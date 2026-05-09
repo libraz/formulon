@@ -105,6 +105,11 @@ Napi::Object MakeErrorStatus(Napi::Env env, fm_status_t code) {
   return o;
 }
 
+/// Converts a C-ABI status code into the shared JS Status envelope.
+Napi::Object MakeStatus(Napi::Env env, fm_status_t code) {
+  return code == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, code);
+}
+
 /// Translates an `fm_value_t` into the JS Value shape.
 Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v) {
   Napi::Object o = Napi::Object::New(env);
@@ -140,6 +145,30 @@ Napi::Object TranslateValue(Napi::Env env, const fm_value_t& v) {
   o.Set("text", Napi::String::New(env, text_field));
   o.Set("errorCode", Napi::Number::New(env, error_code_field));
   return o;
+}
+
+Napi::Object MakeFieldResult(Napi::Env env, Napi::Object status, const char* field, Napi::Value value) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("status", status);
+  out.Set(field, value);
+  return out;
+}
+
+Napi::Object MakeNumberFieldResult(Napi::Env env, Napi::Object status, const char* field, double value) {
+  return MakeFieldResult(env, status, field, Napi::Number::New(env, value));
+}
+
+Napi::Object MakeStringFieldResult(Napi::Env env, Napi::Object status, const char* field, const char* value) {
+  return MakeFieldResult(env, status, field, Napi::String::New(env, value != nullptr ? value : ""));
+}
+
+Napi::Object MakeValueResult(Napi::Env env, Napi::Object status, const fm_value_t& value) {
+  return MakeFieldResult(env, status, "value", TranslateValue(env, value));
+}
+
+Napi::Object MakeEmptyValueResult(Napi::Env env, Napi::Object status) {
+  fm_value_t empty{};
+  return MakeValueResult(env, status, empty);
 }
 
 Napi::Object EmptyPivotLayoutResult(Napi::Env env, Napi::Object status) {
@@ -576,7 +605,7 @@ Napi::Value Workbook::SetNumber(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   const double value = ArgDouble(info, 3);
   fm_status_t rc = fm_workbook_set_number(handle_, sheet, row, col, value);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetBool(const Napi::CallbackInfo& info) {
@@ -592,7 +621,7 @@ Napi::Value Workbook::SetBool(const Napi::CallbackInfo& info) {
     value = info[3].ToBoolean().Value();
   }
   fm_status_t rc = fm_workbook_set_bool(handle_, sheet, row, col, value ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetText(const Napi::CallbackInfo& info) {
@@ -605,7 +634,7 @@ Napi::Value Workbook::SetText(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   const std::string text = ArgString(info, 3);
   fm_status_t rc = fm_workbook_set_text(handle_, sheet, row, col, text.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetBlank(const Napi::CallbackInfo& info) {
@@ -617,7 +646,7 @@ Napi::Value Workbook::SetBlank(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
   fm_status_t rc = fm_workbook_set_blank(handle_, sheet, row, col);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetFormula(const Napi::CallbackInfo& info) {
@@ -630,20 +659,15 @@ Napi::Value Workbook::SetFormula(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   const std::string formula = ArgString(info, 3);
   fm_status_t rc = fm_workbook_set_formula(handle_, sheet, row, col, formula.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 // ---- Cell read ------------------------------------------------------
 
 Napi::Value Workbook::GetValue(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    // Default-zero Value so callers can blindly read .number/.text.
-    fm_value_t empty{};
-    out.Set("value", TranslateValue(env, empty));
-    return out;
+    return MakeEmptyValueResult(env, NullHandleError(env));
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const uint32_t row = ArgU32(info, 1);
@@ -651,14 +675,9 @@ Napi::Value Workbook::GetValue(const Napi::CallbackInfo& info) {
   fm_value_t v{};
   fm_status_t rc = fm_workbook_get_value(handle_, sheet, row, col, &v);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    fm_value_t empty{};
-    out.Set("value", TranslateValue(env, empty));
-    return out;
+    return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("value", TranslateValue(env, v));
-  return out;
+  return MakeValueResult(env, MakeOkStatus(env), v);
 }
 
 // ---- Recalc + save --------------------------------------------------
@@ -669,16 +688,13 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   fm_status_t rc = fm_workbook_recalc(handle_);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("recomputed", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, NullHandleError(env), "recomputed", 0);
   }
   // Embind takes the viewport as a JS object; we mirror that shape.
   fm_viewport vp{};
@@ -693,13 +709,9 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   uint32_t recomputed = 0;
   fm_status_t rc = fm_workbook_partial_recalc(handle_, &vp, &recomputed);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("recomputed", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "recomputed", 0);
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("recomputed", Napi::Number::New(env, recomputed));
-  return out;
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "recomputed", recomputed);
 }
 
 Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
@@ -711,7 +723,7 @@ Napi::Value Workbook::SetIterative(const Napi::CallbackInfo& info) {
   const uint32_t max_iter = ArgU32(info, 1);
   const double max_change = ArgDouble(info, 2);
   fm_status_t rc = fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iter), max_change);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
@@ -728,7 +740,7 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
       slot.installed = false;
     }
     fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
-    return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+    return MakeStatus(env, rc);
   }
   if (!info[0].IsFunction()) {
     return MakeErrorStatus(env, kBindingNullPointer);
@@ -743,7 +755,7 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
   slot.fn.SuppressDestruct();
   slot.installed = true;
   fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &IterativeProgressTrampoline, nullptr);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::IsValid(const Napi::CallbackInfo& info) {
@@ -787,7 +799,7 @@ Napi::Value Workbook::AddSheet(const Napi::CallbackInfo& info) {
   }
   const std::string name = ArgString(info, 0);
   fm_status_t rc = fm_workbook_add_sheet(handle_, name.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::RemoveSheet(const Napi::CallbackInfo& info) {
@@ -797,7 +809,7 @@ Napi::Value Workbook::RemoveSheet(const Napi::CallbackInfo& info) {
   }
   const uint32_t idx = ArgU32(info, 0);
   fm_status_t rc = fm_workbook_remove_sheet(handle_, idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::RenameSheet(const Napi::CallbackInfo& info) {
@@ -808,7 +820,7 @@ Napi::Value Workbook::RenameSheet(const Napi::CallbackInfo& info) {
   const uint32_t idx = ArgU32(info, 0);
   const std::string name = ArgString(info, 1);
   fm_status_t rc = fm_workbook_rename_sheet(handle_, idx, name.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::MoveSheet(const Napi::CallbackInfo& info) {
@@ -819,7 +831,7 @@ Napi::Value Workbook::MoveSheet(const Napi::CallbackInfo& info) {
   const uint32_t from_idx = ArgU32(info, 0);
   const uint32_t to_idx = ArgU32(info, 1);
   fm_status_t rc = fm_workbook_move_sheet(handle_, from_idx, to_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
@@ -832,23 +844,16 @@ Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SheetName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("value", Napi::String::New(env, ""));
-    return out;
+    return MakeStringFieldResult(env, NullHandleError(env), "value", "");
   }
   const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const char* name = nullptr;
   fm_status_t rc = fm_workbook_sheet_name(handle_, idx, &name);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("value", Napi::String::New(env, ""));
-    return out;
+    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), "value", "");
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("value", Napi::String::New(env, name != nullptr ? name : ""));
-  return out;
+  return MakeStringFieldResult(env, MakeOkStatus(env), "value", name);
 }
 
 // ---- Row / column structural edits ----------------------------------
@@ -862,7 +867,7 @@ Napi::Value Workbook::InsertRows(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const uint32_t count = ArgU32(info, 2);
   fm_status_t rc = fm_workbook_insert_rows(handle_, sheet, row, count);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::DeleteRows(const Napi::CallbackInfo& info) {
@@ -874,7 +879,7 @@ Napi::Value Workbook::DeleteRows(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const uint32_t count = ArgU32(info, 2);
   fm_status_t rc = fm_workbook_delete_rows(handle_, sheet, row, count);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::InsertCols(const Napi::CallbackInfo& info) {
@@ -886,7 +891,7 @@ Napi::Value Workbook::InsertCols(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 1);
   const uint32_t count = ArgU32(info, 2);
   fm_status_t rc = fm_workbook_insert_cols(handle_, sheet, col, count);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
@@ -898,7 +903,7 @@ Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 1);
   const uint32_t count = ArgU32(info, 2);
   fm_status_t rc = fm_workbook_delete_cols(handle_, sheet, col, count);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 // ---- Iteration / metadata accessors ---------------------------------
@@ -1219,7 +1224,7 @@ Napi::Value Workbook::PivotCacheRemove(const Napi::CallbackInfo& info) {
   }
   const uint32_t cache_id = ArgU32(info, 0);
   fm_status_t rc = fm_workbook_pivot_cache_remove(handle_, cache_id);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheFieldCount(const Napi::CallbackInfo& info) {
@@ -1279,7 +1284,7 @@ Napi::Value Workbook::PivotCacheFieldClear(const Napi::CallbackInfo& info) {
   }
   const uint32_t cache_id = ArgU32(info, 0);
   fm_status_t rc = fm_workbook_pivot_cache_field_clear(handle_, cache_id);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& info) {
@@ -1305,7 +1310,7 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemNumber(const Napi::CallbackInf
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const double value = ArgDouble(info, 2);
   fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_number(handle_, cache_id, field_idx, value);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info) {
@@ -1317,7 +1322,7 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo&
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::string utf8 = ArgString(info, 2);
   fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_text(handle_, cache_id, field_idx, utf8.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo& info) {
@@ -1329,7 +1334,7 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo&
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const bool value = ArgBool(info, 2);
   fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_bool(handle_, cache_id, field_idx, value ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo& info) {
@@ -1340,7 +1345,7 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo
   const uint32_t cache_id = ArgU32(info, 0);
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
   fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_blank(handle_, cache_id, field_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& info) {
@@ -1351,7 +1356,7 @@ Napi::Value Workbook::PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& 
   const uint32_t cache_id = ArgU32(info, 0);
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
   fm_status_t rc = fm_workbook_pivot_cache_field_clear_shared_items(handle_, cache_id, field_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheRecordCount(const Napi::CallbackInfo& info) {
@@ -1388,7 +1393,7 @@ Napi::Value Workbook::PivotCacheRecordClear(const Napi::CallbackInfo& info) {
   }
   const uint32_t cache_id = ArgU32(info, 0);
   fm_status_t rc = fm_workbook_pivot_cache_record_clear(handle_, cache_id);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetNumber(const Napi::CallbackInfo& info) {
@@ -1401,7 +1406,7 @@ Napi::Value Workbook::PivotCacheRecordSetNumber(const Napi::CallbackInfo& info) 
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   const double value = ArgDouble(info, 3);
   fm_status_t rc = fm_workbook_pivot_cache_record_set_number(handle_, cache_id, record_idx, field_idx, value);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {
@@ -1414,7 +1419,7 @@ Napi::Value Workbook::PivotCacheRecordSetText(const Napi::CallbackInfo& info) {
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   const std::string utf8 = ArgString(info, 3);
   fm_status_t rc = fm_workbook_pivot_cache_record_set_text(handle_, cache_id, record_idx, field_idx, utf8.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetBool(const Napi::CallbackInfo& info) {
@@ -1427,7 +1432,7 @@ Napi::Value Workbook::PivotCacheRecordSetBool(const Napi::CallbackInfo& info) {
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   const bool value = ArgBool(info, 3);
   fm_status_t rc = fm_workbook_pivot_cache_record_set_bool(handle_, cache_id, record_idx, field_idx, value ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetBlank(const Napi::CallbackInfo& info) {
@@ -1439,7 +1444,7 @@ Napi::Value Workbook::PivotCacheRecordSetBlank(const Napi::CallbackInfo& info) {
   const std::size_t record_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   fm_status_t rc = fm_workbook_pivot_cache_record_set_blank(handle_, cache_id, record_idx, field_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotCacheRecordSetError(const Napi::CallbackInfo& info) {
@@ -1453,7 +1458,7 @@ Napi::Value Workbook::PivotCacheRecordSetError(const Napi::CallbackInfo& info) {
   const int32_t error_code = info.Length() > 3 ? info[3].As<Napi::Number>().Int32Value() : 0;
   fm_status_t rc = fm_workbook_pivot_cache_record_set_error(handle_, cache_id, record_idx, field_idx,
                                                             static_cast<fm_error_code_t>(error_code));
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 // ---- PivotTable mutation --------------------------------------------
@@ -1484,7 +1489,7 @@ Napi::Value Workbook::PivotRemove(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   fm_status_t rc = fm_workbook_pivot_remove(handle_, sheet, pivot_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotSetName(const Napi::CallbackInfo& info) {
@@ -1496,7 +1501,7 @@ Napi::Value Workbook::PivotSetName(const Napi::CallbackInfo& info) {
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::string name = ArgString(info, 2);
   fm_status_t rc = fm_workbook_pivot_set_name(handle_, sheet, pivot_idx, name.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotSetAnchor(const Napi::CallbackInfo& info) {
@@ -1512,7 +1517,7 @@ Napi::Value Workbook::PivotSetAnchor(const Napi::CallbackInfo& info) {
   const uint32_t span_cols = ArgU32(info, 5);
   fm_status_t rc =
       fm_workbook_pivot_set_anchor(handle_, sheet, pivot_idx, anchor_row, anchor_col, span_rows, span_cols);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotSetGrandTotals(const Napi::CallbackInfo& info) {
@@ -1526,7 +1531,7 @@ Napi::Value Workbook::PivotSetGrandTotals(const Napi::CallbackInfo& info) {
   const bool cols_enabled = ArgBool(info, 3);
   fm_status_t rc =
       fm_workbook_pivot_set_grand_totals(handle_, sheet, pivot_idx, rows_enabled ? 1 : 0, cols_enabled ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldCount(const Napi::CallbackInfo& info) {
@@ -1584,7 +1589,7 @@ Napi::Value Workbook::PivotFieldClear(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   fm_status_t rc = fm_workbook_pivot_field_clear(handle_, sheet, pivot_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldSetAxis(const Napi::CallbackInfo& info) {
@@ -1598,7 +1603,7 @@ Napi::Value Workbook::PivotFieldSetAxis(const Napi::CallbackInfo& info) {
   const uint32_t axis = ArgU32(info, 3);
   fm_status_t rc =
       fm_workbook_pivot_field_set_axis(handle_, sheet, pivot_idx, field_idx, static_cast<fm_pivot_axis_t>(axis));
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldSetSort(const Napi::CallbackInfo& info) {
@@ -1613,7 +1618,7 @@ Napi::Value Workbook::PivotFieldSetSort(const Napi::CallbackInfo& info) {
   const std::string by_field = ArgString(info, 4);
   const char* by = by_field.empty() ? nullptr : by_field.c_str();
   fm_status_t rc = fm_workbook_pivot_field_set_sort(handle_, sheet, pivot_idx, field_idx, ascending ? 1 : 0, by);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info) {
@@ -1626,7 +1631,7 @@ Napi::Value Workbook::PivotFieldSetSubtotalTop(const Napi::CallbackInfo& info) {
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   const bool top = ArgBool(info, 3);
   fm_status_t rc = fm_workbook_pivot_field_set_subtotal_top(handle_, sheet, pivot_idx, field_idx, top ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldAddAggregation(const Napi::CallbackInfo& info) {
@@ -1640,7 +1645,7 @@ Napi::Value Workbook::PivotFieldAddAggregation(const Napi::CallbackInfo& info) {
   const uint32_t agg = ArgU32(info, 3);
   fm_status_t rc = fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivot_idx, field_idx,
                                                            static_cast<fm_pivot_aggregation_t>(agg));
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldClearAggregations(const Napi::CallbackInfo& info) {
@@ -1652,7 +1657,7 @@ Napi::Value Workbook::PivotFieldClearAggregations(const Napi::CallbackInfo& info
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   fm_status_t rc = fm_workbook_pivot_field_clear_aggregations(handle_, sheet, pivot_idx, field_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
@@ -1667,7 +1672,7 @@ Napi::Value Workbook::PivotFieldAddItem(const Napi::CallbackInfo& info) {
   const bool visible = ArgBool(info, 4);
   fm_status_t rc =
       fm_workbook_pivot_field_add_item(handle_, sheet, pivot_idx, field_idx, name.c_str(), visible ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldClearItems(const Napi::CallbackInfo& info) {
@@ -1679,7 +1684,7 @@ Napi::Value Workbook::PivotFieldClearItems(const Napi::CallbackInfo& info) {
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   fm_status_t rc = fm_workbook_pivot_field_clear_items(handle_, sheet, pivot_idx, field_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldSetItemVisible(const Napi::CallbackInfo& info) {
@@ -1694,7 +1699,7 @@ Napi::Value Workbook::PivotFieldSetItemVisible(const Napi::CallbackInfo& info) {
   const bool visible = ArgBool(info, 4);
   fm_status_t rc =
       fm_workbook_pivot_field_set_item_visible(handle_, sheet, pivot_idx, field_idx, item_idx, visible ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info) {
@@ -1708,7 +1713,7 @@ Napi::Value Workbook::PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info) {
   const uint32_t agg = ArgU32(info, 3);
   fm_status_t rc = fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivot_idx, field_idx,
                                                            static_cast<fm_pivot_aggregation_t>(agg));
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldClearSubtotalFns(const Napi::CallbackInfo& info) {
@@ -1720,7 +1725,7 @@ Napi::Value Workbook::PivotFieldClearSubtotalFns(const Napi::CallbackInfo& info)
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   fm_status_t rc = fm_workbook_pivot_field_clear_subtotal_fns(handle_, sheet, pivot_idx, field_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
@@ -1738,7 +1743,7 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   fm_status_t rc = fm_workbook_pivot_field_set_date_group(
       handle_, sheet, pivot_idx, field_idx, static_cast<fm_pivot_date_grouping_t>(granularity),
       static_cast<fm_pivot_calendar_t>(calendar), start_year, end_year);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldClearDateGroup(const Napi::CallbackInfo& info) {
@@ -1750,7 +1755,7 @@ Napi::Value Workbook::PivotFieldClearDateGroup(const Napi::CallbackInfo& info) {
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   fm_status_t rc = fm_workbook_pivot_field_clear_date_group(handle_, sheet, pivot_idx, field_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFieldSetNumberFormat(const Napi::CallbackInfo& info) {
@@ -1763,7 +1768,7 @@ Napi::Value Workbook::PivotFieldSetNumberFormat(const Napi::CallbackInfo& info) 
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   const std::string utf8 = ArgString(info, 3);
   fm_status_t rc = fm_workbook_pivot_field_set_number_format(handle_, sheet, pivot_idx, field_idx, utf8.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 namespace {
@@ -1801,7 +1806,7 @@ Napi::Value Workbook::PivotSetRowFieldOrder(const Napi::CallbackInfo& info) {
   const std::vector<uint32_t> indices = ReadU32Array(info, 2);
   fm_status_t rc = fm_workbook_pivot_set_row_field_order(handle_, sheet, pivot_idx,
                                                          indices.empty() ? nullptr : indices.data(), indices.size());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotSetColFieldOrder(const Napi::CallbackInfo& info) {
@@ -1814,7 +1819,7 @@ Napi::Value Workbook::PivotSetColFieldOrder(const Napi::CallbackInfo& info) {
   const std::vector<uint32_t> indices = ReadU32Array(info, 2);
   fm_status_t rc = fm_workbook_pivot_set_col_field_order(handle_, sheet, pivot_idx,
                                                          indices.empty() ? nullptr : indices.data(), indices.size());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotDataFieldCount(const Napi::CallbackInfo& info) {
@@ -1885,7 +1890,7 @@ Napi::Value Workbook::PivotDataFieldClear(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   fm_status_t rc = fm_workbook_pivot_data_field_clear(handle_, sheet, pivot_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
@@ -1906,7 +1911,7 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   bool has_nfmt = false;
   BuildDataFieldSpec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
   fm_status_t rc = fm_workbook_pivot_data_field_set(handle_, sheet, pivot_idx, data_field_idx, &c_spec);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
@@ -1952,7 +1957,7 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   c_spec.value_high_double = SpecPullDouble(spec, "valueHighDouble", 0.0);
 
   fm_status_t rc = fm_workbook_pivot_filter_add(handle_, sheet, pivot_idx, &c_spec);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFilterClear(const Napi::CallbackInfo& info) {
@@ -1963,7 +1968,7 @@ Napi::Value Workbook::PivotFilterClear(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   fm_status_t rc = fm_workbook_pivot_filter_clear(handle_, sheet, pivot_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::PivotFilterRemoveAt(const Napi::CallbackInfo& info) {
@@ -1975,7 +1980,7 @@ Napi::Value Workbook::PivotFilterRemoveAt(const Napi::CallbackInfo& info) {
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t filter_idx = static_cast<std::size_t>(ArgU32(info, 2));
   fm_status_t rc = fm_workbook_pivot_filter_remove_at(handle_, sheet, pivot_idx, filter_idx);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 // ---- Defined names --------------------------------------------------
@@ -1988,7 +1993,7 @@ Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   const std::string name = ArgString(info, 0);
   const std::string formula = ArgString(info, 1);
   fm_status_t rc = fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str());
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 // ---- Conditional formatting -----------------------------------------
@@ -2095,7 +2100,7 @@ Napi::Value Workbook::SetSheetZoom(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const uint32_t zoom = ArgU32(info, 1);
   fm_status_t rc = fm_sheet_set_zoom(handle_, sheet, zoom);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetSheetFreeze(const Napi::CallbackInfo& info) {
@@ -2107,7 +2112,7 @@ Napi::Value Workbook::SetSheetFreeze(const Napi::CallbackInfo& info) {
   const uint32_t freeze_rows = ArgU32(info, 1);
   const uint32_t freeze_cols = ArgU32(info, 2);
   fm_status_t rc = fm_sheet_set_freeze(handle_, sheet, freeze_rows, freeze_cols);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetSheetTabHidden(const Napi::CallbackInfo& info) {
@@ -2118,7 +2123,7 @@ Napi::Value Workbook::SetSheetTabHidden(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const bool hidden = ArgBool(info, 1);
   fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
@@ -2168,7 +2173,7 @@ Napi::Value Workbook::SetColumnWidth(const Napi::CallbackInfo& info) {
   const uint32_t last = ArgU32(info, 2);
   const double width = ArgDouble(info, 3);
   fm_status_t rc = fm_sheet_set_column_width(handle_, sheet, first, last, width);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetColumnHidden(const Napi::CallbackInfo& info) {
@@ -2181,7 +2186,7 @@ Napi::Value Workbook::SetColumnHidden(const Napi::CallbackInfo& info) {
   const uint32_t last = ArgU32(info, 2);
   const bool hidden = ArgBool(info, 3);
   fm_status_t rc = fm_sheet_set_column_hidden(handle_, sheet, first, last, hidden ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
@@ -2197,7 +2202,7 @@ Napi::Value Workbook::SetColumnOutline(const Napi::CallbackInfo& info) {
     level = 255U;
   }
   fm_status_t rc = fm_sheet_set_column_outline(handle_, sheet, first, last, static_cast<uint8_t>(level));
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
@@ -2245,7 +2250,7 @@ Napi::Value Workbook::SetRowHeight(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const double height = ArgDouble(info, 2);
   fm_status_t rc = fm_sheet_set_row_height(handle_, sheet, row, height);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
@@ -2257,7 +2262,7 @@ Napi::Value Workbook::SetRowHidden(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const bool hidden = ArgBool(info, 2);
   fm_status_t rc = fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
@@ -2272,18 +2277,15 @@ Napi::Value Workbook::SetRowOutline(const Napi::CallbackInfo& info) {
     level = 255U;
   }
   fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, static_cast<uint8_t>(level));
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 // ---- Styles ---------------------------------------------------------
 
 Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("xfIndex", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, NullHandleError(env), "xfIndex", 0);
   }
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t row = ArgU32(info, 1);
@@ -2291,13 +2293,9 @@ Napi::Value Workbook::GetCellXfIndex(const Napi::CallbackInfo& info) {
   uint32_t xf = 0;
   fm_status_t rc = fm_cell_get_xf_index(handle_, sheet, row, col, &xf);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("xfIndex", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "xfIndex", 0);
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("xfIndex", Napi::Number::New(env, xf));
-  return out;
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "xfIndex", xf);
 }
 
 Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
@@ -2310,7 +2308,7 @@ Napi::Value Workbook::SetCellXfIndex(const Napi::CallbackInfo& info) {
   const uint32_t col = ArgU32(info, 2);
   const uint32_t xf = ArgU32(info, 3);
   fm_status_t rc = fm_cell_set_xf_index(handle_, sheet, row, col, xf);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
@@ -2437,11 +2435,8 @@ Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("index", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
   std::string name;
@@ -2459,22 +2454,15 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("index", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("index", Napi::Number::New(env, idx));
-  return out;
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
 }
 
 Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("index", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
   fm_fill_record fr{};
@@ -2484,22 +2472,15 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("index", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("index", Napi::Number::New(env, idx));
-  return out;
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
 }
 
 Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("index", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
   auto pull_side = [&](const char* key) {
@@ -2526,43 +2507,29 @@ Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("index", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("index", Napi::Number::New(env, idx));
-  return out;
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
 }
 
 Napi::Value Workbook::AddNumFmt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("numFmtId", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, NullHandleError(env), "numFmtId", 0);
   }
   const std::string code = ArgString(info, 0);
   uint16_t id = 0;
   fm_status_t rc = fm_styles_add_num_fmt(handle_, code.c_str(), &id);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("numFmtId", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "numFmtId", 0);
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(id)));
-  return out;
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "numFmtId", static_cast<uint32_t>(id));
 }
 
 Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
-    out.Set("status", NullHandleError(env));
-    out.Set("index", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
   fm_cell_xf xf{};
@@ -2578,13 +2545,9 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    out.Set("index", Napi::Number::New(env, 0));
-    return out;
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("index", Napi::Number::New(env, idx));
-  return out;
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
 }
 
 Napi::Value Workbook::FontCount(const Napi::CallbackInfo& info) {
@@ -2652,7 +2615,7 @@ Napi::Value Workbook::AddMerge(const Napi::CallbackInfo& info) {
     m.last_col = range.Get("lastCol").ToNumber().Uint32Value();
   }
   fm_status_t rc = fm_sheet_add_merge(handle_, sheet, m);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::RemoveMerge(const Napi::CallbackInfo& info) {
@@ -2670,7 +2633,7 @@ Napi::Value Workbook::RemoveMerge(const Napi::CallbackInfo& info) {
     m.last_col = range.Get("lastCol").ToNumber().Uint32Value();
   }
   fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, m);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::RemoveMergeAt(const Napi::CallbackInfo& info) {
@@ -2681,7 +2644,7 @@ Napi::Value Workbook::RemoveMergeAt(const Napi::CallbackInfo& info) {
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t index = ArgU32(info, 1);
   fm_status_t rc = fm_sheet_remove_merge_at(handle_, sheet, index);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::ClearMerges(const Napi::CallbackInfo& info) {
@@ -2691,7 +2654,7 @@ Napi::Value Workbook::ClearMerges(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   fm_status_t rc = fm_sheet_clear_merges(handle_, sheet);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
@@ -2755,7 +2718,7 @@ Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   const char* author_c = author.empty() ? nullptr : author.c_str();
   const char* text_c = text.empty() ? nullptr : text.c_str();
   fm_status_t rc = fm_sheet_set_comment(handle_, sheet, row, col, author_c, text_c);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
@@ -2790,7 +2753,7 @@ Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
   hl.display = display.empty() ? nullptr : display.c_str();
   hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
   fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
@@ -2831,7 +2794,7 @@ Napi::Value Workbook::RemoveHyperlink(const Napi::CallbackInfo& info) {
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
   fm_status_t rc = fm_sheet_remove_hyperlink(handle_, sheet, row, col);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::RemoveHyperlinkAt(const Napi::CallbackInfo& info) {
@@ -2842,7 +2805,7 @@ Napi::Value Workbook::RemoveHyperlinkAt(const Napi::CallbackInfo& info) {
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t index = ArgU32(info, 1);
   fm_status_t rc = fm_sheet_remove_hyperlink_at(handle_, sheet, index);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::ClearHyperlinks(const Napi::CallbackInfo& info) {
@@ -2852,7 +2815,7 @@ Napi::Value Workbook::ClearHyperlinks(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   fm_status_t rc = fm_sheet_clear_hyperlinks(handle_, sheet);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
@@ -2991,7 +2954,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
   dv.prompt_message = prompt_message.empty() ? nullptr : prompt_message.c_str();
   fm_status_t rc = fm_sheet_add_validation(handle_, sheet, dv);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
@@ -3002,7 +2965,7 @@ Napi::Value Workbook::RemoveValidationAt(const Napi::CallbackInfo& info) {
   const uint32_t sheet = ArgU32(info, 0);
   const uint32_t index = ArgU32(info, 1);
   fm_status_t rc = fm_sheet_remove_validation_at(handle_, sheet, index);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
@@ -3012,7 +2975,7 @@ Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
   }
   const uint32_t sheet = ArgU32(info, 0);
   fm_status_t rc = fm_sheet_clear_validations(handle_, sheet);
-  return rc == 0 ? MakeOkStatus(env) : MakeErrorStatus(env, rc);
+  return MakeStatus(env, rc);
 }
 
 // ---- Class registration ---------------------------------------------
@@ -3167,7 +3130,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
 /// returns `{ status, value }`.
 Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  Napi::Object out = Napi::Object::New(env);
   std::string formula;
   if (info.Length() > 0) {
     formula = info[0].ToString().Utf8Value();
@@ -3176,38 +3138,28 @@ Napi::Value EvalFormula(const Napi::CallbackInfo& info) {
   fm_workbook_t* wb = nullptr;
   fm_status_t rc = fm_workbook_create(&wb);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    fm_value_t empty{};
-    out.Set("value", TranslateValue(env, empty));
-    return out;
+    return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
   }
   rc = fm_workbook_set_formula(wb, 0, 0, 0, formula.c_str());
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    fm_value_t empty{};
-    out.Set("value", TranslateValue(env, empty));
+    Napi::Object out = MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
     fm_workbook_destroy(wb);
     return out;
   }
   rc = fm_workbook_recalc(wb);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    fm_value_t empty{};
-    out.Set("value", TranslateValue(env, empty));
+    Napi::Object out = MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
     fm_workbook_destroy(wb);
     return out;
   }
   fm_value_t v{};
   rc = fm_workbook_get_value(wb, 0, 0, 0, &v);
   if (rc != 0) {
-    out.Set("status", MakeErrorStatus(env, rc));
-    fm_value_t empty{};
-    out.Set("value", TranslateValue(env, empty));
+    Napi::Object out = MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
     fm_workbook_destroy(wb);
     return out;
   }
-  out.Set("status", MakeOkStatus(env));
-  out.Set("value", TranslateValue(env, v));
+  Napi::Object out = MakeValueResult(env, MakeOkStatus(env), v);
   fm_workbook_destroy(wb);
   return out;
 }

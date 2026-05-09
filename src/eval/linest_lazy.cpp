@@ -241,6 +241,12 @@ struct DesignMatrix {
   std::vector<double> y;     // length m
 };
 
+struct FitStats {
+  double ss_resid = 0.0;
+  double ss_total = 0.0;
+  double mean_y = 0.0;
+};
+
 /// Forms `A = X^T X` (p x p) and `b = X^T y` (length p) given the
 /// design matrix view `dm`. `p` = `k + (with_const ? 1 : 0)`.
 void normal_equations(const DesignMatrix& dm, std::vector<double>& a, std::vector<double>& b) {
@@ -365,6 +371,34 @@ bool solve_normal_equations(const DesignMatrix& dm, bool want_inv, std::vector<d
   return true;
 }
 
+FitStats compute_fit_stats(const DesignMatrix& dm, const std::vector<double>& coeffs) {
+  const std::uint32_t p = dm.k + (dm.with_const ? 1U : 0U);
+  FitStats stats;
+  double sum_y = 0.0;
+  for (std::uint32_t i = 0; i < dm.m; ++i) {
+    double yhat = 0.0;
+    for (std::uint32_t j = 0; j < p; ++j) {
+      yhat += coeffs[j] * dm.data[static_cast<std::size_t>(i) * p + j];
+    }
+    const double e = dm.y[i] - yhat;
+    stats.ss_resid += e * e;
+    sum_y += dm.y[i];
+  }
+  stats.mean_y = sum_y / static_cast<double>(dm.m);
+
+  if (dm.with_const) {
+    for (std::uint32_t i = 0; i < dm.m; ++i) {
+      const double d = dm.y[i] - stats.mean_y;
+      stats.ss_total += d * d;
+    }
+  } else {
+    for (std::uint32_t i = 0; i < dm.m; ++i) {
+      stats.ss_total += dm.y[i] * dm.y[i];
+    }
+  }
+  return stats;
+}
+
 /// Builds the design matrix from a known_y array and an optional
 /// known_x array. `known_y` may be 1 x m or m x 1; the orientation
 /// determines how `known_x` is read. If `x_arr` is `nullptr`, the
@@ -483,6 +517,25 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
     }
   }
   return true;
+}
+
+ArrayValue* build_prediction_output(const std::vector<double>& coeffs, const std::vector<double>& pred_design,
+                                    std::uint32_t n_obs, std::uint32_t p, bool y_is_col, bool exp_result,
+                                    Arena& arena) {
+  std::vector<Value> cells;
+  cells.reserve(n_obs);
+  for (std::uint32_t i = 0; i < n_obs; ++i) {
+    double s = 0.0;
+    for (std::uint32_t j = 0; j < p; ++j) {
+      s += coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j];
+    }
+    const double v = exp_result ? std::exp(s) : s;
+    cells.push_back(is_finite(v) ? Value::number(v) : Value::error(ErrorCode::Num));
+  }
+
+  const std::uint32_t out_rows = y_is_col ? n_obs : 1U;
+  const std::uint32_t out_cols = y_is_col ? 1U : n_obs;
+  return make_double_array(cells, out_rows, out_cols, arena);
 }
 
 /// Builds the LINEST / LOGEST output array. `coeffs` is in normal
@@ -667,36 +720,8 @@ Value eval_linest_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::array(arr);
   }
 
-  // Compute residuals and SS quantities for the stats block.
-  // ŷ_i = Σ_j coeffs[j] * X[i,j].
-  double ss_resid = 0.0;
-  double sum_y = 0.0;
-  for (std::uint32_t i = 0; i < dm.m; ++i) {
-    double yhat = 0.0;
-    for (std::uint32_t j = 0; j < p; ++j) {
-      yhat += coeffs[j] * dm.data[static_cast<std::size_t>(i) * p + j];
-    }
-    const double e = dm.y[i] - yhat;
-    ss_resid += e * e;
-    sum_y += dm.y[i];
-  }
-  const double mean_y = sum_y / static_cast<double>(dm.m);
-
-  // ss_total: centred when an intercept is fitted, raw sum-of-squares
-  // when const=false. Matches Mac Excel's r^2 / F definitions.
-  double ss_total = 0.0;
-  if (with_const) {
-    for (std::uint32_t i = 0; i < dm.m; ++i) {
-      const double d = dm.y[i] - mean_y;
-      ss_total += d * d;
-    }
-  } else {
-    for (std::uint32_t i = 0; i < dm.m; ++i) {
-      ss_total += dm.y[i] * dm.y[i];
-    }
-  }
-
-  ArrayValue* arr = build_stats_output(coeffs, inv_a, dm, ss_resid, ss_total, mean_y, arena);
+  const FitStats stats = compute_fit_stats(dm, coeffs);
+  ArrayValue* arr = build_stats_output(coeffs, inv_a, dm, stats.ss_resid, stats.ss_total, stats.mean_y, arena);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -833,20 +858,7 @@ Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
   }
 
-  // Compute y_hat = X_pred * beta. Any non-finite cell -> #NUM!.
-  std::vector<Value> cells;
-  cells.reserve(n_obs);
-  for (std::uint32_t i = 0; i < n_obs; ++i) {
-    double s = 0.0;
-    for (std::uint32_t j = 0; j < p; ++j) {
-      s += coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j];
-    }
-    cells.push_back(is_finite(s) ? Value::number(s) : Value::error(ErrorCode::Num));
-  }
-
-  const std::uint32_t out_rows = y_is_col ? n_obs : 1U;
-  const std::uint32_t out_cols = y_is_col ? 1U : n_obs;
-  ArrayValue* arr = make_double_array(cells, out_rows, out_cols, arena);
+  ArrayValue* arr = build_prediction_output(coeffs, pred_design, n_obs, p, y_is_col, /*exp_result=*/false, arena);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -930,32 +942,9 @@ Value eval_logest_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::array(arr);
   }
 
-  // Residuals on the linearised log-y scale. Same recipe as LINEST.
-  double ss_resid = 0.0;
-  double sum_y = 0.0;
-  for (std::uint32_t i = 0; i < dm.m; ++i) {
-    double yhat = 0.0;
-    for (std::uint32_t j = 0; j < p; ++j) {
-      yhat += coeffs[j] * dm.data[static_cast<std::size_t>(i) * p + j];
-    }
-    const double e = dm.y[i] - yhat;
-    ss_resid += e * e;
-    sum_y += dm.y[i];
-  }
-  const double mean_y = sum_y / static_cast<double>(dm.m);
-  double ss_total = 0.0;
-  if (with_const) {
-    for (std::uint32_t i = 0; i < dm.m; ++i) {
-      const double d = dm.y[i] - mean_y;
-      ss_total += d * d;
-    }
-  } else {
-    for (std::uint32_t i = 0; i < dm.m; ++i) {
-      ss_total += dm.y[i] * dm.y[i];
-    }
-  }
-
-  ArrayValue* arr = build_stats_output(coeffs, inv_a, dm, ss_resid, ss_total, mean_y, arena, /*log_form=*/true);
+  const FitStats stats = compute_fit_stats(dm, coeffs);
+  ArrayValue* arr =
+      build_stats_output(coeffs, inv_a, dm, stats.ss_resid, stats.ss_total, stats.mean_y, arena, /*log_form=*/true);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -1026,20 +1015,7 @@ Value eval_growth_lazy(const parser::AstNode& call, Arena& arena, const Function
     }
   }
 
-  std::vector<Value> cells;
-  cells.reserve(n_obs);
-  for (std::uint32_t i = 0; i < n_obs; ++i) {
-    double s = 0.0;
-    for (std::uint32_t j = 0; j < p; ++j) {
-      s += coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j];
-    }
-    const double y_hat = std::exp(s);
-    cells.push_back(is_finite(y_hat) ? Value::number(y_hat) : Value::error(ErrorCode::Num));
-  }
-
-  const std::uint32_t out_rows = y_is_col ? n_obs : 1U;
-  const std::uint32_t out_cols = y_is_col ? 1U : n_obs;
-  ArrayValue* arr = make_double_array(cells, out_rows, out_cols, arena);
+  ArrayValue* arr = build_prediction_output(coeffs, pred_design, n_obs, p, y_is_col, /*exp_result=*/true, arena);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }

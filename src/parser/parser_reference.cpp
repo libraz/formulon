@@ -215,11 +215,7 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
   if (peek_kind() == TokenKind::RParen) {
     record_error_with_token(ParseErrorCode::LetWrongArity, name_tok.range, name_tok.lexeme);
     const Token& rparen_empty = advance();
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(SpanRange(call_start, rparen_empty.range));
-    }
-    return placeholder;
+    return make_recovery_placeholder(SpanRange(call_start, rparen_empty.range));
   }
 
   // Slot-walk loop. At each iteration pos_ sits on the first token of the
@@ -331,11 +327,7 @@ AstNode* Parser::parse_let_call(const Token& name_tok) {
     } else if (names.empty()) {
       record_error_with_token(ParseErrorCode::LetWrongArity, call_start, name_tok.lexeme);
     }
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(SpanRange(call_start, end_range));
-    }
-    return placeholder;
+    return make_recovery_placeholder(SpanRange(call_start, end_range));
   }
 
   AstNode* n = make_let_binding(arena_, names.data(), exprs.data(), static_cast<std::uint32_t>(names.size()), body);
@@ -374,11 +366,7 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
   if (peek_kind() == TokenKind::RParen) {
     record_error_with_token(ParseErrorCode::LambdaEmpty, name_tok.range, name_tok.lexeme);
     const Token& rparen_empty = advance();
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(SpanRange(call_start, rparen_empty.range));
-    }
-    return placeholder;
+    return make_recovery_placeholder(SpanRange(call_start, rparen_empty.range));
   }
 
   // Slot-walk loop. Each iteration starts at the first token of the next
@@ -505,11 +493,7 @@ AstNode* Parser::parse_lambda_call(const Token& name_tok) {
 
   if (body == nullptr) {
     record_error_with_token(ParseErrorCode::LambdaEmpty, call_start, name_tok.lexeme);
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(SpanRange(call_start, end_range));
-    }
-    return placeholder;
+    return make_recovery_placeholder(SpanRange(call_start, end_range));
   }
 
   AstNode* n = make_lambda(arena_, params.empty() ? nullptr : params.data(), static_cast<std::uint32_t>(params.size()),

@@ -48,6 +48,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -531,16 +532,18 @@ void register_engineering_special_builtins(FunctionRegistry& registry) {
   // ERF family. ERF is the sole 1-or-2-arg entry; the rest are strictly
   // 1-arg. The dispatcher enforces arity, so passing a second argument to
   // ERF.PRECISE / ERFC / ERFC.PRECISE surfaces #VALUE! before the impl runs.
-  registry.register_function(FunctionDef{"ERF", 1u, 2u, &Erf});
-  registry.register_function(FunctionDef{"ERF.PRECISE", 1u, 1u, &ErfPrecise});
-  registry.register_function(FunctionDef{"ERFC", 1u, 1u, &Erfc});
-  registry.register_function(FunctionDef{"ERFC.PRECISE", 1u, 1u, &ErfcPrecise});
-
-  // BESSEL family. All are strict 2-arg (x, n).
-  registry.register_function(FunctionDef{"BESSELJ", 2u, 2u, &BesselJ});
-  registry.register_function(FunctionDef{"BESSELY", 2u, 2u, &BesselY});
-  registry.register_function(FunctionDef{"BESSELI", 2u, 2u, &BesselI});
-  registry.register_function(FunctionDef{"BESSELK", 2u, 2u, &BesselK});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"ERF", 1u, 2u, &Erf},
+      {"ERF.PRECISE", 1u, 1u, &ErfPrecise},
+      {"ERFC", 1u, 1u, &Erfc},
+      {"ERFC.PRECISE", 1u, 1u, &ErfcPrecise},
+      // BESSEL family. All are strict 2-arg (x, n).
+      {"BESSELJ", 2u, 2u, &BesselJ},
+      {"BESSELY", 2u, 2u, &BesselY},
+      {"BESSELI", 2u, 2u, &BesselI},
+      {"BESSELK", 2u, 2u, &BesselK},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

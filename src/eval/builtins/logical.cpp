@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/logical_coerce.h"
@@ -131,35 +132,22 @@ Value Xor_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }  // namespace
 
 void register_logical_builtins(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"TRUE", 0u, 0u, &True_});
-  registry.register_function(FunctionDef{"FALSE", 0u, 0u, &False_});
-  registry.register_function(FunctionDef{"NOT", 1u, 1u, &Not});
   // AND / OR are range-aware so `=AND(A1:A3)` expands the rectangle. The
   // `range_filter_bool_coercible` flag silently drops Text / Blank cells
   // inside a range (Excel skips them rather than surfacing #VALUE!), while
   // direct scalar arguments still flow through `coerce_to_bool` and surface
   // #VALUE! for non-coercible text literals.
-  {
-    FunctionDef def{"AND", 1u, kVariadic, &And_};
-    def.accepts_ranges = true;
-    def.range_filter_bool_coercible = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"OR", 1u, kVariadic, &Or_};
-    def.accepts_ranges = true;
-    def.range_filter_bool_coercible = true;
-    registry.register_function(def);
-  }
-  {
-    // XOR shares AND / OR's range-aware surface: a trailing range argument
-    // such as `=XOR(A1:A3)` expands in the dispatcher; Text and Blank cells
-    // inside the range are silently skipped rather than surfacing #VALUE!.
-    FunctionDef def{"XOR", 1u, kVariadic, &Xor_};
-    def.accepts_ranges = true;
-    def.range_filter_bool_coercible = true;
-    registry.register_function(def);
-  }
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"TRUE", 0u, 0u, &True_},
+      {"FALSE", 0u, 0u, &False_},
+      {"NOT", 1u, 1u, &Not},
+      {"AND", 1u, kVariadic, &And_, true, true, false, true},
+      {"OR", 1u, kVariadic, &Or_, true, true, false, true},
+      // XOR shares AND / OR's range-aware surface: Text and Blank cells
+      // inside a range are silently skipped rather than surfacing #VALUE!.
+      {"XOR", 1u, kVariadic, &Xor_, true, true, false, true},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

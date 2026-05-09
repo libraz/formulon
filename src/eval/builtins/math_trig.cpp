@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -37,17 +38,52 @@ static constexpr double kPi = 3.14159265358979323846;
 // guards (LN/LOG/LOG10/ASIN/ACOS/ACOSH/ATANH) keep their own bodies
 // because the guard can short-circuit before invoking the math function.
 using DoubleFn = double (*)(double);
+using DomainPredicate = bool (*)(double);
+
+inline Value finite_math_number(double r) {
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
 
 inline Value apply_unary_math(DoubleFn fn, const Value* args) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
     return Value::error(x.error());
   }
-  const double r = fn(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
+  return finite_math_number(fn(x.value()));
+}
+
+inline Value apply_guarded_unary_math(DoubleFn fn, DomainPredicate domain, const Value* args) {
+  auto x = coerce_to_number(args[0]);
+  if (!x) {
+    return Value::error(x.error());
+  }
+  if (!domain(x.value())) {
     return Value::error(ErrorCode::Num);
   }
-  return Value::number(r);
+  return finite_math_number(fn(x.value()));
+}
+
+bool positive_domain(double x) {
+  return x > 0.0;
+}
+
+bool closed_unit_domain(double x) {
+  return x >= -1.0 && x <= 1.0;
+}
+
+bool at_least_one_domain(double x) {
+  return x >= 1.0;
+}
+
+bool open_unit_domain(double x) {
+  return x > -1.0 && x < 1.0;
+}
+
+bool outside_closed_unit_domain(double x) {
+  return x < -1.0 || x > 1.0;
 }
 
 // EXP(x) - e raised to x. Overflow (e.g. EXP(1000)) produces +Inf, which is
@@ -58,18 +94,7 @@ Value Exp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // LN(x) - natural logarithm. Excel rejects `x <= 0` with `#NUM!`.
 Value Ln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  if (x.value() <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double r = std::log(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_guarded_unary_math(&std::log, &positive_domain, args);
 }
 
 // LOG(x, [base]) - logarithm with an optional base (default 10). Excel
@@ -104,26 +129,12 @@ Value Log(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = std::log(x.value()) / denom;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // LOG10(x) - base-10 logarithm. `x <= 0` -> `#NUM!`.
 Value Log10(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  if (x.value() <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double r = std::log10(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_guarded_unary_math(&std::log10, &positive_domain, args);
 }
 
 // PI() - the constant pi. Zero-argument; the registry's arity check rejects
@@ -140,10 +151,7 @@ Value Radians(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(x.error());
   }
   const double r = x.value() * kPi / 180.0;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // DEGREES(radians) - radians-to-degrees conversion. DEGREES(pi) == 180.
@@ -156,10 +164,7 @@ Value Degrees(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(x.error());
   }
   const double r = x.value() / kPi * 180.0;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // SIN(x) - sine in radians. Excel imposes no domain restriction; only
@@ -186,35 +191,13 @@ Value Tan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // ASIN(x) - arcsine. Domain [-1, 1]; outside -> `#NUM!`. Result in
 // [-pi/2, pi/2] radians.
 Value Asin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  if (x.value() < -1.0 || x.value() > 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double r = std::asin(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_guarded_unary_math(&std::asin, &closed_unit_domain, args);
 }
 
 // ACOS(x) - arccosine. Domain [-1, 1]; outside -> `#NUM!`. Result in
 // [0, pi] radians.
 Value Acos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  if (x.value() < -1.0 || x.value() > 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double r = std::acos(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_guarded_unary_math(&std::acos, &closed_unit_domain, args);
 }
 
 // ATAN(x) - arctangent. No domain restriction. Result in (-pi/2, pi/2)
@@ -241,10 +224,7 @@ Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = std::atan2(y.value(), x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // --- Hyperbolic functions ----------------------------------------------
@@ -280,36 +260,14 @@ Value Asinh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // outside the domain and Excel reports `#NUM!`; this mirrors the ACOS
 // domain check above.
 Value Acosh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  if (x.value() < 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double r = std::acosh(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_guarded_unary_math(&std::acosh, &at_least_one_domain, args);
 }
 
 // ATANH(x) - inverse hyperbolic tangent. Domain: `(-1, 1)` EXCLUSIVE. At
 // `|x| == 1` the result is +/-Inf; `|x| > 1` produces NaN. Both are folded
 // to `#NUM!` - matching Excel, which rejects the closed endpoints as well.
 Value Atanh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
-  }
-  if (x.value() <= -1.0 || x.value() >= 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double r = std::atanh(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return apply_guarded_unary_math(&std::atanh, &open_unit_domain, args);
 }
 
 // --- Reciprocal trigonometric functions ---------------------------------
@@ -333,10 +291,7 @@ Value Sec(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = 1.0 / c;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // CSC(x) - cosecant, `1 / sin(x)`. `sin(x) == 0` -> `#DIV/0!`.
@@ -350,10 +305,7 @@ Value Csc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = 1.0 / s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // COT(x) - cotangent, `cos(x) / sin(x)` (equivalently `1 / tan(x)`).
@@ -371,10 +323,7 @@ Value Cot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = std::cos(x.value()) / s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // ACOT(x) - inverse cotangent, `PI/2 - atan(x)`. Range `(0, PI)`. No
@@ -386,10 +335,7 @@ Value Acot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(x.error());
   }
   const double r = kPi / 2.0 - std::atan(x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // SECH(x) - hyperbolic secant, `1 / cosh(x)`. `cosh` is always >= 1, so
@@ -407,10 +353,7 @@ Value Sech(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const double r = 1.0 / c;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // CSCH(x) - hyperbolic cosecant, `1 / sinh(x)`. `sinh(0) == 0` -> `#DIV/0!`.
@@ -428,10 +371,7 @@ Value Csch(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const double r = 1.0 / s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // COTH(x) - hyperbolic cotangent, `cosh(x) / sinh(x)`. `sinh(0) == 0`
@@ -450,10 +390,7 @@ Value Coth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::number((x.value() > 0.0) ? 1.0 : -1.0);
   }
   const double r = std::cosh(x.value()) / s;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(r);
 }
 
 // ACOTH(x) - inverse hyperbolic cotangent, `atanh(1 / x)`. Domain is
@@ -465,50 +402,25 @@ Value Acoth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!x) {
     return Value::error(x.error());
   }
-  if (x.value() >= -1.0 && x.value() <= 1.0) {
+  if (!outside_closed_unit_domain(x.value())) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = std::atanh(1.0 / x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_math_number(std::atanh(1.0 / x.value()));
 }
 
 }  // namespace
 
 void register_math_trig_builtins(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"EXP", 1u, 1u, &Exp});
-  registry.register_function(FunctionDef{"LN", 1u, 1u, &Ln});
-  registry.register_function(FunctionDef{"LOG", 1u, 2u, &Log});
-  registry.register_function(FunctionDef{"LOG10", 1u, 1u, &Log10});
-  registry.register_function(FunctionDef{"PI", 0u, 0u, &Pi});
-  registry.register_function(FunctionDef{"RADIANS", 1u, 1u, &Radians});
-  registry.register_function(FunctionDef{"DEGREES", 1u, 1u, &Degrees});
-  registry.register_function(FunctionDef{"SIN", 1u, 1u, &Sin});
-  registry.register_function(FunctionDef{"COS", 1u, 1u, &Cos});
-  registry.register_function(FunctionDef{"TAN", 1u, 1u, &Tan});
-  registry.register_function(FunctionDef{"ASIN", 1u, 1u, &Asin});
-  registry.register_function(FunctionDef{"ACOS", 1u, 1u, &Acos});
-  registry.register_function(FunctionDef{"ATAN", 1u, 1u, &Atan});
-  registry.register_function(FunctionDef{"ATAN2", 2u, 2u, &Atan2});
-  // Hyperbolic family.
-  registry.register_function(FunctionDef{"SINH", 1u, 1u, &Sinh});
-  registry.register_function(FunctionDef{"COSH", 1u, 1u, &Cosh});
-  registry.register_function(FunctionDef{"TANH", 1u, 1u, &Tanh});
-  registry.register_function(FunctionDef{"ASINH", 1u, 1u, &Asinh});
-  registry.register_function(FunctionDef{"ACOSH", 1u, 1u, &Acosh});
-  registry.register_function(FunctionDef{"ATANH", 1u, 1u, &Atanh});
-  // Reciprocal trig + inverse cotangent.
-  registry.register_function(FunctionDef{"SEC", 1u, 1u, &Sec});
-  registry.register_function(FunctionDef{"CSC", 1u, 1u, &Csc});
-  registry.register_function(FunctionDef{"COT", 1u, 1u, &Cot});
-  registry.register_function(FunctionDef{"ACOT", 1u, 1u, &Acot});
-  // Reciprocal hyperbolic + inverse coth.
-  registry.register_function(FunctionDef{"SECH", 1u, 1u, &Sech});
-  registry.register_function(FunctionDef{"CSCH", 1u, 1u, &Csch});
-  registry.register_function(FunctionDef{"COTH", 1u, 1u, &Coth});
-  registry.register_function(FunctionDef{"ACOTH", 1u, 1u, &Acoth});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"EXP", 1u, 1u, &Exp},   {"LN", 1u, 1u, &Ln},           {"LOG", 1u, 2u, &Log},         {"LOG10", 1u, 1u, &Log10},
+      {"PI", 0u, 0u, &Pi},     {"RADIANS", 1u, 1u, &Radians}, {"DEGREES", 1u, 1u, &Degrees}, {"SIN", 1u, 1u, &Sin},
+      {"COS", 1u, 1u, &Cos},   {"TAN", 1u, 1u, &Tan},         {"ASIN", 1u, 1u, &Asin},       {"ACOS", 1u, 1u, &Acos},
+      {"ATAN", 1u, 1u, &Atan}, {"ATAN2", 2u, 2u, &Atan2},     {"SINH", 1u, 1u, &Sinh},       {"COSH", 1u, 1u, &Cosh},
+      {"TANH", 1u, 1u, &Tanh}, {"ASINH", 1u, 1u, &Asinh},     {"ACOSH", 1u, 1u, &Acosh},     {"ATANH", 1u, 1u, &Atanh},
+      {"SEC", 1u, 1u, &Sec},   {"CSC", 1u, 1u, &Csc},         {"COT", 1u, 1u, &Cot},         {"ACOT", 1u, 1u, &Acot},
+      {"SECH", 1u, 1u, &Sech}, {"CSCH", 1u, 1u, &Csch},       {"COTH", 1u, 1u, &Coth},       {"ACOTH", 1u, 1u, &Acoth},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

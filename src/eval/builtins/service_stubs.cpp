@@ -53,6 +53,7 @@
 
 #include <cstdint>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -100,18 +101,20 @@ Value Copilot(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) 
 }  // namespace
 
 void register_service_stub_builtins(FunctionRegistry& registry) {
-  // IMAGE(source, [alt_text], [sizing], [height], [width]) -- arity 1..5.
-  registry.register_function(FunctionDef{"IMAGE", 1u, 5u, &Image});
-  // RTD(progID, server, topic1, [topic2], ...) -- Excel caps total args
-  // at 255 after the two required scalars (the usual variadic ceiling
-  // inside the engine; kVariadic is the explicit sentinel for no cap).
-  registry.register_function(FunctionDef{"RTD", 3u, 255u, &Rtd});
-  // TRANSLATE(text, source_lang, target_lang) -- Mac Excel 365 accepts
-  // the source language as optional (auto-detect), so min_arity = 2.
-  registry.register_function(FunctionDef{"TRANSLATE", 2u, 3u, &Translate});
-  registry.register_function(FunctionDef{"DETECTLANGUAGE", 1u, 1u, &DetectLanguage});
-  // COPILOT(prompt, [context...]) -- variadic context cells.
-  registry.register_function(FunctionDef{"COPILOT", 1u, 255u, &Copilot});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      // IMAGE(source, [alt_text], [sizing], [height], [width]) -- arity 1..5.
+      {"IMAGE", 1u, 5u, &Image},
+      // RTD(progID, server, topic1, [topic2], ...) -- Excel caps total args
+      // at 255 after the two required scalars.
+      {"RTD", 3u, 255u, &Rtd},
+      // TRANSLATE(text, source_lang, target_lang) -- Mac Excel 365 accepts
+      // the source language as optional (auto-detect), so min_arity = 2.
+      {"TRANSLATE", 2u, 3u, &Translate},
+      {"DETECTLANGUAGE", 1u, 1u, &DetectLanguage},
+      // COPILOT(prompt, [context...]) -- variadic context cells.
+      {"COPILOT", 1u, 255u, &Copilot},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
   // GETPIVOTDATA(data_field, pivot_anchor, [field, item, ...]) is
   // registered through the lazy dispatch table in `tree_walker.cpp`
   // (entry: GETPIVOTDATA -> eval_getpivotdata_lazy). The lazy path

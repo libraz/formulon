@@ -365,6 +365,16 @@ struct OffsetBase {
   std::uint32_t cols = 1;
 };
 
+struct IndirectReference {
+  std::string_view sheet;
+  std::uint32_t top_row = 0;
+  std::uint32_t left_col = 0;
+  std::uint32_t bottom_row = 0;
+  std::uint32_t right_col = 0;
+  bool is_range = false;
+  bool range_syntax = false;
+};
+
 }  // namespace refs_internal
 
 // Forward-declared for `refs_internal::resolve_offset_base`'s Call-branch.
@@ -374,6 +384,76 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
                             bool* out_is_range, ErrorCode* out_err);
 
 namespace refs_internal {
+
+bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx, IndirectReference* out, ErrorCode* out_err) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 2U) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+
+  // Evaluate `ref_text` first so errors propagate per the dispatcher's
+  // left-most-wins rule.
+  const Value ref_val = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (ref_val.is_error()) {
+    *out_err = ref_val.as_error();
+    return false;
+  }
+  auto text_exp = coerce_to_text(ref_val);
+  if (!text_exp) {
+    *out_err = text_exp.error();
+    return false;
+  }
+
+  bool a1_style = true;
+  if (arity == 2U) {
+    const Value a1_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+    if (a1_val.is_error()) {
+      *out_err = a1_val.as_error();
+      return false;
+    }
+    auto b = coerce_to_bool(a1_val);
+    if (!b) {
+      *out_err = b.error();
+      return false;
+    }
+    a1_style = b.value();
+  }
+  if (!a1_style) {
+    // R1C1 style not yet supported by the A1 parser.
+    *out_err = ErrorCode::Ref;
+    return false;
+  }
+
+  const std::string& src = text_exp.value();
+  if (src.empty()) {
+    *out_err = ErrorCode::Ref;
+    return false;
+  }
+  const A1Parse parsed = parse_a1_ref(src);
+  if (!parsed.valid) {
+    *out_err = ErrorCode::Ref;
+    return false;
+  }
+
+  out->sheet = parsed.sheet.empty() ? std::string_view{} : arena.intern(parsed.sheet);
+  out->range_syntax = parsed.is_range;
+  if (parsed.is_range) {
+    out->top_row = std::min(parsed.row, parsed.row2);
+    out->left_col = std::min(parsed.col, parsed.col2);
+    out->bottom_row = std::max(parsed.row, parsed.row2);
+    out->right_col = std::max(parsed.col, parsed.col2);
+    out->is_range = (out->top_row != out->bottom_row) || (out->left_col != out->right_col);
+  } else {
+    out->top_row = parsed.row;
+    out->left_col = parsed.col;
+    out->bottom_row = parsed.row;
+    out->right_col = parsed.col;
+    out->is_range = false;
+  }
+  return true;
+}
 
 // Normalises the base reference from OFFSET's first argument. Literal
 // Ref and `Ref:Ref` RangeOp shapes are accepted directly; INDIRECT /
@@ -603,66 +683,21 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
 
 Value eval_indirect_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 1U || arity > 2U) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  // Evaluate `ref_text` first so errors propagate per the dispatcher's
-  // left-most-wins rule.
-  const Value ref_val = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (ref_val.is_error()) {
-    return ref_val;
-  }
-  auto text_exp = coerce_to_text(ref_val);
-  if (!text_exp) {
-    return Value::error(text_exp.error());
-  }
-
-  // `a1` flag: truthy / absent -> A1; falsy -> R1C1. Excel accepts any
-  // coercible value. R1C1 style is deferred in this MVP.
-  bool a1_style = true;
-  if (arity == 2U) {
-    const Value a1_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-    if (a1_val.is_error()) {
-      return a1_val;
-    }
-    auto b = coerce_to_bool(a1_val);
-    if (!b) {
-      return Value::error(b.error());
-    }
-    a1_style = b.value();
-  }
-  if (!a1_style) {
-    // R1C1 path deferred — INDIRECT can return a reference today only via
-    // the A1 parser. Document in `divergence.yaml` when this bites.
-    return Value::error(ErrorCode::Ref);
-  }
-
-  const std::string& src = text_exp.value();
-  if (src.empty()) {
-    return Value::error(ErrorCode::Ref);
-  }
-
-  refs_internal::A1Parse parsed = refs_internal::parse_a1_ref(src);
-  if (!parsed.valid) {
-    return Value::error(ErrorCode::Ref);
+  refs_internal::IndirectReference indirect{};
+  ErrorCode err = ErrorCode::Value;
+  if (!refs_internal::resolve_indirect_reference(call, arena, registry, ctx, &indirect, &err)) {
+    return Value::error(err);
   }
   // Range INDIRECT is deferred until `Value::Array` lands. `=SUM(INDIRECT(
   // "A1:B2"))` therefore surfaces as `#REF!` in scalar context today.
-  if (parsed.is_range) {
+  if (indirect.range_syntax) {
     return Value::error(ErrorCode::Ref);
   }
 
-  // The sheet view may point at thread-local scratch owned by
-  // `parse_a1_ref`; intern it into the evaluation arena so the
-  // `parser::Reference` we build outlives the next call.
   parser::Reference ref{};
-  if (!parsed.sheet.empty()) {
-    ref.sheet = arena.intern(parsed.sheet);
-  }
-  ref.row = parsed.row;
-  ref.col = parsed.col;
+  ref.sheet = indirect.sheet;
+  ref.row = indirect.top_row;
+  ref.col = indirect.left_col;
   return ctx.resolve_ref(ref, arena, registry);
 }
 
@@ -1031,86 +1066,27 @@ bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const Fun
   }
   const std::string_view name = node.as_call_name();
   if (strings::case_insensitive_eq(name, "INDIRECT")) {
-    const std::uint32_t arity = node.as_call_arity();
-    if (arity < 1U || arity > 2U) {
-      *out_err = ErrorCode::Value;
-      return false;
-    }
-    // Evaluate `ref_text` first so errors in the subtree propagate.
-    const Value ref_val = eval_node(node.as_call_arg(0), arena, registry, ctx);
-    if (ref_val.is_error()) {
-      *out_err = ref_val.as_error();
-      return false;
-    }
-    auto text_exp = coerce_to_text(ref_val);
-    if (!text_exp) {
-      *out_err = text_exp.error();
-      return false;
-    }
-    bool a1_style = true;
-    if (arity == 2U) {
-      const Value a1_val = eval_node(node.as_call_arg(1), arena, registry, ctx);
-      if (a1_val.is_error()) {
-        *out_err = a1_val.as_error();
-        return false;
-      }
-      auto b = coerce_to_bool(a1_val);
-      if (!b) {
-        *out_err = b.error();
-        return false;
-      }
-      a1_style = b.value();
-    }
-    if (!a1_style) {
-      // R1C1 style not yet supported by the A1 parser.
-      *out_err = ErrorCode::Ref;
-      return false;
-    }
-    const std::string& src = text_exp.value();
-    if (src.empty()) {
-      *out_err = ErrorCode::Ref;
-      return false;
-    }
-    refs_internal::A1Parse parsed = refs_internal::parse_a1_ref(src);
-    if (!parsed.valid) {
-      *out_err = ErrorCode::Ref;
+    refs_internal::IndirectReference indirect{};
+    if (!refs_internal::resolve_indirect_reference(node, arena, registry, ctx, &indirect, out_err)) {
       return false;
     }
     // A sheet qualifier is only valid if the workbook actually holds a
     // matching sheet. Without this check a caller like `ROW(INDIRECT(
     // "NonExistent!A1"))` would happily report row 1 for a sheet that
     // doesn't exist; Excel surfaces `#REF!` in that case.
-    if (!parsed.sheet.empty()) {
+    if (!indirect.sheet.empty()) {
       const Workbook* wb = ctx.workbook();
-      if (wb == nullptr || wb->sheet_by_name(parsed.sheet) == nullptr) {
+      if (wb == nullptr || wb->sheet_by_name(indirect.sheet) == nullptr) {
         *out_err = ErrorCode::Ref;
         return false;
       }
     }
-    // Intern the sheet qualifier: `parse_a1_ref` parks quoted sheet
-    // names in thread-local scratch that dies on the next call.
-    if (!parsed.sheet.empty()) {
-      *out_sheet = arena.intern(parsed.sheet);
-    } else {
-      *out_sheet = std::string_view{};
-    }
-    if (parsed.is_range) {
-      const std::uint32_t r_lo = std::min(parsed.row, parsed.row2);
-      const std::uint32_t r_hi = std::max(parsed.row, parsed.row2);
-      const std::uint32_t c_lo = std::min(parsed.col, parsed.col2);
-      const std::uint32_t c_hi = std::max(parsed.col, parsed.col2);
-      *out_top_row = r_lo;
-      *out_left_col = c_lo;
-      *out_bottom_row = r_hi;
-      *out_right_col = c_hi;
-      *out_is_range = (r_lo != r_hi) || (c_lo != c_hi);
-    } else {
-      *out_top_row = parsed.row;
-      *out_left_col = parsed.col;
-      *out_bottom_row = parsed.row;
-      *out_right_col = parsed.col;
-      *out_is_range = false;
-    }
+    *out_sheet = indirect.sheet;
+    *out_top_row = indirect.top_row;
+    *out_left_col = indirect.left_col;
+    *out_bottom_row = indirect.bottom_row;
+    *out_right_col = indirect.right_col;
+    *out_is_range = indirect.is_range;
     return true;
   }
   if (strings::case_insensitive_eq(name, "OFFSET")) {

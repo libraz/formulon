@@ -119,6 +119,65 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   return Expected<void, Error>::Ok();
 }
 
+std::uint32_t ParseXfIndex(std::string_view text) {
+  std::uint32_t xf = 0;
+  for (char c : text) {
+    if (c < '0' || c > '9') {
+      return 0U;
+    }
+    xf = (xf * 10U) + static_cast<std::uint32_t>(c - '0');
+  }
+  return xf;
+}
+
+Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view formula_text,
+                                      std::uint32_t xf_index, std::string_view phonetic_text,
+                                      std::size_t sheet_index, Workbook& workbook, SheetReadContext& ctx) {
+  if (!formula_text.empty()) {
+    // `Workbook::set_cell_formula` accepts both spellings, but to
+    // match the parser/evaluator's expected input form (the existing
+    // call sites in workbook_recalc_test.cpp pass "=A1*2") we prepend
+    // '=' here.
+    std::string with_eq("=");
+    with_eq.append(formula_text);
+    auto wf = workbook.set_cell_formula(sheet_index, parsed.row, parsed.col, std::move(with_eq));
+    if (!wf) {
+      return wf.error();
+    }
+  } else if (parsed.value.is_blank()) {
+    // Skip blank-blank cells to keep the row map sparse, unless a style
+    // index exists: then the format is the payload and must materialise
+    // the cell below.
+    if (parsed.is_sst_index) {
+      ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
+    }
+    if (xf_index == 0U) {
+      return Expected<void, Error>::Ok();
+    }
+  } else {
+    auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, parsed.value);
+    if (!wv) {
+      return wv.error();
+    }
+  }
+
+  if (parsed.is_sst_index) {
+    ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
+  }
+
+  if (xf_index != 0U) {
+    auto sx = workbook.set_cell_xf_index(sheet_index, parsed.row, parsed.col, xf_index);
+    if (!sx) {
+      return sx.error();
+    }
+  }
+
+  if (!parsed.is_sst_index && !phonetic_text.empty()) {
+    workbook.sheet(sheet_index).set_cell_phonetic(parsed.row, parsed.col, phonetic_text);
+  }
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
 
 Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::size_t sheet_index, Workbook& workbook,
@@ -167,70 +226,10 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         }
       }
 
-      // The parser already routed any inline-string text through
-      // `text_storage`, so the value can be stored as-is.
-      const Value to_store = parsed.value;
-
-      // Hand off to the workbook. Order matters: `set_cell_formula`
-      // resets the cell's cached_value, so the cached value (if any
-      // came from `<v>`) would be overwritten if we wrote it first.
-      // For literal cells, just write the value.
-      if (!formula_text.empty()) {
-        // `Workbook::set_cell_formula` accepts both spellings, but to
-        // match the parser/evaluator's expected input form (the existing
-        // call sites in workbook_recalc_test.cpp pass "=A1*2") we
-        // prepend '=' here.
-        std::string with_eq("=");
-        with_eq.append(formula_text);
-        auto wf = workbook.set_cell_formula(sheet_index, parsed.row, parsed.col, std::move(with_eq));
-        if (!wf) {
-          return wf.error();
-        }
-      } else {
-        // Literal cell. Skip blank-blank cells (e.g. <c r="A1"/>) to
-        // keep the row map sparse and avoid spurious dirty-set entries
-        // — UNLESS the cell carries a non-zero `s=` style index, in
-        // which case the format itself is the load-bearing payload and
-        // we must materialise the slot below so the xf-index write
-        // lands on a real `Cell`.
-        if (to_store.is_blank()) {
-          // Nothing to record. Note: SST placeholders are Text("") so
-          // they fall through here; the queue below still picks them up.
-          if (parsed.is_sst_index) {
-            ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
-          }
-          if (parsed.xf_index == 0U) {
-            continue;
-          }
-          // Fall through to xf-index persistence below; the
-          // `set_cell_xf_index` call materialises the blank cell.
-        } else {
-          auto wv = workbook.set_cell_value(sheet_index, parsed.row, parsed.col, to_store);
-          if (!wv) {
-            return wv.error();
-          }
-        }
-      }
-
-      if (parsed.is_sst_index) {
-        ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
-      }
-
-      // Persist the cell's `s=` style index when non-zero. The default
-      // `0` is the sentinel "no explicit format"; skipping the call
-      // avoids materialising blank cells purely for style bookkeeping.
-      if (parsed.xf_index != 0U) {
-        auto sx = workbook.set_cell_xf_index(sheet_index, parsed.row, parsed.col, parsed.xf_index);
-        if (!sx) {
-          return sx.error();
-        }
-      }
-
-      // Inline-string cells carry any <rPh> annotation directly on the
-      // cell parser's output. SST-referenced cells route their phonetic
-      // through the post-loop SST resolution pass, so we skip them here.
-      if (!parsed.is_sst_index && !parsed.phonetic_text.empty()) {
-        workbook.sheet(sheet_index).set_cell_phonetic(parsed.row, parsed.col, parsed.phonetic_text);
+      auto applied = ApplyParsedCell(parsed, formula_text, parsed.xf_index, parsed.phonetic_text, sheet_index, workbook,
+                                     ctx);
+      if (!applied) {
+        return applied.error();
       }
     }
   }
@@ -503,51 +502,27 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
     return payload_or.error();
   }
   const ParsedCell& parsed = payload_or.value();
+  ParsedCell cell = parsed;
+  cell.row = rec.row;
+  cell.col = rec.col;
 
-  if (!rec.formula.empty()) {
-    std::string with_eq("=");
-    with_eq.append(rec.formula);
-    auto wf = workbook.set_cell_formula(sheet_index, rec.row, rec.col, std::move(with_eq));
-    if (!wf) {
-      return wf.error();
-    }
-  } else if (!parsed.value.is_blank()) {
-    auto wv = workbook.set_cell_value(sheet_index, rec.row, rec.col, parsed.value);
-    if (!wv) {
-      return wv.error();
-    }
-  }
-  if (parsed.is_sst_index) {
-    ctx.pending_sst_cells.emplace_back(rec.row, rec.col, parsed.sst_index);
-  }
   // Persist the cell's `s=` xf index when present. The SAX scanner
   // surfaces it as a string view; parse to integer here. Empty / "0"
   // collapses to the default sentinel and we skip the call to keep
   // the row map sparse.
+  std::uint32_t xf = 0;
   if (!rec.s.empty()) {
-    std::uint32_t xf = 0;
-    for (char c : rec.s) {
-      if (c < '0' || c > '9') {
-        xf = 0;
-        break;
-      }
-      xf = (xf * 10U) + static_cast<std::uint32_t>(c - '0');
-    }
-    if (xf != 0U) {
-      auto sx = workbook.set_cell_xf_index(sheet_index, rec.row, rec.col, xf);
-      if (!sx) {
-        return sx.error();
-      }
-    }
+    xf = ParseXfIndex(rec.s);
   }
   // Inline-string cells with <rPh> annotations carry their kana on the
   // SAX record. SST-referenced cells (rec.phonetic stays empty by
   // construction) route their phonetic through the post-loop SST
   // resolution pass instead — same contract the DOM path uses.
-  if (!rec.phonetic.empty()) {
-    workbook.sheet(sheet_index).set_cell_phonetic(rec.row, rec.col, rec.phonetic);
+  auto applied = ApplyParsedCell(cell, rec.formula, xf, rec.phonetic, sheet_index, workbook, ctx);
+  if (!applied) {
+    return applied.error();
   }
-  return Expected<void, Error>::Ok();
+  return applied;
 }
 
 Expected<void, Error> SaxOnCellTrampoline(void* user_data, const CellRecord& rec) {

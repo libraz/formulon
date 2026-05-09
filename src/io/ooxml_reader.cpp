@@ -395,6 +395,73 @@ std::string DirOf(std::string_view path) {
   return std::string(path.substr(0, pos));
 }
 
+/// Returns the `.rels` file path corresponding to any OOXML part path.
+/// For example, `xl/worksheets/sheet1.xml` becomes
+/// `xl/worksheets/_rels/sheet1.xml.rels`; top-level parts similarly
+/// produce `_rels/<file>.rels`.
+std::string RelsPathForPart(std::string_view part_path) {
+  const std::size_t slash = part_path.find_last_of('/');
+  std::string out;
+  if (slash == std::string_view::npos) {
+    out.append("_rels/").append(part_path).append(".rels");
+  } else {
+    out.append(part_path.substr(0, slash));
+    out.append("/_rels/");
+    out.append(part_path.substr(slash + 1));
+    out.append(".rels");
+  }
+  return out;
+}
+
+/// Returns the Office relationship id from nodes that may spell it as
+/// either `r:id` or bare `id`.
+std::string RelationshipRefId(const pugi::xml_node& node) {
+  std::string rid = node.attribute("r:id").value();
+  if (rid.empty()) {
+    rid = node.attribute("id").value();
+  }
+  return rid;
+}
+
+template <typename Fn>
+Expected<void, Error> VisitRelationshipNodes(const ZipReader& zip, std::string_view rels_path,
+                                             std::string_view label, Fn&& fn) {
+  auto rels_bytes_or = zip.read_entry(rels_path);
+  if (!rels_bytes_or) {
+    return rels_bytes_or.error();
+  }
+  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
+
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse =
+      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(rels_path);
+    ctx.append(" desc=");
+    ctx.append(parse.description());
+    std::string message(label);
+    message.append(": pugixml parse failed");
+    return make_error(FormulonErrorCode::kIoXmlParse, std::move(message), std::move(ctx));
+  }
+  pugi::xml_node root = doc.child("Relationships");
+  if (!root) {
+    std::string ctx("context=ooxml_reader part=");
+    ctx.append(rels_path);
+    std::string message(label);
+    message.append(": missing <Relationships>");
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, std::move(message), std::move(ctx));
+  }
+
+  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    auto status = fn(rel);
+    if (!status) {
+      return status.error();
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
 /// Aggregated workbook-relationship lookup: per-sheet `rId -> path` map
 /// plus optional resolved paths for the `sharedStrings` and `styles`
 /// parts. Empty `sst_path` / `styles_path` mean "no such relationship",
@@ -419,59 +486,25 @@ struct WorkbookRels {
 /// shared-strings and styles relationships when present.
 Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string_view workbook_path) {
   WorkbookRels rels;
-
-  // workbook_path = "xl/workbook.xml" => rels = "xl/_rels/workbook.xml.rels"
-  const std::size_t slash = workbook_path.find_last_of('/');
-  std::string rels_path;
-  if (slash == std::string_view::npos) {
-    rels_path.append("_rels/").append(workbook_path).append(".rels");
-  } else {
-    rels_path.append(workbook_path.substr(0, slash));
-    rels_path.append("/_rels/");
-    rels_path.append(workbook_path.substr(slash + 1));
-    rels_path.append(".rels");
-  }
-
+  const std::string rels_path = RelsPathForPart(workbook_path);
   if (!zip.has_entry(rels_path)) {
     // Excel always emits this; treat absence as a broken package.
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook rels: part not found",
                       "context=ooxml_reader rels_path=" + rels_path);
   }
-  auto rels_bytes_or = zip.read_entry(rels_path);
-  if (!rels_bytes_or) {
-    return rels_bytes_or.error();
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
-
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(rels_path);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "workbook rels: pugixml parse failed", std::move(ctx));
-  }
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(rels_path);
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook rels: missing <Relationships>",
-                      std::move(ctx));
-  }
 
   const std::string base_dir = DirOf(workbook_path);
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  auto visit_status = VisitRelationshipNodes(zip, rels_path, "workbook rels",
+                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
     const std::string_view type = rel.attribute("Type").value();
     const std::string_view target = rel.attribute("Target").value();
     if (target.empty()) {
-      continue;
+      return Expected<void, Error>::Ok();
     }
     if (type == kRelWorksheet) {
       const std::string id = rel.attribute("Id").value();
       if (id.empty()) {
-        continue;
+        return Expected<void, Error>::Ok();
       }
       auto resolved = ResolveRelativePath(base_dir, target);
       if (!resolved) {
@@ -495,7 +528,7 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
     } else if (type == kRelPivotCacheDefinition) {
       const std::string id = rel.attribute("Id").value();
       if (id.empty()) {
-        continue;
+        return Expected<void, Error>::Ok();
       }
       auto resolved = ResolveRelativePath(base_dir, target);
       if (!resolved) {
@@ -505,7 +538,7 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
     } else if (type == kRelExternalLink) {
       const std::string id = rel.attribute("Id").value();
       if (id.empty()) {
-        continue;
+        return Expected<void, Error>::Ok();
       }
       auto resolved = ResolveRelativePath(base_dir, target);
       if (!resolved) {
@@ -513,26 +546,12 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
       }
       rels.external_link_paths_by_rid.emplace(id, std::move(resolved).value());
     }
+    return Expected<void, Error>::Ok();
+  });
+  if (!visit_status) {
+    return visit_status.error();
   }
   return rels;
-}
-
-/// Returns the sheet rels file path corresponding to `sheet_path`. For
-/// example, `xl/worksheets/sheet1.xml` becomes
-/// `xl/worksheets/_rels/sheet1.xml.rels`. Sheet parts at the package
-/// root (no directory component) similarly produce `_rels/<file>.rels`.
-std::string SheetRelsPath(std::string_view sheet_path) {
-  const std::size_t slash = sheet_path.find_last_of('/');
-  std::string out;
-  if (slash == std::string_view::npos) {
-    out.append("_rels/").append(sheet_path).append(".rels");
-  } else {
-    out.append(sheet_path.substr(0, slash));
-    out.append("/_rels/");
-    out.append(sheet_path.substr(slash + 1));
-    out.append(".rels");
-  }
-  return out;
 }
 
 /// Walks `<externalReferences>` in the parsed workbook document and
@@ -566,10 +585,7 @@ ExternalLinkLoadResult LoadExternalLinks(const ZipReader& zip, const pugi::xml_n
   std::uint32_t index = 1;
   for (pugi::xml_node ref = refs_node.child("externalReference"); ref;
        ref = ref.next_sibling("externalReference"), ++index) {
-    std::string rid = ref.attribute("r:id").value();
-    if (rid.empty()) {
-      rid = ref.attribute("id").value();
-    }
+    std::string rid = RelationshipRefId(ref);
     if (rid.empty()) {
       continue;
     }
@@ -596,18 +612,10 @@ ExternalLinkLoadResult LoadExternalLinks(const ZipReader& zip, const pugi::xml_n
           if (link_root) {
             if (pugi::xml_node book = link_root.child("externalBook"); book) {
               rec.kind = ExternalLinkRecord::Kind::kExternalBook;
-              std::string body_rid = book.attribute("r:id").value();
-              if (body_rid.empty()) {
-                body_rid = book.attribute("id").value();
-              }
-              rec.body_rel_id = std::move(body_rid);
+              rec.body_rel_id = RelationshipRefId(book);
             } else if (pugi::xml_node ole = link_root.child("oleLink"); ole) {
               rec.kind = ExternalLinkRecord::Kind::kOleLink;
-              std::string body_rid = ole.attribute("r:id").value();
-              if (body_rid.empty()) {
-                body_rid = ole.attribute("id").value();
-              }
-              rec.body_rel_id = std::move(body_rid);
+              rec.body_rel_id = RelationshipRefId(ole);
             } else if (link_root.child("ddeLink")) {
               rec.kind = ExternalLinkRecord::Kind::kDdeLink;
               // ddeLink carries its connection metadata inline; no inner r:id.
@@ -618,7 +626,7 @@ ExternalLinkLoadResult LoadExternalLinks(const ZipReader& zip, const pugi::xml_n
     }
 
     // Per-link rels — capture target URL + target_mode for round-trip.
-    const std::string body_rels_path = SheetRelsPath(rec.part_path);
+    const std::string body_rels_path = RelsPathForPart(rec.part_path);
     if (zip.has_entry(body_rels_path)) {
       auto rels_or = zip.read_entry(body_rels_path);
       if (rels_or) {
@@ -673,33 +681,12 @@ ExternalLinkLoadResult LoadExternalLinks(const ZipReader& zip, const pugi::xml_n
 Expected<std::vector<std::string>, Error> LoadSheetTableTargets(const ZipReader& zip, std::string_view sheet_rels_path,
                                                                 std::string_view sheet_dir) {
   std::vector<std::string> targets;
-  auto rels_bytes_or = zip.read_entry(sheet_rels_path);
-  if (!rels_bytes_or) {
-    return rels_bytes_or.error();
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
-
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(sheet_rels_path);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "sheet rels: pugixml parse failed", std::move(ctx));
-  }
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(sheet_rels_path);
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "sheet rels: missing <Relationships>", std::move(ctx));
-  }
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  auto visit_status = VisitRelationshipNodes(zip, sheet_rels_path, "sheet rels",
+                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
     const std::string_view type = rel.attribute("Type").value();
     const std::string_view target = rel.attribute("Target").value();
     if (target.empty()) {
-      continue;
+      return Expected<void, Error>::Ok();
     }
     if (type == kRelTable) {
       auto resolved = ResolveRelativePath(sheet_dir, target);
@@ -711,6 +698,10 @@ Expected<std::vector<std::string>, Error> LoadSheetTableTargets(const ZipReader&
     // Other rel types (printerSettings, drawings, comments, ...) are
     // out of scope for Bundle 2.4. A future bundle may widen this
     // dispatch.
+    return Expected<void, Error>::Ok();
+  });
+  if (!visit_status) {
+    return visit_status.error();
   }
   return targets;
 }
@@ -738,37 +729,17 @@ struct SheetAuxRels {
 Expected<SheetAuxRels, Error> LoadSheetAuxRels(const ZipReader& zip, std::string_view sheet_rels_path,
                                                std::string_view sheet_dir) {
   SheetAuxRels out;
-  auto rels_bytes_or = zip.read_entry(sheet_rels_path);
-  if (!rels_bytes_or) {
-    return rels_bytes_or.error();
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(sheet_rels_path);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "sheet rels: pugixml parse failed", std::move(ctx));
-  }
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(sheet_rels_path);
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "sheet rels: missing <Relationships>", std::move(ctx));
-  }
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  auto visit_status = VisitRelationshipNodes(zip, sheet_rels_path, "sheet rels",
+                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
     const std::string_view type = rel.attribute("Type").value();
     const std::string_view target = rel.attribute("Target").value();
     if (target.empty()) {
-      continue;
+      return Expected<void, Error>::Ok();
     }
     if (type == kRelHyperlink) {
       const std::string id = rel.attribute("Id").value();
       if (id.empty()) {
-        continue;
+        return Expected<void, Error>::Ok();
       }
       // Hyperlink targets are external URLs — preserve them exactly as
       // the OOXML producer wrote them (no relative-path resolution).
@@ -786,6 +757,10 @@ Expected<SheetAuxRels, Error> LoadSheetAuxRels(const ZipReader& zip, std::string
       }
       out.vml_path = std::move(resolved).value();
     }
+    return Expected<void, Error>::Ok();
+  });
+  if (!visit_status) {
+    return visit_status.error();
   }
   return out;
 }
@@ -799,33 +774,12 @@ Expected<std::vector<std::string>, Error> LoadSheetPivotTableTargets(const ZipRe
                                                                      std::string_view sheet_rels_path,
                                                                      std::string_view sheet_dir) {
   std::vector<std::string> targets;
-  auto rels_bytes_or = zip.read_entry(sheet_rels_path);
-  if (!rels_bytes_or) {
-    return rels_bytes_or.error();
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
-
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(sheet_rels_path);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "sheet rels: pugixml parse failed", std::move(ctx));
-  }
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(sheet_rels_path);
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "sheet rels: missing <Relationships>", std::move(ctx));
-  }
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  auto visit_status = VisitRelationshipNodes(zip, sheet_rels_path, "sheet rels",
+                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
     const std::string_view type = rel.attribute("Type").value();
     const std::string_view target = rel.attribute("Target").value();
     if (target.empty()) {
-      continue;
+      return Expected<void, Error>::Ok();
     }
     if (type == kRelPivotTable) {
       auto resolved = ResolveRelativePath(sheet_dir, target);
@@ -834,6 +788,10 @@ Expected<std::vector<std::string>, Error> LoadSheetPivotTableTargets(const ZipRe
       }
       targets.push_back(std::move(resolved).value());
     }
+    return Expected<void, Error>::Ok();
+  });
+  if (!visit_status) {
+    return visit_status.error();
   }
   return targets;
 }
@@ -846,55 +804,32 @@ Expected<std::vector<std::string>, Error> LoadSheetPivotTableTargets(const ZipRe
 /// is absent or carries no records relationship — both are valid OOXML
 /// states (definition-only caches are uncommon but legal).
 Expected<std::string, Error> LoadPivotCacheRecordsTarget(const ZipReader& zip, std::string_view definition_path) {
-  // Build the rels path: <dir>/_rels/<filename>.rels.
-  const std::size_t slash = definition_path.find_last_of('/');
-  std::string rels_path;
-  if (slash == std::string_view::npos) {
-    rels_path.append("_rels/").append(definition_path).append(".rels");
-  } else {
-    rels_path.append(definition_path.substr(0, slash));
-    rels_path.append("/_rels/");
-    rels_path.append(definition_path.substr(slash + 1));
-    rels_path.append(".rels");
-  }
+  const std::string rels_path = RelsPathForPart(definition_path);
   if (!zip.has_entry(rels_path)) {
     return std::string{};
   }
-  auto rels_bytes_or = zip.read_entry(rels_path);
-  if (!rels_bytes_or) {
-    return rels_bytes_or.error();
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
-
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(rels_path);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "pivotCache rels: pugixml parse failed", std::move(ctx));
-  }
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(rels_path);
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "pivotCache rels: missing <Relationships>",
-                      std::move(ctx));
-  }
   const std::string base_dir = DirOf(definition_path);
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  std::string records_target;
+  auto visit_status = VisitRelationshipNodes(zip, rels_path, "pivotCache rels",
+                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
     const std::string_view type = rel.attribute("Type").value();
     const std::string_view target = rel.attribute("Target").value();
     if (target.empty()) {
-      continue;
+      return Expected<void, Error>::Ok();
     }
-    if (type == kRelPivotCacheRecords) {
-      return ResolveRelativePath(base_dir, target);
+    if (type == kRelPivotCacheRecords && records_target.empty()) {
+      auto resolved = ResolveRelativePath(base_dir, target);
+      if (!resolved) {
+        return resolved.error();
+      }
+      records_target = std::move(resolved).value();
     }
+    return Expected<void, Error>::Ok();
+  });
+  if (!visit_status) {
+    return visit_status.error();
   }
-  return std::string{};
+  return records_target;
 }
 
 }  // namespace
@@ -1010,20 +945,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   consumed_parts.insert("[Content_Types].xml");
   consumed_parts.insert("_rels/.rels");
   consumed_parts.insert(workbook_path);
-  // Also mark the workbook rels file as consumed.
-  {
-    const std::size_t slash = workbook_path.find_last_of('/');
-    std::string rels_path;
-    if (slash == std::string::npos) {
-      rels_path.append("_rels/").append(workbook_path).append(".rels");
-    } else {
-      rels_path.append(workbook_path.substr(0, slash));
-      rels_path.append("/_rels/");
-      rels_path.append(workbook_path.substr(slash + 1));
-      rels_path.append(".rels");
-    }
-    consumed_parts.insert(std::move(rels_path));
-  }
+  consumed_parts.insert(RelsPathForPart(workbook_path));
 
   // Collect (display_name, part_path) per sheet in document order. The
   // sheet's `r:id` attribute resolves to a part path through
@@ -1044,10 +966,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     // accept both the Office-namespaced ("r:id") and the unprefixed
     // ("id") variants because pugixml exposes namespace-prefixed names
     // verbatim and writers in the wild diverge on which one they use.
-    std::string rid = sn.attribute("r:id").value();
-    if (rid.empty()) {
-      rid = sn.attribute("id").value();
-    }
+    std::string rid = RelationshipRefId(sn);
     if (rid.empty()) {
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: <sheet> missing r:id attribute",
                         "context=ooxml_reader part=" + workbook_path);
@@ -1301,7 +1220,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     // no rels at all. Tables and pivot tables are read in two passes
     // through the same rels file (separate helpers, each scoped to one
     // relationship type) so each consumer site reads linearly.
-    const std::string sheet_rels_path = SheetRelsPath(sheet_path);
+    const std::string sheet_rels_path = RelsPathForPart(sheet_path);
     if (zip.has_entry(sheet_rels_path)) {
       const std::string sheet_dir = DirOf(sheet_path);
       auto targets_or = LoadSheetTableTargets(zip, sheet_rels_path, sheet_dir);
@@ -1359,7 +1278,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         // it (the table already carries `pivot_cache_id`), but we mark
         // the rels file as consumed so it does not surface as an
         // unknown part.
-        const std::string pt_rels_path = SheetRelsPath(pivot_table_path);
+        const std::string pt_rels_path = RelsPathForPart(pivot_table_path);
         if (zip.has_entry(pt_rels_path)) {
           consumed_parts.insert(pt_rels_path);
         }
@@ -1489,10 +1408,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     const std::uint32_t cache_id = pc.attribute("cacheId").as_uint(0U);
     // Accept both "r:id" (Office-namespaced) and bare "id" — same
     // forgiveness as the sheet relationship walk above.
-    std::string rid = pc.attribute("r:id").value();
-    if (rid.empty()) {
-      rid = pc.attribute("id").value();
-    }
+    std::string rid = RelationshipRefId(pc);
     if (rid.empty()) {
       return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook.xml: <pivotCache> missing r:id attribute",
                         "context=ooxml_reader part=" + workbook_path);
@@ -1555,7 +1471,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     // The cache definition may carry its own rels file (it does when
     // there's a records part); mark it consumed so it does not surface
     // as an unknown part.
-    const std::string def_rels_path = SheetRelsPath(definition_path);
+    const std::string def_rels_path = RelsPathForPart(definition_path);
     if (zip.has_entry(def_rels_path)) {
       consumed_parts.insert(def_rels_path);
     }

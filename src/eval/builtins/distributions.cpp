@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <limits>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/stats/special_functions.h"
@@ -89,6 +90,28 @@ Expected<double, ErrorCode> read_optional_number(const Value* args, std::uint32_
     return default_value;
   }
   return read_number(args, index);
+}
+
+struct NumberTriple {
+  double first;
+  double second;
+  double third;
+};
+
+Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args) {
+  auto first = read_number(args, 0);
+  if (!first) {
+    return first.error();
+  }
+  auto second = read_number(args, 1);
+  if (!second) {
+    return second.error();
+  }
+  auto third = read_number(args, 2);
+  if (!third) {
+    return third.error();
+  }
+  return NumberTriple{first.value(), second.value(), third.value()};
 }
 
 // Shared bracket-then-Newton inverter for CDF surfaces on a half-open
@@ -372,25 +395,17 @@ double GammaPdf(double x, double alpha, double beta_scale) noexcept {
 //   alpha > 1: 0
 // The CDF at x == 0 is 0 by definition.
 Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_e = read_number(args, 0);
-  if (!x_e) {
-    return Value::error(x_e.error());
-  }
-  auto alpha_e = read_number(args, 1);
-  if (!alpha_e) {
-    return Value::error(alpha_e.error());
-  }
-  auto beta_e = read_number(args, 2);
-  if (!beta_e) {
-    return Value::error(beta_e.error());
+  auto parsed = read_number_triple(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
   auto cum_e = coerce_to_bool(args[3]);
   if (!cum_e) {
     return Value::error(cum_e.error());
   }
-  const double x = x_e.value();
-  const double alpha = alpha_e.value();
-  const double beta_scale = beta_e.value();
+  const double x = parsed.value().first;
+  const double alpha = parsed.value().second;
+  const double beta_scale = parsed.value().third;
   if (x < 0.0 || alpha <= 0.0 || beta_scale <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -478,21 +493,13 @@ double InverseStandardNormal(double p) {
 // driver directly here (on the gamma surface) to avoid calling into
 // stats.cpp for the helper. The two paths agree to ~1e-12.
 Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p_e = read_number(args, 0);
-  if (!p_e) {
-    return Value::error(p_e.error());
+  auto parsed = read_number_triple(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto alpha_e = read_number(args, 1);
-  if (!alpha_e) {
-    return Value::error(alpha_e.error());
-  }
-  auto beta_e = read_number(args, 2);
-  if (!beta_e) {
-    return Value::error(beta_e.error());
-  }
-  const double p = p_e.value();
-  const double alpha = alpha_e.value();
-  const double beta_scale = beta_e.value();
+  const double p = parsed.value().first;
+  const double alpha = parsed.value().second;
+  const double beta_scale = parsed.value().third;
   if (p < 0.0 || p >= 1.0 || alpha <= 0.0 || beta_scale <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -569,25 +576,17 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // contract for this entry is "density at the boundary is zero"; verified
 // against the golden oracle. The CDF at x == 0 is 0 as expected.
 Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_e = read_number(args, 0);
-  if (!x_e) {
-    return Value::error(x_e.error());
-  }
-  auto alpha_e = read_number(args, 1);
-  if (!alpha_e) {
-    return Value::error(alpha_e.error());
-  }
-  auto beta_e = read_number(args, 2);
-  if (!beta_e) {
-    return Value::error(beta_e.error());
+  auto parsed = read_number_triple(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
   auto cum_e = coerce_to_bool(args[3]);
   if (!cum_e) {
     return Value::error(cum_e.error());
   }
-  const double x = x_e.value();
-  const double alpha = alpha_e.value();
-  const double beta_scale = beta_e.value();
+  const double x = parsed.value().first;
+  const double alpha = parsed.value().second;
+  const double beta_scale = parsed.value().third;
   if (x < 0.0 || alpha <= 0.0 || beta_scale <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -616,25 +615,17 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 //   PDF: 1 / (x * sd * sqrt(2*pi)) * exp(-(ln x - mean)^2 / (2 sd^2))
 // #NUM! on x <= 0, sd <= 0.
 Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_e = read_number(args, 0);
-  if (!x_e) {
-    return Value::error(x_e.error());
-  }
-  auto mean_e = read_number(args, 1);
-  if (!mean_e) {
-    return Value::error(mean_e.error());
-  }
-  auto sd_e = read_number(args, 2);
-  if (!sd_e) {
-    return Value::error(sd_e.error());
+  auto parsed = read_number_triple(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
   auto cum_e = coerce_to_bool(args[3]);
   if (!cum_e) {
     return Value::error(cum_e.error());
   }
-  const double x = x_e.value();
-  const double mean = mean_e.value();
-  const double sd = sd_e.value();
+  const double x = parsed.value().first;
+  const double mean = parsed.value().second;
+  const double sd = parsed.value().third;
   if (x <= 0.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -651,21 +642,13 @@ Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 //   exp(mean + sd * InverseStandardNormal(p))
 // #NUM! on p <= 0, p >= 1, sd <= 0.
 Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p_e = read_number(args, 0);
-  if (!p_e) {
-    return Value::error(p_e.error());
+  auto parsed = read_number_triple(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto mean_e = read_number(args, 1);
-  if (!mean_e) {
-    return Value::error(mean_e.error());
-  }
-  auto sd_e = read_number(args, 2);
-  if (!sd_e) {
-    return Value::error(sd_e.error());
-  }
-  const double p = p_e.value();
-  const double mean = mean_e.value();
-  const double sd = sd_e.value();
+  const double p = parsed.value().first;
+  const double mean = parsed.value().second;
+  const double sd = parsed.value().third;
   if (p <= 0.0 || p >= 1.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -813,38 +796,28 @@ Value BetaDistLegacy(const Value* args, std::uint32_t arity, Arena& arena) {
 void register_distribution_builtins(FunctionRegistry& registry) {
   // Scalar-only: every entry below coerces its args through `coerce_to_number`
   // / `coerce_to_bool`, so `accepts_ranges` stays at the default `false`.
-  registry.register_function(FunctionDef{"BETA.DIST", 4u, 6u, &BetaDist});
-  registry.register_function(FunctionDef{"BETA.INV", 3u, 5u, &BetaInv});
-
-  registry.register_function(FunctionDef{"GAMMA", 1u, 1u, &Gamma});
-  // GAMMALN is the pre-2010 name; GAMMALN.PRECISE is Excel 2010+'s
-  // canonical spelling. Both use the same impl and are exposed under
-  // both names so either formula parses.
-  registry.register_function(FunctionDef{"GAMMALN", 1u, 1u, &Gammaln});
-  registry.register_function(FunctionDef{"GAMMALN.PRECISE", 1u, 1u, &Gammaln});
-  registry.register_function(FunctionDef{"GAMMA.DIST", 4u, 4u, &GammaDist});
-  registry.register_function(FunctionDef{"GAMMA.INV", 3u, 3u, &GammaInv});
-
-  registry.register_function(FunctionDef{"WEIBULL.DIST", 4u, 4u, &WeibullDist});
-
-  registry.register_function(FunctionDef{"LOGNORM.DIST", 4u, 4u, &LognormDist});
-  registry.register_function(FunctionDef{"LOGNORM.INV", 3u, 3u, &LognormInv});
-
-  registry.register_function(FunctionDef{"HYPGEOM.DIST", 5u, 5u, &HypgeomDist});
-
-  // Legacy (pre-2010) spellings. BETAINV, GAMMADIST, GAMMAINV, WEIBULL,
-  // and LOGINV are signature-identical to the .NEW form and share the
-  // impl pointer. LOGNORMDIST / HYPGEOMDIST / BETADIST route through
-  // wrappers above because their legacy signatures drop or shift the
-  // cumulative flag.
-  registry.register_function(FunctionDef{"BETADIST", 3u, 5u, &BetaDistLegacy});
-  registry.register_function(FunctionDef{"BETAINV", 3u, 5u, &BetaInv});
-  registry.register_function(FunctionDef{"GAMMADIST", 4u, 4u, &GammaDist});
-  registry.register_function(FunctionDef{"GAMMAINV", 3u, 3u, &GammaInv});
-  registry.register_function(FunctionDef{"WEIBULL", 4u, 4u, &WeibullDist});
-  registry.register_function(FunctionDef{"LOGNORMDIST", 3u, 3u, &LognormDistLegacy});
-  registry.register_function(FunctionDef{"LOGINV", 3u, 3u, &LognormInv});
-  registry.register_function(FunctionDef{"HYPGEOMDIST", 4u, 4u, &HypgeomDistLegacy});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"BETA.DIST", 4u, 6u, &BetaDist},
+      {"BETA.INV", 3u, 5u, &BetaInv},
+      {"GAMMA", 1u, 1u, &Gamma},
+      {"GAMMALN", 1u, 1u, &Gammaln},
+      {"GAMMALN.PRECISE", 1u, 1u, &Gammaln},
+      {"GAMMA.DIST", 4u, 4u, &GammaDist},
+      {"GAMMA.INV", 3u, 3u, &GammaInv},
+      {"WEIBULL.DIST", 4u, 4u, &WeibullDist},
+      {"LOGNORM.DIST", 4u, 4u, &LognormDist},
+      {"LOGNORM.INV", 3u, 3u, &LognormInv},
+      {"HYPGEOM.DIST", 5u, 5u, &HypgeomDist},
+      {"BETADIST", 3u, 5u, &BetaDistLegacy},
+      {"BETAINV", 3u, 5u, &BetaInv},
+      {"GAMMADIST", 4u, 4u, &GammaDist},
+      {"GAMMAINV", 3u, 3u, &GammaInv},
+      {"WEIBULL", 4u, 4u, &WeibullDist},
+      {"LOGNORMDIST", 3u, 3u, &LognormDistLegacy},
+      {"LOGINV", 3u, 3u, &LognormInv},
+      {"HYPGEOMDIST", 4u, 4u, &HypgeomDistLegacy},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

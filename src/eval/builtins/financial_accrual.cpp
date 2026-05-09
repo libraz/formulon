@@ -20,7 +20,6 @@
 
 #include "eval/builtins/financial_helpers.h"
 #include "eval/coerce.h"
-#include "eval/date_time.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -29,77 +28,6 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 namespace {
-
-// Computes YEARFRAC(start, end, basis) following the YEARFRAC builtin's
-// rules. Returns `#NUM!` on an unsupported basis or non-finite result.
-// Unlike the DISC/INTRATE helper in `financial_rates.cpp`, a zero-length
-// span is allowed and yields 0.0 — ACCRINT/ACCRINTM do not divide by the
-// year-fraction, so a zero result simply means "no accrued interest".
-Expected<double, ErrorCode> yearfrac_accrual(double start, double end, int basis) {
-  if (basis < 0 || basis > 4) {
-    return ErrorCode::Num;
-  }
-  const double s = std::trunc(start);
-  const double e = std::trunc(end);
-  const date_time::YMD a = date_time::ymd_from_serial(s);
-  const date_time::YMD b = date_time::ymd_from_serial(e);
-  double yf = 0.0;
-  switch (basis) {
-    case 0:
-      yf = date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    case 1:
-      yf = date_time::yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    case 2:
-      yf = (e - s) / 360.0;
-      break;
-    case 3:
-      yf = (e - s) / 365.0;
-      break;
-    case 4:
-      yf = date_time::yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    default:
-      return ErrorCode::Num;
-  }
-  if (std::isnan(yf) || std::isinf(yf)) {
-    return ErrorCode::Num;
-  }
-  return yf;
-}
-
-// Reads the `basis` argument at `args[index]` if present, otherwise
-// returns 0. Truncates toward zero and validates against {0,1,2,3,4}.
-Expected<int, ErrorCode> read_basis(const Value* args, std::uint32_t arity, std::uint32_t index) {
-  if (arity <= index) {
-    return 0;
-  }
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return raw.error();
-  }
-  const int basis = static_cast<int>(std::trunc(raw.value()));
-  if (basis < 0 || basis > 4) {
-    return ErrorCode::Num;
-  }
-  return basis;
-}
-
-// Reads a required date argument, truncating toward zero. Negative
-// serials are rejected as `#NUM!` to match the rest of the date-aware
-// builtins.
-Expected<double, ErrorCode> read_date(const Value* args, std::uint32_t index) {
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return raw.error();
-  }
-  const double t = std::trunc(raw.value());
-  if (t < 0.0) {
-    return ErrorCode::Num;
-  }
-  return t;
-}
 
 // Reads a Bool / numeric "calc_method" tail argument. TRUE/non-zero
 // selects the issue-to-settlement formula; FALSE/zero selects the
@@ -143,15 +71,15 @@ Expected<bool, ErrorCode> read_calc_method(const Value* args, std::uint32_t arit
 //   - frequency not in {1, 2, 4}     ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}   ->  #NUM!
 Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto issue = read_date(args, 0);
+  auto issue = read_financial_date(args, 0);
   if (!issue) {
     return Value::error(issue.error());
   }
-  auto first_interest = read_date(args, 1);
+  auto first_interest = read_financial_date(args, 1);
   if (!first_interest) {
     return Value::error(first_interest.error());
   }
-  auto settlement = read_date(args, 2);
+  auto settlement = read_financial_date(args, 2);
   if (!settlement) {
     return Value::error(settlement.error());
   }
@@ -163,11 +91,11 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!par) {
     return Value::error(par.error());
   }
-  auto frequency_e = read_required_number(args, 5);
-  if (!frequency_e) {
-    return Value::error(frequency_e.error());
+  auto frequency = read_coupon_frequency(args, 5);
+  if (!frequency) {
+    return Value::error(frequency.error());
   }
-  auto basis = read_basis(args, arity, 6);
+  auto basis = read_day_count_basis(args, arity, 6);
   if (!basis) {
     return Value::error(basis.error());
   }
@@ -181,10 +109,6 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (rate.value() <= 0.0 || par.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const int freq = static_cast<int>(std::trunc(frequency_e.value()));
-  if (freq != 1 && freq != 2 && freq != 4) {
-    return Value::error(ErrorCode::Num);
-  }
   // Mac Excel 365 always accrues from `issue` to `settlement`, ignoring
   // both `first_interest` and `calc_method`. The MS docs say
   // calc_method=FALSE should switch to first_interest, but the actual
@@ -194,7 +118,7 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   (void)calc_method;
   (void)first_interest;
   const double start = issue.value();
-  auto yf = yearfrac_accrual(start, settlement.value(), basis.value());
+  auto yf = yearfrac_for_basis(start, settlement.value(), basis.value());
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -214,11 +138,11 @@ Value Accrint(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - par <= 0                       ->  #NUM!
 //   - basis not in {0, 1, 2, 3, 4}   ->  #NUM!
 Value Accrintm(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto issue = read_date(args, 0);
+  auto issue = read_financial_date(args, 0);
   if (!issue) {
     return Value::error(issue.error());
   }
-  auto settlement = read_date(args, 1);
+  auto settlement = read_financial_date(args, 1);
   if (!settlement) {
     return Value::error(settlement.error());
   }
@@ -230,7 +154,7 @@ Value Accrintm(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!par) {
     return Value::error(par.error());
   }
-  auto basis = read_basis(args, arity, 4);
+  auto basis = read_day_count_basis(args, arity, 4);
   if (!basis) {
     return Value::error(basis.error());
   }
@@ -240,7 +164,7 @@ Value Accrintm(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (rate.value() <= 0.0 || par.value() <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  auto yf = yearfrac_accrual(issue.value(), settlement.value(), basis.value());
+  auto yf = yearfrac_for_basis(issue.value(), settlement.value(), basis.value());
   if (!yf) {
     return Value::error(yf.error());
   }

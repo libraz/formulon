@@ -511,9 +511,9 @@ Value extract_dispatch(const KernelResult& kr, std::string_view subject, long lo
 // PCRE2_SUBSTITUTE_EXTENDED so Excel's `$1`, `${name}`, `$$`, and `\n`
 // escapes work; we add PCRE2_SUBSTITUTE_GLOBAL only when occurrence == 0.
 
-// Replaces every match in one pcre2_substitute call (occurrence == 0).
-Value substitute_global(std::string_view subject, std::string_view pattern, std::string_view replacement,
-                        bool case_insensitive, Arena& arena) {
+// Runs one pcre2_substitute call with caller-selected global/single flags.
+Value substitute_with_flags(std::string_view subject, std::string_view pattern, std::string_view replacement,
+                            bool case_insensitive, std::size_t start_offset, std::uint32_t sub_flags, Arena& arena) {
   // Pattern guards mirror regex_kernel.
   if (pattern.empty() || pattern.size() > kMaxPatternBytes) {
     return Value::error(ErrorCode::Value);
@@ -547,9 +547,9 @@ Value substitute_global(std::string_view subject, std::string_view pattern, std:
   std::vector<unsigned char> buffer(bufsize);
   PCRE2_SIZE outlen = bufsize;
 
-  const std::uint32_t sub_flags = PCRE2_SUBSTITUTE_EXTENDED | PCRE2_SUBSTITUTE_GLOBAL;
   int rc = pcre2_substitute(code, reinterpret_cast<PCRE2_SPTR>(subject.data()), static_cast<PCRE2_SIZE>(subject.size()),
-                            0, sub_flags, nullptr, mctx, reinterpret_cast<PCRE2_SPTR>(replacement.data()),
+                            static_cast<PCRE2_SIZE>(start_offset), sub_flags, nullptr, mctx,
+                            reinterpret_cast<PCRE2_SPTR>(replacement.data()),
                             static_cast<PCRE2_SIZE>(replacement.size()), buffer.data(), &outlen);
   if (rc == PCRE2_ERROR_NOMEMORY) {
     // outlen now contains the required size; reallocate and retry.
@@ -557,8 +557,9 @@ Value substitute_global(std::string_view subject, std::string_view pattern, std:
     bufsize = outlen;
     outlen = bufsize;
     rc = pcre2_substitute(code, reinterpret_cast<PCRE2_SPTR>(subject.data()), static_cast<PCRE2_SIZE>(subject.size()),
-                          0, sub_flags, nullptr, mctx, reinterpret_cast<PCRE2_SPTR>(replacement.data()),
-                          static_cast<PCRE2_SIZE>(replacement.size()), buffer.data(), &outlen);
+                          static_cast<PCRE2_SIZE>(start_offset), sub_flags, nullptr, mctx,
+                          reinterpret_cast<PCRE2_SPTR>(replacement.data()), static_cast<PCRE2_SIZE>(replacement.size()),
+                          buffer.data(), &outlen);
   }
 
   pcre2_match_context_free(mctx);
@@ -574,6 +575,12 @@ Value substitute_global(std::string_view subject, std::string_view pattern, std:
   // rc == 0 means no matches were found — return original text unchanged.
   std::string_view out_view(reinterpret_cast<const char*>(buffer.data()), static_cast<std::size_t>(outlen));
   return Value::text(arena.intern(out_view));
+}
+
+Value substitute_global(std::string_view subject, std::string_view pattern, std::string_view replacement,
+                        bool case_insensitive, Arena& arena) {
+  return substitute_with_flags(subject, pattern, replacement, case_insensitive, /*start_offset=*/0U,
+                               PCRE2_SUBSTITUTE_EXTENDED | PCRE2_SUBSTITUTE_GLOBAL, arena);
 }
 
 // Replaces only the N-th match (occurrence == N > 0). Strategy: run the
@@ -592,60 +599,9 @@ Value substitute_nth(std::string_view subject, std::string_view pattern, std::st
     return Value::text(arena.intern(subject));
   }
 
-  // Recompile + run pcre2_substitute at the target match's start.
-  std::uint32_t compile_flags = PCRE2_UTF | PCRE2_UCP;
-  if (case_insensitive) {
-    compile_flags |= PCRE2_CASELESS;
-  }
-  int err_code = 0;
-  PCRE2_SIZE err_offset = 0;
-  pcre2_code* code =
-      pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.data()), static_cast<PCRE2_SIZE>(pattern.size()),
-                    compile_flags, &err_code, &err_offset, nullptr);
-  if (code == nullptr) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  pcre2_match_context* mctx = pcre2_match_context_create(nullptr);
-  if (mctx == nullptr) {
-    pcre2_code_free(code);
-    return Value::error(ErrorCode::Value);
-  }
-  pcre2_set_match_limit(mctx, kMatchLimit);
-  pcre2_set_depth_limit(mctx, kDepthLimit);
-
   const std::size_t target_start = kr.matches[static_cast<std::size_t>(occurrence - 1)].whole_start;
-
-  std::size_t bufsize = subject.size() + replacement.size() * 2 + 16;
-  std::vector<unsigned char> buffer(bufsize);
-  PCRE2_SIZE outlen = bufsize;
-
-  const std::uint32_t sub_flags = PCRE2_SUBSTITUTE_EXTENDED;  // single match
-  int rc = pcre2_substitute(code, reinterpret_cast<PCRE2_SPTR>(subject.data()), static_cast<PCRE2_SIZE>(subject.size()),
-                            static_cast<PCRE2_SIZE>(target_start), sub_flags, nullptr, mctx,
-                            reinterpret_cast<PCRE2_SPTR>(replacement.data()),
-                            static_cast<PCRE2_SIZE>(replacement.size()), buffer.data(), &outlen);
-  if (rc == PCRE2_ERROR_NOMEMORY) {
-    buffer.resize(outlen);
-    bufsize = outlen;
-    outlen = bufsize;
-    rc = pcre2_substitute(code, reinterpret_cast<PCRE2_SPTR>(subject.data()), static_cast<PCRE2_SIZE>(subject.size()),
-                          static_cast<PCRE2_SIZE>(target_start), sub_flags, nullptr, mctx,
-                          reinterpret_cast<PCRE2_SPTR>(replacement.data()), static_cast<PCRE2_SIZE>(replacement.size()),
-                          buffer.data(), &outlen);
-  }
-
-  pcre2_match_context_free(mctx);
-  pcre2_code_free(code);
-
-  if (rc < 0) {
-    if (rc == PCRE2_ERROR_MATCHLIMIT || rc == PCRE2_ERROR_DEPTHLIMIT || rc == PCRE2_ERROR_HEAPLIMIT) {
-      return Value::error(ErrorCode::Calc);
-    }
-    return Value::error(ErrorCode::Value);
-  }
-  std::string_view out_view(reinterpret_cast<const char*>(buffer.data()), static_cast<std::size_t>(outlen));
-  return Value::text(arena.intern(out_view));
+  return substitute_with_flags(subject, pattern, replacement, case_insensitive, target_start, PCRE2_SUBSTITUTE_EXTENDED,
+                               arena);
 }
 
 }  // namespace

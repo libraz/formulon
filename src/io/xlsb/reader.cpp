@@ -146,6 +146,59 @@ std::string DirOf(std::string_view path) {
   return std::string(path.substr(0, pos));
 }
 
+std::string RelsPathForPart(std::string_view part_path) {
+  const std::size_t slash = part_path.find_last_of('/');
+  std::string out;
+  if (slash == std::string_view::npos) {
+    out.append("_rels/").append(part_path).append(".rels");
+  } else {
+    out.append(part_path.substr(0, slash));
+    out.append("/_rels/");
+    out.append(part_path.substr(slash + 1));
+    out.append(".rels");
+  }
+  return out;
+}
+
+template <typename Fn>
+Expected<void, Error> VisitRelationshipNodes(const ZipReader& zip, std::string_view rels_path,
+                                             std::string_view label, Fn&& fn) {
+  auto rels_bytes_or = zip.read_entry(rels_path);
+  if (!rels_bytes_or) {
+    return rels_bytes_or.error();
+  }
+  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
+
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse =
+      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    std::string ctx("context=xlsb_reader part=");
+    ctx.append(rels_path);
+    ctx.append(" desc=");
+    ctx.append(parse.description());
+    std::string message(label);
+    message.append(": pugixml parse failed");
+    return make_error(FormulonErrorCode::kIoXmlParse, std::move(message), std::move(ctx));
+  }
+  pugi::xml_node root = doc.child("Relationships");
+  if (!root) {
+    std::string ctx("context=xlsb_reader part=");
+    ctx.append(rels_path);
+    std::string message(label);
+    message.append(": missing <Relationships>");
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, std::move(message), std::move(ctx));
+  }
+
+  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    auto status = fn(rel);
+    if (!status) {
+      return status.error();
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
 // ---------------------------------------------------------------------------
 // XML envelope walkers (return `Expected` on every failure path).
 // ---------------------------------------------------------------------------
@@ -232,51 +285,23 @@ struct WorkbookRels {
 
 Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string_view workbook_path) {
   WorkbookRels rels;
-  const std::size_t slash = workbook_path.find_last_of('/');
-  std::string rels_path;
-  if (slash == std::string_view::npos) {
-    rels_path.append("_rels/").append(workbook_path).append(".rels");
-  } else {
-    rels_path.append(workbook_path.substr(0, slash));
-    rels_path.append("/_rels/");
-    rels_path.append(workbook_path.substr(slash + 1));
-    rels_path.append(".rels");
-  }
+  const std::string rels_path = RelsPathForPart(workbook_path);
   if (!zip.has_entry(rels_path)) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook rels: part not found",
                       "context=xlsb_reader rels_path=" + rels_path);
   }
-  auto rels_bytes_or = zip.read_entry(rels_path);
-  if (!rels_bytes_or) {
-    return rels_bytes_or.error();
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=xlsb_reader part=");
-    ctx.append(rels_path);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    return make_error(FormulonErrorCode::kIoXmlParse, "workbook rels: pugixml parse failed", std::move(ctx));
-  }
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook rels: missing <Relationships>",
-                      "context=xlsb_reader part=" + rels_path);
-  }
   const std::string base_dir = DirOf(workbook_path);
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+  auto visit_status = VisitRelationshipNodes(zip, rels_path, "workbook rels",
+                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
     const std::string_view type = rel.attribute("Type").value();
     const std::string_view target = rel.attribute("Target").value();
     if (target.empty()) {
-      continue;
+      return Expected<void, Error>::Ok();
     }
     if (type == kRelWorksheet) {
       const std::string id = rel.attribute("Id").value();
       if (id.empty()) {
-        continue;
+        return Expected<void, Error>::Ok();
       }
       auto resolved = ResolveRelativePath(base_dir, target);
       if (!resolved) {
@@ -296,6 +321,10 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
       }
       rels.styles_path = std::move(resolved).value();
     }
+    return Expected<void, Error>::Ok();
+  });
+  if (!visit_status) {
+    return visit_status.error();
   }
   return rels;
 }
@@ -847,20 +876,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   consumed_parts.insert("[Content_Types].xml");
   consumed_parts.insert("_rels/.rels");
   consumed_parts.insert(workbook_path);
-  // workbook rels file path:
-  {
-    const std::size_t slash = workbook_path.find_last_of('/');
-    std::string p;
-    if (slash == std::string::npos) {
-      p.append("_rels/").append(workbook_path).append(".rels");
-    } else {
-      p.append(workbook_path.substr(0, slash));
-      p.append("/_rels/");
-      p.append(workbook_path.substr(slash + 1));
-      p.append(".rels");
-    }
-    consumed_parts.insert(std::move(p));
-  }
+  consumed_parts.insert(RelsPathForPart(workbook_path));
   if (!wb_rels.sst_path.empty()) {
     consumed_parts.insert(wb_rels.sst_path);
   }

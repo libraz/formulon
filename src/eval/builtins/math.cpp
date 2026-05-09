@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -672,38 +673,28 @@ Value Quotient(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }  // namespace
 
 void register_math_builtins(FunctionRegistry& registry) {
-  // Single-number transforms.
-  registry.register_function(FunctionDef{"ABS", 1u, 1u, &Abs});
-  registry.register_function(FunctionDef{"SIGN", 1u, 1u, &Sign});
-  registry.register_function(FunctionDef{"INT", 1u, 1u, &Int_});
-  registry.register_function(FunctionDef{"TRUNC", 1u, 2u, &Trunc});
-  registry.register_function(FunctionDef{"SQRT", 1u, 1u, &Sqrt});
-
-  // Two-argument numeric.
-  registry.register_function(FunctionDef{"MOD", 2u, 2u, &Mod});
-  registry.register_function(FunctionDef{"POWER", 2u, 2u, &Power});
-  registry.register_function(FunctionDef{"QUOTIENT", 2u, 2u, &Quotient});
-
-  // Rounding (all take value + digits).
-  registry.register_function(FunctionDef{"ROUND", 2u, 2u, &Round});
-  registry.register_function(FunctionDef{"ROUNDDOWN", 2u, 2u, &RoundDown});
-  registry.register_function(FunctionDef{"ROUNDUP", 2u, 2u, &RoundUp});
-
-  // Parity-aware rounding.
-  registry.register_function(FunctionDef{"EVEN", 1u, 1u, &Even});
-  registry.register_function(FunctionDef{"ODD", 1u, 1u, &Odd});
-
-  // Significance-aware rounding.
-  registry.register_function(FunctionDef{"CEILING", 2u, 2u, &Ceiling});
-  registry.register_function(FunctionDef{"FLOOR", 2u, 2u, &Floor});
-  {
-    FunctionDef def{"MROUND", 2u, 2u, &MRound};
-    def.blank_scalar_policy = FunctionDef::BlankScalarPolicy::RejectLiteralEmpty;
-    def.blank_scalar_error = ErrorCode::NA;
-    registry.register_function(def);
-  }
-  registry.register_function(FunctionDef{"CEILING.MATH", 1u, 3u, &CeilingMath});
-  registry.register_function(FunctionDef{"FLOOR.MATH", 1u, 3u, &FloorMath});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"ABS", 1u, 1u, &Abs},
+      {"SIGN", 1u, 1u, &Sign},
+      {"INT", 1u, 1u, &Int_},
+      {"TRUNC", 1u, 2u, &Trunc},
+      {"SQRT", 1u, 1u, &Sqrt},
+      {"MOD", 2u, 2u, &Mod},
+      {"POWER", 2u, 2u, &Power},
+      {"QUOTIENT", 2u, 2u, &Quotient},
+      {"ROUND", 2u, 2u, &Round},
+      {"ROUNDDOWN", 2u, 2u, &RoundDown},
+      {"ROUNDUP", 2u, 2u, &RoundUp},
+      {"EVEN", 1u, 1u, &Even},
+      {"ODD", 1u, 1u, &Odd},
+      {"CEILING", 2u, 2u, &Ceiling},
+      {"FLOOR", 2u, 2u, &Floor},
+      {"MROUND", 2u, 2u, &MRound, true, false, false, false, false, FunctionDef::BlankScalarPolicy::RejectLiteralEmpty,
+       ErrorCode::NA},
+      {"CEILING.MATH", 1u, 3u, &CeilingMath},
+      {"FLOOR.MATH", 1u, 3u, &FloorMath},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

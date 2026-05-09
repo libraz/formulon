@@ -249,6 +249,44 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   return eval_node(*lv->body, arena, registry, body_ctx);
 }
 
+bool append_range_sourced_value(const FunctionDef& def, const Value& v, std::vector<Value>* values, Value* out_err) {
+  if (def.propagate_errors && v.is_error()) {
+    *out_err = v;
+    return false;
+  }
+  if (def.range_filter_numeric_only && v.kind() != ValueKind::Number) {
+    return true;
+  }
+  if (def.range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
+    return true;
+  }
+  if (def.range_filter_a_coerce) {
+    if (v.kind() == ValueKind::Blank) {
+      return true;
+    }
+    if (v.kind() == ValueKind::Bool) {
+      values->push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
+      return true;
+    }
+    if (v.kind() == ValueKind::Text) {
+      values->push_back(Value::number(0.0));
+      return true;
+    }
+  }
+  values->push_back(v);
+  return true;
+}
+
+bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count,
+                                 std::vector<Value>* values, Value* out_err) {
+  for (std::size_t i = 0; i < count; ++i) {
+    if (!append_range_sourced_value(def, cells[i], values, out_err)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Special-cased function-call dispatch.
 //
 // Lazy entries (`IF`, `IFERROR`, `IFNA`, the `*IF`/`*IFS` aggregators) are
@@ -366,37 +404,10 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       for (std::uint32_t r = 0; r < rows && !short_circuit; ++r) {
         for (std::uint32_t c = 0; c < cols; ++c) {
           Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
-          if (def->propagate_errors && v.is_error()) {
-            propagated_err = v;
+          if (!append_range_sourced_value(*def, v, &values, &propagated_err)) {
             short_circuit = true;
             break;
           }
-          // Provenance-aware filtering for array-literal-sourced values.
-          // An element inside a `{...}` literal is treated the same way as
-          // a cell inside a range: non-numeric elements are dropped for
-          // `range_filter_numeric_only`, coerced for the A-family, etc.
-          // Direct scalar arguments (handled in the fall-through branch
-          // below) still coerce through the impl's strict rules.
-          if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-            continue;
-          }
-          if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-            continue;
-          }
-          if (def->range_filter_a_coerce) {
-            if (v.kind() == ValueKind::Blank) {
-              continue;
-            }
-            if (v.kind() == ValueKind::Bool) {
-              values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-              continue;
-            }
-            if (v.kind() == ValueKind::Text) {
-              values.push_back(Value::number(0.0));
-              continue;
-            }
-          }
-          values.push_back(v);
         }
       }
       if (short_circuit) {
@@ -445,30 +456,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      for (const Value& v : region->cells) {
-        if (def->propagate_errors && v.is_error()) {
-          return v;
-        }
-        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-          continue;
-        }
-        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-          continue;
-        }
-        if (def->range_filter_a_coerce) {
-          if (v.kind() == ValueKind::Blank) {
-            continue;
-          }
-          if (v.kind() == ValueKind::Bool) {
-            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-            continue;
-          }
-          if (v.kind() == ValueKind::Text) {
-            values.push_back(Value::number(0.0));
-            continue;
-          }
-        }
-        values.push_back(v);
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, region->cells.data(), region->cells.size(), &values, &range_err)) {
+        return range_err;
       }
       continue;
     }
@@ -524,40 +514,10 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      for (const Value& v : expanded.value()) {
-        if (def->propagate_errors && v.is_error()) {
-          return v;
-        }
-        // Provenance-aware filtering for range-sourced values. Excel skips
-        // Bool / Text / Blank cells inside a range for SUM / AVERAGE /
-        // MIN / MAX / PRODUCT, and skips Text / Blank for AND / OR.
-        // Direct scalar arguments (handled in the `else` branch below) are
-        // not affected by either filter.
-        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-          continue;
-        }
-        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-          continue;
-        }
-        if (def->range_filter_a_coerce) {
-          // A-family (AVERAGEA / MAXA / MINA / VAR{A,PA} / STDEV{A,PA}).
-          // Bool and Text cells inside a range are coerced to numbers rather
-          // than dropped: TRUE -> 1, FALSE -> 0, any text (including the
-          // empty string and numeric-looking strings like "3.14") -> 0.
-          // Blank cells are still skipped.
-          if (v.kind() == ValueKind::Blank) {
-            continue;
-          }
-          if (v.kind() == ValueKind::Bool) {
-            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-            continue;
-          }
-          if (v.kind() == ValueKind::Text) {
-            values.push_back(Value::number(0.0));
-            continue;
-          }
-        }
-        values.push_back(v);
+      Value range_err = Value::blank();
+      const std::vector<Value>& expanded_values = expanded.value();
+      if (!append_range_sourced_values(*def, expanded_values.data(), expanded_values.size(), &values, &range_err)) {
+        return range_err;
       }
       continue;
     }
@@ -582,35 +542,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      for (const Value& v : off_cells) {
-        if (def->propagate_errors && v.is_error()) {
-          return v;
-        }
-        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-          continue;
-        }
-        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-          continue;
-        }
-        if (def->range_filter_a_coerce) {
-          // A-family (AVERAGEA / MAXA / MINA / VAR{A,PA} / STDEV{A,PA}).
-          // Bool and Text cells inside a range are coerced to numbers rather
-          // than dropped: TRUE -> 1, FALSE -> 0, any text (including the
-          // empty string and numeric-looking strings like "3.14") -> 0.
-          // Blank cells are still skipped.
-          if (v.kind() == ValueKind::Blank) {
-            continue;
-          }
-          if (v.kind() == ValueKind::Bool) {
-            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-            continue;
-          }
-          if (v.kind() == ValueKind::Text) {
-            values.push_back(Value::number(0.0));
-            continue;
-          }
-        }
-        values.push_back(v);
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, off_cells.data(), off_cells.size(), &values, &range_err)) {
+        return range_err;
       }
       continue;
     }
@@ -634,35 +568,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      for (const Value& v : if_cells) {
-        if (def->propagate_errors && v.is_error()) {
-          return v;
-        }
-        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-          continue;
-        }
-        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-          continue;
-        }
-        if (def->range_filter_a_coerce) {
-          // A-family (AVERAGEA / MAXA / MINA / VAR{A,PA} / STDEV{A,PA}).
-          // Bool and Text cells inside a range are coerced to numbers rather
-          // than dropped: TRUE -> 1, FALSE -> 0, any text (including the
-          // empty string and numeric-looking strings like "3.14") -> 0.
-          // Blank cells are still skipped.
-          if (v.kind() == ValueKind::Blank) {
-            continue;
-          }
-          if (v.kind() == ValueKind::Bool) {
-            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-            continue;
-          }
-          if (v.kind() == ValueKind::Text) {
-            values.push_back(Value::number(0.0));
-            continue;
-          }
-        }
-        values.push_back(v);
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, if_cells.data(), if_cells.size(), &values, &range_err)) {
+        return range_err;
       }
       continue;
     }
@@ -685,35 +593,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      for (const Value& v : ch_cells) {
-        if (def->propagate_errors && v.is_error()) {
-          return v;
-        }
-        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-          continue;
-        }
-        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-          continue;
-        }
-        if (def->range_filter_a_coerce) {
-          // A-family (AVERAGEA / MAXA / MINA / VAR{A,PA} / STDEV{A,PA}).
-          // Bool and Text cells inside a range are coerced to numbers rather
-          // than dropped: TRUE -> 1, FALSE -> 0, any text (including the
-          // empty string and numeric-looking strings like "3.14") -> 0.
-          // Blank cells are still skipped.
-          if (v.kind() == ValueKind::Blank) {
-            continue;
-          }
-          if (v.kind() == ValueKind::Bool) {
-            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-            continue;
-          }
-          if (v.kind() == ValueKind::Text) {
-            values.push_back(Value::number(0.0));
-            continue;
-          }
-        }
-        values.push_back(v);
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, ch_cells.data(), ch_cells.size(), &values, &range_err)) {
+        return range_err;
       }
       continue;
     }
@@ -738,30 +620,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      for (const Value& v : row_cells) {
-        if (def->propagate_errors && v.is_error()) {
-          return v;
-        }
-        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-          continue;
-        }
-        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-          continue;
-        }
-        if (def->range_filter_a_coerce) {
-          if (v.kind() == ValueKind::Blank) {
-            continue;
-          }
-          if (v.kind() == ValueKind::Bool) {
-            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-            continue;
-          }
-          if (v.kind() == ValueKind::Text) {
-            values.push_back(Value::number(0.0));
-            continue;
-          }
-        }
-        values.push_back(v);
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, row_cells.data(), row_cells.size(), &values, &range_err)) {
+        return range_err;
       }
       continue;
     }
@@ -785,31 +646,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         had_range_shaped_arg = true;
         const ArrayValue* a = sr_val.as_array();
         const std::size_t sr_total = static_cast<std::size_t>(a->rows) * static_cast<std::size_t>(a->cols);
-        for (std::size_t k = 0; k < sr_total; ++k) {
-          const Value& v = a->cells[k];
-          if (def->propagate_errors && v.is_error()) {
-            return v;
-          }
-          if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-            continue;
-          }
-          if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-            continue;
-          }
-          if (def->range_filter_a_coerce) {
-            if (v.kind() == ValueKind::Blank) {
-              continue;
-            }
-            if (v.kind() == ValueKind::Bool) {
-              values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-              continue;
-            }
-            if (v.kind() == ValueKind::Text) {
-              values.push_back(Value::number(0.0));
-              continue;
-            }
-          }
-          values.push_back(v);
+        Value range_err = Value::blank();
+        if (!append_range_sourced_values(*def, a->cells, sr_total, &values, &range_err)) {
+          return range_err;
         }
         continue;
       }
@@ -832,30 +671,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         values.push_back(err);
         continue;
       }
-      for (const Value& v : col_cells) {
-        if (def->propagate_errors && v.is_error()) {
-          return v;
-        }
-        if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-          continue;
-        }
-        if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-          continue;
-        }
-        if (def->range_filter_a_coerce) {
-          if (v.kind() == ValueKind::Blank) {
-            continue;
-          }
-          if (v.kind() == ValueKind::Bool) {
-            values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-            continue;
-          }
-          if (v.kind() == ValueKind::Text) {
-            values.push_back(Value::number(0.0));
-            continue;
-          }
-        }
-        values.push_back(v);
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, col_cells.data(), col_cells.size(), &values, &range_err)) {
+        return range_err;
       }
       continue;
     }
@@ -878,31 +696,9 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       had_range_shaped_arg = true;
       const ArrayValue* arr = v.as_array();
       const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
-      for (std::size_t flat = 0; flat < n; ++flat) {
-        const Value& cell = arr->cells[flat];
-        if (def->propagate_errors && cell.is_error()) {
-          return cell;
-        }
-        if (def->range_filter_numeric_only && cell.kind() != ValueKind::Number) {
-          continue;
-        }
-        if (def->range_filter_bool_coercible && cell.kind() != ValueKind::Number && cell.kind() != ValueKind::Bool) {
-          continue;
-        }
-        if (def->range_filter_a_coerce) {
-          if (cell.kind() == ValueKind::Blank) {
-            continue;
-          }
-          if (cell.kind() == ValueKind::Bool) {
-            values.push_back(Value::number(cell.as_boolean() ? 1.0 : 0.0));
-            continue;
-          }
-          if (cell.kind() == ValueKind::Text) {
-            values.push_back(Value::number(0.0));
-            continue;
-          }
-        }
-        values.push_back(cell);
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, arr->cells, n, &values, &range_err)) {
+        return range_err;
       }
       continue;
     }
@@ -939,25 +735,11 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // etc. Direct scalar literals (numbers, bool literals, text literals)
     // still use strict coercion in the impl.
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref) {
-      if (def->range_filter_numeric_only && v.kind() != ValueKind::Number) {
-        continue;
+      Value range_err = Value::blank();
+      if (!append_range_sourced_value(*def, v, &values, &range_err)) {
+        return range_err;
       }
-      if (def->range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-        continue;
-      }
-      if (def->range_filter_a_coerce) {
-        if (v.kind() == ValueKind::Blank) {
-          continue;
-        }
-        if (v.kind() == ValueKind::Bool) {
-          values.push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-          continue;
-        }
-        if (v.kind() == ValueKind::Text) {
-          values.push_back(Value::number(0.0));
-          continue;
-        }
-      }
+      continue;
     }
     values.push_back(v);
   }

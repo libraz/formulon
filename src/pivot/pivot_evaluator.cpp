@@ -210,18 +210,42 @@ bool coerce_arithmetic(const Value& v, double& out) noexcept {
   }
 }
 
+struct ArithmeticSummary {
+  double sum = 0.0;
+  double product = 1.0;
+  double min = std::numeric_limits<double>::infinity();
+  double max = -std::numeric_limits<double>::infinity();
+  std::size_t count = 0;
+  std::vector<double> samples;
+};
+
+ArithmeticSummary summarize_arithmetic(const std::vector<Value>& values, bool keep_samples = false) {
+  ArithmeticSummary summary;
+  if (keep_samples) {
+    summary.samples.reserve(values.size());
+  }
+  for (const auto& v : values) {
+    double x = 0.0;
+    if (!coerce_arithmetic(v, x)) {
+      continue;
+    }
+    summary.sum += x;
+    summary.product *= x;
+    summary.min = (summary.count == 0 || x < summary.min) ? x : summary.min;
+    summary.max = (summary.count == 0 || x > summary.max) ? x : summary.max;
+    ++summary.count;
+    if (keep_samples) {
+      summary.samples.push_back(x);
+    }
+  }
+  return summary;
+}
+
 Value AggregateSum(const std::vector<Value>& values) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  double sum = 0.0;
-  for (const auto& v : values) {
-    double n = 0.0;
-    if (coerce_arithmetic(v, n)) {
-      sum += n;
-    }
-  }
-  return Value::number(sum);
+  return Value::number(summarize_arithmetic(values).sum);
 }
 
 // Excel's pivot `Count` mirrors COUNTA: any non-blank cell counts,
@@ -258,56 +282,28 @@ Value AggregateAverage(const std::vector<Value>& values) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  double sum = 0.0;
-  std::size_t n = 0;
-  for (const auto& v : values) {
-    double x = 0.0;
-    if (coerce_arithmetic(v, x)) {
-      sum += x;
-      ++n;
-    }
-  }
-  if (n == 0) {
+  const ArithmeticSummary summary = summarize_arithmetic(values);
+  if (summary.count == 0) {
     return Value::error(ErrorCode::Div0);
   }
-  return Value::number(sum / static_cast<double>(n));
+  return Value::number(summary.sum / static_cast<double>(summary.count));
 }
 
 Value AggregateMax(const std::vector<Value>& values) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  bool seen = false;
-  double best = -std::numeric_limits<double>::infinity();
-  for (const auto& v : values) {
-    double x = 0.0;
-    if (coerce_arithmetic(v, x)) {
-      if (!seen || x > best) {
-        best = x;
-        seen = true;
-      }
-    }
-  }
+  const ArithmeticSummary summary = summarize_arithmetic(values);
   // Excel's pivot MAX over an empty/all-text group returns 0.
-  return Value::number(seen ? best : 0.0);
+  return Value::number(summary.count > 0 ? summary.max : 0.0);
 }
 
 Value AggregateMin(const std::vector<Value>& values) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  bool seen = false;
-  double best = std::numeric_limits<double>::infinity();
-  for (const auto& v : values) {
-    double x = 0.0;
-    if (coerce_arithmetic(v, x)) {
-      if (!seen || x < best) {
-        best = x;
-        seen = true;
-      }
-    }
-  }
-  return Value::number(seen ? best : 0.0);
+  const ArithmeticSummary summary = summarize_arithmetic(values);
+  return Value::number(summary.count > 0 ? summary.min : 0.0);
 }
 
 // Two-pass variance computation. Mirrors `VAR.S` / `VAR.P` from
@@ -322,23 +318,13 @@ Value variance_helper(const std::vector<Value>& values, bool population) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  std::vector<double> xs;
-  xs.reserve(values.size());
-  for (const auto& v : values) {
-    double x = 0.0;
-    if (coerce_arithmetic(v, x)) {
-      xs.push_back(x);
-    }
-  }
+  const ArithmeticSummary summary = summarize_arithmetic(values, /*keep_samples=*/true);
+  const std::vector<double>& xs = summary.samples;
   const std::size_t min_n = population ? 1u : 2u;
   if (xs.size() < min_n) {
     return Value::error(ErrorCode::Div0);
   }
-  double sum = 0.0;
-  for (double x : xs) {
-    sum += x;
-  }
-  const double mean = sum / static_cast<double>(xs.size());
+  const double mean = summary.sum / static_cast<double>(xs.size());
   double ss = 0.0;
   for (double x : xs) {
     const double d = x - mean;
@@ -388,17 +374,9 @@ Value AggregateProduct(const std::vector<Value>& values) {
   if (const Value* err = first_error(values); err != nullptr) {
     return *err;
   }
-  bool seen = false;
-  double product = 1.0;
-  for (const auto& v : values) {
-    double x = 0.0;
-    if (coerce_arithmetic(v, x)) {
-      product *= x;
-      seen = true;
-    }
-  }
+  const ArithmeticSummary summary = summarize_arithmetic(values);
   // Excel's pivot PRODUCT on an empty/all-text group returns 0.
-  return Value::number(seen ? product : 0.0);
+  return Value::number(summary.count > 0 ? summary.product : 0.0);
 }
 
 Value apply_aggregation(Aggregation agg, const std::vector<Value>& values) {
@@ -897,6 +875,160 @@ void prune_top_level(std::vector<Node>& roots, const std::vector<bool>& keep) {
   roots = std::move(kept);
 }
 
+std::optional<double> numeric_aggregate_value(const Value& v) {
+  if (v.is_number()) {
+    return v.as_number();
+  }
+  if (v.is_boolean()) {
+    return v.as_boolean() ? 1.0 : 0.0;
+  }
+  return std::nullopt;
+}
+
+struct AxisScores {
+  std::vector<double> scores;
+  std::vector<bool> all_blank;
+};
+
+Value leaf_score(const PivotResult& result, std::size_t r, std::size_t c) {
+  if (r >= result.values.size() || c >= result.values[r].size() || result.values[r][c].empty()) {
+    return Value::blank();
+  }
+  return result.values[r][c][0];
+}
+
+AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std::size_t col_count) {
+  AxisScores axis{{}, {}};
+  axis.scores.assign(row_count, 0.0);
+  axis.all_blank.assign(row_count, true);
+  for (std::size_t r = 0; r < row_count; ++r) {
+    for (std::size_t c = 0; c < col_count; ++c) {
+      if (auto n = numeric_aggregate_value(leaf_score(result, r, c))) {
+        axis.scores[r] += *n;
+        axis.all_blank[r] = false;
+      }
+    }
+  }
+  return axis;
+}
+
+AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std::size_t row_count) {
+  AxisScores axis{{}, {}};
+  axis.scores.assign(col_count, 0.0);
+  axis.all_blank.assign(col_count, true);
+  for (std::size_t c = 0; c < col_count; ++c) {
+    for (std::size_t r = 0; r < row_count; ++r) {
+      if (auto n = numeric_aggregate_value(leaf_score(result, r, c))) {
+        axis.scores[c] += *n;
+        axis.all_blank[c] = false;
+      }
+    }
+  }
+  return axis;
+}
+
+std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis) {
+  const std::size_t n = axis.scores.size();
+  std::vector<bool> keep(n, false);
+  if (f.type == FilterType::ValueTop10) {
+    const auto top_n = static_cast<std::size_t>(filter_number_value(f));
+    // Sort indices by score descending; all-blank leaves sink to the
+    // bottom regardless of N.
+    std::vector<std::size_t> order(n);
+    for (std::size_t i = 0; i < n; ++i) {
+      order[i] = i;
+    }
+    std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
+      if (axis.all_blank[a] != axis.all_blank[b]) {
+        return !axis.all_blank[a];
+      }
+      return axis.scores[a] > axis.scores[b];
+    });
+    const std::size_t k = std::min(top_n, n);
+    for (std::size_t i = 0; i < k; ++i) {
+      if (!axis.all_blank[order[i]]) {
+        keep[order[i]] = true;
+      }
+    }
+    return keep;
+  }
+  if (f.type == FilterType::ValueGreaterThan) {
+    const double threshold = filter_number_value(f);
+    for (std::size_t i = 0; i < n; ++i) {
+      if (!axis.all_blank[i] && axis.scores[i] > threshold) {
+        keep[i] = true;
+      }
+    }
+    return keep;
+  }
+  if (f.type == FilterType::ValueBetween) {
+    const double lo = filter_number_value(f);
+    const auto hi_or = filter_number_value_high(f);
+    if (!hi_or) {
+      return std::nullopt;  // Unbounded above -> no-op for this filter.
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+      if (!axis.all_blank[i] && axis.scores[i] >= lo && axis.scores[i] <= *hi_or) {
+        keep[i] = true;
+      }
+    }
+    return keep;
+  }
+  return std::nullopt;
+}
+
+void compact_row_axis_values(std::vector<std::vector<std::vector<Value>>>& values, const std::vector<bool>& keep) {
+  std::vector<std::vector<std::vector<Value>>> new_values;
+  new_values.reserve(values.size());
+  for (std::size_t i = 0; i < values.size() && i < keep.size(); ++i) {
+    if (keep[i]) {
+      new_values.push_back(std::move(values[i]));
+    }
+  }
+  values = std::move(new_values);
+}
+
+void compact_col_axis_values(std::vector<std::vector<std::vector<Value>>>& values, const std::vector<bool>& keep) {
+  for (auto& row_slot : values) {
+    std::vector<std::vector<Value>> new_row;
+    new_row.reserve(row_slot.size());
+    for (std::size_t c = 0; c < row_slot.size() && c < keep.size(); ++c) {
+      if (keep[c]) {
+        new_row.push_back(std::move(row_slot[c]));
+      }
+    }
+    row_slot = std::move(new_row);
+  }
+}
+
+using RecordBuckets = std::vector<std::vector<std::vector<std::size_t>>>;
+
+void append_record_field_values(const PivotCache& cache, const std::vector<std::size_t>& records,
+                                std::uint32_t field_index, std::vector<Value>& out) {
+  for (std::size_t rec_idx : records) {
+    out.push_back(cell_value(cache, cache.records()[rec_idx], field_index));
+  }
+}
+
+void append_bucket_field_values(const PivotCache& cache, const RecordBuckets& buckets, std::size_t row_leaf,
+                                std::size_t col_leaf, std::uint32_t field_index, std::vector<Value>& out) {
+  if (row_leaf >= buckets.size() || col_leaf >= buckets[row_leaf].size()) {
+    return;
+  }
+  append_record_field_values(cache, buckets[row_leaf][col_leaf], field_index, out);
+}
+
+void append_leaf_set_field_values(const PivotCache& cache, const RecordBuckets& buckets,
+                                  const std::vector<std::size_t>& row_leaves,
+                                  const std::vector<std::size_t>& col_leaves, std::uint32_t field_index,
+                                  std::vector<Value>& out) {
+  for (std::size_t row_leaf : row_leaves) {
+    for (std::size_t col_leaf : col_leaves) {
+      append_bucket_field_values(cache, buckets, row_leaf, col_leaf, field_index, out);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Result-side text reification.
 // ---------------------------------------------------------------------------
@@ -1030,9 +1162,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       for (const PivotDataField& df : table.data_fields()) {
         std::vector<Value> column;
         column.reserve(records.size());
-        for (std::size_t rec_idx : records) {
-          column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
-        }
+        append_record_field_values(cache, records, df.field_index, column);
         result.values[r][c].push_back(reify(apply_aggregation(df.aggregation, column), result));
       }
     }
@@ -1193,9 +1323,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
                 for (std::size_t leaf_idx_iter = top.collected_start; leaf_idx_iter < stack_col_leaves.size();
                      ++leaf_idx_iter) {
                   const std::size_t leaf_idx = stack_col_leaves[leaf_idx_iter];
-                  for (std::size_t rec_idx : buckets[r][leaf_idx]) {
-                    column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
-                  }
+                  append_bucket_field_values(cache, buckets, r, leaf_idx, df.field_index, column);
                 }
                 subtotal.values[r][df_idx] = reify(apply_aggregation(df.aggregation, column), result);
               }
@@ -1236,19 +1364,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
         for (std::size_t df_idx = 0; df_idx < data_field_count; ++df_idx) {
           const PivotDataField& df = table.data_fields()[df_idx];
           std::vector<Value> column;
-          for (std::size_t row_leaf : row_subtotal_leaf_sets[rs]) {
-            if (row_leaf >= row_leaf_count) {
-              continue;
-            }
-            for (std::size_t col_leaf : col_subtotal_leaf_sets[cs]) {
-              if (col_leaf >= col_leaf_count) {
-                continue;
-              }
-              for (std::size_t rec_idx : buckets[row_leaf][col_leaf]) {
-                column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
-              }
-            }
-          }
+          append_leaf_set_field_values(cache, buckets, row_subtotal_leaf_sets[rs], col_subtotal_leaf_sets[cs],
+                                       df.field_index, column);
           row_subtotal.col_subtotal_values[cs][df_idx] = reify(apply_aggregation(df.aggregation, column), result);
         }
       }
@@ -1262,9 +1379,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     for (const PivotDataField& df : table.data_fields()) {
       std::vector<Value> column;
       column.reserve(surviving.size());
-      for (std::size_t rec_idx : surviving) {
-        column.push_back(cell_value(cache, cache.records()[rec_idx], df.field_index));
-      }
+      append_record_field_values(cache, surviving, df.field_index, column);
       result.grand_totals.push_back(reify(apply_aggregation(df.aggregation, column), result));
     }
     if (!result.grand_totals.empty()) {
@@ -1291,15 +1406,6 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     if (data_field_count == 0) {
       continue;
     }
-    // Score per leaf is the data-field-0 aggregate. For column-axis
-    // filtering we score across all rows for that column; row-axis
-    // similarly across all columns.
-    auto leaf_score = [&](std::size_t r, std::size_t c) -> Value {
-      if (r >= result.values.size() || c >= result.values[r].size() || result.values[r][c].empty()) {
-        return Value::blank();
-      }
-      return result.values[r][c][0];
-    };
     if (f.axis == PivotAxis::Row && !table.row_field_order().empty()) {
       // `n` is the number of row leaves (DFS pre-order), which is what
       // `result.values` is indexed by; `result.rows.size()` would be the
@@ -1309,80 +1415,17 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       if (n == 0) {
         continue;
       }
-      // Compute a per-leaf scalar by summing data-field-0 across all cols.
-      std::vector<double> scores(n, 0.0);
-      std::vector<bool> all_blank(n, true);
-      for (std::size_t r = 0; r < n; ++r) {
-        for (std::size_t c = 0; c < (col_levels.empty() ? 1u : col_leaf_count); ++c) {
-          const Value v = leaf_score(r, c);
-          if (v.is_number()) {
-            scores[r] += v.as_number();
-            all_blank[r] = false;
-          } else if (v.is_boolean()) {
-            scores[r] += v.as_boolean() ? 1.0 : 0.0;
-            all_blank[r] = false;
-          }
-        }
-      }
-      std::vector<bool> keep(n, false);
-      bool keep_initialised = true;
-      if (f.type == FilterType::ValueTop10) {
-        const auto top_n = static_cast<std::size_t>(filter_number_value(f));
-        // Sort indices by score descending; rows with all-blank scores
-        // sink to the bottom regardless of N.
-        std::vector<std::size_t> order(n);
-        for (std::size_t i = 0; i < n; ++i) {
-          order[i] = i;
-        }
-        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
-          if (all_blank[a] != all_blank[b]) {
-            return !all_blank[a];
-          }
-          return scores[a] > scores[b];
-        });
-        const std::size_t k = std::min(top_n, n);
-        for (std::size_t i = 0; i < k; ++i) {
-          if (!all_blank[order[i]]) {
-            keep[order[i]] = true;
-          }
-        }
-      } else if (f.type == FilterType::ValueGreaterThan) {
-        const double threshold = filter_number_value(f);
-        for (std::size_t i = 0; i < n; ++i) {
-          if (!all_blank[i] && scores[i] > threshold) {
-            keep[i] = true;
-          }
-        }
-      } else if (f.type == FilterType::ValueBetween) {
-        const double lo = filter_number_value(f);
-        const auto hi_or = filter_number_value_high(f);
-        if (!hi_or) {
-          // Unbounded above -> no-op for this filter.
-          keep_initialised = false;
-        } else {
-          for (std::size_t i = 0; i < n; ++i) {
-            if (!all_blank[i] && scores[i] >= lo && scores[i] <= *hi_or) {
-              keep[i] = true;
-            }
-          }
-        }
-      }
-      if (!keep_initialised) {
+      const auto keep_or = build_value_filter_keep(f, score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count));
+      if (!keep_or) {
         continue;
       }
+      const std::vector<bool>& keep = *keep_or;
       // Prune the row hierarchy: leaves survive when `keep[leaf] == true`
       // and interior nodes survive when at least one descendant leaf
       // does. Then compact `result.values` to the surviving leaves,
       // preserving DFS order.
       prune_top_level(result.rows, keep);
-      std::vector<std::vector<std::vector<Value>>> new_values;
-      new_values.reserve(n);
-      for (std::size_t i = 0; i < n; ++i) {
-        if (keep[i]) {
-          new_values.push_back(std::move(result.values[i]));
-        }
-      }
-      result.values = std::move(new_values);
+      compact_row_axis_values(result.values, keep);
     } else if (f.axis == PivotAxis::Col && !table.col_field_order().empty()) {
       // `n` is the number of column leaves (DFS pre-order). When the row
       // axis has at least one materialised slot we read the leaf count
@@ -1392,77 +1435,15 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       if (n == 0) {
         continue;
       }
-      std::vector<double> scores(n, 0.0);
-      std::vector<bool> all_blank(n, true);
       const std::size_t row_n = row_levels.empty() ? 1u : result.values.size();
-      for (std::size_t c = 0; c < n; ++c) {
-        for (std::size_t r = 0; r < row_n; ++r) {
-          const Value v = leaf_score(r, c);
-          if (v.is_number()) {
-            scores[c] += v.as_number();
-            all_blank[c] = false;
-          } else if (v.is_boolean()) {
-            scores[c] += v.as_boolean() ? 1.0 : 0.0;
-            all_blank[c] = false;
-          }
-        }
-      }
-      std::vector<bool> keep(n, false);
-      bool keep_initialised = true;
-      if (f.type == FilterType::ValueTop10) {
-        const auto top_n = static_cast<std::size_t>(filter_number_value(f));
-        std::vector<std::size_t> order(n);
-        for (std::size_t i = 0; i < n; ++i) {
-          order[i] = i;
-        }
-        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
-          if (all_blank[a] != all_blank[b]) {
-            return !all_blank[a];
-          }
-          return scores[a] > scores[b];
-        });
-        const std::size_t k = std::min(top_n, n);
-        for (std::size_t i = 0; i < k; ++i) {
-          if (!all_blank[order[i]]) {
-            keep[order[i]] = true;
-          }
-        }
-      } else if (f.type == FilterType::ValueGreaterThan) {
-        const double threshold = filter_number_value(f);
-        for (std::size_t i = 0; i < n; ++i) {
-          if (!all_blank[i] && scores[i] > threshold) {
-            keep[i] = true;
-          }
-        }
-      } else if (f.type == FilterType::ValueBetween) {
-        const double lo = filter_number_value(f);
-        const auto hi_or = filter_number_value_high(f);
-        if (!hi_or) {
-          // Unbounded above -> no-op for this filter.
-          keep_initialised = false;
-        } else {
-          for (std::size_t i = 0; i < n; ++i) {
-            if (!all_blank[i] && scores[i] >= lo && scores[i] <= *hi_or) {
-              keep[i] = true;
-            }
-          }
-        }
-      }
-      if (!keep_initialised) {
+      const auto keep_or = build_value_filter_keep(f, score_col_axis(result, n, row_n));
+      if (!keep_or) {
         continue;
       }
+      const std::vector<bool>& keep = *keep_or;
       // Prune the col hierarchy then compact every row's per-col slice.
       prune_top_level(result.cols, keep);
-      for (auto& row_slot : result.values) {
-        std::vector<std::vector<Value>> new_row;
-        new_row.reserve(n);
-        for (std::size_t c = 0; c < row_slot.size() && c < n; ++c) {
-          if (keep[c]) {
-            new_row.push_back(std::move(row_slot[c]));
-          }
-        }
-        row_slot = std::move(new_row);
-      }
+      compact_col_axis_values(result.values, keep);
     }
     // Mixed-direction (e.g. row-axis filter referencing a column field)
     // remains out of scope; such filters fall through here as a no-op.

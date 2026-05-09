@@ -15,6 +15,7 @@
 #include <string_view>
 
 #include "eval/a1_parse.h"
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "sheet.h"
@@ -222,7 +223,10 @@ void register_reference_builtins(FunctionRegistry& registry) {
   // ADDRESS is the only reference builtin that fits the eager dispatch
   // path; INDIRECT and OFFSET are routed through the lazy table in
   // `tree_walker.cpp`.
-  registry.register_function(FunctionDef{"ADDRESS", 2u, 5u, &Address});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"ADDRESS", 2u, 5u, &Address},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

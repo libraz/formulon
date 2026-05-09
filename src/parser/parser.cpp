@@ -349,6 +349,20 @@ void Parser::skip_to_sync(SyncContext ctx) noexcept {
   }
 }
 
+AstNode* Parser::make_recovery_placeholder(TextRange range) {
+  AstNode* placeholder = make_error_placeholder(arena_);
+  if (placeholder != nullptr) {
+    placeholder->set_range(range);
+  }
+  return placeholder;
+}
+
+AstNode* Parser::recover_with_placeholder(ParseErrorCode code, const Token& tok, SyncContext ctx) {
+  record_error_with_token(code, tok.range, tok.lexeme);
+  skip_to_sync(ctx);
+  return make_recovery_placeholder(tok.range);
+}
+
 // ---------------------------------------------------------------------------
 // Top-level parse
 // ---------------------------------------------------------------------------
@@ -546,18 +560,12 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
   if (depth_ > opts_.max_parse_depth) {
     record_error(ParseErrorCode::NestedFormulaTooDeep, peek().range);
     skip_to_sync(ctx);
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(peek().range);
-    }
+    AstNode* placeholder = make_recovery_placeholder(peek().range);
     --depth_;
     return placeholder;
   }
   if (bailed_) {
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(peek().range);
-    }
+    AstNode* placeholder = make_recovery_placeholder(peek().range);
     --depth_;
     return placeholder;
   }
@@ -732,10 +740,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       if (lhs->kind() != NodeKind::Ref) {
         record_error_with_token(ParseErrorCode::UnsupportedConstruct, hash_tok.range, hash_tok.lexeme);
         // Surface an `ErrorPlaceholder` so siblings keep parsing.
-        AstNode* placeholder = make_error_placeholder(arena_);
-        if (placeholder != nullptr) {
-          placeholder->set_range(SpanRange(lhs->range(), hash_tok.range));
-        }
+        AstNode* placeholder = make_recovery_placeholder(SpanRange(lhs->range(), hash_tok.range));
         lhs = placeholder != nullptr ? placeholder : lhs;
         continue;
       }
@@ -743,10 +748,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       if (r.is_full_col || r.is_full_row) {
         // `A:A#` / `1:1#` are not legal Excel spill anchors.
         record_error_with_token(ParseErrorCode::UnsupportedConstruct, hash_tok.range, hash_tok.lexeme);
-        AstNode* placeholder = make_error_placeholder(arena_);
-        if (placeholder != nullptr) {
-          placeholder->set_range(SpanRange(lhs->range(), hash_tok.range));
-        }
+        AstNode* placeholder = make_recovery_placeholder(SpanRange(lhs->range(), hash_tok.range));
         lhs = placeholder != nullptr ? placeholder : lhs;
         continue;
       }
@@ -875,11 +877,7 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
         return n;
       }
       skip_to_sync(ctx);
-      AstNode* placeholder = make_error_placeholder(arena_);
-      if (placeholder != nullptr) {
-        placeholder->set_range(sheet.range);
-      }
-      return placeholder;
+      return make_recovery_placeholder(sheet.range);
     }
     case TokenKind::LBracket: {
       // Structured-ref grammar is not implemented yet; pick the right code
@@ -905,13 +903,7 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       }
       const ParseErrorCode code =
           found_close ? ParseErrorCode::UnsupportedConstruct : ParseErrorCode::UnbalancedBrackets;
-      record_error_with_token(code, lbracket.range, lbracket.lexeme);
-      skip_to_sync(ctx);
-      AstNode* placeholder = make_error_placeholder(arena_);
-      if (placeholder != nullptr) {
-        placeholder->set_range(lbracket.range);
-      }
-      return placeholder;
+      return recover_with_placeholder(code, lbracket, ctx);
     }
     case TokenKind::String:
       return parse_string_atom();
@@ -919,13 +911,7 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       // The spilled-range `#` is not implemented yet. Surface a single,
       // unmistakable diagnostic and recover.
       const Token& tok = peek();
-      record_error_with_token(ParseErrorCode::UnsupportedConstruct, tok.range, tok.lexeme);
-      skip_to_sync(ctx);
-      AstNode* placeholder = make_error_placeholder(arena_);
-      if (placeholder != nullptr) {
-        placeholder->set_range(tok.range);
-      }
-      return placeholder;
+      return recover_with_placeholder(ParseErrorCode::UnsupportedConstruct, tok, ctx);
     }
     case TokenKind::Invalid: {
       // The tokenizer already recorded a LexerError for this; promote to a
@@ -934,29 +920,15 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       record_error_with_token(ParseErrorCode::UnexpectedToken, tok.range, tok.lexeme);
       advance();
       skip_to_sync(ctx);
-      AstNode* placeholder = make_error_placeholder(arena_);
-      if (placeholder != nullptr) {
-        placeholder->set_range(tok.range);
-      }
-      return placeholder;
+      return make_recovery_placeholder(tok.range);
     }
     case TokenKind::Eof: {
       record_error(ParseErrorCode::UnexpectedEof, peek().range);
-      AstNode* placeholder = make_error_placeholder(arena_);
-      if (placeholder != nullptr) {
-        placeholder->set_range(peek().range);
-      }
-      return placeholder;
+      return make_recovery_placeholder(peek().range);
     }
     default: {
       const Token& tok = peek();
-      record_error_with_token(ParseErrorCode::ExpectedExpression, tok.range, tok.lexeme);
-      skip_to_sync(ctx);
-      AstNode* placeholder = make_error_placeholder(arena_);
-      if (placeholder != nullptr) {
-        placeholder->set_range(tok.range);
-      }
-      return placeholder;
+      return recover_with_placeholder(ParseErrorCode::ExpectedExpression, tok, ctx);
     }
   }
 }

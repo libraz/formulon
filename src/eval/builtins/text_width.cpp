@@ -41,6 +41,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/jp_kana_table.h"
@@ -402,11 +403,14 @@ Value Jis(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }  // namespace
 
 void register_text_width_builtins(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"ASC", 1u, 1u, &Asc});
   // DBCS is a documented alias of JIS in Excel; we share the implementation
   // rather than maintain two parallel code paths.
-  registry.register_function(FunctionDef{"JIS", 1u, 1u, &Jis});
-  registry.register_function(FunctionDef{"DBCS", 1u, 1u, &Jis});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"ASC", 1u, 1u, &Asc},
+      {"JIS", 1u, 1u, &Jis},
+      {"DBCS", 1u, 1u, &Jis},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

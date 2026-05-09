@@ -12,9 +12,11 @@
 #ifndef FORMULON_EVAL_BUILTINS_STATS_STATS_HELPERS_H_
 #define FORMULON_EVAL_BUILTINS_STATS_STATS_HELPERS_H_
 
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
+#include "eval/coerce.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -48,6 +50,70 @@ struct MeanSS {
   double mean;
   double ss;  // Sum of squared deviations from the mean.
 };
+
+struct NumberPair {
+  double first;
+  double second;
+};
+
+struct NumberTriple {
+  double first;
+  double second;
+  double third;
+};
+
+inline Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint32_t index) {
+  auto value = coerce_to_number(args[index]);
+  if (!value) {
+    return value.error();
+  }
+  return value.value();
+}
+
+inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::uint32_t first_index,
+                                                        std::uint32_t second_index) {
+  auto first = read_number_arg(args, first_index);
+  if (!first) {
+    return first.error();
+  }
+  auto second = read_number_arg(args, second_index);
+  if (!second) {
+    return second.error();
+  }
+  return NumberPair{first.value(), second.value()};
+}
+
+inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
+                                                            std::uint32_t second_index, std::uint32_t third_index) {
+  auto first = read_number_arg(args, first_index);
+  if (!first) {
+    return first.error();
+  }
+  auto second = read_number_arg(args, second_index);
+  if (!second) {
+    return second.error();
+  }
+  auto third = read_number_arg(args, third_index);
+  if (!third) {
+    return third.error();
+  }
+  return NumberTriple{first.value(), second.value(), third.value()};
+}
+
+inline Expected<bool, ErrorCode> read_bool_arg(const Value* args, std::uint32_t index) {
+  auto value = coerce_to_bool(args[index]);
+  if (!value) {
+    return value.error();
+  }
+  return value.value();
+}
+
+inline Value finite_number_result(double value) {
+  if (std::isnan(value) || std::isinf(value)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(value);
+}
 
 // Helper: compute `(mean, sum_of_squared_deviations)` over a numeric slice.
 // Empty input returns `{0, 0}` which the callers treat as a DIV/0! case.

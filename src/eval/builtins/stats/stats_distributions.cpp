@@ -47,45 +47,34 @@ static Value NormDistCompute(double x, double mean, double sd, bool cumulative) 
   } else {
     r = std::exp(-0.5 * z * z) / (sd * std::sqrt(2.0 * kStatsPi));
   }
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(r);
 }
 
 // NORM.DIST(x, mean, sd, cumulative) - normal distribution PDF or CDF.
 // `sd <= 0` yields `#NUM!`; all other finite inputs are accepted.
 Value NormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto mean = coerce_to_number(args[1]);
-  if (!mean) {
-    return Value::error(mean.error());
-  }
-  auto sd = coerce_to_number(args[2]);
-  if (!sd) {
-    return Value::error(sd.error());
-  }
-  auto cum = coerce_to_bool(args[3]);
+  auto cum = read_bool_arg(args, 3);
   if (!cum) {
     return Value::error(cum.error());
   }
-  if (sd.value() <= 0.0) {
+  if (input.value().third <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return NormDistCompute(x.value(), mean.value(), sd.value(), cum.value());
+  return NormDistCompute(input.value().first, input.value().second, input.value().third, cum.value());
 }
 
 // NORM.S.DIST(z, cumulative) - thin wrapper over NORM.DIST with
 // mean = 0 and sd = 1. Does not need the sd-domain check since 1 > 0.
 Value NormSDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto z = coerce_to_number(args[0]);
+  auto z = read_number_arg(args, 0);
   if (!z) {
     return Value::error(z.error());
   }
-  auto cum = coerce_to_bool(args[1]);
+  auto cum = read_bool_arg(args, 1);
   if (!cum) {
     return Value::error(cum.error());
   }
@@ -95,44 +84,31 @@ Value NormSDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // NORM.INV(p, mean, sd) - inverse normal CDF. Excel rejects `p <= 0`,
 // `p >= 1`, and `sd <= 0` with `#NUM!`.
 Value NormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p = coerce_to_number(args[0]);
-  if (!p) {
-    return Value::error(p.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto mean = coerce_to_number(args[1]);
-  if (!mean) {
-    return Value::error(mean.error());
-  }
-  auto sd = coerce_to_number(args[2]);
-  if (!sd) {
-    return Value::error(sd.error());
-  }
-  if (p.value() <= 0.0 || p.value() >= 1.0 || sd.value() <= 0.0) {
+  const double p = input.value().first;
+  const double mean = input.value().second;
+  const double sd = input.value().third;
+  if (p <= 0.0 || p >= 1.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double z = InverseStandardNormal(p.value());
-  const double r = mean.value() + sd.value() * z;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  const double z = InverseStandardNormal(p);
+  return finite_number_result(mean + sd * z);
 }
 
 // NORM.S.INV(p) - inverse standard-normal CDF. Equivalent to
 // NORM.INV(p, 0, 1); same domain checks apply.
 Value NormSInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p = coerce_to_number(args[0]);
+  auto p = read_number_arg(args, 0);
   if (!p) {
     return Value::error(p.error());
   }
   if (p.value() <= 0.0 || p.value() >= 1.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = InverseStandardNormal(p.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(InverseStandardNormal(p.value()));
 }
 
 // Log-PMF of Binomial(n, p) at k: computes
@@ -162,25 +138,17 @@ double BinomPmf(double k, double n, double prob) {
 // outside [0, 1] yields `#NUM!`. The CDF sums PMFs from 0 to number_s;
 // this is O(trials) but matches Excel's approach for moderate n.
 Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto n_s = coerce_to_number(args[0]);
-  if (!n_s) {
-    return Value::error(n_s.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto trials = coerce_to_number(args[1]);
-  if (!trials) {
-    return Value::error(trials.error());
-  }
-  auto prob = coerce_to_number(args[2]);
-  if (!prob) {
-    return Value::error(prob.error());
-  }
-  auto cum = coerce_to_bool(args[3]);
+  auto cum = read_bool_arg(args, 3);
   if (!cum) {
     return Value::error(cum.error());
   }
-  const double k = std::floor(n_s.value());
-  const double n = std::floor(trials.value());
-  const double p = prob.value();
+  const double k = std::floor(input.value().first);
+  const double n = std::floor(input.value().second);
+  const double p = input.value().third;
   if (k < 0.0 || n < 0.0 || k > n || p < 0.0 || p > 1.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -196,10 +164,7 @@ Value BinomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   } else {
     r = BinomPmf(k, n, p);
   }
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(r);
 }
 
 // Log-space PMF of Poisson(mean) at k: exp(-mean + k*log(mean) - lgamma(k+1)).
@@ -215,20 +180,16 @@ static double PoissonPmf(double k, double mean) {
 // PMF(k) = 0 for k > 0, CDF(k) = 1 for k >= 0. Matches Mac Excel 365.
 // CDF is the O(x) partial sum of PMFs.
 Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = coerce_to_number(args[0]);
-  if (!x_arg) {
-    return Value::error(x_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto mean_arg = coerce_to_number(args[1]);
-  if (!mean_arg) {
-    return Value::error(mean_arg.error());
-  }
-  auto cum = coerce_to_bool(args[2]);
+  auto cum = read_bool_arg(args, 2);
   if (!cum) {
     return Value::error(cum.error());
   }
-  const double x = std::floor(x_arg.value());
-  const double mean = mean_arg.value();
+  const double x = std::floor(input.value().first);
+  const double mean = input.value().second;
   if (x < 0.0 || mean < 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -251,10 +212,7 @@ Value PoissonDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   } else {
     r = PoissonPmf(x, mean);
   }
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(r);
 }
 
 // Chi-squared PDF at `x` with `df` degrees of freedom, evaluated in log
@@ -305,20 +263,16 @@ static double ChisqCdfWilsonHilferty(double x, double df) noexcept {
 // 1e10, and negative `x` with `#NUM!`. The PDF singularity at `x == 0`
 // with `df == 1` also surfaces `#NUM!`.
 Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = coerce_to_number(args[0]);
-  if (!x_arg) {
-    return Value::error(x_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  auto cum = coerce_to_bool(args[2]);
+  auto cum = read_bool_arg(args, 2);
   if (!cum) {
     return Value::error(cum.error());
   }
-  const double x = x_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double x = input.value().first;
+  const double df = std::floor(input.value().second);
   if (x < 0.0 || df < 1.0 || df > kChisqDfMax) {
     return Value::error(ErrorCode::Num);
   }
@@ -348,10 +302,7 @@ Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
       r = ChisqPdf(x, df);
     }
   }
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(r);
 }
 
 // CHISQ.DIST.RT(x, df) - right-tailed chi-squared CDF, `1 - CDF(x)`.
@@ -359,24 +310,17 @@ Value ChisqDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // (Excel 365 does accept non-integer `df` and floors it before the domain
 // check; the CHISQ.INV family uses the same convention.)
 Value ChisqDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = coerce_to_number(args[0]);
-  if (!x_arg) {
-    return Value::error(x_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  const double x = x_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double x = input.value().first;
+  const double df = std::floor(input.value().second);
   if (x < 0.0 || df < 1.0 || df > kChisqDfMax) {
     return Value::error(ErrorCode::Num);
   }
   const double r = (x == 0.0) ? 1.0 : stats::q_gamma(0.5 * df, 0.5 * x);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(r);
 }
 
 // Shared Newton-Raphson inverter for CHISQ.INV(p, df). Assumes the caller
@@ -434,27 +378,19 @@ static double ChisqInvCore(double p, double df) noexcept {
 // CHISQ.INV(p, df) - inverse of the left-tailed chi-squared CDF. `p` must
 // lie in `[0, 1)`; `p == 1` and `p` outside the unit interval yield `#NUM!`.
 Value ChisqInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p_arg = coerce_to_number(args[0]);
-  if (!p_arg) {
-    return Value::error(p_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  const double p = p_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double p = input.value().first;
+  const double df = std::floor(input.value().second);
   if (p < 0.0 || p >= 1.0 || df < 1.0 || df > kChisqDfMax) {
     return Value::error(ErrorCode::Num);
   }
   if (p == 0.0) {
     return Value::number(0.0);
   }
-  const double r = ChisqInvCore(p, df);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(ChisqInvCore(p, df));
 }
 
 // CHISQ.INV.RT(p, df) - inverse of the right-tailed CDF. `p == 1` means
@@ -462,54 +398,40 @@ Value ChisqInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // surfaces `#NUM!`. Equivalent to `CHISQ.INV(1 - p, df)` modulo the
 // closed/open endpoint conventions above.
 Value ChisqInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p_arg = coerce_to_number(args[0]);
-  if (!p_arg) {
-    return Value::error(p_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  const double p = p_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double p = input.value().first;
+  const double df = std::floor(input.value().second);
   if (p <= 0.0 || p > 1.0 || df < 1.0 || df > kChisqDfMax) {
     return Value::error(ErrorCode::Num);
   }
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  const double r = ChisqInvCore(1.0 - p, df);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(ChisqInvCore(1.0 - p, df));
 }
 
 // EXPON.DIST(x, lambda, cumulative) - exponential distribution PDF or CDF.
 // `x < 0` or `lambda <= 0` yields `#NUM!`. PDF: lambda * exp(-lambda*x);
 // CDF: 1 - exp(-lambda*x).
 Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x = coerce_to_number(args[0]);
-  if (!x) {
-    return Value::error(x.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto lambda = coerce_to_number(args[1]);
-  if (!lambda) {
-    return Value::error(lambda.error());
-  }
-  auto cum = coerce_to_bool(args[2]);
+  auto cum = read_bool_arg(args, 2);
   if (!cum) {
     return Value::error(cum.error());
   }
-  if (x.value() < 0.0 || lambda.value() <= 0.0) {
+  const double x = input.value().first;
+  const double lambda = input.value().second;
+  if (x < 0.0 || lambda <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = cum.value() ? 1.0 - std::exp(-lambda.value() * x.value())
-                               : lambda.value() * std::exp(-lambda.value() * x.value());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  const double r = cum.value() ? 1.0 - std::exp(-lambda * x) : lambda * std::exp(-lambda * x);
+  return finite_number_result(r);
 }
 
 // ---------------------------------------------------------------------------
@@ -551,77 +473,53 @@ static double TDistPdf(double x, double df) noexcept {
 // unrestricted (the distribution is symmetric around 0). The PDF uses
 // lgamma to avoid overflow at large df.
 Value TDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = coerce_to_number(args[0]);
-  if (!x_arg) {
-    return Value::error(x_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  auto cum = coerce_to_bool(args[2]);
+  auto cum = read_bool_arg(args, 2);
   if (!cum) {
     return Value::error(cum.error());
   }
-  const double x = x_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double x = input.value().first;
+  const double df = std::floor(input.value().second);
   if (df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = cum.value() ? TDistCdf(x, df) : TDistPdf(x, df);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(cum.value() ? TDistCdf(x, df) : TDistPdf(x, df));
 }
 
 // T.DIST.2T(x, deg_freedom) - two-tailed Student's t probability. Excel
 // enforces `x >= 0` here (the function is defined as the probability that
 // |T| exceeds x in absolute value); negative x yields `#NUM!`.
 Value TDist2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = coerce_to_number(args[0]);
-  if (!x_arg) {
-    return Value::error(x_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  const double x = x_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double x = input.value().first;
+  const double df = std::floor(input.value().second);
   if (x < 0.0 || df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
   // Two-tailed probability is `I_y(df/2, 1/2)` with y = df / (df + x*x).
   const double y = df / (df + x * x);
-  const double r = stats::regularized_incomplete_beta(0.5 * df, 0.5, y);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(stats::regularized_incomplete_beta(0.5 * df, 0.5, y));
 }
 
 // T.DIST.RT(x, deg_freedom) - right-tailed Student's t CDF, `1 - CDF(x)`.
 // `x` is unrestricted; `df` must satisfy the same domain as T.DIST.
 Value TDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = coerce_to_number(args[0]);
-  if (!x_arg) {
-    return Value::error(x_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  const double x = x_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double x = input.value().first;
+  const double df = std::floor(input.value().second);
   if (df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = 1.0 - TDistCdf(x, df);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(1.0 - TDistCdf(x, df));
 }
 
 // Newton-Raphson inverter for the Student's t CDF. Assumes the caller has
@@ -684,24 +582,16 @@ double TInvCore(double p, double df) noexcept {
 // `p` must lie in the open unit interval; the median is returned exactly
 // at `p == 0.5`. `df` floors toward -inf and must satisfy `df >= 1`.
 Value TInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p_arg = coerce_to_number(args[0]);
-  if (!p_arg) {
-    return Value::error(p_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  const double p = p_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double p = input.value().first;
+  const double df = std::floor(input.value().second);
   if (p <= 0.0 || p >= 1.0 || df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = TInvCore(p, df);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(TInvCore(p, df));
 }
 
 // T.INV.2T(probability, deg_freedom) - inverse of the two-tailed Student's
@@ -713,27 +603,19 @@ Value TInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // symmetric centre, and `TInvCore(1 - p/2, df)` handles the extended
 // range naturally because `1 - p/2` remains strictly inside (0, 1).
 Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p_arg = coerce_to_number(args[0]);
-  if (!p_arg) {
-    return Value::error(p_arg.error());
+  auto input = read_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto df_arg = coerce_to_number(args[1]);
-  if (!df_arg) {
-    return Value::error(df_arg.error());
-  }
-  const double p = p_arg.value();
-  const double df = std::floor(df_arg.value());
+  const double p = input.value().first;
+  const double df = std::floor(input.value().second);
   if (p <= 0.0 || p >= 2.0 || df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  const double r = TInvCore(1.0 - 0.5 * p, df);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(TInvCore(1.0 - 0.5 * p, df));
 }
 
 // Snedecor's F CDF at `x >= 0` with `(d1, d2)` degrees of freedom, via
@@ -761,25 +643,17 @@ static double FDistPdf(double x, double d1, double d2) noexcept {
 // yields `#NUM!`. At `x == 0` the PDF is divergent for `d1 == 1` (Excel
 // surfaces `#NUM!`), equals 1 for `d1 == 2`, and 0 for `d1 > 2`.
 Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = coerce_to_number(args[0]);
-  if (!x_arg) {
-    return Value::error(x_arg.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto d1_arg = coerce_to_number(args[1]);
-  if (!d1_arg) {
-    return Value::error(d1_arg.error());
-  }
-  auto d2_arg = coerce_to_number(args[2]);
-  if (!d2_arg) {
-    return Value::error(d2_arg.error());
-  }
-  auto cum = coerce_to_bool(args[3]);
+  auto cum = read_bool_arg(args, 3);
   if (!cum) {
     return Value::error(cum.error());
   }
-  const double x = x_arg.value();
-  const double d1 = std::floor(d1_arg.value());
-  const double d2 = std::floor(d2_arg.value());
+  const double x = input.value().first;
+  const double d1 = std::floor(input.value().second);
+  const double d2 = std::floor(input.value().third);
   if (x < 0.0 || d1 < 1.0 || d1 > kTFdfMax || d2 < 1.0 || d2 > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
@@ -796,38 +670,23 @@ Value FDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
       r = FDistPdf(x, d1, d2);
     }
   }
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(r);
 }
 
 // F.DIST.RT(x, d1, d2) - right-tailed Snedecor's F CDF, `1 - CDF(x)`.
 // Same domain as F.DIST; always `x >= 0`.
 Value FDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto x_arg = coerce_to_number(args[0]);
-  if (!x_arg) {
-    return Value::error(x_arg.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto d1_arg = coerce_to_number(args[1]);
-  if (!d1_arg) {
-    return Value::error(d1_arg.error());
-  }
-  auto d2_arg = coerce_to_number(args[2]);
-  if (!d2_arg) {
-    return Value::error(d2_arg.error());
-  }
-  const double x = x_arg.value();
-  const double d1 = std::floor(d1_arg.value());
-  const double d2 = std::floor(d2_arg.value());
+  const double x = input.value().first;
+  const double d1 = std::floor(input.value().second);
+  const double d2 = std::floor(input.value().third);
   if (x < 0.0 || d1 < 1.0 || d1 > kTFdfMax || d2 < 1.0 || d2 > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = 1.0 - FDistCdf(x, d1, d2);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(1.0 - FDistCdf(x, d1, d2));
 }
 
 // Newton-Raphson inverter for Snedecor's F CDF. Assumes `0 < p < 1` and
@@ -894,32 +753,20 @@ static double FInvCore(double p, double d1, double d2) noexcept {
 // at its right edge. `p == 1` (no finite quantile) and `p` outside
 // `[0, 1)` surface `#NUM!`.
 Value FInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p_arg = coerce_to_number(args[0]);
-  if (!p_arg) {
-    return Value::error(p_arg.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto d1_arg = coerce_to_number(args[1]);
-  if (!d1_arg) {
-    return Value::error(d1_arg.error());
-  }
-  auto d2_arg = coerce_to_number(args[2]);
-  if (!d2_arg) {
-    return Value::error(d2_arg.error());
-  }
-  const double p = p_arg.value();
-  const double d1 = std::floor(d1_arg.value());
-  const double d2 = std::floor(d2_arg.value());
+  const double p = input.value().first;
+  const double d1 = std::floor(input.value().second);
+  const double d2 = std::floor(input.value().third);
   if (p < 0.0 || p >= 1.0 || d1 < 1.0 || d1 > kTFdfMax || d2 < 1.0 || d2 > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
   if (p == 0.0) {
     return Value::number(0.0);
   }
-  const double r = FInvCore(p, d1, d2);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(FInvCore(p, d1, d2));
 }
 
 // F.INV.RT(probability, d1, d2) - inverse of the right-tailed F CDF.
@@ -927,32 +774,20 @@ Value FInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // (Excel accepts `p == 1` and returns 0 for the right-tail variant,
 // symmetric to CHISQ.INV.RT).
 Value FInvRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto p_arg = coerce_to_number(args[0]);
-  if (!p_arg) {
-    return Value::error(p_arg.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto d1_arg = coerce_to_number(args[1]);
-  if (!d1_arg) {
-    return Value::error(d1_arg.error());
-  }
-  auto d2_arg = coerce_to_number(args[2]);
-  if (!d2_arg) {
-    return Value::error(d2_arg.error());
-  }
-  const double p = p_arg.value();
-  const double d1 = std::floor(d1_arg.value());
-  const double d2 = std::floor(d2_arg.value());
+  const double p = input.value().first;
+  const double d1 = std::floor(input.value().second);
+  const double d2 = std::floor(input.value().third);
   if (p <= 0.0 || p > 1.0 || d1 < 1.0 || d1 > kTFdfMax || d2 < 1.0 || d2 > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
   if (p == 1.0) {
     return Value::number(0.0);
   }
-  const double r = FInvCore(1.0 - p, d1, d2);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_result(FInvCore(1.0 - p, d1, d2));
 }
 
 // ---------------------------------------------------------------------------
@@ -976,11 +811,11 @@ Value NormSDistLegacy(const Value* args, std::uint32_t /*arity*/, Arena& arena) 
 // (truncated toward zero). tails=1 maps to T.DIST.RT, tails=2 maps to
 // T.DIST.2T. Any other tails value surfaces #NUM!.
 Value TDistLegacy(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto x_arg = coerce_to_number(args[0]);
+  auto x_arg = read_number_arg(args, 0);
   if (!x_arg) {
     return Value::error(x_arg.error());
   }
-  auto tails_arg = coerce_to_number(args[2]);
+  auto tails_arg = read_number_arg(args, 2);
   if (!tails_arg) {
     return Value::error(tails_arg.error());
   }

@@ -690,6 +690,8 @@ constexpr std::int32_t kDefaultTop10Rank = 10;
 // the same cached-or-compute path.
 ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet);
 const ColorScalePopulation& ensure_population(const CFEvalContext& ctx, ColorScalePopulation& fallback);
+const ColorScalePopulation* numeric_population_for_cell(const Value& cell_value, const CFEvalContext& ctx,
+                                                        ColorScalePopulation& fallback);
 
 // Collects every numeric value in `sqref` (read spill-aware via
 // `Sheet::resolve_cell_value`). Booleans and text are skipped — Excel's
@@ -734,22 +736,16 @@ double sample_stddev(const std::vector<double>& values, double mean) {
 }
 
 bool match_above_average(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  if (ctx.sqref == nullptr || ctx.eval_ctx == nullptr || ctx.eval_ctx->current_sheet() == nullptr) {
-    return false;
-  }
-  if (!cell_value.is_number()) {
-    return false;
-  }
   ColorScalePopulation fallback;
-  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
-  if (pop.sorted.empty()) {
+  const ColorScalePopulation* pop = numeric_population_for_cell(cell_value, ctx, fallback);
+  if (pop == nullptr) {
     return false;
   }
-  const double mean = mean_of(pop.sorted);
+  const double mean = mean_of(pop->sorted);
 
   double threshold = mean;
   if (rule.std_dev.has_value() && *rule.std_dev > 0.0) {
-    const double sigma = sample_stddev(pop.sorted, mean);
+    const double sigma = sample_stddev(pop->sorted, mean);
     const double offset = *rule.std_dev * sigma;
     threshold = rule.above_average ? mean + offset : mean - offset;
   }
@@ -785,18 +781,12 @@ std::size_t resolve_top10_rank(const CFRule& rule, std::size_t population) {
 }
 
 bool match_top10(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  if (ctx.sqref == nullptr || ctx.eval_ctx == nullptr || ctx.eval_ctx->current_sheet() == nullptr) {
-    return false;
-  }
-  if (!cell_value.is_number()) {
-    return false;
-  }
   ColorScalePopulation fallback;
-  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
-  if (pop.sorted.empty()) {
+  const ColorScalePopulation* pop = numeric_population_for_cell(cell_value, ctx, fallback);
+  if (pop == nullptr) {
     return false;
   }
-  const std::size_t rank_n = resolve_top10_rank(rule, pop.sorted.size());
+  const std::size_t rank_n = resolve_top10_rank(rule, pop->sorted.size());
   if (rank_n == 0) {
     return false;
   }
@@ -807,10 +797,10 @@ bool match_top10(const CFRule& rule, const Value& cell_value, const CFEvalContex
   // threshold so cells equal to the rank cutoff still match.
   const double cell = cell_value.as_number();
   if (rule.bottom) {
-    const double threshold = pop.sorted[rank_n - 1];
+    const double threshold = pop->sorted[rank_n - 1];
     return cell <= threshold;
   }
-  const double threshold = pop.sorted[pop.sorted.size() - rank_n];
+  const double threshold = pop->sorted[pop->sorted.size() - rank_n];
   return cell >= threshold;
 }
 
@@ -843,6 +833,21 @@ const ColorScalePopulation& ensure_population(const CFEvalContext& ctx, ColorSca
   }
   fallback = gather_population(*ctx.sqref, *ctx.eval_ctx->current_sheet());
   return fallback;
+}
+
+const ColorScalePopulation* numeric_population_for_cell(const Value& cell_value, const CFEvalContext& ctx,
+                                                        ColorScalePopulation& fallback) {
+  if (ctx.sqref == nullptr || ctx.eval_ctx == nullptr || ctx.eval_ctx->current_sheet() == nullptr) {
+    return nullptr;
+  }
+  if (!cell_value.is_number()) {
+    return nullptr;
+  }
+  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
+  if (pop.sorted.empty()) {
+    return nullptr;
+  }
+  return &pop;
 }
 
 // PERCENTILE.INC: linear interpolation between sorted points.
@@ -918,6 +923,20 @@ std::optional<double> resolve_cfvo(const CfValueObject& cfvo, const ColorScalePo
   return std::nullopt;
 }
 
+std::optional<std::vector<double>> resolve_cfvo_list(const std::vector<CfValueObject>& cfvos,
+                                                     const ColorScalePopulation& pop, const CFEvalContext& ctx) {
+  std::vector<double> resolved;
+  resolved.reserve(cfvos.size());
+  for (const CfValueObject& cfvo : cfvos) {
+    auto value = resolve_cfvo(cfvo, pop, ctx);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+    resolved.push_back(*value);
+  }
+  return resolved;
+}
+
 // Linear interpolation between two sRGB colours. `fraction` is clamped
 // to [0, 1] by the caller. Alpha is interpolated alongside RGB so
 // stops with transparent components blend correctly.
@@ -941,11 +960,7 @@ Color interpolate_color(Color start, Color end, double fraction) {
 // nullopt for empty populations, malformed thresholds, or non-numeric
 // cells (the rule still "applies", but the cell renders without fill).
 std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  if (!rule.color_scale.has_value() || ctx.sqref == nullptr || ctx.eval_ctx == nullptr ||
-      ctx.eval_ctx->current_sheet() == nullptr) {
-    return std::nullopt;
-  }
-  if (!cell_value.is_number()) {
+  if (!rule.color_scale.has_value()) {
     return std::nullopt;
   }
   const ColorScaleSpec& spec = *rule.color_scale;
@@ -954,33 +969,28 @@ std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_v
   }
 
   ColorScalePopulation fallback;
-  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
-  if (pop.sorted.empty()) {
+  const ColorScalePopulation* pop = numeric_population_for_cell(cell_value, ctx, fallback);
+  if (pop == nullptr) {
     return std::nullopt;
   }
 
-  std::vector<double> resolved_thresholds;
-  resolved_thresholds.reserve(spec.thresholds.size());
-  for (const CfValueObject& cfvo : spec.thresholds) {
-    auto value = resolve_cfvo(cfvo, pop, ctx);
-    if (!value.has_value()) {
-      return std::nullopt;
-    }
-    resolved_thresholds.push_back(*value);
+  auto resolved_thresholds = resolve_cfvo_list(spec.thresholds, *pop, ctx);
+  if (!resolved_thresholds.has_value()) {
+    return std::nullopt;
   }
 
   const double cell = cell_value.as_number();
   // Locate the segment that contains the cell value. Cells outside the
   // outermost stops clamp to the boundary colour.
-  if (cell <= resolved_thresholds.front()) {
+  if (cell <= resolved_thresholds->front()) {
     return spec.colors.front();
   }
-  if (cell >= resolved_thresholds.back()) {
+  if (cell >= resolved_thresholds->back()) {
     return spec.colors.back();
   }
-  for (std::size_t i = 0; i + 1 < resolved_thresholds.size(); ++i) {
-    const double lower_bound = resolved_thresholds[i];
-    const double upper_bound = resolved_thresholds[i + 1];
+  for (std::size_t i = 0; i + 1 < resolved_thresholds->size(); ++i) {
+    const double lower_bound = (*resolved_thresholds)[i];
+    const double upper_bound = (*resolved_thresholds)[i + 1];
     if (cell >= lower_bound && cell <= upper_bound) {
       // When the segment collapses (lower == upper), pick the upper
       // colour; the cell is exactly at a stop so either end is correct.
@@ -1035,23 +1045,19 @@ double automatic_axis_position(double threshold_min, double threshold_max) {
 }
 
 std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  if (!rule.data_bar.has_value() || ctx.sqref == nullptr || ctx.eval_ctx == nullptr ||
-      ctx.eval_ctx->current_sheet() == nullptr) {
-    return std::nullopt;
-  }
-  if (!cell_value.is_number()) {
+  if (!rule.data_bar.has_value()) {
     return std::nullopt;
   }
   const DataBarSpec& spec = *rule.data_bar;
 
   ColorScalePopulation fallback;
-  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
-  if (pop.sorted.empty()) {
+  const ColorScalePopulation* pop = numeric_population_for_cell(cell_value, ctx, fallback);
+  if (pop == nullptr) {
     return std::nullopt;
   }
 
-  auto threshold_min = resolve_cfvo(spec.min, pop, ctx);
-  auto threshold_max = resolve_cfvo(spec.max, pop, ctx);
+  auto threshold_min = resolve_cfvo(spec.min, *pop, ctx);
+  auto threshold_max = resolve_cfvo(spec.max, *pop, ctx);
   if (!threshold_min.has_value() || !threshold_max.has_value()) {
     return std::nullopt;
   }
@@ -1106,11 +1112,7 @@ bool match_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalCon
 // ---------------------------------------------------------------------------
 
 std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  if (!rule.icon_set.has_value() || ctx.sqref == nullptr || ctx.eval_ctx == nullptr ||
-      ctx.eval_ctx->current_sheet() == nullptr) {
-    return std::nullopt;
-  }
-  if (!cell_value.is_number()) {
+  if (!rule.icon_set.has_value()) {
     return std::nullopt;
   }
   const IconSetSpec& spec = *rule.icon_set;
@@ -1119,32 +1121,27 @@ std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell
   }
 
   ColorScalePopulation fallback;
-  const ColorScalePopulation& pop = ensure_population(ctx, fallback);
-  if (pop.sorted.empty()) {
+  const ColorScalePopulation* pop = numeric_population_for_cell(cell_value, ctx, fallback);
+  if (pop == nullptr) {
     return std::nullopt;
   }
 
-  std::vector<double> resolved;
-  resolved.reserve(spec.thresholds.size());
-  for (const CfValueObject& cfvo : spec.thresholds) {
-    auto value = resolve_cfvo(cfvo, pop, ctx);
-    if (!value.has_value()) {
-      return std::nullopt;
-    }
-    resolved.push_back(*value);
+  auto resolved = resolve_cfvo_list(spec.thresholds, *pop, ctx);
+  if (!resolved.has_value()) {
+    return std::nullopt;
   }
 
   const double cell = cell_value.as_number();
   std::uint8_t icon_index = 0;
-  for (std::size_t i = 0; i < resolved.size(); ++i) {
-    const bool above = spec.thresholds[i].gte ? (cell >= resolved[i]) : (cell > resolved[i]);
+  for (std::size_t i = 0; i < resolved->size(); ++i) {
+    const bool above = spec.thresholds[i].gte ? (cell >= (*resolved)[i]) : (cell > (*resolved)[i]);
     if (above) {
       icon_index = static_cast<std::uint8_t>(i + 1);
     }
   }
 
   if (spec.reverse) {
-    const auto bucket_count = static_cast<std::uint8_t>(resolved.size() + 1);
+    const auto bucket_count = static_cast<std::uint8_t>(resolved->size() + 1);
     icon_index = static_cast<std::uint8_t>(bucket_count - 1 - icon_index);
   }
 

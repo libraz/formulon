@@ -209,6 +209,21 @@ std::string_view dbnum_digit_subst(DbNumMode mode, char c) noexcept {
   }
 }
 
+void append_digit_dbnum(std::string& out, DbNumMode mode, char c) {
+  const std::string_view sub = dbnum_digit_subst(mode, c);
+  if (!sub.empty()) {
+    out.append(sub);
+  } else {
+    out.push_back(c);
+  }
+}
+
+void append_chars_dbnum(std::string& out, DbNumMode mode, std::string_view chars) {
+  for (char c : chars) {
+    append_digit_dbnum(out, mode, c);
+  }
+}
+
 // Appends `value` to `out` with each digit substituted per `mode`. Used
 // for date components (era year, m, d, h, min, s) where positional kanji
 // do NOT apply -- only per-digit substitution.
@@ -218,18 +233,7 @@ void append_int_dbnum(std::string& out, long long value, DbNumMode mode) {
     out.append(buf);
     return;
   }
-  for (char c : buf) {
-    if (c == '-') {
-      out.push_back('-');
-      continue;
-    }
-    const std::string_view sub = dbnum_digit_subst(mode, c);
-    if (!sub.empty()) {
-      out.append(sub);
-    } else {
-      out.push_back(c);
-    }
-  }
+  append_chars_dbnum(out, mode, buf);
 }
 
 // Appends `value` zero-padded to 2 digits, with DBNum substitution applied.
@@ -239,14 +243,18 @@ void append_pad2_dbnum(std::string& out, unsigned value, DbNumMode mode) {
     return;
   }
   if (value < 10u) {
-    const std::string_view zero = dbnum_digit_subst(mode, '0');
-    if (!zero.empty()) {
-      out.append(zero);
-    } else {
-      out.push_back('0');
-    }
+    append_digit_dbnum(out, mode, '0');
   }
   append_int_dbnum(out, static_cast<long long>(value), mode);
+}
+
+bool decimal_digits_all_zero(std::string_view digits) noexcept {
+  for (char ch : digits) {
+    if (ch != '0') {
+      return false;
+    }
+  }
+  return true;
 }
 
 // Rounds `v` to `decimals` fractional places, half-away-from-zero. The
@@ -624,22 +632,7 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
   // render `TEXT(-1/3, "0")` as `"0"`, not `"-0"`: once the rounding has
   // crushed the magnitude below the displayable precision, no sign leaks out.
   if (negative && !section.has_general) {
-    bool all_zero = true;
-    for (char ch : int_digits) {
-      if (ch != '0') {
-        all_zero = false;
-        break;
-      }
-    }
-    if (all_zero) {
-      for (char ch : frac_digits_str) {
-        if (ch != '0') {
-          all_zero = false;
-          break;
-        }
-      }
-    }
-    if (all_zero) {
+    if (decimal_digits_all_zero(int_digits) && decimal_digits_all_zero(frac_digits_str)) {
       negative = false;
     }
   }
@@ -660,23 +653,13 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
     if (section.thousands_separator && int_cursor > 0 && (n_int_digits - int_cursor) % 3 == 0) {
       result.push_back(',');
     }
-    const std::string_view sub = dbnum_digit_subst(section.dbnum_mode, digit);
-    if (!sub.empty()) {
-      result.append(sub);
-    } else {
-      result.push_back(digit);
-    }
+    append_digit_dbnum(result, section.dbnum_mode, digit);
     ++int_cursor;
   };
 
   // Helper: emit a single fractional digit with DBNum substitution.
   auto emit_frac_digit_char = [&](char digit) {
-    const std::string_view sub = dbnum_digit_subst(section.dbnum_mode, digit);
-    if (!sub.empty()) {
-      result.append(sub);
-    } else {
-      result.push_back(digit);
-    }
+    append_digit_dbnum(result, section.dbnum_mode, digit);
   };
 
   for (std::size_t i = 0; i < section.tokens.size(); ++i) {
@@ -849,14 +832,7 @@ void emit_fraction_digits(const Section& section, std::string_view fmt, long lon
     // Overflow: Excel never produces this for our caps, but be defensive.
     // Emit the digits verbatim (the widest available run cap is enforced
     // by the search above so this case is essentially unreachable).
-    for (char c : digits) {
-      const std::string_view sub = dbnum_digit_subst(section.dbnum_mode, c);
-      if (!sub.empty()) {
-        out.append(sub);
-      } else {
-        out.push_back(c);
-      }
-    }
+    append_chars_dbnum(out, section.dbnum_mode, digits);
     return;
   }
   const int pad = width - static_cast<int>(digits.size());
@@ -869,24 +845,14 @@ void emit_fraction_digits(const Section& section, std::string_view fmt, long lon
     if (k < pad) {
       // Leading-position behaviour by placeholder kind.
       if (kind == Tok::DigitZero) {
-        const std::string_view sub = dbnum_digit_subst(section.dbnum_mode, '0');
-        if (!sub.empty()) {
-          out.append(sub);
-        } else {
-          out.push_back('0');
-        }
+        append_digit_dbnum(out, section.dbnum_mode, '0');
       } else if (kind == Tok::DigitPad) {
         out.push_back(' ');
       }
       // `#`: emit nothing.
     } else {
       const char d = digits[digit_cursor++];
-      const std::string_view sub = dbnum_digit_subst(section.dbnum_mode, d);
-      if (!sub.empty()) {
-        out.append(sub);
-      } else {
-        out.push_back(d);
-      }
+      append_digit_dbnum(out, section.dbnum_mode, d);
     }
   }
 }
@@ -1075,14 +1041,7 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
           if (dbnum == DbNumMode::kNone) {
             out.append(buf, static_cast<std::size_t>(n));
           } else {
-            for (int k = 0; k < n; ++k) {
-              const std::string_view sub = dbnum_digit_subst(dbnum, buf[k]);
-              if (!sub.empty()) {
-                out.append(sub);
-              } else {
-                out.push_back(buf[k]);
-              }
-            }
+            append_chars_dbnum(out, dbnum, std::string_view(buf, static_cast<std::size_t>(n)));
           }
         }
         break;
@@ -1216,12 +1175,7 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
               d = 0;
             }
             const char ch = static_cast<char>('0' + d);
-            const std::string_view sub = dbnum_digit_subst(dbnum, ch);
-            if (!sub.empty()) {
-              out.append(sub);
-            } else {
-              out.push_back(ch);
-            }
+            append_digit_dbnum(out, dbnum, ch);
             f -= static_cast<double>(d);
           }
         }

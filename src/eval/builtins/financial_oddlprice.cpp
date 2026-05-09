@@ -37,7 +37,6 @@
 
 #include "eval/builtins/financial_helpers.h"
 #include "eval/builtins/financial_oddl_helpers.h"
-#include "eval/coerce.h"
 #include "eval/date_time.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -47,23 +46,6 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 namespace {
-
-// Reads a required date argument, truncating toward zero. Negative
-// serials are rejected as `#NUM!`. Mirrors the helper in
-// `financial_price.cpp` / `financial_yield.cpp`; replicated per-TU to
-// keep the helper local to its callers (see those files for the
-// established pattern).
-Expected<double, ErrorCode> read_date(const Value* args, std::uint32_t index) {
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return raw.error();
-  }
-  const double t = std::trunc(raw.value());
-  if (t < 0.0) {
-    return ErrorCode::Num;
-  }
-  return t;
-}
 
 // Last day-of-month for a given Gregorian (year, month) pair. Identical
 // to the helper in `coupon_schedule.cpp`; replicated here to keep this
@@ -202,15 +184,15 @@ Expected<OddLastSchedule, ErrorCode> compute_odd_last_schedule(double settlement
 }
 
 Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uint32_t arity) {
-  auto settlement = read_date(args, 0);
+  auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
   }
-  auto maturity = read_date(args, 1);
+  auto maturity = read_financial_date(args, 1);
   if (!maturity) {
     return maturity.error();
   }
-  auto last_interest = read_date(args, 2);
+  auto last_interest = read_financial_date(args, 2);
   if (!last_interest) {
     return last_interest.error();
   }
@@ -226,11 +208,11 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
   if (!redemption) {
     return redemption.error();
   }
-  auto frequency_e = read_required_number(args, 6);
+  auto frequency_e = read_coupon_frequency(args, 6);
   if (!frequency_e) {
     return frequency_e.error();
   }
-  auto basis_e = read_optional_number(args, arity, 7, 0.0);
+  auto basis_e = read_day_count_basis(args, arity, 7);
   if (!basis_e) {
     return basis_e.error();
   }
@@ -245,14 +227,8 @@ Expected<double, ErrorCode> compute_oddl_clean_price(const Value* args, std::uin
   if (settlement.value() >= maturity.value()) {
     return ErrorCode::Num;
   }
-  const int frequency = static_cast<int>(std::trunc(frequency_e.value()));
-  if (frequency != 1 && frequency != 2 && frequency != 4) {
-    return ErrorCode::Num;
-  }
-  const int basis = static_cast<int>(std::trunc(basis_e.value()));
-  if (basis < 0 || basis > 4) {
-    return ErrorCode::Num;
-  }
+  const int frequency = frequency_e.value();
+  const int basis = basis_e.value();
   if (rate.value() < 0.0) {
     return ErrorCode::Num;
   }

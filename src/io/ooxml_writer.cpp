@@ -86,6 +86,19 @@ constexpr std::string_view kRelVmlDrawing =
 
 constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
 constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
+constexpr std::string_view kRelOfficeDocument =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+constexpr std::string_view kRelWorksheet =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+constexpr std::string_view kRelExternalLink =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
+constexpr std::string_view kRelExternalLinkPath =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
+constexpr std::string_view kRelOleLink =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink";
+constexpr std::string_view kRelDdeLink =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink";
 
 // ---------------------------------------------------------------------------
 // Per-package emission plan
@@ -162,6 +175,8 @@ struct EmissionPlan {
   std::vector<const PassthroughPart*> passthrough_kept;
 };
 
+std::string RelsPathForPart(std::string_view part_path);
+
 /// Returns the set of paths the writer always generates, regardless of
 /// metadata. Used to detect passthrough collisions.
 std::unordered_set<std::string> BuildGeneratedPathSet(
@@ -206,20 +221,7 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   // from the captured `ExternalLinkRecord`s; the body parts themselves
   // are passthrough.
   for (const ExternalLinkRecord& rec : wb.external_links()) {
-    // SheetRelsPath equivalent inlined here to avoid a writer-side
-    // dependency on the reader's helpers: insert
-    // `xl/<dir>/_rels/<file>.rels` for `xl/<dir>/<file>`.
-    const std::size_t slash = rec.part_path.find_last_of('/');
-    std::string rels_path;
-    if (slash == std::string::npos) {
-      rels_path = "_rels/" + rec.part_path + ".rels";
-    } else {
-      rels_path.append(rec.part_path.substr(0, slash));
-      rels_path.append("/_rels/");
-      rels_path.append(rec.part_path.substr(slash + 1));
-      rels_path.append(".rels");
-    }
-    paths.insert(std::move(rels_path));
+    paths.insert(RelsPathForPart(rec.part_path));
   }
   // Sheet rels: any sheet that owns at least one table or pivot table.
   // Computed by callers; we enumerate them here for completeness.
@@ -420,6 +422,54 @@ inline void AppendOverride(std::string& out, std::string_view path, std::string_
   out.append("\"/>\n");
 }
 
+std::string RelsPathForPart(std::string_view part_path) {
+  const std::size_t slash = part_path.find_last_of('/');
+  if (slash == std::string_view::npos) {
+    std::string rels_path("_rels/");
+    rels_path.append(part_path);
+    rels_path.append(".rels");
+    return rels_path;
+  }
+  std::string rels_path;
+  rels_path.append(part_path.substr(0, slash));
+  rels_path.append("/_rels/");
+  rels_path.append(part_path.substr(slash + 1));
+  rels_path.append(".rels");
+  return rels_path;
+}
+
+std::string_view WithoutXlPrefix(std::string_view path) {
+  constexpr std::string_view kXlPrefix = "xl/";
+  if (path.size() >= kXlPrefix.size() && path.substr(0, kXlPrefix.size()) == kXlPrefix) {
+    path.remove_prefix(kXlPrefix.size());
+  }
+  return path;
+}
+
+void AppendRelationship(std::string& out, std::string_view id, std::string_view type, std::string_view target,
+                        bool target_external = false, bool escape_target = false) {
+  out.append("  <Relationship Id=\"");
+  AppendXmlEscaped(out, id);
+  out.append("\" Type=\"");
+  out.append(type);
+  out.append("\" Target=\"");
+  if (escape_target) {
+    AppendXmlEscaped(out, target);
+  } else {
+    out.append(target);
+  }
+  if (target_external) {
+    out.append("\" TargetMode=\"External\"/>\n");
+  } else {
+    out.append("\"/>\n");
+  }
+}
+
+void AppendRelationship(std::string& out, std::uint32_t rid, std::string_view type, std::string_view target,
+                        bool target_external = false, bool escape_target = false) {
+  AppendRelationship(out, "rId" + std::to_string(rid), type, target, target_external, escape_target);
+}
+
 // ---------------------------------------------------------------------------
 // Part builders
 // ---------------------------------------------------------------------------
@@ -507,10 +557,7 @@ std::string BuildPackageRels() {
   out.reserve(256);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  out.append(
-      "  <Relationship Id=\"rId1\" "
-      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
-      "Target=\"xl/workbook.xml\"/>\n");
+  AppendRelationship(out, 1, kRelOfficeDocument, "xl/workbook.xml");
   out.append("</Relationships>\n");
   return out;
 }
@@ -644,54 +691,23 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan)
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(i + 1));
-    out.append(
-        "\" "
-        "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
-        "Target=\"worksheets/sheet");
-    out.append(std::to_string(i + 1));
-    out.append(".xml\"/>\n");
+    const std::string target = "worksheets/sheet" + std::to_string(i + 1) + ".xml";
+    AppendRelationship(out, static_cast<std::uint32_t>(i + 1), kRelWorksheet, target);
   }
   // Styles relationship follows the worksheet relationships.
-  out.append("  <Relationship Id=\"rId");
-  out.append(std::to_string(sheet_count + 1));
-  out.append(
-      "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" "
-      "Target=\"styles.xml\"/>\n");
+  AppendRelationship(out, static_cast<std::uint32_t>(sheet_count + 1), kRelStyles, "styles.xml");
   // Pivot-cache definition relationships, one per planned cache. Targets
   // are relative to the workbook directory (`xl/`); we strip the `xl/`
   // prefix from `definition_path` so the form matches what Excel emits
   // (e.g. `Target="pivotCache/pivotCacheDefinition1.xml"`).
-  constexpr std::string_view kXlPrefix = "xl/";
   for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
-    std::string_view target = c.definition_path;
-    if (target.size() >= kXlPrefix.size() && target.substr(0, kXlPrefix.size()) == kXlPrefix) {
-      target.remove_prefix(kXlPrefix.size());
-    }
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(c.workbook_rid));
-    out.append("\" Type=\"");
-    out.append(kRelPivotCacheDefinition);
-    out.append("\" Target=\"");
-    out.append(target);
-    out.append("\"/>\n");
+    AppendRelationship(out, c.workbook_rid, kRelPivotCacheDefinition, WithoutXlPrefix(c.definition_path));
   }
   // External link relationships. Same `xl/` prefix stripping as pivot
   // caches above; targets land as `Target="externalLinks/externalLink1.xml"`.
   for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
-    std::string_view target = e.record->part_path;
-    if (target.size() >= kXlPrefix.size() && target.substr(0, kXlPrefix.size()) == kXlPrefix) {
-      target.remove_prefix(kXlPrefix.size());
-    }
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(e.workbook_rid));
-    out.append(
-        "\" "
-        "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink\" "
-        "Target=\"");
-    AppendXmlEscaped(out, target);
-    out.append("\"/>\n");
+    AppendRelationship(out, e.workbook_rid, kRelExternalLink, WithoutXlPrefix(e.record->part_path),
+                       /*target_external=*/false, /*escape_target=*/true);
   }
   out.append("</Relationships>\n");
   return out;
@@ -709,29 +725,21 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
   out.reserve(256);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  out.append("  <Relationship Id=\"");
-  AppendXmlEscaped(out, rec.body_rel_id.empty() ? std::string("rId1") : rec.body_rel_id);
-  out.append("\" Type=\"");
+  std::string_view type = kRelExternalLinkPath;
   switch (rec.kind) {
     case ExternalLinkRecord::Kind::kOleLink:
-      out.append("http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink");
+      type = kRelOleLink;
       break;
     case ExternalLinkRecord::Kind::kDdeLink:
-      out.append("http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink");
+      type = kRelDdeLink;
       break;
     case ExternalLinkRecord::Kind::kExternalBook:
     case ExternalLinkRecord::Kind::kUnknown:
     default:
-      out.append("http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath");
       break;
   }
-  out.append("\" Target=\"");
-  AppendXmlEscaped(out, rec.target);
-  if (rec.target_external) {
-    out.append("\" TargetMode=\"External\"/>\n");
-  } else {
-    out.append("\"/>\n");
-  }
+  AppendRelationship(out, rec.body_rel_id.empty() ? std::string_view("rId1") : std::string_view(rec.body_rel_id), type,
+                     rec.target, rec.target_external, /*escape_target=*/true);
   out.append("</Relationships>\n");
   return out;
 }
@@ -1070,25 +1078,15 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   std::uint32_t next_rid = 1;
   for (std::size_t i = 0; i < sheet_tables.size(); ++i) {
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(next_rid++));
-    out.append("\" Type=\"");
-    out.append(kRelTable);
-    out.append("\" Target=\"../tables/table");
-    out.append(std::to_string(sheet_tables[i].numeric_id));
-    out.append(".xml\"/>\n");
+    const std::string target = "../tables/table" + std::to_string(sheet_tables[i].numeric_id) + ".xml";
+    AppendRelationship(out, next_rid++, kRelTable, target);
   }
   // Pivot-table relationships follow the table relationships, with rId
   // numbering continuing in sequence so each rel id is unique within
   // the sheet rels file.
   for (std::size_t i = 0; i < sheet_pivot_tables.size(); ++i) {
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(next_rid++));
-    out.append("\" Type=\"");
-    out.append(kRelPivotTable);
-    out.append("\" Target=\"../pivotTables/pivotTable");
-    out.append(std::to_string(sheet_pivot_tables[i].numeric_id));
-    out.append(".xml\"/>\n");
+    const std::string target = "../pivotTables/pivotTable" + std::to_string(sheet_pivot_tables[i].numeric_id) + ".xml";
+    AppendRelationship(out, next_rid++, kRelPivotTable, target);
   }
   // Hyperlink relationships. Each external hyperlink target gets one
   // entry. Relative ordering is preserved so the round-trip writes the
@@ -1110,32 +1108,16 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
       rid = "rId" + std::to_string(next_rid++);
     }
     res.hyperlink_rids.push_back(rid);
-    out.append("  <Relationship Id=\"");
-    AppendXmlEscaped(out, rid);
-    out.append("\" Type=\"");
-    out.append(kRelHyperlink);
-    out.append("\" Target=\"");
-    AppendXmlEscaped(out, h.target);
-    out.append("\" TargetMode=\"External\"/>\n");
+    AppendRelationship(out, rid, kRelHyperlink, h.target, /*target_external=*/true, /*escape_target=*/true);
   }
   // Comments + VML relationships when the sheet has comments. The
   // comments rel comes first; the VML rel follows so the two ids are
   // adjacent and readers that scan top-down see them as a pair.
   if (comments_plan.numeric_id != 0) {
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(next_rid++));
-    out.append("\" Type=\"");
-    out.append(kRelComments);
-    out.append("\" Target=\"../comments");
-    out.append(std::to_string(comments_plan.numeric_id));
-    out.append(".xml\"/>\n");
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(next_rid++));
-    out.append("\" Type=\"");
-    out.append(kRelVmlDrawing);
-    out.append("\" Target=\"../drawings/vmlDrawing");
-    out.append(std::to_string(comments_plan.numeric_id));
-    out.append(".vml\"/>\n");
+    const std::string comments_target = "../comments" + std::to_string(comments_plan.numeric_id) + ".xml";
+    const std::string vml_target = "../drawings/vmlDrawing" + std::to_string(comments_plan.numeric_id) + ".vml";
+    AppendRelationship(out, next_rid++, kRelComments, comments_target);
+    AppendRelationship(out, next_rid++, kRelVmlDrawing, vml_target);
   }
   out.append("</Relationships>\n");
   return res;
@@ -1151,11 +1133,7 @@ std::string BuildPivotCacheDefinitionRels(std::string_view records_filename) {
   out.reserve(256 + records_filename.size());
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  out.append("  <Relationship Id=\"rId1\" Type=\"");
-  out.append(kRelPivotCacheRecords);
-  out.append("\" Target=\"");
-  out.append(records_filename);
-  out.append("\"/>\n");
+  AppendRelationship(out, 1, kRelPivotCacheRecords, records_filename);
   out.append("</Relationships>\n");
   return out;
 }
@@ -1605,16 +1583,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     if (rels_xml.empty()) {
       continue;
     }
-    const std::size_t slash = e.record->part_path.find_last_of('/');
-    std::string rels_path;
-    if (slash == std::string::npos) {
-      rels_path = "_rels/" + e.record->part_path + ".rels";
-    } else {
-      rels_path.append(e.record->part_path.substr(0, slash));
-      rels_path.append("/_rels/");
-      rels_path.append(e.record->part_path.substr(slash + 1));
-      rels_path.append(".rels");
-    }
+    std::string rels_path = RelsPathForPart(e.record->part_path);
     auto result = AddPart(writer.get(), rels_path, std::move(rels_xml));
     if (!result) {
       return result.error();

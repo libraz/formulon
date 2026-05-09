@@ -245,11 +245,7 @@ AstNode* Parser::parse_array_literal_atom() {
           const Token& tok = peek();
           record_error_with_token(ParseErrorCode::ExpectedExpression, tok.range, tok.lexeme);
           skip_to_sync(SyncContext::ArrayElem);
-          AstNode* placeholder = make_error_placeholder(arena_);
-          if (placeholder != nullptr) {
-            placeholder->set_range(tok.range);
-          }
-          return placeholder;
+          return make_recovery_placeholder(tok.range);
         }
         // The tokenizer's `text` field is the escape-resolved payload,
         // already interned in the tokenizer arena, so we can hand it
@@ -264,13 +260,7 @@ AstNode* Parser::parse_array_literal_atom() {
       }
       default: {
         const Token& tok = peek();
-        record_error_with_token(ParseErrorCode::ExpectedExpression, tok.range, tok.lexeme);
-        skip_to_sync(SyncContext::ArrayElem);
-        AstNode* placeholder = make_error_placeholder(arena_);
-        if (placeholder != nullptr) {
-          placeholder->set_range(tok.range);
-        }
-        return placeholder;
+        return recover_with_placeholder(ParseErrorCode::ExpectedExpression, tok, SyncContext::ArrayElem);
       }
     }
   };
@@ -313,11 +303,7 @@ AstNode* Parser::parse_array_literal_atom() {
         if (peek_kind() == TokenKind::RBrace) {
           advance();
         }
-        AstNode* placeholder = make_error_placeholder(arena_);
-        if (placeholder != nullptr) {
-          placeholder->set_range(lbrace.range);
-        }
-        return placeholder;
+        return make_recovery_placeholder(lbrace.range);
       }
       cur_row_cols = 0;
       ++rows;
@@ -333,11 +319,7 @@ AstNode* Parser::parse_array_literal_atom() {
     if (k == TokenKind::Eof) {
       record_error_with_token(ParseErrorCode::UnbalancedBraces, lbrace.range, lbrace.lexeme);
       // Synthesise a placeholder to carry the brace's source range.
-      AstNode* placeholder = make_error_placeholder(arena_);
-      if (placeholder != nullptr) {
-        placeholder->set_range(lbrace.range);
-      }
-      return placeholder;
+      return make_recovery_placeholder(lbrace.range);
     }
     record_error_with_token(ParseErrorCode::ExpectedCommaOrSemiInArray, peek().range, peek().lexeme);
     skip_to_sync(SyncContext::ArrayElem);
@@ -351,20 +333,12 @@ AstNode* Parser::parse_array_literal_atom() {
     if (peek_kind() == TokenKind::RBrace) {
       advance();
     }
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(lbrace.range);
-    }
-    return placeholder;
+    return make_recovery_placeholder(lbrace.range);
   }
 
   if (peek_kind() != TokenKind::RBrace) {
     record_error_with_token(ParseErrorCode::UnbalancedBraces, lbrace.range, lbrace.lexeme);
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(lbrace.range);
-    }
-    return placeholder;
+    return make_recovery_placeholder(lbrace.range);
   }
   const Token& rbrace = advance();
 
@@ -411,11 +385,7 @@ AstNode* Parser::parse_cellref_atom() {
   Reference r;
   if (!decode_cellref_lexeme(tok.lexeme, &r)) {
     record_error_with_token(ParseErrorCode::InvalidReference, tok.range, tok.lexeme);
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(tok.range);
-    }
-    return placeholder;
+    return make_recovery_placeholder(tok.range);
   }
   AstNode* n = make_ref(arena_, r);
   if (n == nullptr) {
@@ -466,11 +436,7 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     }
     if (!found_close) {
       record_error_with_token(ParseErrorCode::UnbalancedBrackets, lbracket.range, lbracket.lexeme);
-      AstNode* placeholder = make_error_placeholder(arena_);
-      if (placeholder != nullptr) {
-        placeholder->set_range(lbracket.range);
-      }
-      return placeholder;
+      return make_recovery_placeholder(lbracket.range);
     }
     const Token& rbracket = peek_at(close_offset);
     // Compute the byte slice of the bracket payload from the source buffer.
@@ -603,11 +569,7 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     if (n != nullptr) {
       return n;
     }
-    AstNode* placeholder = make_error_placeholder(arena_);
-    if (placeholder != nullptr) {
-      placeholder->set_range(sheet_range);
-    }
-    return placeholder;
+    return make_recovery_placeholder(sheet_range);
   }
 
   if (next == TokenKind::Colon && peek_kind_at(2) == TokenKind::Ident) {

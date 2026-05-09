@@ -200,6 +200,90 @@ bool read_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry&
   return true;
 }
 
+bool read_optional_int_in_set(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
+                              Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                              const int* allowed, std::size_t count, int* out, Value* out_err) {
+  *out = default_value;
+  if (arity <= arg_index) {
+    return true;
+  }
+  return read_int_in_set(call.as_call_arg(arg_index), arena, registry, ctx, allowed, count, out, out_err);
+}
+
+bool read_optional_int(const parser::AstNode& call, std::uint32_t arg_index, std::uint32_t arity, int default_value,
+                       Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx, int* out,
+                       Value* out_err) {
+  *out = default_value;
+  if (arity <= arg_index) {
+    return true;
+  }
+  return read_int(call.as_call_arg(arg_index), arena, registry, ctx, out, out_err);
+}
+
+struct HeaderLayout {
+  bool inputs_have_header = false;
+  bool output_emits_header = false;
+  std::uint32_t data_start_row = 0;
+  std::uint32_t data_row_count = 0;
+};
+
+Expected<HeaderLayout, ErrorCode> resolve_header_layout(int field_headers, std::uint32_t input_rows) {
+  HeaderLayout layout;
+  layout.inputs_have_header = (field_headers == 1 || field_headers == 3);
+  layout.output_emits_header = (field_headers == 1 || field_headers == 2 || field_headers == 3);
+  if (layout.inputs_have_header && input_rows < 1U) {
+    return Expected<HeaderLayout, ErrorCode>::Err(ErrorCode::Value);
+  }
+  layout.data_start_row = layout.inputs_have_header ? 1U : 0U;
+  if (input_rows < layout.data_start_row) {
+    return Expected<HeaderLayout, ErrorCode>::Err(ErrorCode::Calc);
+  }
+  layout.data_row_count = input_rows - layout.data_start_row;
+  return Expected<HeaderLayout, ErrorCode>::Ok(layout);
+}
+
+bool read_filter_mask(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                      std::uint32_t data_row_count, std::vector<bool>* include_row, Value* out_err) {
+  const ArrayValue* mask = read_array_arg(node, arena, registry, ctx, out_err);
+  if (mask == nullptr) {
+    return false;
+  }
+  const std::uint32_t mask_n = (mask->rows >= mask->cols) ? mask->rows : mask->cols;
+  if (mask->rows != 1U && mask->cols != 1U) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  if (mask_n != data_row_count) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  for (std::uint32_t i = 0; i < data_row_count; ++i) {
+    const Value& cell = mask->cells[i];
+    if (cell.is_error()) {
+      *out_err = cell;
+      return false;
+    }
+    auto coerced = coerce_to_bool(cell);
+    if (!coerced) {
+      *out_err = Value::error(coerced.error());
+      return false;
+    }
+    (*include_row)[i] = coerced.value();
+  }
+  return true;
+}
+
+std::vector<std::uint32_t> collect_included_rows(const std::vector<bool>& include_row, std::uint32_t data_start_row) {
+  std::vector<std::uint32_t> rows;
+  rows.reserve(include_row.size());
+  for (std::uint32_t i = 0; i < include_row.size(); ++i) {
+    if (include_row[i]) {
+      rows.push_back(data_start_row + i);
+    }
+  }
+  return rows;
+}
+
 // ---------------------------------------------------------------------------
 // Group-key equality
 // ---------------------------------------------------------------------------
@@ -380,6 +464,28 @@ Value invoke_aggregator_for_group(const AggregatorRef& agg, const ArrayValue* sl
   return res;
 }
 
+std::vector<Value> aggregate_value_columns(const ArrayValue& values, std::uint32_t val_cols,
+                                           const std::vector<std::uint32_t>& row_indices, const AggregatorRef& agg,
+                                           Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                                           ErrorCode empty_error) {
+  std::vector<Value> cells(val_cols, Value::blank());
+  if (row_indices.empty()) {
+    for (std::uint32_t v = 0; v < val_cols; ++v) {
+      cells[v] = Value::error(empty_error);
+    }
+    return cells;
+  }
+  for (std::uint32_t v = 0; v < val_cols; ++v) {
+    const ArrayValue* slice = build_group_slice(values, v, row_indices, arena);
+    if (slice == nullptr) {
+      cells[v] = Value::error(ErrorCode::Num);
+      continue;
+    }
+    cells[v] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+  }
+  return cells;
+}
+
 // ---------------------------------------------------------------------------
 // Output assembly
 // ---------------------------------------------------------------------------
@@ -388,6 +494,31 @@ Value invoke_aggregator_for_group(const AggregatorRef& agg, const ArrayValue* sl
 // Used to materialise headers, total rows, and per-group rows.
 void emit_row(std::vector<std::vector<Value>>* rows, const std::vector<Value>& row) {
   rows->push_back(row);
+}
+
+Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint32_t out_cols, Arena& arena) {
+  if (rows.empty()) {
+    return Value::error(ErrorCode::Calc);
+  }
+  const std::uint32_t out_rows_n = static_cast<std::uint32_t>(rows.size());
+  const std::size_t total_cells = static_cast<std::size_t>(out_rows_n) * static_cast<std::size_t>(out_cols);
+  Value* buffer = arena.create_array<Value>(total_cells);
+  if (buffer == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t r = 0; r < out_rows_n; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      buffer[static_cast<std::size_t>(r) * out_cols + c] = rows[r][c];
+    }
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = out_rows_n;
+  arr->cols = out_cols;
+  arr->cells = buffer;
+  return Value::array(arr);
 }
 
 // Comparator helper for sort tie-breaking: ascending compare on a single
@@ -522,74 +653,43 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- arg 3: field_headers ∈ {0,1,2,3} ------------------------------------
+  static constexpr int kFieldHeaders[] = {0, 1, 2, 3};
   int field_headers = 0;
-  if (arity >= 4U) {
-    static constexpr int kAllowed[] = {0, 1, 2, 3};
-    if (!read_int_in_set(call.as_call_arg(3), arena, registry, ctx, kAllowed, sizeof(kAllowed) / sizeof(kAllowed[0]),
-                         &field_headers, &err)) {
-      return err;
-    }
+  if (!read_optional_int_in_set(call, 3, arity, 0, arena, registry, ctx, kFieldHeaders,
+                                sizeof(kFieldHeaders) / sizeof(kFieldHeaders[0]), &field_headers, &err)) {
+    return err;
   }
 
   // -- arg 4: total_depth ∈ {-2,-1,0,1,2} ----------------------------------
+  static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
   int total_depth = -1;
-  if (arity >= 5U) {
-    static constexpr int kAllowed[] = {-2, -1, 0, 1, 2};
-    if (!read_int_in_set(call.as_call_arg(4), arena, registry, ctx, kAllowed, sizeof(kAllowed) / sizeof(kAllowed[0]),
-                         &total_depth, &err)) {
-      return err;
-    }
+  if (!read_optional_int_in_set(call, 4, arity, -1, arena, registry, ctx, kTotalDepths,
+                                sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &total_depth, &err)) {
+    return err;
   }
 
   // -- arg 5: sort_order ----------------------------------------------------
   int sort_order = 0;
-  if (arity >= 6U) {
-    if (!read_int(call.as_call_arg(5), arena, registry, ctx, &sort_order, &err)) {
-      return err;
-    }
+  if (!read_optional_int(call, 5, arity, 0, arena, registry, ctx, &sort_order, &err)) {
+    return err;
   }
 
   // Determine header row layout. Inputs have a header row when
   // field_headers ∈ {1, 3}; outputs emit a header row when
   // field_headers ∈ {1, 2, 3}.
-  const bool inputs_have_header = (field_headers == 1 || field_headers == 3);
-  const bool output_emits_header = (field_headers == 1 || field_headers == 2 || field_headers == 3);
-
-  if (inputs_have_header && row_fields->rows < 1U) {
-    return Value::error(ErrorCode::Value);
+  auto layout_result = resolve_header_layout(field_headers, row_fields->rows);
+  if (!layout_result) {
+    return Value::error(layout_result.error());
   }
-
-  const std::uint32_t data_start_row = inputs_have_header ? 1U : 0U;
-  if (row_fields->rows < data_start_row) {
-    return Value::error(ErrorCode::Calc);
-  }
-  const std::uint32_t data_row_count = row_fields->rows - data_start_row;
+  const HeaderLayout layout = layout_result.take();
+  const std::uint32_t data_start_row = layout.data_start_row;
+  const std::uint32_t data_row_count = layout.data_row_count;
 
   // -- arg 6: filter_array --------------------------------------------------
   std::vector<bool> include_row(data_row_count, true);
   if (arity == 7U) {
-    const ArrayValue* mask = read_array_arg(call.as_call_arg(6), arena, registry, ctx, &err);
-    if (mask == nullptr) {
+    if (!read_filter_mask(call.as_call_arg(6), arena, registry, ctx, data_row_count, &include_row, &err)) {
       return err;
-    }
-    // Excel allows a single-column or single-row 1D mask.
-    const std::uint32_t mask_n = (mask->rows >= mask->cols) ? mask->rows : mask->cols;
-    if (mask->rows != 1U && mask->cols != 1U) {
-      return Value::error(ErrorCode::Value);
-    }
-    if (mask_n != data_row_count) {
-      return Value::error(ErrorCode::Value);
-    }
-    for (std::uint32_t i = 0; i < data_row_count; ++i) {
-      const Value& cell = mask->cells[i];
-      if (cell.is_error()) {
-        return cell;
-      }
-      auto coerced = coerce_to_bool(cell);
-      if (!coerced) {
-        return Value::error(coerced.error());
-      }
-      include_row[i] = coerced.value();
     }
   }
 
@@ -715,21 +815,11 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (emit_grand_total) {
     grand_total_row.assign(out_cols, Value::blank());
     grand_total_row[0] = Value::text(arena.intern("Grand Total"));
-    // Build the row-index list of every included data row.
-    std::vector<std::uint32_t> all_rows;
-    all_rows.reserve(data_row_count);
-    for (std::uint32_t i = 0; i < data_row_count; ++i) {
-      if (include_row[i]) {
-        all_rows.push_back(data_start_row + i);
-      }
-    }
+    const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
+    const std::vector<Value> totals =
+        aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
     for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
-      const ArrayValue* slice = build_group_slice(*values, vc, all_rows, arena);
-      if (slice == nullptr) {
-        grand_total_row[key_cols + vc] = Value::error(ErrorCode::Num);
-        continue;
-      }
-      grand_total_row[key_cols + vc] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
+      grand_total_row[key_cols + vc] = totals[vc];
     }
   }
   // Subtotals (total_depth == ±2) require multi-column row_fields; with
@@ -744,7 +834,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   out_rows.reserve(agg_rows.size() + 2U);
 
   // Header row (if requested).
-  if (output_emits_header) {
+  if (layout.output_emits_header) {
     std::vector<Value> header(out_cols, Value::blank());
     if (field_headers == 1 || field_headers == 3) {
       // Inputs had a header row (row 0 of each input). Copy it verbatim.
@@ -785,30 +875,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     emit_row(&out_rows, grand_total_row);
   }
 
-  if (out_rows.empty()) {
-    return Value::error(ErrorCode::Calc);
-  }
-
-  // Flatten into row-major arena buffer.
-  const std::uint32_t out_rows_n = static_cast<std::uint32_t>(out_rows.size());
-  const std::size_t total_cells = static_cast<std::size_t>(out_rows_n) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total_cells);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  for (std::uint32_t r = 0; r < out_rows_n; ++r) {
-    for (std::uint32_t c = 0; c < out_cols; ++c) {
-      buffer[static_cast<std::size_t>(r) * out_cols + c] = out_rows[r][c];
-    }
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = out_rows_n;
-  arr->cols = out_cols;
-  arr->cells = buffer;
-  return Value::array(arr);
+  return rows_to_array_value(out_rows, out_cols, arena);
 }
 
 // ---------------------------------------------------------------------------
@@ -933,26 +1000,22 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // PIVOTBY's default differs from GROUPBY's (0): pivot output typically
   // wants both the input row to be treated as a header AND a header to be
   // emitted on the output's left/top edges.
+  static constexpr int kFieldHeaders[] = {0, 1, 2, 3};
   int field_headers = 3;
-  if (arity >= 5U) {
-    static constexpr int kAllowed[] = {0, 1, 2, 3};
-    if (!read_int_in_set(call.as_call_arg(4), arena, registry, ctx, kAllowed, sizeof(kAllowed) / sizeof(kAllowed[0]),
-                         &field_headers, &err)) {
-      return err;
-    }
+  if (!read_optional_int_in_set(call, 4, arity, 3, arena, registry, ctx, kFieldHeaders,
+                                sizeof(kFieldHeaders) / sizeof(kFieldHeaders[0]), &field_headers, &err)) {
+    return err;
   }
 
   // -- arg 5: row_total_depth ∈ {-2,-1,0,1,2}, default -1 ------------------
   // The grand-total row (showing column totals) defaults to the TOP of the
   // result. ±2 (subtotal rows) is deferred and silently degrades to ±1 in
   // the single-column row_fields scope of this commit.
+  static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
   int row_total_depth = -1;
-  if (arity >= 6U) {
-    static constexpr int kAllowed[] = {-2, -1, 0, 1, 2};
-    if (!read_int_in_set(call.as_call_arg(5), arena, registry, ctx, kAllowed, sizeof(kAllowed) / sizeof(kAllowed[0]),
-                         &row_total_depth, &err)) {
-      return err;
-    }
+  if (!read_optional_int_in_set(call, 5, arity, -1, arena, registry, ctx, kTotalDepths,
+                                sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &row_total_depth, &err)) {
+    return err;
   }
 
   // -- arg 6: row_sort_order, default 0 ------------------------------------
@@ -960,10 +1023,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // every (row_group, col_group) cell of the row). 0 preserves first-
   // occurrence order; positive means ascending; negative descending.
   int row_sort_order = 0;
-  if (arity >= 7U) {
-    if (!read_int(call.as_call_arg(6), arena, registry, ctx, &row_sort_order, &err)) {
-      return err;
-    }
+  if (!read_optional_int(call, 6, arity, 0, arena, registry, ctx, &row_sort_order, &err)) {
+    return err;
   }
 
   // -- arg 7: col_total_depth ∈ {-2,-1,0,1,2}, default 1 -------------------
@@ -971,62 +1032,33 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // the result. ±2 silently degrades to ±1 in the single-column col_fields
   // scope of this commit.
   int col_total_depth = 1;
-  if (arity >= 8U) {
-    static constexpr int kAllowed[] = {-2, -1, 0, 1, 2};
-    if (!read_int_in_set(call.as_call_arg(7), arena, registry, ctx, kAllowed, sizeof(kAllowed) / sizeof(kAllowed[0]),
-                         &col_total_depth, &err)) {
-      return err;
-    }
+  if (!read_optional_int_in_set(call, 7, arity, 1, arena, registry, ctx, kTotalDepths,
+                                sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &col_total_depth, &err)) {
+    return err;
   }
 
   // -- arg 8: col_sort_order, default 0 ------------------------------------
   int col_sort_order = 0;
-  if (arity >= 9U) {
-    if (!read_int(call.as_call_arg(8), arena, registry, ctx, &col_sort_order, &err)) {
-      return err;
-    }
+  if (!read_optional_int(call, 8, arity, 0, arena, registry, ctx, &col_sort_order, &err)) {
+    return err;
   }
 
   // Determine header row layout. Same as GROUPBY but the header / output
   // emission flags drive both the row-axis labels (left edge) and the
   // col-axis labels (top edge).
-  const bool inputs_have_header = (field_headers == 1 || field_headers == 3);
-  const bool output_emits_header = (field_headers == 1 || field_headers == 2 || field_headers == 3);
-
-  if (inputs_have_header && row_fields->rows < 1U) {
-    return Value::error(ErrorCode::Value);
+  auto layout_result = resolve_header_layout(field_headers, row_fields->rows);
+  if (!layout_result) {
+    return Value::error(layout_result.error());
   }
-
-  const std::uint32_t data_start_row = inputs_have_header ? 1U : 0U;
-  if (row_fields->rows < data_start_row) {
-    return Value::error(ErrorCode::Calc);
-  }
-  const std::uint32_t data_row_count = row_fields->rows - data_start_row;
+  const HeaderLayout layout = layout_result.take();
+  const std::uint32_t data_start_row = layout.data_start_row;
+  const std::uint32_t data_row_count = layout.data_row_count;
 
   // -- arg 9: filter_array --------------------------------------------------
   std::vector<bool> include_row(data_row_count, true);
   if (arity == 10U) {
-    const ArrayValue* mask = read_array_arg(call.as_call_arg(9), arena, registry, ctx, &err);
-    if (mask == nullptr) {
+    if (!read_filter_mask(call.as_call_arg(9), arena, registry, ctx, data_row_count, &include_row, &err)) {
       return err;
-    }
-    const std::uint32_t mask_n = (mask->rows >= mask->cols) ? mask->rows : mask->cols;
-    if (mask->rows != 1U && mask->cols != 1U) {
-      return Value::error(ErrorCode::Value);
-    }
-    if (mask_n != data_row_count) {
-      return Value::error(ErrorCode::Value);
-    }
-    for (std::uint32_t i = 0; i < data_row_count; ++i) {
-      const Value& cell = mask->cells[i];
-      if (cell.is_error()) {
-        return cell;
-      }
-      auto coerced = coerce_to_bool(cell);
-      if (!coerced) {
-        return Value::error(coerced.error());
-      }
-      include_row[i] = coerced.value();
     }
   }
 
@@ -1111,14 +1143,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::vector<std::vector<Value>> row_totals(n_rows, std::vector<Value>(val_cols, Value::blank()));
   if (emit_row_totals_col) {
     for (std::size_t rg = 0; rg < n_rows; ++rg) {
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        const ArrayValue* slice = build_group_slice(*values, v, row_members[rg], arena);
-        if (slice == nullptr) {
-          row_totals[rg][v] = Value::error(ErrorCode::Num);
-          continue;
-        }
-        row_totals[rg][v] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
-      }
+      row_totals[rg] =
+          aggregate_value_columns(*values, val_cols, row_members[rg], agg, arena, registry, ctx, ErrorCode::Calc);
     }
   }
 
@@ -1130,14 +1156,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::vector<std::vector<Value>> col_totals(n_cols, std::vector<Value>(val_cols, Value::blank()));
   if (emit_col_totals_row) {
     for (std::size_t cg = 0; cg < n_cols; ++cg) {
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        const ArrayValue* slice = build_group_slice(*values, v, col_members[cg], arena);
-        if (slice == nullptr) {
-          col_totals[cg][v] = Value::error(ErrorCode::Num);
-          continue;
-        }
-        col_totals[cg][v] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
-      }
+      col_totals[cg] =
+          aggregate_value_columns(*values, val_cols, col_members[cg], agg, arena, registry, ctx, ErrorCode::Calc);
     }
   }
 
@@ -1145,27 +1165,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // The grand total cells exist only when both axes emit totals.
   std::vector<Value> grand_totals(val_cols, Value::blank());
   if (emit_row_totals_col && emit_col_totals_row) {
-    std::vector<std::uint32_t> all_rows;
-    all_rows.reserve(data_row_count);
-    for (std::uint32_t i = 0; i < data_row_count; ++i) {
-      if (include_row[i]) {
-        all_rows.push_back(data_start_row + i);
-      }
-    }
-    if (all_rows.empty()) {
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        grand_totals[v] = Value::error(ErrorCode::Calc);
-      }
-    } else {
-      for (std::uint32_t v = 0; v < val_cols; ++v) {
-        const ArrayValue* slice = build_group_slice(*values, v, all_rows, arena);
-        if (slice == nullptr) {
-          grand_totals[v] = Value::error(ErrorCode::Num);
-          continue;
-        }
-        grand_totals[v] = invoke_aggregator_for_group(agg, slice, arena, registry, ctx);
-      }
-    }
+    const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
+    grand_totals = aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
   }
 
   // -- Sort row groups ----------------------------------------------------
@@ -1280,7 +1281,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // input's row 0). With field_headers == 2 we synth "Value <v+1>".
   // field_headers == 0 leaves these blank (output_emits_header is false).
   std::vector<Value> values_header_labels(val_cols, Value::blank());
-  if (output_emits_header) {
+  if (layout.output_emits_header) {
     if (field_headers == 1 || field_headers == 3) {
       for (std::uint32_t v = 0; v < val_cols; ++v) {
         values_header_labels[v] = values->cells[v];
@@ -1441,7 +1442,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   out_rows.reserve(static_cast<std::size_t>(col_levels) + n_rows + 3U);
   if (merged_single_col_layout) {
     // Merged single-column layout: one optional combined top row.
-    if (output_emits_header) {
+    if (layout.output_emits_header) {
       out_rows.push_back(render_merged_header_row());
     }
   } else {
@@ -1450,7 +1451,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     for (std::uint32_t level = 0; level < col_levels; ++level) {
       out_rows.push_back(render_col_axis_row(level));
     }
-    if (output_emits_header) {
+    if (layout.output_emits_header) {
       out_rows.push_back(render_header_row());
     }
   }
@@ -1467,29 +1468,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     out_rows.push_back(render_totals_row());
   }
 
-  if (out_rows.empty()) {
-    return Value::error(ErrorCode::Calc);
-  }
-
-  const std::uint32_t out_rows_n = static_cast<std::uint32_t>(out_rows.size());
-  const std::size_t total_cells = static_cast<std::size_t>(out_rows_n) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total_cells);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  for (std::uint32_t r = 0; r < out_rows_n; ++r) {
-    for (std::uint32_t c = 0; c < out_cols; ++c) {
-      buffer[static_cast<std::size_t>(r) * out_cols + c] = out_rows[r][c];
-    }
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = out_rows_n;
-  arr->cols = out_cols;
-  arr->cells = buffer;
-  return Value::array(arr);
+  return rows_to_array_value(out_rows, out_cols, arena);
 }
 
 }  // namespace eval

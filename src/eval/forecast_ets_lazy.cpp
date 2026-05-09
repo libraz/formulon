@@ -1139,6 +1139,38 @@ bool read_double_arg(const parser::AstNode& node, Arena& arena, const FunctionRe
   return true;
 }
 
+bool read_required_finite_number(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                                 const EvalContext& ctx, double* out, Value* out_err, ErrorCode non_finite_error) {
+  const Value v = eval_node(node, arena, registry, ctx);
+  if (v.is_error()) {
+    *out_err = v;
+    return false;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    *out_err = Value::error(coerced.error());
+    return false;
+  }
+  const double n = coerced.value();
+  if (!std::isfinite(n)) {
+    *out_err = Value::error(non_finite_error);
+    return false;
+  }
+  *out = n;
+  return true;
+}
+
+bool read_required_truncated_int(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                                 const EvalContext& ctx, std::int64_t* out, Value* out_err,
+                                 ErrorCode non_finite_error) {
+  double n = 0.0;
+  if (!read_required_finite_number(node, arena, registry, ctx, &n, out_err, non_finite_error)) {
+    return false;
+  }
+  *out = static_cast<std::int64_t>(n);
+  return true;
+}
+
 // Aggregated state from the preprocessing pipeline. Returned to each
 // front-end after timeline / values have been paired, sorted, aggregated,
 // and resampled onto an evenly spaced grid.
@@ -1147,6 +1179,12 @@ struct Preprocessed {
   double step = 0.0;     // grid step (median delta-t of original timeline).
   double t0 = 0.0;       // first original timeline value (== resampled.t[0]).
   std::uint32_t m = 1U;  // resolved seasonality length.
+};
+
+struct ForecastOptions {
+  std::int64_t seasonality = 1;
+  int data_completion = 1;
+  AggregationMode aggregation = AggregationMode::kAverage;
 };
 
 // Runs the timeline / values preprocessing pipeline. Inputs:
@@ -1328,6 +1366,43 @@ bool read_seasonality(const parser::AstNode* node, Arena& arena, const FunctionR
   return true;
 }
 
+bool read_forecast_options(const parser::AstNode& call, std::uint32_t arity, std::uint32_t first_optional, Arena& arena,
+                           const FunctionRegistry& registry, const EvalContext& ctx, ForecastOptions* out,
+                           Value* out_err) {
+  ForecastOptions opts;
+  if (!read_seasonality(arity > first_optional ? &call.as_call_arg(first_optional) : nullptr, arena, registry, ctx,
+                        &opts.seasonality, out_err)) {
+    return false;
+  }
+  if (!read_data_completion(arity > first_optional + 1U ? &call.as_call_arg(first_optional + 1U) : nullptr, arena,
+                            registry, ctx, &opts.data_completion, out_err)) {
+    return false;
+  }
+  if (!read_aggregation(arity > first_optional + 2U ? &call.as_call_arg(first_optional + 2U) : nullptr, arena, registry,
+                        ctx, &opts.aggregation, out_err)) {
+    return false;
+  }
+  *out = opts;
+  return true;
+}
+
+bool read_seasonality_options(const parser::AstNode& call, std::uint32_t arity, std::uint32_t first_optional,
+                              Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                              ForecastOptions* out, Value* out_err) {
+  ForecastOptions opts;
+  opts.seasonality = 1;
+  if (!read_data_completion(arity > first_optional ? &call.as_call_arg(first_optional) : nullptr, arena, registry, ctx,
+                            &opts.data_completion, out_err)) {
+    return false;
+  }
+  if (!read_aggregation(arity > first_optional + 1U ? &call.as_call_arg(first_optional + 1U) : nullptr, arena, registry,
+                        ctx, &opts.aggregation, out_err)) {
+    return false;
+  }
+  *out = opts;
+  return true;
+}
+
 // Computes the integer step count h between the last training timeline
 // value and `target_date`. Caller has already validated `target_date >=
 // t0`. Returns the rounded step count; the caller may compare against
@@ -1372,38 +1447,20 @@ Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const Fu
   }
 
   // arg 0: target_date scalar.
-  const Value target_v = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (target_v.is_error()) {
-    return target_v;
-  }
-  auto target_coerced = coerce_to_number(target_v);
-  if (!target_coerced) {
-    return Value::error(target_coerced.error());
-  }
-  const double target_date = target_coerced.value();
-  if (!std::isfinite(target_date)) {
-    return Value::error(ErrorCode::Num);
+  Value err = Value::blank();
+  double target_date = 0.0;
+  if (!read_required_finite_number(call.as_call_arg(0), arena, registry, ctx, &target_date, &err, ErrorCode::Num)) {
+    return err;
   }
 
-  // arg 3..5: optional integer args.
-  std::int64_t seasonality = 1;
-  int data_completion = 1;
-  AggregationMode aggregation = AggregationMode::kAverage;
-  Value err = Value::blank();
-  if (!read_seasonality(arity > 3U ? &call.as_call_arg(3) : nullptr, arena, registry, ctx, &seasonality, &err)) {
-    return err;
-  }
-  if (!read_data_completion(arity > 4U ? &call.as_call_arg(4) : nullptr, arena, registry, ctx, &data_completion,
-                            &err)) {
-    return err;
-  }
-  if (!read_aggregation(arity > 5U ? &call.as_call_arg(5) : nullptr, arena, registry, ctx, &aggregation, &err)) {
+  ForecastOptions opts;
+  if (!read_forecast_options(call, arity, 3U, arena, registry, ctx, &opts, &err)) {
     return err;
   }
 
   Preprocessed pre;
-  if (!preprocess(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, seasonality, data_completion,
-                  aggregation, &pre, &err)) {
+  if (!preprocess(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, opts.seasonality,
+                  opts.data_completion, opts.aggregation, &pre, &err)) {
     return err;
   }
 
@@ -1441,20 +1498,12 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
     return Value::error(ErrorCode::Value);
   }
 
-  const Value target_v = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (target_v.is_error()) {
-    return target_v;
-  }
-  auto target_coerced = coerce_to_number(target_v);
-  if (!target_coerced) {
-    return Value::error(target_coerced.error());
-  }
-  const double target_date = target_coerced.value();
-  if (!std::isfinite(target_date)) {
-    return Value::error(ErrorCode::Num);
+  Value err = Value::blank();
+  double target_date = 0.0;
+  if (!read_required_finite_number(call.as_call_arg(0), arena, registry, ctx, &target_date, &err, ErrorCode::Num)) {
+    return err;
   }
 
-  Value err = Value::blank();
   double confidence = 0.95;
   if (arity > 3U) {
     if (!read_double_arg(call.as_call_arg(3), arena, registry, ctx, 0.95, &confidence, &err)) {
@@ -1469,23 +1518,14 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
     return Value::error(ErrorCode::Num);
   }
 
-  std::int64_t seasonality = 1;
-  int data_completion = 1;
-  AggregationMode aggregation = AggregationMode::kAverage;
-  if (!read_seasonality(arity > 4U ? &call.as_call_arg(4) : nullptr, arena, registry, ctx, &seasonality, &err)) {
-    return err;
-  }
-  if (!read_data_completion(arity > 5U ? &call.as_call_arg(5) : nullptr, arena, registry, ctx, &data_completion,
-                            &err)) {
-    return err;
-  }
-  if (!read_aggregation(arity > 6U ? &call.as_call_arg(6) : nullptr, arena, registry, ctx, &aggregation, &err)) {
+  ForecastOptions opts;
+  if (!read_forecast_options(call, arity, 4U, arena, registry, ctx, &opts, &err)) {
     return err;
   }
 
   Preprocessed pre;
-  if (!preprocess(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, seasonality, data_completion,
-                  aggregation, &pre, &err)) {
+  if (!preprocess(call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, opts.seasonality,
+                  opts.data_completion, opts.aggregation, &pre, &err)) {
     return err;
   }
   if (target_date < pre.t0) {
@@ -1529,21 +1569,16 @@ Value eval_forecast_ets_seasonality_lazy(const parser::AstNode& call, Arena& are
   }
 
   Value err = Value::blank();
-  int data_completion = 1;
-  AggregationMode aggregation = AggregationMode::kAverage;
-  if (!read_data_completion(arity > 2U ? &call.as_call_arg(2) : nullptr, arena, registry, ctx, &data_completion,
-                            &err)) {
-    return err;
-  }
-  if (!read_aggregation(arity > 3U ? &call.as_call_arg(3) : nullptr, arena, registry, ctx, &aggregation, &err)) {
+  ForecastOptions opts;
+  if (!read_seasonality_options(call, arity, 2U, arena, registry, ctx, &opts, &err)) {
     return err;
   }
 
   // Force auto-detect by passing seasonality = 1 to preprocess; the
   // resampling path is unchanged.
   Preprocessed pre;
-  if (!preprocess(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx, /*seasonality=*/1, data_completion,
-                  aggregation, &pre, &err)) {
+  if (!preprocess(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx, opts.seasonality,
+                  opts.data_completion, opts.aggregation, &pre, &err)) {
     return err;
   }
   // Mac Excel 365 reports 0 (not 1) when no period is detected. Internally
@@ -1560,41 +1595,23 @@ Value eval_forecast_ets_stat_lazy(const parser::AstNode& call, Arena& arena, con
   }
 
   // arg 2: statistic_type scalar.
-  const Value stat_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-  if (stat_v.is_error()) {
-    return stat_v;
+  Value err = Value::blank();
+  std::int64_t stat_type = 0;
+  if (!read_required_truncated_int(call.as_call_arg(2), arena, registry, ctx, &stat_type, &err, ErrorCode::Num)) {
+    return err;
   }
-  auto stat_coerced = coerce_to_number(stat_v);
-  if (!stat_coerced) {
-    return Value::error(stat_coerced.error());
-  }
-  const double stat_d = stat_coerced.value();
-  if (!std::isfinite(stat_d)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::int64_t stat_type = static_cast<std::int64_t>(stat_d);  // truncate
   if (stat_type < 1 || stat_type > 8) {
     return Value::error(ErrorCode::Num);
   }
 
-  Value err = Value::blank();
-  std::int64_t seasonality = 1;
-  int data_completion = 1;
-  AggregationMode aggregation = AggregationMode::kAverage;
-  if (!read_seasonality(arity > 3U ? &call.as_call_arg(3) : nullptr, arena, registry, ctx, &seasonality, &err)) {
-    return err;
-  }
-  if (!read_data_completion(arity > 4U ? &call.as_call_arg(4) : nullptr, arena, registry, ctx, &data_completion,
-                            &err)) {
-    return err;
-  }
-  if (!read_aggregation(arity > 5U ? &call.as_call_arg(5) : nullptr, arena, registry, ctx, &aggregation, &err)) {
+  ForecastOptions opts;
+  if (!read_forecast_options(call, arity, 3U, arena, registry, ctx, &opts, &err)) {
     return err;
   }
 
   Preprocessed pre;
-  if (!preprocess(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx, seasonality, data_completion,
-                  aggregation, &pre, &err)) {
+  if (!preprocess(call.as_call_arg(0), call.as_call_arg(1), arena, registry, ctx, opts.seasonality,
+                  opts.data_completion, opts.aggregation, &pre, &err)) {
     return err;
   }
 

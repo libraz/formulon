@@ -21,6 +21,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <utility>
 
 #include "eval/builtins/financial_bond_simple.h"
 #include "eval/builtins/financial_duration.h"
@@ -31,6 +32,7 @@
 #include "eval/builtins/financial_oddlyield.h"
 #include "eval/builtins/financial_price.h"
 #include "eval/builtins/financial_yield.h"
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -49,6 +51,157 @@ using financial_detail::pmt_scalar;
 using financial_detail::read_optional_number;
 using financial_detail::read_required_number;
 
+struct TvmArgs {
+  double first;
+  double second;
+  double third;
+  double fourth;
+  double type;
+};
+
+struct RateArgs {
+  double nper;
+  double pmt;
+  double pv;
+  double fv;
+  double type;
+  double guess;
+};
+
+struct PaymentArgs {
+  double rate;
+  double per;
+  double nper;
+  double pv;
+  double fv;
+  double type;
+};
+
+struct CumPaymentArgs {
+  double rate;
+  double nper;
+  double pv;
+  double start;
+  double end;
+  double type;
+};
+
+Expected<TvmArgs, ErrorCode> read_tvm_args(const Value* args, std::uint32_t arity, double fourth_default) {
+  auto first = read_required_number(args, 0);
+  if (!first) {
+    return first.error();
+  }
+  auto second = read_required_number(args, 1);
+  if (!second) {
+    return second.error();
+  }
+  auto third = read_required_number(args, 2);
+  if (!third) {
+    return third.error();
+  }
+  auto fourth = read_optional_number(args, arity, 3, fourth_default);
+  if (!fourth) {
+    return fourth.error();
+  }
+  auto type = read_optional_number(args, arity, 4, 0.0);
+  if (!type) {
+    return type.error();
+  }
+  return TvmArgs{first.value(), second.value(), third.value(), fourth.value(), normalize_type(type.value())};
+}
+
+Expected<RateArgs, ErrorCode> read_rate_args(const Value* args, std::uint32_t arity) {
+  auto tvm = read_tvm_args(args, arity, 0.0);
+  if (!tvm) {
+    return tvm.error();
+  }
+  auto guess = read_optional_number(args, arity, 5, 0.1);
+  if (!guess) {
+    return guess.error();
+  }
+  return RateArgs{tvm.value().first,  tvm.value().second, tvm.value().third,
+                  tvm.value().fourth, tvm.value().type,   guess.value()};
+}
+
+Expected<PaymentArgs, ErrorCode> read_payment_args(const Value* args, std::uint32_t arity) {
+  auto rate = read_required_number(args, 0);
+  if (!rate) {
+    return rate.error();
+  }
+  auto per = read_required_number(args, 1);
+  if (!per) {
+    return per.error();
+  }
+  auto nper = read_required_number(args, 2);
+  if (!nper) {
+    return nper.error();
+  }
+  auto pv = read_required_number(args, 3);
+  if (!pv) {
+    return pv.error();
+  }
+  auto fv = read_optional_number(args, arity, 4, 0.0);
+  if (!fv) {
+    return fv.error();
+  }
+  auto type = read_optional_number(args, arity, 5, 0.0);
+  if (!type) {
+    return type.error();
+  }
+  return PaymentArgs{rate.value(), per.value(), nper.value(), pv.value(), fv.value(), normalize_type(type.value())};
+}
+
+Expected<CumPaymentArgs, ErrorCode> read_cum_payment_args(const Value* args) {
+  for (std::uint32_t i = 0; i < 6; ++i) {
+    if (args[i].kind() == ValueKind::Bool) {
+      return ErrorCode::Value;
+    }
+  }
+  auto rate = read_required_number(args, 0);
+  if (!rate) {
+    return rate.error();
+  }
+  auto nper = read_required_number(args, 1);
+  if (!nper) {
+    return nper.error();
+  }
+  auto pv = read_required_number(args, 2);
+  if (!pv) {
+    return pv.error();
+  }
+  auto start = read_required_number(args, 3);
+  if (!start) {
+    return start.error();
+  }
+  auto end = read_required_number(args, 4);
+  if (!end) {
+    return end.error();
+  }
+  auto type = read_required_number(args, 5);
+  if (!type) {
+    return type.error();
+  }
+  if (type.value() != 0.0 && type.value() != 1.0) {
+    return ErrorCode::Num;
+  }
+  return CumPaymentArgs{rate.value(),  nper.value(), pv.value(),
+                        start.value(), end.value(),  normalize_type(type.value())};
+}
+
+Expected<std::pair<std::int64_t, std::int64_t>, ErrorCode> cum_period_bounds(double start, double end, double nper) {
+  if (start < 1.0 || end < 1.0 || start > end || start > nper || end > nper) {
+    return ErrorCode::Num;
+  }
+  // Mac Excel 365 rounds `start` UP (ceil) and `end` DOWN (floor) before
+  // iterating; see CUMIPMT / CUMPRINC oracle fixtures.
+  const auto start_i = static_cast<std::int64_t>(std::ceil(start));
+  const auto end_i = static_cast<std::int64_t>(std::floor(end));
+  if (start_i > end_i) {
+    return ErrorCode::Num;
+  }
+  return std::pair<std::int64_t, std::int64_t>{start_i, end_i};
+}
+
 // --- PV(rate, nper, pmt, [fv=0], [type=0]) ------------------------------
 //
 // Matches Excel's documented formula:
@@ -61,31 +214,15 @@ using financial_detail::read_required_number;
 // values are positive. Non-finite intermediate or final values surface as
 // `#NUM!`.
 Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto rate = read_required_number(args, 0);
-  if (!rate) {
-    return Value::error(rate.error());
+  auto input = read_tvm_args(args, arity, 0.0);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto nper = read_required_number(args, 1);
-  if (!nper) {
-    return Value::error(nper.error());
-  }
-  auto pmt = read_required_number(args, 2);
-  if (!pmt) {
-    return Value::error(pmt.error());
-  }
-  auto fv = read_optional_number(args, arity, 3, 0.0);
-  if (!fv) {
-    return Value::error(fv.error());
-  }
-  auto type = read_optional_number(args, arity, 4, 0.0);
-  if (!type) {
-    return Value::error(type.error());
-  }
-  const double r = rate.value();
-  const double n = nper.value();
-  const double p = pmt.value();
-  const double f = fv.value();
-  const double t = normalize_type(type.value());
+  const double r = input.value().first;
+  const double n = input.value().second;
+  const double p = input.value().third;
+  const double f = input.value().fourth;
+  const double t = input.value().type;
   if (r == -1.0) {
     // (1+r)^n is 0 for n>0 (yields division by 0 inside the closed form)
     // or infinite for n<=0; Excel collapses both to #DIV/0!.
@@ -108,31 +245,15 @@ Value Pv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   rate != 0  ->  f  = (1 + rate)^nper
 //                  FV = -(pv * f + pmt * (1 + rate*type) * (f - 1) / rate)
 Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto rate = read_required_number(args, 0);
-  if (!rate) {
-    return Value::error(rate.error());
+  auto input = read_tvm_args(args, arity, 0.0);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto nper = read_required_number(args, 1);
-  if (!nper) {
-    return Value::error(nper.error());
-  }
-  auto pmt = read_required_number(args, 2);
-  if (!pmt) {
-    return Value::error(pmt.error());
-  }
-  auto pv = read_optional_number(args, arity, 3, 0.0);
-  if (!pv) {
-    return Value::error(pv.error());
-  }
-  auto type = read_optional_number(args, arity, 4, 0.0);
-  if (!type) {
-    return Value::error(type.error());
-  }
-  const double r = rate.value();
-  const double n = nper.value();
-  const double p = pmt.value();
-  const double v = pv.value();
-  const double t = normalize_type(type.value());
+  const double r = input.value().first;
+  const double n = input.value().second;
+  const double p = input.value().third;
+  const double v = input.value().fourth;
+  const double t = input.value().type;
   if (r == -1.0) {
     // (1+r)^n is 0 for n>0 (zero payment discount factor) or infinite for
     // n<=0; Excel collapses both to #DIV/0!.
@@ -155,31 +276,15 @@ Value Fv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Zero denominators (nper == 0 when rate == 0, or f == 1 when rate != 0
 // with nper == 0) surface as `#NUM!`.
 Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto rate = read_required_number(args, 0);
-  if (!rate) {
-    return Value::error(rate.error());
+  auto input = read_tvm_args(args, arity, 0.0);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto nper = read_required_number(args, 1);
-  if (!nper) {
-    return Value::error(nper.error());
-  }
-  auto pv = read_required_number(args, 2);
-  if (!pv) {
-    return Value::error(pv.error());
-  }
-  auto fv = read_optional_number(args, arity, 3, 0.0);
-  if (!fv) {
-    return Value::error(fv.error());
-  }
-  auto type = read_optional_number(args, arity, 4, 0.0);
-  if (!type) {
-    return Value::error(type.error());
-  }
-  const double r = rate.value();
-  const double n = nper.value();
-  const double v = pv.value();
-  const double f = fv.value();
-  const double t = normalize_type(type.value());
+  const double r = input.value().first;
+  const double n = input.value().second;
+  const double v = input.value().third;
+  const double f = input.value().fourth;
+  const double t = input.value().type;
   if (r <= -1.0) {
     // Mac Excel 365 rejects rate <= -1 for PMT outright with #NUM!, even
     // when the closed form would evaluate to a finite value (e.g. rate=-3
@@ -221,31 +326,15 @@ Value Pmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // not `#NUM!`. The oracle confirmed this. We therefore return whatever
 // the log formula yields as long as the input domain is valid.
 Value Nper(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto rate = read_required_number(args, 0);
-  if (!rate) {
-    return Value::error(rate.error());
+  auto input = read_tvm_args(args, arity, 0.0);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto pmt = read_required_number(args, 1);
-  if (!pmt) {
-    return Value::error(pmt.error());
-  }
-  auto pv = read_required_number(args, 2);
-  if (!pv) {
-    return Value::error(pv.error());
-  }
-  auto fv = read_optional_number(args, arity, 3, 0.0);
-  if (!fv) {
-    return Value::error(fv.error());
-  }
-  auto type = read_optional_number(args, arity, 4, 0.0);
-  if (!type) {
-    return Value::error(type.error());
-  }
-  const double r = rate.value();
-  const double p = pmt.value();
-  const double v = pv.value();
-  const double f = fv.value();
-  const double t = normalize_type(type.value());
+  const double r = input.value().first;
+  const double p = input.value().second;
+  const double v = input.value().third;
+  const double f = input.value().fourth;
+  const double t = input.value().type;
   if (r == 0.0) {
     if (p == 0.0) {
       return Value::error(ErrorCode::Num);
@@ -342,37 +431,16 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // this matches the heuristic used by most open-source RATE
 // implementations and by Excel in practice.
 Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto nper_e = read_required_number(args, 0);
-  if (!nper_e) {
-    return Value::error(nper_e.error());
+  auto input = read_rate_args(args, arity);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto pmt_e = read_required_number(args, 1);
-  if (!pmt_e) {
-    return Value::error(pmt_e.error());
-  }
-  auto pv_e = read_required_number(args, 2);
-  if (!pv_e) {
-    return Value::error(pv_e.error());
-  }
-  auto fv_e = read_optional_number(args, arity, 3, 0.0);
-  if (!fv_e) {
-    return Value::error(fv_e.error());
-  }
-  auto type_e = read_optional_number(args, arity, 4, 0.0);
-  if (!type_e) {
-    return Value::error(type_e.error());
-  }
-  auto guess_e = read_optional_number(args, arity, 5, 0.1);
-  if (!guess_e) {
-    return Value::error(guess_e.error());
-  }
-
-  const double nper = nper_e.value();
-  const double pmt = pmt_e.value();
-  const double pv = pv_e.value();
-  const double fv = fv_e.value();
-  const double type = normalize_type(type_e.value());
-  double rate = guess_e.value();
+  const double nper = input.value().nper;
+  const double pmt = input.value().pmt;
+  const double pv = input.value().pv;
+  const double fv = input.value().fv;
+  const double type = input.value().type;
+  double rate = input.value().guess;
 
   if (nper < 1.0) {
     return Value::error(ErrorCode::Num);
@@ -445,32 +513,12 @@ Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // schedule. `per` is 1-based and must fall within `[1, nper]`; otherwise
 // `#NUM!`. See `ipmt_scalar` above for the formula details.
 Value Ipmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto rate_e = read_required_number(args, 0);
-  if (!rate_e) {
-    return Value::error(rate_e.error());
+  auto input = read_payment_args(args, arity);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto per_e = read_required_number(args, 1);
-  if (!per_e) {
-    return Value::error(per_e.error());
-  }
-  auto nper_e = read_required_number(args, 2);
-  if (!nper_e) {
-    return Value::error(nper_e.error());
-  }
-  auto pv_e = read_required_number(args, 3);
-  if (!pv_e) {
-    return Value::error(pv_e.error());
-  }
-  auto fv_e = read_optional_number(args, arity, 4, 0.0);
-  if (!fv_e) {
-    return Value::error(fv_e.error());
-  }
-  auto type_e = read_optional_number(args, arity, 5, 0.0);
-  if (!type_e) {
-    return Value::error(type_e.error());
-  }
-  const double result = ipmt_scalar(rate_e.value(), per_e.value(), nper_e.value(), pv_e.value(), fv_e.value(),
-                                    normalize_type(type_e.value()));
+  const double result = ipmt_scalar(input.value().rate, input.value().per, input.value().nper, input.value().pv,
+                                    input.value().fv, input.value().type);
   return finalize(result);
 }
 
@@ -482,36 +530,16 @@ Value Ipmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Excel 365 / IronCalc oracle). The integer-per > nper check is applied
 // inside `ipmt_scalar`, so PPMT itself only needs to reject `per < 1`.
 Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto rate_e = read_required_number(args, 0);
-  if (!rate_e) {
-    return Value::error(rate_e.error());
+  auto input = read_payment_args(args, arity);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto per_e = read_required_number(args, 1);
-  if (!per_e) {
-    return Value::error(per_e.error());
-  }
-  auto nper_e = read_required_number(args, 2);
-  if (!nper_e) {
-    return Value::error(nper_e.error());
-  }
-  auto pv_e = read_required_number(args, 3);
-  if (!pv_e) {
-    return Value::error(pv_e.error());
-  }
-  auto fv_e = read_optional_number(args, arity, 4, 0.0);
-  if (!fv_e) {
-    return Value::error(fv_e.error());
-  }
-  auto type_e = read_optional_number(args, arity, 5, 0.0);
-  if (!type_e) {
-    return Value::error(type_e.error());
-  }
-  const double rate = rate_e.value();
-  const double per = per_e.value();
-  const double nper = nper_e.value();
-  const double pv = pv_e.value();
-  const double fv = fv_e.value();
-  const double type = normalize_type(type_e.value());
+  const double rate = input.value().rate;
+  const double per = input.value().per;
+  const double nper = input.value().nper;
+  const double pv = input.value().pv;
+  const double fv = input.value().fv;
+  const double type = input.value().type;
   if (per < 1.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -539,70 +567,25 @@ Value Ppmt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - 1 <= start <= end <= nper
 // Violating any check returns `#NUM!`.
 Value Cumipmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  // Excel 365 rejects Bool in any CUMIPMT position with #VALUE!. Guard
-  // before `read_required_number`, which would otherwise silently coerce
-  // TRUE/FALSE to 1.0/0.0.
-  for (std::uint32_t i = 0; i < 6; ++i) {
-    if (args[i].kind() == ValueKind::Bool) {
-      return Value::error(ErrorCode::Value);
-    }
+  auto input = read_cum_payment_args(args);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto rate_e = read_required_number(args, 0);
-  if (!rate_e) {
-    return Value::error(rate_e.error());
-  }
-  auto nper_e = read_required_number(args, 1);
-  if (!nper_e) {
-    return Value::error(nper_e.error());
-  }
-  auto pv_e = read_required_number(args, 2);
-  if (!pv_e) {
-    return Value::error(pv_e.error());
-  }
-  auto start_e = read_required_number(args, 3);
-  if (!start_e) {
-    return Value::error(start_e.error());
-  }
-  auto end_e = read_required_number(args, 4);
-  if (!end_e) {
-    return Value::error(end_e.error());
-  }
-  auto type_e = read_required_number(args, 5);
-  if (!type_e) {
-    return Value::error(type_e.error());
-  }
-  const double rate = rate_e.value();
-  const double nper = nper_e.value();
-  const double pv = pv_e.value();
-  const double start = start_e.value();
-  const double end = end_e.value();
-  // CUMIPMT validates `type` strictly: only the literal values 0 or 1 are
-  // accepted. Fractional or other numeric values yield `#NUM!`. This is
-  // stricter than the PMT / PV / FV family where any non-zero value folds
-  // to 1 through `normalize_type`.
-  if (type_e.value() != 0.0 && type_e.value() != 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double type = normalize_type(type_e.value());
+  const double rate = input.value().rate;
+  const double nper = input.value().nper;
+  const double pv = input.value().pv;
   if (rate <= 0.0 || nper <= 0.0 || pv <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (start < 1.0 || end < 1.0 || start > end || start > nper || end > nper) {
-    return Value::error(ErrorCode::Num);
+  auto bounds = cum_period_bounds(input.value().start, input.value().end, nper);
+  if (!bounds) {
+    return Value::error(bounds.error());
   }
+  const std::int64_t start_i = bounds.value().first;
+  const std::int64_t end_i = bounds.value().second;
   double total = 0.0;
-  // Normalise fractional period indices: Mac Excel 365 rounds `start` UP
-  // (ceil) and `end` DOWN (floor) before iterating, so a fractional
-  // `start_period = 1.2` skips period 1. This diverges from Microsoft's
-  // "truncated to integer" documentation but matches the oracle across the
-  // CUMIPMT / CUMPRINC fixture rows.
-  const auto start_i = static_cast<std::int64_t>(std::ceil(start));
-  const auto end_i = static_cast<std::int64_t>(std::floor(end));
-  if (start_i > end_i) {
-    return Value::error(ErrorCode::Num);
-  }
   for (std::int64_t p = start_i; p <= end_i; ++p) {
-    const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, type);
+    const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, input.value().type);
     if (std::isnan(interest) || std::isinf(interest)) {
       return Value::error(ErrorCode::Num);
     }
@@ -616,67 +599,29 @@ Value Cumipmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Sum of principal paid from period `start` to `end` inclusive. Same
 // domain contract as CUMIPMT.
 Value Cumprinc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  // See CUMIPMT: Excel rejects Bool in any position with #VALUE! rather
-  // than folding to 0/1 via numeric coercion.
-  for (std::uint32_t i = 0; i < 6; ++i) {
-    if (args[i].kind() == ValueKind::Bool) {
-      return Value::error(ErrorCode::Value);
-    }
+  auto input = read_cum_payment_args(args);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto rate_e = read_required_number(args, 0);
-  if (!rate_e) {
-    return Value::error(rate_e.error());
-  }
-  auto nper_e = read_required_number(args, 1);
-  if (!nper_e) {
-    return Value::error(nper_e.error());
-  }
-  auto pv_e = read_required_number(args, 2);
-  if (!pv_e) {
-    return Value::error(pv_e.error());
-  }
-  auto start_e = read_required_number(args, 3);
-  if (!start_e) {
-    return Value::error(start_e.error());
-  }
-  auto end_e = read_required_number(args, 4);
-  if (!end_e) {
-    return Value::error(end_e.error());
-  }
-  auto type_e = read_required_number(args, 5);
-  if (!type_e) {
-    return Value::error(type_e.error());
-  }
-  const double rate = rate_e.value();
-  const double nper = nper_e.value();
-  const double pv = pv_e.value();
-  const double start = start_e.value();
-  const double end = end_e.value();
-  // See CUMIPMT: CUMPRINC mirrors the strict 0-or-1 `type` validation.
-  if (type_e.value() != 0.0 && type_e.value() != 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double type = normalize_type(type_e.value());
+  const double rate = input.value().rate;
+  const double nper = input.value().nper;
+  const double pv = input.value().pv;
   if (rate <= 0.0 || nper <= 0.0 || pv <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  if (start < 1.0 || end < 1.0 || start > end || start > nper || end > nper) {
-    return Value::error(ErrorCode::Num);
+  auto bounds = cum_period_bounds(input.value().start, input.value().end, nper);
+  if (!bounds) {
+    return Value::error(bounds.error());
   }
-  const double pmt = pmt_scalar(rate, nper, pv, 0.0, type);
+  const std::int64_t start_i = bounds.value().first;
+  const std::int64_t end_i = bounds.value().second;
+  const double pmt = pmt_scalar(rate, nper, pv, 0.0, input.value().type);
   if (std::isnan(pmt)) {
     return Value::error(ErrorCode::Num);
   }
   double total = 0.0;
-  // See CUMIPMT above: ceil(start), floor(end) matches Mac Excel 365's
-  // fractional-period behaviour.
-  const auto start_i = static_cast<std::int64_t>(std::ceil(start));
-  const auto end_i = static_cast<std::int64_t>(std::floor(end));
-  if (start_i > end_i) {
-    return Value::error(ErrorCode::Num);
-  }
   for (std::int64_t p = start_i; p <= end_i; ++p) {
-    const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, type);
+    const double interest = ipmt_scalar(rate, static_cast<double>(p), nper, pv, 0.0, input.value().type);
     if (std::isnan(interest) || std::isinf(interest)) {
       return Value::error(ErrorCode::Num);
     }
@@ -688,167 +633,55 @@ Value Cumprinc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }  // namespace
 
 void register_financial_builtins(FunctionRegistry& registry) {
-  // PV / FV / PMT / NPER all share the (rate, nper, third, [fourth], [type])
-  // arity pattern: 3 required + up to 2 optional = min 3, max 5.
-  registry.register_function(FunctionDef{"PV", 3u, 5u, &Pv});
-  registry.register_function(FunctionDef{"FV", 3u, 5u, &Fv});
-  registry.register_function(FunctionDef{"PMT", 3u, 5u, &Pmt});
-  registry.register_function(FunctionDef{"NPER", 3u, 5u, &Nper});
-
-  // NPV: rate + at least one value, unbounded variadic. Range-aware with
-  // numeric-only filtering so bool/text/blank cells inside a range are
-  // silently skipped (matching Excel's behaviour for SUM / AVERAGE).
-  {
-    FunctionDef def{"NPV", 2u, kVariadic, &Npv};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-
-  // RATE: 3 required (nper, pmt, pv) + up to 3 optional (fv, type, guess).
-  registry.register_function(FunctionDef{"RATE", 3u, 6u, &Rate});
-
-  // IPMT / PPMT: (rate, per, nper, pv, [fv], [type]) = min 4, max 6.
-  registry.register_function(FunctionDef{"IPMT", 4u, 6u, &Ipmt});
-  registry.register_function(FunctionDef{"PPMT", 4u, 6u, &Ppmt});
-
-  // CUMIPMT / CUMPRINC: `type` is REQUIRED (Excel's signature), so both
-  // take exactly 6 args — no optional tail.
-  registry.register_function(FunctionDef{"CUMIPMT", 6u, 6u, &Cumipmt});
-  registry.register_function(FunctionDef{"CUMPRINC", 6u, 6u, &Cumprinc});
-
-  // Depreciation family — all eager, no range support. SLN/SYD have
-  // fixed arity; DDB/DB take an optional trailing (factor / month) arg.
-  // VDB accepts an optional factor and no_switch tail; AMORDEGRC /
-  // AMORLINC accept an optional basis tail. Implementations live in
-  // `financial_depreciation.cpp`.
-  registry.register_function(FunctionDef{"SLN", 3u, 3u, &financial_detail::Sln});
-  registry.register_function(FunctionDef{"SYD", 4u, 4u, &financial_detail::Syd});
-  registry.register_function(FunctionDef{"DDB", 4u, 5u, &financial_detail::Ddb});
-  registry.register_function(FunctionDef{"DB", 4u, 5u, &financial_detail::Db});
-  registry.register_function(FunctionDef{"VDB", 5u, 7u, &financial_detail::Vdb});
-  registry.register_function(FunctionDef{"AMORDEGRC", 6u, 7u, &financial_detail::Amordegrc});
-  registry.register_function(FunctionDef{"AMORLINC", 6u, 7u, &financial_detail::Amorlinc});
-
-  // Accrued interest family. Implementations live in
-  // `financial_accrual.cpp`.
-  //   ACCRINT:  6 required + optional (basis, calc_method), max 8.
-  //   ACCRINTM: 4 required + optional basis,              max 5.
-  registry.register_function(FunctionDef{"ACCRINT", 6u, 8u, &financial_detail::Accrint});
-  registry.register_function(FunctionDef{"ACCRINTM", 4u, 5u, &financial_detail::Accrintm});
-
-  // Fractional-dollar quote conversion. Pure scalar pair, no range arg.
-  // Implementations live in `financial_misc.cpp`.
-  registry.register_function(FunctionDef{"DOLLARDE", 2u, 2u, &financial_detail::DollarDe});
-  registry.register_function(FunctionDef{"DOLLARFR", 2u, 2u, &financial_detail::DollarFr});
-
-  // Rate / period conversions. All scalar, fixed arity.
-  // Implementations live in `financial_misc.cpp`.
-  registry.register_function(FunctionDef{"EFFECT", 2u, 2u, &financial_detail::Effect});
-  registry.register_function(FunctionDef{"NOMINAL", 2u, 2u, &financial_detail::Nominal});
-  registry.register_function(FunctionDef{"PDURATION", 3u, 3u, &financial_detail::PDuration});
-  registry.register_function(FunctionDef{"RRI", 3u, 3u, &financial_detail::Rri});
-  registry.register_function(FunctionDef{"ISPMT", 4u, 4u, &financial_detail::IsPmt});
-
-  // FVSCHEDULE: principal + variadic schedule of rates. Range-aware with
-  // numeric-only filtering so Bool / Text / Blank cells inside a schedule
-  // range are silently skipped (matching Excel's behaviour for range
-  // inputs, mirroring NPV). Implementation lives in `financial_misc.cpp`.
-  {
-    FunctionDef def{"FVSCHEDULE", 2u, kVariadic, &financial_detail::FvSchedule};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-
-  // Security-rate / T-Bill family. All eager scalar, no range support.
-  // Implementations live in `financial_rates.cpp`.
-  //   DISC / INTRATE / RECEIVED: 4 required + optional basis (min 4, max 5).
-  //   TBILLPRICE / TBILLYIELD / TBILLEQ: exactly 3 args (fixed basis).
-  registry.register_function(FunctionDef{"DISC", 4u, 5u, &financial_detail::Disc});
-  registry.register_function(FunctionDef{"INTRATE", 4u, 5u, &financial_detail::Intrate});
-  registry.register_function(FunctionDef{"RECEIVED", 4u, 5u, &financial_detail::Received});
-  registry.register_function(FunctionDef{"TBILLPRICE", 3u, 3u, &financial_detail::TBillPrice});
-  registry.register_function(FunctionDef{"TBILLYIELD", 3u, 3u, &financial_detail::TBillYield});
-  registry.register_function(FunctionDef{"TBILLEQ", 3u, 3u, &financial_detail::TBillEq});
-
-  // Closed-form bond pricing / yield helpers. All eager scalar, no range
-  // support. Implementations live in `financial_bond_simple.cpp`.
-  //   PRICEDISC / YIELDDISC: 4 required + optional basis (min 4, max 5).
-  //   PRICEMAT / YIELDMAT:   5 required + optional basis (min 5, max 6).
-  registry.register_function(FunctionDef{"PRICEDISC", 4u, 5u, &financial_detail::PriceDisc});
-  registry.register_function(FunctionDef{"PRICEMAT", 5u, 6u, &financial_detail::PriceMat});
-  registry.register_function(FunctionDef{"YIELDDISC", 4u, 5u, &financial_detail::YieldDisc});
-  registry.register_function(FunctionDef{"YIELDMAT", 5u, 6u, &financial_detail::YieldMat});
-
-  // Macaulay / modified duration. Both share the (settlement, maturity,
-  // coupon, yld, frequency, [basis=0]) signature: 5 required + optional
-  // basis (min 5, max 6). Implementations live in
-  // `financial_duration.cpp`.
-  registry.register_function(FunctionDef{"DURATION", 5u, 6u, &financial_detail::Duration});
-  registry.register_function(FunctionDef{"MDURATION", 5u, 6u, &financial_detail::MDuration});
-
-  // Regular-period bond pricing. Signature is (settlement, maturity,
-  // rate, yld, redemption, frequency, [basis=0]) -- 6 required + optional
-  // basis (min 6, max 7). PRICE and YIELD share the closed-form
-  // clean-price kernel in `financial_clean_price.h`; YIELD inverts it via
-  // Newton-Raphson. Implementations live in `financial_price.cpp` and
-  // `financial_yield.cpp`.
-  {
-    FunctionDef def{"PRICE", 6u, 7u, &financial_detail::Price};
-    def.propagate_errors = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"YIELD", 6u, 7u, &financial_detail::Yield};
-    def.propagate_errors = true;
-    registry.register_function(def);
-  }
-
-  // Irregular-last-period bond pricing. Signature is (settlement,
-  // maturity, last_interest, rate, yld_or_pr, redemption, frequency,
-  // [basis=0]) -- 7 required + optional basis (min 7, max 8). ODDLPRICE
-  // and ODDLYIELD share a closed-form schedule helper in
-  // `financial_oddl_helpers.h`; ODDLYIELD inverts ODDLPRICE in closed
-  // form (no Newton iteration needed because the residual period uses
-  // simple-interest discounting). Implementations live in
-  // `financial_oddlprice.cpp` / `financial_oddlyield.cpp`.
-  {
-    FunctionDef def{"ODDLPRICE", 7u, 8u, &financial_detail::OddlPrice};
-    def.propagate_errors = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"ODDLYIELD", 7u, 8u, &financial_detail::OddlYield};
-    def.propagate_errors = true;
-    registry.register_function(def);
-  }
-
-  // Irregular-first-period bond pricing. Signature is (settlement,
-  // maturity, issue, first_coupon, rate, yld_or_pr, redemption,
-  // frequency, [basis=0]) -- 8 required + optional basis (min 8, max 9).
-  // ODDFPRICE and ODDFYIELD share a per-quasi-period schedule walker
-  // in `financial_oddf_helpers.h`; unlike ODDLYIELD, ODDFYIELD must
-  // use Newton-Raphson because the price kernel is a polynomial in
-  // `v = 1/(1+yld/freq)` of degree (nc + n_regular) with no
-  // closed-form algebraic inverse. Implementations live in
-  // `financial_oddfprice.cpp` / `financial_oddfyield.cpp`.
-  {
-    FunctionDef def{"ODDFPRICE", 8u, 9u, &financial_detail::OddfPrice};
-    def.propagate_errors = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"ODDFYIELD", 8u, 9u, &financial_detail::OddfYield};
-    def.propagate_errors = true;
-    registry.register_function(def);
-  }
-
-  // STOCKHISTORY: stub returning #VALUE!. Formulon is a pure calc engine
-  // and does not perform network / market-data I/O. Accepts any tail of
-  // properties (2..kVariadic). See `financial_bond_simple.cpp` for the
-  // rationale; mirrors the WEBSERVICE / PY pattern in `web.cpp`.
-  registry.register_function(FunctionDef{"STOCKHISTORY", 2u, kVariadic, &financial_detail::StockHistory});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"PV", 3u, 5u, &Pv},
+      {"FV", 3u, 5u, &Fv},
+      {"PMT", 3u, 5u, &Pmt},
+      {"NPER", 3u, 5u, &Nper},
+      {"NPV", 2u, kVariadic, &Npv, true, true, true},
+      {"RATE", 3u, 6u, &Rate},
+      {"IPMT", 4u, 6u, &Ipmt},
+      {"PPMT", 4u, 6u, &Ppmt},
+      {"CUMIPMT", 6u, 6u, &Cumipmt},
+      {"CUMPRINC", 6u, 6u, &Cumprinc},
+      {"SLN", 3u, 3u, &financial_detail::Sln},
+      {"SYD", 4u, 4u, &financial_detail::Syd},
+      {"DDB", 4u, 5u, &financial_detail::Ddb},
+      {"DB", 4u, 5u, &financial_detail::Db},
+      {"VDB", 5u, 7u, &financial_detail::Vdb},
+      {"AMORDEGRC", 6u, 7u, &financial_detail::Amordegrc},
+      {"AMORLINC", 6u, 7u, &financial_detail::Amorlinc},
+      {"ACCRINT", 6u, 8u, &financial_detail::Accrint},
+      {"ACCRINTM", 4u, 5u, &financial_detail::Accrintm},
+      {"DOLLARDE", 2u, 2u, &financial_detail::DollarDe},
+      {"DOLLARFR", 2u, 2u, &financial_detail::DollarFr},
+      {"EFFECT", 2u, 2u, &financial_detail::Effect},
+      {"NOMINAL", 2u, 2u, &financial_detail::Nominal},
+      {"PDURATION", 3u, 3u, &financial_detail::PDuration},
+      {"RRI", 3u, 3u, &financial_detail::Rri},
+      {"ISPMT", 4u, 4u, &financial_detail::IsPmt},
+      {"FVSCHEDULE", 2u, kVariadic, &financial_detail::FvSchedule, true, true, true},
+      {"DISC", 4u, 5u, &financial_detail::Disc},
+      {"INTRATE", 4u, 5u, &financial_detail::Intrate},
+      {"RECEIVED", 4u, 5u, &financial_detail::Received},
+      {"TBILLPRICE", 3u, 3u, &financial_detail::TBillPrice},
+      {"TBILLYIELD", 3u, 3u, &financial_detail::TBillYield},
+      {"TBILLEQ", 3u, 3u, &financial_detail::TBillEq},
+      {"PRICEDISC", 4u, 5u, &financial_detail::PriceDisc},
+      {"PRICEMAT", 5u, 6u, &financial_detail::PriceMat},
+      {"YIELDDISC", 4u, 5u, &financial_detail::YieldDisc},
+      {"YIELDMAT", 5u, 6u, &financial_detail::YieldMat},
+      {"DURATION", 5u, 6u, &financial_detail::Duration},
+      {"MDURATION", 5u, 6u, &financial_detail::MDuration},
+      {"PRICE", 6u, 7u, &financial_detail::Price},
+      {"YIELD", 6u, 7u, &financial_detail::Yield},
+      {"ODDLPRICE", 7u, 8u, &financial_detail::OddlPrice},
+      {"ODDLYIELD", 7u, 8u, &financial_detail::OddlYield},
+      {"ODDFPRICE", 8u, 9u, &financial_detail::OddfPrice},
+      {"ODDFYIELD", 8u, 9u, &financial_detail::OddfYield},
+      {"STOCKHISTORY", 2u, kVariadic, &financial_detail::StockHistory},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

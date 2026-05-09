@@ -153,8 +153,48 @@ struct CompilerContext {
   ByteCode bc;
 };
 
+struct LexicalBinding {
+  enum class Kind : std::uint8_t {
+    None,
+    Let,
+    LambdaArg,
+  };
+
+  Kind kind = Kind::None;
+  std::uint32_t slot = 0;
+};
+
 Error make_compile_error(FormulonErrorCode code, const char* msg) {
   return make_error(code, std::string(msg));
+}
+
+Expected<std::uint32_t, Error> emit(BodyState& bs, const parser::AstNode& src, OpCode op, std::uint32_t a,
+                                    std::uint32_t b);
+
+LexicalBinding lookup_lexical_binding(const BodyState& bs, std::string_view name) noexcept {
+  for (std::size_t i = bs.let_scope.names.size(); i > 0; --i) {
+    if (bs.let_scope.names[i - 1] == name) {
+      return LexicalBinding{LexicalBinding::Kind::Let, bs.let_scope.slots[i - 1]};
+    }
+  }
+  for (std::size_t i = bs.lambda_scope.names.size(); i > 0; --i) {
+    if (bs.lambda_scope.names[i - 1] == name) {
+      return LexicalBinding{LexicalBinding::Kind::LambdaArg, bs.lambda_scope.slots[i - 1]};
+    }
+  }
+  return {};
+}
+
+Expected<void, Error> emit_load_binding(BodyState& bs, const parser::AstNode& node, const LexicalBinding& binding) {
+  if (binding.kind == LexicalBinding::Kind::Let) {
+    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLet, binding.slot, 0));
+    return {};
+  }
+  if (binding.kind == LexicalBinding::Kind::LambdaArg) {
+    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLambdaArg, binding.slot, 0));
+    return {};
+  }
+  return make_compile_error(FormulonErrorCode::kVmCompileFailed, "internal compiler error: missing lexical binding");
 }
 
 // --------------------------------------------------------------------------
@@ -299,17 +339,10 @@ Expected<void, Error> compile_structured_ref(BodyState& bs, const parser::AstNod
 Expected<void, Error> compile_name_ref(BodyState& bs, const parser::AstNode& node) {
   std::string_view name = node.as_name();
   // Resolve against active LET / Lambda scope first (innermost wins).
-  for (std::size_t i = bs.let_scope.names.size(); i > 0; --i) {
-    if (bs.let_scope.names[i - 1] == name) {
-      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLet, bs.let_scope.slots[i - 1]));
-      return {};
-    }
-  }
-  for (std::size_t i = bs.lambda_scope.names.size(); i > 0; --i) {
-    if (bs.lambda_scope.names[i - 1] == name) {
-      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLambdaArg, bs.lambda_scope.slots[i - 1]));
-      return {};
-    }
+  const LexicalBinding binding = lookup_lexical_binding(bs, name);
+  if (binding.kind != LexicalBinding::Kind::None) {
+    FM_RETURN_IF_ERROR(emit_load_binding(bs, node, binding));
+    return {};
   }
   // Fall through to a workbook-scope name lookup at run time.
   FM_ASSIGN_OR_RETURN(auto idx, push_name(bs, name));
@@ -455,27 +488,15 @@ Expected<void, Error> compile_call(BodyState& bs, const parser::AstNode& node) {
   // f(7))` style formulas. Names that resolve to neither scope fall through
   // to the generic registry-driven `Call` opcode.
   const std::string_view call_name = node.as_call_name();
-  for (std::size_t i = bs.let_scope.names.size(); i > 0; --i) {
-    if (bs.let_scope.names[i - 1] == call_name) {
-      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLet, bs.let_scope.slots[i - 1]));
-      const std::uint32_t arity_let = node.as_call_arity();
-      for (std::uint32_t k = 0; k < arity_let; ++k) {
-        FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(k)));
-      }
-      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, arity_let));
-      return {};
+  const LexicalBinding binding = lookup_lexical_binding(bs, call_name);
+  if (binding.kind != LexicalBinding::Kind::None) {
+    FM_RETURN_IF_ERROR(emit_load_binding(bs, node, binding));
+    const std::uint32_t lambda_arity = node.as_call_arity();
+    for (std::uint32_t k = 0; k < lambda_arity; ++k) {
+      FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(k)));
     }
-  }
-  for (std::size_t i = bs.lambda_scope.names.size(); i > 0; --i) {
-    if (bs.lambda_scope.names[i - 1] == call_name) {
-      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLambdaArg, bs.lambda_scope.slots[i - 1]));
-      const std::uint32_t arity_la = node.as_call_arity();
-      for (std::uint32_t k = 0; k < arity_la; ++k) {
-        FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(k)));
-      }
-      FM_RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, arity_la));
-      return {};
-    }
+    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, lambda_arity));
+    return {};
   }
   const std::uint32_t arity = node.as_call_arity();
   for (std::uint32_t i = 0; i < arity; ++i) {

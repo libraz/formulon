@@ -262,6 +262,11 @@ JsStatus error_status(int32_t code) {
   return s;
 }
 
+/// Converts a C-ABI status code into the shared JS Status envelope.
+JsStatus status_from_rc(fm_status_t rc) {
+  return rc == 0 ? ok_status() : error_status(rc);
+}
+
 // ---- JS field-extraction helpers ----------------------------------------
 //
 // These small helpers replace the repetitive
@@ -568,7 +573,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_add_sheet(handle_, name.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Moves the sheet at `fromIdx` to `toIdx`. `toIdx` is interpreted
@@ -578,7 +583,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_move_sheet(handle_, fromIdx, toIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Removes the sheet at `index`.
@@ -587,7 +592,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_remove_sheet(handle_, index);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Renames the sheet at `index` to `newName`.
@@ -596,7 +601,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_rename_sheet(handle_, index, newName.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets / appends / removes a workbook-scoped defined name. An empty
@@ -606,7 +611,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Inserts `count` rows at `row` on `sheet`. References across the
@@ -616,7 +621,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_insert_rows(handle_, sheet, row, count);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Deletes `count` rows starting at `row` on `sheet`. References that
@@ -626,7 +631,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_delete_rows(handle_, sheet, row, count);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Inserts `count` columns at `col` on `sheet`.
@@ -635,7 +640,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_insert_cols(handle_, sheet, col, count);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Deletes `count` columns starting at `col` on `sheet`.
@@ -644,7 +649,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_delete_cols(handle_, sheet, col, count);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Returns the number of sheets (0 when handle is invalid).
@@ -679,7 +684,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_set_number(handle_, sheet, row, col, value);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets a boolean literal at `(sheet, row, col)`.
@@ -688,7 +693,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_set_bool(handle_, sheet, row, col, value ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets a UTF-8 text literal at `(sheet, row, col)`.
@@ -697,7 +702,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_set_text(handle_, sheet, row, col, text.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Stores a Blank literal (clearing the cell).
@@ -706,7 +711,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_set_blank(handle_, sheet, row, col);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Stores a formula at `(sheet, row, col)`.
@@ -715,7 +720,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_set_formula(handle_, sheet, row, col, formula.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Reads the cached cell value at `(sheet, row, col)`.
@@ -765,7 +770,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_recalc(handle_);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Configures iterative-calculation knobs.
@@ -775,7 +780,7 @@ class JsWorkbook {
     }
     fm_status_t rc =
         fm_workbook_set_iterative(handle_, enabled ? 1 : 0, static_cast<int32_t>(max_iterations), max_change);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Returns the workbook's calc mode as the underlying enum value:
@@ -797,7 +802,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_set_calc_mode(handle_, static_cast<fm_calc_mode_t>(mode));
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Returns the workbook's full Excel formula profile id.
@@ -816,7 +821,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_set_excel_profile_id(handle_, profile_id.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Drives a viewport-bounded incremental recalc.
@@ -876,11 +881,11 @@ class JsWorkbook {
     if (cb.isNull() || cb.isUndefined()) {
       js_progress_callback() = emscripten::val::null();
       fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
-      return rc == 0 ? ok_status() : error_status(rc);
+      return status_from_rc(rc);
     }
     js_progress_callback() = cb;
     fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &JsWorkbook::iterativeProgressTrampoline, nullptr);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   // ---- Iteration / metadata accessors --------------------------------------
@@ -1203,7 +1208,7 @@ class JsWorkbook {
     p.auto_filter = in.autoFilter;
     p.pivot_tables = in.pivotTables;
     fm_status_t rc = fm_sheet_set_protection(handle_, sheet, &p);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets the sheet's zoom percentage. Out-of-range values are clamped
@@ -1213,7 +1218,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_set_zoom(handle_, sheet, zoomScale);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets the sheet's frozen pane in `(rows, cols)`.
@@ -1222,7 +1227,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_set_freeze(handle_, sheet, freezeRows, freezeCols);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets the sheet tab's hidden flag.
@@ -1231,7 +1236,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Returns the column-layout overrides on `sheet` in storage order.
@@ -1271,7 +1276,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_set_column_width(handle_, sheet, first, last, width);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets / replaces the column hidden flag on `[first, last]`.
@@ -1280,7 +1285,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_set_column_hidden(handle_, sheet, first, last, hidden ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets / replaces the column outline level on `[first, last]`.
@@ -1292,7 +1297,7 @@ class JsWorkbook {
       level = 255U;
     }
     fm_status_t rc = fm_sheet_set_column_outline(handle_, sheet, first, last, static_cast<uint8_t>(level));
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Returns the row-layout overrides on `sheet` in storage order.
@@ -1331,7 +1336,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_set_row_height(handle_, sheet, row, height);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets / replaces the row hidden flag at `row`.
@@ -1340,7 +1345,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_set_row_hidden(handle_, sheet, row, hidden ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Sets / replaces the row outline level at `row`.
@@ -1352,7 +1357,7 @@ class JsWorkbook {
       level = 255U;
     }
     fm_status_t rc = fm_sheet_set_row_outline(handle_, sheet, row, static_cast<uint8_t>(level));
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   // ---- Styles --------------------------------------------------------------
@@ -1386,7 +1391,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_cell_set_xf_index(handle_, sheet, row, col, xf_index);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// Returns `{ status, fontIndex, fillIndex, borderIndex, numFmtId,
@@ -1803,7 +1808,7 @@ class JsWorkbook {
     m.first_col = range["firstCol"].as<uint32_t>();
     m.last_col = range["lastCol"].as<uint32_t>();
     fm_status_t rc = fm_sheet_add_merge(handle_, sheet, m);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `removeMerge(sheetIdx, {firstRow, lastRow, firstCol, lastCol})`.
@@ -1817,7 +1822,7 @@ class JsWorkbook {
     m.first_col = range["firstCol"].as<uint32_t>();
     m.last_col = range["lastCol"].as<uint32_t>();
     fm_status_t rc = fm_sheet_remove_merge(handle_, sheet, m);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `removeMergeAt(sheetIdx, index)`.
@@ -1826,7 +1831,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_remove_merge_at(handle_, sheet, index);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `clearMerges(sheetIdx)`.
@@ -1835,7 +1840,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_clear_merges(handle_, sheet);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `getComment(sheetIdx, row, col) -> {author, text} | null`.
@@ -1873,7 +1878,7 @@ class JsWorkbook {
     hl.display = display.empty() ? nullptr : display.c_str();
     hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
     fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `removeHyperlink(sheetIdx, row, col)`.
@@ -1882,7 +1887,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_remove_hyperlink(handle_, sheet, row, col);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `removeHyperlinkAt(sheetIdx, index)`.
@@ -1891,7 +1896,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_remove_hyperlink_at(handle_, sheet, index);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `clearHyperlinks(sheetIdx)`.
@@ -1900,7 +1905,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_clear_hyperlinks(handle_, sheet);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `getHyperlinks(sheetIdx) -> Array<{row, col, target, display, tooltip}>`.
@@ -2053,7 +2058,7 @@ class JsWorkbook {
     dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
     dv.prompt_message = prompt_message.empty() ? nullptr : prompt_message.c_str();
     fm_status_t rc = fm_sheet_add_validation(handle_, sheet, dv);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `removeValidationAt(sheetIdx, index)`.
@@ -2062,7 +2067,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_remove_validation_at(handle_, sheet, index);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `clearValidations(sheetIdx)`.
@@ -2071,7 +2076,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_clear_validations(handle_, sheet);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `getConditionalFormats(sheetIdx) -> Array<{id, type, priority, stopIfTrue,
@@ -2222,7 +2227,7 @@ class JsWorkbook {
       rule.time_period = js_pull_u8(v, "timePeriod", 0U);
     }
     fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `removeConditionalFormatAt(sheetIdx, index)`.
@@ -2231,7 +2236,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_cf_remove_at(handle_, sheet, index);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `clearConditionalFormats(sheetIdx)`.
@@ -2240,7 +2245,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_sheet_cf_clear(handle_, sheet);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   /// `precedents(sheet, row, col, depth?) -> Array<{sheet, row, col}>`.
@@ -2352,7 +2357,7 @@ class JsWorkbook {
     const char* author_c = author.empty() ? nullptr : author.c_str();
     const char* text_c = text.empty() ? nullptr : text.c_str();
     fm_status_t rc = fm_sheet_set_comment(handle_, sheet, row, col, author_c, text_c);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   // ---- PivotCache mutation -----------------------------------------------
@@ -2413,7 +2418,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_remove(handle_, cacheId);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   uint32_t pivotCacheFieldCount(uint32_t cacheId) const {
@@ -2466,7 +2471,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_field_clear(handle_, cacheId);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   uint32_t pivotCacheFieldSharedItemCount(uint32_t cacheId, uint32_t fieldIdx) const {
@@ -2485,7 +2490,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_number(handle_, cacheId, fieldIdx, value);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8) {
@@ -2493,7 +2498,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_text(handle_, cacheId, fieldIdx, utf8.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIdx, bool value) {
@@ -2501,7 +2506,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_bool(handle_, cacheId, fieldIdx, value ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIdx) {
@@ -2509,7 +2514,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_blank(handle_, cacheId, fieldIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIdx) {
@@ -2517,7 +2522,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_field_clear_shared_items(handle_, cacheId, fieldIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   uint32_t pivotCacheRecordCount(uint32_t cacheId) const {
@@ -2553,7 +2558,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_record_clear(handle_, cacheId);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheRecordSetNumber(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, double value) {
@@ -2561,7 +2566,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_record_set_number(handle_, cacheId, recordIdx, fieldIdx, value);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheRecordSetText(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, const std::string& utf8) {
@@ -2569,7 +2574,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_record_set_text(handle_, cacheId, recordIdx, fieldIdx, utf8.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheRecordSetBool(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, bool value) {
@@ -2577,7 +2582,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_record_set_bool(handle_, cacheId, recordIdx, fieldIdx, value ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheRecordSetBlank(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx) {
@@ -2585,7 +2590,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_cache_record_set_blank(handle_, cacheId, recordIdx, fieldIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotCacheRecordSetError(uint32_t cacheId, uint32_t recordIdx, uint32_t fieldIdx, int32_t errorCode) {
@@ -2594,7 +2599,7 @@ class JsWorkbook {
     }
     fm_status_t rc = fm_workbook_pivot_cache_record_set_error(handle_, cacheId, recordIdx, fieldIdx,
                                                               static_cast<fm_error_code_t>(errorCode));
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   // ---- PivotTable mutation -----------------------------------------------
@@ -2627,7 +2632,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_remove(handle_, sheet, pivotIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotSetName(uint32_t sheet, uint32_t pivotIdx, const std::string& name) {
@@ -2635,7 +2640,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_set_name(handle_, sheet, pivotIdx, name.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, uint32_t anchorRow, uint32_t anchorCol, uint32_t spanRows,
@@ -2644,7 +2649,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_set_anchor(handle_, sheet, pivotIdx, anchorRow, anchorCol, spanRows, spanCols);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled) {
@@ -2653,7 +2658,7 @@ class JsWorkbook {
     }
     fm_status_t rc =
         fm_workbook_pivot_set_grand_totals(handle_, sheet, pivotIdx, rowsEnabled ? 1 : 0, colsEnabled ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   uint32_t pivotFieldCount(uint32_t sheet, uint32_t pivotIdx) const {
@@ -2702,7 +2707,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_field_clear(handle_, sheet, pivotIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t axis) {
@@ -2711,7 +2716,7 @@ class JsWorkbook {
     }
     fm_status_t rc =
         fm_workbook_pivot_field_set_axis(handle_, sheet, pivotIdx, fieldIdx, static_cast<fm_pivot_axis_t>(axis));
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldSetSort(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool ascending,
@@ -2721,7 +2726,7 @@ class JsWorkbook {
     }
     const char* by = byField.empty() ? nullptr : byField.c_str();
     fm_status_t rc = fm_workbook_pivot_field_set_sort(handle_, sheet, pivotIdx, fieldIdx, ascending ? 1 : 0, by);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldSetSubtotalTop(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, bool top) {
@@ -2729,7 +2734,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_field_set_subtotal_top(handle_, sheet, pivotIdx, fieldIdx, top ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldAddAggregation(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t agg) {
@@ -2738,7 +2743,7 @@ class JsWorkbook {
     }
     fm_status_t rc = fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivotIdx, fieldIdx,
                                                              static_cast<fm_pivot_aggregation_t>(agg));
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldClearAggregations(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
@@ -2746,7 +2751,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_field_clear_aggregations(handle_, sheet, pivotIdx, fieldIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldAddItem(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& name,
@@ -2756,7 +2761,7 @@ class JsWorkbook {
     }
     fm_status_t rc =
         fm_workbook_pivot_field_add_item(handle_, sheet, pivotIdx, fieldIdx, name.c_str(), visible ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldClearItems(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
@@ -2764,7 +2769,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_field_clear_items(handle_, sheet, pivotIdx, fieldIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldSetItemVisible(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t itemIdx,
@@ -2774,7 +2779,7 @@ class JsWorkbook {
     }
     fm_status_t rc =
         fm_workbook_pivot_field_set_item_visible(handle_, sheet, pivotIdx, fieldIdx, itemIdx, visible ? 1 : 0);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t agg) {
@@ -2783,7 +2788,7 @@ class JsWorkbook {
     }
     fm_status_t rc = fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivotIdx, fieldIdx,
                                                              static_cast<fm_pivot_aggregation_t>(agg));
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldClearSubtotalFns(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
@@ -2791,7 +2796,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_field_clear_subtotal_fns(handle_, sheet, pivotIdx, fieldIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, uint32_t granularity,
@@ -2802,7 +2807,7 @@ class JsWorkbook {
     fm_status_t rc = fm_workbook_pivot_field_set_date_group(
         handle_, sheet, pivotIdx, fieldIdx, static_cast<fm_pivot_date_grouping_t>(granularity),
         static_cast<fm_pivot_calendar_t>(calendar), startYear, endYear);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldClearDateGroup(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx) {
@@ -2810,7 +2815,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_field_clear_date_group(handle_, sheet, pivotIdx, fieldIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFieldSetNumberFormat(uint32_t sheet, uint32_t pivotIdx, uint32_t fieldIdx, const std::string& utf8) {
@@ -2818,7 +2823,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_field_set_number_format(handle_, sheet, pivotIdx, fieldIdx, utf8.c_str());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotSetRowFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices) {
@@ -2835,7 +2840,7 @@ class JsWorkbook {
     }
     fm_status_t rc =
         fm_workbook_pivot_set_row_field_order(handle_, sheet, pivotIdx, v.empty() ? nullptr : v.data(), v.size());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotSetColFieldOrder(uint32_t sheet, uint32_t pivotIdx, emscripten::val indices) {
@@ -2852,7 +2857,7 @@ class JsWorkbook {
     }
     fm_status_t rc =
         fm_workbook_pivot_set_col_field_order(handle_, sheet, pivotIdx, v.empty() ? nullptr : v.data(), v.size());
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   uint32_t pivotDataFieldCount(uint32_t sheet, uint32_t pivotIdx) const {
@@ -2919,7 +2924,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_data_field_clear(handle_, sheet, pivotIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32_t dataFieldIdx, emscripten::val spec) {
@@ -2932,7 +2937,7 @@ class JsWorkbook {
     bool has_nfmt = false;
     build_data_field_spec(spec, c_spec, name_buf, nfmt_buf, has_nfmt);
     fm_status_t rc = fm_workbook_pivot_data_field_set(handle_, sheet, pivotIdx, dataFieldIdx, &c_spec);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   uint32_t pivotFilterCount(uint32_t sheet, uint32_t pivotIdx) const {
@@ -2983,7 +2988,7 @@ class JsWorkbook {
                                    : 0.0;
 
     fm_status_t rc = fm_workbook_pivot_filter_add(handle_, sheet, pivotIdx, &c_spec);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFilterClear(uint32_t sheet, uint32_t pivotIdx) {
@@ -2991,7 +2996,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_filter_clear(handle_, sheet, pivotIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
   JsStatus pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx) {
@@ -2999,7 +3004,7 @@ class JsWorkbook {
       return error_status(7000);
     }
     fm_status_t rc = fm_workbook_pivot_filter_remove_at(handle_, sheet, pivotIdx, filterIdx);
-    return rc == 0 ? ok_status() : error_status(rc);
+    return status_from_rc(rc);
   }
 
  private:

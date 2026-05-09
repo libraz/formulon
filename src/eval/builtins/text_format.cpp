@@ -16,11 +16,13 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
 #include "eval/function_registry.h"
 #include "eval/text_format/number_format.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -403,36 +405,64 @@ Value Text_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // numeric walker does not support left-of-decimal-point rounding.
 
 Expected<int, ErrorCode> fixed_read_int(const Value& v) {
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    return coerced.error();
+  auto d = coerce_to_number(v);
+  if (!d) {
+    return d.error();
   }
-  const double d = coerced.value();
+  if (std::isnan(d.value()) || std::isinf(d.value())) {
+    return ErrorCode::Num;
+  }
+  return static_cast<int>(std::trunc(d.value()));
+}
+
+Expected<double, ErrorCode> read_finite_number_arg(const Value* args, std::uint32_t index) {
+  auto number = coerce_to_number(args[index]);
+  if (!number) {
+    return number.error();
+  }
+  const double d = number.value();
   if (std::isnan(d) || std::isinf(d)) {
     return ErrorCode::Num;
   }
-  return static_cast<int>(std::trunc(d));
+  return d;
 }
 
-Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto num = coerce_to_number(args[0]);
-  if (!num) {
-    return Value::error(num.error());
-  }
-  if (std::isnan(num.value()) || std::isinf(num.value())) {
-    return Value::error(ErrorCode::Num);
-  }
-  int decimals = 2;
-  if (arity >= 2) {
-    auto parsed = fixed_read_int(args[1]);
+Expected<int, ErrorCode> read_optional_fixed_decimals(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                      int default_value) {
+  int decimals = default_value;
+  if (arity >= index + 1u) {
+    auto parsed = fixed_read_int(args[index]);
     if (!parsed) {
-      return Value::error(parsed.error());
+      return parsed.error();
     }
     decimals = parsed.value();
   }
   if (decimals > 127 || decimals < -127) {
+    return ErrorCode::Value;
+  }
+  return decimals;
+}
+
+Value apply_text_number_format(double value, std::string_view format, Arena& arena) {
+  std::string out;
+  out.reserve(32);
+  const auto status = ::formulon::text_format::apply_format(value, format, out);
+  if (status != ::formulon::text_format::FormatStatus::kOk) {
     return Value::error(ErrorCode::Value);
   }
+  return Value::text(arena.intern(out));
+}
+
+Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
+  auto num = read_finite_number_arg(args, 0);
+  if (!num) {
+    return Value::error(num.error());
+  }
+  auto decimals_e = read_optional_fixed_decimals(args, arity, 1, 2);
+  if (!decimals_e) {
+    return Value::error(decimals_e.error());
+  }
+  const int decimals = decimals_e.value();
   bool no_commas = false;
   if (arity >= 3) {
     auto parsed = coerce_to_bool(args[2]);
@@ -457,13 +487,7 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
     fmt.push_back('.');
     fmt.append(static_cast<std::size_t>(effective_decimals), '0');
   }
-  std::string out;
-  out.reserve(32);
-  const auto status = ::formulon::text_format::apply_format(value, fmt, out);
-  if (status != ::formulon::text_format::FormatStatus::kOk) {
-    return Value::error(ErrorCode::Value);
-  }
-  return Value::text(arena.intern(out));
+  return apply_text_number_format(value, fmt, arena);
 }
 
 // ---------------------------------------------------------------------------
@@ -482,25 +506,16 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
 // FIXED); `|decimals| > 127` -> `#VALUE!`.
 
 Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
-  auto num = coerce_to_number(args[0]);
+  auto num = read_finite_number_arg(args, 0);
   if (!num) {
     return Value::error(num.error());
   }
-  if (std::isnan(num.value()) || std::isinf(num.value())) {
-    return Value::error(ErrorCode::Num);
-  }
   // ja-JP default is 0 decimals (en-US would default to 2).
-  int decimals = 0;
-  if (arity >= 2) {
-    auto parsed = fixed_read_int(args[1]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    decimals = parsed.value();
+  auto decimals_e = read_optional_fixed_decimals(args, arity, 1, 0);
+  if (!decimals_e) {
+    return Value::error(decimals_e.error());
   }
-  if (decimals > 127 || decimals < -127) {
-    return Value::error(ErrorCode::Value);
-  }
+  const int decimals = decimals_e.value();
   // Excel rounds half-away-from-zero, but the underlying snprintf used by
   // `apply_format` rounds half-to-even on macOS (e.g. `%.0f` on 1234.5 ->
   // 1234). Pre-round explicitly with `std::round` so DOLLAR(1234.5, 0)
@@ -534,13 +549,7 @@ Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
   // Negative section: "¥-#,##0[.00]"
   fmt.append("\xC2\xA5-#,##0");
   fmt.append(fraction);
-  std::string out;
-  out.reserve(32);
-  const auto status = ::formulon::text_format::apply_format(value, fmt, out);
-  if (status != ::formulon::text_format::FormatStatus::kOk) {
-    return Value::error(ErrorCode::Value);
-  }
-  return Value::text(arena.intern(out));
+  return apply_text_number_format(value, fmt, arena);
 }
 
 // ---------------------------------------------------------------------------
@@ -753,13 +762,16 @@ Value ArrayToText_(const Value* args, std::uint32_t arity, Arena& arena) {
 }  // namespace
 
 void register_text_format_builtins(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"TEXT", 2u, 2u, &Text_});
-  registry.register_function(FunctionDef{"VALUE", 1u, 1u, &Value_});
-  registry.register_function(FunctionDef{"VALUETOTEXT", 1u, 2u, &ValueToText_});
-  registry.register_function(FunctionDef{"ARRAYTOTEXT", 1u, 2u, &ArrayToText_});
-  registry.register_function(FunctionDef{"NUMBERVALUE", 1u, 3u, &NumberValue_});
-  registry.register_function(FunctionDef{"FIXED", 1u, 3u, &Fixed_});
-  registry.register_function(FunctionDef{"DOLLAR", 1u, 2u, &Dollar_});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"TEXT", 2u, 2u, &Text_},
+      {"VALUE", 1u, 1u, &Value_},
+      {"VALUETOTEXT", 1u, 2u, &ValueToText_},
+      {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_},
+      {"NUMBERVALUE", 1u, 3u, &NumberValue_},
+      {"FIXED", 1u, 3u, &Fixed_},
+      {"DOLLAR", 1u, 2u, &Dollar_},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

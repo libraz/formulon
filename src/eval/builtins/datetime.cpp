@@ -24,11 +24,13 @@
 #include <ctime>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
 #include "eval/date_time.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -59,6 +61,46 @@ Expected<double, ErrorCode> coerce_serial(const Value& v) {
   return n.value();
 }
 
+Expected<double, ErrorCode> read_truncated_number_arg(const Value* args, std::uint32_t index) {
+  auto n = coerce_to_number(args[index]);
+  if (!n) {
+    return n.error();
+  }
+  return std::trunc(n.value());
+}
+
+Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                         int default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  auto n = coerce_to_number(args[index]);
+  if (!n) {
+    return n.error();
+  }
+  return static_cast<int>(std::trunc(n.value()));
+}
+
+Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v) {
+  auto serial = coerce_serial(v);
+  if (!serial) {
+    return serial.error();
+  }
+  const double day_serial = std::floor(serial.value());
+  if (day_serial == 0.0) {
+    return date_time::YMD{1900, 1u, 0u};
+  }
+  return date_time::ymd_from_serial(day_serial);
+}
+
+Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v) {
+  auto serial = coerce_serial(v);
+  if (!serial) {
+    return serial.error();
+  }
+  return date_time::hms_from_fraction(serial.value());
+}
+
 unsigned days_in_month(int y, unsigned m) noexcept {
   static constexpr unsigned kTable[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   if (m < 1u || m > 12u) {
@@ -77,21 +119,21 @@ unsigned days_in_month(int y, unsigned m) noexcept {
 /// through the normalisation baked into `days_from_civil`, so rolls like
 /// `DATE(2026, 13, 1) = 2027-01-01` fall out naturally.
 Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto year_c = coerce_to_number(args[0]);
-  if (!year_c) {
-    return Value::error(year_c.error());
+  auto year = read_truncated_number_arg(args, 0);
+  if (!year) {
+    return Value::error(year.error());
   }
-  auto month_c = coerce_to_number(args[1]);
-  if (!month_c) {
-    return Value::error(month_c.error());
+  auto month = read_truncated_number_arg(args, 1);
+  if (!month) {
+    return Value::error(month.error());
   }
-  auto day_c = coerce_to_number(args[2]);
-  if (!day_c) {
-    return Value::error(day_c.error());
+  auto day = read_truncated_number_arg(args, 2);
+  if (!day) {
+    return Value::error(day.error());
   }
-  double y = std::trunc(year_c.value());
-  const double m = std::trunc(month_c.value());
-  const double d = std::trunc(day_c.value());
+  double y = year.value();
+  const double m = month.value();
+  const double d = day.value();
   // Excel's two-digit-year convention: `0 <= year < 1900` expands by 1900.
   if (y >= 0.0 && y < 1900.0) {
     y += 1900.0;
@@ -140,19 +182,19 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// inputs are accepted and normalised modulo 24/60/60. A negative result
 /// (e.g. `TIME(-1, 0, 0)`) yields `#NUM!` per Excel.
 Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto h_c = coerce_to_number(args[0]);
-  if (!h_c) {
-    return Value::error(h_c.error());
+  auto hours = read_truncated_number_arg(args, 0);
+  if (!hours) {
+    return Value::error(hours.error());
   }
-  auto m_c = coerce_to_number(args[1]);
-  if (!m_c) {
-    return Value::error(m_c.error());
+  auto minutes = read_truncated_number_arg(args, 1);
+  if (!minutes) {
+    return Value::error(minutes.error());
   }
-  auto s_c = coerce_to_number(args[2]);
-  if (!s_c) {
-    return Value::error(s_c.error());
+  auto seconds = read_truncated_number_arg(args, 2);
+  if (!seconds) {
+    return Value::error(seconds.error());
   }
-  const double total = std::trunc(h_c.value()) * 3600.0 + std::trunc(m_c.value()) * 60.0 + std::trunc(s_c.value());
+  const double total = hours.value() * 3600.0 + minutes.value() * 60.0 + seconds.value();
   if (total < 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -165,71 +207,56 @@ Value Time_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// portion (fractional part discarded). Serial 0 is Excel's fictitious
 /// "1/0/1900": YEAR=1900, MONTH=1, DAY=0.
 Value Year_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto serial = coerce_serial(args[0]);
-  if (!serial) {
-    return Value::error(serial.error());
+  auto ymd = coerce_serial_ymd(args[0]);
+  if (!ymd) {
+    return Value::error(ymd.error());
   }
-  if (std::floor(serial.value()) == 0.0) {
-    return Value::number(1900.0);
-  }
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial.value());
-  return Value::number(static_cast<double>(ymd.y));
+  return Value::number(static_cast<double>(ymd.value().y));
 }
 
 /// MONTH(serial). Returns 1..12.
 Value Month_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto serial = coerce_serial(args[0]);
-  if (!serial) {
-    return Value::error(serial.error());
+  auto ymd = coerce_serial_ymd(args[0]);
+  if (!ymd) {
+    return Value::error(ymd.error());
   }
-  if (std::floor(serial.value()) == 0.0) {
-    return Value::number(1.0);
-  }
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial.value());
-  return Value::number(static_cast<double>(ymd.m));
+  return Value::number(static_cast<double>(ymd.value().m));
 }
 
 /// DAY(serial). Returns 0..31 (0 only for the fictitious serial 0 alias).
 Value Day_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto serial = coerce_serial(args[0]);
-  if (!serial) {
-    return Value::error(serial.error());
+  auto ymd = coerce_serial_ymd(args[0]);
+  if (!ymd) {
+    return Value::error(ymd.error());
   }
-  if (std::floor(serial.value()) == 0.0) {
-    return Value::number(0.0);
-  }
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial.value());
-  return Value::number(static_cast<double>(ymd.d));
+  return Value::number(static_cast<double>(ymd.value().d));
 }
 
 /// HOUR(serial). Returns 0..23.
 Value Hour_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto serial = coerce_serial(args[0]);
-  if (!serial) {
-    return Value::error(serial.error());
+  auto hms = coerce_serial_hms(args[0]);
+  if (!hms) {
+    return Value::error(hms.error());
   }
-  const date_time::HMS hms = date_time::hms_from_fraction(serial.value());
-  return Value::number(static_cast<double>(hms.h));
+  return Value::number(static_cast<double>(hms.value().h));
 }
 
 /// MINUTE(serial). Returns 0..59.
 Value Minute_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto serial = coerce_serial(args[0]);
-  if (!serial) {
-    return Value::error(serial.error());
+  auto hms = coerce_serial_hms(args[0]);
+  if (!hms) {
+    return Value::error(hms.error());
   }
-  const date_time::HMS hms = date_time::hms_from_fraction(serial.value());
-  return Value::number(static_cast<double>(hms.m));
+  return Value::number(static_cast<double>(hms.value().m));
 }
 
 /// SECOND(serial). Returns 0..59.
 Value Second_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto serial = coerce_serial(args[0]);
-  if (!serial) {
-    return Value::error(serial.error());
+  auto hms = coerce_serial_hms(args[0]);
+  if (!hms) {
+    return Value::error(hms.error());
   }
-  const date_time::HMS hms = date_time::hms_from_fraction(serial.value());
-  return Value::number(static_cast<double>(hms.s));
+  return Value::number(static_cast<double>(hms.value().s));
 }
 
 /// WEEKDAY(serial, [return_type]). `return_type` selects between Excel's
@@ -240,15 +267,11 @@ Value Weekday_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!serial) {
     return Value::error(serial.error());
   }
-  int return_type = 1;
-  if (arity >= 2) {
-    auto rt = coerce_to_number(args[1]);
-    if (!rt) {
-      return Value::error(rt.error());
-    }
-    const double t = std::trunc(rt.value());
-    return_type = static_cast<int>(t);
+  auto return_type_arg = read_optional_truncated_int_arg(args, arity, 1, 1);
+  if (!return_type_arg) {
+    return Value::error(return_type_arg.error());
   }
+  const int return_type = return_type_arg.value();
   const date_time::YMD ymd = date_time::ymd_from_serial(serial.value());
   // `days_from_civil` at epoch 1970-01-01 (a Thursday). A Thursday has
   // weekday index 4 in the Sunday=0..Saturday=6 convention, so
@@ -409,14 +432,11 @@ Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!serial) {
     return Value::error(serial.error());
   }
-  int return_type = 1;
-  if (arity >= 2) {
-    auto rt = coerce_to_number(args[1]);
-    if (!rt) {
-      return Value::error(rt.error());
-    }
-    return_type = static_cast<int>(std::trunc(rt.value()));
+  auto return_type_arg = read_optional_truncated_int_arg(args, arity, 1, 1);
+  if (!return_type_arg) {
+    return Value::error(return_type_arg.error());
   }
+  const int return_type = return_type_arg.value();
   // Map return_type -> week-start weekday (Sun=0..Sat=6). -1 means invalid.
   int ws = -1;
   switch (return_type) {
@@ -491,14 +511,11 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (!end) {
     return Value::error(end.error());
   }
-  int basis = 0;
-  if (arity >= 3) {
-    auto b = coerce_to_number(args[2]);
-    if (!b) {
-      return Value::error(b.error());
-    }
-    basis = static_cast<int>(std::trunc(b.value()));
+  auto basis_arg = read_optional_truncated_int_arg(args, arity, 2, 0);
+  if (!basis_arg) {
+    return Value::error(basis_arg.error());
   }
+  const int basis = basis_arg.value();
   double s = std::floor(start.value());
   double e = std::floor(end.value());
   if (s > e) {
@@ -767,6 +784,29 @@ Value Today_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Excel-level argument-shape rules on top of that shared parser.
 // ---------------------------------------------------------------------------
 
+struct ParsedDateTimeText {
+  double serial;
+  double frac;
+  bool has_date;
+  bool has_time;
+};
+
+Expected<ParsedDateTimeText, ErrorCode> parse_date_time_arg(const Value& arg) {
+  auto text = coerce_to_text(arg);
+  if (!text) {
+    return text.error();
+  }
+  const std::string_view trimmed = date_parse::trim_date_text(text.value());
+  if (trimmed.empty()) {
+    return ErrorCode::Value;
+  }
+  ParsedDateTimeText parsed{0.0, 0.0, false, false};
+  if (!date_parse::parse_date_time_text(trimmed, &parsed.serial, &parsed.frac, &parsed.has_date, &parsed.has_time)) {
+    return ErrorCode::Value;
+  }
+  return parsed;
+}
+
 /// DATEVALUE(text). Parses `text` as a date string and returns the Excel
 /// serial for the date part (integer). Embedded time components are
 /// accepted and ignored — a string like "2024-03-15 13:30" returns the
@@ -774,29 +814,18 @@ Value Today_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// `DATEVALUE(TRUE)` tries to parse the literal "TRUE" and fails with
 /// `#VALUE!`.
 Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+  auto parsed = parse_date_time_arg(args[0]);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  const std::string_view trimmed = date_parse::trim_date_text(text.value());
-  if (trimmed.empty()) {
-    return Value::error(ErrorCode::Value);
-  }
-  double serial = 0.0;
-  double frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  if (!date_parse::parse_date_time_text(trimmed, &serial, &frac, &has_date, &has_time)) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (!has_date) {
+  if (!parsed.value().has_date) {
     // DATEVALUE requires an explicit date component; time-only input is
     // rejected as #VALUE! (Excel defaults to "today", which isn't
     // reproducible without a clock — see the divergence note in the file
     // banner comment).
     return Value::error(ErrorCode::Value);
   }
-  return Value::number(serial);
+  return Value::number(parsed.value().serial);
 }
 
 /// TIMEVALUE(text). Parses `text` as a time string and returns the
@@ -805,22 +834,11 @@ Value Datevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// wrap around the day (`TIMEVALUE("25:00")` returns `1/24` after modular
 /// reduction).
 Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
+  auto parsed = parse_date_time_arg(args[0]);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  const std::string_view trimmed = date_parse::trim_date_text(text.value());
-  if (trimmed.empty()) {
-    return Value::error(ErrorCode::Value);
-  }
-  double serial = 0.0;
-  double frac = 0.0;
-  bool has_date = false;
-  bool has_time = false;
-  if (!date_parse::parse_date_time_text(trimmed, &serial, &frac, &has_date, &has_time)) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (!has_time) {
+  if (!parsed.value().has_time) {
     // TIMEVALUE requires an explicit time component; a date-only input
     // returns `#VALUE!` (matches Excel's behaviour for "2024-03-15" as an
     // argument to TIMEVALUE).
@@ -828,7 +846,7 @@ Value Timevalue_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   }
   // Normalise the fractional day modulo a full day so TIMEVALUE("25:00")
   // returns the same value as TIMEVALUE("1:00") = 1/24.
-  double out = std::fmod(frac, 1.0);
+  double out = std::fmod(parsed.value().frac, 1.0);
   if (out < 0.0) {
     out += 1.0;
   }
@@ -842,27 +860,16 @@ void register_datetime_builtins(FunctionRegistry& registry) {
   // read the host's local wall clock via `std::chrono::system_clock` and
   // `localtime_r` (Windows: `localtime_s`). Recalc semantics (marking them
   // volatile) are handled by the scheduler, not this registration.
-  registry.register_function(FunctionDef{"DATE", 3u, 3u, &Date_});
-  registry.register_function(FunctionDef{"TIME", 3u, 3u, &Time_});
-  registry.register_function(FunctionDef{"YEAR", 1u, 1u, &Year_});
-  registry.register_function(FunctionDef{"MONTH", 1u, 1u, &Month_});
-  registry.register_function(FunctionDef{"DAY", 1u, 1u, &Day_});
-  registry.register_function(FunctionDef{"HOUR", 1u, 1u, &Hour_});
-  registry.register_function(FunctionDef{"MINUTE", 1u, 1u, &Minute_});
-  registry.register_function(FunctionDef{"SECOND", 1u, 1u, &Second_});
-  registry.register_function(FunctionDef{"WEEKDAY", 1u, 2u, &Weekday_});
-  registry.register_function(FunctionDef{"EDATE", 2u, 2u, &Edate_});
-  registry.register_function(FunctionDef{"EOMONTH", 2u, 2u, &Eomonth_});
-  registry.register_function(FunctionDef{"DAYS", 2u, 2u, &Days_});
-  registry.register_function(FunctionDef{"DAYS360", 2u, 3u, &Days360_});
-  registry.register_function(FunctionDef{"WEEKNUM", 1u, 2u, &Weeknum_});
-  registry.register_function(FunctionDef{"ISOWEEKNUM", 1u, 1u, &Isoweeknum_});
-  registry.register_function(FunctionDef{"YEARFRAC", 2u, 3u, &Yearfrac_});
-  registry.register_function(FunctionDef{"DATEDIF", 3u, 3u, &Datedif_});
-  registry.register_function(FunctionDef{"DATEVALUE", 1u, 1u, &Datevalue_});
-  registry.register_function(FunctionDef{"TIMEVALUE", 1u, 1u, &Timevalue_});
-  registry.register_function(FunctionDef{"NOW", 0u, 0u, &Now_});
-  registry.register_function(FunctionDef{"TODAY", 0u, 0u, &Today_});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"DATE", 3u, 3u, &Date_},           {"TIME", 3u, 3u, &Time_},       {"YEAR", 1u, 1u, &Year_},
+      {"MONTH", 1u, 1u, &Month_},         {"DAY", 1u, 1u, &Day_},         {"HOUR", 1u, 1u, &Hour_},
+      {"MINUTE", 1u, 1u, &Minute_},       {"SECOND", 1u, 1u, &Second_},   {"WEEKDAY", 1u, 2u, &Weekday_},
+      {"EDATE", 2u, 2u, &Edate_},         {"EOMONTH", 2u, 2u, &Eomonth_}, {"DAYS", 2u, 2u, &Days_},
+      {"DAYS360", 2u, 3u, &Days360_},     {"WEEKNUM", 1u, 2u, &Weeknum_}, {"ISOWEEKNUM", 1u, 1u, &Isoweeknum_},
+      {"YEARFRAC", 2u, 3u, &Yearfrac_},   {"DATEDIF", 3u, 3u, &Datedif_}, {"DATEVALUE", 1u, 1u, &Datevalue_},
+      {"TIMEVALUE", 1u, 1u, &Timevalue_}, {"NOW", 0u, 0u, &Now_},         {"TODAY", 0u, 0u, &Today_},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <random>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/rng.h"
@@ -67,8 +68,11 @@ Value RandBetween_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
 }  // namespace
 
 void register_math_rng_builtins(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"RAND", 0u, 0u, &Rand_});
-  registry.register_function(FunctionDef{"RANDBETWEEN", 2u, 2u, &RandBetween_});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"RAND", 0u, 0u, &Rand_},
+      {"RANDBETWEEN", 2u, 2u, &RandBetween_},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

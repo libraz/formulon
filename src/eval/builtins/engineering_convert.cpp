@@ -32,6 +32,7 @@
 #include <cstring>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -407,7 +408,10 @@ Value Convert(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }  // namespace
 
 void register_engineering_convert_builtins(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"CONVERT", 3u, 3u, &Convert});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"CONVERT", 3u, 3u, &Convert},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

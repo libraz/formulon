@@ -16,8 +16,6 @@
 #include <cstdint>
 
 #include "eval/builtins/financial_helpers.h"
-#include "eval/coerce.h"
-#include "eval/date_time.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -27,73 +25,131 @@ namespace eval {
 namespace financial_detail {
 namespace {
 
-// Computes YEARFRAC(start, end, basis) following the YEARFRAC builtin's
-// rules. Returns `#NUM!` on an unsupported basis or non-finite result.
-// Zero-length spans are allowed (unlike DISC/INTRATE which divide by
-// the year-fraction).
-Expected<double, ErrorCode> yearfrac_for_depreciation(double start, double end, int basis) {
-  if (basis < 0 || basis > 4) {
-    return ErrorCode::Num;
+struct DepreciationArgs4 {
+  double cost;
+  double salvage;
+  double life;
+  double period;
+};
+
+struct DepreciationArgs3 {
+  double cost;
+  double salvage;
+  double life;
+};
+
+struct VdbArgs {
+  double cost;
+  double salvage;
+  double life;
+  double start_period;
+  double end_period;
+  double factor;
+  bool no_switch;
+};
+
+struct AmorArgs {
+  double cost;
+  double date_purchased;
+  double first_period;
+  double salvage;
+  double period;
+  double rate;
+  int basis;
+};
+
+Expected<double, ErrorCode> read_dep_number(const Value* args, std::uint32_t index) {
+  auto value = read_required_number(args, index);
+  if (!value) {
+    return value.error();
   }
-  const double s = std::trunc(start);
-  const double e = std::trunc(end);
-  const date_time::YMD a = date_time::ymd_from_serial(s);
-  const date_time::YMD b = date_time::ymd_from_serial(e);
-  double yf = 0.0;
-  switch (basis) {
-    case 0:
-      yf = date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    case 1:
-      yf = date_time::yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    case 2:
-      yf = (e - s) / 360.0;
-      break;
-    case 3:
-      yf = (e - s) / 365.0;
-      break;
-    case 4:
-      yf = date_time::yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d);
-      break;
-    default:
-      return ErrorCode::Num;
-  }
-  if (std::isnan(yf) || std::isinf(yf)) {
-    return ErrorCode::Num;
-  }
-  return yf;
+  return value.value();
 }
 
-// Reads the `basis` argument at `args[index]` if present, otherwise
-// returns 0. Truncates toward zero and validates against {0,1,2,3,4}.
-Expected<int, ErrorCode> read_basis_dep(const Value* args, std::uint32_t arity, std::uint32_t index) {
-  if (arity <= index) {
-    return 0;
+Expected<DepreciationArgs3, ErrorCode> read_depreciation_args3(const Value* args) {
+  auto cost = read_dep_number(args, 0);
+  if (!cost) {
+    return cost.error();
   }
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return raw.error();
+  auto salvage = read_dep_number(args, 1);
+  if (!salvage) {
+    return salvage.error();
   }
-  const int basis = static_cast<int>(std::trunc(raw.value()));
-  if (basis < 0 || basis > 4) {
-    return ErrorCode::Num;
+  auto life = read_dep_number(args, 2);
+  if (!life) {
+    return life.error();
   }
-  return basis;
+  return DepreciationArgs3{cost.value(), salvage.value(), life.value()};
 }
 
-// Reads a required date argument, truncating toward zero. Negative
-// serials are rejected as `#NUM!`.
-Expected<double, ErrorCode> read_date_dep(const Value* args, std::uint32_t index) {
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return raw.error();
+Expected<DepreciationArgs4, ErrorCode> read_depreciation_args4(const Value* args) {
+  auto base = read_depreciation_args3(args);
+  if (!base) {
+    return base.error();
   }
-  const double t = std::trunc(raw.value());
-  if (t < 0.0) {
-    return ErrorCode::Num;
+  auto period = read_dep_number(args, 3);
+  if (!period) {
+    return period.error();
   }
-  return t;
+  return DepreciationArgs4{base.value().cost, base.value().salvage, base.value().life, period.value()};
+}
+
+Expected<VdbArgs, ErrorCode> read_vdb_args(const Value* args, std::uint32_t arity) {
+  auto base = read_depreciation_args3(args);
+  if (!base) {
+    return base.error();
+  }
+  auto start = read_dep_number(args, 3);
+  if (!start) {
+    return start.error();
+  }
+  auto end = read_dep_number(args, 4);
+  if (!end) {
+    return end.error();
+  }
+  auto factor = read_optional_number(args, arity, 5, 2.0);
+  if (!factor) {
+    return factor.error();
+  }
+  auto no_switch = read_optional_number(args, arity, 6, 0.0);
+  if (!no_switch) {
+    return no_switch.error();
+  }
+  return VdbArgs{base.value().cost, base.value().salvage, base.value().life,       start.value(),
+                 end.value(),       factor.value(),       no_switch.value() != 0.0};
+}
+
+Expected<AmorArgs, ErrorCode> read_amor_args(const Value* args, std::uint32_t arity) {
+  auto cost = read_dep_number(args, 0);
+  if (!cost) {
+    return cost.error();
+  }
+  auto date_purchased = read_financial_date(args, 1);
+  if (!date_purchased) {
+    return date_purchased.error();
+  }
+  auto first_period = read_financial_date(args, 2);
+  if (!first_period) {
+    return first_period.error();
+  }
+  auto salvage = read_dep_number(args, 3);
+  if (!salvage) {
+    return salvage.error();
+  }
+  auto period = read_dep_number(args, 4);
+  if (!period) {
+    return period.error();
+  }
+  auto rate = read_dep_number(args, 5);
+  if (!rate) {
+    return rate.error();
+  }
+  auto basis = read_day_count_basis(args, arity, 6);
+  if (!basis) {
+    return basis.error();
+  }
+  return AmorArgs{cost.value(),   date_purchased.value(), first_period.value(), salvage.value(),
+                  period.value(), rate.value(),           basis.value()};
 }
 
 // The AMORDEGRC depreciation coefficient (French accounting code). The
@@ -135,21 +191,13 @@ double amordegrc_coefficient(double life) noexcept {
 // accepted (including `salvage > cost`, which produces a negative
 // charge).
 Value Sln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto cost_e = read_required_number(args, 0);
-  if (!cost_e) {
-    return Value::error(cost_e.error());
+  auto parsed = read_depreciation_args3(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto salvage_e = read_required_number(args, 1);
-  if (!salvage_e) {
-    return Value::error(salvage_e.error());
-  }
-  auto life_e = read_required_number(args, 2);
-  if (!life_e) {
-    return Value::error(life_e.error());
-  }
-  const double cost = cost_e.value();
-  const double salvage = salvage_e.value();
-  const double life = life_e.value();
+  const double cost = parsed.value().cost;
+  const double salvage = parsed.value().salvage;
+  const double life = parsed.value().life;
   if (life == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
@@ -171,26 +219,14 @@ Value Sln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // fractional `period` values like 0.1 (the formula is a simple linear
 // schedule so fractional periods evaluate naturally).
 Value Syd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto cost_e = read_required_number(args, 0);
-  if (!cost_e) {
-    return Value::error(cost_e.error());
+  auto parsed = read_depreciation_args4(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto salvage_e = read_required_number(args, 1);
-  if (!salvage_e) {
-    return Value::error(salvage_e.error());
-  }
-  auto life_e = read_required_number(args, 2);
-  if (!life_e) {
-    return Value::error(life_e.error());
-  }
-  auto period_e = read_required_number(args, 3);
-  if (!period_e) {
-    return Value::error(period_e.error());
-  }
-  const double cost = cost_e.value();
-  const double salvage = salvage_e.value();
-  const double life = life_e.value();
-  const double period = period_e.value();
+  const double cost = parsed.value().cost;
+  const double salvage = parsed.value().salvage;
+  const double life = parsed.value().life;
+  const double period = parsed.value().period;
   if (life <= 0.0 || period <= 0.0 || period > life) {
     return Value::error(ErrorCode::Num);
   }
@@ -233,30 +269,18 @@ Value Syd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // handled by clamping the cumulative depreciation at cost - salvage
 // before subtracting the previous-period total.
 Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto cost_e = read_required_number(args, 0);
-  if (!cost_e) {
-    return Value::error(cost_e.error());
-  }
-  auto salvage_e = read_required_number(args, 1);
-  if (!salvage_e) {
-    return Value::error(salvage_e.error());
-  }
-  auto life_e = read_required_number(args, 2);
-  if (!life_e) {
-    return Value::error(life_e.error());
-  }
-  auto period_e = read_required_number(args, 3);
-  if (!period_e) {
-    return Value::error(period_e.error());
+  auto parsed = read_depreciation_args4(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
   auto factor_e = read_optional_number(args, arity, 4, 2.0);
   if (!factor_e) {
     return Value::error(factor_e.error());
   }
-  const double cost = cost_e.value();
-  const double salvage = salvage_e.value();
-  const double life = life_e.value();
-  const double period = period_e.value();
+  const double cost = parsed.value().cost;
+  const double salvage = parsed.value().salvage;
+  const double life = parsed.value().life;
+  const double period = parsed.value().period;
   const double factor = factor_e.value();
   if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || period < 1.0 || period > life || factor <= 0.0) {
     return Value::error(ErrorCode::Num);
@@ -344,30 +368,18 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //     a negative depreciation. No special-cased error path here — we
 //     let the math speak, matching observed Excel behaviour.
 Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto cost_e = read_required_number(args, 0);
-  if (!cost_e) {
-    return Value::error(cost_e.error());
-  }
-  auto salvage_e = read_required_number(args, 1);
-  if (!salvage_e) {
-    return Value::error(salvage_e.error());
-  }
-  auto life_e = read_required_number(args, 2);
-  if (!life_e) {
-    return Value::error(life_e.error());
-  }
-  auto period_e = read_required_number(args, 3);
-  if (!period_e) {
-    return Value::error(period_e.error());
+  auto parsed = read_depreciation_args4(args);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
   auto month_e = read_optional_number(args, arity, 4, 12.0);
   if (!month_e) {
     return Value::error(month_e.error());
   }
-  const double cost = cost_e.value();
-  const double salvage = salvage_e.value();
-  const double life = life_e.value();
-  const double period = period_e.value();
+  const double cost = parsed.value().cost;
+  const double salvage = parsed.value().salvage;
+  const double life = parsed.value().life;
+  const double period = parsed.value().period;
   // Excel 365 Mac floors `month` before every downstream use (domain
   // checks, first-period proration, and the partial-last-year factor).
   const double month_int = std::floor(month_e.value());
@@ -448,41 +460,17 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - end_period  > life                   ->  #NUM!
 //   - factor  <=  0                        ->  #NUM!
 Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto cost_e = read_required_number(args, 0);
-  if (!cost_e) {
-    return Value::error(cost_e.error());
+  auto parsed = read_vdb_args(args, arity);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto salvage_e = read_required_number(args, 1);
-  if (!salvage_e) {
-    return Value::error(salvage_e.error());
-  }
-  auto life_e = read_required_number(args, 2);
-  if (!life_e) {
-    return Value::error(life_e.error());
-  }
-  auto start_e = read_required_number(args, 3);
-  if (!start_e) {
-    return Value::error(start_e.error());
-  }
-  auto end_e = read_required_number(args, 4);
-  if (!end_e) {
-    return Value::error(end_e.error());
-  }
-  auto factor_e = read_optional_number(args, arity, 5, 2.0);
-  if (!factor_e) {
-    return Value::error(factor_e.error());
-  }
-  auto no_switch_e = read_optional_number(args, arity, 6, 0.0);
-  if (!no_switch_e) {
-    return Value::error(no_switch_e.error());
-  }
-  const double cost = cost_e.value();
-  const double salvage = salvage_e.value();
-  const double life = life_e.value();
-  const double start_period = start_e.value();
-  const double end_period = end_e.value();
-  const double factor = factor_e.value();
-  const bool no_switch = no_switch_e.value() != 0.0;
+  const double cost = parsed.value().cost;
+  const double salvage = parsed.value().salvage;
+  const double life = parsed.value().life;
+  const double start_period = parsed.value().start_period;
+  const double end_period = parsed.value().end_period;
+  const double factor = parsed.value().factor;
+  const bool no_switch = parsed.value().no_switch;
   if (cost < 0.0 || salvage < 0.0 || life <= 0.0 || factor < 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -582,38 +570,14 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 //   - basis not in {0, 1, 2, 3, 4}               ->  #NUM!
 //   - life (= 1/rate) in the rejected buckets    ->  #NUM!
 Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto cost_e = read_required_number(args, 0);
-  if (!cost_e) {
-    return Value::error(cost_e.error());
+  auto parsed = read_amor_args(args, arity);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto date_purchased_e = read_date_dep(args, 1);
-  if (!date_purchased_e) {
-    return Value::error(date_purchased_e.error());
-  }
-  auto first_period_e = read_date_dep(args, 2);
-  if (!first_period_e) {
-    return Value::error(first_period_e.error());
-  }
-  auto salvage_e = read_required_number(args, 3);
-  if (!salvage_e) {
-    return Value::error(salvage_e.error());
-  }
-  auto period_e = read_required_number(args, 4);
-  if (!period_e) {
-    return Value::error(period_e.error());
-  }
-  auto rate_e = read_required_number(args, 5);
-  if (!rate_e) {
-    return Value::error(rate_e.error());
-  }
-  auto basis_e = read_basis_dep(args, arity, 6);
-  if (!basis_e) {
-    return Value::error(basis_e.error());
-  }
-  const double cost = cost_e.value();
-  const double salvage = salvage_e.value();
-  const double period = period_e.value();
-  const double rate = rate_e.value();
+  const double cost = parsed.value().cost;
+  const double salvage = parsed.value().salvage;
+  const double period = parsed.value().period;
+  const double rate = parsed.value().rate;
   if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -627,7 +591,7 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double applied_rate = rate * coef;
 
   // First-period year fraction (YEARFRAC from purchase to first period).
-  auto yf = yearfrac_for_depreciation(date_purchased_e.value(), first_period_e.value(), basis_e.value());
+  auto yf = yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis);
   if (!yf) {
     return Value::error(yf.error());
   }
@@ -692,43 +656,19 @@ Value Amordegrc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Domain: same as AMORDEGRC minus the life-bucket rejection (AMORLINC
 // is valid for every positive rate).
 Value Amorlinc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto cost_e = read_required_number(args, 0);
-  if (!cost_e) {
-    return Value::error(cost_e.error());
+  auto parsed = read_amor_args(args, arity);
+  if (!parsed) {
+    return Value::error(parsed.error());
   }
-  auto date_purchased_e = read_date_dep(args, 1);
-  if (!date_purchased_e) {
-    return Value::error(date_purchased_e.error());
-  }
-  auto first_period_e = read_date_dep(args, 2);
-  if (!first_period_e) {
-    return Value::error(first_period_e.error());
-  }
-  auto salvage_e = read_required_number(args, 3);
-  if (!salvage_e) {
-    return Value::error(salvage_e.error());
-  }
-  auto period_e = read_required_number(args, 4);
-  if (!period_e) {
-    return Value::error(period_e.error());
-  }
-  auto rate_e = read_required_number(args, 5);
-  if (!rate_e) {
-    return Value::error(rate_e.error());
-  }
-  auto basis_e = read_basis_dep(args, arity, 6);
-  if (!basis_e) {
-    return Value::error(basis_e.error());
-  }
-  const double cost = cost_e.value();
-  const double salvage = salvage_e.value();
-  const double period = period_e.value();
-  const double rate = rate_e.value();
+  const double cost = parsed.value().cost;
+  const double salvage = parsed.value().salvage;
+  const double period = parsed.value().period;
+  const double rate = parsed.value().rate;
   if (cost <= 0.0 || rate <= 0.0 || salvage >= cost || period < 0.0) {
     return Value::error(ErrorCode::Num);
   }
 
-  auto yf = yearfrac_for_depreciation(date_purchased_e.value(), first_period_e.value(), basis_e.value());
+  auto yf = yearfrac_for_basis(parsed.value().date_purchased, parsed.value().first_period, parsed.value().basis);
   if (!yf) {
     return Value::error(yf.error());
   }

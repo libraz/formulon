@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
@@ -418,77 +419,29 @@ Value eval_percentof_lazy(const parser::AstNode& call, Arena& arena, const Funct
 }
 
 void register_aggregate_builtins(FunctionRegistry& registry) {
-  {
-    // SUM is range-aware: `=SUM(A1:A100)` expands the rectangle into scalar
-    // cell values before this impl runs. Range-sourced Bool / Text / Blank
-    // cells are silently skipped to match Excel's provenance rule; direct
-    // arguments continue to coerce normally.
-    FunctionDef def{"SUM", 1u, kVariadic, &Sum};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    // CONCAT accepts ranges: cells are coerced to text in row-major order,
-    // with blank cells rendering as "". No numeric-only filter - every cell
-    // (text, number, bool, blank) participates via `coerce_to_text`.
-    FunctionDef def{"CONCAT", 1u, kVariadic, &Concat};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    // CONCATENATE is the legacy spelling and keeps legacy semantics: range
-    // arguments undergo implicit intersection (project to the caller's row /
-    // column) rather than flattening. Mac Excel 365 probe (2026-05-02)
-    // confirms `=CONCATENATE(A1:A3, "!")` at B2 with A1="Hello",A2=" ",
-    // A3="World" returns " !" (IxI to row 2 -> A2), not "Hello World!".
-    // CONCAT (above) is the modern flatten-all variant.
-    FunctionDef def{"CONCATENATE", 1u, kVariadic, &Concat};
-    def.accepts_ranges = false;
-    registry.register_function(def);
-  }
-  registry.register_function(FunctionDef{"LEN", 1u, 1u, &Len});
-
-  // Aggregates (min_arity = 1, variadic). Each is range-aware: a RangeOp
+  // SUM / MIN / MAX / AVERAGE / PRODUCT / SUMSQ are range-aware: a RangeOp
   // argument is flattened into scalar cell values by the dispatcher before
   // the impl runs. The `range_filter_numeric_only` flag mirrors Excel's
   // provenance rule: Bool / Text / Blank cells sourced from a range are
-  // dropped silently, while direct scalar arguments continue through
-  // normal coercion (so =SUM(10,TRUE,30) is 41 but =SUM(A1:A3) with a
-  // TRUE cell is 40).
-  {
-    FunctionDef def{"MIN", 1u, kVariadic, &Min};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"MAX", 1u, kVariadic, &Max};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"AVERAGE", 1u, kVariadic, &Average};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"PRODUCT", 1u, kVariadic, &Product};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    // SUMSQ mirrors SUM's provenance rule: direct args coerce through
-    // `coerce_to_number`; range-sourced Bool / Text / Blank are silently
-    // dropped by the dispatcher before the impl sees them.
-    FunctionDef def{"SUMSQ", 1u, kVariadic, &SumSq};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
+  // dropped silently, while direct scalar arguments continue through normal
+  // coercion.
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"SUM", 1u, kVariadic, &Sum, true, true, true},
+      // CONCAT accepts ranges: cells are coerced to text in row-major order.
+      {"CONCAT", 1u, kVariadic, &Concat, true, true},
+      // CONCATENATE keeps legacy implicit-intersection semantics, so it is
+      // intentionally not range-aware.
+      {"CONCATENATE", 1u, kVariadic, &Concat},
+      {"LEN", 1u, 1u, &Len},
+      {"MIN", 1u, kVariadic, &Min, true, true, true},
+      {"MAX", 1u, kVariadic, &Max, true, true, true},
+      {"AVERAGE", 1u, kVariadic, &Average, true, true, true},
+      {"PRODUCT", 1u, kVariadic, &Product, true, true, true},
+      {"SUMSQ", 1u, kVariadic, &SumSq, true, true, true},
+      {"COUNTA", 1u, kVariadic, &CountA, false, true},
+      {"COUNTBLANK", 1u, kVariadic, &CountBlank, false, true},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 
   // SUMPRODUCT is routed through the lazy dispatch table (see
   // `eval_sumproduct_lazy` in `shape_ops_lazy.cpp`) because it must
@@ -502,21 +455,9 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
   // SUM totals (numerator vs. denominator), which the eager dispatcher
   // collapses into a single concatenated `args[]` vector.
 
-  // Counting aggregators. Both are range-aware and opt out of the
-  // dispatcher's left-most-error rule so the impl itself decides which
-  // values to count. COUNT is registered as a lazy impl in
-  // `tree_walker.cpp`, not here, because it needs per-arg AST shape to
-  // apply Excel's direct-vs-range provenance rule for Bool values.
-  {
-    FunctionDef def{"COUNTA", 1u, kVariadic, &CountA, /*propagate_errors=*/false};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"COUNTBLANK", 1u, kVariadic, &CountBlank, /*propagate_errors=*/false};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
+  // COUNT is registered as a lazy impl in `tree_walker.cpp`, not here,
+  // because it needs per-arg AST shape to apply Excel's direct-vs-range
+  // provenance rule for Bool values.
 }
 
 }  // namespace eval

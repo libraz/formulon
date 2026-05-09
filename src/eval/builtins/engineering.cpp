@@ -28,6 +28,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -509,52 +510,38 @@ Value BitRShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // DELTA / GESTEP
 // ---------------------------------------------------------------------------
 
-Value Delta(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  // Excel-quirk: DELTA rejects a direct Bool argument with `#VALUE!`
-  // rather than coercing it to 0/1. Matches Excel 365 / IronCalc oracle.
-  if (args[0].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
+Expected<double, ErrorCode> coerce_delta_gestep_number(const Value& v) {
+  // Excel-quirk: DELTA / GESTEP reject a direct Bool argument with
+  // `#VALUE!` rather than coercing it to 0/1. Matches Excel 365 /
+  // IronCalc oracle.
+  if (v.kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
   }
-  if (arity >= 2 && args[1].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto a = coerce_to_number(args[0]);
-  if (!a) {
-    return Value::error(a.error());
-  }
-  double b = 0.0;
-  if (arity >= 2) {
-    auto bv = coerce_to_number(args[1]);
-    if (!bv) {
-      return Value::error(bv.error());
-    }
-    b = bv.value();
-  }
-  return Value::number(a.value() == b ? 1.0 : 0.0);
+  return coerce_to_number(v);
 }
 
-Value Gestep(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  // Excel-quirk: GESTEP rejects a direct Bool argument with `#VALUE!`
-  // rather than coercing it to 0/1. Matches Excel 365 / IronCalc oracle.
-  if (args[0].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
-  }
-  if (arity >= 2 && args[1].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto a = coerce_to_number(args[0]);
+Value compare_with_optional_step(const Value* args, std::uint32_t arity, bool greater_equal) {
+  auto a = coerce_delta_gestep_number(args[0]);
   if (!a) {
     return Value::error(a.error());
   }
   double step = 0.0;
   if (arity >= 2) {
-    auto sv = coerce_to_number(args[1]);
+    auto sv = coerce_delta_gestep_number(args[1]);
     if (!sv) {
       return Value::error(sv.error());
     }
     step = sv.value();
   }
-  return Value::number(a.value() >= step ? 1.0 : 0.0);
+  return Value::number((greater_equal ? a.value() >= step : a.value() == step) ? 1.0 : 0.0);
+}
+
+Value Delta(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return compare_with_optional_step(args, arity, /*greater_equal=*/false);
+}
+
+Value Gestep(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return compare_with_optional_step(args, arity, /*greater_equal=*/true);
 }
 
 }  // namespace
@@ -562,29 +549,16 @@ Value Gestep(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 void register_engineering_builtins(FunctionRegistry& registry) {
   // Base conversion. The spec pins BIN2DEC / OCT2DEC / HEX2DEC to exactly
   // one argument (no `places`); all others accept an optional `places`.
-  registry.register_function(FunctionDef{"BIN2DEC", 1u, 1u, &Bin2Dec});
-  registry.register_function(FunctionDef{"BIN2OCT", 1u, 2u, &Bin2Oct});
-  registry.register_function(FunctionDef{"BIN2HEX", 1u, 2u, &Bin2Hex});
-  registry.register_function(FunctionDef{"OCT2DEC", 1u, 1u, &Oct2Dec});
-  registry.register_function(FunctionDef{"OCT2BIN", 1u, 2u, &Oct2Bin});
-  registry.register_function(FunctionDef{"OCT2HEX", 1u, 2u, &Oct2Hex});
-  registry.register_function(FunctionDef{"HEX2DEC", 1u, 1u, &Hex2Dec});
-  registry.register_function(FunctionDef{"HEX2BIN", 1u, 2u, &Hex2Bin});
-  registry.register_function(FunctionDef{"HEX2OCT", 1u, 2u, &Hex2Oct});
-  registry.register_function(FunctionDef{"DEC2BIN", 1u, 2u, &Dec2Bin});
-  registry.register_function(FunctionDef{"DEC2OCT", 1u, 2u, &Dec2Oct});
-  registry.register_function(FunctionDef{"DEC2HEX", 1u, 2u, &Dec2Hex});
-
-  // Bit operations.
-  registry.register_function(FunctionDef{"BITAND", 2u, 2u, &BitAnd});
-  registry.register_function(FunctionDef{"BITOR", 2u, 2u, &BitOr});
-  registry.register_function(FunctionDef{"BITXOR", 2u, 2u, &BitXor});
-  registry.register_function(FunctionDef{"BITLSHIFT", 2u, 2u, &BitLShift});
-  registry.register_function(FunctionDef{"BITRSHIFT", 2u, 2u, &BitRShift});
-
-  // Comparators.
-  registry.register_function(FunctionDef{"DELTA", 1u, 2u, &Delta});
-  registry.register_function(FunctionDef{"GESTEP", 1u, 2u, &Gestep});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"BIN2DEC", 1u, 1u, &Bin2Dec},     {"BIN2OCT", 1u, 2u, &Bin2Oct},     {"BIN2HEX", 1u, 2u, &Bin2Hex},
+      {"OCT2DEC", 1u, 1u, &Oct2Dec},     {"OCT2BIN", 1u, 2u, &Oct2Bin},     {"OCT2HEX", 1u, 2u, &Oct2Hex},
+      {"HEX2DEC", 1u, 1u, &Hex2Dec},     {"HEX2BIN", 1u, 2u, &Hex2Bin},     {"HEX2OCT", 1u, 2u, &Hex2Oct},
+      {"DEC2BIN", 1u, 2u, &Dec2Bin},     {"DEC2OCT", 1u, 2u, &Dec2Oct},     {"DEC2HEX", 1u, 2u, &Dec2Hex},
+      {"BITAND", 2u, 2u, &BitAnd},       {"BITOR", 2u, 2u, &BitOr},         {"BITXOR", 2u, 2u, &BitXor},
+      {"BITLSHIFT", 2u, 2u, &BitLShift}, {"BITRSHIFT", 2u, 2u, &BitRShift}, {"DELTA", 1u, 2u, &Delta},
+      {"GESTEP", 1u, 2u, &Gestep},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <random>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/rng.h"
@@ -328,12 +329,15 @@ void register_dynamic_array_builtins(FunctionRegistry& registry) {
   // passed for any arg surfaces #VALUE! via the dispatcher's normal
   // scalar-coercion path, and any pre-evaluated error short-circuits before
   // the impl runs.
-  registry.register_function(FunctionDef{"SEQUENCE", 1u, 4u, &Sequence});
-  // RANDARRAY: zero required + five optional (rows, cols, min, max,
-  // whole_number). Same dispatcher policy as SEQUENCE.
-  registry.register_function(FunctionDef{"RANDARRAY", 0u, 5u, &RandArray});
-  // MUNIT: single required arg (matrix size).
-  registry.register_function(FunctionDef{"MUNIT", 1u, 1u, &MUnit});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"SEQUENCE", 1u, 4u, &Sequence},
+      // RANDARRAY: zero required + five optional (rows, cols, min, max,
+      // whole_number). Same dispatcher policy as SEQUENCE.
+      {"RANDARRAY", 0u, 5u, &RandArray},
+      // MUNIT: single required arg (matrix size).
+      {"MUNIT", 1u, 1u, &MUnit},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

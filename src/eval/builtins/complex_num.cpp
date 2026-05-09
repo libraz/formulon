@@ -27,6 +27,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -327,6 +328,22 @@ Value text_complex(Complex z, Arena& arena) {
   return Value::text(arena.intern(format_complex(z.re, z.im, z.suffix)));
 }
 
+Value im_unary_text(Complex (*op)(Complex), const Value* args, Arena& arena) {
+  auto z = parse_complex_value(args[0]);
+  if (!z) {
+    return Value::error(z.error());
+  }
+  return text_complex(op(z.value()), arena);
+}
+
+Value im_unary_number(double (*op)(Complex), const Value* args) {
+  auto z = parse_complex_value(args[0]);
+  if (!z) {
+    return Value::error(z.error());
+  }
+  return Value::number(op(z.value()));
+}
+
 // ---------------------------------------------------------------------------
 // Complex arithmetic primitives
 // ---------------------------------------------------------------------------
@@ -352,6 +369,18 @@ Complex cplx_ln(Complex z) {
   const double r = std::hypot(z.re, z.im);
   const double theta = std::atan2(z.im, z.re);
   return Complex{std::log(r), theta, z.suffix};
+}
+
+double cplx_abs(Complex z) {
+  return std::hypot(z.re, z.im);
+}
+
+double cplx_real(Complex z) {
+  return z.re;
+}
+
+double cplx_imaginary(Complex z) {
+  return z.im;
 }
 
 // Reconciles the suffix on a binary op: both must agree when both inputs
@@ -408,27 +437,15 @@ Value Complex_fn(const Value* args, std::uint32_t arity, Arena& arena) {
 }
 
 Value ImAbs(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return Value::number(std::hypot(z.value().re, z.value().im));
+  return im_unary_number(&cplx_abs, args);
 }
 
 Value ImReal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return Value::number(z.value().re);
+  return im_unary_number(&cplx_real, args);
 }
 
 Value ImAginary(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return Value::number(z.value().im);
+  return im_unary_number(&cplx_imaginary, args);
 }
 
 Value ImConjugate(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -572,11 +589,7 @@ Value ImPower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // ---------------------------------------------------------------------------
 
 Value ImExp(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return text_complex(cplx_exp(z.value()), arena);
+  return im_unary_text(&cplx_exp, args, arena);
 }
 
 Value ImLn(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -647,19 +660,11 @@ Complex cplx_cos(Complex z) {
 }
 
 Value ImSin(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return text_complex(cplx_sin(z.value()), arena);
+  return im_unary_text(&cplx_sin, args, arena);
 }
 
 Value ImCos(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return text_complex(cplx_cos(z.value()), arena);
+  return im_unary_text(&cplx_cos, args, arena);
 }
 
 Value ImTan(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -730,19 +735,11 @@ Complex cplx_cosh(Complex z) {
 }
 
 Value ImSinh(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return text_complex(cplx_sinh(z.value()), arena);
+  return im_unary_text(&cplx_sinh, args, arena);
 }
 
 Value ImCosh(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto z = parse_complex_value(args[0]);
-  if (!z) {
-    return Value::error(z.error());
-  }
-  return text_complex(cplx_cosh(z.value()), arena);
+  return im_unary_text(&cplx_cosh, args, arena);
 }
 
 Value ImSech(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -756,41 +753,35 @@ Value ImCsch(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }  // namespace
 
 void register_complex_num_builtins(FunctionRegistry& registry) {
-  // Constructor / inspectors.
-  registry.register_function(FunctionDef{"COMPLEX", 2u, 3u, &Complex_fn});
-  registry.register_function(FunctionDef{"IMABS", 1u, 1u, &ImAbs});
-  registry.register_function(FunctionDef{"IMAGINARY", 1u, 1u, &ImAginary});
-  registry.register_function(FunctionDef{"IMREAL", 1u, 1u, &ImReal});
-  registry.register_function(FunctionDef{"IMCONJUGATE", 1u, 1u, &ImConjugate});
-  registry.register_function(FunctionDef{"IMARGUMENT", 1u, 1u, &ImArgument});
-
-  // Arithmetic.
-  registry.register_function(FunctionDef{"IMSUM", 1u, kVariadic, &ImSum});
-  registry.register_function(FunctionDef{"IMSUB", 2u, 2u, &ImSub});
-  registry.register_function(FunctionDef{"IMPRODUCT", 1u, kVariadic, &ImProduct});
-  registry.register_function(FunctionDef{"IMDIV", 2u, 2u, &ImDiv});
-  registry.register_function(FunctionDef{"IMPOWER", 2u, 2u, &ImPower});
-
-  // Exponentials / logs / roots.
-  registry.register_function(FunctionDef{"IMEXP", 1u, 1u, &ImExp});
-  registry.register_function(FunctionDef{"IMLN", 1u, 1u, &ImLn});
-  registry.register_function(FunctionDef{"IMLOG10", 1u, 1u, &ImLog10});
-  registry.register_function(FunctionDef{"IMLOG2", 1u, 1u, &ImLog2});
-  registry.register_function(FunctionDef{"IMSQRT", 1u, 1u, &ImSqrt});
-
-  // Trigonometric.
-  registry.register_function(FunctionDef{"IMSIN", 1u, 1u, &ImSin});
-  registry.register_function(FunctionDef{"IMCOS", 1u, 1u, &ImCos});
-  registry.register_function(FunctionDef{"IMTAN", 1u, 1u, &ImTan});
-  registry.register_function(FunctionDef{"IMSEC", 1u, 1u, &ImSec});
-  registry.register_function(FunctionDef{"IMCSC", 1u, 1u, &ImCsc});
-  registry.register_function(FunctionDef{"IMCOT", 1u, 1u, &ImCot});
-
-  // Hyperbolic.
-  registry.register_function(FunctionDef{"IMSINH", 1u, 1u, &ImSinh});
-  registry.register_function(FunctionDef{"IMCOSH", 1u, 1u, &ImCosh});
-  registry.register_function(FunctionDef{"IMSECH", 1u, 1u, &ImSech});
-  registry.register_function(FunctionDef{"IMCSCH", 1u, 1u, &ImCsch});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"COMPLEX", 2u, 3u, &Complex_fn},
+      {"IMABS", 1u, 1u, &ImAbs},
+      {"IMAGINARY", 1u, 1u, &ImAginary},
+      {"IMREAL", 1u, 1u, &ImReal},
+      {"IMCONJUGATE", 1u, 1u, &ImConjugate},
+      {"IMARGUMENT", 1u, 1u, &ImArgument},
+      {"IMSUM", 1u, kVariadic, &ImSum},
+      {"IMSUB", 2u, 2u, &ImSub},
+      {"IMPRODUCT", 1u, kVariadic, &ImProduct},
+      {"IMDIV", 2u, 2u, &ImDiv},
+      {"IMPOWER", 2u, 2u, &ImPower},
+      {"IMEXP", 1u, 1u, &ImExp},
+      {"IMLN", 1u, 1u, &ImLn},
+      {"IMLOG10", 1u, 1u, &ImLog10},
+      {"IMLOG2", 1u, 1u, &ImLog2},
+      {"IMSQRT", 1u, 1u, &ImSqrt},
+      {"IMSIN", 1u, 1u, &ImSin},
+      {"IMCOS", 1u, 1u, &ImCos},
+      {"IMTAN", 1u, 1u, &ImTan},
+      {"IMSEC", 1u, 1u, &ImSec},
+      {"IMCSC", 1u, 1u, &ImCsc},
+      {"IMCOT", 1u, 1u, &ImCot},
+      {"IMSINH", 1u, 1u, &ImSinh},
+      {"IMCOSH", 1u, 1u, &ImCosh},
+      {"IMSECH", 1u, 1u, &ImSech},
+      {"IMCSCH", 1u, 1u, &ImCsch},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

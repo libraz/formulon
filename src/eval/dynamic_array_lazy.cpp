@@ -26,6 +26,88 @@
 namespace formulon {
 namespace eval {
 
+namespace {
+
+bool resolve_array_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx, const ArrayValue*& out, Value& error_out) {
+  const Value v = eval_node_as_array(node, arena, registry, ctx);
+  if (v.is_error()) {
+    error_out = v;
+    return false;
+  }
+  if (!v.is_array()) {
+    error_out = Value::error(ErrorCode::Value);
+    return false;
+  }
+  out = v.as_array();
+  return true;
+}
+
+bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, double& out, Value& error_out) {
+  const Value v = eval_node(node, arena, registry, ctx);
+  if (v.is_error()) {
+    error_out = v;
+    return false;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    error_out = Value::error(coerced.error());
+    return false;
+  }
+  out = std::trunc(coerced.value());
+  return true;
+}
+
+ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& out_buffer) {
+  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return nullptr;
+  }
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return nullptr;
+  }
+  out->rows = rows;
+  out->cols = cols;
+  out->cells = buffer;
+  out_buffer = buffer;
+  return out;
+}
+
+ArrayValue* materialise_selected_lanes(const ArrayValue& src, const std::vector<std::uint32_t>& indices, bool by_col,
+                                       Arena& arena) {
+  const std::uint32_t out_rows = by_col ? src.rows : static_cast<std::uint32_t>(indices.size());
+  const std::uint32_t out_cols = by_col ? static_cast<std::uint32_t>(indices.size()) : src.cols;
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer);
+  if (out == nullptr) {
+    return nullptr;
+  }
+  if (by_col) {
+    for (std::uint32_t r = 0; r < out_rows; ++r) {
+      for (std::uint32_t i = 0; i < out_cols; ++i) {
+        const std::uint32_t src_col = indices[i];
+        buffer[static_cast<std::size_t>(r) * out_cols + i] =
+            src.cells[static_cast<std::size_t>(r) * src.cols + src_col];
+      }
+    }
+  } else {
+    for (std::uint32_t i = 0; i < out_rows; ++i) {
+      const std::uint32_t src_row = indices[i];
+      for (std::uint32_t c = 0; c < out_cols; ++c) {
+        buffer[static_cast<std::size_t>(i) * out_cols + c] =
+            src.cells[static_cast<std::size_t>(src_row) * src.cols + c];
+      }
+    }
+  }
+
+  return out;
+}
+
+}  // namespace
+
 Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -36,23 +118,13 @@ Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Resolve `array` and `include` as Value::Array via the array-context seam
   // so range-shaped args (Ref / RangeOp / OFFSET / CHOOSE / IF / SpillRef)
   // keep their 2D shape. Errors short-circuit before we touch shape logic.
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  const ArrayValue* include = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err) ||
+      !resolve_array_arg(call.as_call_arg(1), arena, registry, ctx, include, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Value include_v = eval_node_as_array(call.as_call_arg(1), arena, registry, ctx);
-  if (include_v.is_error()) {
-    return include_v;
-  }
-  if (!include_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const ArrayValue* array = array_v.as_array();
-  const ArrayValue* include = include_v.as_array();
 
   // Axis decision. `include` must be a 1D vector matching one of `array`'s
   // dimensions. Both shapes equal -> filter rows (the column-vector form is
@@ -98,48 +170,10 @@ Value eval_filter_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Calc);
   }
 
-  // Build the output array. For axis=Rows the output is (kept.size(),
-  // array->cols); for axis=Cols it is (array->rows, kept.size()). Cells are
-  // copied row-major.
-  std::uint32_t out_rows = 0;
-  std::uint32_t out_cols = 0;
-  if (axis == Axis::Rows) {
-    out_rows = static_cast<std::uint32_t>(kept.size());
-    out_cols = array->cols;
-  } else {
-    out_rows = array->rows;
-    out_cols = static_cast<std::uint32_t>(kept.size());
-  }
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (axis == Axis::Rows) {
-    for (std::size_t i = 0; i < kept.size(); ++i) {
-      const std::uint32_t src_row = kept[i];
-      for (std::uint32_t c = 0; c < array->cols; ++c) {
-        buffer[i * static_cast<std::size_t>(out_cols) + c] =
-            array->cells[static_cast<std::size_t>(src_row) * array->cols + c];
-      }
-    }
-  } else {
-    for (std::uint32_t r = 0; r < array->rows; ++r) {
-      for (std::size_t i = 0; i < kept.size(); ++i) {
-        const std::uint32_t src_col = kept[i];
-        buffer[static_cast<std::size_t>(r) * out_cols + i] =
-            array->cells[static_cast<std::size_t>(r) * array->cols + src_col];
-      }
-    }
-  }
-
-  ArrayValue* out = arena.create<ArrayValue>();
+  ArrayValue* out = materialise_selected_lanes(*array, kept, axis == Axis::Cols, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 
@@ -206,14 +240,11 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   // Resolve `array` via the array-context seam so range-shaped args
   // (Ref / RangeOp / OFFSET / CHOOSE / IF / SpillRef) keep their 2D shape.
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
   if (array->rows == 0U || array->cols == 0U) {
     return Value::error(ErrorCode::Calc);
   }
@@ -286,48 +317,10 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Calc);
   }
 
-  // Build the output array. Layout mirrors FILTER: by_col=false produces
-  // (kept.size(), array->cols); by_col=true produces (array->rows,
-  // kept.size()).
-  std::uint32_t out_rows = 0;
-  std::uint32_t out_cols = 0;
-  if (by_col) {
-    out_rows = array->rows;
-    out_cols = static_cast<std::uint32_t>(kept.size());
-  } else {
-    out_rows = static_cast<std::uint32_t>(kept.size());
-    out_cols = array->cols;
-  }
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (by_col) {
-    for (std::uint32_t r = 0; r < array->rows; ++r) {
-      for (std::size_t i = 0; i < kept.size(); ++i) {
-        const std::uint32_t src_col = kept[i];
-        buffer[static_cast<std::size_t>(r) * out_cols + i] =
-            array->cells[static_cast<std::size_t>(r) * array->cols + src_col];
-      }
-    }
-  } else {
-    for (std::size_t i = 0; i < kept.size(); ++i) {
-      const std::uint32_t src_row = kept[i];
-      for (std::uint32_t c = 0; c < array->cols; ++c) {
-        buffer[i * static_cast<std::size_t>(out_cols) + c] =
-            array->cells[static_cast<std::size_t>(src_row) * array->cols + c];
-      }
-    }
-  }
-
-  ArrayValue* out = arena.create<ArrayValue>();
+  ArrayValue* out = materialise_selected_lanes(*array, kept, by_col, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 
@@ -422,6 +415,31 @@ bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending) {
   return descending ? sort_cell_less_asc(key_b, key_a) : sort_cell_less_asc(key_a, key_b);
 }
 
+bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, bool& descending, Value& error_out) {
+  const Value v = eval_node(node, arena, registry, ctx);
+  if (v.is_error()) {
+    error_out = v;
+    return false;
+  }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    error_out = Value::error(coerced.error());
+    return false;
+  }
+  const double n = coerced.value();
+  if (n == 1.0) {
+    descending = false;
+    return true;
+  }
+  if (n == -1.0) {
+    descending = true;
+    return true;
+  }
+  error_out = Value::error(ErrorCode::Value);
+  return false;
+}
+
 }  // namespace
 
 Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -433,14 +451,11 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 
   // Resolve `array` via the array-context seam so range-shaped args keep
   // their 2D shape (matches FILTER / UNIQUE).
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
   if (array->rows == 0U || array->cols == 0U) {
     return Value::error(ErrorCode::Calc);
   }
@@ -489,21 +504,9 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // #VALUE! (matches Excel's "the sort order must be 1 or -1" surface).
   bool descending = false;
   if (arity >= 3U) {
-    const Value v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (v.is_error()) {
-      return v;
-    }
-    auto coerced = coerce_to_number(v);
-    if (!coerced) {
-      return Value::error(coerced.error());
-    }
-    const double n = coerced.value();
-    if (n == 1.0) {
-      descending = false;
-    } else if (n == -1.0) {
-      descending = true;
-    } else {
-      return Value::error(ErrorCode::Value);
+    Value order_err = Value::error(ErrorCode::Value);
+    if (!resolve_sort_order_arg(call.as_call_arg(2), arena, registry, ctx, descending, order_err)) {
+      return order_err;
     }
   }
 
@@ -522,39 +525,10 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return sort_lane_less(ka, kb, descending);
   });
 
-  // SORT preserves the input shape; just reorder the lanes in place.
-  const std::uint32_t out_rows = array->rows;
-  const std::uint32_t out_cols = array->cols;
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (by_col) {
-    for (std::uint32_t r = 0; r < out_rows; ++r) {
-      for (std::uint32_t i = 0; i < lanes; ++i) {
-        const std::uint32_t src_col = perm[i];
-        buffer[static_cast<std::size_t>(r) * out_cols + i] =
-            arr_ref.cells[static_cast<std::size_t>(r) * arr_ref.cols + src_col];
-      }
-    }
-  } else {
-    for (std::uint32_t i = 0; i < lanes; ++i) {
-      const std::uint32_t src_row = perm[i];
-      for (std::uint32_t c = 0; c < out_cols; ++c) {
-        buffer[static_cast<std::size_t>(i) * out_cols + c] =
-            arr_ref.cells[static_cast<std::size_t>(src_row) * arr_ref.cols + c];
-      }
-    }
-  }
-
-  ArrayValue* out = arena.create<ArrayValue>();
+  ArrayValue* out = materialise_selected_lanes(arr_ref, perm, by_col, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 
@@ -568,14 +542,11 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Value);
   }
 
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
   if (array->rows == 0U || array->cols == 0U) {
     return Value::error(ErrorCode::Calc);
   }
@@ -626,21 +597,9 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
     // Optional per-key order (1 or -1). Default ascending when absent.
     bool descending = false;
     if (i + 1U < arity) {
-      const Value v = eval_node(call.as_call_arg(i + 1U), arena, registry, ctx);
-      if (v.is_error()) {
-        return v;
-      }
-      auto coerced = coerce_to_number(v);
-      if (!coerced) {
-        return Value::error(coerced.error());
-      }
-      const double n = coerced.value();
-      if (n == 1.0) {
-        descending = false;
-      } else if (n == -1.0) {
-        descending = true;
-      } else {
-        return Value::error(ErrorCode::Value);
+      Value order_err = Value::error(ErrorCode::Value);
+      if (!resolve_sort_order_arg(call.as_call_arg(i + 1U), arena, registry, ctx, descending, order_err)) {
+        return order_err;
       }
     }
     keys.push_back(KeySpec{by, descending});
@@ -671,38 +630,10 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   // Materialise output, preserving input shape (axis-only reorder).
   const ArrayValue& arr_ref = *array;
-  const std::uint32_t out_rows = array->rows;
-  const std::uint32_t out_cols = array->cols;
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (by_col) {
-    for (std::uint32_t r = 0; r < out_rows; ++r) {
-      for (std::uint32_t i = 0; i < lanes; ++i) {
-        const std::uint32_t src_col = perm[i];
-        buffer[static_cast<std::size_t>(r) * out_cols + i] =
-            arr_ref.cells[static_cast<std::size_t>(r) * arr_ref.cols + src_col];
-      }
-    }
-  } else {
-    for (std::uint32_t i = 0; i < lanes; ++i) {
-      const std::uint32_t src_row = perm[i];
-      for (std::uint32_t c = 0; c < out_cols; ++c) {
-        buffer[static_cast<std::size_t>(i) * out_cols + c] =
-            arr_ref.cells[static_cast<std::size_t>(src_row) * arr_ref.cols + c];
-      }
-    }
-  }
-
-  ArrayValue* out = arena.create<ArrayValue>();
+  ArrayValue* out = materialise_selected_lanes(arr_ref, perm, by_col, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 
@@ -717,18 +648,68 @@ bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena&
                         Value& error_out) {
   out.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const Value v = eval_node_as_array(call.as_call_arg(i), arena, registry, ctx);
-    if (v.is_error()) {
-      error_out = v;
+    const ArrayValue* array = nullptr;
+    if (!resolve_array_arg(call.as_call_arg(i), arena, registry, ctx, array, error_out)) {
       return false;
     }
-    if (!v.is_array()) {
-      error_out = Value::error(ErrorCode::Value);
-      return false;
-    }
-    out.push_back(v.as_array());
+    out.push_back(array);
   }
   return true;
+}
+
+Value materialise_stacked_arrays(const std::vector<const ArrayValue*>& arrays, bool horizontal, Arena& arena) {
+  std::size_t out_rows_sz = 0;
+  std::size_t out_cols_sz = 0;
+  if (horizontal) {
+    for (const ArrayValue* a : arrays) {
+      out_rows_sz = std::max(out_rows_sz, static_cast<std::size_t>(a->rows));
+      out_cols_sz += static_cast<std::size_t>(a->cols);
+    }
+  } else {
+    for (const ArrayValue* a : arrays) {
+      out_rows_sz += static_cast<std::size_t>(a->rows);
+      out_cols_sz = std::max(out_cols_sz, static_cast<std::size_t>(a->cols));
+    }
+  }
+  if (out_rows_sz > static_cast<std::size_t>(0xFFFFFFFFU) || out_cols_sz > static_cast<std::size_t>(0xFFFFFFFFU)) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  const auto out_rows = static_cast<std::uint32_t>(out_rows_sz);
+  const auto out_cols = static_cast<std::uint32_t>(out_cols_sz);
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  if (horizontal) {
+    std::uint32_t col_off = 0;
+    for (const ArrayValue* a : arrays) {
+      for (std::uint32_t r = 0; r < out_rows; ++r) {
+        for (std::uint32_t c = 0; c < a->cols; ++c) {
+          const std::size_t dst = static_cast<std::size_t>(r) * out_cols + col_off + c;
+          buffer[dst] =
+              (r < a->rows) ? a->cells[static_cast<std::size_t>(r) * a->cols + c] : Value::error(ErrorCode::NA);
+        }
+      }
+      col_off += a->cols;
+    }
+  } else {
+    std::uint32_t row_off = 0;
+    for (const ArrayValue* a : arrays) {
+      for (std::uint32_t r = 0; r < a->rows; ++r) {
+        for (std::uint32_t c = 0; c < out_cols; ++c) {
+          const std::size_t dst = static_cast<std::size_t>(row_off + r) * out_cols + c;
+          buffer[dst] =
+              (c < a->cols) ? a->cells[static_cast<std::size_t>(r) * a->cols + c] : Value::error(ErrorCode::NA);
+        }
+      }
+      row_off += a->rows;
+    }
+  }
+
+  return Value::array(out);
 }
 
 }  // namespace
@@ -748,53 +729,7 @@ Value eval_hstack_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (!resolve_stack_args(call, arity, arena, registry, ctx, arrays, err)) {
     return err;
   }
-
-  // Output shape: row count is the max input row count; column count is
-  // the sum of input column counts. Empty inputs are impossible because
-  // `eval_node_as_array` always wraps to at least 1x1.
-  std::uint32_t out_rows = 0;
-  std::size_t out_cols_sz = 0;
-  for (const ArrayValue* a : arrays) {
-    if (a->rows > out_rows) {
-      out_rows = a->rows;
-    }
-    out_cols_sz += static_cast<std::size_t>(a->cols);
-  }
-  if (out_cols_sz > static_cast<std::size_t>(0xFFFFFFFFU)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const auto out_cols = static_cast<std::uint32_t>(out_cols_sz);
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  // Fill the buffer column-band by column-band. Cells above each input's
-  // row count get #N/A per Mac Excel's stack-family contract.
-  std::uint32_t col_off = 0;
-  for (const ArrayValue* a : arrays) {
-    for (std::uint32_t r = 0; r < out_rows; ++r) {
-      for (std::uint32_t c = 0; c < a->cols; ++c) {
-        const std::size_t dst = static_cast<std::size_t>(r) * out_cols + col_off + c;
-        if (r < a->rows) {
-          buffer[dst] = a->cells[static_cast<std::size_t>(r) * a->cols + c];
-        } else {
-          buffer[dst] = Value::error(ErrorCode::NA);
-        }
-      }
-    }
-    col_off += a->cols;
-  }
-
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
-  return Value::array(out);
+  return materialise_stacked_arrays(arrays, /*horizontal=*/true, arena);
 }
 
 Value eval_vstack_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -809,52 +744,7 @@ Value eval_vstack_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (!resolve_stack_args(call, arity, arena, registry, ctx, arrays, err)) {
     return err;
   }
-
-  // Output shape: row count is the sum of input row counts; column count
-  // is the max input column count.
-  std::size_t out_rows_sz = 0;
-  std::uint32_t out_cols = 0;
-  for (const ArrayValue* a : arrays) {
-    out_rows_sz += static_cast<std::size_t>(a->rows);
-    if (a->cols > out_cols) {
-      out_cols = a->cols;
-    }
-  }
-  if (out_rows_sz > static_cast<std::size_t>(0xFFFFFFFFU)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const auto out_rows = static_cast<std::uint32_t>(out_rows_sz);
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  // Fill the buffer row-band by row-band. Cells past each input's column
-  // count get #N/A.
-  std::uint32_t row_off = 0;
-  for (const ArrayValue* a : arrays) {
-    for (std::uint32_t r = 0; r < a->rows; ++r) {
-      for (std::uint32_t c = 0; c < out_cols; ++c) {
-        const std::size_t dst = static_cast<std::size_t>(row_off + r) * out_cols + c;
-        if (c < a->cols) {
-          buffer[dst] = a->cells[static_cast<std::size_t>(r) * a->cols + c];
-        } else {
-          buffer[dst] = Value::error(ErrorCode::NA);
-        }
-      }
-    }
-    row_off += a->rows;
-  }
-
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
-  return Value::array(out);
+  return materialise_stacked_arrays(arrays, /*horizontal=*/false, arena);
 }
 
 namespace {
@@ -865,20 +755,13 @@ namespace {
 bool resolve_choose_index(const parser::AstNode& node, std::uint32_t axis_size, Arena& arena,
                           const FunctionRegistry& registry, const EvalContext& ctx, std::uint32_t& out,
                           Value& error_out) {
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_error()) {
-    error_out = v;
-    return false;
-  }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    error_out = Value::error(coerced.error());
+  double truncated = 0.0;
+  if (!eval_truncated_number_arg(node, arena, registry, ctx, truncated, error_out)) {
     return false;
   }
   // Truncate-toward-zero on the user-supplied index. `0` after truncation
   // is invalid; positives map to `[1, axis_size]`, negatives to
   // `[-axis_size, -1]`. Anything else surfaces #VALUE!.
-  const double truncated = std::trunc(coerced.value());
   if (truncated == 0.0) {
     error_out = Value::error(ErrorCode::Value);
     return false;
@@ -912,14 +795,11 @@ Value eval_choosecols_lazy(const parser::AstNode& call, Arena& arena, const Func
     return Value::error(ErrorCode::Value);
   }
 
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
 
   // Resolve each index in turn. `resolve_choose_index` handles coercion,
   // truncation, sign mapping, and bounds in one place.
@@ -927,34 +807,17 @@ Value eval_choosecols_lazy(const parser::AstNode& call, Arena& arena, const Func
   picks.reserve(arity - 1U);
   for (std::uint32_t i = 1; i < arity; ++i) {
     std::uint32_t idx = 0;
-    Value err = Value::error(ErrorCode::Value);
-    if (!resolve_choose_index(call.as_call_arg(i), array->cols, arena, registry, ctx, idx, err)) {
-      return err;
+    Value idx_err = Value::error(ErrorCode::Value);
+    if (!resolve_choose_index(call.as_call_arg(i), array->cols, arena, registry, ctx, idx, idx_err)) {
+      return idx_err;
     }
     picks.push_back(idx);
   }
 
-  const std::uint32_t out_rows = array->rows;
-  const auto out_cols = static_cast<std::uint32_t>(picks.size());
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  for (std::uint32_t r = 0; r < out_rows; ++r) {
-    for (std::uint32_t k = 0; k < out_cols; ++k) {
-      const std::uint32_t src_col = picks[k];
-      buffer[static_cast<std::size_t>(r) * out_cols + k] =
-          array->cells[static_cast<std::size_t>(r) * array->cols + src_col];
-    }
-  }
-  ArrayValue* out = arena.create<ArrayValue>();
+  ArrayValue* out = materialise_selected_lanes(*array, picks, /*by_col=*/true, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 
@@ -965,47 +828,27 @@ Value eval_chooserows_lazy(const parser::AstNode& call, Arena& arena, const Func
     return Value::error(ErrorCode::Value);
   }
 
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
 
   std::vector<std::uint32_t> picks;
   picks.reserve(arity - 1U);
   for (std::uint32_t i = 1; i < arity; ++i) {
     std::uint32_t idx = 0;
-    Value err = Value::error(ErrorCode::Value);
-    if (!resolve_choose_index(call.as_call_arg(i), array->rows, arena, registry, ctx, idx, err)) {
-      return err;
+    Value idx_err = Value::error(ErrorCode::Value);
+    if (!resolve_choose_index(call.as_call_arg(i), array->rows, arena, registry, ctx, idx, idx_err)) {
+      return idx_err;
     }
     picks.push_back(idx);
   }
 
-  const auto out_rows = static_cast<std::uint32_t>(picks.size());
-  const std::uint32_t out_cols = array->cols;
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  for (std::uint32_t k = 0; k < out_rows; ++k) {
-    const std::uint32_t src_row = picks[k];
-    for (std::uint32_t c = 0; c < out_cols; ++c) {
-      buffer[static_cast<std::size_t>(k) * out_cols + c] =
-          array->cells[static_cast<std::size_t>(src_row) * array->cols + c];
-    }
-  }
-  ArrayValue* out = arena.create<ArrayValue>();
+  ArrayValue* out = materialise_selected_lanes(*array, picks, /*by_col=*/false, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 
@@ -1035,17 +878,10 @@ bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_siz
     hi = axis_size;
     return true;
   }
-  const Value v = eval_node(*node, arena, registry, ctx);
-  if (v.is_error()) {
-    error_out = v;
+  double count = 0.0;
+  if (!eval_truncated_number_arg(*node, arena, registry, ctx, count, error_out)) {
     return false;
   }
-  auto coerced = coerce_to_number(v);
-  if (!coerced) {
-    error_out = Value::error(coerced.error());
-    return false;
-  }
-  const double count = std::trunc(coerced.value());
   if (take) {
     if (count == 0.0) {
       error_out = Value::error(ErrorCode::Calc);
@@ -1090,9 +926,9 @@ ArrayValue* materialise_slice(const ArrayValue& src, std::uint32_t row_lo, std::
                               std::uint32_t col_hi, Arena& arena) {
   const std::uint32_t out_rows = row_hi - row_lo;
   const std::uint32_t out_cols = col_hi - col_lo;
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer);
+  if (out == nullptr) {
     return nullptr;
   }
   for (std::uint32_t r = 0; r < out_rows; ++r) {
@@ -1101,13 +937,6 @@ ArrayValue* materialise_slice(const ArrayValue& src, std::uint32_t row_lo, std::
           src.cells[static_cast<std::size_t>(row_lo + r) * src.cols + (col_lo + c)];
     }
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return nullptr;
-  }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return out;
 }
 
@@ -1120,18 +949,14 @@ Value eval_take_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Value);
   }
 
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
 
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
-  Value err = Value::error(ErrorCode::Value);
   if (!resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/true, arena, registry, ctx, row_lo, row_hi,
                                err)) {
     return err;
@@ -1159,18 +984,14 @@ Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Value);
   }
 
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
 
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
-  Value err = Value::error(ErrorCode::Value);
   if (!resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/false, arena, registry, ctx, row_lo, row_hi,
                                err)) {
     return err;
@@ -1198,25 +1019,17 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Value);
   }
 
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
 
   // Resolve the new row count. `rows` is required.
-  const Value rows_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (rows_v.is_error()) {
-    return rows_v;
+  double rows_d = 0.0;
+  if (!eval_truncated_number_arg(call.as_call_arg(1), arena, registry, ctx, rows_d, err)) {
+    return err;
   }
-  auto rows_c = coerce_to_number(rows_v);
-  if (!rows_c) {
-    return Value::error(rows_c.error());
-  }
-  const double rows_d = std::trunc(rows_c.value());
   if (rows_d < static_cast<double>(array->rows)) {
     return Value::error(ErrorCode::Value);
   }
@@ -1225,15 +1038,10 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   // column count (no horizontal expansion).
   std::uint32_t out_cols = array->cols;
   if (arity >= 3U) {
-    const Value cols_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (cols_v.is_error()) {
-      return cols_v;
+    double cols_d = 0.0;
+    if (!eval_truncated_number_arg(call.as_call_arg(2), arena, registry, ctx, cols_d, err)) {
+      return err;
     }
-    auto cols_c = coerce_to_number(cols_v);
-    if (!cols_c) {
-      return Value::error(cols_c.error());
-    }
-    const double cols_d = std::trunc(cols_c.value());
     if (cols_d < static_cast<double>(array->cols)) {
       return Value::error(ErrorCode::Value);
     }
@@ -1262,9 +1070,9 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
     }
   }
 
-  const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::uint32_t r = 0; r < out_rows; ++r) {
@@ -1278,13 +1086,6 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
     }
   }
 
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 
@@ -1341,17 +1142,11 @@ bool resolve_tocol_torow_options(const parser::AstNode& call, std::uint32_t arit
   ignore_mask = 0;
   scan_by_column = false;
   if (arity >= 2U) {
-    const Value ig_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-    if (ig_v.is_error()) {
-      error_out = ig_v;
+    double ignore_d = 0.0;
+    if (!eval_truncated_number_arg(call.as_call_arg(1), arena, registry, ctx, ignore_d, error_out)) {
       return false;
     }
-    auto coerced = coerce_to_number(ig_v);
-    if (!coerced) {
-      error_out = Value::error(coerced.error());
-      return false;
-    }
-    ignore_mask = static_cast<std::int64_t>(std::trunc(coerced.value()));
+    ignore_mask = static_cast<std::int64_t>(ignore_d);
   }
   if (arity >= 3U) {
     const Value sc_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
@@ -1374,25 +1169,16 @@ bool resolve_tocol_torow_options(const parser::AstNode& call, std::uint32_t arit
 /// pre-validate and not call this with `cells.empty()`.
 ArrayValue* materialise_vector(std::vector<Value>&& cells, bool as_column, Arena& arena) {
   const auto n = static_cast<std::uint32_t>(cells.size());
-  Value* buffer = arena.create_array<Value>(cells.size());
-  if (buffer == nullptr) {
+  const std::uint32_t rows = as_column ? n : 1U;
+  const std::uint32_t cols = as_column ? 1U : n;
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(rows, cols, arena, buffer);
+  if (out == nullptr) {
     return nullptr;
   }
   for (std::size_t i = 0; i < cells.size(); ++i) {
     buffer[i] = cells[i];
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return nullptr;
-  }
-  if (as_column) {
-    out->rows = n;
-    out->cols = 1;
-  } else {
-    out->rows = 1;
-    out->cols = n;
-  }
-  out->cells = buffer;
   return out;
 }
 
@@ -1404,18 +1190,14 @@ Value eval_tocol_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity < 1U || arity > 3U) {
     return Value::error(ErrorCode::Value);
   }
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
 
   std::int64_t ignore_mask = 0;
   bool scan_by_column = false;
-  Value err = Value::error(ErrorCode::Value);
   if (!resolve_tocol_torow_options(call, arity, arena, registry, ctx, ignore_mask, scan_by_column, err)) {
     return err;
   }
@@ -1450,18 +1232,14 @@ Value eval_torow_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (arity < 1U || arity > 3U) {
     return Value::error(ErrorCode::Value);
   }
-  const Value array_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
-  if (array_v.is_error()) {
-    return array_v;
+  const ArrayValue* array = nullptr;
+  Value err = Value::error(ErrorCode::Value);
+  if (!resolve_array_arg(call.as_call_arg(0), arena, registry, ctx, array, err)) {
+    return err;
   }
-  if (!array_v.is_array()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const ArrayValue* array = array_v.as_array();
 
   std::int64_t ignore_mask = 0;
   bool scan_by_column = false;
-  Value err = Value::error(ErrorCode::Value);
   if (!resolve_tocol_torow_options(call, arity, arena, registry, ctx, ignore_mask, scan_by_column, err)) {
     return err;
   }
@@ -1518,17 +1296,10 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
   }
   vector_arr = arr;
 
-  const Value wc_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (wc_v.is_error()) {
-    error_out = wc_v;
+  double wc_d = 0.0;
+  if (!eval_truncated_number_arg(call.as_call_arg(1), arena, registry, ctx, wc_d, error_out)) {
     return false;
   }
-  auto wc_c = coerce_to_number(wc_v);
-  if (!wc_c) {
-    error_out = Value::error(wc_c.error());
-    return false;
-  }
-  const double wc_d = std::trunc(wc_c.value());
   if (wc_d < 1.0) {
     error_out = Value::error(ErrorCode::Num);
     return false;
@@ -1579,20 +1350,14 @@ Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const Functi
   const std::uint32_t out_rows =
       static_cast<std::uint32_t>((n + static_cast<std::size_t>(wrap_count) - 1) / wrap_count);
   const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t i = 0; i < total; ++i) {
     buffer[i] = (i < n) ? vector_arr->cells[i] : pad;
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 
@@ -1614,8 +1379,9 @@ Value eval_wrapcols_lazy(const parser::AstNode& call, Arena& arena, const Functi
   const std::uint32_t out_cols =
       static_cast<std::uint32_t>((n + static_cast<std::size_t>(wrap_count) - 1) / wrap_count);
   const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t i = 0; i < total; ++i) {
@@ -1624,13 +1390,6 @@ Value eval_wrapcols_lazy(const parser::AstNode& call, Arena& arena, const Functi
     const std::size_t flat = c * out_rows + r;
     buffer[i] = (flat < n) ? vector_arr->cells[flat] : pad;
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 

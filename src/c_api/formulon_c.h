@@ -1662,10 +1662,7 @@ typedef enum {
  * @brief Calendar system used by date grouping. Numbering mirrors
  *        `formulon::pivot::CalendarSystem`.
  */
-typedef enum {
-  FM_PIVOT_CALENDAR_GREGORIAN = 0,
-  FM_PIVOT_CALENDAR_JAPANESE = 1
-} fm_pivot_calendar_t;
+typedef enum { FM_PIVOT_CALENDAR_GREGORIAN = 0, FM_PIVOT_CALENDAR_JAPANESE = 1 } fm_pivot_calendar_t;
 
 /**
  * @brief Discriminator for the variant payload carried by a pivot filter
@@ -1817,7 +1814,7 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_count(const fm_workbook_t* wb, 
  *        the cache field list is mutated.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_field_name(const fm_workbook_t* wb, uint32_t cache_id, size_t field_idx,
-                                                     const char** out_utf8);
+                                                      const char** out_utf8);
 
 /**
  * @brief Appends a new field with the given UTF-8 name to the cache.
@@ -1825,34 +1822,34 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_name(const fm_workbook_t* wb, u
  *        must be non-NULL.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add(fm_workbook_t* wb, uint32_t cache_id, const char* utf8_name,
-                                                    size_t* out_field_idx);
+                                                     size_t* out_field_idx);
 
 /** @brief Drops every field (and every record) from the cache. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_clear(fm_workbook_t* wb, uint32_t cache_id);
 
 /** @brief Number of shared items configured on cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_count(const fm_workbook_t* wb, uint32_t cache_id,
-                                                                  size_t field_idx, size_t* out_count);
+                                                                   size_t field_idx, size_t* out_count);
 
 /** @brief Appends a numeric shared item to cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_workbook_t* wb, uint32_t cache_id,
-                                                                       size_t field_idx, double value);
+                                                                        size_t field_idx, double value);
 
 /** @brief Appends a text shared item to cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_text(fm_workbook_t* wb, uint32_t cache_id,
-                                                                     size_t field_idx, const char* utf8);
+                                                                      size_t field_idx, const char* utf8);
 
 /** @brief Appends a boolean shared item to cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_bool(fm_workbook_t* wb, uint32_t cache_id,
-                                                                     size_t field_idx, int32_t value);
+                                                                      size_t field_idx, int32_t value);
 
 /** @brief Appends a blank shared item to cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_blank(fm_workbook_t* wb, uint32_t cache_id,
-                                                                      size_t field_idx);
+                                                                       size_t field_idx);
 
 /** @brief Drops every shared item from cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_clear_shared_items(fm_workbook_t* wb, uint32_t cache_id,
-                                                                   size_t field_idx);
+                                                                    size_t field_idx);
 
 /** @brief Returns the number of records (rows) on the cache. */
 FM_API fm_status_t fm_workbook_pivot_cache_record_count(const fm_workbook_t* wb, uint32_t cache_id, size_t* out_count);
@@ -1873,23 +1870,23 @@ FM_API fm_status_t fm_workbook_pivot_cache_record_clear(fm_workbook_t* wb, uint3
  *        Blank fillers when shorter.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_record_set_number(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
-                                                            size_t field_idx, double value);
+                                                             size_t field_idx, double value);
 
 /** @brief Sets cell `(record_idx, field_idx)` to a UTF-8 text value. */
 FM_API fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
-                                                          size_t field_idx, const char* utf8);
+                                                           size_t field_idx, const char* utf8);
 
 /** @brief Sets cell `(record_idx, field_idx)` to a boolean value. */
 FM_API fm_status_t fm_workbook_pivot_cache_record_set_bool(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
-                                                          size_t field_idx, int32_t value);
+                                                           size_t field_idx, int32_t value);
 
 /** @brief Sets cell `(record_idx, field_idx)` to Blank. */
 FM_API fm_status_t fm_workbook_pivot_cache_record_set_blank(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
-                                                           size_t field_idx);
+                                                            size_t field_idx);
 
 /** @brief Sets cell `(record_idx, field_idx)` to an Excel error value. */
 FM_API fm_status_t fm_workbook_pivot_cache_record_set_error(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
-                                                           size_t field_idx, fm_error_code_t error);
+                                                            size_t field_idx, fm_error_code_t error);
 
 /* --- Pivot tables (sheet-owned) ------------------------------------------ */
 

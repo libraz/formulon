@@ -24,6 +24,7 @@
 
 #include <cstdint>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -45,14 +46,17 @@ Value CubeNameStub(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*aren
 void register_cube_builtins(FunctionRegistry& registry) {
   // Arities as documented by Microsoft for Excel 365. Enforced by the
   // dispatcher's min/max arity check before the stub body runs.
-  registry.register_function(FunctionDef{"CUBEKPIMEMBER", 3u, 4u, &CubeNameStub});
-  registry.register_function(FunctionDef{"CUBEMEMBER", 2u, 3u, &CubeNameStub});
-  registry.register_function(FunctionDef{"CUBEMEMBERPROPERTY", 3u, 3u, &CubeNameStub});
-  registry.register_function(FunctionDef{"CUBERANKEDMEMBER", 3u, 4u, &CubeNameStub});
-  registry.register_function(FunctionDef{"CUBESET", 2u, 5u, &CubeNameStub});
-  registry.register_function(FunctionDef{"CUBESETCOUNT", 1u, 1u, &CubeNameStub});
-  // CUBEVALUE is variadic: connection plus 0..N member_expression tuples.
-  registry.register_function(FunctionDef{"CUBEVALUE", 1u, kVariadic, &CubeNameStub});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"CUBEKPIMEMBER", 3u, 4u, &CubeNameStub},
+      {"CUBEMEMBER", 2u, 3u, &CubeNameStub},
+      {"CUBEMEMBERPROPERTY", 3u, 3u, &CubeNameStub},
+      {"CUBERANKEDMEMBER", 3u, 4u, &CubeNameStub},
+      {"CUBESET", 2u, 5u, &CubeNameStub},
+      {"CUBESETCOUNT", 1u, 1u, &CubeNameStub},
+      // CUBEVALUE is variadic: connection plus 0..N member_expression tuples.
+      {"CUBEVALUE", 1u, kVariadic, &CubeNameStub},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

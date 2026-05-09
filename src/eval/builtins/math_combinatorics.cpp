@@ -20,9 +20,9 @@
 #include <limits>
 #include <numeric>
 #include <string>
-#include <string_view>
 #include <utility>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -77,6 +77,54 @@ inline bool try_truncate_nonneg(double x, std::uint64_t max, std::uint64_t* out)
   return true;
 }
 
+Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint32_t index) {
+  auto coerced = coerce_to_number(args[index]);
+  if (!coerced) {
+    return coerced.error();
+  }
+  const double x = coerced.value();
+  if (std::isnan(x) || std::isinf(x)) {
+    return ErrorCode::Num;
+  }
+  return x;
+}
+
+Expected<std::uint64_t, ErrorCode> read_nonneg_uint_arg(const Value* args, std::uint32_t index, std::uint64_t max) {
+  auto x = read_number_arg(args, index);
+  if (!x) {
+    return x.error();
+  }
+  std::uint64_t out = 0;
+  if (!try_truncate_nonneg(x.value(), max, &out)) {
+    return ErrorCode::Num;
+  }
+  return out;
+}
+
+struct UIntPair {
+  std::uint64_t first;
+  std::uint64_t second;
+};
+
+Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args, std::uint64_t max) {
+  auto first = read_nonneg_uint_arg(args, 0, max);
+  if (!first) {
+    return first.error();
+  }
+  auto second = read_nonneg_uint_arg(args, 1, max);
+  if (!second) {
+    return second.error();
+  }
+  return UIntPair{first.value(), second.value()};
+}
+
+Value finite_number_or_num(double r) {
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
 // ---------------------------------------------------------------------------
 // FACT / FACTDOUBLE
 // ---------------------------------------------------------------------------
@@ -84,34 +132,22 @@ inline bool try_truncate_nonneg(double x, std::uint64_t max, std::uint64_t* out)
 // FACT(n) - n! for non-negative integer n <= 170. Fractional input is
 // truncated toward zero. Negative n or n > 170 yields #NUM!.
 Value Fact(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto coerced = coerce_to_number(args[0]);
-  if (!coerced) {
-    return Value::error(coerced.error());
+  auto n = read_nonneg_uint_arg(args, 0, 170u);
+  if (!n) {
+    return Value::error(n.error());
   }
-  const double x = coerced.value();
-  if (std::isnan(x) || std::isinf(x) || x < 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double t = std::trunc(x);
-  if (t > 170.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(factorial_lookup(static_cast<std::uint32_t>(t)));
+  return Value::number(factorial_lookup(static_cast<std::uint32_t>(n.value())));
 }
 
 // FACTDOUBLE(n) - double factorial n!! = n*(n-2)*(n-4)*...*1 or *2. By
 // Excel convention, `FACTDOUBLE(0) = 1` and `FACTDOUBLE(-1) = 1`; every
 // other negative value yields #NUM!. Overflow to +Inf yields #NUM!.
 Value FactDouble(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto coerced = coerce_to_number(args[0]);
-  if (!coerced) {
-    return Value::error(coerced.error());
+  auto x = read_number_arg(args, 0);
+  if (!x) {
+    return Value::error(x.error());
   }
-  const double x = coerced.value();
-  if (std::isnan(x) || std::isinf(x)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double t = std::trunc(x);
+  const double t = std::trunc(x.value());
   if (t < -1.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -160,48 +196,28 @@ inline double combin_exact(std::uint64_t n, std::uint64_t k) {
 // COMBIN(n, k) - n choose k. Fractional inputs truncated toward zero.
 // Negative n, negative k, or k > n yields #NUM!. Overflow yields #NUM!.
 Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto n_v = coerce_to_number(args[0]);
-  if (!n_v) {
-    return Value::error(n_v.error());
+  auto pair = read_nonneg_uint_pair(args, static_cast<std::uint64_t>(1) << 53u);
+  if (!pair) {
+    return Value::error(pair.error());
   }
-  auto k_v = coerce_to_number(args[1]);
-  if (!k_v) {
-    return Value::error(k_v.error());
-  }
-  std::uint64_t n = 0;
-  std::uint64_t k = 0;
-  if (!try_truncate_nonneg(n_v.value(), static_cast<std::uint64_t>(1) << 53u, &n) ||
-      !try_truncate_nonneg(k_v.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
-    return Value::error(ErrorCode::Num);
-  }
+  const std::uint64_t n = pair.value().first;
+  const std::uint64_t k = pair.value().second;
   if (k > n) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = combin_exact(n, k);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_or_num(combin_exact(n, k));
 }
 
 // COMBINA(n, k) - multichoose = C(n+k-1, k). Same error conditions as
 // COMBIN (after the k <= n check — which does NOT apply to COMBINA;
 // COMBINA allows k > n since order-with-repetition has no such cap).
 Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto n_v = coerce_to_number(args[0]);
-  if (!n_v) {
-    return Value::error(n_v.error());
+  auto pair = read_nonneg_uint_pair(args, static_cast<std::uint64_t>(1) << 53u);
+  if (!pair) {
+    return Value::error(pair.error());
   }
-  auto k_v = coerce_to_number(args[1]);
-  if (!k_v) {
-    return Value::error(k_v.error());
-  }
-  std::uint64_t n = 0;
-  std::uint64_t k = 0;
-  if (!try_truncate_nonneg(n_v.value(), static_cast<std::uint64_t>(1) << 53u, &n) ||
-      !try_truncate_nonneg(k_v.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
-    return Value::error(ErrorCode::Num);
-  }
+  const std::uint64_t n = pair.value().first;
+  const std::uint64_t k = pair.value().second;
   // Excel quirk: `COMBINA(0, 0) = 1`; `COMBINA(0, k>0) = 0`.
   if (n == 0 && k == 0) {
     return Value::number(1.0);
@@ -214,11 +230,7 @@ Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const std::uint64_t upper = n + k - 1;
-  const double r = combin_exact(upper, k);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_or_num(combin_exact(upper, k));
 }
 
 // PERMUT(n, k) - number of k-permutations of n distinct items =
@@ -226,20 +238,12 @@ Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // non-negative integer; `k > n` yields `#NUM!`, as does overflow.
 // Edge cases: `PERMUT(n, 0) = 1` for any n >= 0.
 Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto n_v = coerce_to_number(args[0]);
-  if (!n_v) {
-    return Value::error(n_v.error());
+  auto pair = read_nonneg_uint_pair(args, static_cast<std::uint64_t>(1) << 53u);
+  if (!pair) {
+    return Value::error(pair.error());
   }
-  auto k_v = coerce_to_number(args[1]);
-  if (!k_v) {
-    return Value::error(k_v.error());
-  }
-  std::uint64_t n = 0;
-  std::uint64_t k = 0;
-  if (!try_truncate_nonneg(n_v.value(), static_cast<std::uint64_t>(1) << 53u, &n) ||
-      !try_truncate_nonneg(k_v.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
-    return Value::error(ErrorCode::Num);
-  }
+  const std::uint64_t n = pair.value().first;
+  const std::uint64_t k = pair.value().second;
   if (k > n) {
     return Value::error(ErrorCode::Num);
   }
@@ -259,31 +263,19 @@ Value Permut(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // n^k. Both arguments floor to non-negative integer. `PERMUTATIONA(0, 0) = 1`
 // by Excel convention; `PERMUTATIONA(0, k>0) = 0`. Overflow yields `#NUM!`.
 Value PermutationA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto n_v = coerce_to_number(args[0]);
-  if (!n_v) {
-    return Value::error(n_v.error());
+  auto pair = read_nonneg_uint_pair(args, static_cast<std::uint64_t>(1) << 53u);
+  if (!pair) {
+    return Value::error(pair.error());
   }
-  auto k_v = coerce_to_number(args[1]);
-  if (!k_v) {
-    return Value::error(k_v.error());
-  }
-  std::uint64_t n = 0;
-  std::uint64_t k = 0;
-  if (!try_truncate_nonneg(n_v.value(), static_cast<std::uint64_t>(1) << 53u, &n) ||
-      !try_truncate_nonneg(k_v.value(), static_cast<std::uint64_t>(1) << 53u, &k)) {
-    return Value::error(ErrorCode::Num);
-  }
+  const std::uint64_t n = pair.value().first;
+  const std::uint64_t k = pair.value().second;
   if (n == 0 && k == 0) {
     return Value::number(1.0);
   }
   if (n == 0) {
     return Value::number(0.0);
   }
-  const double r = std::pow(static_cast<double>(n), static_cast<double>(k));
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_or_num(std::pow(static_cast<double>(n), static_cast<double>(k)));
 }
 
 // MULTINOMIAL(a1, a2, ...) - multinomial coefficient = (sum(a_i))! / prod(a_i!).
@@ -298,14 +290,11 @@ Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // via `result *= C(total_so_far, next_k)` (Pascal's rule for multinomials).
   double result = 1.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    auto coerced = coerce_to_number(args[i]);
-    if (!coerced) {
-      return Value::error(coerced.error());
+    auto k_e = read_nonneg_uint_arg(args, i, static_cast<std::uint64_t>(1) << 52u);
+    if (!k_e) {
+      return Value::error(k_e.error());
     }
-    std::uint64_t k = 0;
-    if (!try_truncate_nonneg(coerced.value(), static_cast<std::uint64_t>(1) << 52u, &k)) {
-      return Value::error(ErrorCode::Num);
-    }
+    const std::uint64_t k = k_e.value();
     total += k;
     if (total > (static_cast<std::uint64_t>(1) << 52u)) {
       return Value::error(ErrorCode::Num);
@@ -770,70 +759,41 @@ Value IsoCeiling(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // SQRTPI(num) - sqrt(num * PI). Negative num -> #NUM!.
 Value SqrtPi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto coerced = coerce_to_number(args[0]);
-  if (!coerced) {
-    return Value::error(coerced.error());
+  auto x = read_number_arg(args, 0);
+  if (!x) {
+    return Value::error(x.error());
   }
-  const double x = coerced.value();
-  if (x < 0.0) {
+  if (x.value() < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double r = std::sqrt(x * kPi);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_number_or_num(std::sqrt(x.value() * kPi));
 }
 
 }  // namespace
 
 void register_math_combinatorics_builtins(FunctionRegistry& registry) {
-  // Factorials / combinatorics.
-  registry.register_function(FunctionDef{"FACT", 1u, 1u, &Fact});
-  registry.register_function(FunctionDef{"FACTDOUBLE", 1u, 1u, &FactDouble});
-  registry.register_function(FunctionDef{"COMBIN", 2u, 2u, &Combin});
-  registry.register_function(FunctionDef{"COMBINA", 2u, 2u, &CombinA});
-  registry.register_function(FunctionDef{"PERMUT", 2u, 2u, &Permut});
-  registry.register_function(FunctionDef{"PERMUTATIONA", 2u, 2u, &PermutationA});
-
-  // Variadic combinatorial aggregators. Range-aware: `=MULTINOMIAL(A1:A3)`
-  // expands the rectangle into scalar args before the impl runs. Unlike the
-  // SUM family, these do NOT set `range_filter_numeric_only`: Excel surfaces
-  // #VALUE! on a Text cell sourced from a range, matching the direct
-  // coercion path.
-  {
-    FunctionDef def{"MULTINOMIAL", 1u, kVariadic, &Multinomial};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"GCD", 1u, kVariadic, &Gcd};
-    def.accepts_ranges = true;
-    def.blank_scalar_policy = FunctionDef::BlankScalarPolicy::RejectAnyScalar;
-    def.blank_scalar_error = ErrorCode::Value;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"LCM", 1u, kVariadic, &Lcm};
-    def.accepts_ranges = true;
-    def.blank_scalar_policy = FunctionDef::BlankScalarPolicy::RejectAnyScalar;
-    def.blank_scalar_error = ErrorCode::Value;
-    registry.register_function(def);
-  }
-
-  // Numeral-system conversions.
-  registry.register_function(FunctionDef{"ARABIC", 1u, 1u, &Arabic});
-  registry.register_function(FunctionDef{"ROMAN", 1u, 2u, &Roman});
-  registry.register_function(FunctionDef{"BASE", 2u, 3u, &Base});
-  registry.register_function(FunctionDef{"DECIMAL", 2u, 2u, &Decimal});
-
-  // Precise / ISO rounding.
-  registry.register_function(FunctionDef{"CEILING.PRECISE", 1u, 2u, &CeilingPrecise});
-  registry.register_function(FunctionDef{"FLOOR.PRECISE", 1u, 2u, &FloorPrecise});
-  registry.register_function(FunctionDef{"ISO.CEILING", 1u, 2u, &IsoCeiling});
-
-  // Miscellaneous.
-  registry.register_function(FunctionDef{"SQRTPI", 1u, 1u, &SqrtPi});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"FACT", 1u, 1u, &Fact},
+      {"FACTDOUBLE", 1u, 1u, &FactDouble},
+      {"COMBIN", 2u, 2u, &Combin},
+      {"COMBINA", 2u, 2u, &CombinA},
+      {"PERMUT", 2u, 2u, &Permut},
+      {"PERMUTATIONA", 2u, 2u, &PermutationA},
+      {"ARABIC", 1u, 1u, &Arabic},
+      {"ROMAN", 1u, 2u, &Roman},
+      {"BASE", 2u, 3u, &Base},
+      {"DECIMAL", 2u, 2u, &Decimal},
+      {"CEILING.PRECISE", 1u, 2u, &CeilingPrecise},
+      {"FLOOR.PRECISE", 1u, 2u, &FloorPrecise},
+      {"ISO.CEILING", 1u, 2u, &IsoCeiling},
+      {"SQRTPI", 1u, 1u, &SqrtPi},
+      {"MULTINOMIAL", 1u, kVariadic, &Multinomial, true, true},
+      {"GCD", 1u, kVariadic, &Gcd, true, true, false, false, false, FunctionDef::BlankScalarPolicy::RejectAnyScalar,
+       ErrorCode::Value},
+      {"LCM", 1u, kVariadic, &Lcm, true, true, false, false, false, FunctionDef::BlankScalarPolicy::RejectAnyScalar,
+       ErrorCode::Value},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

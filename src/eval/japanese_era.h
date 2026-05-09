@@ -35,7 +35,7 @@ struct EraInfo {
   int start_year;
   unsigned start_month;
   unsigned start_day;
-  int year_anchor;     ///< Gregorian year corresponding to era year 1.
+  int year_anchor;  ///< Gregorian year corresponding to era year 1.
   const char* roman;
   const char* kanji1;
   const char* kanji2;

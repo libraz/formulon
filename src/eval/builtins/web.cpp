@@ -25,6 +25,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "pugixml.hpp"
@@ -236,12 +237,15 @@ Value Py(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }  // namespace
 
 void register_web_builtins(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"ENCODEURL", 1u, 1u, &EncodeUrl});
-  registry.register_function(FunctionDef{"FILTERXML", 2u, 2u, &FilterXml});
   // Stubs: eager dispatch still propagates argument errors (default
   // propagate_errors = true) before the fixed return fires.
-  registry.register_function(FunctionDef{"WEBSERVICE", 1u, 1u, &WebService});
-  registry.register_function(FunctionDef{"PY", 1u, 1u, &Py});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"ENCODEURL", 1u, 1u, &EncodeUrl},
+      {"FILTERXML", 2u, 2u, &FilterXml},
+      {"WEBSERVICE", 1u, 1u, &WebService},
+      {"PY", 1u, 1u, &Py},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

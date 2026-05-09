@@ -128,6 +128,10 @@ class Parser {
   // Respects nested `(` `[` `{` so commas/semicolons inside an inner group
   // do not satisfy an outer sync. Does not consume the sync token itself.
   void skip_to_sync(SyncContext ctx) noexcept;
+  // Builds an ErrorPlaceholder carrying `range`.
+  AstNode* make_recovery_placeholder(TextRange range);
+  // Records a token-based error, recovers to `ctx`, and returns a placeholder.
+  AstNode* recover_with_placeholder(ParseErrorCode code, const Token& tok, SyncContext ctx);
 
   // Pratt expression parser. `min_bp` is the minimum binding power required
   // to consume a left-denotation. `ctx` is the recovery context used when an

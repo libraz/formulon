@@ -18,6 +18,87 @@ namespace eval {
 namespace financial_detail {
 namespace {
 
+struct NumberPair {
+  double first;
+  double second;
+};
+
+struct NumberTriple {
+  double first;
+  double second;
+  double third;
+};
+
+struct NumberQuad {
+  double first;
+  double second;
+  double third;
+  double fourth;
+};
+
+Expected<double, ErrorCode> read_number_at(const Value* args, std::uint32_t index) {
+  auto value = read_required_number(args, index);
+  if (!value) {
+    return value.error();
+  }
+  return value.value();
+}
+
+Expected<NumberPair, ErrorCode> read_non_bool_number_pair(const Value* args, std::uint32_t first_index,
+                                                          std::uint32_t second_index) {
+  if (args[first_index].kind() == ValueKind::Bool || args[second_index].kind() == ValueKind::Bool) {
+    return ErrorCode::Value;
+  }
+  auto first = read_number_at(args, first_index);
+  if (!first) {
+    return first.error();
+  }
+  auto second = read_number_at(args, second_index);
+  if (!second) {
+    return second.error();
+  }
+  return NumberPair{first.value(), second.value()};
+}
+
+Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
+                                                     std::uint32_t second_index, std::uint32_t third_index) {
+  auto first = read_number_at(args, first_index);
+  if (!first) {
+    return first.error();
+  }
+  auto second = read_number_at(args, second_index);
+  if (!second) {
+    return second.error();
+  }
+  auto third = read_number_at(args, third_index);
+  if (!third) {
+    return third.error();
+  }
+  return NumberTriple{first.value(), second.value(), third.value()};
+}
+
+Expected<NumberQuad, ErrorCode> read_number_quad(const Value* args, std::uint32_t first_index,
+                                                 std::uint32_t second_index, std::uint32_t third_index,
+                                                 std::uint32_t fourth_index) {
+  auto first = read_number_at(args, first_index);
+  if (!first) {
+    return first.error();
+  }
+  auto second = read_number_at(args, second_index);
+  if (!second) {
+    return second.error();
+  }
+  auto third = read_number_at(args, third_index);
+  if (!third) {
+    return third.error();
+  }
+  auto fourth = read_number_at(args, fourth_index);
+  if (!fourth) {
+    return fourth.error();
+  }
+  return NumberQuad{first.value(), second.value(), third.value(), fourth.value()};
+}
+
 // --- DOLLARDE / DOLLARFR shared denominator scaling --------------------
 //
 // Excel's fractional-dollar pair converts between "integer.fraction" quotes
@@ -49,6 +130,45 @@ Expected<double, ErrorCode> dollar_scale_from_denom(double denom_raw) {
   return std::pow(10.0, digits);
 }
 
+Value dollar_fractional_quote(const Value* args, bool to_decimal) {
+  // Excel-quirk: DOLLARDE / DOLLARFR reject a direct Bool argument with
+  // `#VALUE!` rather than coercing it to 0/1. Matches Excel 365 /
+  // IronCalc oracle.
+  auto input = read_non_bool_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
+  }
+  auto scale = dollar_scale_from_denom(input.value().second);
+  if (!scale) {
+    return Value::error(scale.error());
+  }
+  const double price = input.value().first;
+  const double denom = std::trunc(input.value().second);
+  const double integer_part = std::trunc(price);
+  const double fractional_part = price - integer_part;
+  const double result = to_decimal ? integer_part + fractional_part * scale.value() / denom
+                                   : integer_part + fractional_part * denom / scale.value();
+  return finalize(result);
+}
+
+Value compound_rate_conversion(const Value* args, bool nominal_to_effective) {
+  // Excel-quirk: EFFECT / NOMINAL reject a direct Bool argument with
+  // `#VALUE!` rather than coercing it to 0/1. Without this guard the
+  // non-positive rate branch below would report `#NUM!` instead.
+  auto input = read_non_bool_number_pair(args, 0, 1);
+  if (!input) {
+    return Value::error(input.error());
+  }
+  const double rate = input.value().first;
+  const double npery = std::trunc(input.value().second);
+  if (rate <= 0.0 || npery < 1.0) {
+    return Value::error(ErrorCode::Num);
+  }
+  const double result = nominal_to_effective ? std::pow(1.0 + rate / npery, npery) - 1.0
+                                             : npery * (std::pow(1.0 + rate, 1.0 / npery) - 1.0);
+  return finalize(result);
+}
+
 }  // namespace
 
 // --- DOLLARDE(fractional_price, fraction_denom) ------------------------
@@ -63,29 +183,7 @@ Expected<double, ErrorCode> dollar_scale_from_denom(double denom_raw) {
 // Example: DOLLARDE(1.1, 16) treats 1.1 as "1 + 10/16 = 1.625" because
 // scale = 100 and frac = 0.1 -> 0.1 * 100 / 16 = 0.625.
 Value DollarDe(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  // Excel-quirk: DOLLARDE rejects a direct Bool argument with `#VALUE!`
-  // rather than coercing it to 0/1. Matches Excel 365 / IronCalc oracle.
-  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto price_e = read_required_number(args, 0);
-  if (!price_e) {
-    return Value::error(price_e.error());
-  }
-  auto denom_e = read_required_number(args, 1);
-  if (!denom_e) {
-    return Value::error(denom_e.error());
-  }
-  auto scale = dollar_scale_from_denom(denom_e.value());
-  if (!scale) {
-    return Value::error(scale.error());
-  }
-  const double price = price_e.value();
-  const double denom = std::trunc(denom_e.value());
-  const double integer_part = std::trunc(price);
-  const double fractional_part = price - integer_part;
-  const double decimal = integer_part + fractional_part * scale.value() / denom;
-  return finalize(decimal);
+  return dollar_fractional_quote(args, /*to_decimal=*/true);
 }
 
 // --- DOLLARFR(decimal_price, fraction_denom) ---------------------------
@@ -95,29 +193,7 @@ Value DollarDe(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //   result = trunc(price) + frac * denom / scale
 //           where frac = price - trunc(price) and scale as above.
 Value DollarFr(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  // Excel-quirk: DOLLARFR rejects a direct Bool argument with `#VALUE!`
-  // rather than coercing it to 0/1. Matches Excel 365 / IronCalc oracle.
-  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto price_e = read_required_number(args, 0);
-  if (!price_e) {
-    return Value::error(price_e.error());
-  }
-  auto denom_e = read_required_number(args, 1);
-  if (!denom_e) {
-    return Value::error(denom_e.error());
-  }
-  auto scale = dollar_scale_from_denom(denom_e.value());
-  if (!scale) {
-    return Value::error(scale.error());
-  }
-  const double price = price_e.value();
-  const double denom = std::trunc(denom_e.value());
-  const double integer_part = std::trunc(price);
-  const double fractional_part = price - integer_part;
-  const double fractional = integer_part + fractional_part * denom / scale.value();
-  return finalize(fractional);
+  return dollar_fractional_quote(args, /*to_decimal=*/false);
 }
 
 // --- EFFECT(nominal_rate, npery) ---------------------------------------
@@ -133,27 +209,7 @@ Value DollarFr(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //
 // `npery` is truncated to an integer before the arithmetic.
 Value Effect(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  // Excel-quirk: EFFECT / NOMINAL reject a direct Bool argument with
-  // `#VALUE!` rather than coercing it to 0/1. Without this guard the
-  // `nominal <= 0` branch below would report `#NUM!` instead.
-  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto nom_e = read_required_number(args, 0);
-  if (!nom_e) {
-    return Value::error(nom_e.error());
-  }
-  auto npery_e = read_required_number(args, 1);
-  if (!npery_e) {
-    return Value::error(npery_e.error());
-  }
-  const double nominal = nom_e.value();
-  const double npery = std::trunc(npery_e.value());
-  if (nominal <= 0.0 || npery < 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double result = std::pow(1.0 + nominal / npery, npery) - 1.0;
-  return finalize(result);
+  return compound_rate_conversion(args, /*nominal_to_effective=*/true);
 }
 
 // --- NOMINAL(effect_rate, npery) ---------------------------------------
@@ -165,25 +221,7 @@ Value Effect(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //
 // Same domain constraints as EFFECT.
 Value Nominal(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  // See EFFECT above -- same Bool-rejection quirk.
-  if (args[0].kind() == ValueKind::Bool || args[1].kind() == ValueKind::Bool) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto eff_e = read_required_number(args, 0);
-  if (!eff_e) {
-    return Value::error(eff_e.error());
-  }
-  auto npery_e = read_required_number(args, 1);
-  if (!npery_e) {
-    return Value::error(npery_e.error());
-  }
-  const double effect = eff_e.value();
-  const double npery = std::trunc(npery_e.value());
-  if (effect <= 0.0 || npery < 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double result = npery * (std::pow(1.0 + effect, 1.0 / npery) - 1.0);
-  return finalize(result);
+  return compound_rate_conversion(args, /*nominal_to_effective=*/false);
 }
 
 // --- FVSCHEDULE(principal, schedule) -----------------------------------
@@ -231,21 +269,13 @@ Value FvSchedule(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Domain per Microsoft docs:
 //   - rate <= 0, pv <= 0, fv <= 0  ->  #NUM!
 Value PDuration(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto rate_e = read_required_number(args, 0);
-  if (!rate_e) {
-    return Value::error(rate_e.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto pv_e = read_required_number(args, 1);
-  if (!pv_e) {
-    return Value::error(pv_e.error());
-  }
-  auto fv_e = read_required_number(args, 2);
-  if (!fv_e) {
-    return Value::error(fv_e.error());
-  }
-  const double rate = rate_e.value();
-  const double pv = pv_e.value();
-  const double fv = fv_e.value();
+  const double rate = input.value().first;
+  const double pv = input.value().second;
+  const double fv = input.value().third;
   if (rate <= 0.0 || pv <= 0.0 || fv <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -263,21 +293,13 @@ Value PDuration(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Domain per Microsoft docs:
 //   - nper <= 0, pv <= 0, fv <= 0  ->  #NUM!
 Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto nper_e = read_required_number(args, 0);
-  if (!nper_e) {
-    return Value::error(nper_e.error());
+  auto input = read_number_triple(args, 0, 1, 2);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto pv_e = read_required_number(args, 1);
-  if (!pv_e) {
-    return Value::error(pv_e.error());
-  }
-  auto fv_e = read_required_number(args, 2);
-  if (!fv_e) {
-    return Value::error(fv_e.error());
-  }
-  const double nper = nper_e.value();
-  const double pv = pv_e.value();
-  const double fv = fv_e.value();
+  const double nper = input.value().first;
+  const double pv = input.value().second;
+  const double fv = input.value().third;
   if (nper <= 0.0 || pv <= 0.0 || fv < 0.0) {
     return Value::error(ErrorCode::Num);
   }
@@ -300,26 +322,14 @@ Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // is used as-is (Excel lets negative or out-of-range `per` produce the
 // raw algebraic result).
 Value IsPmt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto rate_e = read_required_number(args, 0);
-  if (!rate_e) {
-    return Value::error(rate_e.error());
+  auto input = read_number_quad(args, 0, 1, 2, 3);
+  if (!input) {
+    return Value::error(input.error());
   }
-  auto per_e = read_required_number(args, 1);
-  if (!per_e) {
-    return Value::error(per_e.error());
-  }
-  auto nper_e = read_required_number(args, 2);
-  if (!nper_e) {
-    return Value::error(nper_e.error());
-  }
-  auto pv_e = read_required_number(args, 3);
-  if (!pv_e) {
-    return Value::error(pv_e.error());
-  }
-  const double rate = rate_e.value();
-  const double per = per_e.value();
-  const double nper = nper_e.value();
-  const double pv = pv_e.value();
+  const double rate = input.value().first;
+  const double per = input.value().second;
+  const double nper = input.value().third;
+  const double pv = input.value().fourth;
   if (nper == 0.0) {
     return Value::error(ErrorCode::Div0);
   }

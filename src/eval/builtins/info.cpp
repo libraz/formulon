@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -388,33 +389,25 @@ void register_info_builtins(FunctionRegistry& registry) {
   // entry clears `propagate_errors` to opt out of the dispatcher's default
   // left-most-error short-circuit. `N` and `T` use the default (errors
   // propagate before the body runs).
-  registry.register_function(FunctionDef{"ISNUMBER", 1u, 1u, &IsNumber, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"ISTEXT", 1u, 1u, &IsText, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"ISBLANK", 1u, 1u, &IsBlank, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"ISLOGICAL", 1u, 1u, &IsLogical, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"ISERROR", 1u, 1u, &IsError, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"ISERR", 1u, 1u, &IsErr, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"ISNA", 1u, 1u, &IsNa, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"NA", 0u, 0u, &Na});
-  registry.register_function(FunctionDef{"N", 1u, 1u, &N});
-  registry.register_function(FunctionDef{"T", 1u, 1u, &T});
-
-  // Parity predicates: coerce through `coerce_to_number`, so errors
-  // propagate through the dispatcher's default short-circuit (do NOT
-  // clear `propagate_errors`).
-  registry.register_function(FunctionDef{"ISEVEN", 1u, 1u, &IsEven});
-  registry.register_function(FunctionDef{"ISODD", 1u, 1u, &IsOdd});
-
-  // ISNONTEXT, ERROR.TYPE, TYPE all inspect error values directly rather
-  // than propagating them, so they opt out of the dispatcher's default
-  // left-most-error short-circuit just like the IS* family above.
-  registry.register_function(FunctionDef{"ISNONTEXT", 1u, 1u, &IsNonText, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"ERROR.TYPE", 1u, 1u, &ErrorType, /*propagate_errors=*/false});
-  registry.register_function(FunctionDef{"TYPE", 1u, 1u, &Type, /*propagate_errors=*/false});
-
-  // INFO returns build-time-stable environment strings (host-agnostic).
-  // Errors propagate; any non-matching type_text surfaces #VALUE!.
-  registry.register_function(FunctionDef{"INFO", 1u, 1u, &Info});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"ISNUMBER", 1u, 1u, &IsNumber, false},
+      {"ISTEXT", 1u, 1u, &IsText, false},
+      {"ISBLANK", 1u, 1u, &IsBlank, false},
+      {"ISLOGICAL", 1u, 1u, &IsLogical, false},
+      {"ISERROR", 1u, 1u, &IsError, false},
+      {"ISERR", 1u, 1u, &IsErr, false},
+      {"ISNA", 1u, 1u, &IsNa, false},
+      {"NA", 0u, 0u, &Na},
+      {"N", 1u, 1u, &N},
+      {"T", 1u, 1u, &T},
+      {"ISEVEN", 1u, 1u, &IsEven},
+      {"ISODD", 1u, 1u, &IsOdd},
+      {"ISNONTEXT", 1u, 1u, &IsNonText, false},
+      {"ERROR.TYPE", 1u, 1u, &ErrorType, false},
+      {"TYPE", 1u, 1u, &Type, false},
+      {"INFO", 1u, 1u, &Info},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
   // ROWS / COLUMNS / ROW / COLUMN are routed through the lazy dispatch
   // table in `tree_walker.cpp` (see `eval_rows_lazy` et al. in
   // `shape_ops_lazy.cpp`) because they must introspect each argument's

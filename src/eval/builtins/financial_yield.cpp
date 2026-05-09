@@ -61,7 +61,6 @@
 
 #include "eval/builtins/financial_clean_price.h"
 #include "eval/builtins/financial_helpers.h"
-#include "eval/coerce.h"
 #include "eval/coupon_schedule.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -71,22 +70,6 @@ namespace formulon {
 namespace eval {
 namespace financial_detail {
 namespace {
-
-// Reads a required date argument, truncating toward zero. Negative serials
-// are rejected as `#NUM!`. Mirrors the helper in `financial_price.cpp` and
-// `financial_duration.cpp`; replicated per-TU to keep the helper local
-// to its callers (see those files for the established pattern).
-Expected<double, ErrorCode> read_date(const Value* args, std::uint32_t index) {
-  auto raw = read_required_number(args, index);
-  if (!raw) {
-    return raw.error();
-  }
-  const double t = std::trunc(raw.value());
-  if (t < 0.0) {
-    return ErrorCode::Num;
-  }
-  return t;
-}
 
 // Evaluates `compute_clean_price` at the candidate yld by reusing
 // YIELD's own argument vector with slot 3 swapped for the iterate.
@@ -119,11 +102,11 @@ Expected<double, ErrorCode> price_at(const Value* yield_args, std::uint32_t arit
 // Computes the YIELD result. Returns the yield-to-maturity (decimal) on
 // success or `ErrorCode::Num` on any validation / numerical failure.
 Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity) {
-  auto settlement = read_date(args, 0);
+  auto settlement = read_financial_date(args, 0);
   if (!settlement) {
     return settlement.error();
   }
-  auto maturity = read_date(args, 1);
+  auto maturity = read_financial_date(args, 1);
   if (!maturity) {
     return maturity.error();
   }
@@ -139,11 +122,11 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   if (!redemption) {
     return redemption.error();
   }
-  auto frequency_e = read_required_number(args, 5);
+  auto frequency_e = read_coupon_frequency(args, 5);
   if (!frequency_e) {
     return frequency_e.error();
   }
-  auto basis_e = read_optional_number(args, arity, 6, 0.0);
+  auto basis_e = read_day_count_basis(args, arity, 6);
   if (!basis_e) {
     return basis_e.error();
   }
@@ -156,14 +139,8 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   if (settlement.value() >= maturity.value()) {
     return ErrorCode::Num;
   }
-  const int frequency = static_cast<int>(std::trunc(frequency_e.value()));
-  if (frequency != 1 && frequency != 2 && frequency != 4) {
-    return ErrorCode::Num;
-  }
-  const int basis = static_cast<int>(std::trunc(basis_e.value()));
-  if (basis < 0 || basis > 4) {
-    return ErrorCode::Num;
-  }
+  const int frequency = frequency_e.value();
+  const int basis = basis_e.value();
   if (rate.value() < 0.0) {
     return ErrorCode::Num;
   }

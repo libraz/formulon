@@ -37,6 +37,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -167,6 +168,28 @@ double mean_of(const std::vector<double>& xs) noexcept {
   return s / static_cast<double>(xs.size());
 }
 
+Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool square_root) {
+  if (sample ? xs.size() < 2u : xs.empty()) {
+    return Value::error(ErrorCode::Div0);
+  }
+  const MeanSS ms = compute_mean_ss(xs);
+  const double divisor = sample ? static_cast<double>(xs.size() - 1u) : static_cast<double>(xs.size());
+  const double variance = ms.ss / divisor;
+  const double r = square_root ? std::sqrt(variance) : variance;
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+Value variance_or_stdev_a(const Value* args, std::uint32_t arity, bool sample, bool square_root) {
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
+  }
+  return variance_or_stdev(collected.value(), sample, square_root);
+}
+
 Expected<double, ErrorCode> read_kth_arg(const Value& v) {
   auto coerced = coerce_to_number(v);
   if (!coerced) {
@@ -177,6 +200,72 @@ Expected<double, ErrorCode> read_kth_arg(const Value& v) {
     return ErrorCode::Num;
   }
   return d;
+}
+
+Value finite_stats_number(double r) {
+  if (std::isnan(r) || std::isinf(r)) {
+    return Value::error(ErrorCode::Num);
+  }
+  return Value::number(r);
+}
+
+Value percentile_inc_sorted(const std::vector<double>& xs, double k) {
+  const double pos = k * static_cast<double>(xs.size() - 1u);
+  const double floor_pos = std::floor(pos);
+  const auto idx = static_cast<std::size_t>(floor_pos);
+  const double frac = pos - floor_pos;
+  if (frac == 0.0 || idx + 1u >= xs.size()) {
+    return finite_stats_number(xs[idx]);
+  }
+  return finite_stats_number(xs[idx] + frac * (xs[idx + 1u] - xs[idx]));
+}
+
+Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
+  const std::size_t n = xs.size();
+  const double pos = k * (static_cast<double>(n) + 1.0);
+  const double floor_pos = std::floor(pos);
+  const auto idx = static_cast<std::int64_t>(floor_pos);
+  const double frac = pos - floor_pos;
+  // k <= 1/(n+1) puts idx < 1; k >= n/(n+1) puts idx >= n. Both are the
+  // exclusive-method boundaries and yield `#NUM!` per Excel.
+  if (idx < 1 || idx >= static_cast<std::int64_t>(n)) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto lo = static_cast<std::size_t>(idx - 1);
+  return finite_stats_number(xs[lo] + frac * (xs[lo + 1u] - xs[lo]));
+}
+
+struct ModeFrequencies {
+  std::vector<double> values;
+  std::vector<std::size_t> counts;
+  std::size_t best_count = 0;
+};
+
+ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {
+  ModeFrequencies freq;
+  freq.values.reserve(xs.size());
+  freq.counts.reserve(xs.size());
+  for (double v : xs) {
+    bool found = false;
+    for (std::size_t i = 0; i < freq.values.size(); ++i) {
+      if (freq.values[i] == v) {
+        ++freq.counts[i];
+        if (freq.counts[i] > freq.best_count) {
+          freq.best_count = freq.counts[i];
+        }
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      freq.values.push_back(v);
+      freq.counts.push_back(1u);
+      if (freq.best_count == 0u) {
+        freq.best_count = 1u;
+      }
+    }
+  }
+  return freq;
 }
 
 double InverseStandardNormal(double p) {
@@ -273,51 +362,16 @@ static Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (xs.empty()) {
     return Value::error(ErrorCode::NA);
   }
-  // Walk the input once to record first-occurrence order, then again over a
-  // sorted copy to count runs; this keeps ties resolving to the earliest
-  // appearance even though the frequency count itself is O(n log n).
-  std::vector<double> sorted = xs;
-  std::sort(sorted.begin(), sorted.end());
-  std::size_t best_count = 1;
-  double best_value = 0.0;
-  bool have_best = false;
-  std::size_t run_len = 1;
-  for (std::size_t i = 1; i <= sorted.size(); ++i) {
-    if (i < sorted.size() && sorted[i] == sorted[i - 1u]) {
-      ++run_len;
-      continue;
-    }
-    if (run_len > best_count) {
-      best_count = run_len;
-      // Tie-break: first occurrence in the original input.
-      for (double x : xs) {
-        if (x == sorted[i - 1u]) {
-          best_value = x;
-          have_best = true;
-          break;
-        }
-      }
-    } else if (run_len == best_count && have_best) {
-      // Same run length as the current best; keep the earlier original-order
-      // occurrence. We only need to compare if the new run's value appears
-      // in `xs` before the current `best_value`.
-      const double candidate = sorted[i - 1u];
-      for (double x : xs) {
-        if (x == best_value) {
-          break;  // current best appears first; keep it.
-        }
-        if (x == candidate) {
-          best_value = candidate;
-          break;
-        }
-      }
-    }
-    run_len = 1;
-  }
-  if (best_count < 2u) {
+  const ModeFrequencies freq = build_mode_frequencies(xs);
+  if (freq.best_count < 2u) {
     return Value::error(ErrorCode::NA);
   }
-  return Value::number(best_value);
+  for (std::size_t i = 0; i < freq.values.size(); ++i) {
+    if (freq.counts[i] == freq.best_count) {
+      return Value::number(freq.values[i]);
+    }
+  }
+  return Value::error(ErrorCode::NA);
 }
 
 // MODE.MULT(value, ...) - vertical (column) array of every value tied for
@@ -331,41 +385,15 @@ static Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
   if (xs.empty()) {
     return Value::error(ErrorCode::NA);
   }
-  // First-occurrence-ordered frequency table. n is small in practice for
-  // MODE.MULT so an O(n^2) scan beats a hash map (no allocator churn,
-  // smaller code).
-  std::vector<double> uniq;
-  std::vector<std::size_t> counts;
-  uniq.reserve(xs.size());
-  counts.reserve(xs.size());
-  for (double v : xs) {
-    bool found = false;
-    for (std::size_t i = 0; i < uniq.size(); ++i) {
-      if (uniq[i] == v) {
-        ++counts[i];
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      uniq.push_back(v);
-      counts.push_back(1);
-    }
-  }
-  std::size_t best_count = 0;
-  for (std::size_t c : counts) {
-    if (c > best_count) {
-      best_count = c;
-    }
-  }
-  if (best_count < 2u) {
+  const ModeFrequencies freq = build_mode_frequencies(xs);
+  if (freq.best_count < 2u) {
     return Value::error(ErrorCode::NA);
   }
   std::vector<double> modes;
-  modes.reserve(uniq.size());
-  for (std::size_t i = 0; i < uniq.size(); ++i) {
-    if (counts[i] == best_count) {
-      modes.push_back(uniq[i]);
+  modes.reserve(freq.values.size());
+  for (std::size_t i = 0; i < freq.values.size(); ++i) {
+    if (freq.counts[i] == freq.best_count) {
+      modes.push_back(freq.values[i]);
     }
   }
   const auto rows = static_cast<std::uint32_t>(modes.size());
@@ -400,7 +428,7 @@ static Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
 // (Bool -> 1 / 0, Text -> strict numeric coercion with #VALUE! on failure).
 // Range-sourced and array-literal-sourced non-Number cells are dropped by
 // the dispatcher via `range_filter_numeric_only` before reaching this impl.
-static Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+Value large_small(const Value* args, std::uint32_t arity, bool want_large) {
   const std::uint32_t data_count = arity - 1u;
   auto k_raw = read_kth_arg(args[arity - 1u]);
   if (!k_raw) {
@@ -417,9 +445,13 @@ static Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   std::sort(xs.begin(), xs.end());
-  const double idx_d = std::trunc(n + 1.0 - k);
+  const double idx_d = want_large ? std::trunc(n + 1.0 - k) : std::trunc(k);
   const auto idx = static_cast<std::size_t>(idx_d);
   return Value::number(xs[idx - 1u]);
+}
+
+static Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  return large_small(args, arity, true);
 }
 
 // SMALL(array, k) - k-th smallest numeric. Same shape as LARGE: k is
@@ -429,25 +461,7 @@ static Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // `small_k_above_n_fractional`). `SMALL({10;20;30}, 2.999)` succeeds
 // because raw k=2.999 is within `[1, N]` and `TRUNC(2.999) = 2`.
 static Value Small(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto k_raw = read_kth_arg(args[arity - 1u]);
-  if (!k_raw) {
-    return Value::error(k_raw.error());
-  }
-  const double k = k_raw.value();
-  auto xs_e = collect_small_large(args, data_count);
-  if (!xs_e) {
-    return Value::error(xs_e.error());
-  }
-  std::vector<double>& xs = xs_e.value();
-  const auto n = static_cast<double>(xs.size());
-  if (xs.empty() || k < 1.0 || k > n) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  const double idx_d = std::trunc(k);
-  const auto idx = static_cast<std::size_t>(idx_d);
-  return Value::number(xs[idx - 1u]);
+  return large_small(args, arity, false);
 }
 
 // PERCENTILE.INC(array, k) / PERCENTILE(array, k) - linear-interpolation
@@ -469,20 +483,7 @@ static Value PercentileInc(const Value* args, std::uint32_t arity, Arena& /*aren
     return Value::error(ErrorCode::Num);
   }
   std::sort(xs.begin(), xs.end());
-  const double pos = k * static_cast<double>(xs.size() - 1u);
-  const double floor_pos = std::floor(pos);
-  const auto idx = static_cast<std::size_t>(floor_pos);
-  const double frac = pos - floor_pos;
-  double r;
-  if (frac == 0.0 || idx + 1u >= xs.size()) {
-    r = xs[idx];
-  } else {
-    r = xs[idx] + frac * (xs[idx + 1u] - xs[idx]);
-  }
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return percentile_inc_sorted(xs, k);
 }
 
 // PERCENTILE.EXC(array, k) - exclusive-interpolation percentile. `k` must
@@ -503,22 +504,7 @@ static Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*aren
     return Value::error(ErrorCode::Num);
   }
   std::sort(xs.begin(), xs.end());
-  const std::size_t n = xs.size();
-  const double pos = k * (static_cast<double>(n) + 1.0);
-  const double floor_pos = std::floor(pos);
-  const auto idx = static_cast<std::int64_t>(floor_pos);
-  const double frac = pos - floor_pos;
-  // k <= 1/(n+1) puts idx < 1; k >= n/(n+1) puts idx >= n. Both are the
-  // exclusive-method boundaries and yield `#NUM!` per Excel.
-  if (idx < 1 || idx >= static_cast<std::int64_t>(n)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const auto lo = static_cast<std::size_t>(idx - 1);
-  const double r = xs[lo] + frac * (xs[lo + 1u] - xs[lo]);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return percentile_exc_sorted(xs, k);
 }
 
 // QUARTILE.INC(array, quart) / QUARTILE(array, quart) - quartile by
@@ -541,20 +527,7 @@ static Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*
   }
   std::sort(xs.begin(), xs.end());
   const double k = q / 4.0;
-  const double pos = k * static_cast<double>(xs.size() - 1u);
-  const double floor_pos = std::floor(pos);
-  const auto idx = static_cast<std::size_t>(floor_pos);
-  const double frac = pos - floor_pos;
-  double r;
-  if (frac == 0.0 || idx + 1u >= xs.size()) {
-    r = xs[idx];
-  } else {
-    r = xs[idx] + frac * (xs[idx + 1u] - xs[idx]);
-  }
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return percentile_inc_sorted(xs, k);
 }
 
 // QUARTILE.EXC(array, quart) - exclusive quartile, equivalent to
@@ -578,82 +551,35 @@ static Value QuartileExc(const Value* args, std::uint32_t arity, Arena& /*arena*
     return Value::error(ErrorCode::Num);
   }
   std::sort(xs.begin(), xs.end());
-  const std::size_t n = xs.size();
   const double k = q / 4.0;
-  const double pos = k * (static_cast<double>(n) + 1.0);
-  const double floor_pos = std::floor(pos);
-  const auto idx = static_cast<std::int64_t>(floor_pos);
-  const double frac = pos - floor_pos;
-  if (idx < 1 || idx >= static_cast<std::int64_t>(n)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const auto lo = static_cast<std::size_t>(idx - 1);
-  const double r = xs[lo] + frac * (xs[lo + 1u] - xs[lo]);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return percentile_exc_sorted(xs, k);
 }
 
 // VAR.S(value, ...) / VAR(value, ...) - sample variance with divisor n - 1.
 // Fewer than 2 numeric inputs yields `#DIV/0!`.
 static Value VarS(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.size() < 2u) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double r = ms.ss / static_cast<double>(xs.size() - 1u);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return variance_or_stdev(xs, true, false);
 }
 
 // VAR.P(value, ...) - population variance with divisor n. A single numeric
 // input yields 0; no numeric inputs yields `#DIV/0!`.
 static Value VarP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double r = ms.ss / static_cast<double>(xs.size());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return variance_or_stdev(xs, false, false);
 }
 
 // STDEV.S(value, ...) / STDEV(value, ...) - sample standard deviation,
 // `sqrt(VAR.S)`. Fewer than 2 numeric inputs yields `#DIV/0!`.
 static Value StdevS(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.size() < 2u) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double var = ms.ss / static_cast<double>(xs.size() - 1u);
-  const double r = std::sqrt(var);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return variance_or_stdev(xs, true, true);
 }
 
 // STDEV.P(value, ...) - population standard deviation, `sqrt(VAR.P)`.
 static Value StdevP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double var = ms.ss / static_cast<double>(xs.size());
-  const double r = std::sqrt(var);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return variance_or_stdev(xs, false, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -679,122 +605,49 @@ static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
     total += x;
   }
   const double r = total / static_cast<double>(xs.size());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
+  return finite_stats_number(r);
+}
+
+Value extreme_a(const Value* args, std::uint32_t arity, bool want_max) {
+  auto collected = collect_a(args, arity);
+  if (!collected) {
+    return Value::error(collected.error());
   }
-  return Value::number(r);
+  const std::vector<double>& xs = collected.value();
+  if (xs.empty()) {
+    return Value::number(0.0);
+  }
+  double best = xs[0];
+  for (std::size_t i = 1; i < xs.size(); ++i) {
+    if (want_max ? xs[i] > best : xs[i] < best) {
+      best = xs[i];
+    }
+  }
+  return finite_stats_number(best);
 }
 
 static Value MaxA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_a(args, arity);
-  if (!collected) {
-    return Value::error(collected.error());
-  }
-  const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::number(0.0);
-  }
-  double best = xs[0];
-  for (std::size_t i = 1; i < xs.size(); ++i) {
-    if (xs[i] > best) {
-      best = xs[i];
-    }
-  }
-  if (std::isnan(best) || std::isinf(best)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(best);
+  return extreme_a(args, arity, true);
 }
 
 static Value MinA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_a(args, arity);
-  if (!collected) {
-    return Value::error(collected.error());
-  }
-  const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::number(0.0);
-  }
-  double best = xs[0];
-  for (std::size_t i = 1; i < xs.size(); ++i) {
-    if (xs[i] < best) {
-      best = xs[i];
-    }
-  }
-  if (std::isnan(best) || std::isinf(best)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(best);
+  return extreme_a(args, arity, false);
 }
 
 static Value VarA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_a(args, arity);
-  if (!collected) {
-    return Value::error(collected.error());
-  }
-  const std::vector<double>& xs = collected.value();
-  if (xs.size() < 2u) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double r = ms.ss / static_cast<double>(xs.size() - 1u);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return variance_or_stdev_a(args, arity, true, false);
 }
 
 static Value VarPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_a(args, arity);
-  if (!collected) {
-    return Value::error(collected.error());
-  }
-  const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double r = ms.ss / static_cast<double>(xs.size());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return variance_or_stdev_a(args, arity, false, false);
 }
 
 static Value StdevA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_a(args, arity);
-  if (!collected) {
-    return Value::error(collected.error());
-  }
-  const std::vector<double>& xs = collected.value();
-  if (xs.size() < 2u) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double var = ms.ss / static_cast<double>(xs.size() - 1u);
-  const double r = std::sqrt(var);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return variance_or_stdev_a(args, arity, true, true);
 }
 
 static Value StdevPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_a(args, arity);
-  if (!collected) {
-    return Value::error(collected.error());
-  }
-  const std::vector<double>& xs = collected.value();
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  const double var = ms.ss / static_cast<double>(xs.size());
-  const double r = std::sqrt(var);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return variance_or_stdev_a(args, arity, false, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -825,10 +678,7 @@ static Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     log_sum += std::log(x);
   }
   const double r = std::exp(log_sum / static_cast<double>(xs.size()));
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_stats_number(r);
 }
 
 // HARMEAN(value, ...) - harmonic mean. Every input must be strictly
@@ -849,10 +699,7 @@ static Value HarMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double r = static_cast<double>(xs.size()) / inv_sum;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_stats_number(r);
 }
 
 // DEVSQ(value, ...) - sum of squared deviations from the mean,
@@ -864,10 +711,7 @@ static Value DevSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const MeanSS ms = compute_mean_ss(xs);
-  if (std::isnan(ms.ss) || std::isinf(ms.ss)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(ms.ss);
+  return finite_stats_number(ms.ss);
 }
 
 // AVEDEV(value, ...) - mean absolute deviation from the mean,
@@ -883,10 +727,7 @@ static Value AveDev(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     abs_sum += std::fabs(x - mean);
   }
   const double r = abs_sum / static_cast<double>(xs.size());
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_stats_number(r);
 }
 
 // TRIMMEAN(array, percent) - mean after trimming `percent / 2` from each
@@ -920,10 +761,7 @@ static Value TrimMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
     sum += xs[i];
   }
   const double r = sum / static_cast<double>(kept);
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_stats_number(r);
 }
 
 // SKEW(value, ...) - sample skewness,
@@ -949,10 +787,7 @@ static Value Skew(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   const double coeff = n / ((n - 1.0) * (n - 2.0));
   const double r = coeff * cubed_sum;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_stats_number(r);
 }
 
 // SKEW.P(value, ...) - population skewness,
@@ -978,10 +813,7 @@ static Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     cubed_sum += z * z * z;
   }
   const double r = cubed_sum / n;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_stats_number(r);
 }
 
 // KURT(value, ...) - excess kurtosis (Fisher's definition),
@@ -1009,10 +841,7 @@ static Value Kurt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double coeff_a = (n * (n + 1.0)) / ((n - 1.0) * (n - 2.0) * (n - 3.0));
   const double coeff_b = (3.0 * (n - 1.0) * (n - 1.0)) / ((n - 2.0) * (n - 3.0));
   const double r = coeff_a * quartic_sum - coeff_b;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_stats_number(r);
 }
 
 // STANDARDIZE(x, mean, standard_dev) - z-score, `(x - mean) / standard_dev`.
@@ -1036,334 +865,104 @@ static Value Standardize(const Value* args, std::uint32_t /*arity*/, Arena& /*ar
     return Value::error(ErrorCode::Num);
   }
   const double r = (x_e.value() - mean_e.value()) / sd;
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return finite_stats_number(r);
 }
 
 }  // namespace stats_detail
 
 void register_stats_builtins(FunctionRegistry& registry) {
-  // Statistical aggregators. Every entry below is range-aware and keeps the
-  // default `propagate_errors = true`: errors short-circuit before the impl
-  // runs, and the impls filter non-numeric kinds (text / bool / blank)
-  // themselves -- see the block comment at the top of this file.
-  {
-    FunctionDef def{"MEDIAN", 1u, kVariadic, &stats_detail::Median};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"MODE", 1u, kVariadic, &stats_detail::Mode};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    // MODE.SNGL is Excel 2010+'s canonical spelling; implementation is
-    // identical to MODE. Registry already handles the dotted name.
-    FunctionDef def{"MODE.SNGL", 1u, kVariadic, &stats_detail::Mode};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    // MODE.MULT returns a vertical-array spill of every value tied for
-    // the maximum frequency. Same input rules as MODE / MODE.SNGL
-    // (numeric-only filter via `collect_numerics`), but the output is an
-    // ArrayValue rather than a scalar.
-    FunctionDef def{"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    // LARGE(array, k) - trailing scalar k lives at `args[arity - 1]` after
-    // the dispatcher has expanded any leading range; the impl trims the
-    // slice explicitly before collecting numerics.
-    //
-    // `range_filter_numeric_only = true` drops range-sourced and array-
-    // literal-sourced non-Number cells silently, matching Excel's "skip
-    // text/bool/blank from ranges" rule. Direct scalar Text / Bool
-    // arguments still reach the impl, where `collect_small_large` applies
-    // the direct-coercion rule (Bool -> 1 / 0, Text -> strict numeric
-    // coercion, surfaces #VALUE! on failure).
-    FunctionDef def{"LARGE", 2u, kVariadic, &stats_detail::Large};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"SMALL", 2u, kVariadic, &stats_detail::Small};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"PERCENTILE.INC", 2u, kVariadic, &stats_detail::PercentileInc};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    // PERCENTILE is the pre-2010 spelling of PERCENTILE.INC; same impl.
-    FunctionDef def{"PERCENTILE", 2u, kVariadic, &stats_detail::PercentileInc};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    // PERCENTILE.EXC: exclusive-interpolation variant. `k` must lie in the
-    // open interval (1/(n+1), n/(n+1)); out-of-range yields `#NUM!`.
-    FunctionDef def{"PERCENTILE.EXC", 2u, kVariadic, &stats_detail::PercentileExc};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"QUARTILE.INC", 2u, kVariadic, &stats_detail::QuartileInc};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"QUARTILE", 2u, kVariadic, &stats_detail::QuartileInc};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    // QUARTILE.EXC: exclusive quartile with `quart` restricted to {1, 2, 3}.
-    // Shares the interpolation kernel with PERCENTILE.EXC.
-    FunctionDef def{"QUARTILE.EXC", 2u, kVariadic, &stats_detail::QuartileExc};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"STDEV.S", 1u, kVariadic, &stats_detail::StdevS};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"STDEV", 1u, kVariadic, &stats_detail::StdevS};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"STDEV.P", 1u, kVariadic, &stats_detail::StdevP};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"VAR.S", 1u, kVariadic, &stats_detail::VarS};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"VAR", 1u, kVariadic, &stats_detail::VarS};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"VAR.P", 1u, kVariadic, &stats_detail::VarP};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  // Legacy (pre-2010) spellings of VAR.P / STDEV.P. Same signature, same
-  // impl; only the canonical name changed. Kept for Excel-97..2007 workbooks
-  // whose formulas have not been rewritten to the .NEW form.
-  {
-    FunctionDef def{"VARP", 1u, kVariadic, &stats_detail::VarP};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"STDEVP", 1u, kVariadic, &stats_detail::StdevP};
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-
-  // "A" family. Registered with `range_filter_a_coerce = true` so the
-  // dispatcher transforms range-sourced Bool / Text / Blank cells into
-  // numbers (TRUE->1, FALSE->0, Text->0, Blank dropped) before the impl
-  // runs. Direct scalar arguments are handled inside `collect_a`.
-  {
-    FunctionDef def{"AVERAGEA", 1u, kVariadic, &stats_detail::AverageA};
-    def.accepts_ranges = true;
-    def.range_filter_a_coerce = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"MAXA", 1u, kVariadic, &stats_detail::MaxA};
-    def.accepts_ranges = true;
-    def.range_filter_a_coerce = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"MINA", 1u, kVariadic, &stats_detail::MinA};
-    def.accepts_ranges = true;
-    def.range_filter_a_coerce = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"VARA", 1u, kVariadic, &stats_detail::VarA};
-    def.accepts_ranges = true;
-    def.range_filter_a_coerce = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"VARPA", 1u, kVariadic, &stats_detail::VarPA};
-    def.accepts_ranges = true;
-    def.range_filter_a_coerce = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"STDEVA", 1u, kVariadic, &stats_detail::StdevA};
-    def.accepts_ranges = true;
-    def.range_filter_a_coerce = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"STDEVPA", 1u, kVariadic, &stats_detail::StdevPA};
-    def.accepts_ranges = true;
-    def.range_filter_a_coerce = true;
-    registry.register_function(def);
-  }
-
-  // Descriptive statistics: GEOMEAN / HARMEAN / DEVSQ / AVEDEV / TRIMMEAN /
-  // SKEW / SKEW.P / KURT / STANDARDIZE. All range-aware except STANDARDIZE
-  // (scalar-only).
-  {
-    FunctionDef def{"GEOMEAN", 1u, kVariadic, &stats_detail::GeoMean};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"HARMEAN", 1u, kVariadic, &stats_detail::HarMean};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"DEVSQ", 1u, kVariadic, &stats_detail::DevSq};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"AVEDEV", 1u, kVariadic, &stats_detail::AveDev};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    // TRIMMEAN takes (array, percent). The trailing scalar `percent` lives
-    // at args[arity-1]; the dispatcher flattens a leading RangeOp into
-    // scalar cells, so the data slice is args[0..arity-2].
-    FunctionDef def{"TRIMMEAN", 2u, kVariadic, &stats_detail::TrimMean};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"SKEW", 1u, kVariadic, &stats_detail::Skew};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"SKEW.P", 1u, kVariadic, &stats_detail::SkewP};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"KURT", 1u, kVariadic, &stats_detail::Kurt};
-    def.accepts_ranges = true;
-    def.range_filter_numeric_only = true;
-    registry.register_function(def);
-  }
-  // STANDARDIZE: strict 3-arg, scalar-only. `accepts_ranges` stays false.
-  registry.register_function(FunctionDef{"STANDARDIZE", 3u, 3u, &stats_detail::Standardize});
+  static constexpr builtins_detail::BuiltinRegistration range_stats[] = {
+      {"MEDIAN", 1u, kVariadic, &stats_detail::Median, true, true},
+      {"MODE", 1u, kVariadic, &stats_detail::Mode, true, true},
+      {"MODE.SNGL", 1u, kVariadic, &stats_detail::Mode, true, true},
+      {"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult, true, true},
+      {"LARGE", 2u, kVariadic, &stats_detail::Large, true, true, true},
+      {"SMALL", 2u, kVariadic, &stats_detail::Small, true, true, true},
+      {"PERCENTILE.INC", 2u, kVariadic, &stats_detail::PercentileInc, true, true},
+      {"PERCENTILE", 2u, kVariadic, &stats_detail::PercentileInc, true, true},
+      {"PERCENTILE.EXC", 2u, kVariadic, &stats_detail::PercentileExc, true, true, true},
+      {"QUARTILE.INC", 2u, kVariadic, &stats_detail::QuartileInc, true, true},
+      {"QUARTILE", 2u, kVariadic, &stats_detail::QuartileInc, true, true},
+      {"QUARTILE.EXC", 2u, kVariadic, &stats_detail::QuartileExc, true, true, true},
+      {"STDEV.S", 1u, kVariadic, &stats_detail::StdevS, true, true},
+      {"STDEV", 1u, kVariadic, &stats_detail::StdevS, true, true},
+      {"STDEV.P", 1u, kVariadic, &stats_detail::StdevP, true, true},
+      {"VAR.S", 1u, kVariadic, &stats_detail::VarS, true, true},
+      {"VAR", 1u, kVariadic, &stats_detail::VarS, true, true},
+      {"VAR.P", 1u, kVariadic, &stats_detail::VarP, true, true},
+      {"VARP", 1u, kVariadic, &stats_detail::VarP, true, true},
+      {"STDEVP", 1u, kVariadic, &stats_detail::StdevP, true, true},
+      {"AVERAGEA", 1u, kVariadic, &stats_detail::AverageA, true, true, false, false, true},
+      {"MAXA", 1u, kVariadic, &stats_detail::MaxA, true, true, false, false, true},
+      {"MINA", 1u, kVariadic, &stats_detail::MinA, true, true, false, false, true},
+      {"VARA", 1u, kVariadic, &stats_detail::VarA, true, true, false, false, true},
+      {"VARPA", 1u, kVariadic, &stats_detail::VarPA, true, true, false, false, true},
+      {"STDEVA", 1u, kVariadic, &stats_detail::StdevA, true, true, false, false, true},
+      {"STDEVPA", 1u, kVariadic, &stats_detail::StdevPA, true, true, false, false, true},
+      {"GEOMEAN", 1u, kVariadic, &stats_detail::GeoMean, true, true, true},
+      {"HARMEAN", 1u, kVariadic, &stats_detail::HarMean, true, true, true},
+      {"DEVSQ", 1u, kVariadic, &stats_detail::DevSq, true, true, true},
+      {"AVEDEV", 1u, kVariadic, &stats_detail::AveDev, true, true, true},
+      {"TRIMMEAN", 2u, kVariadic, &stats_detail::TrimMean, true, true, true},
+      {"SKEW", 1u, kVariadic, &stats_detail::Skew, true, true, true},
+      {"SKEW.P", 1u, kVariadic, &stats_detail::SkewP, true, true, true},
+      {"KURT", 1u, kVariadic, &stats_detail::Kurt, true, true, true},
+  };
+  builtins_detail::register_builtin_functions(registry, range_stats, sizeof(range_stats) / sizeof(range_stats[0]));
 
   // Probability-distribution family. Scalar-only: `accepts_ranges` is left
   // at its default `false`, and `propagate_errors` stays `true` so the
   // dispatcher short-circuits error arguments before the impl runs. Impls
   // live in `stats/stats_distributions.cpp`.
-  registry.register_function(FunctionDef{"NORM.DIST", 4u, 4u, &stats_detail::NormDist});
-  registry.register_function(FunctionDef{"NORM.S.DIST", 2u, 2u, &stats_detail::NormSDist});
-  registry.register_function(FunctionDef{"NORM.INV", 3u, 3u, &stats_detail::NormInv});
-  registry.register_function(FunctionDef{"NORM.S.INV", 1u, 1u, &stats_detail::NormSInv});
-  registry.register_function(FunctionDef{"BINOM.DIST", 4u, 4u, &stats_detail::BinomDist});
-  registry.register_function(FunctionDef{"POISSON.DIST", 3u, 3u, &stats_detail::PoissonDist});
-  registry.register_function(FunctionDef{"EXPON.DIST", 3u, 3u, &stats_detail::ExponDist});
-
-  // Chi-squared distribution family. All four are scalar-only (no range
-  // expansion) and lean on `stats::p_gamma` / `stats::q_gamma` from
-  // `eval/stats/special_functions.h`; the inverses close the loop with a
-  // Newton-Raphson iteration seeded by Wilson-Hilferty.
-  registry.register_function(FunctionDef{"CHISQ.DIST", 3u, 3u, &stats_detail::ChisqDist});
-  registry.register_function(FunctionDef{"CHISQ.DIST.RT", 2u, 2u, &stats_detail::ChisqDistRt});
-  registry.register_function(FunctionDef{"CHISQ.INV", 2u, 2u, &stats_detail::ChisqInv});
-  registry.register_function(FunctionDef{"CHISQ.INV.RT", 2u, 2u, &stats_detail::ChisqInvRt});
-
-  // Student's t distribution family. Scalar-only; all share
-  // `stats::regularized_incomplete_beta` for the CDF surface. The inverses
-  // use Hill's approximation for the initial guess with a bisection
-  // fallback in the steep tails.
-  registry.register_function(FunctionDef{"T.DIST", 3u, 3u, &stats_detail::TDist});
-  registry.register_function(FunctionDef{"T.DIST.2T", 2u, 2u, &stats_detail::TDist2T});
-  registry.register_function(FunctionDef{"T.DIST.RT", 2u, 2u, &stats_detail::TDistRt});
-  registry.register_function(FunctionDef{"T.INV", 2u, 2u, &stats_detail::TInv});
-  registry.register_function(FunctionDef{"T.INV.2T", 2u, 2u, &stats_detail::TInv2T});
-
-  // Snedecor's F distribution family. Scalar-only; the inverses use a
-  // bisection warm-up on [1e-10, 1e10] before switching to Newton to
-  // avoid oscillation near the steep upper tail.
-  registry.register_function(FunctionDef{"F.DIST", 4u, 4u, &stats_detail::FDist});
-  registry.register_function(FunctionDef{"F.DIST.RT", 3u, 3u, &stats_detail::FDistRt});
-  registry.register_function(FunctionDef{"F.INV", 3u, 3u, &stats_detail::FInv});
-  registry.register_function(FunctionDef{"F.INV.RT", 3u, 3u, &stats_detail::FInvRt});
-
-  // Legacy (pre-2010) spellings. Signature-compatible aliases share the
-  // canonical impl pointer; NORMSDIST and TDIST have bespoke wrappers
-  // because their arities / tail semantics differ from the .NEW form.
-  registry.register_function(FunctionDef{"NORMDIST", 4u, 4u, &stats_detail::NormDist});
-  registry.register_function(FunctionDef{"NORMINV", 3u, 3u, &stats_detail::NormInv});
-  registry.register_function(FunctionDef{"NORMSDIST", 1u, 1u, &stats_detail::NormSDistLegacy});
-  registry.register_function(FunctionDef{"NORMSINV", 1u, 1u, &stats_detail::NormSInv});
-  registry.register_function(FunctionDef{"BINOMDIST", 4u, 4u, &stats_detail::BinomDist});
-  registry.register_function(FunctionDef{"POISSON", 3u, 3u, &stats_detail::PoissonDist});
-  registry.register_function(FunctionDef{"EXPONDIST", 3u, 3u, &stats_detail::ExponDist});
-  registry.register_function(FunctionDef{"CHIDIST", 2u, 2u, &stats_detail::ChisqDistRt});
-  registry.register_function(FunctionDef{"CHIINV", 2u, 2u, &stats_detail::ChisqInvRt});
-  registry.register_function(FunctionDef{"FDIST", 3u, 3u, &stats_detail::FDistRt});
-  registry.register_function(FunctionDef{"FINV", 3u, 3u, &stats_detail::FInvRt});
-  registry.register_function(FunctionDef{"TDIST", 3u, 3u, &stats_detail::TDistLegacy});
-  registry.register_function(FunctionDef{"TINV", 2u, 2u, &stats_detail::TInv2T});
-
-  // Confidence-interval half-widths (CONFIDENCE / .NORM / .T). All
-  // scalar-only; share the normal impl pointer for the two equivalent
-  // spellings. The T variant uses TInvCore on df = size - 1.
-  registry.register_function(FunctionDef{"CONFIDENCE", 3u, 3u, &stats_detail::ConfidenceNorm});
-  registry.register_function(FunctionDef{"CONFIDENCE.NORM", 3u, 3u, &stats_detail::ConfidenceNorm});
-  registry.register_function(FunctionDef{"CONFIDENCE.T", 3u, 3u, &stats_detail::ConfidenceT});
-
-  // Binomial quantile (BINOM.INV / CRITBINOM legacy alias) and range
-  // probability (BINOM.DIST.RANGE, 3 or 4 args).
-  registry.register_function(FunctionDef{"BINOM.INV", 3u, 3u, &stats_detail::BinomInv});
-  registry.register_function(FunctionDef{"CRITBINOM", 3u, 3u, &stats_detail::BinomInv});
-  registry.register_function(FunctionDef{"BINOM.DIST.RANGE", 3u, 4u, &stats_detail::BinomDistRange});
-
-  // Fisher transformation and inverse, both scalar-only.
-  registry.register_function(FunctionDef{"FISHER", 1u, 1u, &stats_detail::Fisher});
-  registry.register_function(FunctionDef{"FISHERINV", 1u, 1u, &stats_detail::FisherInv});
-
-  // Standard-normal helpers: GAUSS = NORM.S.DIST(x, TRUE) - 0.5, PHI is
-  // the standard-normal PDF.
-  registry.register_function(FunctionDef{"GAUSS", 1u, 1u, &stats_detail::Gauss});
-  registry.register_function(FunctionDef{"PHI", 1u, 1u, &stats_detail::Phi});
-
-  // Negative binomial distribution. 4-arg canonical form plus the
-  // pre-2010 3-arg spelling (always PMF).
-  registry.register_function(FunctionDef{"NEGBINOM.DIST", 4u, 4u, &stats_detail::NegBinomDist});
-  registry.register_function(FunctionDef{"NEGBINOMDIST", 3u, 3u, &stats_detail::NegBinomDistLegacy});
+  static constexpr builtins_detail::BuiltinRegistration scalar_stats[] = {
+      {"STANDARDIZE", 3u, 3u, &stats_detail::Standardize},
+      {"NORM.DIST", 4u, 4u, &stats_detail::NormDist},
+      {"NORM.S.DIST", 2u, 2u, &stats_detail::NormSDist},
+      {"NORM.INV", 3u, 3u, &stats_detail::NormInv},
+      {"NORM.S.INV", 1u, 1u, &stats_detail::NormSInv},
+      {"BINOM.DIST", 4u, 4u, &stats_detail::BinomDist},
+      {"POISSON.DIST", 3u, 3u, &stats_detail::PoissonDist},
+      {"EXPON.DIST", 3u, 3u, &stats_detail::ExponDist},
+      {"CHISQ.DIST", 3u, 3u, &stats_detail::ChisqDist},
+      {"CHISQ.DIST.RT", 2u, 2u, &stats_detail::ChisqDistRt},
+      {"CHISQ.INV", 2u, 2u, &stats_detail::ChisqInv},
+      {"CHISQ.INV.RT", 2u, 2u, &stats_detail::ChisqInvRt},
+      {"T.DIST", 3u, 3u, &stats_detail::TDist},
+      {"T.DIST.2T", 2u, 2u, &stats_detail::TDist2T},
+      {"T.DIST.RT", 2u, 2u, &stats_detail::TDistRt},
+      {"T.INV", 2u, 2u, &stats_detail::TInv},
+      {"T.INV.2T", 2u, 2u, &stats_detail::TInv2T},
+      {"F.DIST", 4u, 4u, &stats_detail::FDist},
+      {"F.DIST.RT", 3u, 3u, &stats_detail::FDistRt},
+      {"F.INV", 3u, 3u, &stats_detail::FInv},
+      {"F.INV.RT", 3u, 3u, &stats_detail::FInvRt},
+      {"NORMDIST", 4u, 4u, &stats_detail::NormDist},
+      {"NORMINV", 3u, 3u, &stats_detail::NormInv},
+      {"NORMSDIST", 1u, 1u, &stats_detail::NormSDistLegacy},
+      {"NORMSINV", 1u, 1u, &stats_detail::NormSInv},
+      {"BINOMDIST", 4u, 4u, &stats_detail::BinomDist},
+      {"POISSON", 3u, 3u, &stats_detail::PoissonDist},
+      {"EXPONDIST", 3u, 3u, &stats_detail::ExponDist},
+      {"CHIDIST", 2u, 2u, &stats_detail::ChisqDistRt},
+      {"CHIINV", 2u, 2u, &stats_detail::ChisqInvRt},
+      {"FDIST", 3u, 3u, &stats_detail::FDistRt},
+      {"FINV", 3u, 3u, &stats_detail::FInvRt},
+      {"TDIST", 3u, 3u, &stats_detail::TDistLegacy},
+      {"TINV", 2u, 2u, &stats_detail::TInv2T},
+      {"CONFIDENCE", 3u, 3u, &stats_detail::ConfidenceNorm},
+      {"CONFIDENCE.NORM", 3u, 3u, &stats_detail::ConfidenceNorm},
+      {"CONFIDENCE.T", 3u, 3u, &stats_detail::ConfidenceT},
+      {"BINOM.INV", 3u, 3u, &stats_detail::BinomInv},
+      {"CRITBINOM", 3u, 3u, &stats_detail::BinomInv},
+      {"BINOM.DIST.RANGE", 3u, 4u, &stats_detail::BinomDistRange},
+      {"FISHER", 1u, 1u, &stats_detail::Fisher},
+      {"FISHERINV", 1u, 1u, &stats_detail::FisherInv},
+      {"GAUSS", 1u, 1u, &stats_detail::Gauss},
+      {"PHI", 1u, 1u, &stats_detail::Phi},
+      {"NEGBINOM.DIST", 4u, 4u, &stats_detail::NegBinomDist},
+      {"NEGBINOMDIST", 3u, 3u, &stats_detail::NegBinomDistLegacy},
+  };
+  builtins_detail::register_builtin_functions(registry, scalar_stats, sizeof(scalar_stats) / sizeof(scalar_stats[0]));
 
   // The pairwise linear-regression family (CORREL, COVARIANCE.P,
   // COVARIANCE.S, SLOPE, INTERCEPT, RSQ, FORECAST / FORECAST.LINEAR)

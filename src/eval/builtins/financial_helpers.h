@@ -17,6 +17,7 @@
 #include <limits>
 
 #include "eval/coerce.h"
+#include "eval/date_time.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -59,6 +60,88 @@ inline Expected<double, ErrorCode> read_required_number(const Value* args, std::
     return ErrorCode::Num;
   }
   return v;
+}
+
+// Reads a required date argument, truncating toward zero. Negative serials
+// are rejected as `#NUM!` (Excel's calendar builtins do the same).
+inline Expected<double, ErrorCode> read_financial_date(const Value* args, std::uint32_t index) {
+  auto raw = read_required_number(args, index);
+  if (!raw) {
+    return raw.error();
+  }
+  const double t = std::trunc(raw.value());
+  if (t < 0.0) {
+    return ErrorCode::Num;
+  }
+  return t;
+}
+
+// Reads an optional day-count basis argument. Excel truncates numeric basis
+// values toward zero and accepts only {0, 1, 2, 3, 4}.
+inline Expected<int, ErrorCode> read_day_count_basis(const Value* args, std::uint32_t arity, std::uint32_t index) {
+  if (arity <= index) {
+    return 0;
+  }
+  auto raw = read_required_number(args, index);
+  if (!raw) {
+    return raw.error();
+  }
+  const int basis = static_cast<int>(std::trunc(raw.value()));
+  if (basis < 0 || basis > 4) {
+    return ErrorCode::Num;
+  }
+  return basis;
+}
+
+// Reads a required coupon frequency argument. Excel truncates the numeric
+// value and accepts annual, semi-annual, and quarterly schedules only.
+inline Expected<int, ErrorCode> read_coupon_frequency(const Value* args, std::uint32_t index) {
+  auto raw = read_required_number(args, index);
+  if (!raw) {
+    return raw.error();
+  }
+  const int frequency = static_cast<int>(std::trunc(raw.value()));
+  if (frequency != 1 && frequency != 2 && frequency != 4) {
+    return ErrorCode::Num;
+  }
+  return frequency;
+}
+
+// Computes YEARFRAC(start, end, basis) under the same rules as the
+// YEARFRAC builtin. Allows a zero result; callers that divide by the
+// year fraction should reject zero before use.
+inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, int basis) {
+  if (basis < 0 || basis > 4) {
+    return ErrorCode::Num;
+  }
+  const double s = std::trunc(start);
+  const double e = std::trunc(end);
+  const date_time::YMD a = date_time::ymd_from_serial(s);
+  const date_time::YMD b = date_time::ymd_from_serial(e);
+  double yf = 0.0;
+  switch (basis) {
+    case 0:
+      yf = date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d);
+      break;
+    case 1:
+      yf = date_time::yearfrac_actual_actual(a.y, a.m, a.d, b.y, b.m, b.d);
+      break;
+    case 2:
+      yf = (e - s) / 360.0;
+      break;
+    case 3:
+      yf = (e - s) / 365.0;
+      break;
+    case 4:
+      yf = date_time::yearfrac_eu30_360(a.y, a.m, a.d, b.y, b.m, b.d);
+      break;
+    default:
+      return ErrorCode::Num;
+  }
+  if (std::isnan(yf) || std::isinf(yf)) {
+    return ErrorCode::Num;
+  }
+  return yf;
 }
 
 // Finalises a scalar financial result: a non-finite value becomes `#NUM!`,

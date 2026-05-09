@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <string>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -273,7 +274,10 @@ Value Bahttext(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }  // namespace
 
 void register_bahttext_builtin(FunctionRegistry& registry) {
-  registry.register_function(FunctionDef{"BAHTTEXT", 1u, 1u, &Bahttext});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"BAHTTEXT", 1u, 1u, &Bahttext},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

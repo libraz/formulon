@@ -17,6 +17,7 @@
 #include "eval/text_ops.h"
 #include "eval/utf8_length.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -186,6 +187,14 @@ Utf8Step next_utf8_step(std::string_view src, std::size_t i) noexcept {
 
 namespace text_detail {
 
+Expected<int, ErrorCode> read_optional_byte_count(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                  int default_value) {
+  if (arity <= index) {
+    return default_value;
+  }
+  return read_int_arg(args[index]);
+}
+
 // LENB(text) - returns the ja-JP DBCS byte length of the coerced text.
 Value Lenb(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto text = coerce_to_text(args[0]);
@@ -203,14 +212,11 @@ Value Leftb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  int n = 1;
-  if (arity >= 2) {
-    auto parsed = read_int_arg(args[1]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    n = parsed.value();
+  auto byte_count = read_optional_byte_count(args, arity, 1, 1);
+  if (!byte_count) {
+    return Value::error(byte_count.error());
   }
+  const int n = byte_count.value();
   if (n < 0) {
     return Value::error(ErrorCode::Value);
   }
@@ -255,14 +261,11 @@ Value Rightb(const Value* args, std::uint32_t arity, Arena& arena) {
   if (!text) {
     return Value::error(text.error());
   }
-  int n = 1;
-  if (arity >= 2) {
-    auto parsed = read_int_arg(args[1]);
-    if (!parsed) {
-      return Value::error(parsed.error());
-    }
-    n = parsed.value();
+  auto byte_count = read_optional_byte_count(args, arity, 1, 1);
+  if (!byte_count) {
+    return Value::error(byte_count.error());
   }
+  const int n = byte_count.value();
   if (n < 0) {
     return Value::error(ErrorCode::Value);
   }

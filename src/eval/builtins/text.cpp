@@ -20,6 +20,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/text_detail.h"
 #include "eval/coerce.h"
 #include "eval/criteria.h"
@@ -738,63 +739,38 @@ Value Hyperlink(const Value* args, std::uint32_t arity, Arena& arena) {
 }  // namespace
 
 void register_text_builtins(FunctionRegistry& registry) {
-  // Text manipulation.
-  registry.register_function(FunctionDef{"UPPER", 1u, 1u, &Upper});
-  registry.register_function(FunctionDef{"LOWER", 1u, 1u, &Lower});
-  registry.register_function(FunctionDef{"TRIM", 1u, 1u, &Trim});
-  registry.register_function(FunctionDef{"LEFT", 1u, 2u, &Left});
-  registry.register_function(FunctionDef{"RIGHT", 1u, 2u, &Right});
-  registry.register_function(FunctionDef{"MID", 3u, 3u, &Mid});
-  registry.register_function(FunctionDef{"REPT", 2u, 2u, &Rept});
-  registry.register_function(FunctionDef{"SUBSTITUTE", 3u, 4u, &Substitute});
-  registry.register_function(FunctionDef{"FIND", 2u, 3u, &Find});
-  registry.register_function(FunctionDef{"SEARCH", 2u, 3u, &Search});
-  registry.register_function(FunctionDef{"EXACT", 2u, 2u, &Exact});
-  registry.register_function(FunctionDef{"REPLACE", 4u, 4u, &Replace_});
-  registry.register_function(FunctionDef{"FINDB", 2u, 3u, &text_detail::FindB_});
-  registry.register_function(FunctionDef{"SEARCHB", 2u, 3u, &text_detail::SearchB_});
-  {
-    // propagate_errors=false: if_not_found (arg 6) must pass through as a raw
-    // Value even when it is an error type, so the callee can return it as the
-    // fallback on match failure. The impls handle error propagation for
-    // args 0-4 manually.
-    FunctionDef def{"TEXTBEFORE", 2u, 6u, &text_detail::TextBefore_};
-    def.propagate_errors = false;
-    registry.register_function(def);
-  }
-  {
-    FunctionDef def{"TEXTAFTER", 2u, 6u, &text_detail::TextAfter_};
-    def.propagate_errors = false;
-    registry.register_function(def);
-  }
-
-  // Text manipulation, second batch.
-  {
-    FunctionDef def{"TEXTJOIN", 3u, kVariadic, &TextJoin};
-    // TEXTJOIN walks every cell in a range argument (row-major) and
-    // concatenates their text projections. `accepts_ranges` asks the
-    // dispatcher to flatten `Ref:Ref` arguments; blank cells coerce to "",
-    // which the `ignore_empty=TRUE` branch skips, matching Excel.
-    def.accepts_ranges = true;
-    registry.register_function(def);
-  }
-  registry.register_function(FunctionDef{"UNICHAR", 1u, 1u, &Unichar});
-  registry.register_function(FunctionDef{"UNICODE", 1u, 1u, &Unicode_});
-  registry.register_function(FunctionDef{"CLEAN", 1u, 1u, &Clean});
-  registry.register_function(FunctionDef{"PROPER", 1u, 1u, &Proper});
-
-  // Byte-oriented text family (ja-JP DBCS).
-  registry.register_function(FunctionDef{"LENB", 1u, 1u, &text_detail::Lenb});
-  registry.register_function(FunctionDef{"LEFTB", 1u, 2u, &text_detail::Leftb});
-  registry.register_function(FunctionDef{"RIGHTB", 1u, 2u, &text_detail::Rightb});
-  registry.register_function(FunctionDef{"MIDB", 3u, 3u, &text_detail::Midb});
-  registry.register_function(FunctionDef{"REPLACEB", 4u, 4u, &text_detail::ReplaceB_});
-  registry.register_function(FunctionDef{"CHAR", 1u, 1u, &Char_});
-  registry.register_function(FunctionDef{"CODE", 1u, 1u, &Code_});
-
-  // HYPERLINK: pure-value passthrough - returns the friendly name when
-  // provided, otherwise the link location as text.
-  registry.register_function(FunctionDef{"HYPERLINK", 1u, 2u, &Hyperlink});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"UPPER", 1u, 1u, &Upper},
+      {"LOWER", 1u, 1u, &Lower},
+      {"TRIM", 1u, 1u, &Trim},
+      {"LEFT", 1u, 2u, &Left},
+      {"RIGHT", 1u, 2u, &Right},
+      {"MID", 3u, 3u, &Mid},
+      {"REPT", 2u, 2u, &Rept},
+      {"SUBSTITUTE", 3u, 4u, &Substitute},
+      {"FIND", 2u, 3u, &Find},
+      {"SEARCH", 2u, 3u, &Search},
+      {"EXACT", 2u, 2u, &Exact},
+      {"REPLACE", 4u, 4u, &Replace_},
+      {"FINDB", 2u, 3u, &text_detail::FindB_},
+      {"SEARCHB", 2u, 3u, &text_detail::SearchB_},
+      {"TEXTBEFORE", 2u, 6u, &text_detail::TextBefore_, false},
+      {"TEXTAFTER", 2u, 6u, &text_detail::TextAfter_, false},
+      {"TEXTJOIN", 3u, kVariadic, &TextJoin, true, true},
+      {"UNICHAR", 1u, 1u, &Unichar},
+      {"UNICODE", 1u, 1u, &Unicode_},
+      {"CLEAN", 1u, 1u, &Clean},
+      {"PROPER", 1u, 1u, &Proper},
+      {"LENB", 1u, 1u, &text_detail::Lenb},
+      {"LEFTB", 1u, 2u, &text_detail::Leftb},
+      {"RIGHTB", 1u, 2u, &text_detail::Rightb},
+      {"MIDB", 3u, 3u, &text_detail::Midb},
+      {"REPLACEB", 4u, 4u, &text_detail::ReplaceB_},
+      {"CHAR", 1u, 1u, &Char_},
+      {"CODE", 1u, 1u, &Code_},
+      {"HYPERLINK", 1u, 2u, &Hyperlink},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

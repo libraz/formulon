@@ -11,10 +11,10 @@
 
 #include "eval/builtins/financial_coupon.h"
 
-#include <cmath>
 #include <cstdint>
 
 #include "eval/builtins/financial_helpers.h"
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coupon_schedule.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -26,8 +26,9 @@ namespace eval {
 namespace {
 
 using financial_detail::finalize;
-using financial_detail::read_optional_number;
-using financial_detail::read_required_number;
+using financial_detail::read_coupon_frequency;
+using financial_detail::read_day_count_basis;
+using financial_detail::read_financial_date;
 
 // Shared argument-validation helper for the COUP* family. Truncates
 // settlement / maturity to integer serials, validates the frequency
@@ -36,40 +37,31 @@ using financial_detail::read_required_number;
 // `CouponDates`; on any validation failure a `#NUM!` error is
 // returned for the caller to forward to Excel.
 Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity) {
-  auto s_e = read_required_number(args, 0);
+  auto s_e = read_financial_date(args, 0);
   if (!s_e) {
     return s_e.error();
   }
-  auto m_e = read_required_number(args, 1);
+  auto m_e = read_financial_date(args, 1);
   if (!m_e) {
     return m_e.error();
   }
-  auto f_e = read_required_number(args, 2);
+  auto f_e = read_coupon_frequency(args, 2);
   if (!f_e) {
     return f_e.error();
   }
-  auto b_e = read_optional_number(args, arity, 3, 0.0);
+  auto b_e = read_day_count_basis(args, arity, 3);
   if (!b_e) {
     return b_e.error();
   }
 
-  const double s = std::trunc(s_e.value());
-  const double m = std::trunc(m_e.value());
-  if (s < 0.0 || m < 0.0) {
-    return ErrorCode::Num;
-  }
+  const double s = s_e.value();
+  const double m = m_e.value();
   if (s >= m) {
     return ErrorCode::Num;
   }
 
-  const int frequency = static_cast<int>(std::trunc(f_e.value()));
-  if (frequency != 1 && frequency != 2 && frequency != 4) {
-    return ErrorCode::Num;
-  }
-  const int basis = static_cast<int>(std::trunc(b_e.value()));
-  if (basis < 0 || basis > 4) {
-    return ErrorCode::Num;
-  }
+  const int frequency = f_e.value();
+  const int basis = b_e.value();
 
   CouponDates out{};
   if (!compute_coupon_dates(s, m, frequency, basis, &out)) {
@@ -155,12 +147,11 @@ Value CoupDays(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 void register_financial_coupon_builtins(FunctionRegistry& registry) {
   // All six: 3 required + 1 optional basis = min 3, max 4. Eager
   // scalar, no range support.
-  registry.register_function(FunctionDef{"COUPPCD", 3u, 4u, &CoupPcd});
-  registry.register_function(FunctionDef{"COUPNCD", 3u, 4u, &CoupNcd});
-  registry.register_function(FunctionDef{"COUPNUM", 3u, 4u, &CoupNum});
-  registry.register_function(FunctionDef{"COUPDAYBS", 3u, 4u, &CoupDayBs});
-  registry.register_function(FunctionDef{"COUPDAYSNC", 3u, 4u, &CoupDaysNc});
-  registry.register_function(FunctionDef{"COUPDAYS", 3u, 4u, &CoupDays});
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"COUPPCD", 3u, 4u, &CoupPcd},     {"COUPNCD", 3u, 4u, &CoupNcd},       {"COUPNUM", 3u, 4u, &CoupNum},
+      {"COUPDAYBS", 3u, 4u, &CoupDayBs}, {"COUPDAYSNC", 3u, 4u, &CoupDaysNc}, {"COUPDAYS", 3u, 4u, &CoupDays},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval

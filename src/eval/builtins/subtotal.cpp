@@ -44,6 +44,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
@@ -336,16 +337,10 @@ Value Subtotal(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }  // namespace
 
 void register_subtotal_builtins(FunctionRegistry& registry) {
-  // SUBTOTAL is range-aware (the second-and-later args are typically
-  // rectangle references) but does not opt into the numeric-only filter:
-  // code 3 (COUNTA) must see non-numeric cells to count them. The impl
-  // applies its own per-mode filter rule. `propagate_errors = false`
-  // mirrors the COUNTA / COUNT behaviour where a range-sourced #N/A is
-  // counted (COUNTA) or skipped (numeric modes) rather than aborting the
-  // whole aggregator.
-  FunctionDef def{"SUBTOTAL", 2u, kVariadic, &Subtotal, /*propagate_errors=*/false};
-  def.accepts_ranges = true;
-  registry.register_function(def);
+  static constexpr builtins_detail::BuiltinRegistration functions[] = {
+      {"SUBTOTAL", 2u, kVariadic, &Subtotal, false, true},
+  };
+  builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
 
 }  // namespace eval
