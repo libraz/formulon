@@ -1577,6 +1577,486 @@ FM_API fm_status_t fm_pivot_cells_bounds(const fm_pivot_cells_t* cells, uint32_t
 FM_API fm_status_t fm_pivot_cells_at(const fm_pivot_cells_t* cells, size_t idx, fm_pivot_cell_t* out);
 
 /* -------------------------------------------------------------------------- */
+/* PivotCache & PivotTable mutation                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief PivotTable axis enumeration.
+ *
+ * Numbering mirrors `formulon::pivot::PivotAxis`.
+ */
+typedef enum {
+  FM_PIVOT_AXIS_ROW = 0,
+  FM_PIVOT_AXIS_COL = 1,
+  FM_PIVOT_AXIS_VALUE = 2,
+  FM_PIVOT_AXIS_PAGE = 3
+} fm_pivot_axis_t;
+
+/**
+ * @brief Aggregation function for a value-axis field. Numbering mirrors
+ *        `formulon::pivot::Aggregation` and `SubtotalFn` (the two enums are
+ *        currently 1-to-1).
+ */
+typedef enum {
+  FM_PIVOT_AGG_SUM = 0,
+  FM_PIVOT_AGG_COUNT = 1,
+  FM_PIVOT_AGG_AVERAGE = 2,
+  FM_PIVOT_AGG_MAX = 3,
+  FM_PIVOT_AGG_MIN = 4,
+  FM_PIVOT_AGG_PRODUCT = 5,
+  FM_PIVOT_AGG_COUNT_NUMBERS = 6,
+  FM_PIVOT_AGG_STDDEV = 7,
+  FM_PIVOT_AGG_STDDEVP = 8,
+  FM_PIVOT_AGG_VAR = 9,
+  FM_PIVOT_AGG_VARP = 10
+} fm_pivot_aggregation_t;
+
+/**
+ * @brief Show-values-as derivation applied to a data-field aggregate.
+ *        Numbering mirrors `formulon::pivot::ShowValuesAs`.
+ */
+typedef enum {
+  FM_PIVOT_SHOW_AS_NORMAL = 0,
+  FM_PIVOT_SHOW_AS_PERCENT_OF_ROW = 1,
+  FM_PIVOT_SHOW_AS_PERCENT_OF_COL = 2,
+  FM_PIVOT_SHOW_AS_PERCENT_OF_TOTAL = 3,
+  FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_ROW = 4,
+  FM_PIVOT_SHOW_AS_RUNNING_TOTAL_IN_COL = 5,
+  FM_PIVOT_SHOW_AS_INDEX = 6,
+  FM_PIVOT_SHOW_AS_DIFFERENCE_FROM = 7,
+  FM_PIVOT_SHOW_AS_PERCENT_DIFFERENCE_FROM = 8,
+  FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_ROW = 9,
+  FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT_COL = 10,
+  FM_PIVOT_SHOW_AS_PERCENT_OF_PARENT = 11
+} fm_pivot_show_as_t;
+
+/**
+ * @brief Filter type for an active (slicer-applied) filter.
+ *        Numbering mirrors `formulon::pivot::FilterType`.
+ */
+typedef enum {
+  FM_PIVOT_FILTER_VALUE_TOP_10 = 0,
+  FM_PIVOT_FILTER_VALUE_GREATER_THAN = 1,
+  FM_PIVOT_FILTER_VALUE_BETWEEN = 2,
+  FM_PIVOT_FILTER_LABEL_CONTAINS = 3,
+  FM_PIVOT_FILTER_LABEL_BEGINS_WITH = 4,
+  FM_PIVOT_FILTER_LABEL_DATE = 5
+} fm_pivot_filter_type_t;
+
+/**
+ * @brief Date-grouping granularity. Numbering mirrors
+ *        `formulon::pivot::DateGrouping`.
+ */
+typedef enum {
+  FM_PIVOT_DATE_DAY = 0,
+  FM_PIVOT_DATE_MONTH = 1,
+  FM_PIVOT_DATE_QUARTER = 2,
+  FM_PIVOT_DATE_YEAR = 3,
+  FM_PIVOT_DATE_WEEK = 4,
+  FM_PIVOT_DATE_HOUR = 5,
+  FM_PIVOT_DATE_MINUTE = 6,
+  FM_PIVOT_DATE_SECOND = 7
+} fm_pivot_date_grouping_t;
+
+/**
+ * @brief Calendar system used by date grouping. Numbering mirrors
+ *        `formulon::pivot::CalendarSystem`.
+ */
+typedef enum {
+  FM_PIVOT_CALENDAR_GREGORIAN = 0,
+  FM_PIVOT_CALENDAR_JAPANESE = 1
+} fm_pivot_calendar_t;
+
+/**
+ * @brief Discriminator for the variant payload carried by a pivot filter
+ *        spec. `FM_PIVOT_FILTER_VALUE_NONE` (= -1) means the slot is unset
+ *        (only meaningful for the optional upper-bound payload on range
+ *        filters); the int / double / text variants mirror
+ *        `std::variant<int, double, std::string>`.
+ */
+typedef enum {
+  FM_PIVOT_FILTER_VALUE_NONE = -1,
+  FM_PIVOT_FILTER_VALUE_INT = 0,
+  FM_PIVOT_FILTER_VALUE_DOUBLE = 1,
+  FM_PIVOT_FILTER_VALUE_TEXT = 2
+} fm_pivot_filter_value_kind_t;
+
+/**
+ * @brief Errors carried by `fm_workbook_pivot_cache_record_set_error`.
+ *        Mirrors `formulon::ErrorCode`.
+ */
+typedef int32_t fm_error_code_t;
+
+/**
+ * @brief Plain-data spec for `fm_workbook_pivot_field_add`.
+ *
+ *   * `source_name`   — required; matches a `PivotCacheField::name`.
+ *   * `custom_name`   — nullable; pass `NULL` or the empty string for none.
+ *   * `axis`          — initial axis for the field.
+ *   * `subtotal_top`  — non-zero to render subtotals at the group head.
+ *   * `number_format` — nullable; `NULL` means "leave blank".
+ */
+typedef struct {
+  const char* source_name;
+  const char* custom_name;
+  fm_pivot_axis_t axis;
+  int32_t subtotal_top;
+  const char* number_format;
+} fm_pivot_field_spec_t;
+
+/**
+ * @brief Plain-data spec for `fm_workbook_pivot_data_field_add` /
+ *        `fm_workbook_pivot_data_field_set`.
+ *
+ *   * `name`          — required; display name (key for GETPIVOTDATA).
+ *   * `field_index`   — index into `PivotTable::fields()` of the source
+ *                       pivot field.
+ *   * `aggregation`   — aggregation function applied to the source.
+ *   * `number_format` — nullable.
+ *   * `show_as`       — derivation mode.
+ *   * `show_as_base_field` — `-1` means unset; otherwise an index into
+ *                       `PivotTable::fields()`.
+ *   * `show_as_base_item`  — `-1` means unset; `1048828` means "(previous)";
+ *                       `1048829` means "(next)"; any other value is an
+ *                       index into the base field's `items[]`.
+ */
+typedef struct {
+  const char* name;
+  uint32_t field_index;
+  fm_pivot_aggregation_t aggregation;
+  const char* number_format;
+  fm_pivot_show_as_t show_as;
+  int32_t show_as_base_field;
+  int32_t show_as_base_item;
+} fm_pivot_data_field_spec_t;
+
+/**
+ * @brief Plain-data spec for `fm_workbook_pivot_filter_add`.
+ *
+ *   * `axis`           — pivot axis the filter targets.
+ *   * `field_name`     — required; the pivot field's name (or display name).
+ *   * `type`           — filter type.
+ *   * `value_kind`     — discriminator for the primary `value` payload.
+ *                        For non-range filters this must be one of the
+ *                        three concrete kinds (the `_NONE` sentinel is
+ *                        rejected). For range filters (`VALUE_BETWEEN`,
+ *                        `LABEL_DATE`) this is the lower bound.
+ *   * `value_int`      — int payload; consulted iff `value_kind == INT`.
+ *   * `value_double`   — double payload; consulted iff `value_kind == DOUBLE`.
+ *   * `value_text`     — UTF-8 payload; consulted iff `value_kind == TEXT`.
+ *                        Must be non-NULL when `value_kind == TEXT`.
+ *   * `value_high_kind` — discriminator for the upper-bound payload.
+ *                        `FM_PIVOT_FILTER_VALUE_NONE` for non-range filters.
+ *                        For range filters, must be `INT` or `DOUBLE`
+ *                        (text upper bounds are not modelled).
+ *   * `value_high_int` / `value_high_double` — upper bound payload.
+ */
+typedef struct {
+  fm_pivot_axis_t axis;
+  const char* field_name;
+  fm_pivot_filter_type_t type;
+  fm_pivot_filter_value_kind_t value_kind;
+  int32_t value_int;
+  double value_double;
+  const char* value_text;
+  fm_pivot_filter_value_kind_t value_high_kind;
+  int32_t value_high_int;
+  double value_high_double;
+} fm_pivot_filter_spec_t;
+
+/* --- Pivot caches (workbook-owned) --------------------------------------- */
+
+/**
+ * @brief Returns the number of pivot caches owned by the workbook.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_count(const fm_workbook_t* wb, size_t* out_count);
+
+/**
+ * @brief Returns the `cache_id` of the pivot cache at flat index `idx`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `idx` is out of range.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_id_at(const fm_workbook_t* wb, size_t idx, uint32_t* out_cache_id);
+
+/**
+ * @brief Creates a new empty pivot cache.
+ *
+ * `requested_id` may be `0` to request auto-assignment; the new id is
+ * `max(existing_ids) + 1` (or `1` if no caches exist). When non-zero,
+ * `requested_id` must not collide with an existing cache. The assigned
+ * id is written to `*out_cache_id`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `requested_id` collides with an
+ *         existing cache.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, uint32_t requested_id, uint32_t* out_cache_id);
+
+/**
+ * @brief Removes the pivot cache with id `cache_id`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when no cache matches `cache_id` or when
+ *         the cache is still referenced by at least one pivot table.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_remove(fm_workbook_t* wb, uint32_t cache_id);
+
+/** @brief Number of fields on the cache identified by `cache_id`. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_count(const fm_workbook_t* wb, uint32_t cache_id, size_t* out_count);
+
+/**
+ * @brief Reads the name of the cache field at `field_idx`. The pointer
+ *        is borrowed from the workbook handle and remains valid until
+ *        the cache field list is mutated.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_field_name(const fm_workbook_t* wb, uint32_t cache_id, size_t field_idx,
+                                                     const char** out_utf8);
+
+/**
+ * @brief Appends a new field with the given UTF-8 name to the cache.
+ *        `out_field_idx` receives the new field's index. `utf8_name`
+ *        must be non-NULL.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_field_add(fm_workbook_t* wb, uint32_t cache_id, const char* utf8_name,
+                                                    size_t* out_field_idx);
+
+/** @brief Drops every field (and every record) from the cache. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_clear(fm_workbook_t* wb, uint32_t cache_id);
+
+/** @brief Number of shared items configured on cache field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_shared_item_count(const fm_workbook_t* wb, uint32_t cache_id,
+                                                                  size_t field_idx, size_t* out_count);
+
+/** @brief Appends a numeric shared item to cache field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_number(fm_workbook_t* wb, uint32_t cache_id,
+                                                                       size_t field_idx, double value);
+
+/** @brief Appends a text shared item to cache field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_text(fm_workbook_t* wb, uint32_t cache_id,
+                                                                     size_t field_idx, const char* utf8);
+
+/** @brief Appends a boolean shared item to cache field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_bool(fm_workbook_t* wb, uint32_t cache_id,
+                                                                     size_t field_idx, int32_t value);
+
+/** @brief Appends a blank shared item to cache field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_blank(fm_workbook_t* wb, uint32_t cache_id,
+                                                                      size_t field_idx);
+
+/** @brief Drops every shared item from cache field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_clear_shared_items(fm_workbook_t* wb, uint32_t cache_id,
+                                                                   size_t field_idx);
+
+/** @brief Returns the number of records (rows) on the cache. */
+FM_API fm_status_t fm_workbook_pivot_cache_record_count(const fm_workbook_t* wb, uint32_t cache_id, size_t* out_count);
+
+/**
+ * @brief Appends a new empty record to the cache. `out_record_idx`
+ *        receives the new record's index. The record's cell vector is
+ *        empty; populate it via `fm_workbook_pivot_cache_record_set_*`.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_record_add(fm_workbook_t* wb, uint32_t cache_id, size_t* out_record_idx);
+
+/** @brief Drops every record from the cache. */
+FM_API fm_status_t fm_workbook_pivot_cache_record_clear(fm_workbook_t* wb, uint32_t cache_id);
+
+/**
+ * @brief Sets cell `(record_idx, field_idx)` to a numeric value. The
+ *        record's cell vector auto-extends to `field_idx + 1` with
+ *        Blank fillers when shorter.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_record_set_number(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
+                                                            size_t field_idx, double value);
+
+/** @brief Sets cell `(record_idx, field_idx)` to a UTF-8 text value. */
+FM_API fm_status_t fm_workbook_pivot_cache_record_set_text(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
+                                                          size_t field_idx, const char* utf8);
+
+/** @brief Sets cell `(record_idx, field_idx)` to a boolean value. */
+FM_API fm_status_t fm_workbook_pivot_cache_record_set_bool(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
+                                                          size_t field_idx, int32_t value);
+
+/** @brief Sets cell `(record_idx, field_idx)` to Blank. */
+FM_API fm_status_t fm_workbook_pivot_cache_record_set_blank(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
+                                                           size_t field_idx);
+
+/** @brief Sets cell `(record_idx, field_idx)` to an Excel error value. */
+FM_API fm_status_t fm_workbook_pivot_cache_record_set_error(fm_workbook_t* wb, uint32_t cache_id, size_t record_idx,
+                                                           size_t field_idx, fm_error_code_t error);
+
+/* --- Pivot tables (sheet-owned) ------------------------------------------ */
+
+/**
+ * @brief Creates a new empty pivot table on `sheet_index`. `cache_id`
+ *        must reference an existing cache. The new table's flat index
+ *        is written to `*out_pivot_index`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `utf8_name`, or `out_pivot_index`
+ *         is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range or
+ *         `cache_id` does not match any existing cache.
+ */
+FM_API fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, size_t sheet_index, const char* utf8_name,
+                                            uint32_t cache_id, uint32_t anchor_row, uint32_t anchor_col,
+                                            size_t* out_pivot_index);
+
+/** @brief Removes the pivot table at `pivot_index` from `sheet_index`. */
+FM_API fm_status_t fm_workbook_pivot_remove(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
+
+/** @brief Renames the pivot table. `utf8_name` must be non-NULL. */
+FM_API fm_status_t fm_workbook_pivot_set_name(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                              const char* utf8_name);
+
+/** @brief Updates the pivot's anchor cell and span. */
+FM_API fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                uint32_t anchor_row, uint32_t anchor_col, uint32_t span_rows,
+                                                uint32_t span_cols);
+
+/** @brief Toggles the row / column grand total bands on the pivot. */
+FM_API fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                      int32_t rows_enabled, int32_t cols_enabled);
+
+/** @brief Number of fields configured on the pivot. */
+FM_API fm_status_t fm_workbook_pivot_field_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                 size_t* out_count);
+
+/**
+ * @brief Appends a new field to the pivot. `spec->source_name` must be
+ *        non-NULL; the other string fields are nullable. `out_field_idx`
+ *        receives the new field's index.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                               const fm_pivot_field_spec_t* spec, size_t* out_field_idx);
+
+/** @brief Drops every field from the pivot. */
+FM_API fm_status_t fm_workbook_pivot_field_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
+
+/** @brief Sets the axis of pivot field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                    size_t field_idx, fm_pivot_axis_t axis);
+
+/**
+ * @brief Sets the sort directive on pivot field `field_idx`. Pass
+ *        `by_field == NULL` to clear the by-field key.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_sort(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                    size_t field_idx, int32_t ascending, const char* by_field);
+
+/** @brief Sets the `subtotal_top` flag on pivot field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_field_set_subtotal_top(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                            size_t field_idx, int32_t top);
+
+/**
+ * @brief Appends an aggregation to pivot field `field_idx`. Only
+ *        meaningful for value-axis fields.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_add_aggregation(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                           size_t field_idx, fm_pivot_aggregation_t agg);
+
+/** @brief Drops every aggregation from pivot field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_field_clear_aggregations(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                              size_t field_idx);
+
+/**
+ * @brief Appends a manual-filter item to pivot field `field_idx`.
+ *        `utf8_name` must be non-NULL. `visible` is a 32-bit boolean.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_add_item(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                    size_t field_idx, const char* utf8_name, int32_t visible);
+
+/** @brief Drops every manual-filter item from pivot field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_field_clear_items(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                       size_t field_idx);
+
+/** @brief Toggles the visibility of item `item_idx` on field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_field_set_item_visible(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                            size_t field_idx, size_t item_idx, int32_t visible);
+
+/** @brief Appends a subtotal-fn entry to pivot field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_field_add_subtotal_fn(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                           size_t field_idx, fm_pivot_aggregation_t agg);
+
+/** @brief Drops every subtotal-fn entry from pivot field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                              size_t field_idx);
+
+/**
+ * @brief Configures date-grouping on pivot field `field_idx`. Pass
+ *        `start_year_or_neg1 == -1` (and likewise `end_year_or_neg1`)
+ *        to leave the bound unset.
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                          size_t field_idx, fm_pivot_date_grouping_t granularity,
+                                                          fm_pivot_calendar_t calendar, int32_t start_year_or_neg1,
+                                                          int32_t end_year_or_neg1);
+
+/** @brief Removes the date-grouping config from pivot field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                            size_t field_idx);
+
+/**
+ * @brief Sets the OOXML number-format string on pivot field `field_idx`.
+ *        `utf8` must be non-NULL (use the empty string to clear).
+ */
+FM_API fm_status_t fm_workbook_pivot_field_set_number_format(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                             size_t field_idx, const char* utf8);
+
+/**
+ * @brief Replaces the row-axis field order with `indices[0..count)`.
+ *        Each entry must be `< field_count`. Pass `count == 0` to clear.
+ */
+FM_API fm_status_t fm_workbook_pivot_set_row_field_order(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                         const uint32_t* indices, size_t count);
+
+/** @brief Replaces the column-axis field order. Same contract as rows. */
+FM_API fm_status_t fm_workbook_pivot_set_col_field_order(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                         const uint32_t* indices, size_t count);
+
+/** @brief Number of `<dataField>` entries on the pivot. */
+FM_API fm_status_t fm_workbook_pivot_data_field_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                      size_t* out_count);
+
+/** @brief Appends a new data-field entry. `spec->name` must be non-NULL. */
+FM_API fm_status_t fm_workbook_pivot_data_field_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                    const fm_pivot_data_field_spec_t* spec, size_t* out_idx);
+
+/** @brief Drops every data-field entry from the pivot. */
+FM_API fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
+
+/** @brief Replaces the data-field entry at `data_field_idx` in place. */
+FM_API fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                    size_t data_field_idx, const fm_pivot_data_field_spec_t* spec);
+
+/** @brief Number of active (slicer-applied) filters on the pivot. */
+FM_API fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                  size_t* out_count);
+
+/**
+ * @brief Appends an active filter. `spec->field_name` must be non-NULL;
+ *        `spec->value_text` must be non-NULL when
+ *        `spec->value_kind == FM_PIVOT_FILTER_VALUE_TEXT`. The optional
+ *        upper-bound payload is honoured only for range filter types
+ *        (`VALUE_BETWEEN`, `LABEL_DATE`).
+ */
+FM_API fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                const fm_pivot_filter_spec_t* spec);
+
+/** @brief Drops every active filter from the pivot. */
+FM_API fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
+
+/** @brief Removes the active filter at `filter_idx`. */
+FM_API fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                      size_t filter_idx);
+
+/* -------------------------------------------------------------------------- */
 /* Dynamic-array spill payload                                                */
 /* -------------------------------------------------------------------------- */
 

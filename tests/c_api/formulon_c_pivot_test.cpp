@@ -276,3 +276,369 @@ TEST(FormulonCApiPivot, InvalidPivotArgsReturnErrors) {
   EXPECT_EQ(fm_pivot_cells_at(nullptr, 0, &cell),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
+
+// ----------------------------------------------------------------------------
+// Pivot mutation surface
+// ----------------------------------------------------------------------------
+
+namespace {
+
+// Builds a pivot cache + table from scratch via the C ABI:
+//   * 2 fields: "Region" (text) and "Amount" (numeric).
+//   * 4 records: (North, 100), (South, 200), (North, 300), (South, 400).
+//   * Pivot table on sheet 0, name "PT", anchor (0, 3), with Region as the
+//     row field and Amount aggregated as Sum.
+fm_status_t BuildScratchPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, std::size_t* out_pivot_index) {
+  std::uint32_t cache_id = 0;
+  fm_status_t st = fm_workbook_pivot_cache_create(wb, 0, &cache_id);
+  if (st != 0) {
+    return st;
+  }
+  std::size_t region_idx = 99;
+  st = fm_workbook_pivot_cache_field_add(wb, cache_id, "Region", &region_idx);
+  if (st != 0) {
+    return st;
+  }
+  std::size_t amount_idx = 99;
+  st = fm_workbook_pivot_cache_field_add(wb, cache_id, "Amount", &amount_idx);
+  if (st != 0) {
+    return st;
+  }
+  // Shared items for "Region": index 0 = "North", index 1 = "South".
+  st = fm_workbook_pivot_cache_field_add_shared_item_text(wb, cache_id, region_idx, "North");
+  if (st != 0) {
+    return st;
+  }
+  st = fm_workbook_pivot_cache_field_add_shared_item_text(wb, cache_id, region_idx, "South");
+  if (st != 0) {
+    return st;
+  }
+  // 4 records.
+  const struct {
+    double region_index;
+    double amount;
+  } rows[] = {{0.0, 100.0}, {1.0, 200.0}, {0.0, 300.0}, {1.0, 400.0}};
+  for (const auto& row : rows) {
+    std::size_t rec_idx = 99;
+    st = fm_workbook_pivot_cache_record_add(wb, cache_id, &rec_idx);
+    if (st != 0) {
+      return st;
+    }
+    st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, region_idx, row.region_index);
+    if (st != 0) {
+      return st;
+    }
+    st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, amount_idx, row.amount);
+    if (st != 0) {
+      return st;
+    }
+  }
+  // Pivot table.
+  std::size_t pivot_idx = 99;
+  st = fm_workbook_pivot_create(wb, 0, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, &pivot_idx);
+  if (st != 0) {
+    return st;
+  }
+  // Region (row) + items 0 and 1, plus the OOXML "default" subtotal item.
+  fm_pivot_field_spec_t region_spec{};
+  region_spec.source_name = "Region";
+  region_spec.custom_name = "";
+  region_spec.axis = FM_PIVOT_AXIS_ROW;
+  region_spec.subtotal_top = 0;
+  region_spec.number_format = "";
+  std::size_t region_field = 99;
+  st = fm_workbook_pivot_field_add(wb, 0, pivot_idx, &region_spec, &region_field);
+  if (st != 0) {
+    return st;
+  }
+  st = fm_workbook_pivot_field_add_item(wb, 0, pivot_idx, region_field, "North", 1);
+  if (st != 0) {
+    return st;
+  }
+  st = fm_workbook_pivot_field_add_item(wb, 0, pivot_idx, region_field, "South", 1);
+  if (st != 0) {
+    return st;
+  }
+  // Amount (value-axis source field).
+  fm_pivot_field_spec_t amount_spec{};
+  amount_spec.source_name = "Amount";
+  amount_spec.custom_name = "";
+  amount_spec.axis = FM_PIVOT_AXIS_VALUE;
+  amount_spec.subtotal_top = 0;
+  amount_spec.number_format = "";
+  std::size_t amount_field = 99;
+  st = fm_workbook_pivot_field_add(wb, 0, pivot_idx, &amount_spec, &amount_field);
+  if (st != 0) {
+    return st;
+  }
+  // Row-field order.
+  const std::uint32_t row_order[] = {static_cast<std::uint32_t>(region_field)};
+  st = fm_workbook_pivot_set_row_field_order(wb, 0, pivot_idx, row_order, 1U);
+  if (st != 0) {
+    return st;
+  }
+  // Data field: Sum of Amount.
+  fm_pivot_data_field_spec_t df_spec{};
+  df_spec.name = "Sum of Amount";
+  df_spec.field_index = static_cast<std::uint32_t>(amount_field);
+  df_spec.aggregation = FM_PIVOT_AGG_SUM;
+  df_spec.number_format = "";
+  df_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+  df_spec.show_as_base_field = -1;
+  df_spec.show_as_base_item = -1;
+  std::size_t df_idx = 99;
+  st = fm_workbook_pivot_data_field_add(wb, 0, pivot_idx, &df_spec, &df_idx);
+  if (st != 0) {
+    return st;
+  }
+  if (out_cache_id != nullptr) {
+    *out_cache_id = cache_id;
+  }
+  if (out_pivot_index != nullptr) {
+    *out_pivot_index = pivot_idx;
+  }
+  return 0;
+}
+
+std::vector<fm_pivot_cell_t> CollectCells(fm_pivot_cells_t* handle) {
+  const std::size_t n = fm_pivot_cells_count(handle);
+  std::vector<fm_pivot_cell_t> out(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    EXPECT_EQ(fm_pivot_cells_at(handle, i, &out[i]), 0);
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST(FormulonCApiPivot, CreatePivotFromScratch) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  std::size_t cache_count = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_count(wb.handle, &cache_count), 0);
+  EXPECT_EQ(cache_count, 1U);
+
+  std::size_t pivot_count = 0;
+  ASSERT_EQ(fm_workbook_pivot_count(wb.handle, 0, &pivot_count), 0);
+  EXPECT_EQ(pivot_count, 1U);
+
+  std::size_t records = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_record_count(wb.handle, cache_id, &records), 0);
+  EXPECT_EQ(records, 4U);
+
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+
+  const std::vector<fm_pivot_cell_t> cells = CollectCells(projected.handle);
+  ASSERT_FALSE(cells.empty());
+
+  // North (regions 0, 2) sum = 400; South (regions 1, 3) sum = 600.
+  // Grand total = 1000.
+  bool saw_north = false;
+  bool saw_south = false;
+  bool saw_grand = false;
+  for (const fm_pivot_cell_t& c : cells) {
+    if (c.kind == FM_PIVOT_CELL_DATA && c.value.kind == FM_VAL_NUMBER) {
+      if (c.value.u.number == 400.0) {
+        saw_north = true;
+      } else if (c.value.u.number == 600.0) {
+        saw_south = true;
+      }
+    }
+    if (c.kind == FM_PIVOT_CELL_GRAND_TOTAL && c.value.kind == FM_VAL_NUMBER && c.value.u.number == 1000.0) {
+      saw_grand = true;
+    }
+  }
+  EXPECT_TRUE(saw_north);
+  EXPECT_TRUE(saw_south);
+  EXPECT_TRUE(saw_grand);
+}
+
+TEST(FormulonCApiPivot, MutateExistingPivotFilter) {
+  // Build a scratch pivot — the OOXML reader populates only `custom_name`
+  // from `<pivotField name="...">`, while the filter resolver matches on
+  // `source_name`, so a filter applied to a loaded workbook would silently
+  // no-op. Building from scratch lets us exercise the same surface against
+  // a pivot whose `source_name` is set the way the resolver expects.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  // Baseline projection contains "South" because no filter is active.
+  {
+    PivotCellsGuard projected;
+    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0);
+    bool saw_south = false;
+    for (const fm_pivot_cell_t& c : CollectCells(projected.handle)) {
+      if (c.kind == FM_PIVOT_CELL_ROW_LABEL && c.value.kind == FM_VAL_TEXT && c.value.u.text != nullptr &&
+          std::string_view(c.value.u.text) == "South") {
+        saw_south = true;
+      }
+    }
+    EXPECT_TRUE(saw_south);
+  }
+
+  // Add a label filter that only retains "North".
+  fm_pivot_filter_spec_t spec{};
+  spec.axis = FM_PIVOT_AXIS_ROW;
+  spec.field_name = "Region";
+  spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
+  spec.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
+  spec.value_text = "N";
+  spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  ASSERT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), 0) << fm_last_error_message();
+
+  std::size_t filter_count = 0;
+  ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &filter_count), 0);
+  EXPECT_EQ(filter_count, 1U);
+
+  // Re-project — "South" must be dropped.
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0);
+  bool saw_south = false;
+  bool saw_north = false;
+  for (const fm_pivot_cell_t& c : CollectCells(projected.handle)) {
+    if (c.kind == FM_PIVOT_CELL_ROW_LABEL && c.value.kind == FM_VAL_TEXT && c.value.u.text != nullptr) {
+      if (std::string_view(c.value.u.text) == "South") {
+        saw_south = true;
+      }
+      if (std::string_view(c.value.u.text) == "North") {
+        saw_north = true;
+      }
+    }
+  }
+  EXPECT_TRUE(saw_north);
+  EXPECT_FALSE(saw_south);
+
+  // Verify remove_at clears the filter.
+  ASSERT_EQ(fm_workbook_pivot_filter_remove_at(wb.handle, 0, pivot_idx, 0), 0);
+  std::size_t after_count = 99;
+  ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &after_count), 0);
+  EXPECT_EQ(after_count, 0U);
+}
+
+TEST(FormulonCApiPivot, MutateShowValuesAs) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  // Re-set the data field to PercentOfRow.
+  std::size_t df_count = 0;
+  ASSERT_EQ(fm_workbook_pivot_data_field_count(wb.handle, 0, pivot_idx, &df_count), 0);
+  ASSERT_EQ(df_count, 1U);
+
+  fm_pivot_data_field_spec_t df_spec{};
+  df_spec.name = "Sum of Amount";
+  df_spec.field_index = 1U;  // Amount is the second pivot field.
+  df_spec.aggregation = FM_PIVOT_AGG_SUM;
+  df_spec.number_format = "";
+  df_spec.show_as = FM_PIVOT_SHOW_AS_PERCENT_OF_ROW;
+  df_spec.show_as_base_field = -1;
+  df_spec.show_as_base_item = -1;
+  ASSERT_EQ(fm_workbook_pivot_data_field_set(wb.handle, 0, pivot_idx, 0, &df_spec), 0) << fm_last_error_message();
+
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+
+  // Each FM_PIVOT_CELL_DATA cell should equal 1.0 (single data column ->
+  // each row's percent-of-row is 100% of itself).
+  std::size_t data_count = 0;
+  for (const fm_pivot_cell_t& c : CollectCells(projected.handle)) {
+    if (c.kind == FM_PIVOT_CELL_DATA && c.value.kind == FM_VAL_NUMBER) {
+      EXPECT_DOUBLE_EQ(c.value.u.number, 1.0);
+      ++data_count;
+    }
+  }
+  EXPECT_GT(data_count, 0U);
+}
+
+TEST(FormulonCApiPivot, RemovePivotAndCache) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  std::size_t before_pivots = 0;
+  std::size_t before_caches = 0;
+  ASSERT_EQ(fm_workbook_pivot_count(wb.handle, 0, &before_pivots), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_count(wb.handle, &before_caches), 0);
+  EXPECT_EQ(before_pivots, 1U);
+  EXPECT_EQ(before_caches, 1U);
+
+  // Remove the pivot first, then the cache.
+  ASSERT_EQ(fm_workbook_pivot_remove(wb.handle, 0, pivot_idx), 0);
+  std::size_t after_remove_pivots = 99;
+  ASSERT_EQ(fm_workbook_pivot_count(wb.handle, 0, &after_remove_pivots), 0);
+  EXPECT_EQ(after_remove_pivots, 0U);
+
+  ASSERT_EQ(fm_workbook_pivot_cache_remove(wb.handle, cache_id), 0);
+  std::size_t after_caches = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_count(wb.handle, &after_caches), 0);
+  EXPECT_EQ(after_caches, 0U);
+}
+
+TEST(FormulonCApiPivot, CacheRemoveBlockedByPivot) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  EXPECT_EQ(fm_workbook_pivot_cache_remove(wb.handle, cache_id),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  // Removing a non-existent cache id must also surface kInvalidArgument.
+  EXPECT_EQ(fm_workbook_pivot_cache_remove(wb.handle, 9999U),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_create(wb.handle, 0, &cache_id), 0);
+  std::size_t field_idx = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb.handle, cache_id, "F", &field_idx), 0);
+
+  std::size_t out_count = 0;
+  EXPECT_EQ(fm_workbook_pivot_cache_count(nullptr, &out_count),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_workbook_pivot_cache_count(wb.handle, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+
+  std::size_t fc = 0;
+  EXPECT_EQ(fm_workbook_pivot_cache_field_count(nullptr, cache_id, &fc),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add(wb.handle, cache_id, nullptr, &field_idx),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_text(wb.handle, cache_id, field_idx, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+
+  std::size_t pivot_idx = 99;
+  EXPECT_EQ(fm_workbook_pivot_create(wb.handle, 0, nullptr, cache_id, 0, 0, &pivot_idx),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+
+  // spec arguments
+  EXPECT_EQ(fm_workbook_pivot_field_add(wb.handle, 0, 0, nullptr, &pivot_idx),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+
+  fm_pivot_filter_spec_t bad_filter{};
+  bad_filter.field_name = nullptr;
+  bad_filter.type = FM_PIVOT_FILTER_LABEL_CONTAINS;
+  bad_filter.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
+  bad_filter.value_text = "X";
+  bad_filter.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  EXPECT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, 0, &bad_filter),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+}
