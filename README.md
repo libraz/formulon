@@ -1,41 +1,25 @@
 # Formulon
 
-> **Status: Under active development. Not yet ready for production use.**
-> APIs, file layout, and packaging may change without notice until the first tagged release.
+[![CI](https://img.shields.io/github/actions/workflow/status/libraz/formulon/ci.yml?branch=main&label=CI)](https://github.com/libraz/formulon/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@libraz/formulon)](https://www.npmjs.com/package/@libraz/formulon)
+[![PyPI](https://img.shields.io/pypi/v/formulon)](https://pypi.org/project/formulon/)
+[![codecov](https://codecov.io/gh/libraz/formulon/branch/main/graph/badge.svg)](https://codecov.io/gh/libraz/formulon)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/formulon/blob/main/LICENSE)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?logo=c%2B%2B)](https://en.cppreference.com/w/cpp/17)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/formulon)
+[![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-blue)](https://formulon.libraz.net)
 
-Formulon is a headless, Excel-compatible calculation engine — a C++17 core
-that defaults to the **Windows Excel 365 (ja-JP)** behavior profile, with every
-known divergence explicitly tracked against Excel oracle data. The same engine is packaged for the browser
-(WebAssembly), for Python, and for native command-line use, so a workbook
-recalculates to the same values wherever it runs.
+Formulon is a headless, Excel-compatible calculation engine — a C++17 core that defaults to the **Windows Excel 365 (ja-JP)** behavior profile, with every known divergence explicitly tracked against Excel oracle data. The same engine is packaged for the browser (WebAssembly), for Python, and for native command-line use, so a workbook recalculates to the same values wherever it runs.
 
-No Excel installation, no Microsoft runtime, no COM automation required.
-Runs on macOS, Linux, Windows, in the browser, and in Node.
+No Excel installation, no Microsoft runtime, no COM automation required. The WASM build runs in browsers and Node; native packages currently ship for `darwin-arm64`, `linux-x64`, and `linux-arm64`.
 
 ## Why Formulon
 
-- **Strict oracle, not aspirational compatibility.** The runtime default is
-  `win-365-ja_JP`, and profile-specific oracle suites pin observed Excel
-  behavior. The primary checked-in oracle remains Mac Excel 365 (ja-JP), while
-  Windows Excel 365 (ja-JP) is verified through variant goldens. Outputs are
-  checked for bit-level parity against golden data regenerated from the real
-  product; every accepted divergence
-  (transcendental ulp drift, volatile-function snapshots, Excel quirks where
-  Formulon deliberately keeps a saner answer) is recorded case-by-case in
-  [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the
-  last verified Excel build.
-- **One C++ core, identical results everywhere.** JS-only competitors re-run
-  the logic in the browser and the logic on the server. Formulon ships one
-  engine to every surface (WASM, Python, CLI) so there is no second
-  implementation to drift.
-- **Strict WASM size budget.** Target **1.65 MB uncompressed / 530 KB
-  Brotli**, hard ceiling **1.8 MB / 600 KB Brotli**. The budget is enforced
-  in CI, not aspirational; features ship within the budget or do not ship.
-- **Small dependency set.** Engine deps: `miniz` (zip), `pugixml` (XML +
-  XPath 1.0). That is the complete list for the core. Linear algebra,
-  number formatting, and UTF-8 handling are in-tree.
-- **Readable, reviewable code.** `Expected<T, Error>` error handling, RAII,
-  `-fno-exceptions -fno-rtti`, Google C++ style.
+- **Strict oracle, not aspirational compatibility.** The runtime default is `win-365-ja_JP`, and profile-specific oracle suites pin observed Excel behavior. The primary checked-in oracle remains Mac Excel 365 (ja-JP), while Windows Excel 365 (ja-JP) is verified through variant goldens. Outputs are checked for bit-level parity against golden data regenerated from the real product; every accepted divergence (transcendental ulp drift, volatile-function snapshots, Excel quirks where Formulon deliberately keeps a saner answer) is recorded case-by-case in [`tests/divergence.yaml`](tests/divergence.yaml) with a reason and the last verified Excel build.
+- **One C++ core, identical results everywhere.** JS-only competitors re-run the logic in the browser and the logic on the server. Formulon ships one engine to every surface (WASM, Python, CLI) so there is no second implementation to drift.
+- **Strict WASM size budget.** Target **1.65 MB uncompressed / 530 KB Brotli**, hard ceiling **1.9 MB / 600 KB Brotli**. The budget is enforced in CI, not aspirational; features ship within the budget or do not ship.
+- **Small dependency set.** Engine deps: `miniz` (zip/deflate), `pugixml` (XML + XPath 1.0), `PCRE2` (Excel-compatible regex for `REGEX*`), `double-conversion` (Grisu3 shortest-roundtrip `dtoa`). Linear algebra, UTF-8 handling, and most number coercion are in-tree.
+- **Readable, reviewable code.** `Expected<T, Error>` error handling, RAII, `-fno-exceptions -fno-rtti`, Google C++ style.
 
 ## What it is useful for
 
@@ -59,49 +43,25 @@ Formulon deliberately does **not** cover:
 | Pivot cache recomputation | Structurally preserved; recomputation is out of scope. |
 | Spreadsheet UI | A thin UI integration layer is planned; rendering is yours. |
 
-These are **permanent** non-goals, not "not yet." The scope is finite on
-purpose.
+These are **permanent** non-goals, not "not yet." The scope is finite on purpose.
 
 ## Packaging
 
 | Surface | Name | Notes |
 |---------|------|-------|
 | npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 18+, browsers, workers. |
-| PyPI | `formulon` | CPython 3.9–3.13 wheels for macOS / Linux / Windows. ctypes-based, stdlib-only at runtime. |
-| GitHub Releases | `formulon-cli-<os>-<arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`). |
+| PyPI | `formulon` | CPython 3.9–3.13 wheels for `darwin-arm64`, `linux-x64`, `linux-arm64`. ctypes-based, stdlib-only at runtime. |
+| GitHub Releases | `formulon-cli-<platform-arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
 
 ## Status
 
-As of 2026-05: **all 522 catalogued Excel functions are implemented
-(100%)** across Math & Trig, Statistical, Logical, Text, Date/Time,
-Lookup, Financial, Engineering, Information, Database, Cube, and the
-2024/2025 additions (GROUPBY, PIVOTBY, TRANSLATE, COPILOT, ...).
-**92 oracle categories** are defined and regenerated from Mac Excel 365
-ja-JP, with Windows Excel 365 ja-JP covered by the `win-365-ja_JP` variant
-goldens. New workbooks use the `win-365-ja_JP` formula profile by default;
-callers can switch with the profile-id API (`mac-365-ja_JP`,
-`win-365-ja_JP`). English-locale profiles are intentionally not exposed until
-matching EN oracle data and verified locale-specific behavior are available.
-A bytecode compiler and stack-machine VM run in parallel with the
-tree-walker for parity verification. The OOXML reader/writer round-trips
-sheets, styles, conditional formatting, comments, hyperlinks, merges,
-data validations, defined names, tables, and pivot tables; an MS-XLSB
-reader/writer is in place. Workbook-level operations (sheet add /
-rename / move, row/column insert / delete with formula rewriting,
-partial recalc, iterative-solver progress callbacks) are wired through
-the C ABI and exposed in the WASM, Python, and CLI surfaces.
+**All 522 catalogued Excel functions are implemented (100%)** across Math & Trig, Statistical, Logical, Text, Date/Time, Lookup, Financial, Engineering, Information, Database, Cube, and the 2024/2025 additions (GROUPBY, PIVOTBY, TRANSLATE, COPILOT, ...). **92 oracle categories** are defined and regenerated from Mac Excel 365 ja-JP, with Windows Excel 365 ja-JP covered by the `win-365-ja_JP` variant goldens. New workbooks use the `win-365-ja_JP` formula profile by default; callers can switch with the profile-id API (`mac-365-ja_JP`, `win-365-ja_JP`). English-locale profiles are intentionally not exposed until matching EN oracle data and verified locale-specific behavior are available. A bytecode compiler and stack-machine VM run in parallel with the tree-walker for parity verification. The OOXML reader/writer round-trips sheets, styles, conditional formatting, comments, hyperlinks, merges, data validations, defined names, tables, and pivot tables; an MS-XLSB reader/writer is in place. Workbook-level operations (sheet add / rename / move, row/column insert / delete with formula rewriting, partial recalc, iterative-solver progress callbacks) are wired through the C ABI and exposed in the WASM, Python, and CLI surfaces.
 
-Feedback, issue reports, and oracle divergence reports are welcome, but
-please do not rely on Formulon for production workloads yet.
+Feedback, issue reports, and oracle divergence reports are very welcome.
 
 ## Contributing
 
-The fastest way to help right now is to **donate Excel oracle data
-from your locale**. If you have Excel 365 in any locale beyond Mac
-ja-JP, one command (`make oracle-contribute`) drives Excel, captures
-goldens, and walks you through the PR. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the full flow and the rationale
-for why this is community-driven.
+The fastest way to help right now is to **donate Excel oracle data from your locale**. If you have Excel 365 in any locale beyond Mac ja-JP, one command (`make oracle-contribute`) drives Excel, captures goldens, and walks you through the PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full flow and the rationale for why this is community-driven.
 
 ## License
 
