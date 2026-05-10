@@ -157,6 +157,40 @@ class RecalcEngine {
   RecalcEngine(RecalcEngine&&) = delete;
   RecalcEngine& operator=(RecalcEngine&&) = delete;
 
+  /// Passkey-style facade that exposes the engine's `*_locked` mutators
+  /// to `Workbook`'s compound-mutation entry points. The constructor is
+  /// friend-restricted to `RecalcEngine` / `Workbook`, so a caller can
+  /// only obtain a `LockedMutator` from inside a `Workbook` member
+  /// function that has already taken `engine.mutex_`. The facade itself
+  /// does NOT acquire or release the lock — callers MUST hold a
+  /// `std::lock_guard<std::mutex>` on `RecalcEngine::mutex_for_compound_mutation()`
+  /// for the full duration of every call routed through this object.
+  ///
+  /// The type is publicly named so anonymous-namespace helpers inside
+  /// `workbook.cpp` can take it by reference; only `Workbook` can mint
+  /// one, so the surface area stays controlled.
+  class LockedMutator {
+   public:
+    LockedMutator(const LockedMutator&) = delete;
+    LockedMutator& operator=(const LockedMutator&) = delete;
+    LockedMutator(LockedMutator&&) = delete;
+    LockedMutator& operator=(LockedMutator&&) = delete;
+    ~LockedMutator() = default;
+
+    void register_formula(CellNodeId cell, const parser::AstNode& ast, const Workbook& workbook) const;
+    void unregister_formula(CellNodeId cell) const;
+    void clear_cell_dependencies(CellNodeId cell) const;
+    void mark_dirty(CellNodeId cell) const;
+    const DepGraph& dep_graph() const noexcept;
+
+   private:
+    friend class RecalcEngine;
+    friend class ::formulon::Workbook;
+    explicit LockedMutator(RecalcEngine& engine) noexcept : engine_(engine) {}
+
+    RecalcEngine& engine_;
+  };
+
   /// Re-analyses the formula at `cell` and updates the dep graph / volatile
   /// tracker. Drops every previous outgoing edge of `cell` first, so
   /// repeated calls are idempotent. `workbook` is read-only here — it is
@@ -288,6 +322,25 @@ class RecalcEngine {
   // single-threaded contract intact for every other caller.
   friend Expected<void, Error> recalc_parallel_impl(Workbook&, const FunctionRegistry&, const SchedulerConfig&,
                                                     SchedulerStats*, RecalcEngine&);
+
+  // `Workbook` mutators (`set_cell_value`, `set_cell_formula`, the
+  // row/col edit helpers, `remove_sheet`) issue several engine operations
+  // back-to-back and must hold `mutex_` for the entire compound sequence
+  // so a concurrent `recalc_parallel` does not observe a half-applied
+  // mutation. The friendship lets those mutators take `mutex_` once and
+  // call the `*_locked` helpers directly through `LockedMutator`,
+  // instead of round-tripping through the public API and re-acquiring
+  // the lock between every call.
+  friend class ::formulon::Workbook;
+
+  // `Workbook` reaches the locked-mutator facade and the engine mutex
+  // through these accessors; they are intentionally private so the rest
+  // of the codebase keeps going through the public `recalc()` /
+  // `register_*` surface. The friend grant above lets `Workbook`
+  // mutators call them when they need a single critical section across
+  // multiple engine operations plus a `Sheet` write.
+  LockedMutator locked_mutator() noexcept { return LockedMutator(*this); }
+  std::mutex& mutex_for_compound_mutation() noexcept { return mutex_; }
 
   // Internal helpers that assume `mutex_` is already held. Public
   // counterparts above lock and delegate; the scheduler reaches them

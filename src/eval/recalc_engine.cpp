@@ -57,6 +57,28 @@ RecalcEngine::RecalcEngine() : arena_(std::make_unique<Arena>()) {}
 RecalcEngine::~RecalcEngine() = default;
 
 // ---------------------------------------------------------------------------
+// LockedMutator — passkey facade routing `Workbook`'s compound mutators
+// through the engine's `*_locked` API. The facade never acquires the
+// mutex; the caller (a `Workbook` member) holds `mutex_` for the entire
+// scope.
+// ---------------------------------------------------------------------------
+
+void RecalcEngine::LockedMutator::register_formula(CellNodeId cell, const parser::AstNode& ast,
+                                                   const Workbook& workbook) const {
+  engine_.register_formula_locked(cell, ast, workbook);
+}
+
+void RecalcEngine::LockedMutator::unregister_formula(CellNodeId cell) const { engine_.unregister_formula_locked(cell); }
+
+void RecalcEngine::LockedMutator::clear_cell_dependencies(CellNodeId cell) const {
+  engine_.clear_cell_dependencies_locked(cell);
+}
+
+void RecalcEngine::LockedMutator::mark_dirty(CellNodeId cell) const { engine_.mark_dirty_locked(cell); }
+
+const DepGraph& RecalcEngine::LockedMutator::dep_graph() const noexcept { return engine_.graph_; }
+
+// ---------------------------------------------------------------------------
 // Public mutating API: each entry acquires `mutex_` and delegates to the
 // `_locked` body. Internal callers (notably the parallel scheduler) take
 // `mutex_` themselves and call the `_locked` helpers directly to avoid

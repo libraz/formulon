@@ -266,20 +266,29 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
 
   const std::string removed_name = sheets_[index].name();
 
-  // Drop dep-graph nodes for every populated cell on the removed sheet.
+  // Drop dep-graph nodes for every populated cell on the removed sheet,
+  // then erase the sheet itself. Both halves run under a single hold of
+  // the engine mutex so a concurrent `recalc_parallel` either sees the
+  // sheet (and its graph nodes) fully present or fully gone, never a
+  // half-erased intermediate where the graph still names a cell whose
+  // sheet vector has already shifted.
+  //
   // The graph stores reverse edges, so other sheets' formulas that read
   // into the removed sheet keep their edges — but those edges are now
   // dangling. The next recalc catches them naturally because the source
   // cell is gone.
-  const Sheet& removed = sheets_[index];
-  for (const auto& [row, cells] : removed.rows()) {
-    for (std::size_t col = 0; col < cells.size(); ++col) {
-      eval::CellNodeId node{static_cast<std::uint16_t>(index), row, static_cast<std::uint32_t>(col)};
-      engine_->unregister_formula(node);
+  {
+    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    const Sheet& removed = sheets_[index];
+    for (const auto& [row, cells] : removed.rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        eval::CellNodeId node{static_cast<std::uint16_t>(index), row, static_cast<std::uint32_t>(col)};
+        mutator.unregister_formula(node);
+      }
     }
+    sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
   }
-
-  sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
 
   // Drop defined names that target the removed sheet. We compare against
   // the removed sheet's name verbatim; sheet-scoped names whose
@@ -320,7 +329,15 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
 
   // `to_index` is the destination in the *post-removal* sheet list, which
   // matches Excel's UI semantics. Implementation: lift the sheet out,
-  // then insert at the destination.
+  // then insert at the destination. The sheet vector mutation and the
+  // subsequent per-cell `mark_dirty` loop run under a single hold of
+  // the engine mutex so a concurrent `recalc_parallel` either sees the
+  // pre-move workbook (sheets in their original order, dirty set
+  // unchanged) or the fully patched one, never a half-applied move
+  // where `sheets_` has been reordered but the dep-graph still indexes
+  // cells by their pre-move sheet_id.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   Sheet moving = std::move(sheets_[from_index]);
   sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(from_index));
   sheets_.insert(sheets_.begin() + static_cast<std::ptrdiff_t>(to_index), std::move(moving));
@@ -359,7 +376,7 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
     for (const auto& [row, cells] : target.rows()) {
       for (std::size_t col = 0; col < cells.size(); ++col) {
         eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
-        engine_->mark_dirty(node);
+        mutator.mark_dirty(node);
       }
     }
   }
@@ -447,14 +464,20 @@ eval::CellNodeId make_node(std::size_t sheet_index, std::uint32_t row, std::uint
   return eval::CellNodeId{static_cast<std::uint16_t>(sheet_index), row, col};
 }
 
-// Eagerly marks every existing dependent of `cell` dirty in `engine`. The
-// next `recalc()` pass would discover them via BFS anyway, but eager
-// marking keeps the dirty set self-consistent between mutations and
-// matches what callers see when they introspect the engine via
-// `recalc_engine()`.
-void mark_dependents_dirty(eval::RecalcEngine& engine, eval::CellNodeId cell) {
-  for (eval::CellNodeId dep : engine.dep_graph().dependents_of(cell)) {
-    engine.mark_dirty(dep);
+// Eagerly marks every existing dependent of `cell` dirty in `mutator`'s
+// engine. The next `recalc()` pass would discover them via BFS anyway,
+// but eager marking keeps the dirty set self-consistent between
+// mutations and matches what callers see when they introspect the
+// engine via `recalc_engine()`.
+//
+// Precondition: caller holds the engine mutex for the lifetime of the
+// `LockedMutator&`. The helper routes through the facade so the
+// compound mutation in `set_cell_value` / `set_cell_formula` stays
+// under a single critical section, which keeps the `Sheet` write that
+// follows from racing against a concurrent `recalc_parallel`.
+void mark_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutator, eval::CellNodeId cell) {
+  for (eval::CellNodeId dep : mutator.dep_graph().dependents_of(cell)) {
+    mutator.mark_dirty(dep);
   }
 }
 
@@ -479,11 +502,22 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
   // reverse-edge snapshot still describes the pre-clear graph. (Clearing
   // outgoing edges does not actually drop incoming edges, but doing the
   // mark first keeps the ordering robust against future API changes.)
-  engine_->mark_dirty(node);
-  mark_dependents_dirty(*engine_, node);
-  engine_->clear_cell_dependencies(node);
-
-  sheets_[sheet_index].set_cell_value(row, col, value);
+  //
+  // The entire compound mutation — three engine operations plus the
+  // `Sheet` write — is performed under a single hold of the engine
+  // mutex so a concurrent `recalc_parallel` (which holds the same
+  // mutex for the duration of its pass) cannot observe a half-applied
+  // edit. Going through the public engine API would release and
+  // re-acquire the lock between every step and let the `Sheet` write
+  // race against the recalc worker reading the same cell.
+  {
+    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    mutator.mark_dirty(node);
+    mark_dependents_dirty(mutator, node);
+    mutator.clear_cell_dependencies(node);
+    sheets_[sheet_index].set_cell_value(row, col, value);
+  }
   return Expected<void, Error>::Ok();
 }
 
@@ -508,23 +542,30 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   parser::Parser parser(src, tmp_arena);
   parser::AstNode* root = parser.parse();
 
-  // Persist the formula text on the sheet first so a later `recalc()`
-  // reads what the user actually typed. This also resets `cached_value`
-  // to blank.
-  sheets_[sheet_index].set_cell_formula(row, col, std::move(formula));
+  // The compound mutation runs under a single hold of the engine mutex
+  // so a concurrent `recalc_parallel` does not see a half-applied
+  // edit — see the comment in `set_cell_value` for the full rationale.
+  {
+    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    // Persist the formula text on the sheet first so a later `recalc()`
+    // reads what the user actually typed. This also resets `cached_value`
+    // to blank.
+    sheets_[sheet_index].set_cell_formula(row, col, std::move(formula));
 
-  if (root != nullptr) {
-    engine_->register_formula(node, *root, *this);
-  } else {
-    // Parser failed beyond recovery (typically empty input). Drop any
-    // stale edges so we do not retain spurious dependencies; the cell
-    // will surface `#NAME?` at the next recalc.
-    engine_->unregister_formula(node);
+    if (root != nullptr) {
+      mutator.register_formula(node, *root, *this);
+    } else {
+      // Parser failed beyond recovery (typically empty input). Drop any
+      // stale edges so we do not retain spurious dependencies; the cell
+      // will surface `#NAME?` at the next recalc.
+      mutator.unregister_formula(node);
+    }
+
+    // Mark the cell dirty and propagate to direct dependents.
+    mutator.mark_dirty(node);
+    mark_dependents_dirty(mutator, node);
   }
-
-  // Mark the cell dirty and propagate to direct dependents.
-  engine_->mark_dirty(node);
-  mark_dependents_dirty(*engine_, node);
   return Expected<void, Error>::Ok();
 }
 
@@ -662,9 +703,17 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
 // coordinates and recalc evaluates the wrong cell — visible as blank
 // cached values on the band edge and `#REF!` on aggregators that span
 // the band.
-void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, eval::RecalcEngine& engine, const Workbook& workbook,
-                                       std::string_view target_sheet, parser::RowColAxis axis, parser::RowColEdit edit,
-                                       std::uint32_t index, std::uint32_t count) {
+//
+// Precondition: caller holds the engine mutex for the lifetime of the
+// `LockedMutator&`. The helper drives a long per-cell loop of dep-graph
+// mutations and must share the critical section that the surrounding
+// `apply_row_col_edit_operation` takes, so the eventual
+// `Sheet::insert_rows` / `delete_rows` does not race against a
+// concurrent `recalc_parallel`.
+void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                                       const Workbook& workbook, std::string_view target_sheet,
+                                       parser::RowColAxis axis, parser::RowColEdit edit, std::uint32_t index,
+                                       std::uint32_t count) {
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
     const bool local_means_target = strings::case_insensitive_eq(sheet.name(), target_sheet);
@@ -741,7 +790,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, eval::RecalcE
         const eval::CellNodeId old_node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
         if (dropped) {
           // Cell will vanish from the sheet — drop its dep-graph node.
-          engine.unregister_formula(old_node);
+          mutator.unregister_formula(old_node);
           continue;
         }
 
@@ -750,12 +799,12 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, eval::RecalcE
         // engine must learn the new key; otherwise dirty marks and
         // dependent edges fire against an empty / wrong slot.
         if (cell_moves) {
-          engine.unregister_formula(old_node);
+          mutator.unregister_formula(old_node);
         }
         const eval::CellNodeId new_node{static_cast<std::uint16_t>(sheet_idx), new_row, new_col};
         const parser::AstNode& effective_ast = ast_changed ? *shifted : *root;
-        engine.register_formula(new_node, effective_ast, workbook);
-        engine.mark_dirty(new_node);
+        mutator.register_formula(new_node, effective_ast, workbook);
+        mutator.mark_dirty(new_node);
       }
     }
   }
@@ -787,13 +836,24 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   return Expected<void, Error>::Ok();
 }
 
-Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets, eval::RecalcEngine& engine,
+// Precondition: caller holds the engine mutex for the lifetime of the
+// `LockedMutator&`. The compound edit (per-cell dep-graph re-keys plus
+// the eventual `Sheet::insert_rows` / `delete_rows` / `insert_cols` /
+// `delete_cols`) runs entirely under that single critical section so
+// a concurrent `recalc_parallel` either sees the pre-edit state or
+// the fully patched one, never a half-applied edit.
+// `rewrite_defined_names` does not touch the engine but is included
+// here to preserve the "defined-name table matches dep-graph state"
+// invariant for any other reader that consults both under the same
+// lock.
+Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
+                                                   const eval::RecalcEngine::LockedMutator& mutator,
                                                    std::vector<io::DefinedName>& defined_names, std::size_t sheet_index,
                                                    parser::RowColAxis axis, parser::RowColEdit edit,
                                                    std::uint32_t origin, std::uint32_t count, const char* op_name) {
   RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, origin, count, op_name));
   const std::string target_sheet_name = sheets[sheet_index].name();
-  rewrite_formulas_for_row_col_edit(sheets, engine, wb, target_sheet_name, axis, edit, origin, count);
+  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
   const parser::RowColShiftTransform name_transform(target_sheet_name, axis, edit, origin, count);
   rewrite_defined_names(defined_names, name_transform);
   Sheet& target = sheets[sheet_index];
@@ -814,22 +874,38 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
 }  // namespace
 
 Expected<void, Error> Workbook::insert_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
-  return apply_row_col_edit_operation(*this, sheets_, *engine_, defined_names_, sheet_index, parser::RowColAxis::kRow,
+  // The whole edit — including the per-cell dep-graph re-keys done by
+  // `rewrite_formulas_for_row_col_edit` and the eventual
+  // `Sheet::insert_rows` — must run under a single hold of the engine
+  // mutex. A concurrent `recalc_parallel` holds the same mutex for its
+  // full pass, so the compound mutation either runs entirely before
+  // or entirely after a recalc, never half-applied alongside it. The
+  // `LockedMutator` facade routes through the engine's `*_locked` API
+  // and assumes this lock is already held.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, parser::RowColAxis::kRow,
                                       parser::RowColEdit::kInsert, row, count, "insert_rows");
 }
 
 Expected<void, Error> Workbook::delete_rows(std::size_t sheet_index, std::uint32_t row, std::uint32_t count) {
-  return apply_row_col_edit_operation(*this, sheets_, *engine_, defined_names_, sheet_index, parser::RowColAxis::kRow,
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, parser::RowColAxis::kRow,
                                       parser::RowColEdit::kDelete, row, count, "delete_rows");
 }
 
 Expected<void, Error> Workbook::insert_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
-  return apply_row_col_edit_operation(*this, sheets_, *engine_, defined_names_, sheet_index, parser::RowColAxis::kCol,
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, parser::RowColAxis::kCol,
                                       parser::RowColEdit::kInsert, col, count, "insert_cols");
 }
 
 Expected<void, Error> Workbook::delete_cols(std::size_t sheet_index, std::uint32_t col, std::uint32_t count) {
-  return apply_row_col_edit_operation(*this, sheets_, *engine_, defined_names_, sheet_index, parser::RowColAxis::kCol,
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  return apply_row_col_edit_operation(*this, sheets_, mutator, defined_names_, sheet_index, parser::RowColAxis::kCol,
                                       parser::RowColEdit::kDelete, col, count, "delete_cols");
 }
 
