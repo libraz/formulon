@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Formulon function-coverage reporter.
 
-Derives "implemented" from a static scan of C++ sources (authoritative
-strings: `FunctionDef{"NAME"` inside `src/eval/builtins/*.cpp` and entries
-in the `kLazyDispatch` table inside `src/eval/tree_walker.cpp`). Derives
-"targeted" from the canonical catalog at `tools/catalog/functions.txt`.
+Derives "implemented" from a static scan of C++ sources: builtin entries
+inside `FunctionDef` array initialisers (any `{"NAME", <arity>u, ...}`
+literal under `src/eval/`), entries in the `kLazyDispatch` table inside
+`src/eval/tree_walker_lazy_table.cpp`, and special-form names inside the
+`kNames[] = { ... }` block in `src/eval/special_forms_catalog.cpp`.
+Derives "targeted" from the canonical catalog at
+`tools/catalog/functions.txt`.
 
 Prints a per-category coverage report by default. Supports a few
 pipe-friendly flags for CI / debugging:
@@ -31,10 +34,13 @@ CATALOG_PATH = REPO_ROOT / "tools" / "catalog" / "functions.txt"
 EVAL_DIR = REPO_ROOT / "src" / "eval"
 SPECIAL_FORMS_PATH = EVAL_DIR / "special_forms_catalog.cpp"
 
-# Matches `FunctionDef{"SUM"`, `FunctionDef def{"AND"`, etc. We require at
-# least one uppercase letter at the start so we don't pick up free-form
-# strings like `"foo"`.
-FUNCTION_DEF_RE = re.compile(r'FunctionDef(?:\s+\w+)?\s*\{\s*"([A-Z][A-Z0-9_.]*)"')
+# Matches builtin entries inside a `FunctionDef` array initialiser, of
+# the form `{"SUM", 1u, kVariadic, &Sum, ...}`. The arity column is the
+# disambiguator — every builtin entry has an unsigned-literal arity right
+# after the name, which is unique enough to keep the regex from matching
+# arbitrary string-keyed maps elsewhere in the tree. Catches single-letter
+# names like `N`/`T` too (the `*` quantifier allows zero suffix chars).
+FUNCTION_DEF_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*\d+u\s*,')
 
 # Inside `constexpr LazyEntry kLazyDispatch[] = { ... };` entries look like
 # `{"IF", &eval_if_lazy},`. We anchor on the leading `{` and `"` to avoid
