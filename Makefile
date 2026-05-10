@@ -27,7 +27,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         python-package python-test python-wheel \
         parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
-        oracle-gen oracle-gen-cf oracle-verify oracle-contribute \
+        oracle-gen oracle-gen-cf oracle-verify oracle-contribute oracle-contribute-list \
         ironcalc-import ironcalc-verify \
         fuzz-parser fuzz-xlsx fuzz-eval bench coverage mutation \
         function-status behavior-status
@@ -359,6 +359,17 @@ oracle-contribute:
 	fi
 	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py contribute \
 	  $(if $(TARGET),--target $(TARGET),)
+
+# Lists every contribution target known to `tools/oracle/targets.yaml`
+# along with the current host's runnable subset. Referenced from
+# `oracle-contribute`'s auto-detect failure path so the operator can see
+# the valid `TARGET=...` values without leaving the shell.
+oracle-contribute-list:
+	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	  echo "oracle-contribute-list: venv missing -- bootstrapping via oracle-setup..."; \
+	  $(MAKE) oracle-setup; \
+	fi
+	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py list
 
 # -- IronCalc secondary oracle --------------------------------------------
 # Imports xlsx fixtures vendored from IronCalc (dual MIT / Apache-2.0)
