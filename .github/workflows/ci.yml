@@ -159,6 +159,7 @@ jobs:
     name: Coverage (lcov + codecov upload)
     runs-on: ubuntu-latest
     continue-on-error: true
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -177,7 +178,12 @@ jobs:
 
       - name: Run fast tests under coverage instrumentation
         working-directory: build-coverage
-        run: ctest -LE "SLOW|LOAD" --output-on-failure --timeout 60
+        # Parallel ctest is required here -- a serial run of the ~10k
+        # fast tests under -O0 + gcov instrumentation overruns the
+        # 6-hour Actions ceiling. `-j` matches the available cores;
+        # gcov writes per-TU .gcda files so parallel tests do not
+        # corrupt each other.
+        run: ctest -LE "SLOW|LOAD" --output-on-failure --timeout 60 -j 4
 
       - name: Capture and filter lcov tracefile
         run: |
