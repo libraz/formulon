@@ -407,14 +407,21 @@ class PythonChannel(Channel):
 
     def _probe(self) -> None:
         # Strategy 1: module already importable (installed wheel).
+        # We catch `Exception` rather than `ImportError` because the
+        # `formulon` package's `__init__` eagerly resolves
+        # `libformulon.so` via ctypes; a missing/unbuilt shared library
+        # raises `OSError`, not `ImportError`. Treat any failure to
+        # bring the module up as "channel unavailable" so the harness
+        # stays skip-aware (per the README contract) instead of
+        # aborting the whole parity run.
         try:
             import formulon  # type: ignore[import-not-found]
 
             self._mod = formulon
             self._reason = "available (installed)"
             return
-        except ImportError:
-            pass
+        except Exception as exc:  # noqa: BLE001 -- channel-boundary skip
+            self._reason = f"installed import failed: {exc}"
         # Strategy 2: source-tree fallback. Add packages/python to sys.path.
         if self.pkg_dir.is_dir():
             sys.path.insert(0, str(self.pkg_dir))
@@ -424,10 +431,13 @@ class PythonChannel(Channel):
                 self._mod = formulon
                 self._reason = f"available (source tree: {self.pkg_dir})"
                 return
-            except ImportError as exc:
+            except Exception as exc:  # noqa: BLE001 -- channel-boundary skip
                 self._reason = f"source-tree import failed: {exc}"
                 return
-        self._reason = "not installed and source tree missing"
+        # Only overwrite reason here if the installed-strategy probe
+        # didn't already record an informative message.
+        if self._reason == "not yet probed":
+            self._reason = "not installed and source tree missing"
 
     def available(self) -> bool:
         return self._mod is not None
