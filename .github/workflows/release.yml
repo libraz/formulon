@@ -14,7 +14,10 @@
 #   - attach-cli    : after the release exists, upload CLI tarballs to it.
 #
 # Required setup:
-#   - `NPM_TOKEN` repository secret (Automation token).
+#   - npm Trusted Publishing (OIDC) linked for `@libraz/formulon`.
+#     The very first publish must be performed manually so the package
+#     name exists on the registry; subsequent versions are published
+#     by this workflow via OIDC (no `NPM_TOKEN` secret required).
 #   - PyPI trusted publishing configured for project `formulon`,
 #     environment `pypi`, this workflow file.
 #
@@ -93,8 +96,6 @@ jobs:
 
       - name: Publish to npm
         working-directory: packages/npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --provenance
 
   build-cli:
