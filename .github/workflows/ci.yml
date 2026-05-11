@@ -73,7 +73,13 @@ jobs:
         # tests under `-O0 + --coverage` is multi-hour on the
         # ubuntu-latest runner. gcov writes per-TU `.gcda` files so
         # parallel test binaries do not corrupt each other.
-        run: ctest -LE "SLOW|LOAD" --output-on-failure --timeout 60 -j 4
+        #
+        # BENCH is excluded because formulon_bench_check is a 20%
+        # wall-clock regression gate against a Release-mode baseline;
+        # under -O0 + --coverage every bench is 5-10x slower and the
+        # gate trivially fails. Bench is also excluded from the local
+        # fast-suite definition in tests/bench/CMakeLists.txt.
+        run: ctest -LE "SLOW|LOAD|BENCH" --output-on-failure --timeout 60 -j 4
 
       - name: Check failures against allowlist
         run: |
