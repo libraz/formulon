@@ -1,18 +1,22 @@
 # Formulon main-branch CI workflow.
 #
-# Two jobs only — the bare-minimum signal that a push to `main` did not
-# break the build or the user-facing fast suite:
+# Two jobs — the bare-minimum signal that a push to `main` did not
+# break the build, the user-facing fast suite, or the WASM artifact:
 #
-#   - native : build + ctest (fast labels), gated by an allowlist of
-#              pre-existing flakes (tools/ci/expected_flakes.txt).
+#   - native : Debug + gcov build, run ctest (fast labels) gated by an
+#              allowlist of pre-existing flakes (tools/ci/expected_flakes.txt),
+#              capture an lcov tracefile, and upload coverage to Codecov.
+#              Pattern mirrored from ../mygram-db's ci.yml: tests and
+#              coverage share a single instrumented run so coverage tracks
+#              the same code paths the CI gate validates.
 #   - wasm   : build the WASM artifact, run the size report against
-#              the 1.8 MiB hard ceiling, smoke-test under Node 20,
+#              the 1.9 MiB hard ceiling, smoke-test under Node 22,
 #              and upload formulon.wasm as a downloadable artifact.
 #
-# Heavier signals (clang-format, clang-tidy, ThreadSanitizer) live on the
-# `develop` branch (.github/workflows/develop-ci.yml) so iterating on
-# `main` does not block on the stricter passes. Sanitizers can also be
-# fired manually via `workflow_dispatch` from the Actions UI.
+# Heavier signals (clang-format) live on the `develop` branch
+# (.github/workflows/develop-ci.yml). Sanitizers (TSan, ASan, UBSan)
+# live in .github/workflows/sanitizers.yml and are fired manually via
+# `workflow_dispatch` from the Actions UI.
 #
 # The +10 KiB WASM growth review rule (CLAUDE.md "WASM Size Policy") is
 # *not* enforced here -- the size script only blocks at the hard ceiling.
@@ -34,47 +38,97 @@ concurrency:
 
 jobs:
   native:
-    name: Build and test (native, Linux)
+    name: Build, test, and coverage (native, Linux)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install build and coverage tooling
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build libbrotli-dev brotli
+            build-essential cmake ninja-build libbrotli-dev brotli lcov ccache
 
-      - name: Cache CMake build directory
+      - name: Cache ccache
         uses: actions/cache@v4
         with:
-          path: build
-          key: native-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'Makefile', 'cmake/**') }}
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
           restore-keys: |
-            native-build-${{ runner.os }}-
+            ccache-${{ runner.os }}-
 
-      - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Cache CMake build directory (coverage)
+        uses: actions/cache@v4
+        with:
+          path: build-coverage
+          key: coverage-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'Makefile', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            coverage-build-${{ runner.os }}-
+
+      - name: Setup ccache
+        run: |
+          ccache --set-config=max_size=500M
+          ccache --zero-stats
+
+      - name: Configure (coverage preset)
+        env:
+          CC: ccache gcc
+          CXX: ccache g++
+        run: cmake --preset coverage
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build-coverage --parallel
+
+      - name: Show ccache statistics
+        run: ccache --show-stats
+
+      - name: Zero gcov counters
+        run: lcov --zerocounters --directory build-coverage
 
       - name: Run fast tests
         id: ctest
         continue-on-error: true
-        working-directory: build
-        run: ctest -LE "SLOW|LOAD" --output-on-failure --timeout 30
+        working-directory: build-coverage
+        # Parallel ctest is required -- a serial run of the ~10k fast
+        # tests under `-O0 + --coverage` is multi-hour on the
+        # ubuntu-latest runner. gcov writes per-TU `.gcda` files so
+        # parallel test binaries do not corrupt each other.
+        run: ctest -LE "SLOW|LOAD" --output-on-failure --timeout 60 -j 4
 
       - name: Check failures against allowlist
         run: |
-          if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
+          if [ -f build-coverage/Testing/Temporary/LastTestsFailed.log ]; then
             python3 tools/ci/check_test_failures.py \
-              --failed build/Testing/Temporary/LastTestsFailed.log \
+              --failed build-coverage/Testing/Temporary/LastTestsFailed.log \
               --allowlist tools/ci/expected_flakes.txt
           else
             echo "ctest produced no LastTestsFailed.log; assuming success"
           fi
+
+      - name: Capture and filter lcov tracefile
+        run: |
+          set -euo pipefail
+          mkdir -p build-coverage/coverage
+          lcov --directory build-coverage --capture \
+               --output-file build-coverage/coverage/coverage.info \
+               --rc lcov_branch_coverage=0 \
+               --ignore-errors source,gcov,negative,unused,mismatch,inconsistent
+          lcov --extract build-coverage/coverage/coverage.info \
+               "${PWD}/src/*" \
+               --output-file build-coverage/coverage/coverage.filtered.info \
+               --rc lcov_branch_coverage=0 \
+               --ignore-errors unused,negative
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build-coverage/coverage/coverage.filtered.info
+          flags: unittests
+          name: codecov-formulon
+          fail_ci_if_error: false
 
   wasm:
     name: Build WASM and check size
