@@ -58,7 +58,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Node 24 ships with npm >= 11.5.1 natively, which supports
+          # token-less OIDC publishing via Trusted Publisher. Node 22
+          # ships with npm 10, which can sign provenance via OIDC but
+          # still requires a NODE_AUTH_TOKEN for the publish PUT and
+          # errors with 404 against the OIDC-only registry path.
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install host tools
@@ -103,16 +108,6 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upgrade npm to a version that supports OIDC publishing
-        # Node 22 ships with npm 10.x. npm 10 can sign provenance via OIDC
-        # but still requires NODE_AUTH_TOKEN to actually publish, so a
-        # workflow with a configured Trusted Publisher (and no NPM_TOKEN
-        # secret) errors with `404 Not Found` on the PUT. Token-less
-        # OIDC publish via Trusted Publisher requires npm >= 11.5.1.
-        run: |
-          npm install -g npm@latest
-          npm --version
 
       - name: Publish to npm
         working-directory: packages/npm
