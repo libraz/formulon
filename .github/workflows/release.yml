@@ -45,15 +45,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: 'https://registry.npmjs.org'
-
+      # Order matters: setup-emsdk@v14 prepends its bundled (non-executable)
+      # node / cmake to PATH. Running setup-node AFTER it re-prepends the
+      # real node, so `node ...` in subsequent steps hits the actions-managed
+      # binary, not emsdk's broken shim. cmake still needs an explicit
+      # CMAKE=/usr/bin/cmake override (emsdk owns its own cmake binary that
+      # actions/setup-node cannot displace).
       - uses: mymindstorm/setup-emsdk@v14
         with:
           version: 3.1.74
           actions-cache-folder: emsdk-cache
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install host tools
         run: |
@@ -79,10 +85,10 @@ jobs:
         run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
 
       - name: Stage and smoke-test npm package
-        # Same CMAKE override as the Build WASM step: emsdk's PATH order
-        # shadows the system cmake with a non-executable bundled copy,
-        # and the secondary `cmake --build` recipe lines in npm-package /
-        # npm-test would otherwise fail with EACCES.
+        # CMAKE override mirrors the Build WASM step (emsdk's PATH order
+        # shadows the system cmake with a non-executable bundled copy).
+        # node resolves cleanly because setup-node was placed AFTER
+        # setup-emsdk at the top of this job.
         run: |
           make CMAKE=/usr/bin/cmake npm-package
           make CMAKE=/usr/bin/cmake npm-test
@@ -233,6 +239,10 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
+          # Idempotent: if a re-run uploads the same version, skip
+          # instead of failing. Useful when only a sibling job (e.g.
+          # publish-npm) failed and the release tag has to be re-pushed.
+          skip-existing: true
 
   attach-cli:
     name: Attach CLI archives to GitHub Release

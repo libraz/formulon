@@ -10,6 +10,10 @@ CTEST ?= ctest
 CLANG_FORMAT ?= clang-format
 CLANG_TIDY ?= clang-tidy
 
+# Node.js binary. Overridable so CI can dodge emsdk's bundled non-executable
+# `node` shim (see release.yml's `make CMAKE=... NODE=...` pattern).
+NODE ?= node
+
 # Default test parallelism. Override with `make test CTEST_JOBS=N`. CTest
 # infers a reasonable number when the variable is empty (`-j 0` lets it
 # pick), but defaulting to the host CPU count keeps the fast loop near
@@ -129,11 +133,11 @@ test-wasm:
 	  echo "test-wasm: $(WASM_BUILD_DIR)/formulon.js missing; run 'make wasm' first"; \
 	  exit 1; \
 	fi
-	@if ! command -v node >/dev/null 2>&1; then \
-	  echo "test-wasm: node not found in PATH"; \
+	@if ! command -v $(NODE) >/dev/null 2>&1; then \
+	  echo "test-wasm: '$(NODE)' not found"; \
 	  exit 1; \
 	fi
-	node tests/wasm/run.mjs
+	$(NODE) tests/wasm/run.mjs
 
 # -- npm packaging targets ------------------------------------------------
 # `make npm-package` -> stage build-wasm/formulon.{js,wasm} + the
@@ -148,20 +152,20 @@ test-wasm:
 NPM_PKG_DIR := packages/npm
 
 npm-package: wasm
-	@if ! command -v node >/dev/null 2>&1; then \
-	  echo "npm-package: node not found in PATH"; \
+	@if ! command -v $(NODE) >/dev/null 2>&1; then \
+	  echo "npm-package: '$(NODE)' not found"; \
 	  exit 1; \
 	fi
-	node $(NPM_PKG_DIR)/scripts/stage.mjs \
+	$(NODE) $(NPM_PKG_DIR)/scripts/stage.mjs \
 	  --build-dir $(WASM_BUILD_DIR) \
 	  --out-dir $(NPM_PKG_DIR)/dist
 
 npm-test: npm-package
-	@if ! command -v node >/dev/null 2>&1; then \
-	  echo "npm-test: node not found in PATH"; \
+	@if ! command -v $(NODE) >/dev/null 2>&1; then \
+	  echo "npm-test: '$(NODE)' not found"; \
 	  exit 1; \
 	fi
-	(cd $(NPM_PKG_DIR) && node --test 'test/*.test.mjs')
+	(cd $(NPM_PKG_DIR) && $(NODE) --test 'test/*.test.mjs')
 
 npm-pack: npm-package
 	@if ! command -v npm >/dev/null 2>&1; then \
@@ -240,15 +244,15 @@ node-native:
 	$(CMAKE) --build $(NODE_NATIVE_BUILD_DIR) --target formulon_node --parallel
 
 node-package: node-native
-	@if ! command -v node >/dev/null 2>&1; then \
-	  echo "node-package: node not found in PATH"; exit 1; \
+	@if ! command -v $(NODE) >/dev/null 2>&1; then \
+	  echo "node-package: '$(NODE)' not found"; exit 1; \
 	fi
-	node $(NODE_NATIVE_PKG_DIR)/scripts/stage.mjs \
+	$(NODE) $(NODE_NATIVE_PKG_DIR)/scripts/stage.mjs \
 	  --build-dir $(NODE_NATIVE_BUILD_DIR) \
 	  --out-dir $(NODE_NATIVE_PKG_DIR)/dist
 
 node-test: node-package
-	(cd $(NODE_NATIVE_PKG_DIR) && node --test 'test/*.test.mjs')
+	(cd $(NODE_NATIVE_PKG_DIR) && $(NODE) --test 'test/*.test.mjs')
 
 # -- Cross-channel parity gate ------------------------------------------------
 # `make parity-test` -> evaluate fixtures.json on every available channel
