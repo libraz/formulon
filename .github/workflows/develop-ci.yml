@@ -3,18 +3,23 @@
 # Runs the heavier signals that `main` (ci.yml) intentionally skips so
 # iteration on `main` stays fast:
 #
-#   - format-and-lint : clang-format dry-run + clang-tidy. Currently
-#                       soft-fail (`continue-on-error: true`) until the
-#                       pre-existing warnings backlog is drained.
-#   - tsan            : ThreadSanitizer gate. Builds the dedicated TSAN-
-#                       labelled concurrency tests under
-#                       `-fsanitize=thread` and uploads logs on failure.
-#                       Driver: tools/ci/run_tsan.sh.
+#   - format       : clang-format dry-run only. Hard gate (the check is
+#                    binary: file is formatted or it is not).
+#   - tsan         : ThreadSanitizer gate. Builds the dedicated TSAN-
+#                    labelled concurrency tests under
+#                    `-fsanitize=thread` and uploads logs on failure.
+#                    Driver: tools/ci/run_tsan.sh.
 #
 # Pattern mirrored from ../mygram-db's develop-ci.yml: heavier checks
 # stay off the main-branch hot path; they fire when the human is
 # explicitly working on the develop branch (or via `workflow_dispatch`
 # from the Actions UI).
+#
+# clang-tidy is intentionally NOT a CI gate, following the mygram-db
+# policy. It carries a large pre-existing warnings backlog that would
+# never realistically pass `-Werror`, and per CLAUDE.md "CI vs. local
+# development" tunable-threshold signals belong as `tools/dev/` scripts,
+# not as CI pass/fail gates. Local invocation: `make lint`.
 #
 # Sanitizers can also be triggered manually from any branch via the
 # `workflow_dispatch` button in the Actions UI when investigating a
@@ -34,39 +39,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  format-and-lint:
-    name: clang-format and clang-tidy
+  format:
+    name: clang-format check
     runs-on: ubuntu-latest
-    # Soft-fail until the pre-existing warnings backlog is drained.
-    # Hard-flip is scheduled for Phase 6; remove this line at that point.
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install tooling
+      - name: Install clang-format
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build clang-format clang-tidy
+          sudo apt-get install -y --no-install-recommends clang-format
 
       - name: clang-format check
         run: make format-check
-
-      - name: Configure (Debug, for compile_commands.json)
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-
-      - name: Build (compile_commands.json)
-        run: cmake --build build --parallel
-
-      - name: clang-tidy
-        run: |
-          make lint > /tmp/lint.log 2>&1 || true
-          tail -200 /tmp/lint.log
-          if grep -E "warning:|error:" /tmp/lint.log >/dev/null; then
-            echo "clang-tidy reported warnings/errors (soft-fail; see log above)"
-            exit 1
-          fi
 
   tsan:
     name: ThreadSanitizer (Linux, clang)
