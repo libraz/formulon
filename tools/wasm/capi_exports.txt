@@ -1,0 +1,64 @@
+# C ABI symbols exported by the capi WASM variant (consumed by
+# packages/python via wasmtime-py).
+#
+# One symbol per line, no leading underscore -- FormulonWasm.cmake
+# prepends one before passing to emcc's -sEXPORTED_FUNCTIONS.
+#
+# Lines starting with # are comments. Blank lines are ignored.
+#
+# The list is curated, not the full 181-symbol C ABI: only what the
+# Python binding currently calls is included so the WASM stays as
+# small as practical. When the Python binding grows a new entry point,
+# add the corresponding symbol here and the wasmtime allocator helpers
+# below will pick it up.
+
+# -- Construction / lifecycle ------------------------------------------------
+fm_workbook_create
+fm_workbook_create_empty
+fm_workbook_load
+fm_workbook_destroy
+
+# -- Save --------------------------------------------------------------------
+fm_workbook_save
+fm_buffer_free
+
+# -- Sheets ------------------------------------------------------------------
+fm_workbook_sheet_count
+fm_workbook_sheet_name
+fm_workbook_add_sheet
+
+# -- Cell mutation -----------------------------------------------------------
+fm_workbook_set_number
+fm_workbook_set_bool
+fm_workbook_set_text
+fm_workbook_set_blank
+fm_workbook_set_formula
+
+# -- Cell read ---------------------------------------------------------------
+fm_workbook_get_value
+
+# -- Iteration / dump --------------------------------------------------------
+fm_workbook_cell_count
+fm_workbook_cell_at
+fm_workbook_defined_name_count
+fm_workbook_defined_name_at
+fm_workbook_table_count
+fm_workbook_table_at
+fm_workbook_passthrough_count
+fm_workbook_passthrough_at
+
+# -- Recalc ------------------------------------------------------------------
+fm_workbook_recalc
+fm_workbook_set_iterative
+
+# -- Diagnostics -------------------------------------------------------------
+fm_last_error_message
+fm_last_error_context
+fm_status_string
+
+# -- Version -----------------------------------------------------------------
+fm_version_string
+
+# -- Allocator (host-side scratch buffer plumbing) ---------------------------
+malloc
+free

@@ -116,12 +116,11 @@ __pycache__/
 .pytest_cache/
 dumps/
 
-# Python wheel staging artefacts (libformulon is built per-platform and
-# should not be checked in; the empty _lib/.gitkeep keeps the directory).
-packages/python/formulon/_lib/lib*.dylib
-packages/python/formulon/_lib/lib*.so
-packages/python/formulon/_lib/*.dll
-packages/python/formulon/_lib/*.lib
+# Python wheel staging artefacts. The wheel ships `formulon_capi.wasm`
+# (built by `make wasm-capi` and copied here by `scripts/stage.py`), but
+# the binary blob and its auto-generated package-init stay out of the
+# source tree -- they are regenerated on every wheel build.
+packages/python/formulon/_wasm/
 build-py/
 
 # Oracle generated artifacts (golden JSON is committed; intermediate workbooks are not)

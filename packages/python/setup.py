@@ -1,14 +1,19 @@
 # Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
-"""setuptools glue for platform-tagged Formulon wheels.
+"""setuptools glue for the Formulon Python wheel.
 
-The Python code is pure ctypes, but the wheel bundles a native shared library.
-Mark the distribution as non-pure so wheel filenames carry a platform tag
-instead of py3-none-any.
+The wheel ships a single platform-agnostic ``formulon_capi.wasm`` plus
+pure-Python source under ``formulon/``. ``wasmtime`` does the heavy
+lifting at runtime, so the distribution itself is ``py3-none-any`` --
+one wheel works on every interpreter and OS that has a wasmtime build.
+
+Override::
+
+    FORMULON_WHEEL_PURE=0   # build a platform-tagged wheel (legacy)
+
+is intentionally NOT supported: the binding has no native components.
 """
 
 from __future__ import annotations
-
-import os
 
 from setuptools import setup
 
@@ -25,15 +30,13 @@ if _bdist_wheel is not None:
     class bdist_wheel(_bdist_wheel):
         def finalize_options(self) -> None:
             super().finalize_options()
-            self.root_is_pure = False
-            self.python_tag = "py3"
-            plat_name = os.environ.get("FORMULON_PYTHON_PLAT_NAME")
-            if plat_name:
-                self.plat_name = plat_name
+            # Pure-Python: no platform tag. wasmtime is a runtime
+            # dependency listed in pyproject.toml and pip resolves the
+            # right binary wheel for the user's OS / arch.
+            self.root_is_pure = True
 
         def get_tag(self) -> tuple[str, str, str]:
-            _, _, plat_name = super().get_tag()
-            return "py3", "none", plat_name
+            return "py3", "none", "any"
 
     cmdclass["bdist_wheel"] = bdist_wheel
 

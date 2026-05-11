@@ -5,7 +5,7 @@ include pyproject.toml
 include setup.py
 include formulon/py.typed
 include formulon/*.pyi
-recursive-include formulon/_lib *.so *.dylib *.dll *.lib
+recursive-include formulon/_wasm *.wasm
 prune tests
 prune scripts
 global-exclude __pycache__

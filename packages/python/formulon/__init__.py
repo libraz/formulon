@@ -50,7 +50,7 @@ __all__ = [
 
 
 def library_version() -> str:
-    """Return the version string baked into the loaded ``libformulon``.
+    """Return the version string baked into the loaded WASM module.
 
     Returns:
       The result of ``fm_version_string()``. Always non-empty.

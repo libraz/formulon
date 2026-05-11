@@ -1,8 +1,8 @@
 # formulon
 
-Excel 365 calculation engine, exposed as a pure-`ctypes` Python binding.
-Evaluates formulas, loads and saves `.xlsx` workbooks, and aims for 1-bit
-compatibility with Mac Excel 365 (ja-JP locale).
+Excel 365 calculation engine, exposed as a pure-Python binding driven by
+WebAssembly. Evaluates formulas, loads and saves `.xlsx` workbooks, and
+aims for 1-bit compatibility with Mac Excel 365 (ja-JP locale).
 
 ## Install
 
@@ -10,13 +10,16 @@ compatibility with Mac Excel 365 (ja-JP locale).
 pip install formulon
 ```
 
-Requires Python 3.9 or newer. PyPI publishes platform wheels only. Each wheel
-bundles a precompiled `libformulon.{so,dylib,dll}`; there is no Python
-build-time dependency on NumPy, Cython, or pybind11.
+Requires Python 3.9 or newer. The wheel is `py3-none-any`: it contains a
+single `formulon_capi.wasm` (a standalone reactor-style WebAssembly
+module exporting the engine's C ABI) plus a thin Python wrapper that
+drives it through [`wasmtime`](https://pypi.org/project/wasmtime/). One
+wheel works on every platform `wasmtime` supports: Linux x86_64 /
+aarch64, macOS x86_64 / arm64, Windows x86_64.
 
-Source distributions are intentionally not published for the 0.9 series.
-Building the native engine from source requires CMake and a C++17 compiler, so
-release artifacts are cut as verified wheels for supported platforms instead.
+`wasmtime` is the only runtime dependency, declared in the wheel's
+metadata; `pip` resolves the right platform-specific `wasmtime` build at
+install time.
 
 ## Quick start
 
@@ -67,13 +70,16 @@ The public surface is documented via Python docstrings and the
 hand-rolled type stubs in `formulon/__init__.pyi`. Highlights:
 
 - `formulon.eval_formula(formula: str) -> Value` -- one-shot evaluation.
-- `formulon.library_version() -> str` -- version of the underlying
-  `libformulon` build.
+- `formulon.library_version() -> str` -- version of the engine compiled
+  into the bundled `formulon_capi.wasm`.
 - `formulon.Workbook.create_default() / create_empty() / load(bytes)` --
   factory methods; always use them as context managers (`with ... as wb:`).
 - `Workbook.set_number / set_bool / set_text / set_blank / set_formula` --
   cell mutators.
 - `Workbook.recalc()` -- triggers a full dependency-ordered recalculation.
+  Always serial under WASM (the parallel scheduler requires a pthread
+  runtime that wasmtime does not provide; the native CLI uses up to 8
+  worker threads).
 - `Workbook.get_value(sheet, row, col) -> Value` -- read a cached value.
 - `Workbook.save() -> bytes` -- serialise to `.xlsx`.
 - `Workbook.iter_cells(sheet)`, `iter_defined_names()`, `iter_tables()`,
@@ -90,25 +96,21 @@ inside `Value(kind=ValueKind.ERROR)`.
 
 ## Building from source
 
-The wheel is intentionally not built with `pip install` from source --
-that would require CMake and a C++17 compiler on every host. Instead:
-
 ```sh
 # From the repository root:
-make python-package    # builds libformulon and stages it into _lib/
+make wasm-capi         # builds build-wasm-capi/formulon_capi.wasm (Emscripten)
+make python-package    # stages the wasm into packages/python/formulon/_wasm/
 make python-test       # runs the smoke tests against the staged package
-make python-wheel      # produces a platform-tagged build-py/dist/formulon-*.whl
+make python-wheel      # produces a py3-none-any build-py/dist/formulon-*.whl
 ```
 
-`packages/python/scripts/stage.py` is the entry point; it shells out to
-CMake with `-DFM_BUILD_C_API_SHARED=ON` and copies the resulting library
-into `packages/python/formulon/_lib/`.
+`packages/python/scripts/stage.py` is the entry point; it just copies
+the pre-built `formulon_capi.wasm` into the package data directory --
+no compilation happens inside the Python build.
 
-Do not upload a `py3-none-any` wheel for this package. The binding is pure
-Python, but the wheel is platform-specific because it contains the native
-shared library. Linux release wheels should be built in a manylinux container
-and repaired with `auditwheel`; macOS release wheels should be checked with
-`delocate`.
+The wheel is intentionally not built with `pip install` from source:
+that would require Emscripten on the user's machine. CI builds the wheel
+once on Linux and publishes it to PyPI as `py3-none-any`.
 
 ## Project
 

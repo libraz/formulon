@@ -1,17 +1,18 @@
 # PEP 621 metadata for the Formulon Python wheel.
 #
-# The wheel ships a per-platform shared library (libformulon.{dylib,so,dll})
-# that is built out-of-band by `make python-package`. We deliberately do NOT
-# build C++ from inside `pip wheel`, because that would require CMake +
-# clang/gcc on every host that pip-installs from sdist.
+# The wheel ships `formulon_capi.wasm` -- a standalone reactor-style
+# WebAssembly module exporting the C ABI from `src/c_api/formulon_c.h`
+# -- plus a pure-Python wrapper that drives it through `wasmtime`. One
+# `py3-none-any` wheel works on every interpreter and OS that has a
+# wasmtime build (which is every platform wasmtime itself supports:
+# Linux x86_64 / aarch64, macOS x86_64 / arm64, Windows x86_64).
 #
 # Build flow:
-#   1. `make python-package` -> builds libformulon and stages it into
-#                               packages/python/formulon/_lib/.
-#   2. `make python-wheel`   -> runs `setup.py bdist_wheel` against this
-#                               directory with a platform tag.
-#
-# Stdlib-only at runtime. ctypes is the only binding mechanism.
+#   1. `make wasm-capi`      -> emits build-wasm-capi/formulon_capi.wasm.
+#   2. `make python-package` -> stages the wasm into
+#                               packages/python/formulon/_wasm/.
+#   3. `make python-wheel`   -> runs `setup.py bdist_wheel` against this
+#                               directory; the result is py3-none-any.
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -26,12 +27,17 @@ license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "libraz" }]
 requires-python = ">=3.9"
-keywords = ["excel", "spreadsheet", "formula", "xlsx", "calculation"]
+dependencies = [
+  # wasmtime is itself a per-platform binary wheel; pip resolves the
+  # right build at install time. Pin the major to keep the runtime
+  # API stable across formulon point releases.
+  "wasmtime>=20,<45",
+]
+keywords = ["excel", "spreadsheet", "formula", "xlsx", "calculation", "wasm"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
-  "Operating System :: MacOS",
-  "Operating System :: POSIX :: Linux",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
@@ -48,24 +54,14 @@ Source = "https://github.com/libraz/formulon"
 Issues = "https://github.com/libraz/formulon/issues"
 
 [tool.setuptools]
-packages = ["formulon", "formulon._lib"]
+packages = ["formulon", "formulon._wasm"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-# Be explicit so the platform-specific shared library, the PEP 561 marker,
-# and any sibling stub files all land in the wheel. setuptools' default
-# package-data discovery will not pick up files in _lib/ otherwise.
 formulon = [
   "py.typed",
   "*.pyi",
 ]
-"formulon._lib" = [
-  "*.so",
-  "*.dylib",
-  "*.dll",
-  "*.lib",
+"formulon._wasm" = [
+  "formulon_capi.wasm",
 ]
-
-# Wheel tagging lives in setup.py: the binding itself is ctypes-only, but the
-# wheel is deliberately marked non-pure so it is py3-none-<platform>, never
-# py3-none-any. It bundles libformulon.{dylib,so,dll}.

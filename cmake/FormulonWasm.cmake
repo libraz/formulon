@@ -1,37 +1,51 @@
 # FormulonWasm.cmake
 #
-# Configures the Emscripten / embind build target (`formulon_wasm`).
+# Configures the Emscripten WASM build targets.
 #
-# Activated only when `FM_BUILD_WASM=ON`, which is itself meaningful only
+# Two variants, switched via FM_WASM_VARIANT:
+#
+#   embind (default): the npm @libraz/formulon artifact. Compiles
+#     src/wasm/embind.cpp + formulon_static, links with -lembind, emits
+#     a MODULARIZE'd ES module factory (`createFormulon`). Threads are
+#     wired in via -pthread / -sUSE_PTHREADS=1 / -sPTHREAD_POOL_SIZE=8
+#     so the parallel SCC scheduler can use real Web Workers. Output:
+#     `<build>/formulon.{js,wasm}`.
+#
+#   capi: the formulon (PyPI) artifact, consumed by wasmtime-py. No
+#     embind, no JS glue, no pthread. Compiles src/c_api/formulon_c.cpp
+#     + formulon_static, link line is --no-entry + -sSTANDALONE_WASM=1,
+#     exports the fm_* C ABI plus _malloc / _free. The scheduler's
+#     std::thread calls compile but run synchronously under emcc's
+#     no-pthread mode, so a Python caller silently gets serial recalc.
+#     Output: `<build>/formulon_capi.wasm` (no companion .js).
+#
+# Activated only when FM_BUILD_WASM=ON, which itself is meaningful only
 # under `emcmake`. The native build path (the default) MUST remain green
 # without emscripten installed; nothing in this file should touch the
-# build graph unless `FM_BUILD_WASM` is on AND `EMSCRIPTEN` is defined.
+# build graph unless FM_BUILD_WASM is on AND EMSCRIPTEN is defined.
 #
-# Output layout (relative to the build dir): `formulon.js` + `formulon.wasm`
-# for Release, `formulon-debug.js` + `formulon-debug.wasm` for Debug.
+# Linker / codegen notes (embind variant)
+# ---------------------------------------
 #
-# Linker / codegen notes
-# ----------------------
-#
-# * The whole engine is built `-fno-exceptions -fno-rtti`. We keep that
-#   here (`-sDISABLE_EXCEPTION_CATCHING=1`); the embind binding never
-#   throws because `JsWorkbook` and friends route every failure through
-#   a `{ ok, status, message }` envelope.
+# * Engine is built `-fno-exceptions -fno-rtti`. We keep that here
+#   (`-sDISABLE_EXCEPTION_CATCHING=1`); the embind binding never throws
+#   because `JsWorkbook` and friends route every failure through a
+#   `{ ok, status, message }` envelope.
 #
 # * `MODULARIZE=1 + EXPORT_NAME=createFormulon + EXPORT_ES6=1` produces
 #   an ES module factory: `import createFormulon from './formulon.js'`.
-#   Setting `ENVIRONMENT=web,worker,node` lets the same artifact run
-#   under all three.
+#   `ENVIRONMENT=web,worker,node` lets the same artifact run under all
+#   three.
 #
 # * `FILESYSTEM=0` strips Emscripten's MEMFS shim; the engine never
 #   touches files directly (callers hand in byte buffers via the C ABI).
 #
 # * `closure 0` because closure mangles embind's stub functions and
-#   breaks the binding layer. Bundle 5+ size optimisation may revisit.
+#   breaks the binding layer.
 #
 # * `INITIAL_MEMORY=33554432` (32 MiB) is the runtime heap, separate
-#   from the `.wasm` code-size budget. `ALLOW_MEMORY_GROWTH=1`
-#   lets large workbooks expand the heap up to the 4 GiB limit.
+#   from the `.wasm` code-size budget. `ALLOW_MEMORY_GROWTH=1` lets
+#   large workbooks expand the heap up to the 4 GiB limit.
 
 if(NOT FM_BUILD_WASM)
   return()
@@ -43,6 +57,15 @@ if(NOT DEFINED EMSCRIPTEN)
     "Re-run cmake under `emcmake cmake ...` (see `make wasm`).")
 endif()
 
+set(FM_WASM_VARIANT "embind" CACHE STRING
+  "WASM build variant: embind (npm) | capi (PyPI / wasmtime)")
+set_property(CACHE FM_WASM_VARIANT PROPERTY STRINGS embind capi)
+
+if(NOT FM_WASM_VARIANT STREQUAL "embind" AND NOT FM_WASM_VARIANT STREQUAL "capi")
+  message(FATAL_ERROR
+    "FM_WASM_VARIANT must be one of: embind, capi (got: ${FM_WASM_VARIANT})")
+endif()
+
 # Output base name: artifact + JS glue land at <build>/<base>.{js,wasm}.
 # Debug builds get a distinct base so debug + release can coexist when
 # the build directory is reused.
@@ -52,45 +75,25 @@ else()
   set(_FM_WASM_BASE "formulon")
 endif()
 
-add_executable(formulon_wasm src/wasm/embind.cpp)
-target_include_directories(formulon_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(formulon_wasm PRIVATE formulon_static)
+if(FM_WASM_VARIANT STREQUAL "capi")
+  set(_FM_WASM_BASE "${_FM_WASM_BASE}_capi")
+endif()
 
-# embind requires `-lembind` at link time. Compile flags mirror the
-# project-wide stance (`-fno-exceptions -fno-rtti`) plus optimisation
-# tier; link flags configure the JS / module surface.
-#
-# Threads (parallel recalc scheduler): `-pthread` is required at both
-# compile and link time under Emscripten. The link side additionally
-# wants `-sUSE_PTHREADS=1` and a non-zero `PTHREAD_POOL_SIZE` so the
-# runtime preallocates worker Web Workers up front. The 8-thread cap
-# matches `kMaxAutoThreads` in `src/eval/scheduler.cpp`.
-#
-# @size-budget-event: +~14 KB one-time pthread runtime (approved by
-# wasm-size-guardian). Future scheduler additions will not re-add this
-# cost.
-set(_FM_WASM_COMMON_LINK_FLAGS
-  "-lembind"
-  "-sWASM=1"
-  "-sMODULARIZE=1"
-  "-sEXPORT_NAME=createFormulon"
-  "-sEXPORT_ES6=1"
-  "-sENVIRONMENT=web,worker,node"
-  "-sALLOW_MEMORY_GROWTH=1"
-  "-sINITIAL_MEMORY=33554432"
-  "-sNO_EXIT_RUNTIME=1"
-  "-sFILESYSTEM=0"
-  "-sDISABLE_EXCEPTION_CATCHING=1"
-  "-sSUPPORT_LONGJMP=0"
-  "-sDYNAMIC_EXECUTION=0"
-  "-sWASM_BIGINT=0"
-  "-sMALLOC=emmalloc"
-  "-pthread"
-  "-sUSE_PTHREADS=1"
-  "-sPTHREAD_POOL_SIZE=8"
-  "--closure=0"
-)
+if(FM_WASM_VARIANT STREQUAL "embind")
+  add_executable(formulon_wasm src/wasm/embind.cpp)
+  target_include_directories(formulon_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(formulon_wasm PRIVATE formulon_static)
+else()
+  # capi variant: drive the build from the C ABI translation unit. It's
+  # already in formulon_core, but we need an executable entry so emcc
+  # has something to link from. A trivial stub keeps the link graph
+  # rooted; the actual fm_* exports come from the static archive.
+  add_executable(formulon_wasm src/c_api/wasm_entry.cpp)
+  target_include_directories(formulon_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+  target_link_libraries(formulon_wasm PRIVATE formulon_static)
+endif()
 
+# Shared optimisation flags.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(_FM_WASM_OPT_FLAGS "-O0;-g")
   set(_FM_WASM_LINK_OPT_FLAGS "-O0;-g;-sASSERTIONS=2")
@@ -110,40 +113,119 @@ else()
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")
 endif()
 
-# Compile flags for the embind TU only.
-#
-# `formulon_core` is built `-fno-exceptions -fno-rtti` (the project-wide
-# stance). embind, however, materially depends on RTTI: its
-# type-registration tables key on `typeid()` to map C++ types to JS
-# wrappers. Building embind.cpp with RTTI off but
-# EMSCRIPTEN_HAS_UNBOUND_TYPE_NAMES=0 silences the compile-time
-# static_assert but leaves the runtime type-id strings empty — every
-# bound entry then surfaces "Cannot call X due to unbound types".
-#
-# We therefore enable RTTI *only* for the embind translation unit. The
-# `formulon_static` archive linked into this target was already built
-# with `-fno-rtti`; turning RTTI on for the binding glue does not
-# affect its codegen. Exceptions stay disabled both here and in the
-# linker step (`-sDISABLE_EXCEPTION_CATCHING=1`), and the binding
-# routes every failure through the `JsStatus` envelope rather than
-# throwing.
-target_compile_options(formulon_wasm PRIVATE
-  ${_FM_WASM_OPT_FLAGS}
-  -fno-exceptions
-  -frtti
-  -pthread
-)
+if(FM_WASM_VARIANT STREQUAL "embind")
+  # Threads (parallel recalc scheduler): -pthread is required at both
+  # compile and link time under Emscripten. The link side additionally
+  # wants -sUSE_PTHREADS=1 and a non-zero PTHREAD_POOL_SIZE so the
+  # runtime preallocates worker Web Workers up front. The 8-thread cap
+  # matches kMaxAutoThreads in src/eval/scheduler.cpp.
+  #
+  # @size-budget-event: +~14 KB one-time pthread runtime (approved by
+  # wasm-size-guardian). Future scheduler additions will not re-add this
+  # cost.
+  set(_FM_WASM_COMMON_LINK_FLAGS
+    "-lembind"
+    "-sWASM=1"
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME=createFormulon"
+    "-sEXPORT_ES6=1"
+    "-sENVIRONMENT=web,worker,node"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sINITIAL_MEMORY=33554432"
+    "-sNO_EXIT_RUNTIME=1"
+    "-sFILESYSTEM=0"
+    "-sDISABLE_EXCEPTION_CATCHING=1"
+    "-sSUPPORT_LONGJMP=0"
+    "-sDYNAMIC_EXECUTION=0"
+    "-sWASM_BIGINT=0"
+    "-sMALLOC=emmalloc"
+    "-pthread"
+    "-sUSE_PTHREADS=1"
+    "-sPTHREAD_POOL_SIZE=8"
+    "--closure=0"
+  )
 
-# Threading is wired in at the workbook scheduler. Under Emscripten the
-# core library MUST also be built with `-pthread` so atomics in the
-# scheduler's worker pool resolve to the multi-threaded ABI. Native
-# builds do not need a special flag — `Threads::Threads` propagates the
-# host pthread requirements.
-target_compile_options(formulon_core PRIVATE -pthread)
+  # Compile flags for the embind TU only. formulon_core is built
+  # -fno-exceptions -fno-rtti (the project-wide stance). embind, however,
+  # materially depends on RTTI: its type-registration tables key on
+  # typeid() to map C++ types to JS wrappers. Building embind.cpp with
+  # RTTI off but EMSCRIPTEN_HAS_UNBOUND_TYPE_NAMES=0 silences the
+  # compile-time static_assert but leaves the runtime type-id strings
+  # empty -- every bound entry then surfaces "Cannot call X due to
+  # unbound types".
+  #
+  # We therefore enable RTTI *only* for the embind translation unit. The
+  # formulon_static archive linked into this target was already built
+  # with -fno-rtti; turning RTTI on for the binding glue does not
+  # affect its codegen. Exceptions stay disabled both here and in the
+  # linker step (-sDISABLE_EXCEPTION_CATCHING=1), and the binding routes
+  # every failure through the JsStatus envelope rather than throwing.
+  target_compile_options(formulon_wasm PRIVATE
+    ${_FM_WASM_OPT_FLAGS}
+    -fno-exceptions
+    -frtti
+    -pthread
+  )
 
-# Define `FORMULON_WASM` for every TU under the WASM build. The
-# `read_ooxml` SAX/DOM dispatch consults this macro: WASM builds get
-# `kSaxThresholdBytes = SIZE_MAX`, which lets the linker
+  # Threading is wired in at the workbook scheduler. Under Emscripten the
+  # core library MUST also be built with -pthread so atomics in the
+  # scheduler's worker pool resolve to the multi-threaded ABI. Native
+  # builds do not need a special flag -- Threads::Threads propagates the
+  # host pthread requirements.
+  target_compile_options(formulon_core PRIVATE -pthread)
+else()
+  # capi variant: standalone reactor-style WASM. No JS glue, no embind,
+  # no pthread. The scheduler's std::thread calls compile but run
+  # synchronously under emcc's no-pthread mode, so callers transparently
+  # get serial recalc.
+  #
+  # Exports list: every fm_* function the Python binding may call, plus
+  # _malloc / _free / _initialize so the host can allocate scratch
+  # buffers for string arguments. The list is kept in a sibling file so
+  # cmake doesn't have to be edited when the C ABI grows; the harness
+  # in tools/wasm/capi_exports.txt is shared with the Python binding's
+  # signature setup.
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/tools/wasm/capi_exports.txt"
+    _FM_WASM_CAPI_EXPORTS_RAW
+    REGEX "^[^#].+")
+  list(TRANSFORM _FM_WASM_CAPI_EXPORTS_RAW STRIP)
+  list(FILTER _FM_WASM_CAPI_EXPORTS_RAW EXCLUDE REGEX "^$")
+  list(TRANSFORM _FM_WASM_CAPI_EXPORTS_RAW PREPEND "_")
+  list(JOIN _FM_WASM_CAPI_EXPORTS_RAW "," _FM_WASM_CAPI_EXPORTS)
+
+  # Standalone WASM (reactor) link flags:
+  # * NO_EXIT_RUNTIME / DYNAMIC_EXECUTION are JS-glue concepts and
+  #   emcc rejects them under STANDALONE_WASM. Reactor builds (no
+  #   main()) have EXIT_RUNTIME=false implicitly.
+  # * ERROR_ON_UNDEFINED_SYMBOLS=0 because emcc still emits a small
+  #   number of "private" runtime symbols (memory growth notifier,
+  #   stack restore) that wasmtime resolves at instantiation via
+  #   imports. The Python binding declares an env stub for these.
+  set(_FM_WASM_COMMON_LINK_FLAGS
+    "--no-entry"
+    "-sWASM=1"
+    "-sSTANDALONE_WASM=1"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sINITIAL_MEMORY=33554432"
+    "-sFILESYSTEM=0"
+    "-sDISABLE_EXCEPTION_CATCHING=1"
+    "-sSUPPORT_LONGJMP=0"
+    "-sWASM_BIGINT=0"
+    "-sMALLOC=emmalloc"
+    "-sEXPORTED_FUNCTIONS=${_FM_WASM_CAPI_EXPORTS}"
+    "--closure=0"
+  )
+
+  target_compile_options(formulon_wasm PRIVATE
+    ${_FM_WASM_OPT_FLAGS}
+    -fno-exceptions
+    -fno-rtti
+  )
+endif()
+
+# Define FORMULON_WASM for every TU under the WASM build. The
+# read_ooxml SAX/DOM dispatch consults this macro: WASM builds get
+# kSaxThresholdBytes = SIZE_MAX, which lets the linker
 # dead-code-eliminate the streaming scanner (~15-20 KiB savings vs
 # always-active SAX). Native builds keep the threshold at 256 KiB.
 target_compile_definitions(formulon_core PRIVATE FORMULON_WASM=1)
@@ -155,11 +237,21 @@ target_link_options(formulon_wasm PRIVATE
 )
 
 # Land the artifact at <build>/<base>.{js,wasm}. Emscripten infers the
-# `.wasm` companion from the `.js` output name automatically.
-set_target_properties(formulon_wasm PROPERTIES
-  OUTPUT_NAME "${_FM_WASM_BASE}"
-  SUFFIX ".js"
-)
+# .wasm companion from the .js output name automatically. The capi
+# variant uses --no-entry + STANDALONE_WASM so emscripten emits ONLY a
+# .wasm (no companion .js); we still set SUFFIX so the cmake-tracked
+# output path matches.
+if(FM_WASM_VARIANT STREQUAL "embind")
+  set_target_properties(formulon_wasm PROPERTIES
+    OUTPUT_NAME "${_FM_WASM_BASE}"
+    SUFFIX ".js"
+  )
+else()
+  set_target_properties(formulon_wasm PROPERTIES
+    OUTPUT_NAME "${_FM_WASM_BASE}"
+    SUFFIX ".wasm"
+  )
+endif()
 
 # Post-build: run wasm-opt with --converge so optimisation passes
 # stabilise (Emscripten's link-time -Oz only invokes wasm-opt once).
@@ -193,7 +285,7 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # Post-build: print the artifact size (uncompressed + Brotli when
-# available). This is informational only — no enforcement here; the
+# available). This is informational only -- no enforcement here; the
 # size gate lives in a separate bundle. Surface it on every successful
 # wasm build so regressions are visible at a glance.
 add_custom_command(TARGET formulon_wasm POST_BUILD

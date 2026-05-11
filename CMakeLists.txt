@@ -33,7 +33,6 @@ endif()
 # ---------------------------------------------------------------------------
 option(FM_BUILD_TESTING       "Build unit/property/oracle tests" ON)
 option(FM_BUILD_WASM          "Build WASM target (requires emscripten)" OFF)
-option(FM_BUILD_PYTHON_SHARED "Build shared lib for Python ctypes" OFF)
 option(FM_BUILD_C_API_SHARED  "Build libformulon shared lib exporting the C ABI" OFF)
 option(FM_BUILD_CLI           "Build formulon_cli binary" ON)
 option(FM_BUILD_NODE_ADDON    "Build Node.js N-API addon (.node)" OFF)

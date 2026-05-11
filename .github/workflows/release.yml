@@ -3,14 +3,14 @@
 # Triggered by `v*.*.*` tag pushes. Builds and publishes everything in
 # one workflow, mirroring the libsonare publish.yml shape:
 #
-#   - publish-npm   : build WASM, smoke-test, publish `@libraz/formulon`,
-#                     create the GitHub Release.
+#   - publish-npm   : build the embind WASM, smoke-test, publish
+#                     `@libraz/formulon`, create the GitHub Release.
 #   - build-cli     : matrix-build `formulon_cli` per platform-arch,
 #                     upload tar.gz archives + sha256 sums.
-#   - python-wheels : matrix-build platform-tagged wheels per
-#                     platform-arch, upload as artifacts.
-#   - publish-pypi  : aggregate wheels and publish `formulon` to PyPI
-#                     via trusted publishing.
+#   - python-wheel  : build the capi WASM and a single py3-none-any
+#                     wheel (the Python distribution is pure-Python +
+#                     wasmtime; one wheel works on every platform).
+#   - publish-pypi  : publish that wheel to PyPI via trusted publishing.
 #   - attach-cli    : after the release exists, upload CLI tarballs to it.
 #
 # Required setup:
@@ -79,9 +79,13 @@ jobs:
         run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm
 
       - name: Stage and smoke-test npm package
+        # Same CMAKE override as the Build WASM step: emsdk's PATH order
+        # shadows the system cmake with a non-executable bundled copy,
+        # and the secondary `cmake --build` recipe lines in npm-package /
+        # npm-test would otherwise fail with EACCES.
         run: |
-          make npm-package
-          make npm-test
+          make CMAKE=/usr/bin/cmake npm-package
+          make CMAKE=/usr/bin/cmake npm-test
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -153,19 +157,9 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-  python-wheels:
-    name: Build wheel ${{ matrix.platform-arch }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform-arch: darwin-arm64
-            runner: macos-latest
-          - platform-arch: linux-x64
-            runner: ubuntu-latest
-          - platform-arch: linux-arm64
-            runner: ubuntu-24.04-arm
+  python-wheel:
+    name: Build py3-none-any wheel
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -173,8 +167,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install build deps (Linux)
-        if: startsWith(matrix.platform-arch, 'linux-')
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          # Pin to keep WASM size deterministic (matches publish-npm).
+          version: 3.1.74
+          actions-cache-folder: emsdk-cache
+
+      - name: Install host tools
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build
@@ -194,25 +193,30 @@ jobs:
           fi
 
       - name: Build wheel
-        run: make python-wheel
+        # CMAKE override mirrors publish-npm: emsdk's PATH order can
+        # shadow the system cmake with a non-executable bundled copy.
+        run: make CMAKE=/usr/bin/cmake python-wheel
 
       - name: Smoke test wheel
+        # Install into the build venv, run the smoke-test suite. The
+        # wheel is py3-none-any so this exercises the wasmtime-driven
+        # WASM module exactly as a downstream user would.
         run: |
           set -euo pipefail
           wheel=$(ls build-py/dist/formulon-*.whl | head -1)
           python -m pip install "${wheel}"
-          python -c "import formulon; print('formulon', formulon.__version__)"
+          python -m unittest discover -v -s packages/python/tests
 
       - uses: actions/upload-artifact@v4
         with:
-          name: formulon-wheel-${{ matrix.platform-arch }}
+          name: formulon-wheel
           path: build-py/dist/formulon-*.whl
           retention-days: 14
           if-no-files-found: error
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [python-wheels]
+    needs: [python-wheel]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -220,9 +224,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: formulon-wheel-*
+          name: formulon-wheel
           path: dist/
-          merge-multiple: true
 
       - name: List wheels
         run: ls -la dist/

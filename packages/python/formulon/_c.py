@@ -1,127 +1,66 @@
 # Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
-"""Low-level ctypes bindings for libformulon.
+"""Low-level WASM binding for the Formulon C ABI.
 
-This module is an implementation detail. Public users should import the
-``Workbook`` / ``Value`` / ``FormulonError`` symbols re-exported by the
-top-level :mod:`formulon` package instead.
+Public users should import the ``Workbook`` / ``Value`` / ``FormulonError``
+symbols re-exported by the top-level :mod:`formulon` package instead.
 
-The bindings here are intentionally a 1:1 mirror of ``src/c_api/formulon_c.h``:
-every ``fm_*`` export is declared with explicit ``argtypes`` / ``restype``,
-and the ``fm_value_t`` POD is re-expressed as a ctypes ``Structure`` whose
-union layout matches the C side byte-for-byte.
+Architecture
+------------
 
-The shared library is located via :func:`_load_library`, which prefers the
-in-package ``_lib/`` location populated by ``packages/python/scripts/stage.py``
-and falls back to the system loader path for development installs that
-build ``libformulon`` out-of-tree.
+The binding loads ``formulon_capi.wasm`` (a standalone reactor-style
+WebAssembly module that exports the ``fm_*`` C ABI from
+``src/c_api/formulon_c.h``) via the ``wasmtime`` runtime. A single
+module instance is created lazily at first use and shared across every
+:class:`formulon.Workbook` in the process; each ``Workbook`` instance
+owns an opaque ``fm_workbook_t*`` (i32 in WASM) handle.
+
+Pointers are 32-bit offsets into the WASM linear memory. Strings cross
+the boundary as ``malloc``-allocated UTF-8 NUL-terminated buffers in
+that memory; the caller is responsible for ``free``-ing them after the
+WASM function returns. Borrowed return pointers (e.g. text from
+``fm_workbook_get_value``) are read directly from WASM memory and
+decoded eagerly into Python ``str`` so the result outlives any
+subsequent WASM mutation.
+
+The ``fm_value_t`` POD has the wasm32 layout::
+
+    offset 0: int32  kind
+    offset 4: int32  (padding for 8-byte alignment of the union)
+    offset 8: union  { double number ; int32 boolean ; int32 error_code ; ptr text }
+    total: 16 bytes
+
+The union member is selected by ``kind``; reading any other member is
+undefined per the C ABI contract.
 """
 
 from __future__ import annotations
 
-import ctypes
-import os
-import platform
-import sys
-from ctypes import (
-    CDLL,
-    POINTER,
-    Structure,
-    Union,
-    c_char_p,
-    c_double,
-    c_int,
-    c_int32,
-    c_size_t,
-    c_uint32,
-    c_void_p,
-)
+import struct
+import threading
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
+
+import wasmtime
 
 __all__ = [
     "LIB",
     "ValueKind",
-    "fm_status_t",
-    "fm_workbook_t_p",
-    "fm_value_t",
+    "decode_cstr",
+    "fm_value_t_size",
 ]
 
-
-# ---------------------------------------------------------------------------
-# Library loading
-# ---------------------------------------------------------------------------
-
-
-def _candidate_lib_names() -> tuple[str, ...]:
-    """Return the platform-specific shared-library file names to try."""
-    system = platform.system()
-    if system == "Darwin":
-        return ("libformulon.dylib",)
-    if system == "Windows":
-        return ("formulon.dll", "libformulon.dll")
-    # Treat everything else as ELF / POSIX.
-    return ("libformulon.so",)
-
-
-def _load_library() -> CDLL:
-    """Locate and dlopen the libformulon shared library.
-
-    Search order:
-      1. ``packages/python/formulon/_lib/<name>`` (the package-data location
-         populated by ``make python-package``).
-      2. The platform's default loader path (so a development install that
-         built ``libformulon`` somewhere on ``LD_LIBRARY_PATH`` /
-         ``DYLD_LIBRARY_PATH`` / ``PATH`` still works).
-
-    Raises:
-      OSError: when neither location resolves to a loadable file. The error
-        message includes the candidate names that were tried.
-    """
-    here = Path(__file__).resolve().parent
-    lib_dir = here / "_lib"
-    candidates = _candidate_lib_names()
-    tried: list[str] = []
-
-    for name in candidates:
-        local = lib_dir / name
-        if local.is_file():
-            return CDLL(str(local))
-        tried.append(str(local))
-
-    # Fall back to the OS loader.
-    for name in candidates:
-        try:
-            return CDLL(name)
-        except OSError:
-            tried.append(name)
-            continue
-
-    raise OSError(
-        "formulon: failed to locate libformulon shared library. "
-        f"Tried: {', '.join(tried)}. "
-        "Run `make python-package` to stage the library, or install a "
-        "wheel that ships it under formulon/_lib/."
-    )
+# fm_value_t layout: int32 kind + 4 pad + 8 union = 16 bytes.
+fm_value_t_size = 16
 
 
 # ---------------------------------------------------------------------------
-# Type definitions mirroring src/c_api/formulon_c.h
+# ValueKind enum (matches fm_value_kind_t)
 # ---------------------------------------------------------------------------
-
-
-# fm_status_t: int32_t.
-fm_status_t = c_int32
-
-# fm_workbook_t*: opaque pointer.
-fm_workbook_t_p = c_void_p
 
 
 class ValueKind(IntEnum):
-    """Mirror of ``fm_value_kind_t`` in ``formulon_c.h``.
-
-    Numbering matches the C ABI ordinals exactly.
-    """
+    """Mirror of ``fm_value_kind_t`` in ``formulon_c.h``."""
 
     BLANK = 0
     NUMBER = 1
@@ -133,240 +72,264 @@ class ValueKind(IntEnum):
     LAMBDA = 7
 
 
-class _FmValueU(Union):
-    _fields_ = [
-        ("number", c_double),
-        ("boolean", c_int32),
-        ("error_code", c_int32),
-        ("text", c_char_p),
-    ]
+# ---------------------------------------------------------------------------
+# WASM module location
+# ---------------------------------------------------------------------------
 
 
-class fm_value_t(Structure):  # noqa: N801 -- mirrors C struct name
-    """Mirror of ``fm_value_t``.
+def _locate_wasm() -> Path:
+    """Return the on-disk path to ``formulon_capi.wasm``.
 
-    The ``kind`` field is a C ``int`` (matching the underlying ``enum``).
-    The active union member is selected by ``kind``; reading any other
-    member is undefined per the C ABI contract.
+    Search order:
+      1. ``packages/python/formulon/_wasm/formulon_capi.wasm`` -- the
+         package-data location populated by ``make python-package``
+         and shipped inside the wheel.
+      2. ``$FORMULON_WASM_PATH`` -- explicit override for development.
+
+    Raises:
+      FileNotFoundError: when the WASM is not on disk in either
+        location. The error message names both candidates.
+    """
+    here = Path(__file__).resolve().parent
+    bundled = here / "_wasm" / "formulon_capi.wasm"
+    if bundled.is_file():
+        return bundled
+
+    import os
+
+    override = os.environ.get("FORMULON_WASM_PATH")
+    if override:
+        p = Path(override)
+        if p.is_file():
+            return p
+
+    raise FileNotFoundError(
+        "formulon: failed to locate formulon_capi.wasm. "
+        f"Tried: {bundled}. "
+        "Run `make python-package` to stage the artifact, or install a "
+        "wheel that ships it under formulon/_wasm/."
+    )
+
+
+# ---------------------------------------------------------------------------
+# WASM module / store wrapper
+# ---------------------------------------------------------------------------
+
+
+class _WasmInstance:
+    """Owns a single ``wasmtime`` engine, store, and module instance.
+
+    The instance is created lazily on first attribute access; subsequent
+    Workbook creations reuse it. This trades cold-start latency for
+    repeat-call speed and keeps the engine cache around for the life of
+    the Python process.
+
+    The store is `not` thread-safe (per the wasmtime-py docs); a single
+    process-wide ``_call_lock`` serialises every WASM invocation. The
+    underlying calculation engine is already safe for one outstanding
+    recalc per ``Workbook`` handle, so the additional lock only prevents
+    cross-handle reentry on the wasmtime store itself.
     """
 
-    _fields_ = [
-        ("kind", c_int),
-        ("u", _FmValueU),
-    ]
+    def __init__(self) -> None:
+        self._engine: Optional[wasmtime.Engine] = None
+        self._store: Optional[wasmtime.Store] = None
+        self._instance: Optional[wasmtime.Instance] = None
+        self._memory: Optional[wasmtime.Memory] = None
+        self._exports: dict = {}
+        self._init_lock = threading.Lock()
+        self._call_lock = threading.RLock()
+
+    def _ensure(self) -> None:
+        if self._instance is not None:
+            return
+        with self._init_lock:
+            if self._instance is not None:
+                return
+            engine = wasmtime.Engine()
+            store = wasmtime.Store(engine)
+
+            # WASI: provide a minimal config. The engine never reads
+            # files or stdin; stdout/stderr inherit so any diagnostic
+            # libc calls (e.g. trap reasons) surface to the host.
+            wasi = wasmtime.WasiConfig()
+            wasi.inherit_stdout()
+            wasi.inherit_stderr()
+            store.set_wasi(wasi)
+
+            wasm_path = _locate_wasm()
+            module = wasmtime.Module.from_file(engine, str(wasm_path))
+
+            linker = wasmtime.Linker(engine)
+            linker.define_wasi()
+
+            # Stub for env.emscripten_notify_memory_growth. emcc emits
+            # this import even under STANDALONE_WASM; it is called on
+            # memory.grow but the host has nothing useful to do with it.
+            ty = wasmtime.FuncType([wasmtime.ValType.i32()], [])
+            linker.define(
+                store,
+                "env",
+                "emscripten_notify_memory_growth",
+                wasmtime.Func(store, ty, lambda _i: None),
+            )
+
+            instance = linker.instantiate(store, module)
+            exports = dict(instance.exports(store).items())
+
+            # Reactor init must run before any export is callable.
+            init_fn = exports.get("_initialize")
+            if init_fn is not None:
+                init_fn(store)
+
+            self._engine = engine
+            self._store = store
+            self._instance = instance
+            self._memory = exports["memory"]
+            self._exports = exports
+
+    # ----- raw export accessor --------------------------------------------
+    def __getattr__(self, name: str):
+        self._ensure()
+        fn = self._exports.get(name)
+        if fn is None:
+            raise AttributeError(f"WASM export '{name}' not found")
+        store = self._store
+        lock = self._call_lock
+
+        # Wrap so the caller can use a ctypes-like call syntax.
+        def _wrapped(*args):
+            with lock:
+                return fn(store, *args)
+
+        return _wrapped
+
+    # ----- memory primitives ----------------------------------------------
+    @property
+    def store(self) -> wasmtime.Store:
+        self._ensure()
+        assert self._store is not None
+        return self._store
+
+    @property
+    def memory(self) -> wasmtime.Memory:
+        self._ensure()
+        assert self._memory is not None
+        return self._memory
+
+    @property
+    def call_lock(self) -> threading.RLock:
+        return self._call_lock
+
+    def read_bytes(self, ptr: int, length: int) -> bytes:
+        """Copy ``length`` bytes from WASM memory starting at ``ptr``."""
+        self._ensure()
+        assert self._memory is not None
+        return bytes(self._memory.read(self._store, ptr, ptr + length))
+
+    def write_bytes(self, ptr: int, data: bytes) -> None:
+        """Write ``data`` into WASM memory starting at ``ptr``."""
+        self._ensure()
+        assert self._memory is not None
+        self._memory.write(self._store, data, ptr)
+
+    def read_u32(self, ptr: int) -> int:
+        return struct.unpack("<I", self.read_bytes(ptr, 4))[0]
+
+    def read_i32(self, ptr: int) -> int:
+        return struct.unpack("<i", self.read_bytes(ptr, 4))[0]
+
+    def read_f64(self, ptr: int) -> float:
+        return struct.unpack("<d", self.read_bytes(ptr, 8))[0]
+
+    def read_cstr(self, ptr: int) -> str:
+        """Decode a NUL-terminated UTF-8 C string from ``ptr``.
+
+        Returns the empty string when ``ptr`` is 0.
+        """
+        if ptr == 0:
+            return ""
+        self._ensure()
+        assert self._memory is not None
+        # Stream a chunk at a time to avoid copying the whole memory.
+        chunks: list[bytes] = []
+        offset = ptr
+        chunk_size = 256
+        mem_len = self._memory.data_len(self._store)
+        while offset < mem_len:
+            end = min(offset + chunk_size, mem_len)
+            buf = bytes(self._memory.read(self._store, offset, end))
+            nul = buf.find(b"\x00")
+            if nul >= 0:
+                chunks.append(buf[:nul])
+                break
+            chunks.append(buf)
+            offset = end
+        return b"".join(chunks).decode("utf-8", errors="replace")
+
+    def alloc(self, size: int) -> int:
+        """Allocate ``size`` bytes in WASM memory; return the pointer.
+
+        Raises:
+          MemoryError: when the WASM-side allocator returns NULL.
+        """
+        if size <= 0:
+            return 0
+        self._ensure()
+        with self._call_lock:
+            ptr = self._exports["malloc"](self._store, size)
+        if ptr == 0:
+            raise MemoryError(f"formulon: WASM malloc({size}) returned NULL")
+        return ptr
+
+    def free(self, ptr: int) -> None:
+        if ptr == 0:
+            return
+        self._ensure()
+        with self._call_lock:
+            self._exports["free"](self._store, ptr)
+
+    def alloc_utf8(self, s: str) -> Tuple[int, int]:
+        """Encode ``s`` as UTF-8 and copy it into WASM memory.
+
+        Returns ``(ptr, length_with_nul)``. The caller MUST free ``ptr``
+        with :meth:`free` once the call that consumed it returns.
+        """
+        if not isinstance(s, str):
+            raise TypeError(f"expected str, got {type(s).__name__}")
+        buf = s.encode("utf-8") + b"\x00"
+        ptr = self.alloc(len(buf))
+        self.write_bytes(ptr, buf)
+        return ptr, len(buf)
+
+    def alloc_bytes(self, data: bytes) -> int:
+        """Copy ``data`` into WASM memory; return the pointer."""
+        if len(data) == 0:
+            return 0
+        ptr = self.alloc(len(data))
+        self.write_bytes(ptr, data)
+        return ptr
 
 
 # ---------------------------------------------------------------------------
-# Signature setup
+# Module-level singleton + thin compatibility shim
 # ---------------------------------------------------------------------------
 
 
-def _setup_signatures(lib: CDLL) -> None:
-    """Bind argtypes / restype for every fm_* export.
+LIB = _WasmInstance()
 
-    Called exactly once at module import time. The list mirrors the
-    ordering of declarations in ``src/c_api/formulon_c.h``.
+
+def decode_cstr(ptr_or_bytes) -> str:
+    """Backwards-compat shim for :class:`formulon.workbook.FormulonError`.
+
+    Accepts either an int WASM pointer (decoded via :class:`LIB`) or a
+    bytes object (legacy ctypes path). Returns the empty string when
+    the input is ``None``, ``0``, or empty.
     """
-    # -- Construction / lifecycle ------------------------------------------
-    lib.fm_workbook_create.argtypes = [POINTER(fm_workbook_t_p)]
-    lib.fm_workbook_create.restype = fm_status_t
-
-    lib.fm_workbook_create_empty.argtypes = [POINTER(fm_workbook_t_p)]
-    lib.fm_workbook_create_empty.restype = fm_status_t
-
-    lib.fm_workbook_load.argtypes = [
-        POINTER(ctypes.c_uint8),
-        c_size_t,
-        POINTER(fm_workbook_t_p),
-    ]
-    lib.fm_workbook_load.restype = fm_status_t
-
-    lib.fm_workbook_destroy.argtypes = [fm_workbook_t_p]
-    lib.fm_workbook_destroy.restype = None
-
-    # -- Save --------------------------------------------------------------
-    lib.fm_workbook_save.argtypes = [
-        fm_workbook_t_p,
-        POINTER(POINTER(ctypes.c_uint8)),
-        POINTER(c_size_t),
-    ]
-    lib.fm_workbook_save.restype = fm_status_t
-
-    lib.fm_buffer_free.argtypes = [POINTER(ctypes.c_uint8)]
-    lib.fm_buffer_free.restype = None
-
-    # -- Sheets ------------------------------------------------------------
-    lib.fm_workbook_sheet_count.argtypes = [fm_workbook_t_p]
-    lib.fm_workbook_sheet_count.restype = c_size_t
-
-    lib.fm_workbook_sheet_name.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        POINTER(c_char_p),
-    ]
-    lib.fm_workbook_sheet_name.restype = fm_status_t
-
-    lib.fm_workbook_add_sheet.argtypes = [fm_workbook_t_p, c_char_p]
-    lib.fm_workbook_add_sheet.restype = fm_status_t
-
-    # -- Cell mutation -----------------------------------------------------
-    lib.fm_workbook_set_number.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        c_uint32,
-        c_uint32,
-        c_double,
-    ]
-    lib.fm_workbook_set_number.restype = fm_status_t
-
-    lib.fm_workbook_set_bool.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        c_uint32,
-        c_uint32,
-        c_int32,
-    ]
-    lib.fm_workbook_set_bool.restype = fm_status_t
-
-    lib.fm_workbook_set_text.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        c_uint32,
-        c_uint32,
-        c_char_p,
-    ]
-    lib.fm_workbook_set_text.restype = fm_status_t
-
-    lib.fm_workbook_set_blank.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        c_uint32,
-        c_uint32,
-    ]
-    lib.fm_workbook_set_blank.restype = fm_status_t
-
-    lib.fm_workbook_set_formula.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        c_uint32,
-        c_uint32,
-        c_char_p,
-    ]
-    lib.fm_workbook_set_formula.restype = fm_status_t
-
-    # -- Cell read ---------------------------------------------------------
-    lib.fm_workbook_get_value.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        c_uint32,
-        c_uint32,
-        POINTER(fm_value_t),
-    ]
-    lib.fm_workbook_get_value.restype = fm_status_t
-
-    # -- Iteration / dump --------------------------------------------------
-    lib.fm_workbook_cell_count.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        POINTER(c_size_t),
-    ]
-    lib.fm_workbook_cell_count.restype = fm_status_t
-
-    lib.fm_workbook_cell_at.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        c_size_t,
-        POINTER(c_uint32),
-        POINTER(c_uint32),
-        POINTER(c_char_p),
-        POINTER(fm_value_t),
-    ]
-    lib.fm_workbook_cell_at.restype = fm_status_t
-
-    lib.fm_workbook_defined_name_count.argtypes = [fm_workbook_t_p]
-    lib.fm_workbook_defined_name_count.restype = c_size_t
-
-    lib.fm_workbook_defined_name_at.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        POINTER(c_char_p),
-        POINTER(c_char_p),
-    ]
-    lib.fm_workbook_defined_name_at.restype = fm_status_t
-
-    lib.fm_workbook_table_count.argtypes = [fm_workbook_t_p]
-    lib.fm_workbook_table_count.restype = c_size_t
-
-    lib.fm_workbook_table_at.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        POINTER(c_char_p),
-        POINTER(c_char_p),
-        POINTER(c_char_p),
-        POINTER(c_size_t),
-    ]
-    lib.fm_workbook_table_at.restype = fm_status_t
-
-    lib.fm_workbook_passthrough_count.argtypes = [fm_workbook_t_p]
-    lib.fm_workbook_passthrough_count.restype = c_size_t
-
-    lib.fm_workbook_passthrough_at.argtypes = [
-        fm_workbook_t_p,
-        c_size_t,
-        POINTER(c_char_p),
-    ]
-    lib.fm_workbook_passthrough_at.restype = fm_status_t
-
-    # -- Recalc ------------------------------------------------------------
-    lib.fm_workbook_recalc.argtypes = [fm_workbook_t_p]
-    lib.fm_workbook_recalc.restype = fm_status_t
-
-    lib.fm_workbook_set_iterative.argtypes = [
-        fm_workbook_t_p,
-        c_int32,
-        c_int32,
-        c_double,
-    ]
-    lib.fm_workbook_set_iterative.restype = fm_status_t
-
-    # -- Diagnostics -------------------------------------------------------
-    lib.fm_last_error_message.argtypes = []
-    lib.fm_last_error_message.restype = c_char_p
-
-    lib.fm_last_error_context.argtypes = []
-    lib.fm_last_error_context.restype = c_char_p
-
-    lib.fm_status_string.argtypes = [fm_status_t]
-    lib.fm_status_string.restype = c_char_p
-
-    # -- Version -----------------------------------------------------------
-    lib.fm_version_string.argtypes = []
-    lib.fm_version_string.restype = c_char_p
-
-
-# Eagerly load + bind on import. Failure here is fatal: the package cannot
-# function without libformulon.
-LIB: CDLL = _load_library()
-_setup_signatures(LIB)
-
-
-# ---------------------------------------------------------------------------
-# Small helpers used by the higher-level wrapper
-# ---------------------------------------------------------------------------
-
-
-def decode_cstr(ptr: Optional[bytes]) -> str:
-    """Decode an optional C string (``c_char_p`` value) to ``str``.
-
-    Returns the empty string when ``ptr`` is None. The C ABI guarantees
-    that diagnostic / metadata pointers are non-NULL, but borrowed cell
-    text pointers can theoretically be NULL for empty strings.
-    """
-    if ptr is None:
+    if ptr_or_bytes is None:
         return ""
-    return ptr.decode("utf-8", errors="replace")
-
-
-# Suppress the "unused import" warning when `os` / `sys` are only useful
-# for downstream debugging.
-_ = os, sys
+    if isinstance(ptr_or_bytes, bytes):
+        return ptr_or_bytes.decode("utf-8", errors="replace")
+    if isinstance(ptr_or_bytes, int):
+        return LIB.read_cstr(ptr_or_bytes)
+    raise TypeError(f"decode_cstr: unexpected type {type(ptr_or_bytes).__name__}")

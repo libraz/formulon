@@ -21,7 +21,7 @@ SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)
 
 .PHONY: all build release test test-slow test-all format format-check lint clean \
-        wasm wasm-debug test-wasm test-python size-check \
+        wasm wasm-debug wasm-capi test-wasm test-python size-check \
         npm-package npm-test npm-pack \
         node-native node-package node-test \
         python-package python-test python-wheel \
@@ -69,7 +69,7 @@ lint:
 clean:
 	rm -rf $(BUILD_DIR) build-release build-relwithdebinfo \
 	       build-asan build-ubsan build-tsan build-coverage \
-	       $(WASM_BUILD_DIR) $(WASM_DEBUG_BUILD_DIR)
+	       $(WASM_BUILD_DIR) $(WASM_DEBUG_BUILD_DIR) $(WASM_CAPI_BUILD_DIR)
 
 # -- WASM build / smoke-test targets --------------------------------------
 # `make wasm`        -> Release-mode formulon.{js,wasm} under build-wasm/.
@@ -82,6 +82,7 @@ clean:
 EM_CMAKE := emcmake cmake
 WASM_BUILD_DIR ?= build-wasm
 WASM_DEBUG_BUILD_DIR ?= build-wasm-debug
+WASM_CAPI_BUILD_DIR ?= build-wasm-capi
 
 wasm:
 	@if ! command -v emcmake >/dev/null 2>&1; then \
@@ -105,6 +106,23 @@ wasm-debug:
 	$(EM_CMAKE) -B $(WASM_DEBUG_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug \
 	  -DFM_BUILD_WASM=ON -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
 	$(CMAKE) --build $(WASM_DEBUG_BUILD_DIR) --parallel --target formulon_wasm
+
+# capi WASM: standalone reactor build consumed by wasmtime-py. No JS
+# glue, no pthread, exports the curated fm_* list from
+# tools/wasm/capi_exports.txt. Drives the PyPI distribution.
+wasm-capi:
+	@if ! command -v emcmake >/dev/null 2>&1; then \
+	  echo "wasm-capi: emscripten toolchain not found in PATH"; \
+	  exit 1; \
+	fi
+	$(EM_CMAKE) -B $(WASM_CAPI_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
+	  -DFM_BUILD_WASM=ON -DFM_WASM_VARIANT=capi \
+	  -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
+	$(CMAKE) --build $(WASM_CAPI_BUILD_DIR) --parallel --target formulon_wasm
+	@echo ""
+	@echo "wasm-capi artifact:"
+	@ls -la $(WASM_CAPI_BUILD_DIR)/formulon_capi.wasm 2>/dev/null || \
+	  echo "  (artifact not found; check build log above)"
 
 test-wasm:
 	@if [ ! -f $(WASM_BUILD_DIR)/formulon.js ]; then \
@@ -157,33 +175,35 @@ npm-pack: npm-package
 	  echo "  (tarball not found; check log above)"
 
 # -- Python packaging targets --------------------------------------------
-# `make python-package` -> build libformulon (FM_BUILD_C_API_SHARED=ON) and
-#                          stage it into packages/python/formulon/_lib/.
-# `make python-test`    -> run the unittest smoke suite against the staged
-#                          source tree (catches stage / packaging errors).
-# `make python-wheel`   -> produce build-py/dist/formulon-*.whl.
+# `make python-package` -> stage build-wasm-capi/formulon_capi.wasm into
+#                          packages/python/formulon/_wasm/.
+# `make python-test`    -> run the unittest smoke suite against the
+#                          staged source tree (catches stage / packaging
+#                          errors).
+# `make python-wheel`   -> produce build-py/dist/formulon-*-py3-none-any.whl.
 #
-# All three are stdlib-only on the Python side; they need CMake +
-# Python 3.9+ but no PyPI dependencies. Cross-platform manylinux /
-# universal2 wheel building is a later bundle.
+# The Python distribution is pure-Python with a bundled WebAssembly
+# module. The WASM is built by `make wasm-capi` (Emscripten toolchain
+# required); the wheel itself is py3-none-any and works on every OS
+# and arch wasmtime supports.
 PY_PKG_DIR := packages/python
 PY_BUILD_DIR ?= build-py
 PYTHON ?= $(shell python3 -c 'import sys; print(sys.executable)')
-PY_PLATFORM_TAG ?= $(shell $(PYTHON) $(PY_PKG_DIR)/scripts/platform_tag.py)
 
-python-package:
+python-package: wasm-capi
 	@if ! command -v $(PYTHON) >/dev/null 2>&1; then \
 	  echo "python-package: python3 not found in PATH"; \
 	  exit 1; \
 	fi
-	@if ! command -v $(CMAKE) >/dev/null 2>&1; then \
-	  echo "python-package: cmake not found in PATH"; \
-	  exit 1; \
-	fi
 	$(PYTHON) $(PY_PKG_DIR)/scripts/stage.py \
-	  --build-dir $(PY_BUILD_DIR) --config Release
+	  --build-dir $(WASM_CAPI_BUILD_DIR)
 
 python-test: python-package
+	@if ! $(PYTHON) -c "import wasmtime" >/dev/null 2>&1; then \
+	  echo "python-test: wasmtime runtime missing; install with:"; \
+	  echo "  $(PYTHON) -m pip install wasmtime"; \
+	  exit 1; \
+	fi
 	@(cd $(PY_PKG_DIR) && $(PYTHON) -m unittest discover -v tests)
 
 python-wheel: python-package
@@ -200,10 +220,8 @@ python-wheel: python-package
 	  exit 1; \
 	fi
 	mkdir -p $(PY_BUILD_DIR)/dist
-	(cd $(PY_PKG_DIR) && FORMULON_PYTHON_PLAT_NAME=$(PY_PLATFORM_TAG) \
-	  $(PYTHON) setup.py bdist_wheel \
-	    --dist-dir ../../$(PY_BUILD_DIR)/dist/ \
-	    --plat-name $(PY_PLATFORM_TAG))
+	(cd $(PY_PKG_DIR) && $(PYTHON) setup.py bdist_wheel \
+	    --dist-dir ../../$(PY_BUILD_DIR)/dist/)
 	@echo ""
 	@echo "python wheel:"
 	@ls -la $(PY_BUILD_DIR)/dist/formulon-*.whl 2>/dev/null | tail -1 || \
