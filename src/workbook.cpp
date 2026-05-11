@@ -711,9 +711,8 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
 // `Sheet::insert_rows` / `delete_rows` does not race against a
 // concurrent `recalc_parallel`.
 void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
-                                       const Workbook& workbook, std::string_view target_sheet,
-                                       parser::RowColAxis axis, parser::RowColEdit edit, std::uint32_t index,
-                                       std::uint32_t count) {
+                                       const Workbook& workbook, std::string_view target_sheet, parser::RowColAxis axis,
+                                       parser::RowColEdit edit, std::uint32_t index, std::uint32_t count) {
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
     const bool local_means_target = strings::case_insensitive_eq(sheet.name(), target_sheet);

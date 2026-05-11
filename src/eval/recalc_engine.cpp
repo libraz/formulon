@@ -68,15 +68,21 @@ void RecalcEngine::LockedMutator::register_formula(CellNodeId cell, const parser
   engine_.register_formula_locked(cell, ast, workbook);
 }
 
-void RecalcEngine::LockedMutator::unregister_formula(CellNodeId cell) const { engine_.unregister_formula_locked(cell); }
+void RecalcEngine::LockedMutator::unregister_formula(CellNodeId cell) const {
+  engine_.unregister_formula_locked(cell);
+}
 
 void RecalcEngine::LockedMutator::clear_cell_dependencies(CellNodeId cell) const {
   engine_.clear_cell_dependencies_locked(cell);
 }
 
-void RecalcEngine::LockedMutator::mark_dirty(CellNodeId cell) const { engine_.mark_dirty_locked(cell); }
+void RecalcEngine::LockedMutator::mark_dirty(CellNodeId cell) const {
+  engine_.mark_dirty_locked(cell);
+}
 
-const DepGraph& RecalcEngine::LockedMutator::dep_graph() const noexcept { return engine_.graph_; }
+const DepGraph& RecalcEngine::LockedMutator::dep_graph() const noexcept {
+  return engine_.graph_;
+}
 
 // ---------------------------------------------------------------------------
 // Public mutating API: each entry acquires `mutex_` and delegates to the
