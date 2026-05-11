@@ -1,0 +1,58 @@
+# Formulon sanitizers workflow.
+#
+# Sanitizers run on manual dispatch only, per the ../mygram-db sanitizers.yml
+# precedent. They are diagnostic tools, not routine CI gates -- the
+# instrumented builds are an order of magnitude slower than the standard
+# suite and the signal they produce (race traces, leak stacks) is meant
+# to be inspected by a human, not used as a binary pass/fail.
+#
+# Trigger from the Actions UI when investigating a specific commit, after
+# touching concurrency-sensitive code (recalc scheduler, Workbook
+# mutators, dependency graph), or before cutting a release.
+#
+# The TSan driver lives at tools/ci/run_tsan.sh and is kept in lockstep
+# with the local invocation; ASan/UBSan equivalents will be added here
+# when their driver scripts land.
+name: sanitizers
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tsan:
+    name: ThreadSanitizer (Linux, clang)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies + clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build clang
+
+      - name: Cache CMake build directory (TSan)
+        uses: actions/cache@v4
+        with:
+          path: build-tsan
+          key: tsan-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt', 'tests/concurrency/**', 'cmake/**') }}
+          restore-keys: |
+            tsan-build-${{ runner.os }}-
+
+      - name: Run TSan gate
+        env:
+          CXX_COMPILER: clang++
+        run: bash tools/ci/run_tsan.sh
+
+      - name: Upload TSan logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsan-logs
+          path: build-tsan/_tsan_logs/
+          retention-days: 7

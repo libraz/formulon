@@ -1,19 +1,12 @@
 # Formulon develop-branch CI workflow.
 #
-# Runs the heavier signals that `main` (ci.yml) intentionally skips so
-# iteration on `main` stays fast:
+# Develop-branch checks layered on top of ci.yml so iteration on `main`
+# stays fast. Currently a single job:
 #
-#   - format       : clang-format dry-run only. Hard gate (the check is
-#                    binary: file is formatted or it is not).
-#   - tsan         : ThreadSanitizer gate. Builds the dedicated TSAN-
-#                    labelled concurrency tests under
-#                    `-fsanitize=thread` and uploads logs on failure.
-#                    Driver: tools/ci/run_tsan.sh.
+#   - format : clang-format dry-run. Hard gate (binary check).
 #
-# Pattern mirrored from ../mygram-db's develop-ci.yml: heavier checks
-# stay off the main-branch hot path; they fire when the human is
-# explicitly working on the develop branch (or via `workflow_dispatch`
-# from the Actions UI).
+# Pattern mirrored from ../mygram-db's develop-ci.yml: develop-only
+# checks live here, main keeps the minimal build+test signal in ci.yml.
 #
 # clang-tidy is intentionally NOT a CI gate, following the mygram-db
 # policy. It carries a large pre-existing warnings backlog that would
@@ -21,9 +14,9 @@
 # development" tunable-threshold signals belong as `tools/dev/` scripts,
 # not as CI pass/fail gates. Local invocation: `make lint`.
 #
-# Sanitizers can also be triggered manually from any branch via the
-# `workflow_dispatch` button in the Actions UI when investigating a
-# specific commit out of band.
+# Sanitizers (TSan, future ASan/UBSan) live in their own workflow
+# (.github/workflows/sanitizers.yml) and are triggered manually from
+# the Actions UI when investigating a specific commit.
 name: develop-ci
 
 on:
@@ -53,37 +46,3 @@ jobs:
 
       - name: clang-format check
         run: make format-check
-
-  tsan:
-    name: ThreadSanitizer (Linux, clang)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install build dependencies + clang
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build clang
-
-      - name: Cache CMake build directory (TSan)
-        uses: actions/cache@v4
-        with:
-          path: build-tsan
-          key: tsan-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'tests/CMakeLists.txt', 'tests/concurrency/**', 'cmake/**') }}
-          restore-keys: |
-            tsan-build-${{ runner.os }}-
-
-      - name: Run TSan gate
-        env:
-          CXX_COMPILER: clang++
-        run: bash tools/ci/run_tsan.sh
-
-      - name: Upload TSan logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tsan-logs
-          path: build-tsan/_tsan_logs/
-          retention-days: 7
