@@ -6,4 +6,5 @@ The high-level summary lives in [`CHANGELOG.md`](../../CHANGELOG.md).
 
 ## Available Versions
 
-- [v0.9.0](https://github.com/libraz/formulon/releases/tag/v0.9.0) — Latest release (2026-05-10) — first public release.
+- [v0.9.1](https://github.com/libraz/formulon/releases/tag/v0.9.1) — Latest release (2026-05-11) — OOXML print settings round-trip + unknown rels / shared-formula fixes.
+- [v0.9.0](https://github.com/libraz/formulon/releases/tag/v0.9.0) — 2026-05-10 — first public release.
