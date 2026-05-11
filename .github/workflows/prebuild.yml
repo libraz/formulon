@@ -6,10 +6,17 @@
 # (`dist/prebuilds/<platform>-<arch>/formulon.node`).
 #
 # Coverage:
-#   - darwin-x64   (macos-13)
 #   - darwin-arm64 (macos-14)
 #   - linux-x64    (ubuntu-latest)
 #   - linux-arm64  (ubuntu-24.04-arm)
+#
+# darwin-x64 (Intel Mac) is intentionally NOT in the matrix. GitHub's
+# `macos-13` (Ventura, Intel) runner pool is effectively exhausted on
+# the free tier, so the slot routinely queues for over an hour. The
+# release.yml CLI / Python-wheel matrices already ship only darwin-arm64
+# for macOS; keeping the prebuild matrix consistent removes the stuck
+# slot without losing real coverage (every supported macOS user is on
+# Apple Silicon).
 #
 # Windows is intentionally NOT in the matrix yet. The engine compiles
 # with `-fno-exceptions -fno-rtti -fvisibility=hidden` (GCC/Clang
@@ -53,8 +60,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform-arch: darwin-x64
-            runner: macos-13
           - platform-arch: darwin-arm64
             runner: macos-14
           - platform-arch: linux-x64
