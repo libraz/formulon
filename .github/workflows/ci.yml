@@ -40,7 +40,7 @@ jobs:
   native:
     name: Build, test, and coverage (native, Linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,15 +49,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake ninja-build libbrotli-dev brotli lcov ccache
-
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ccache
-          key: ccache-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            ccache-${{ runner.os }}-
+            build-essential cmake ninja-build libbrotli-dev brotli lcov
 
       - name: Cache CMake build directory (coverage)
         uses: actions/cache@v4
@@ -67,25 +59,11 @@ jobs:
           restore-keys: |
             coverage-build-${{ runner.os }}-
 
-      - name: Setup ccache
-        run: |
-          ccache --set-config=max_size=500M
-          ccache --zero-stats
-
       - name: Configure (coverage preset)
-        env:
-          CC: ccache gcc
-          CXX: ccache g++
         run: cmake --preset coverage
 
       - name: Build
         run: cmake --build build-coverage --parallel
-
-      - name: Show ccache statistics
-        run: ccache --show-stats
-
-      - name: Zero gcov counters
-        run: lcov --zerocounters --directory build-coverage
 
       - name: Run fast tests
         id: ctest
