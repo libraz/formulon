@@ -1,0 +1,76 @@
+# Nightly coverage workflow.
+#
+# Coverage is intentionally NOT part of the PR / push CI (ci.yml). Per
+# CLAUDE.md "CI vs. local development", coverage is a report — not a
+# gate — and the gcov-instrumented build is too slow (10k+ fast tests
+# under -O0) to share a runner with the main-branch build/test gate.
+#
+# This workflow runs on a nightly schedule and on manual dispatch.
+# It produces an lcov tracefile and uploads it to Codecov. The local
+# diagnostic remains `tools/dev/run_coverage.sh` for ad-hoc gap hunting.
+name: coverage
+
+on:
+  schedule:
+    # 02:30 UTC nightly (~11:30 JST). Cheap when the repo is quiet.
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Coverage (lcov + codecov upload)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build and coverage tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build lcov
+
+      - name: Configure (coverage preset)
+        run: cmake --preset coverage
+
+      - name: Build
+        run: cmake --build build-coverage --parallel
+
+      - name: Run fast tests under coverage instrumentation
+        working-directory: build-coverage
+        # Parallel ctest is required -- a serial run of the ~10k fast
+        # tests under `-O0 + --coverage` is multi-hour on the
+        # ubuntu-latest runner. gcov writes per-TU `.gcda` files so
+        # parallel test binaries do not corrupt each other.
+        run: ctest -LE "SLOW|LOAD" --output-on-failure --timeout 60 -j 4
+
+      - name: Capture and filter lcov tracefile
+        run: |
+          set -euo pipefail
+          mkdir -p build-coverage/coverage
+          lcov --directory build-coverage --capture \
+               --output-file build-coverage/coverage/coverage.info \
+               --rc lcov_branch_coverage=0 \
+               --ignore-errors source,gcov,negative,unused
+          lcov --extract build-coverage/coverage/coverage.info \
+               "${PWD}/src/*" \
+               --output-file build-coverage/coverage/coverage.filtered.info \
+               --rc lcov_branch_coverage=0 \
+               --ignore-errors unused,negative
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: build-coverage/coverage/coverage.filtered.info
+          flags: unittests
+          name: codecov-formulon
+          fail_ci_if_error: false
