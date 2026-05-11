@@ -11,7 +11,7 @@
 
 **Formulon は Excel 互換の計算エンジンです。** C++17 で書かれたコアエンジンが、Excel 365 (ja-JP) の挙動を bit 単位で再現することを目指しています。同じエンジンをブラウザ (WebAssembly)、Python、ネイティブ CLI から呼び出せるので、どの環境でもワークブックは同じ値に再計算されます。
 
-Excel 本体・Microsoft ランタイム・COM オートメーションは不要です。WASM はブラウザと Node、ネイティブパッケージは `darwin-arm64` / `linux-x64` / `linux-arm64` を対象に配布しています。
+Excel 本体・Microsoft ランタイム・COM オートメーションは不要です。WASM はブラウザ、Node、Python では `wasmtime` 経由で動作し、ネイティブ CLI パッケージは `darwin-arm64` / `linux-x64` / `linux-arm64` を対象に配布しています。
 
 ## インストール
 
@@ -59,8 +59,8 @@ Formulon は以下を **意図的にサポートしません**:
 | 配布元 | パッケージ名 | 内容 |
 |--------|-------------|------|
 | npm | [`@libraz/formulon`](https://www.npmjs.com/package/@libraz/formulon) | WASM ESM モジュール (型定義同梱)。Node 18+ / ブラウザ / Worker 対応。 |
-| PyPI | [`formulon`](https://pypi.org/project/formulon/) | CPython 3.9–3.13 wheel (`darwin-arm64` / `linux-x64` / `linux-arm64`)。実行時は ctypes と標準ライブラリのみに依存。 |
-| GitHub Releases | `formulon-cli-<platform-arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump`)、対応プラットフォームは Python wheel と同じ。 |
+| PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、platform-specific runtime は `pip` が `wasmtime` として解決します。 |
+| GitHub Releases | `formulon-cli-<platform-arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
 
 ## ステータス
 

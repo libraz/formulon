@@ -54,6 +54,31 @@ std::vector<std::uint8_t> BuildZip(const std::vector<PartFile>& parts) {
   return out;
 }
 
+std::string ExtractEntry(const std::vector<std::uint8_t>& archive_bytes, std::string_view name) {
+  mz_zip_archive reader{};
+  if (mz_zip_reader_init_mem(&reader, archive_bytes.data(), archive_bytes.size(), 0) == MZ_FALSE) {
+    ADD_FAILURE() << "mz_zip_reader_init_mem failed";
+    return {};
+  }
+  const int index = mz_zip_reader_locate_file(&reader, std::string(name).c_str(), nullptr, 0);
+  if (index < 0) {
+    ADD_FAILURE() << "entry not found: " << name;
+    mz_zip_reader_end(&reader);
+    return {};
+  }
+  std::size_t extracted_size = 0;
+  void* extracted = mz_zip_reader_extract_to_heap(&reader, static_cast<mz_uint>(index), &extracted_size, 0);
+  if (extracted == nullptr) {
+    ADD_FAILURE() << "extract_to_heap failed for: " << name;
+    mz_zip_reader_end(&reader);
+    return {};
+  }
+  std::string body(static_cast<const char*>(extracted), extracted_size);
+  mz_free(extracted);
+  mz_zip_reader_end(&reader);
+  return body;
+}
+
 // ---------------------------------------------------------------------------
 // DefinedName preservation through full read pipeline
 // ---------------------------------------------------------------------------
@@ -438,6 +463,10 @@ TEST(OoxmlMetadata, PassthroughPartRoundTripsBytesAndContentType) {
 
   // Re-emit and verify the part is still present and byte-stable.
   const std::vector<std::uint8_t> rewritten = SaveOrDie(first.workbook);
+  const std::string workbook_rels = ExtractEntry(rewritten, "xl/_rels/workbook.xml.rels");
+  EXPECT_NE(workbook_rels.find("relationships/theme"), std::string::npos) << workbook_rels;
+  EXPECT_NE(workbook_rels.find("Target=\"theme/theme1.xml\""), std::string::npos) << workbook_rels;
+
   auto second_or = io::read_ooxml(SpanOf(rewritten));
   ASSERT_TRUE(static_cast<bool>(second_or)) << "second read_ooxml: " << second_or.error().message;
   const io::OoxmlReadResult& second = second_or.value();
@@ -448,6 +477,38 @@ TEST(OoxmlMetadata, PassthroughPartRoundTripsBytesAndContentType) {
   ASSERT_EQ(theme_it->bytes.size(), read_back.bytes.size());
   EXPECT_TRUE(std::equal(theme_it->bytes.begin(), theme_it->bytes.end(), read_back.bytes.begin()))
       << "theme bytes diverged";
+}
+
+TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
+  Workbook wb = Workbook::create();
+  std::vector<io::PassthroughPart> parts;
+  auto add_part = [&parts](std::string path, std::string content_type, std::string_view body) {
+    io::PassthroughPart part;
+    part.path = std::move(path);
+    part.content_type = std::move(content_type);
+    part.bytes.assign(body.begin(), body.end());
+    parts.push_back(std::move(part));
+  };
+  add_part("docProps/core.xml", "application/vnd.openxmlformats-package.core-properties+xml", "<core/>");
+  add_part("docProps/app.xml", "application/vnd.openxmlformats-officedocument.extended-properties+xml", "<app/>");
+  add_part("xl/calcChain.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml",
+           "<calcChain/>");
+  add_part("xl/sharedStrings.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml",
+           "<sst/>");
+  wb.set_passthrough_parts(std::move(parts));
+
+  const std::vector<std::uint8_t> bytes = SaveOrDie(wb);
+  const std::string package_rels = ExtractEntry(bytes, "_rels/.rels");
+  EXPECT_NE(package_rels.find("metadata/core-properties"), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("Target=\"docProps/core.xml\""), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("extended-properties"), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("Target=\"docProps/app.xml\""), std::string::npos) << package_rels;
+
+  const std::string workbook_rels = ExtractEntry(bytes, "xl/_rels/workbook.xml.rels");
+  EXPECT_NE(workbook_rels.find("relationships/calcChain"), std::string::npos) << workbook_rels;
+  EXPECT_NE(workbook_rels.find("Target=\"calcChain.xml\""), std::string::npos) << workbook_rels;
+  EXPECT_NE(workbook_rels.find("relationships/sharedStrings"), std::string::npos) << workbook_rels;
+  EXPECT_NE(workbook_rels.find("Target=\"sharedStrings.xml\""), std::string::npos) << workbook_rels;
 }
 
 TEST(OoxmlMetadata, CombinedDefinedNamesTablesAndPassthrough) {

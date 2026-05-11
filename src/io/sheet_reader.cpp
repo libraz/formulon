@@ -3,14 +3,13 @@
 // `<sheetData>` walker. See sheet_reader.h for the public contract.
 //
 // The walker visits each `<row>`/`<c>` pair in document order. A small
-// `shared_formulas` map records the master formula text per `si` index;
-// slave occurrences are looked up in this map. The map is rebuilt per
+// `shared_formulas` map records the master formula text and anchor cell
+// per `si` index; slave occurrences are looked up in this map and shifted
+// by their relative row/column offset. The map is rebuilt per
 // `read_sheet_data` call (per sheet) — `si` indices are sheet-local in
 // OOXML, so leaking entries across sheets would be a correctness bug.
 //
-// Known limitations (called out in the public header):
-//   * Shared formulas are reused verbatim. R1C1-style relative shift will
-//     land in Bundle 2.5 / Phase 4.
+// Known limitation (called out in the public header):
 //   * Cached values from `<v>` on formula cells are dropped: we let the
 //     recalc engine populate them via `Workbook::recalc()`.
 
@@ -31,8 +30,12 @@
 #include "io/cell_parser.h"
 #include "io/sax_xml_reader.h"
 #include "io/xml_utils.h"
+#include "parser/ast_format.h"
+#include "parser/ast_shift.h"
+#include "parser/parser.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -43,12 +46,41 @@ namespace io {
 namespace {
 
 /// Master record for a shared-formula group: the formula body of the
-/// first `<f t="shared" si="N" ...>` occurrence. Slave occurrences of
-/// the same `si` reuse this text. The leading '=' is intentionally
+/// first `<f t="shared" si="N" ...>` occurrence and the cell that owns it.
+/// Slave occurrences of the same `si` reuse this text after shifting every
+/// relative reference by `(slave - master)`. The leading '=' is intentionally
 /// absent (OOXML <f> contents never have it).
 struct SharedFormulaMaster {
   std::string text;
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
 };
+
+std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint32_t target_row,
+                                   std::uint32_t target_col) {
+  const std::int32_t row_delta = static_cast<std::int32_t>(target_row) - static_cast<std::int32_t>(master.row);
+  const std::int32_t col_delta = static_cast<std::int32_t>(target_col) - static_cast<std::int32_t>(master.col);
+  if (row_delta == 0 && col_delta == 0) {
+    return master.text;
+  }
+
+  std::string source("=");
+  source.append(master.text);
+  Arena arena;
+  parser::Parser parser(source, arena);
+  parser::AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    // Keep the workbook loadable for formula dialects this parser does not
+    // fully understand yet. Parseable formulas still get correct Excel-style
+    // shared-formula relative expansion.
+    return master.text;
+  }
+  const parser::AstNode* shifted = parser::shift_relative_refs(*root, arena, row_delta, col_delta);
+  if (shifted == nullptr) {
+    return master.text;
+  }
+  return parser::format_formula(*shifted);
+}
 
 /// Reads the `<f>` child of `c_node` and updates `formula_out`. Returns
 /// `false` and surfaces an error when a slave occurrence references an
@@ -66,8 +98,8 @@ struct SharedFormulaMaster {
 ///     the formula text. CSE-array detail / data-table semantics will
 ///     land in a later bundle.
 Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
-                                     std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared,
-                                     std::string& formula_out) {
+                                     std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared, std::uint32_t row,
+                                     std::uint32_t col, std::string& formula_out) {
   pugi::xml_node f_node = c_node.child("f");
   if (!f_node) {
     formula_out.clear();
@@ -103,7 +135,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   }
   if (!body.empty()) {
     // Master occurrence: register and use as formula text.
-    shared[si] = SharedFormulaMaster{body};
+    shared[si] = SharedFormulaMaster{body, row, col};
     formula_out = std::move(body);
     return Expected<void, Error>::Ok();
   }
@@ -115,8 +147,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: slave references unknown si",
                       std::move(ctx));
   }
-  // NOTE: this slice does NOT shift R1C1 relative refs. See sheet_reader.h.
-  formula_out = it->second.text;
+  formula_out = ShiftSharedFormulaText(it->second, row, col);
   return Expected<void, Error>::Ok();
 }
 
@@ -210,7 +241,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       // Resolve formula text (handling shared-formula reuse).
       std::string formula_text;
       {
-        auto resolved = ResolveFormula(c, shared_formulas, formula_text);
+        auto resolved = ResolveFormula(c, shared_formulas, parsed.row, parsed.col, formula_text);
         if (!resolved) {
           return resolved.error();
         }

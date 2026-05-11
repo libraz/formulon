@@ -27,6 +27,7 @@
 #include "io/passthrough_part.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
+#include "io/unknown_relationship.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -340,6 +341,21 @@ class Workbook {
   /// preserved parts.
   void set_passthrough_parts(std::vector<io::PassthroughPart> parts) { passthrough_parts_ = std::move(parts); }
 
+  /// Read-only access to the verbatim workbook-level `<Relationship>`
+  /// entries (from `xl/_rels/workbook.xml.rels`) whose Type URI the
+  /// reader did not recognise. Captured so the writer can re-emit
+  /// every entry, keeping passthrough-listed parts (theme, calcChain,
+  /// vbaProject, customXml, ...) reachable through the relationship
+  /// graph. The writer mints fresh rIds; the original `id` is
+  /// preserved on the struct for diagnostics only.
+  const std::vector<io::UnknownRelationship>& unknown_workbook_rels() const noexcept { return unknown_workbook_rels_; }
+
+  /// Replaces the workbook's unknown-relationship list. Move-assigns
+  /// to keep the I/O hand-off allocation-free.
+  void set_unknown_workbook_rels(std::vector<io::UnknownRelationship> rels) {
+    unknown_workbook_rels_ = std::move(rels);
+  }
+
   /// Read-only access to the workbook's external-link list (in
   /// `<externalReferences>` document order). Each entry surfaces the
   /// relationship metadata for one cross-workbook reference; the body
@@ -572,6 +588,10 @@ class Workbook {
   std::vector<io::TableMetadata> tables_;
   std::vector<io::PassthroughPart> passthrough_parts_;
   std::vector<io::ExternalLinkRecord> external_links_;
+  // Workbook-rels entries with unrecognised Type URIs (theme, calcChain,
+  // vbaProject, customXml, ...). Round-trip metadata only; the parts
+  // themselves live in `passthrough_parts_`.
+  std::vector<io::UnknownRelationship> unknown_workbook_rels_;
   // Pivot caches owned by the workbook. One cache may be referenced by
   // multiple pivot tables (per `Sheet::pivot_tables()`).
   std::vector<std::unique_ptr<pivot::PivotCache>> pivot_caches_;

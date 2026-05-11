@@ -11,7 +11,7 @@
 
 Formulon is a headless, Excel-compatible calculation engine — a C++17 core that defaults to the **Windows Excel 365 (ja-JP)** behavior profile, with every known divergence explicitly tracked against Excel oracle data. The same engine is packaged for the browser (WebAssembly), for Python, and for native command-line use, so a workbook recalculates to the same values wherever it runs.
 
-No Excel installation, no Microsoft runtime, no COM automation required. The WASM build runs in browsers and Node; native packages currently ship for `darwin-arm64`, `linux-x64`, and `linux-arm64`.
+No Excel installation, no Microsoft runtime, no COM automation required. The WASM build runs in browsers, Node, and Python through `wasmtime`; native CLI packages currently ship for `darwin-arm64`, `linux-x64`, and `linux-arm64`.
 
 ## Why Formulon
 
@@ -50,7 +50,7 @@ These are **permanent** non-goals, not "not yet." The scope is finite on purpose
 | Surface | Name | Notes |
 |---------|------|-------|
 | npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 18+, browsers, workers. |
-| PyPI | `formulon` | CPython 3.9–3.13 wheels for `darwin-arm64`, `linux-x64`, `linux-arm64`. ctypes-based, stdlib-only at runtime. |
+| PyPI | `formulon` | Python 3.9+ `py3-none-any` wheel that bundles `formulon_capi.wasm` plus a pure-Python wrapper. `pip` resolves the platform-specific `wasmtime` runtime. |
 | GitHub Releases | `formulon-cli-<platform-arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
 
 ## Status

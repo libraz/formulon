@@ -42,6 +42,7 @@
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
+#include "io/unknown_relationship.h"
 #include "io/workbook_kind.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
@@ -462,6 +463,11 @@ struct WorkbookRels {
   std::string styles_path;
   std::unordered_map<std::string, std::string> pivot_cache_definition_paths_by_rid;
   std::unordered_map<std::string, std::string> external_link_paths_by_rid;
+  // Relationship entries with Type URIs we don't recognise (theme,
+  // calcChain, vbaProject, customXml, ...). Captured verbatim so the
+  // writer can re-emit them, keeping passthrough-listed parts reachable
+  // in the package graph.
+  std::vector<UnknownRelationship> unknown_rels;
 };
 
 /// Loads `<workbook_dir>/_rels/<workbook_filename>.rels` (if present) and
@@ -529,6 +535,27 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
             return resolved.error();
           }
           rels.external_link_paths_by_rid.emplace(id, std::move(resolved).value());
+        } else {
+          // Unrecognised Type URI: capture verbatim so the writer can
+          // re-emit the entry. Without this, the matching part (theme,
+          // calcChain, vbaProject, customXml, ...) survives in
+          // passthrough but becomes an orphan in the relationship
+          // graph and Excel opens the file in "needs repair" mode.
+          UnknownRelationship entry;
+          entry.id.assign(rel.attribute("Id").value());
+          entry.type.assign(type);
+          const bool external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+          entry.target_external = external;
+          if (external) {
+            entry.target.assign(target);
+          } else {
+            auto resolved = ResolveRelativePath(base_dir, target);
+            if (!resolved) {
+              return resolved.error();
+            }
+            entry.target = std::move(resolved).value();
+          }
+          rels.unknown_rels.push_back(std::move(entry));
         }
         return Expected<void, Error>::Ok();
       });
@@ -881,7 +908,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   if (!wb_rels_or) {
     return wb_rels_or.error();
   }
-  const WorkbookRels& wb_rels = wb_rels_or.value();
+  WorkbookRels& wb_rels = wb_rels_or.value();
 
   // 4. xl/workbook.xml — the <sheets> list (in document order).
   if (!zip.has_entry(workbook_path)) {
@@ -1485,6 +1512,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // `OoxmlReadResult::unknown_parts` view stays populated for tests and
   // tooling that want to inspect what was preserved.
   wb.set_passthrough_parts(unknown_parts);
+  wb.set_unknown_workbook_rels(std::move(wb_rels.unknown_rels));
 
   OoxmlReadResult result{std::move(wb), std::move(unknown_parts), pending_sst_count};
   return result;

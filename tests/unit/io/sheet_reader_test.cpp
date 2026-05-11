@@ -122,14 +122,16 @@ TEST(SheetReader, ErrorCellRoundTrips) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-TEST(SheetReader, SharedFormulaSlaveReusesMasterTextVerbatim) {
-  // si=0 master at A1 with formula "B1+1"; slave at A2 with no body.
-  // The slice does NOT yet shift relative refs, so A2's formula text
-  // matches the master's exactly. Documented as a known limitation.
+TEST(SheetReader, SharedFormulaSlaveShiftsRelativeReferences) {
+  // si=0 master at E3 with formula "C3*D3"; slave at E4 with no body.
+  // Excel applies the slave's row/column offset to relative references,
+  // so E4 must become "C4*D4" and recalc against row 4 inputs.
   const char* xml =
       "<worksheet><sheetData>"
-      "<row r=\"1\"><c r=\"A1\"><f t=\"shared\" si=\"0\" ref=\"A1:A2\">B1+1</f></c></row>"
-      "<row r=\"2\"><c r=\"A2\"><f t=\"shared\" si=\"0\"/></c></row>"
+      "<row r=\"3\"><c r=\"C3\"><v>10</v></c><c r=\"D3\"><v>20</v></c>"
+      "<c r=\"E3\"><f t=\"shared\" si=\"0\" ref=\"E3:E4\">C3*D3</f></c></row>"
+      "<row r=\"4\"><c r=\"C4\"><v>100</v></c><c r=\"D4\"><v>500</v></c>"
+      "<c r=\"E4\"><f t=\"shared\" si=\"0\"/></c></row>"
       "</sheetData></worksheet>";
   pugi::xml_document doc;
   ASSERT_TRUE(doc.load_string(xml));
@@ -138,8 +140,12 @@ TEST(SheetReader, SharedFormulaSlaveReusesMasterTextVerbatim) {
   SheetReadContext ctx;
   std::deque<std::string> text_storage;
   ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
-  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 0U), "=B1+1");
-  EXPECT_EQ(StoredFormula(wb, 0U, 1U, 0U), "=B1+1");
+  EXPECT_EQ(StoredFormula(wb, 0U, 2U, 4U), "=C3*D3");
+  EXPECT_EQ(StoredFormula(wb, 0U, 3U, 4U), "=C4*D4");
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(StoredValue(wb, 0U, 3U, 4U).is_number());
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 3U, 4U).as_number(), 50000.0);
 }
 
 TEST(SheetReader, SharedFormulaSlaveWithoutMasterErrors) {

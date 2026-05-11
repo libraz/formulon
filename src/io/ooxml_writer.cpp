@@ -32,6 +32,7 @@
 #include "io/pivot_table_writer.h"
 #include "io/styles_writer.h"
 #include "io/tables_reader.h"
+#include "io/unknown_relationship.h"
 #include "io/workbook_kind.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -83,11 +84,20 @@ constexpr std::string_view kRelComments =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
 constexpr std::string_view kRelVmlDrawing =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+constexpr std::string_view kRelCalcChain =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
+constexpr std::string_view kRelTheme = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+constexpr std::string_view kRelSharedStrings =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
 
 constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
 constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
 constexpr std::string_view kRelOfficeDocument =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+constexpr std::string_view kRelCoreProperties =
+    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+constexpr std::string_view kRelExtendedProperties =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
 constexpr std::string_view kRelWorksheet =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
 constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
@@ -453,6 +463,15 @@ std::string_view WithoutXlPrefix(std::string_view path) {
   return path;
 }
 
+bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path) {
+  for (const PassthroughPart* part : plan.passthrough_kept) {
+    if (part != nullptr && part->path == path) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void AppendRelationship(std::string& out, std::string_view id, std::string_view type, std::string_view target,
                         bool target_external = false, bool escape_target = false) {
   out.append("  <Relationship Id=\"");
@@ -559,12 +578,19 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-std::string BuildPackageRels() {
+std::string BuildPackageRels(const EmissionPlan& plan) {
   std::string out;
   out.reserve(256);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   AppendRelationship(out, 1, kRelOfficeDocument, "xl/workbook.xml");
+  std::uint32_t next_rid = 2;
+  if (HasPassthroughPart(plan, "docProps/core.xml")) {
+    AppendRelationship(out, next_rid++, kRelCoreProperties, "docProps/core.xml");
+  }
+  if (HasPassthroughPart(plan, "docProps/app.xml")) {
+    AppendRelationship(out, next_rid++, kRelExtendedProperties, "docProps/app.xml");
+  }
   out.append("</Relationships>\n");
   return out;
 }
@@ -692,9 +718,9 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan) {
+std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan, const Workbook& wb) {
   std::string out;
-  out.reserve(256 + sheet_count * 192 + plan.pivot_caches.size() * 192);
+  out.reserve(256 + sheet_count * 192 + plan.pivot_caches.size() * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   for (std::size_t i = 0; i < sheet_count; ++i) {
@@ -715,6 +741,36 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan)
   for (const EmissionPlan::ExternalLinkPlan& e : plan.external_links) {
     AppendRelationship(out, e.workbook_rid, kRelExternalLink, WithoutXlPrefix(e.record->part_path),
                        /*target_external=*/false, /*escape_target=*/true);
+  }
+  // Round-tripped relationships whose Type URI the reader did not
+  // recognise (theme, calcChain, vbaProject, customXml, ...). Without
+  // these the passthrough parts they point at become orphans and Excel
+  // opens the package in "needs repair" mode. Fresh deterministic rIds
+  // sit past the worksheet / styles / pivot / external-link numbering.
+  std::uint32_t next_rid =
+      static_cast<std::uint32_t>(sheet_count + 2 + plan.pivot_caches.size() + plan.external_links.size());
+  auto has_unknown_rel = [&wb](std::string_view type, std::string_view resolved_target) {
+    for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
+      if (!r.target_external && r.type == type && r.target == resolved_target) {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (HasPassthroughPart(plan, "xl/calcChain.xml") && !has_unknown_rel(kRelCalcChain, "xl/calcChain.xml")) {
+    AppendRelationship(out, next_rid++, kRelCalcChain, "calcChain.xml");
+  }
+  if (HasPassthroughPart(plan, "xl/theme/theme1.xml") && !has_unknown_rel(kRelTheme, "xl/theme/theme1.xml")) {
+    AppendRelationship(out, next_rid++, kRelTheme, "theme/theme1.xml");
+  }
+  if (HasPassthroughPart(plan, "xl/sharedStrings.xml")) {
+    AppendRelationship(out, next_rid++, kRelSharedStrings, "sharedStrings.xml");
+  }
+  for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
+    const std::string_view target =
+        r.target_external ? std::string_view(r.target) : WithoutXlPrefix(std::string_view(r.target));
+    AppendRelationship(out, next_rid++, std::string_view(r.type), target, r.target_external,
+                       /*escape_target=*/true);
   }
   out.append("</Relationships>\n");
   return out;
@@ -1461,7 +1517,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 2. _rels/.rels
   {
-    auto result = AddPart(writer.get(), "_rels/.rels", BuildPackageRels());
+    auto result = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(plan));
     if (!result) {
       return result.error();
     }
@@ -1477,7 +1533,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 4. xl/_rels/workbook.xml.rels
   {
-    auto result = AddPart(writer.get(), "xl/_rels/workbook.xml.rels", BuildWorkbookRels(sheet_count, plan));
+    auto result = AddPart(writer.get(), "xl/_rels/workbook.xml.rels", BuildWorkbookRels(sheet_count, plan, wb));
     if (!result) {
       return result.error();
     }

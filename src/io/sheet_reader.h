@@ -57,12 +57,11 @@ struct SheetReadContext {
 ///   * Shared formulas (`<f t="shared" si="N" ref="A1:B5">...</f>`):
 ///       - the master occurrence (with formula body text) is recorded;
 ///       - later occurrences (`<f t="shared" si="N"/>`, no body) reuse the
-///         master's formula text *verbatim*. No R1C1-style relative shift
-///         is performed — Bundle 2.5 / Phase 4 will add proper adjustment.
-///         For now, callers that hit a shared formula with relative refs
-///         should expect the slave cells to evaluate to the master's
-///         result; this is acceptable for the minimal-corpus tests this
-///         slice covers, and is documented as a known limitation.
+///         master's formula text shifted by the slave's row/column offset,
+///         matching Excel's relative-reference semantics for drag-filled
+///         shared formulas. If the formula dialect cannot be parsed yet, the
+///         reader falls back to the master's text so the workbook remains
+///         loadable.
 ///   * Inline strings (`t="inlineStr"`): walked via `cell_parser`; rich-
 ///     text formatting is dropped (concatenated as plain text).
 ///   * SST cells (`t="s"`): the placeholder `Text("")` is written, and
