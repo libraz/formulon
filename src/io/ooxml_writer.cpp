@@ -70,7 +70,6 @@ constexpr std::string_view kCtPivotCacheDefinition =
 constexpr std::string_view kCtPivotCacheRecords =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
 constexpr std::string_view kCtPivotTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
-
 constexpr std::string_view kRelTable = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
 constexpr std::string_view kRelPivotCacheDefinition =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
@@ -89,6 +88,8 @@ constexpr std::string_view kRelCalcChain =
 constexpr std::string_view kRelTheme = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
 constexpr std::string_view kRelSharedStrings =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+constexpr std::string_view kRelPrinterSettings =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
 
 constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
 constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
@@ -385,13 +386,14 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
   std::unordered_set<std::string> generated =
       BuildGeneratedPathSet(wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet);
   // Sheet rels for sheets that own tables, pivot tables, hyperlinks,
-  // comments, or that need a VML drawing rel are also generated.
+  // comments/VML, or printer settings are also generated.
   for (std::size_t i = 0; i < plan.tables_by_sheet.size(); ++i) {
     const bool has_tables = !plan.tables_by_sheet[i].empty();
     const bool has_pivots = i < plan.pivot_tables_by_sheet.size() && !plan.pivot_tables_by_sheet[i].empty();
     const bool has_hyperlinks = i < wb.sheet_count() && !wb.sheet(i).hyperlinks().empty();
     const bool has_comments = i < plan.comments_by_sheet.size() && plan.comments_by_sheet[i].numeric_id != 0;
-    if (has_tables || has_pivots || has_hyperlinks || has_comments) {
+    const bool has_print_settings = i < wb.sheet_count() && !wb.sheet(i).print_settings().printer_settings_path.empty();
+    if (has_tables || has_pivots || has_hyperlinks || has_comments || has_print_settings) {
       generated.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
     }
   }
@@ -470,6 +472,18 @@ bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path) {
     }
   }
   return false;
+}
+
+std::string TargetRelativeToWorksheet(std::string_view package_path) {
+  constexpr std::string_view kXlPrefix = "xl/";
+  std::string out;
+  if (package_path.size() >= kXlPrefix.size() && package_path.substr(0, kXlPrefix.size()) == kXlPrefix) {
+    out.assign("../");
+    out.append(package_path.substr(kXlPrefix.size()));
+    return out;
+  }
+  out.assign(package_path);
+  return out;
 }
 
 void AppendRelationship(std::string& out, std::string_view id, std::string_view type, std::string_view target,
@@ -1038,8 +1052,42 @@ std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::stri
   return out;
 }
 
+std::string PageSetupWithRelationshipId(std::string page_setup_xml, std::string_view rid) {
+  if (page_setup_xml.empty() || rid.empty()) {
+    return page_setup_xml;
+  }
+  auto replace_attr = [&](std::string_view attr_name) {
+    const std::string needle = std::string(attr_name) + "=\"";
+    const std::size_t pos = page_setup_xml.find(needle);
+    if (pos == std::string::npos) {
+      return false;
+    }
+    const std::size_t value_start = pos + needle.size();
+    const std::size_t value_end = page_setup_xml.find('"', value_start);
+    if (value_end == std::string::npos) {
+      return false;
+    }
+    page_setup_xml.replace(value_start, value_end - value_start, rid);
+    return true;
+  };
+  if (replace_attr("r:id") || replace_attr("id")) {
+    return page_setup_xml;
+  }
+  const std::size_t insert_pos = page_setup_xml.rfind("/>");
+  const std::size_t fallback_pos = page_setup_xml.rfind('>');
+  const std::size_t pos = insert_pos != std::string::npos ? insert_pos : fallback_pos;
+  if (pos == std::string::npos) {
+    return page_setup_xml;
+  }
+  std::string attr(" r:id=\"");
+  attr.append(rid);
+  attr.push_back('"');
+  page_setup_xml.insert(pos, attr);
+  return page_setup_xml;
+}
+
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
-                              const std::vector<std::string>& hyperlink_rids) {
+                              const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string cols_xml = BuildColsXml(sheet.layout());
   const std::string sheet_data = BuildSheetDataXml(sheet);
@@ -1050,9 +1098,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string dv_xml = BuildDataValidationsBlock(sheet);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
+  const SheetPrintSettings& print = sheet.print_settings();
+  const std::string page_setup_xml = PageSetupWithRelationshipId(print.page_setup_xml, printer_settings_rid);
   std::string out;
   out.reserve(192U + sheet_view_xml.size() + cols_xml.size() + sheet_data.size() + cf_xml.size() + merges_xml.size() +
-              dv_xml.size() + hl_xml.size() + sheet_tables.size() * 96);
+              dv_xml.size() + hl_xml.size() + print.sheet_pr_xml.size() + print.page_margins_xml.size() +
+              page_setup_xml.size() + sheet_tables.size() * 96);
   out.append(kXmlDecl);
   out.append(
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
@@ -1062,6 +1113,11 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // tableParts. We currently emit a subset; the helpers stay quiet
   // when their underlying field is at default values so absent
   // metadata yields no extra bytes.
+  if (!print.sheet_pr_xml.empty()) {
+    out.append("  ");
+    out.append(print.sheet_pr_xml);
+    out.push_back('\n');
+  }
   if (!sheet_view_xml.empty()) {
     out.append("  ");
     out.append(sheet_view_xml);
@@ -1107,6 +1163,16 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     out.append(hl_xml);
     out.push_back('\n');
   }
+  if (!print.page_margins_xml.empty()) {
+    out.append("  ");
+    out.append(print.page_margins_xml);
+    out.push_back('\n');
+  }
+  if (!page_setup_xml.empty()) {
+    out.append("  ");
+    out.append(page_setup_xml);
+    out.push_back('\n');
+  }
   if (!sheet_tables.empty()) {
     out.append("  <tableParts count=\"");
     out.append(std::to_string(sheet_tables.size()));
@@ -1129,6 +1195,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
 struct SheetRelsResult {
   std::string xml;
   std::vector<std::string> hyperlink_rids;
+  std::string printer_settings_rid;
 };
 
 SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
@@ -1140,16 +1207,25 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   std::uint32_t next_rid = 1;
+  std::unordered_set<std::string> used_rids;
+  auto next_unique_rid = [&]() {
+    std::string rid;
+    do {
+      rid = "rId" + std::to_string(next_rid++);
+    } while (used_rids.count(rid) != 0U);
+    used_rids.insert(rid);
+    return rid;
+  };
   for (std::size_t i = 0; i < sheet_tables.size(); ++i) {
     const std::string target = "../tables/table" + std::to_string(sheet_tables[i].numeric_id) + ".xml";
-    AppendRelationship(out, next_rid++, kRelTable, target);
+    AppendRelationship(out, next_unique_rid(), kRelTable, target);
   }
   // Pivot-table relationships follow the table relationships, with rId
   // numbering continuing in sequence so each rel id is unique within
   // the sheet rels file.
   for (std::size_t i = 0; i < sheet_pivot_tables.size(); ++i) {
     const std::string target = "../pivotTables/pivotTable" + std::to_string(sheet_pivot_tables[i].numeric_id) + ".xml";
-    AppendRelationship(out, next_rid++, kRelPivotTable, target);
+    AppendRelationship(out, next_unique_rid(), kRelPivotTable, target);
   }
   // Hyperlink relationships. Each external hyperlink target gets one
   // entry. Relative ordering is preserved so the round-trip writes the
@@ -1165,13 +1241,25 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     // Reuse the source `rid` when present so byte-identical round-trips
     // are possible; otherwise mint a fresh rIdN counter.
     std::string rid;
-    if (!h.rid.empty()) {
+    if (!h.rid.empty() && used_rids.count(h.rid) == 0U) {
       rid = h.rid;
+      used_rids.insert(rid);
     } else {
-      rid = "rId" + std::to_string(next_rid++);
+      rid = next_unique_rid();
     }
     res.hyperlink_rids.push_back(rid);
     AppendRelationship(out, rid, kRelHyperlink, h.target, /*target_external=*/true, /*escape_target=*/true);
+  }
+  const SheetPrintSettings& print = sheet.print_settings();
+  if (!print.printer_settings_path.empty()) {
+    if (!print.printer_settings_rid.empty() && used_rids.count(print.printer_settings_rid) == 0U) {
+      res.printer_settings_rid = print.printer_settings_rid;
+      used_rids.insert(res.printer_settings_rid);
+    } else {
+      res.printer_settings_rid = next_unique_rid();
+    }
+    AppendRelationship(out, res.printer_settings_rid, kRelPrinterSettings,
+                       TargetRelativeToWorksheet(print.printer_settings_path));
   }
   // Comments + VML relationships when the sheet has comments. The
   // comments rel comes first; the VML rel follows so the two ids are
@@ -1179,8 +1267,8 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   if (comments_plan.numeric_id != 0) {
     const std::string comments_target = "../comments" + std::to_string(comments_plan.numeric_id) + ".xml";
     const std::string vml_target = "../drawings/vmlDrawing" + std::to_string(comments_plan.numeric_id) + ".vml";
-    AppendRelationship(out, next_rid++, kRelComments, comments_target);
-    AppendRelationship(out, next_rid++, kRelVmlDrawing, vml_target);
+    AppendRelationship(out, next_unique_rid(), kRelComments, comments_target);
+    AppendRelationship(out, next_unique_rid(), kRelVmlDrawing, vml_target);
   }
   out.append("</Relationships>\n");
   return res;
@@ -1547,7 +1635,9 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     const auto& comments_plan = plan.comments_by_sheet[i];
     const bool has_hyperlinks = !wb.sheet(i).hyperlinks().empty();
     const bool has_comments = comments_plan.numeric_id != 0;
-    const bool has_rels = !sheet_tables.empty() || !sheet_pivot_tables.empty() || has_hyperlinks || has_comments;
+    const bool has_print_settings = !wb.sheet(i).print_settings().printer_settings_path.empty();
+    const bool has_rels =
+        !sheet_tables.empty() || !sheet_pivot_tables.empty() || has_hyperlinks || has_comments || has_print_settings;
     // Build the rels first because the hyperlink rId vector feeds into
     // the worksheet's <hyperlinks> block. When the sheet has no rels we
     // still call BuildSheetRels with an empty comments plan to get a
@@ -1556,8 +1646,9 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto wresult =
-        AddPart(writer.get(), part_path, BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids));
+    auto wresult = AddPart(
+        writer.get(), part_path,
+        BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids, rels_result.printer_settings_rid));
     if (!wresult) {
       return wresult.error();
     }

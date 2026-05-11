@@ -511,6 +511,93 @@ TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
   EXPECT_NE(workbook_rels.find("Target=\"sharedStrings.xml\""), std::string::npos) << workbook_rels;
 }
 
+TEST(OoxmlMetadata, WorksheetPrintSettingsRoundTrip) {
+  const std::string printer_payload("FORMULON-PRINTER-SETTINGS\0BIN", 29);
+  const std::string_view content_types =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n"
+      "  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n"
+      "  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n"
+      "  <Default Extension=\"bin\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings\"/>\n"
+      "  <Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n"
+      "  <Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "</Types>\n";
+  const std::string_view package_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/>\n"
+      "</Relationships>\n";
+  const std::string_view workbook_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
+      "  <sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>\n"
+      "</workbook>\n";
+  const std::string_view workbook_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>\n"
+      "</Relationships>\n";
+  const std::string_view sheet_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId7\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings\" "
+      "Target=\"../printerSettings/printerSettings1.bin\"/>\n"
+      "</Relationships>\n";
+  const std::string_view sheet_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
+      "  <sheetPr><pageSetUpPr fitToPage=\"1\"/></sheetPr>\n"
+      "  <sheetData/>\n"
+      "  <pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>\n"
+      "  <pageSetup paperSize=\"9\" orientation=\"landscape\" r:id=\"rId7\"/>\n"
+      "</worksheet>\n";
+
+  const std::vector<std::uint8_t> source = BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet_xml},
+      {"xl/worksheets/_rels/sheet1.xml.rels", sheet_rels},
+      {"xl/printerSettings/printerSettings1.bin", std::string_view(printer_payload.data(), printer_payload.size())},
+  });
+
+  auto first_or = io::read_ooxml(SpanOf(source));
+  ASSERT_TRUE(static_cast<bool>(first_or)) << "read_ooxml: " << first_or.error().message;
+  const SheetPrintSettings& print = first_or.value().workbook.sheet(0).print_settings();
+  EXPECT_NE(print.sheet_pr_xml.find("pageSetUpPr"), std::string::npos) << print.sheet_pr_xml;
+  EXPECT_NE(print.page_margins_xml.find("left=\"0.7\""), std::string::npos) << print.page_margins_xml;
+  EXPECT_NE(print.page_setup_xml.find("orientation=\"landscape\""), std::string::npos) << print.page_setup_xml;
+  EXPECT_EQ(print.printer_settings_rid, "rId7");
+  EXPECT_EQ(print.printer_settings_path, "xl/printerSettings/printerSettings1.bin");
+
+  const std::vector<std::uint8_t> rewritten = SaveOrDie(first_or.value().workbook);
+  const std::string rewritten_sheet = ExtractEntry(rewritten, "xl/worksheets/sheet1.xml");
+  EXPECT_NE(rewritten_sheet.find("<pageMargins"), std::string::npos) << rewritten_sheet;
+  EXPECT_NE(rewritten_sheet.find("orientation=\"landscape\""), std::string::npos) << rewritten_sheet;
+  EXPECT_NE(rewritten_sheet.find("r:id=\"rId7\""), std::string::npos) << rewritten_sheet;
+  const std::string rewritten_rels = ExtractEntry(rewritten, "xl/worksheets/_rels/sheet1.xml.rels");
+  EXPECT_NE(rewritten_rels.find("relationships/printerSettings"), std::string::npos) << rewritten_rels;
+  EXPECT_NE(rewritten_rels.find("Target=\"../printerSettings/printerSettings1.bin\""), std::string::npos)
+      << rewritten_rels;
+  EXPECT_EQ(ExtractEntry(rewritten, "xl/printerSettings/printerSettings1.bin"), printer_payload);
+
+  auto second_or = io::read_ooxml(SpanOf(rewritten));
+  ASSERT_TRUE(static_cast<bool>(second_or)) << "second read_ooxml: " << second_or.error().message;
+  EXPECT_EQ(second_or.value().workbook.sheet(0).print_settings().printer_settings_path,
+            "xl/printerSettings/printerSettings1.bin");
+}
+
 TEST(OoxmlMetadata, CombinedDefinedNamesTablesAndPassthrough) {
   const std::vector<std::uint8_t> input = BuildXlsxWithThemePart();
 

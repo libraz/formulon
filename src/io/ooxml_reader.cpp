@@ -82,6 +82,8 @@ constexpr std::string_view kRelComments =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
 constexpr std::string_view kRelVmlDrawing =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+constexpr std::string_view kRelPrinterSettings =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
 constexpr std::string_view kRelExternalLink =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
 constexpr std::string_view kRelExternalLinkPath =
@@ -101,6 +103,8 @@ constexpr std::string_view kCtWorkbookXlsm = "application/vnd.ms-excel.sheet.mac
 constexpr std::string_view kCtWorkbookXltx =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml";
 constexpr std::string_view kCtWorkbookXltm = "application/vnd.ms-excel.template.macroEnabled.main+xml";
+constexpr std::string_view kCtPrinterSettings =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
 
 /// Returns the matching `WorkbookKind` for `content_type`, or
 /// `std::nullopt` when the string does not match any of the four
@@ -125,6 +129,23 @@ DetectedKind DetectWorkbookKind(std::string_view content_type) {
     return {io::WorkbookKind::kXltm, true};
   }
   return {io::WorkbookKind::kXlsx, false};
+}
+
+struct StringXmlWriter final : pugi::xml_writer {
+  std::string* dst = nullptr;
+  void write(const void* data, size_t size) override {
+    if (dst != nullptr) {
+      dst->append(static_cast<const char*>(data), size);
+    }
+  }
+};
+
+std::string RawXml(const pugi::xml_node& node) {
+  std::string out;
+  StringXmlWriter sink;
+  sink.dst = &out;
+  node.print(sink, /*indent=*/"", pugi::format_raw);
+  return out;
 }
 
 /// Returns true if `content_type` references one of the four known
@@ -731,10 +752,14 @@ Expected<std::vector<std::string>, Error> LoadSheetTableTargets(const ZipReader&
 ///   * `vml_path` — resolved path of the `kRelVmlDrawing` target, or
 ///     empty. Used to detect the legacy bounding-box stub so it gets
 ///     marked consumed (passthrough re-emits the bytes).
+///   * `printer_settings_path` — resolved path of the binary printer
+///     settings part referenced by `<pageSetup r:id="...">`, or empty.
 struct SheetAuxRels {
   std::unordered_map<std::string, std::string> hyperlink_rid_to_target;
   std::string comments_path;
   std::string vml_path;
+  std::string printer_settings_rid;
+  std::string printer_settings_path;
 };
 
 Expected<SheetAuxRels, Error> LoadSheetAuxRels(const ZipReader& zip, std::string_view sheet_rels_path,
@@ -767,6 +792,13 @@ Expected<SheetAuxRels, Error> LoadSheetAuxRels(const ZipReader& zip, std::string
                                                    return resolved.error();
                                                  }
                                                  out.vml_path = std::move(resolved).value();
+                                               } else if (type == kRelPrinterSettings) {
+                                                 auto resolved = ResolveRelativePath(sheet_dir, target);
+                                                 if (!resolved) {
+                                                   return resolved.error();
+                                                 }
+                                                 out.printer_settings_rid.assign(rel.attribute("Id").value());
+                                                 out.printer_settings_path = std::move(resolved).value();
                                                }
                                                return Expected<void, Error>::Ok();
                                              });
@@ -949,6 +981,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   consumed_parts.insert("_rels/.rels");
   consumed_parts.insert(workbook_path);
   consumed_parts.insert(RelsPathForPart(workbook_path));
+  std::vector<PassthroughPart> extra_passthrough_parts;
 
   // Collect (display_name, part_path) per sheet in document order. The
   // sheet's `r:id` attribute resolves to a part path through
@@ -1207,6 +1240,19 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       // `<sheetProtection>` is a single optional element; the reader
       // never fails for it (default-on-error). Empty = enabled false.
       wb.sheet(i).mutable_protection() = read_sheet_protection(sheet_doc.child("worksheet"));
+
+      SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
+      pugi::xml_node worksheet = sheet_doc.child("worksheet");
+      if (pugi::xml_node sheet_pr = worksheet.child("sheetPr"); sheet_pr && sheet_pr.child("pageSetUpPr")) {
+        print.sheet_pr_xml = RawXml(sheet_pr);
+      }
+      if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
+        print.page_margins_xml = RawXml(page_margins);
+      }
+      if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
+        print.page_setup_xml = RawXml(page_setup);
+        print.printer_settings_rid = RelationshipRefId(page_setup);
+      }
     }
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives
@@ -1288,6 +1334,26 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       const SheetAuxRels& aux = aux_or.value();
       // Stitch each hyperlink's `target` from the rels lookup.
       apply_hyperlink_rels(wb.sheet(i).mutable_hyperlinks(), aux.hyperlink_rid_to_target);
+
+      if (!aux.printer_settings_path.empty()) {
+        SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
+        if (print.printer_settings_rid.empty()) {
+          print.printer_settings_rid = aux.printer_settings_rid;
+        }
+        print.printer_settings_path = aux.printer_settings_path;
+        if (zip.has_entry(aux.printer_settings_path)) {
+          auto pb_or = zip.read_entry(aux.printer_settings_path);
+          if (!pb_or) {
+            return pb_or.error();
+          }
+          PassthroughPart part;
+          part.path = aux.printer_settings_path;
+          part.content_type = std::string(kCtPrinterSettings);
+          part.bytes = std::move(pb_or.value());
+          extra_passthrough_parts.push_back(std::move(part));
+          consumed_parts.insert(aux.printer_settings_path);
+        }
+      }
 
       // Comments part: load + attach. The VML drawing companion is
       // intentionally NOT consumed here so the bytes flow through the
@@ -1502,6 +1568,13 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     part.content_type = entry.content_type;
     part.bytes = std::move(bytes_or.value());
     unknown_parts.push_back(std::move(part));
+  }
+  for (PassthroughPart& part : extra_passthrough_parts) {
+    auto duplicate = std::find_if(unknown_parts.begin(), unknown_parts.end(),
+                                  [&part](const PassthroughPart& existing) { return existing.path == part.path; });
+    if (duplicate == unknown_parts.end()) {
+      unknown_parts.push_back(std::move(part));
+    }
   }
   // Stable order so callers / tests can compare deterministically.
   std::sort(unknown_parts.begin(), unknown_parts.end(),

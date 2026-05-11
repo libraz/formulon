@@ -247,6 +247,20 @@ struct SheetLayout {
   std::vector<RowLayout> row_overrides;
 };
 
+/// Passive round-trip storage for worksheet print/page configuration.
+///
+/// The page setup surface has many Excel-specific attributes and may point
+/// at a binary `printerSettings*.bin` part through `r:id`. Keep the XML
+/// fragments raw for now so a read/save cycle preserves user-authored print
+/// settings without pretending the engine understands every field.
+struct SheetPrintSettings {
+  std::string sheet_pr_xml;      ///< Raw `<sheetPr>` when it carries page setup metadata.
+  std::string page_margins_xml;  ///< Raw `<pageMargins .../>`.
+  std::string page_setup_xml;    ///< Raw `<pageSetup .../>`.
+  std::string printer_settings_rid;
+  std::string printer_settings_path;  ///< Package path, e.g. `xl/printerSettings/printerSettings1.bin`.
+};
+
 /// Hash for `CellAddress` suitable for `std::unordered_map`.
 ///
 /// Excel addresses cap at row < 2^21 and col < 2^14 so a simple
@@ -642,6 +656,13 @@ class Sheet {
   /// reorder entries without an extra accessor pair per field.
   SheetLayout& mutable_layout() noexcept { return layout_; }
 
+  /// Read-only access to raw print/page setup metadata captured by the
+  /// OOXML reader.
+  const SheetPrintSettings& print_settings() const noexcept { return print_settings_; }
+
+  /// Mutable access for the OOXML reader.
+  SheetPrintSettings& mutable_print_settings() noexcept { return print_settings_; }
+
   // ---------------------------------------------------------------------------
   // Row / column structural edits
   // ---------------------------------------------------------------------------
@@ -707,6 +728,8 @@ class Sheet {
   // Per-sheet layout overrides (column spans + row overrides). Empty by
   // default; populated by the OOXML reader from `<cols>` / `<row>` entries.
   SheetLayout layout_;
+  // Raw print/page setup metadata and its optional printerSettings rel.
+  SheetPrintSettings print_settings_;
 };
 
 }  // namespace formulon
