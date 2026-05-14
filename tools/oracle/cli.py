@@ -249,6 +249,31 @@ def _check_excel_reachable(python_exe: Path) -> Tuple[str, str]:
     )
 
 
+def _discover_win_python_candidates() -> List[Path]:
+    """Returns plausible Windows-side ``python.exe`` paths visible from WSL2.
+
+    Scans the standard per-user (winget / python.org installer) and
+    machine-wide install locations, skipping the Microsoft Store stub
+    under ``WindowsApps`` which is a reparse point and not a real
+    interpreter. Returns existing files only, deduplicated and sorted by
+    descending Python version (so Python312 wins over Python311 when
+    both are present).
+    """
+
+    roots: List[Path] = []
+    roots.extend(Path("/mnt/c/Users").glob("*/AppData/Local/Programs/Python/Python3*/python.exe"))
+    roots.extend(Path("/mnt/c/Program Files").glob("Python3*/python.exe"))
+    roots.extend(Path("/mnt/c/Program Files (x86)").glob("Python3*/python.exe"))
+    seen: List[Path] = []
+    for p in roots:
+        if "WindowsApps" in p.parts:
+            continue
+        if p.is_file() and p not in seen:
+            seen.append(p)
+    seen.sort(key=lambda p: p.parent.name, reverse=True)
+    return seen
+
+
 def _check_win_python_path(target: Dict[str, Any]) -> Tuple[str, str, Optional[Path]]:
     """Returns (status, hint, resolved_path) for ``target.win_python``.
 
@@ -259,17 +284,29 @@ def _check_win_python_path(target: Dict[str, Any]) -> Tuple[str, str, Optional[P
 
     win_python = resolve_win_python(target)
     if not win_python:
+        candidates = _discover_win_python_candidates()
+        if candidates:
+            suggestion = (
+                "Hint: Windows-side Python is installed but FORMULON_WIN_PYTHON "
+                "is not exported. Found:\n"
+                + "\n".join(f"        {p}" for p in candidates)
+                + "\n      Export the one you want to use:\n"
+                f"        export FORMULON_WIN_PYTHON=\"{candidates[0]}\""
+            )
+        else:
+            suggestion = (
+                "Hint: install Python on Windows (winget install Python.Python.3.12),\n"
+                "      then either export FORMULON_WIN_PYTHON pointing at the\n"
+                "      Windows-side python.exe (preferred for OSS contributors so\n"
+                "      no per-machine path lands in targets.yaml) or, for a\n"
+                "      private fork, add a win_python: line under the target.\n"
+                "      Example:\n"
+                "        export FORMULON_WIN_PYTHON=\"/mnt/c/Users/<you>/AppData/"
+                "Local/Programs/Python/Python312/python.exe\""
+            )
         return (
             _STATUS_FAIL,
-            "win_python not configured\n"
-            "Hint: install Python on Windows (winget install Python.Python.3.12),\n"
-            "      then either export FORMULON_WIN_PYTHON pointing at the\n"
-            "      Windows-side python.exe (preferred for OSS contributors so\n"
-            "      no per-machine path lands in targets.yaml) or, for a\n"
-            "      private fork, add a win_python: line under the target.\n"
-            "      Example:\n"
-            "        export FORMULON_WIN_PYTHON=\"/mnt/c/Users/<you>/AppData/"
-            "Local/Programs/Python/Python312/python.exe\"",
+            "win_python not configured\n" + suggestion,
             None,
         )
     p = Path(win_python)

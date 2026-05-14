@@ -1,0 +1,62 @@
+{
+  "suite": "valuetotext",
+  "description": "VALUETOTEXT serializes a value to text using either concise (format=0, default) or strict (format=1) formatting. Concise mode passes scalars through with default Excel rendering. Strict mode quotes text values and reports errors verbatim. Numbers and booleans render the same in both modes.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "valuetotext_number_passthrough",
+      "formula": "=VALUETOTEXT(123.45)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123.45"
+      }
+    },
+    {
+      "id": "valuetotext_text_concise_default",
+      "formula": "=VALUETOTEXT(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "valuetotext_text_strict_quoted",
+      "formula": "=VALUETOTEXT(\"hello\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "\"hello\""
+      }
+    },
+    {
+      "id": "valuetotext_boolean_renders_uppercase",
+      "formula": "=VALUETOTEXT(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUE"
+      }
+    },
+    {
+      "id": "valuetotext_error_concise",
+      "formula": "=VALUETOTEXT(NA())",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

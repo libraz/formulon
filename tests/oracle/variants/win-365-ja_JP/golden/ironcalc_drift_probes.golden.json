@@ -1,0 +1,237 @@
+{
+  "suite": "ironcalc_drift_probes",
+  "description": "Mac Excel 365 reference values for cases where Formulon and Mac agree but the IronCalc-imported golden in tests/oracle/golden/ironcalc/ does not. Each case here is the citation cited by an entry in tests/ironcalc_divergence.yaml. The IronCalc test driver already includes its own goldens; this suite exists to anchor the Mac probe values that justify each `prefer: mac` divergence.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "tan_neg_three_pi_over_two",
+      "formula": "=TAN(-3*PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5441517425873024.0
+      }
+    },
+    {
+      "id": "tan_neg_pi_over_two",
+      "formula": "=TAN(-PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.6324552277619072e+16
+      }
+    },
+    {
+      "id": "tan_pi_over_two",
+      "formula": "=TAN(PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.6324552277619072e+16
+      }
+    },
+    {
+      "id": "tan_three_pi_over_two",
+      "formula": "=TAN(3*PI()/2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5441517425873024.0
+      }
+    },
+    {
+      "id": "sum_a2_to_choose_third_with_blank_a2",
+      "formula": "=SUM(A2:CHOOSE(3,A3,A4,A5))",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A4": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A5": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "spill_operator_sum_b2_to_b5_array_literal",
+      "formula": "=SUM({12;24;34;1245})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1315.0
+      }
+    },
+    {
+      "id": "spill_operator_sum_c2_to_c5_array_literal",
+      "formula": "=SUM({123;123;123;123})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 492.0
+      }
+    },
+    {
+      "id": "spill_operator_concat_l2_to_l3_array_literal",
+      "formula": "=CONCAT({\"Hola\";\"Mundo\"})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "HolaMundo"
+      }
+    },
+    {
+      "id": "misc_cot_pi_minus_eps",
+      "formula": "=COT(PI()-0.000000000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -999788629259.2037
+      }
+    },
+    {
+      "id": "misc_csc_pi_minus_eps",
+      "formula": "=CSC(PI()-0.000000000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 999788629259.2037
+      }
+    },
+    {
+      "id": "misc_sec_halfpi_minus_eps",
+      "formula": "=SEC(PI()/2-0.000000000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 999849864538.9548
+      }
+    },
+    {
+      "id": "misc_sec_halfpi_plus_eps",
+      "formula": "=SEC(PI()/2+0.000000000001)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -999972357604.5276
+      }
+    },
+    {
+      "id": "bessel_besseli_32_7",
+      "formula": "=BESSELI(32, 7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2576524402069.303
+      }
+    },
+    {
+      "id": "bessel_besseli_neg32_7",
+      "formula": "=BESSELI(-32, 7)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2576524402069.303
+      }
+    },
+    {
+      "id": "bessel_besselk_04_10",
+      "formula": "=BESSELK(0.4, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1764019651684.988
+      }
+    },
+    {
+      "id": "bessel_bessely_02_10",
+      "formula": "=BESSELY(0.2, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1156367142008513.5
+      }
+    },
+    {
+      "id": "bessel_bessely_04_10",
+      "formula": "=BESSELY(0.4, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1133036596169.1414
+      }
+    },
+    {
+      "id": "bessel_besselk_2_30",
+      "formula": "=BESSELK(2.0, 30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.2711258180315126e+30
+      }
+    },
+    {
+      "id": "bessel_bessely_2_30",
+      "formula": "=BESSELY(2.0, 30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.9132238172293094e+30
+      }
+    },
+    {
+      "id": "gamma_100",
+      "formula": "=GAMMA(100)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.332621544394421e+155
+      }
+    },
+    {
+      "id": "gamma_23_4",
+      "formula": "=GAMMA(23.4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.91912153053999e+21
+      }
+    },
+    {
+      "id": "combin_1000_200",
+      "formula": "=COMBIN(1000, 200)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.617155560659313e+215
+      }
+    },
+    {
+      "id": "combina_1000_200",
+      "formula": "=COMBINA(1000, 200)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.6676833067813678e+233
+      }
+    }
+  ]
+}

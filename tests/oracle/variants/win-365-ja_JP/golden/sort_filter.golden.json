@@ -1,0 +1,188 @@
+{
+  "suite": "sort_filter",
+  "description": "Dynamic-array filter / dedupe / sort family — FILTER, UNIQUE, SORT, SORTBY (Excel 365). 24 perspectives (6 per function); spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (oracle compare_value cannot navigate ArrayValue). Live cases cover scalar fallback and error returns — FILTER if_empty scalar, FILTER no-match #CALC!, FILTER mask shape #VALUE!, FILTER include error propagation, UNIQUE exactly_once-empty #CALC!, SORT sort_index out-of-range #VALUE!, SORT invalid sort_order #VALUE!, SORTBY shape mismatch #VALUE!, SORTBY invalid order #VALUE!.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "filter_row_axis_basic",
+      "formula": "=FILTER({1;2;3}, {TRUE;FALSE;TRUE})",
+      "setup": {},
+      "skipped": "FILTER row-axis result is a 2D spill (2x1 array); oracle compare_value only handles scalars. Unit tests in filter_eval_test.cpp cover the column-vector mask path."
+    },
+    {
+      "id": "filter_col_axis_basic",
+      "formula": "=FILTER({1,2,3}, {TRUE,FALSE,TRUE})",
+      "setup": {},
+      "skipped": "FILTER col-axis result is a 1x2 spill; oracle compare_value only handles scalars. Unit tests in filter_eval_test.cpp cover the row-vector mask path."
+    },
+    {
+      "id": "filter_empty_with_if_empty",
+      "formula": "=FILTER({1;2;3}, {FALSE;FALSE;FALSE}, \"none\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "none"
+      }
+    },
+    {
+      "id": "filter_empty_without_if_empty_calc",
+      "formula": "=FILTER({1;2;3}, {FALSE;FALSE;FALSE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "filter_shape_mismatch_value",
+      "formula": "=FILTER({1;2;3}, {TRUE;FALSE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filter_include_error_propagates",
+      "formula": "=FILTER({1;2;3}, {TRUE;#N/A;TRUE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "unique_row_axis_dedup",
+      "formula": "=UNIQUE({\"A\";\"B\";\"A\";\"C\"})",
+      "setup": {},
+      "skipped": "UNIQUE row-axis result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover row-axis dedup ordering."
+    },
+    {
+      "id": "unique_col_axis_dedup",
+      "formula": "=UNIQUE({1,2,1,3}, TRUE)",
+      "setup": {},
+      "skipped": "UNIQUE by_col=TRUE result is a 1x3 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover col-axis dedup."
+    },
+    {
+      "id": "unique_exactly_once_keeps_singletons",
+      "formula": "=UNIQUE({1;2;1;3}, FALSE, TRUE)",
+      "setup": {},
+      "skipped": "UNIQUE exactly_once=TRUE result is a 2x1 spill of the rows that occur once; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover this path."
+    },
+    {
+      "id": "unique_exactly_once_empty_calc",
+      "formula": "=UNIQUE({1;1;2;2}, FALSE, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "unique_case_insensitive_text",
+      "formula": "=UNIQUE({\"a\";\"A\";\"b\"})",
+      "setup": {},
+      "skipped": "UNIQUE case-insensitive ASCII text dedup yields a 2x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover the case-insensitive equality semantics."
+    },
+    {
+      "id": "unique_pass_through_all_distinct",
+      "formula": "=UNIQUE({\"X\";\"Y\";\"Z\"})",
+      "setup": {},
+      "skipped": "UNIQUE pass-through (all rows distinct) returns a 3x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover identity preservation."
+    },
+    {
+      "id": "sort_row_ascending_default",
+      "formula": "=SORT({3;1;2})",
+      "setup": {},
+      "skipped": "SORT default row-axis ascending yields a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the default ordering."
+    },
+    {
+      "id": "sort_col_axis_by_col",
+      "formula": "=SORT({3,1,2}, 1, 1, TRUE)",
+      "setup": {},
+      "skipped": "SORT by_col=TRUE yields a 1x3 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the column-axis path."
+    },
+    {
+      "id": "sort_descending_order",
+      "formula": "=SORT({1;2;3}, 1, -1)",
+      "setup": {},
+      "skipped": "SORT sort_order=-1 yields a 3x1 descending spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover descending sort."
+    },
+    {
+      "id": "sort_index_out_of_range_value",
+      "formula": "=SORT({1,2;3,4}, 5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sort_invalid_order_value",
+      "formula": "=SORT({1;2;3}, 1, 99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sort_mixed_kind_ordering",
+      "formula": "=SORT({TRUE;\"x\";1;#N/A})",
+      "setup": {},
+      "skipped": "SORT mixed-kind ordering (Number < Text < Bool < Error < Blank) yields a 4x1 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the canonical kind-rank."
+    },
+    {
+      "id": "sortby_single_key_ascending",
+      "formula": "=SORTBY({\"A\";\"B\";\"C\"}, {3;1;2})",
+      "setup": {},
+      "skipped": "SORTBY single-key ascending result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover the single-key path."
+    },
+    {
+      "id": "sortby_single_key_descending",
+      "formula": "=SORTBY({\"A\";\"B\";\"C\"}, {1;2;3}, -1)",
+      "setup": {},
+      "skipped": "SORTBY single-key descending result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover order=-1."
+    },
+    {
+      "id": "sortby_two_key_composite",
+      "formula": "=SORTBY({\"A\";\"B\";\"C\";\"D\"}, {1;1;2;2}, 1, {2;1;2;1}, 1)",
+      "setup": {},
+      "skipped": "SORTBY two-key composite sort result is a 4x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover multi-key composition."
+    },
+    {
+      "id": "sortby_row_vector_sorts_cols",
+      "formula": "=SORTBY({\"A\",\"B\",\"C\"}, {3,1,2})",
+      "setup": {},
+      "skipped": "SORTBY row-vector key sorts cols, yielding a 1x3 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover axis inference."
+    },
+    {
+      "id": "sortby_shape_mismatch_value",
+      "formula": "=SORTBY({\"A\";\"B\";\"C\"}, {1;2})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "sortby_invalid_order_value",
+      "formula": "=SORTBY({\"A\";\"B\"}, {1;2}, 99)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

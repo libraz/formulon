@@ -1,0 +1,18 @@
+# Win Excel 365 (ja-JP) variant-specific divergences.
+#
+# Entries here merge on top of tests/divergence.yaml and override the
+# primary file on key collision (more specific wins). Use this file when a
+# case is fine on Mac Excel 365 but needs special handling against the
+# Windows Excel 365 oracle (or vice versa) — global drift belongs in
+# tests/divergence.yaml.
+#
+# Schema is identical to tests/divergence.yaml; see that file's header for
+# documentation. `applies_to: [win-365-ja_JP]` is implied when the entry
+# lives in this file and may be omitted.
+#
+# No variant-specific entries are needed today: the win-365-ja_JP goldens
+# generated on 2026-05-14 differ from mac-365-ja_JP only through cases
+# already accounted for by tests/divergence.yaml's `applies_to` filtering.
+# Add entries here when divergence-research uncovers a Windows-only quirk.
+
+entries: []

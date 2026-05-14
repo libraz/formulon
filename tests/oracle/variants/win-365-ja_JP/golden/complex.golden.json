@@ -1,0 +1,1270 @@
+{
+  "suite": "complex",
+  "description": "Excel's complex-number family: COMPLEX + the 24 IM* functions. Cases focus on the formatting rules (pure real, pure imag, +/-1 coefficient elision, alternate 'j' suffix), the arithmetic core (IMSUM / IMSUB / IMPRODUCT / IMDIV / IMPOWER) including mixed-suffix error cases, and exponential / logarithmic / root operations where floating-point drift is most likely. Trigonometric and hyperbolic variants are exercised at stable points (z=0, pure real) to keep goldens robust.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-05,
+    "rel": 1e-05
+  },
+  "cases": [
+    {
+      "id": "complex_full_default_suffix",
+      "formula": "=COMPLEX(3,4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      }
+    },
+    {
+      "id": "complex_full_j_suffix",
+      "formula": "=COMPLEX(3,4,\"j\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4j"
+      }
+    },
+    {
+      "id": "complex_pure_imag_plus_one",
+      "formula": "=COMPLEX(0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "i"
+      }
+    },
+    {
+      "id": "complex_pure_imag_minus_one",
+      "formula": "=COMPLEX(0,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-i"
+      }
+    },
+    {
+      "id": "complex_pure_imag_five",
+      "formula": "=COMPLEX(0,5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5i"
+      }
+    },
+    {
+      "id": "complex_pure_real",
+      "formula": "=COMPLEX(3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3"
+      }
+    },
+    {
+      "id": "complex_full_plus_one_imag",
+      "formula": "=COMPLEX(3,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+i"
+      }
+    },
+    {
+      "id": "complex_full_minus_one_imag",
+      "formula": "=COMPLEX(3,-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3-i"
+      }
+    },
+    {
+      "id": "complex_invalid_suffix_is_value",
+      "formula": "=COMPLEX(3,4,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "imabs_three_four",
+      "formula": "=IMABS(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "imreal_three_four",
+      "formula": "=IMREAL(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "imaginary_three_four",
+      "formula": "=IMAGINARY(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "imconjugate_three_four",
+      "formula": "=IMCONJUGATE(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3-4i"
+      }
+    },
+    {
+      "id": "imargument_three_four",
+      "formula": "=IMARGUMENT(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9272952180016122
+      }
+    },
+    {
+      "id": "imargument_zero_is_div0",
+      "formula": "=IMARGUMENT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "imsum_two_args",
+      "formula": "=IMSUM(\"1+i\",\"2+3i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      }
+    },
+    {
+      "id": "imsum_mixed_suffix_is_value",
+      "formula": "=IMSUM(\"1+i\",\"2+3j\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "imsub_basic",
+      "formula": "=IMSUB(\"5+3i\",\"2+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+2i"
+      }
+    },
+    {
+      "id": "improduct_two_args",
+      "formula": "=IMPRODUCT(\"2+i\",\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2+11i"
+      }
+    },
+    {
+      "id": "imdiv_one_plus_i_over_one_minus_i",
+      "formula": "=IMDIV(\"1+i\",\"1-i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "i"
+      }
+    },
+    {
+      "id": "impower_square",
+      "formula": "=IMPOWER(\"1+i\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.22514845490862E-16+2i"
+      }
+    },
+    {
+      "id": "imln_one_plus_i",
+      "formula": "=IMLN(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.346573590279973+0.785398163397448i"
+      }
+    },
+    {
+      "id": "imsqrt_i",
+      "formula": "=IMSQRT(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.707106781186548+0.707106781186547i"
+      }
+    },
+    {
+      "id": "imexp_zero",
+      "formula": "=IMEXP(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imsin_one_plus_i",
+      "formula": "=IMSIN(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.29845758141598+0.634963914784736i"
+      }
+    },
+    {
+      "id": "imcos_one_plus_i",
+      "formula": "=IMCOS(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.833730025131149-0.988897705762865i"
+      }
+    },
+    {
+      "id": "imtan_one_plus_i",
+      "formula": "=IMTAN(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.271752585319512+1.08392332733869i"
+      }
+    },
+    {
+      "id": "imsinh_one_plus_i",
+      "formula": "=IMSINH(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.634963914784736+1.29845758141598i"
+      }
+    },
+    {
+      "id": "imcosh_one_plus_i",
+      "formula": "=IMCOSH(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.833730025131149+0.988897705762865i"
+      }
+    },
+    {
+      "id": "imsec_one_plus_i",
+      "formula": "=IMSEC(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.498337030555187+0.591083841721045i"
+      }
+    },
+    {
+      "id": "imcsc_one_plus_i",
+      "formula": "=IMCSC(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.621518017170428-0.303931001628427i"
+      },
+      "tolerance": {
+        "abs": 1e-14,
+        "rel": 0.0
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imlog2_two_plus_i",
+      "formula": "=IMLOG2(\"2+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.16096404744368+0.668902106225488i"
+      }
+    },
+    {
+      "id": "imlog10_two_plus_i",
+      "formula": "=IMLOG10(\"2+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.349485002168009+0.201359598136687i"
+      }
+    },
+    {
+      "id": "imln_negative_real",
+      "formula": "=IMLN(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.14159265358979i"
+      }
+    },
+    {
+      "id": "imln_zero_is_num",
+      "formula": "=IMLN(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imsum_three_args",
+      "formula": "=IMSUM(\"1+i\",\"2+2i\",\"3+3i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "6+6i"
+      }
+    },
+    {
+      "id": "improduct_three_args",
+      "formula": "=IMPRODUCT(\"1+i\",\"1+i\",\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-2+2i"
+      }
+    },
+    {
+      "id": "imdiv_by_zero_is_num",
+      "formula": "=IMDIV(\"1+i\",\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "improduct_zero_factor",
+      "formula": "=IMPRODUCT(\"3+4i\",\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imsub_self_is_zero",
+      "formula": "=IMSUB(\"3+4i\",\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "impower_zero_exp",
+      "formula": "=IMPOWER(\"3+4i\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "impower_negative_exp",
+      "formula": "=IMPOWER(\"1+i\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.5-0.5i"
+      }
+    },
+    {
+      "id": "impower_fractional_exp",
+      "formula": "=IMPOWER(\"1+i\",0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.09868411346781+0.455089860562227i"
+      }
+    },
+    {
+      "id": "impower_zero_base_zero_exp",
+      "formula": "=IMPOWER(\"0\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "impower_zero_base_negative_exp_is_num",
+      "formula": "=IMPOWER(\"0\",-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imsqrt_negative_one",
+      "formula": "=IMSQRT(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "6.1257422745431E-17+i"
+      }
+    },
+    {
+      "id": "imsqrt_negative_real",
+      "formula": "=IMSQRT(\"-4\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.22514845490862E-16+2i"
+      }
+    },
+    {
+      "id": "imsqrt_zero",
+      "formula": "=IMSQRT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imargument_negative_real",
+      "formula": "=IMARGUMENT(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.141592653589793
+      }
+    },
+    {
+      "id": "imargument_negative_imag",
+      "formula": "=IMARGUMENT(\"-i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.5707963267948966
+      }
+    },
+    {
+      "id": "imargument_third_quadrant",
+      "formula": "=IMARGUMENT(\"-1-i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -2.356194490192345
+      }
+    },
+    {
+      "id": "imabs_zero",
+      "formula": "=IMABS(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "imabs_pure_imag",
+      "formula": "=IMABS(\"5i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "imabs_negative",
+      "formula": "=IMABS(\"-3-4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "imexp_pi_i",
+      "formula": "=IMEXP(COMPLEX(0, PI()))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1+3.2311393144413E-15i"
+      }
+    },
+    {
+      "id": "imexp_one_plus_i",
+      "formula": "=IMEXP(\"1+i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.46869393991589+2.28735528717884i"
+      }
+    },
+    {
+      "id": "imreal_invalid_string_is_num",
+      "formula": "=IMREAL(\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imsum_error_arg_propagates",
+      "formula": "=IMSUM(\"1+i\", #REF!)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "improduct_one_arg",
+      "formula": "=IMPRODUCT(\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      }
+    },
+    {
+      "id": "complex_text_real_is_value",
+      "formula": "=COMPLEX(\"x\",4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "complex_blank_real_is_zero",
+      "formula": "=COMPLEX(A1,4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "4i"
+      }
+    },
+    {
+      "id": "imabs_pure_real",
+      "formula": "=IMABS(\"3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "imaginary_pure_real",
+      "formula": "=IMAGINARY(\"3\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "imaginary_pure_imag",
+      "formula": "=IMAGINARY(\"5i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "imaginary_negative_imag",
+      "formula": "=IMAGINARY(\"2-3i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "imaginary_j_suffix",
+      "formula": "=IMAGINARY(\"3+4j\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "imconjugate_pure_real",
+      "formula": "=IMCONJUGATE(\"3\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3"
+      }
+    },
+    {
+      "id": "imconjugate_pure_imag",
+      "formula": "=IMCONJUGATE(\"5i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-5i"
+      }
+    },
+    {
+      "id": "imconjugate_negative_imag",
+      "formula": "=IMCONJUGATE(\"3-4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      }
+    },
+    {
+      "id": "imconjugate_double_is_identity",
+      "formula": "=IMCONJUGATE(IMCONJUGATE(\"3+4i\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3+4i"
+      }
+    },
+    {
+      "id": "imcos_zero",
+      "formula": "=IMCOS(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imcos_pure_real",
+      "formula": "=IMCOS(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.54030230586814"
+      }
+    },
+    {
+      "id": "imcos_pure_imag",
+      "formula": "=IMCOS(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.54308063481524"
+      }
+    },
+    {
+      "id": "imcos_negative_real",
+      "formula": "=IMCOS(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.54030230586814"
+      }
+    },
+    {
+      "id": "imcosh_zero",
+      "formula": "=IMCOSH(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imcosh_pure_real",
+      "formula": "=IMCOSH(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.54308063481524"
+      }
+    },
+    {
+      "id": "imcosh_pure_imag",
+      "formula": "=IMCOSH(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.54030230586814"
+      }
+    },
+    {
+      "id": "imcosh_negative_real",
+      "formula": "=IMCOSH(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.54308063481524"
+      }
+    },
+    {
+      "id": "imcsc_pure_real",
+      "formula": "=IMCSC(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.18839510577812"
+      }
+    },
+    {
+      "id": "imcsc_pure_imag",
+      "formula": "=IMCSC(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.850918128239322i"
+      }
+    },
+    {
+      "id": "imcsc_negative_real",
+      "formula": "=IMCSC(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.18839510577812"
+      }
+    },
+    {
+      "id": "imcsc_zero_is_num",
+      "formula": "=IMCSC(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imdiv_by_real",
+      "formula": "=IMDIV(\"3+4i\",\"2\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.5+2i"
+      }
+    },
+    {
+      "id": "imdiv_by_pure_imag",
+      "formula": "=IMDIV(\"3+4i\",\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "4-3i"
+      }
+    },
+    {
+      "id": "imdiv_self_is_one",
+      "formula": "=IMDIV(\"3+4i\",\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imexp_pure_real",
+      "formula": "=IMEXP(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2.71828182845905"
+      }
+    },
+    {
+      "id": "imexp_negative_real",
+      "formula": "=IMEXP(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.367879441171442"
+      }
+    },
+    {
+      "id": "imln_one",
+      "formula": "=IMLN(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imln_pure_imag",
+      "formula": "=IMLN(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.5707963267949i"
+      }
+    },
+    {
+      "id": "imlog10_one",
+      "formula": "=IMLOG10(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imlog10_pure_real",
+      "formula": "=IMLOG10(\"10\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imlog10_pure_imag",
+      "formula": "=IMLOG10(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.682188176920921i"
+      }
+    },
+    {
+      "id": "imlog10_negative_real",
+      "formula": "=IMLOG10(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.36437635384184i"
+      }
+    },
+    {
+      "id": "imlog2_one",
+      "formula": "=IMLOG2(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imlog2_pure_real",
+      "formula": "=IMLOG2(\"2\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imlog2_pure_imag",
+      "formula": "=IMLOG2(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2.2661800709136i"
+      }
+    },
+    {
+      "id": "imlog2_negative_real",
+      "formula": "=IMLOG2(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "4.53236014182719i"
+      }
+    },
+    {
+      "id": "improduct_i_times_i",
+      "formula": "=IMPRODUCT(\"i\",\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1"
+      }
+    },
+    {
+      "id": "imreal_pure_imag",
+      "formula": "=IMREAL(\"5i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "imreal_pure_real",
+      "formula": "=IMREAL(\"7\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "imreal_negative_real_part",
+      "formula": "=IMREAL(\"-3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "imsec_zero",
+      "formula": "=IMSEC(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imsec_pure_real",
+      "formula": "=IMSEC(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.85081571768093"
+      }
+    },
+    {
+      "id": "imsec_pure_imag",
+      "formula": "=IMSEC(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.648054273663885"
+      }
+    },
+    {
+      "id": "imsec_negative_real",
+      "formula": "=IMSEC(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.85081571768093"
+      }
+    },
+    {
+      "id": "imsin_zero",
+      "formula": "=IMSIN(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imsin_pure_real",
+      "formula": "=IMSIN(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.841470984807897"
+      }
+    },
+    {
+      "id": "imsin_pure_imag",
+      "formula": "=IMSIN(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.1752011936438i"
+      }
+    },
+    {
+      "id": "imsin_negative_real",
+      "formula": "=IMSIN(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.841470984807897"
+      }
+    },
+    {
+      "id": "imsinh_zero",
+      "formula": "=IMSINH(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imsinh_pure_real",
+      "formula": "=IMSINH(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.1752011936438"
+      }
+    },
+    {
+      "id": "imsinh_pure_imag",
+      "formula": "=IMSINH(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.841470984807897i"
+      }
+    },
+    {
+      "id": "imsinh_negative_real",
+      "formula": "=IMSINH(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.1752011936438"
+      }
+    },
+    {
+      "id": "imsqrt_pure_real",
+      "formula": "=IMSQRT(\"4\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "2"
+      }
+    },
+    {
+      "id": "imsub_pure_real",
+      "formula": "=IMSUB(\"5\",\"2\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3"
+      }
+    },
+    {
+      "id": "imsub_pure_imag",
+      "formula": "=IMSUB(\"5i\",\"2i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3i"
+      }
+    },
+    {
+      "id": "imsub_negative_result",
+      "formula": "=IMSUB(\"1+i\",\"3+4i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-2-3i"
+      }
+    },
+    {
+      "id": "imsum_pure_imag_pair",
+      "formula": "=IMSUM(\"2i\",\"3i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5i"
+      }
+    },
+    {
+      "id": "imtan_zero",
+      "formula": "=IMTAN(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "imtan_pure_real",
+      "formula": "=IMTAN(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.5574077246549"
+      }
+    },
+    {
+      "id": "imtan_pure_imag",
+      "formula": "=IMTAN(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.761594155955765i"
+      }
+    },
+    {
+      "id": "imtan_negative_real",
+      "formula": "=IMTAN(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.5574077246549"
+      }
+    },
+    {
+      "id": "imcot_pure_real",
+      "formula": "=IMCOT(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.642092615934331"
+      }
+    },
+    {
+      "id": "imcot_pure_imag",
+      "formula": "=IMCOT(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.31303528549933i"
+      }
+    },
+    {
+      "id": "imcot_zero_is_div0",
+      "formula": "=IMCOT(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imcot_identity_with_imtan",
+      "formula": "=IMPRODUCT(IMCOT(\"1+i\"),IMTAN(\"1+i\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.999999999999996-9.43689570931383E-16i"
+      },
+      "tolerance": {
+        "abs": 1e-14,
+        "rel": 0.0
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imcot_negative_real",
+      "formula": "=IMCOT(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.642092615934331"
+      }
+    },
+    {
+      "id": "imcsch_pure_real",
+      "formula": "=IMCSCH(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.850918128239322"
+      }
+    },
+    {
+      "id": "imcsch_pure_imag",
+      "formula": "=IMCSCH(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1.18839510577812i"
+      }
+    },
+    {
+      "id": "imcsch_zero_is_div0",
+      "formula": "=IMCSCH(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imcsch_identity_with_imsinh",
+      "formula": "=IMPRODUCT(IMCSCH(\"1+i\"),IMSINH(\"1+i\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1-5.55111512312578E-17i"
+      },
+      "tolerance": {
+        "abs": 1e-14,
+        "rel": 0.0
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imcsch_negative_real",
+      "formula": "=IMCSCH(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.850918128239322"
+      }
+    },
+    {
+      "id": "imsech_zero_is_one",
+      "formula": "=IMSECH(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "imsech_pure_real",
+      "formula": "=IMSECH(\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.648054273663885"
+      }
+    },
+    {
+      "id": "imsech_pure_imag",
+      "formula": "=IMSECH(\"i\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.85081571768093"
+      }
+    },
+    {
+      "id": "imsech_identity_with_imcosh",
+      "formula": "=IMPRODUCT(IMSECH(\"1+i\"),IMCOSH(\"1+i\"))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1+2.22044604925031E-16i"
+      },
+      "tolerance": {
+        "abs": 1e-14,
+        "rel": 0.0
+      },
+      "compare_mode": "complex_text"
+    },
+    {
+      "id": "imsech_negative_real",
+      "formula": "=IMSECH(\"-1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.648054273663885"
+      }
+    }
+  ]
+}

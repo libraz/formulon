@@ -1,0 +1,521 @@
+{
+  "suite": "financial_dcc",
+  "description": "financial_dcc family — bond pricing/yield/duration with shared day-count basis matrix (0..4). 8 members (PRICE, YIELD, ODDFPRICE, ODDFYIELD, ODDLPRICE, ODDLYIELD, DURATION, MDURATION) × 7 perspectives = 56 cases. Each member exercises all 5 DCC bases plus two error paths (boundary date and invalid basis 5). Tolerance 1e-8 covers Mac Excel's bond-math ULP drift.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-08,
+    "rel": 1e-08
+  },
+  "cases": [
+    {
+      "id": "price_canonical_basis_0",
+      "formula": "=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 94.63436162132213
+      }
+    },
+    {
+      "id": "price_basis_1_actual_actual",
+      "formula": "=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 94.6354492078772
+      }
+    },
+    {
+      "id": "price_basis_2_actual_360",
+      "formula": "=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 94.63656403002507
+      }
+    },
+    {
+      "id": "price_basis_3_actual_365",
+      "formula": "=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 94.63517479678454
+      }
+    },
+    {
+      "id": "price_basis_4_european_30_360",
+      "formula": "=PRICE(DATE(2008,2,15),DATE(2017,11,15),0.0575,0.065,100,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 94.63436162132213
+      }
+    },
+    {
+      "id": "price_settlement_eq_maturity_error",
+      "formula": "=PRICE(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "price_invalid_basis_error",
+      "formula": "=PRICE(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,100,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "yield_canonical_basis_0",
+      "formula": "=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06500000688073143
+      }
+    },
+    {
+      "id": "yield_basis_1_actual_actual",
+      "formula": "=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06500182060552322
+      }
+    },
+    {
+      "id": "yield_basis_2_actual_360",
+      "formula": "=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06500368033042932
+      }
+    },
+    {
+      "id": "yield_basis_3_actual_365",
+      "formula": "=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06500136292831674
+      }
+    },
+    {
+      "id": "yield_basis_4_european_30_360",
+      "formula": "=YIELD(DATE(2008,2,15),DATE(2016,11,15),0.0575,95.04287,100,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06500000688073143
+      }
+    },
+    {
+      "id": "yield_settlement_eq_maturity_error",
+      "formula": "=YIELD(DATE(2024,6,1),DATE(2024,6,1),0.05,100,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "yield_invalid_basis_error",
+      "formula": "=YIELD(DATE(2020,1,1),DATE(2030,1,1),0.05,95,100,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oddfprice_canonical_basis_1",
+      "formula": "=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 114.19065832009143
+      }
+    },
+    {
+      "id": "oddfprice_basis_0_us_30_360",
+      "formula": "=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 114.1918253871234
+      }
+    },
+    {
+      "id": "oddfprice_basis_2_actual_360",
+      "formula": "=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 114.19145420181911
+      }
+    },
+    {
+      "id": "oddfprice_basis_3_actual_365",
+      "formula": "=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 114.19046128603308
+      }
+    },
+    {
+      "id": "oddfprice_basis_4_european_30_360",
+      "formula": "=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 114.1918253871234
+      }
+    },
+    {
+      "id": "oddfprice_settlement_before_issue_error",
+      "formula": "=ODDFPRICE(DATE(2007,10,1),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oddfprice_invalid_basis_error",
+      "formula": "=ODDFPRICE(DATE(2008,1,11),DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oddfyield_canonical_basis_0",
+      "formula": "=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07724554159729888
+      }
+    },
+    {
+      "id": "oddfyield_basis_1_actual_actual",
+      "formula": "=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07724706259741908
+      }
+    },
+    {
+      "id": "oddfyield_basis_2_actual_360",
+      "formula": "=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07724502192067954
+      }
+    },
+    {
+      "id": "oddfyield_basis_3_actual_365",
+      "formula": "=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0772500780535923
+      }
+    },
+    {
+      "id": "oddfyield_basis_4_european_30_360",
+      "formula": "=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07724554159729888
+      }
+    },
+    {
+      "id": "oddfyield_settlement_before_issue_error",
+      "formula": "=ODDFYIELD(DATE(2008,10,1),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oddfyield_invalid_basis_error",
+      "formula": "=ODDFYIELD(DATE(2008,11,11),DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oddlprice_canonical_basis_0",
+      "formula": "=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.87828601472134
+      }
+    },
+    {
+      "id": "oddlprice_basis_1_actual_actual",
+      "formula": "=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.87916768152911
+      }
+    },
+    {
+      "id": "oddlprice_basis_2_actual_360",
+      "formula": "=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.87916768152911
+      }
+    },
+    {
+      "id": "oddlprice_basis_3_actual_365",
+      "formula": "=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.87916768152911
+      }
+    },
+    {
+      "id": "oddlprice_basis_4_european_30_360",
+      "formula": "=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.87828601472134
+      }
+    },
+    {
+      "id": "oddlprice_settlement_before_last_interest_error",
+      "formula": "=ODDLPRICE(DATE(2007,9,1),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oddlprice_invalid_basis_error",
+      "formula": "=ODDLPRICE(DATE(2008,2,7),DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oddlyield_canonical_basis_0",
+      "formula": "=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04519223562916916
+      }
+    },
+    {
+      "id": "oddlyield_basis_1_actual_actual",
+      "formula": "=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04517988549187201
+      }
+    },
+    {
+      "id": "oddlyield_basis_2_actual_360",
+      "formula": "=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04517988549187201
+      }
+    },
+    {
+      "id": "oddlyield_basis_3_actual_365",
+      "formula": "=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04517988549187201
+      }
+    },
+    {
+      "id": "oddlyield_basis_4_european_30_360",
+      "formula": "=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04519223562916916
+      }
+    },
+    {
+      "id": "oddlyield_settlement_before_last_interest_error",
+      "formula": "=ODDLYIELD(DATE(2007,11,1),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oddlyield_invalid_basis_error",
+      "formula": "=ODDLYIELD(DATE(2008,4,20),DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "duration_canonical_basis_1",
+      "formula": "=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.993774955545186
+      }
+    },
+    {
+      "id": "duration_basis_0_us_30_360",
+      "formula": "=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.993774955545186
+      }
+    },
+    {
+      "id": "duration_basis_2_actual_360",
+      "formula": "=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.993774955545186
+      }
+    },
+    {
+      "id": "duration_basis_3_actual_365",
+      "formula": "=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.993774955545186
+      }
+    },
+    {
+      "id": "duration_basis_4_european_30_360",
+      "formula": "=DURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.993774955545186
+      }
+    },
+    {
+      "id": "duration_settlement_eq_maturity_error",
+      "formula": "=DURATION(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "duration_invalid_basis_error",
+      "formula": "=DURATION(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mduration_canonical_basis_1",
+      "formula": "=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.735669813918839
+      }
+    },
+    {
+      "id": "mduration_basis_0_us_30_360",
+      "formula": "=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.735669813918839
+      }
+    },
+    {
+      "id": "mduration_basis_2_actual_360",
+      "formula": "=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.735669813918839
+      }
+    },
+    {
+      "id": "mduration_basis_3_actual_365",
+      "formula": "=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.735669813918839
+      }
+    },
+    {
+      "id": "mduration_basis_4_european_30_360",
+      "formula": "=MDURATION(DATE(2008,1,1),DATE(2016,1,1),0.08,0.09,2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.735669813918839
+      }
+    },
+    {
+      "id": "mduration_settlement_eq_maturity_error",
+      "formula": "=MDURATION(DATE(2024,6,1),DATE(2024,6,1),0.05,0.06,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mduration_invalid_basis_error",
+      "formula": "=MDURATION(DATE(2020,1,1),DATE(2030,1,1),0.05,0.06,2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

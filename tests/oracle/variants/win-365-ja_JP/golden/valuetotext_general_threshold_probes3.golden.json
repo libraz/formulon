@@ -1,0 +1,134 @@
+{
+  "suite": "valuetotext_general_threshold_probes3",
+  "description": "Round-3 probes: confirm the 20-char threshold and verify whether the negative sign counts toward the limit. Also pin a few mantissa-precision edge cases.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "vtt3_neg_1em18",
+      "formula": "=VALUETOTEXT(-1E-18)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.000000000000000001"
+      }
+    },
+    {
+      "id": "vtt3_neg_1em17",
+      "formula": "=VALUETOTEXT(-1E-17)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.00000000000000001"
+      }
+    },
+    {
+      "id": "vtt3_neg_1e19",
+      "formula": "=VALUETOTEXT(-1E19)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-10000000000000000000"
+      }
+    },
+    {
+      "id": "vtt3_neg_1e18",
+      "formula": "=VALUETOTEXT(-1E18)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1000000000000000000"
+      }
+    },
+    {
+      "id": "vtt3_mant_9d_em9",
+      "formula": "=VALUETOTEXT(1.23456789E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00000000123456789"
+      }
+    },
+    {
+      "id": "vtt3_mant_11d_em9",
+      "formula": "=VALUETOTEXT(1.23456789012E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23456789012E-09"
+      }
+    },
+    {
+      "id": "vtt3_mant_5d_e14",
+      "formula": "=VALUETOTEXT(1.2345E14)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123450000000000"
+      }
+    },
+    {
+      "id": "vtt3_mant_15d_e14",
+      "formula": "=VALUETOTEXT(1.23456789012345E14)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123456789012345"
+      }
+    },
+    {
+      "id": "vtt3_neg_7p123_em9",
+      "formula": "=VALUETOTEXT(-7.123456E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.000000007123456"
+      }
+    },
+    {
+      "id": "vtt3_15d_em4_unsigned",
+      "formula": "=VALUETOTEXT(1.23456789012345E-4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000123456789012345"
+      }
+    },
+    {
+      "id": "vtt3_15d_em4_signed",
+      "formula": "=VALUETOTEXT(-1.23456789012345E-4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.000123456789012345"
+      }
+    },
+    {
+      "id": "vtt3_16sig_int",
+      "formula": "=VALUETOTEXT(12345678901234567)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "12345678901234500"
+      }
+    },
+    {
+      "id": "vtt3_17sig_decimal",
+      "formula": "=VALUETOTEXT(1.23456789012345678)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23456789012345"
+      }
+    }
+  ]
+}

@@ -1,0 +1,630 @@
+{
+  "suite": "filterxml",
+  "description": "FILTERXML(xml, xpath) parses `xml` and runs `xpath` against it. Excel's documented contract:\n\n  * Empty node set            → #N/A\n  * Malformed XML             → #VALUE!\n  * Malformed XPath           → #VALUE!\n  * Single-node match         → scalar text (the node's inner text)\n  * Multi-node match          → vertical N x 1 spill of node texts\n  * Attribute axis            → attribute value (one per matched attr)\n\nFormulon implements this against pugixml's XPath 1.0 engine. The two engines (MSXML6 on Windows, equivalent on Mac, pugixml here) all nominally implement XPath 1.0, but each carries subtle quirks worth pinning per host:\n\n  * Default-namespace handling — MSXML/Excel typically requires\n    `local-name()=...` workarounds because FILTERXML does not expose a\n    namespace-prefix registration API. pugixml is the same in that\n    respect, so the probes below pin the workaround pattern.\n  * Non-node-set XPath returns (e.g. `count()`, `string()`, `true()`).\n    Excel docs say xpath must evaluate to a node set; we probe what each\n    host actually returns.\n  * Entity decoding (`&amp;`, `&#10;`, `&#x41;`) — XML parsing should\n    decode these; what reaches FILTERXML is the decoded text.\n  * CDATA sections — content reaches the caller as inner text.\n  * Whitespace in mixed content — `text()` vs element node string-value.\n  * Comment / processing-instruction nodes — `comment()` and\n    `processing-instruction()` axes return inner-text in pugixml; Excel\n    may differ.\n  * XPath 2.0+ features (`for`, `let`, `matches`, sequence types) —\n    must reject as #VALUE!.\n\nSpill model: in a sheet context the multi-node return spills into adjacent cells via `EvalContext::dispatch_array_result`. In the oracle pipeline each case is written to a single cell so multi-node cases spill below the anchor; the verifier reads the anchor cell, which sees the first node's text. The setup of these probes uses an anchor read, so the recorded golden value is always a scalar text; the full spill shape is exercised separately in `tests/unit/eval/builtins_web_test.cpp`.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "filterxml_single_element_text",
+      "formula": "=FILTERXML(\"<r><a>hello</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "filterxml_root_element_text",
+      "formula": "=FILTERXML(\"<r>top</r>\",\"/r\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "top"
+      }
+    },
+    {
+      "id": "filterxml_nested_path",
+      "formula": "=FILTERXML(\"<r><b><c>deep</c></b></r>\",\"/r/b/c\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "deep"
+      }
+    },
+    {
+      "id": "filterxml_element_with_attrs_text_only",
+      "formula": "=FILTERXML(\"<r><a id=\"\"1\"\">payload</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "payload"
+      }
+    },
+    {
+      "id": "filterxml_empty_element_text",
+      "formula": "=FILTERXML(\"<r><a/></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_text_with_leading_trailing_ws",
+      "formula": "=FILTERXML(\"<r><a>  spaced  </a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "spaced"
+      }
+    },
+    {
+      "id": "filterxml_text_unicode_jp",
+      "formula": "=FILTERXML(\"<r><a>日本語</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "日本語"
+      }
+    },
+    {
+      "id": "filterxml_multi_element_anchor",
+      "formula": "=FILTERXML(\"<r><a>1</a><a>2</a><a>3</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "filterxml_multi_element_anchor_text",
+      "formula": "=FILTERXML(\"<r><a>alpha</a><a>beta</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "alpha"
+      }
+    },
+    {
+      "id": "filterxml_multi_element_indexed_first",
+      "formula": "=FILTERXML(\"<r><a>x</a><a>y</a><a>z</a></r>\",\"(//a)[1]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "filterxml_multi_element_indexed_last",
+      "formula": "=FILTERXML(\"<r><a>x</a><a>y</a><a>z</a></r>\",\"(//a)[last()]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "z"
+      }
+    },
+    {
+      "id": "filterxml_multi_element_indexed_middle",
+      "formula": "=FILTERXML(\"<r><a>x</a><a>y</a><a>z</a></r>\",\"(//a)[2]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "y"
+      }
+    },
+    {
+      "id": "filterxml_single_attribute",
+      "formula": "=FILTERXML(\"<r><a id=\"\"v\"\"/></r>\",\"//@id\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "filterxml_attribute_axis_anchor",
+      "formula": "=FILTERXML(\"<r><a id=\"\"x\"\"/><a id=\"\"y\"\"/></r>\",\"//a/@id\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "filterxml_attribute_predicate_text",
+      "formula": "=FILTERXML(\"<r><a id=\"\"1\"\">first</a><a id=\"\"2\"\">second</a></r>\",\"//a[@id='2']\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "second"
+      }
+    },
+    {
+      "id": "filterxml_attribute_value_with_entity",
+      "formula": "=FILTERXML(\"<r a=\"\"AT&amp;T\"\"/>\",\"//@a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "AT&T"
+      }
+    },
+    {
+      "id": "filterxml_attribute_value_with_single_quote_in_double",
+      "formula": "=FILTERXML(\"<r a=\"\"can't\"\"/>\",\"//@a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "can't"
+      }
+    },
+    {
+      "id": "filterxml_text_node_axis",
+      "formula": "=FILTERXML(\"<r>top<a>mid</a>bot</r>\",\"/r/text()\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_mixed_content_first_text",
+      "formula": "=FILTERXML(\"<r>before<a>inside</a>after</r>\",\"/r/text()[1]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_string_value_of_element_with_children",
+      "formula": "=FILTERXML(\"<r><a>1<b>2</b>3</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "filterxml_cdata_inner_text",
+      "formula": "=FILTERXML(\"<r><a><![CDATA[<x>literal</x>]]></a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "<x>literal</x>"
+      }
+    },
+    {
+      "id": "filterxml_cdata_with_amp_and_lt",
+      "formula": "=FILTERXML(\"<r><a><![CDATA[a < b & c]]></a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a < b & c"
+      }
+    },
+    {
+      "id": "filterxml_pcdata_entity_amp",
+      "formula": "=FILTERXML(\"<r><a>AT&amp;T</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "AT&T"
+      }
+    },
+    {
+      "id": "filterxml_pcdata_entity_lt",
+      "formula": "=FILTERXML(\"<r><a>a &lt; b</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a < b"
+      }
+    },
+    {
+      "id": "filterxml_pcdata_numeric_char_ref",
+      "formula": "=FILTERXML(\"<r><a>&#65;</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "A"
+      }
+    },
+    {
+      "id": "filterxml_pcdata_hex_char_ref",
+      "formula": "=FILTERXML(\"<r><a>&#x4E2D;</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "中"
+      }
+    },
+    {
+      "id": "filterxml_comment_axis",
+      "formula": "=FILTERXML(\"<r><!--note--><a>v</a></r>\",\"//comment()\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_pi_axis",
+      "formula": "=FILTERXML(\"<r><?stylesheet href=\"\"x\"\"?><a>v</a></r>\",\"//processing-instruction()\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_with_xml_declaration",
+      "formula": "=FILTERXML(\"<?xml version=\"\"1.0\"\" encoding=\"\"UTF-8\"\"?><r><a>v</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "filterxml_with_bom_in_string",
+      "formula": "=FILTERXML(CHAR(239)&CHAR(187)&CHAR(191)&\"<r><a>v</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_default_namespace_naive_path",
+      "formula": "=FILTERXML(\"<r xmlns=\"\"http://example.com\"\"><a>v</a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "filterxml_default_namespace_local_name_workaround",
+      "formula": "=FILTERXML(\"<r xmlns=\"\"http://example.com\"\"><a>v</a></r>\",\"//*[local-name()='a']\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "filterxml_prefixed_namespace_naive_path",
+      "formula": "=FILTERXML(\"<r xmlns:ns=\"\"http://example.com\"\"><ns:a>v</ns:a></r>\",\"//ns:a\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "filterxml_prefixed_namespace_local_name_workaround",
+      "formula": "=FILTERXML(\"<r xmlns:ns=\"\"http://example.com\"\"><ns:a>v</ns:a></r>\",\"//*[local-name()='a']\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "v"
+      }
+    },
+    {
+      "id": "filterxml_no_match_returns_na",
+      "formula": "=FILTERXML(\"<r><a>1</a></r>\",\"//b\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_empty_root_no_match",
+      "formula": "=FILTERXML(\"<r/>\",\"//x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_predicate_no_match_na",
+      "formula": "=FILTERXML(\"<r><a id=\"\"1\"\"/></r>\",\"//a[@id='999']\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_count_function_return",
+      "formula": "=FILTERXML(\"<r><a/><a/></r>\",\"count(//a)\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_string_function_return",
+      "formula": "=FILTERXML(\"<r><a>v</a></r>\",\"string(//a)\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_concat_function_return",
+      "formula": "=FILTERXML(\"<r><a>x</a><b>y</b></r>\",\"concat(//a,//b)\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_true_function_return",
+      "formula": "=FILTERXML(\"<r/>\",\"true()\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_predicate_numeric_compare",
+      "formula": "=FILTERXML(\"<r><a>3</a><a>10</a><a>7</a></r>\",\"//a[. > 5]\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "filterxml_predicate_contains_function",
+      "formula": "=FILTERXML(\"<r><a>apple</a><a>banana</a><a>apricot</a></r>\",\"//a[contains(.,'ap')]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "apple"
+      }
+    },
+    {
+      "id": "filterxml_predicate_starts_with_function",
+      "formula": "=FILTERXML(\"<r><a>foo</a><a>bar</a></r>\",\"//a[starts-with(.,'b')]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "bar"
+      }
+    },
+    {
+      "id": "filterxml_predicate_position_range",
+      "formula": "=FILTERXML(\"<r><a>x</a><a>y</a><a>z</a></r>\",\"//a[position()<=2]\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "filterxml_xpath2_for_expression_rejected",
+      "formula": "=FILTERXML(\"<r><a>1</a></r>\",\"for $x in //a return $x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_xpath2_let_expression_rejected",
+      "formula": "=FILTERXML(\"<r><a>1</a></r>\",\"let $x := //a return $x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_xpath2_matches_function_rejected",
+      "formula": "=FILTERXML(\"<r><a>1</a></r>\",\"//a[matches(.,'1')]\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_malformed_xml_unclosed_tag",
+      "formula": "=FILTERXML(\"<r><a></r>\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_malformed_xml_garbage",
+      "formula": "=FILTERXML(\"not xml at all\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_malformed_xml_empty_string",
+      "formula": "=FILTERXML(\"\",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_malformed_xml_whitespace_only",
+      "formula": "=FILTERXML(\"   \",\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_malformed_xpath_triple_slash",
+      "formula": "=FILTERXML(\"<r><a/></r>\",\"///\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_malformed_xpath_unterminated_predicate",
+      "formula": "=FILTERXML(\"<r><a/></r>\",\"//a[\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_empty_xpath",
+      "formula": "=FILTERXML(\"<r><a/></r>\",\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_xml_number_arg",
+      "formula": "=FILTERXML(42,\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_xml_bool_arg",
+      "formula": "=FILTERXML(TRUE,\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_xpath_number_arg",
+      "formula": "=FILTERXML(\"<r><a/></r>\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_xpath_bool_arg",
+      "formula": "=FILTERXML(\"<r><a/></r>\",TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "filterxml_error_in_xml_arg",
+      "formula": "=FILTERXML(1/0,\"//a\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "filterxml_error_in_xpath_arg",
+      "formula": "=FILTERXML(\"<r/>\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "filterxml_arity_one",
+      "formula": "=FILTERXML(\"<r/>\")",
+      "setup": {},
+      "skipped": "driver skip: COM -2147352567: 例外が発生しました。"
+    },
+    {
+      "id": "filterxml_arity_zero",
+      "formula": "=FILTERXML()",
+      "setup": {},
+      "skipped": "driver skip: COM -2147352567: 例外が発生しました。"
+    },
+    {
+      "id": "filterxml_arity_three",
+      "formula": "=FILTERXML(\"<r/>\",\"//a\",\"extra\")",
+      "setup": {},
+      "skipped": "driver skip: COM -2147352567: 例外が発生しました。"
+    },
+    {
+      "id": "filterxml_xml_from_cell_ref",
+      "formula": "=FILTERXML(A1,\"//a\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "<r><a>fromcell</a></r>"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "fromcell"
+      }
+    },
+    {
+      "id": "filterxml_xpath_from_cell_ref",
+      "formula": "=FILTERXML(\"<r><a>x</a></r>\",A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "//a"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "x"
+      }
+    },
+    {
+      "id": "filterxml_both_args_from_cells",
+      "formula": "=FILTERXML(A1,A2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "<r><a id=\"99\">value</a></r>"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "//a/@id"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 99.0
+      }
+    }
+  ]
+}

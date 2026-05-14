@@ -333,7 +333,12 @@ oracle-setup-wsl:
 	@echo "  winget install Python.Python.3.12"
 	@echo "  py -m pip install xlwings pywin32 pyyaml"
 	@echo ""
-	@echo "Then edit tools/oracle/targets.yaml and set win_python under win-365-ja_JP."
+	@echo "Then point the bridge at the Windows-side python.exe (preferred):"
+	@echo "  export FORMULON_WIN_PYTHON=\"/mnt/c/Users/<you>/AppData/Local/Programs/Python/Python312/python.exe\""
+	@echo "  # the cli.py setup step below auto-discovers candidates and prints"
+	@echo "  # the exact export line; copy that into your shell rc."
+	@echo "  # (Editing tools/oracle/targets.yaml is only for private forks — the"
+	@echo "  # env var keeps per-machine paths out of committed files.)"
 	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py setup --target win-365-ja_JP || true
 
 oracle-gen:

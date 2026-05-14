@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """WSL2 -> Windows Excel bridge driver.
 
-Implements :class:`OracleDriver` by invoking ``python.exe -m
-tools.oracle.drivers.windows_excel`` as a Windows-side subprocess. JSON
-files in ``/tmp`` (translated to Windows paths via ``wslpath -w``) carry
-the case batch and result vectors across the WSL/Win boundary.
+Implements :class:`OracleDriver` by spawning ``python.exe -m
+tools.oracle.drivers.windows_excel --serve`` once and ferrying
+newline-delimited JSON requests to it over stdin/stdout. Excel is
+opened a single time on the Windows side and reused across every
+``run_suite`` call; without this, generating 90+ suites paid one Excel
+cold-start each (~5-15s) and dominated wall-clock time.
 
 Used automatically when :func:`tools.oracle.drivers.select_driver` sees:
 
@@ -18,10 +20,7 @@ macOS hosts have no use for this module.
 WSL2's Linux Python cannot load the Windows pywin32 COM bridge -- the
 two ABIs are incompatible. The only way to drive Excel from a WSL2
 shell is to invoke Windows-side ``python.exe`` (which can be mounted as
-``/mnt/c/...``) and shuttle data over a serializable channel. JSON
-files are slower than a pipe but cleanly survive the encoding boundary
-(WSL writes utf-8 directly to /tmp; Windows-side Python reads the same
-bytes via the translated path with ``encoding='utf-8'`` pinned).
+``/mnt/c/...``) and shuttle data over a serializable channel.
 
 ## Configuration
 
@@ -37,7 +36,7 @@ from __future__ import annotations
 import json
 import platform
 import subprocess
-import tempfile
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -69,29 +68,15 @@ def _ensure_wsl2() -> None:
         )
 
 
-def _to_windows_path(p: Path) -> str:
-    """Translates a WSL path to a Windows path via ``wslpath -w``.
-
-    Raises if ``wslpath`` is missing (only present on WSL) or returns
-    an empty string (which would silently break the subprocess
-    invocation).
-    """
-
-    out = subprocess.check_output(["wslpath", "-w", str(p)], text=True).strip()
-    if not out:
-        raise RuntimeError(f"wslpath returned empty for {p}")
-    return out
-
-
 class WSLBridgeOracle(OracleDriver):
-    """Drives a Windows-side :class:`WindowsExcelOracle` through subprocess.
+    """Drives a Windows-side :class:`WindowsExcelOracle` through a persistent subprocess.
 
     Lifetime is bounded by the surrounding ``with`` block: ``__enter__``
-    creates a private ``/tmp`` directory for input/output JSON files, and
-    ``__exit__`` cleans it up. Each :meth:`probe_environment` /
-    :meth:`run_suite` call writes a fresh ``input.json`` and reads the
-    corresponding ``output.json``, so callers do not need to coordinate
-    file naming.
+    spawns ``python.exe ... --serve``, waits for the ``ready`` line
+    (which also carries the cached environment), and ``__exit__``
+    sends a ``shutdown`` command and reaps the process. All
+    :meth:`probe_environment` / :meth:`run_suite` calls flow through the
+    same long-lived stdio pipe, so Excel cold-start is paid once.
     """
 
     def __init__(self, *, win_python: str, visible: bool = False) -> None:
@@ -103,33 +88,12 @@ class WSLBridgeOracle(OracleDriver):
             )
         self._win_python = win_python
         self._visible = visible
-        self._tmpdir: Optional[tempfile.TemporaryDirectory] = None
+        self._proc: Optional[subprocess.Popen] = None
+        self._stderr_buf: List[str] = []
+        self._stderr_thread: Optional[threading.Thread] = None
+        self._cached_env: Optional[Dict[str, Any]] = None
 
     def __enter__(self) -> "WSLBridgeOracle":
-        self._tmpdir = tempfile.TemporaryDirectory(prefix="formulon-oracle-")
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        if self._tmpdir is not None:
-            self._tmpdir.cleanup()
-            self._tmpdir = None
-
-    def _invoke(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Runs one wire-protocol round-trip against the Windows driver.
-
-        The payload is serialized to ``input.json``, the Windows-side
-        Python is invoked with translated Windows paths, and the
-        response is parsed from ``output.json``. Subprocess failure
-        (non-zero return code or missing output file) is surfaced as a
-        ``RuntimeError`` carrying both stdout and stderr so the
-        operator can diagnose Office activation / COM issues.
-        """
-
-        assert self._tmpdir is not None, "use as context manager"
-        tmp = Path(self._tmpdir.name)
-        in_path = tmp / "input.json"
-        out_path = tmp / "output.json"
-        in_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         # `-X utf8=1` enables Python's UTF-8 mode on the Windows side
         # without relying on env-var inheritance. Why we need this:
         #
@@ -155,31 +119,117 @@ class WSLBridgeOracle(OracleDriver):
             self._win_python,
             "-X", "utf8=1",
             "-m", "tools.oracle.drivers.windows_excel",
-            "--input", _to_windows_path(in_path),
-            "--output", _to_windows_path(out_path),
+            "--serve",
         ]
-        result = subprocess.run(
+        if self._visible:
+            cmd.append("--visible")
+        self._proc = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             encoding="utf-8",
             errors="replace",
+            bufsize=1,  # line-buffered text mode
         )
-        if result.returncode != 0:
+        # Drain stderr in a background thread so a chatty subprocess
+        # never blocks on a full pipe. The buffer is consulted only when
+        # we surface an error.
+        self._stderr_thread = threading.Thread(
+            target=self._drain_stderr, daemon=True
+        )
+        self._stderr_thread.start()
+
+        # Wait for the ready line. If the subprocess fails to start
+        # (Excel activation prompt, missing xlwings, COM hang, ...),
+        # _read_line raises with the captured stderr.
+        ready = self._read_line()
+        if ready.get("type") != "ready":
             raise RuntimeError(
-                f"windows_excel subprocess failed (rc={result.returncode}):\n"
-                f"stdout: {result.stdout}\nstderr: {result.stderr}"
+                f"windows_excel did not announce ready: {ready!r}"
             )
-        if not out_path.exists():
+        self._cached_env = ready.get("environment") or {}
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        proc = self._proc
+        if proc is None:
+            return
+        try:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.write(json.dumps({"version": 1, "command": "shutdown"}) + "\n")
+                    proc.stdin.flush()
+                except (BrokenPipeError, OSError):
+                    pass
+                try:
+                    proc.stdin.close()
+                except OSError:
+                    pass
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=5)
+        finally:
+            self._proc = None
+
+    def _drain_stderr(self) -> None:
+        assert self._proc is not None and self._proc.stderr is not None
+        for line in self._proc.stderr:
+            self._stderr_buf.append(line)
+
+    def _stderr_dump(self) -> str:
+        return "".join(self._stderr_buf).strip()
+
+    def _read_line(self) -> Dict[str, Any]:
+        assert self._proc is not None and self._proc.stdout is not None
+        line = self._proc.stdout.readline()
+        if not line:
+            rc = self._proc.poll()
             raise RuntimeError(
-                f"windows_excel did not produce output (stdout: {result.stdout})"
+                f"windows_excel subprocess closed unexpectedly (rc={rc}):\n"
+                f"stderr: {self._stderr_dump()}"
             )
-        return json.loads(out_path.read_text(encoding="utf-8"))
+        return json.loads(line)
+
+    def _invoke(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Runs one wire-protocol round-trip against the long-lived server.
+
+        Sends one JSON line on stdin, reads one JSON line on stdout.
+        Subprocess death or a ``type: error`` response is surfaced as
+        ``RuntimeError`` carrying any captured stderr so the operator
+        can diagnose Office activation / COM issues.
+        """
+
+        assert self._proc is not None, "use as context manager"
+        if self._proc.stdin is None:
+            raise RuntimeError("bridge stdin is not open")
+        try:
+            self._proc.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            self._proc.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            raise RuntimeError(
+                f"windows_excel bridge stdin closed: {exc}\n"
+                f"stderr: {self._stderr_dump()}"
+            ) from exc
+        resp = self._read_line()
+        if resp.get("type") == "error":
+            raise RuntimeError(
+                f"windows_excel server error: {resp.get('error', 'unknown')}\n"
+                f"stderr: {self._stderr_dump()}"
+            )
+        return resp
 
     def probe_environment(self) -> EnvironmentInfo:
-        out = self._invoke(
-            {"version": 1, "command": "probe_environment", "visible": self._visible}
-        )
-        env = out["environment"]
+        # The server already sent the environment in its ready line. We
+        # still issue a round-trip so callers that probe explicitly get
+        # the same shape as the legacy path, but the data itself is the
+        # cached snapshot -- Excel's locale doesn't shift mid-run.
+        env = (self._cached_env or {}) if self._cached_env else {}
+        if not env:
+            out = self._invoke({"version": 1, "command": "probe_environment"})
+            env = out.get("environment") or {}
         return EnvironmentInfo(
             excel_version=env.get("excel_version", ""),
             excel_locale=env.get("excel_locale", ""),
@@ -200,7 +250,6 @@ class WSLBridgeOracle(OracleDriver):
                 "version": 1,
                 "command": "run_suite",
                 "suite_name": suite_name,
-                "visible": self._visible,
                 "date1904": date1904,
                 "iterative": iterative,
                 "cases": cases,

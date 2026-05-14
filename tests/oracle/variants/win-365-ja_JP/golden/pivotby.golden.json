@@ -1,0 +1,95 @@
+{
+  "suite": "pivotby",
+  "description": "PIVOTBY dynamic-array pivot (Excel 365). Six perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "pivotby_bare_sum",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0)",
+      "setup": {},
+      "skipped": "PIVOTBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BareSumName covers bare-name aggregator dispatch."
+    },
+    {
+      "id": "pivotby_lambda_sum",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0)",
+      "setup": {},
+      "skipped": "PIVOTBY with a LAMBDA aggregator returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BasicTwoByTwoLambdaAggregatorSum covers inline-LAMBDA dispatch."
+    },
+    {
+      "id": "pivotby_unknown_name_error",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, NOPE_NAME, 0, 0, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NAME?"
+      }
+    },
+    {
+      "id": "pivotby_field_headers_out_of_range",
+      "formula": "=PIVOTBY({\"A\"}, {\"X\"}, {1}, SUM, 5, 0, 0, 0, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_filter_array_length_mismatch",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0, {TRUE;FALSE;TRUE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_filter_array_excludes_all",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0, {FALSE;FALSE})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "pivotby_multi_col_rows_basic",
+      "formula": "=PIVOTBY({\"A\",\"P\";\"B\",\"Q\";\"A\",\"P\"}, {\"X\";\"Y\";\"X\"}, {1;2;3}, SUM, 0)",
+      "setup": {},
+      "skipped": "Multi-column PIVOTBY emits a 2D ArrayValue cross-product; oracle compare_value only handles scalars. Unit test PivotBy.MultiColumnRowFieldsBasic covers the K=2 layout (row-keys + col-groups + grand totals); shape captured against Mac Excel 16.108.1 via xlwings INDEX probes."
+    },
+    {
+      "id": "pivotby_multi_col_cols_basic",
+      "formula": "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"}, {1;2;3}, SUM, 0)",
+      "setup": {},
+      "skipped": "Multi-column PIVOTBY (L=2 col_fields) emits a 2D ArrayValue with 2 col-key rows. Unit test PivotBy.MultiColumnColFieldsBasic covers the layout."
+    },
+    {
+      "id": "pivotby_multi_values_basic",
+      "formula": "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\";\"Y\";\"X\"}, {1,10;2,20;3,30}, SUM, 0)",
+      "setup": {},
+      "skipped": "Multi-column values (V=2) tiles value labels per col-group. Unit test PivotBy.MultiColumnValuesBasic covers the layout."
+    },
+    {
+      "id": "pivotby_multi_all_axes",
+      "formula": "=PIVOTBY({\"A\",\"P\";\"B\",\"Q\";\"A\",\"P\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"}, {1,10;2,20;3,30}, SUM, 0)",
+      "setup": {},
+      "skipped": "K=2/L=2/V=2 dense cross-product spill. Unit test PivotBy.MultiColumnAllAxes covers the layout."
+    },
+    {
+      "id": "pivotby_multi_with_input_header",
+      "formula": "=PIVOTBY({\"R1\",\"R2\";\"A\",\"P\";\"B\",\"Q\";\"A\",\"P\"}, {\"C\";\"X\";\"Y\";\"X\"}, {\"V\";1;2;3}, SUM, 3)",
+      "setup": {},
+      "skipped": "Multi-col rows with field_headers=3 emits an output header row containing row_fields header + values header tiled. Unit test PivotBy.MultiColumnRowsWithFieldHeadersThree covers the layout."
+    }
+  ]
+}

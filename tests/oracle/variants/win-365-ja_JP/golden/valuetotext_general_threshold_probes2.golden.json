@@ -1,0 +1,260 @@
+{
+  "suite": "valuetotext_general_threshold_probes2",
+  "description": "Round-2 probes: pin the exact threshold transitions. Boundary 1: between 1E+17 and 1E+20 - find the integer-decimal -> sci switch. Boundary 2: between 1E-15 and 1E-20 - find the small-decimal -> sci switch. Boundary 3: mantissa-width effect - vary sig digits from 1..15 at fixed\n  exponent (e.g. ?E-9) to determine whether the rule is \"decimal width <=\n  N chars\" or \"leading-zero count + sig digits <= N\".\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "vtt2_pos_1e17",
+      "formula": "=VALUETOTEXT(1E17)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000000000"
+      }
+    },
+    {
+      "id": "vtt2_pos_1e18",
+      "formula": "=VALUETOTEXT(1E18)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1000000000000000000"
+      }
+    },
+    {
+      "id": "vtt2_pos_1e19",
+      "formula": "=VALUETOTEXT(1E19)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "10000000000000000000"
+      }
+    },
+    {
+      "id": "vtt2_pos_1e20",
+      "formula": "=VALUETOTEXT(1E20)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1E+20"
+      }
+    },
+    {
+      "id": "vtt2_pos_99999999999999990000",
+      "formula": "=VALUETOTEXT(99999999999999990000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "99999999999999900000"
+      }
+    },
+    {
+      "id": "vtt2_neg_1em15",
+      "formula": "=VALUETOTEXT(1E-15)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000000000001"
+      }
+    },
+    {
+      "id": "vtt2_neg_1em16",
+      "formula": "=VALUETOTEXT(1E-16)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000000000000001"
+      }
+    },
+    {
+      "id": "vtt2_neg_1em17",
+      "formula": "=VALUETOTEXT(1E-17)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00000000000000001"
+      }
+    },
+    {
+      "id": "vtt2_neg_1em18",
+      "formula": "=VALUETOTEXT(1E-18)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000000000000001"
+      }
+    },
+    {
+      "id": "vtt2_neg_1em19",
+      "formula": "=VALUETOTEXT(1E-19)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1E-19"
+      }
+    },
+    {
+      "id": "vtt2_neg_1em20",
+      "formula": "=VALUETOTEXT(1E-20)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1E-20"
+      }
+    },
+    {
+      "id": "vtt2_mant_1d_em9",
+      "formula": "=VALUETOTEXT(1E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000001"
+      }
+    },
+    {
+      "id": "vtt2_mant_2d_em9",
+      "formula": "=VALUETOTEXT(1.2E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000000012"
+      }
+    },
+    {
+      "id": "vtt2_mant_5d_em9",
+      "formula": "=VALUETOTEXT(1.2345E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000000012345"
+      }
+    },
+    {
+      "id": "vtt2_mant_8d_em9",
+      "formula": "=VALUETOTEXT(1.2345678E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000000012345678"
+      }
+    },
+    {
+      "id": "vtt2_mant_10d_em9",
+      "formula": "=VALUETOTEXT(1.234567890123E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.234567890123E-09"
+      }
+    },
+    {
+      "id": "vtt2_mant_15d_em9",
+      "formula": "=VALUETOTEXT(1.23456789012345E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23456789012345E-09"
+      }
+    },
+    {
+      "id": "vtt2_mant_1d_em12",
+      "formula": "=VALUETOTEXT(1E-12)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000000001"
+      }
+    },
+    {
+      "id": "vtt2_mant_3d_em12",
+      "formula": "=VALUETOTEXT(1.23E-12)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00000000000123"
+      }
+    },
+    {
+      "id": "vtt2_mant_5d_em12",
+      "formula": "=VALUETOTEXT(1.2345E-12)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000000000012345"
+      }
+    },
+    {
+      "id": "vtt2_mant_15d_em12",
+      "formula": "=VALUETOTEXT(1.23456789012345E-12)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23456789012345E-12"
+      }
+    },
+    {
+      "id": "vtt2_mant_1d_e15",
+      "formula": "=VALUETOTEXT(1E15)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1000000000000000"
+      }
+    },
+    {
+      "id": "vtt2_mant_5d_e15",
+      "formula": "=VALUETOTEXT(1.2345E15)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1234500000000000"
+      }
+    },
+    {
+      "id": "vtt2_mant_15d_e15",
+      "formula": "=VALUETOTEXT(1.23456789012345E15)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1234567890123450"
+      }
+    },
+    {
+      "id": "vtt2_mant_1d_e16",
+      "formula": "=VALUETOTEXT(1E16)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "10000000000000000"
+      }
+    },
+    {
+      "id": "vtt2_mant_2d_e16",
+      "formula": "=VALUETOTEXT(1.2E16)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "12000000000000000"
+      }
+    },
+    {
+      "id": "vtt2_mant_15d_e16",
+      "formula": "=VALUETOTEXT(1.23456789012345E16)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "12345678901234500"
+      }
+    }
+  ]
+}

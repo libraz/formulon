@@ -1,0 +1,116 @@
+{
+  "suite": "bahttext",
+  "description": "BAHTTEXT — Thai-baht spell-out closure against Mac Excel 365 (ja-JP).",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "bahttext_zero",
+      "formula": "=BAHTTEXT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ศูนย์บาทถ้วน"
+      }
+    },
+    {
+      "id": "bahttext_single_digit_one",
+      "formula": "=BAHTTEXT(1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "หนึ่งบาทถ้วน"
+      }
+    },
+    {
+      "id": "bahttext_single_digit_seven",
+      "formula": "=BAHTTEXT(7)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "เจ็ดบาทถ้วน"
+      }
+    },
+    {
+      "id": "bahttext_tens_eleven",
+      "formula": "=BAHTTEXT(11)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "สิบเอ็ดบาทถ้วน"
+      }
+    },
+    {
+      "id": "bahttext_tens_twenty",
+      "formula": "=BAHTTEXT(20)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ยี่สิบบาทถ้วน"
+      }
+    },
+    {
+      "id": "bahttext_tens_twenty_one",
+      "formula": "=BAHTTEXT(21)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ยี่สิบเอ็ดบาทถ้วน"
+      }
+    },
+    {
+      "id": "bahttext_fractional_satang",
+      "formula": "=BAHTTEXT(1.25)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "หนึ่งบาทยี่สิบห้าสตางค์"
+      }
+    },
+    {
+      "id": "bahttext_negative_one",
+      "formula": "=BAHTTEXT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ลบหนึ่งบาทถ้วน"
+      }
+    },
+    {
+      "id": "bahttext_negative_with_satang",
+      "formula": "=BAHTTEXT(-100.5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "ลบหนึ่งร้อยบาทห้าสิบสตางค์"
+      }
+    },
+    {
+      "id": "bahttext_million_boundary",
+      "formula": "=BAHTTEXT(1000001)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "หนึ่งล้านเอ็ดบาทถ้วน"
+      }
+    },
+    {
+      "id": "bahttext_overflow_1e15",
+      "formula": "=BAHTTEXT(1E15)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "หนึ่งพันล้านล้านบาทถ้วน"
+      }
+    }
+  ]
+}

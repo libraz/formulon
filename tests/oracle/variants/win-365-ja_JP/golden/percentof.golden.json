@@ -1,0 +1,71 @@
+{
+  "suite": "percentof",
+  "description": "PERCENTOF ratio aggregator (Excel 365, Sep 2024 GA) — six perspectives spanning scalar ratio, array-literal subset/all, denominator-zero, the range-filter quirk that drops text inside an array literal, direct-scalar bool coercion, and left-to-right error propagation.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "percentof_scalar_basic",
+      "formula": "=PERCENTOF(2, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.2
+      }
+    },
+    {
+      "id": "percentof_array_subset_all",
+      "formula": "=PERCENTOF({2,3}, {2,3,5,10})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.25
+      }
+    },
+    {
+      "id": "percentof_denominator_zero",
+      "formula": "=PERCENTOF(50, 0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "percentof_array_text_filtered_div0",
+      "formula": "=PERCENTOF({1,2}, {\"a\",\"b\"})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "percentof_scalar_bool_coerces",
+      "formula": "=PERCENTOF(2, TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "percentof_error_propagates_subset",
+      "formula": "=PERCENTOF(#N/A, 10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    }
+  ]
+}

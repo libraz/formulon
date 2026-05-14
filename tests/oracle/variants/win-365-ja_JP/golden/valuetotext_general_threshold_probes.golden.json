@@ -1,0 +1,440 @@
+{
+  "suite": "valuetotext_general_threshold_probes",
+  "description": "Probe suite for pinning Mac Excel General-format rendering inside VALUETOTEXT(value, 0). Each case isolates one boundary so the format_double / format_excel_general implementation can be aligned to Mac. Group A: powers of ten across magnitudes (positive). Group B: negative-exponent powers of ten (when does General switch to scientific?). Group C: representative mantissas with trailing zeros. Group D: integer round-trip and very large integers. Group E: signed variants and zero. Group F: 15-significant-digit precision.\nMac probes via xlwings: the formula is typed via formula2 and read back through `range.value`, then VALUETOTEXT round-trips the cell value to text. The static oracle harness writes the literal numeric in the formula and reads back the surfaced text.\n",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "vtt_general_pos_1e0",
+      "formula": "=VALUETOTEXT(1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e1",
+      "formula": "=VALUETOTEXT(10)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "10"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e3",
+      "formula": "=VALUETOTEXT(1000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1000"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e6",
+      "formula": "=VALUETOTEXT(1000000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1000000"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e9",
+      "formula": "=VALUETOTEXT(1000000000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1000000000"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e12",
+      "formula": "=VALUETOTEXT(1000000000000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1000000000000"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e14",
+      "formula": "=VALUETOTEXT(100000000000000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000000"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e15",
+      "formula": "=VALUETOTEXT(1000000000000000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1000000000000000"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e16",
+      "formula": "=VALUETOTEXT(10000000000000000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "10000000000000000"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e17",
+      "formula": "=VALUETOTEXT(100000000000000000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "100000000000000000"
+      }
+    },
+    {
+      "id": "vtt_general_pos_1e20",
+      "formula": "=VALUETOTEXT(1E20)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1E+20"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em1",
+      "formula": "=VALUETOTEXT(0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.1"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em3",
+      "formula": "=VALUETOTEXT(0.001)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em4",
+      "formula": "=VALUETOTEXT(0.0001)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em5",
+      "formula": "=VALUETOTEXT(0.00001)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em6",
+      "formula": "=VALUETOTEXT(0.000001)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em7",
+      "formula": "=VALUETOTEXT(0.0000001)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em8",
+      "formula": "=VALUETOTEXT(0.00000001)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em9",
+      "formula": "=VALUETOTEXT(1E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em10",
+      "formula": "=VALUETOTEXT(1E-10)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em11",
+      "formula": "=VALUETOTEXT(1E-11)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00000000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em12",
+      "formula": "=VALUETOTEXT(1E-12)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em13",
+      "formula": "=VALUETOTEXT(1E-13)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000000000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em14",
+      "formula": "=VALUETOTEXT(1E-14)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00000000000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em15",
+      "formula": "=VALUETOTEXT(1E-15)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000000000001"
+      }
+    },
+    {
+      "id": "vtt_general_neg_1em20",
+      "formula": "=VALUETOTEXT(1E-20)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1E-20"
+      }
+    },
+    {
+      "id": "vtt_general_mant_7p123_em9",
+      "formula": "=VALUETOTEXT(7.123456E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000007123456"
+      }
+    },
+    {
+      "id": "vtt_general_mant_1p5_em5",
+      "formula": "=VALUETOTEXT(1.5E-5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000015"
+      }
+    },
+    {
+      "id": "vtt_general_mant_2p71828_em10",
+      "formula": "=VALUETOTEXT(2.71828E-10)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000000000271828"
+      }
+    },
+    {
+      "id": "vtt_general_mant_3p14_em8",
+      "formula": "=VALUETOTEXT(3.14159265358979E-8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.14159265358979E-08"
+      }
+    },
+    {
+      "id": "vtt_general_mant_9p99_em5",
+      "formula": "=VALUETOTEXT(9.99E-5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.0000999"
+      }
+    },
+    {
+      "id": "vtt_general_mant_1p0001_em4",
+      "formula": "=VALUETOTEXT(1.0001E-4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.00010001"
+      }
+    },
+    {
+      "id": "vtt_general_int_123",
+      "formula": "=VALUETOTEXT(123)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123"
+      }
+    },
+    {
+      "id": "vtt_general_int_123456789012",
+      "formula": "=VALUETOTEXT(123456789012)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123456789012"
+      }
+    },
+    {
+      "id": "vtt_general_int_123456789012345",
+      "formula": "=VALUETOTEXT(123456789012345)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123456789012345"
+      }
+    },
+    {
+      "id": "vtt_general_int_999999999999999",
+      "formula": "=VALUETOTEXT(999999999999999)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "999999999999999"
+      }
+    },
+    {
+      "id": "vtt_general_int_1234567890123456",
+      "formula": "=VALUETOTEXT(1234567890123456)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1234567890123450"
+      }
+    },
+    {
+      "id": "vtt_general_zero",
+      "formula": "=VALUETOTEXT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "vtt_general_neg_one",
+      "formula": "=VALUETOTEXT(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1"
+      }
+    },
+    {
+      "id": "vtt_general_neg_small_decimal",
+      "formula": "=VALUETOTEXT(-0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.5"
+      }
+    },
+    {
+      "id": "vtt_general_neg_tiny_em9",
+      "formula": "=VALUETOTEXT(-7.123456E-9)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-0.000000007123456"
+      }
+    },
+    {
+      "id": "vtt_general_neg_huge_pos",
+      "formula": "=VALUETOTEXT(-1E20)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-1E+20"
+      }
+    },
+    {
+      "id": "vtt_general_15digits_pi",
+      "formula": "=VALUETOTEXT(PI())",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "3.14159265358979"
+      }
+    },
+    {
+      "id": "vtt_general_15digits_one_third",
+      "formula": "=VALUETOTEXT(1/3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.333333333333333"
+      }
+    },
+    {
+      "id": "vtt_general_15digits_two_thirds",
+      "formula": "=VALUETOTEXT(2/3)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.666666666666667"
+      }
+    },
+    {
+      "id": "vtt_general_trailing_zero_50pct",
+      "formula": "=VALUETOTEXT(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.5"
+      }
+    },
+    {
+      "id": "vtt_general_trailing_zero_125e5",
+      "formula": "=VALUETOTEXT(125000)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "125000"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1043 @@
+{
+  "suite": "datetime",
+  "description": "DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS / DAYS360 / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / NETWORKDAYS / NETWORKDAYS.INTL / WORKDAY / WORKDAY.INTL",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "date_2024_4_22",
+      "formula": "=DATE(2024,4,22)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45404.0
+      }
+    },
+    {
+      "id": "date_two_digit_year_adds_1900",
+      "formula": "=DATE(26,4,23)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9610.0
+      }
+    },
+    {
+      "id": "date_negative_month_normalises",
+      "formula": "=DATE(2026,0,15)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46006.0
+      }
+    },
+    {
+      "id": "date_day_overflow_normalises",
+      "formula": "=DATE(2024,1,32)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45323.0
+      }
+    },
+    {
+      "id": "time_mid_day",
+      "formula": "=TIME(12,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "time_wrap_25_hours",
+      "formula": "=TIME(25,0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04166666666666674
+      }
+    },
+    {
+      "id": "year_of_serial",
+      "formula": "=YEAR(DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "month_of_serial",
+      "formula": "=MONTH(DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "day_of_serial",
+      "formula": "=DAY(DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 22.0
+      }
+    },
+    {
+      "id": "hour_of_time",
+      "formula": "=HOUR(TIME(13,45,30))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "minute_of_time",
+      "formula": "=MINUTE(TIME(13,45,30))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "second_of_time",
+      "formula": "=SECOND(TIME(13,45,30))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "weekday_default_sun1",
+      "formula": "=WEEKDAY(DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "weekday_mon1",
+      "formula": "=WEEKDAY(DATE(2024,4,22),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weekday_mon0",
+      "formula": "=WEEKDAY(DATE(2024,4,22),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "edate_plus_three_months",
+      "formula": "=EDATE(DATE(2024,4,22),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45495.0
+      }
+    },
+    {
+      "id": "eomonth_same_month",
+      "formula": "=EOMONTH(DATE(2024,4,15),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45412.0
+      }
+    },
+    {
+      "id": "eomonth_forward_two",
+      "formula": "=EOMONTH(DATE(2024,4,15),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45473.0
+      }
+    },
+    {
+      "id": "days_positive",
+      "formula": "=DAYS(DATE(2024,5,1),DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "days_negative",
+      "formula": "=DAYS(DATE(2024,4,22),DATE(2024,5,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -9.0
+      }
+    },
+    {
+      "id": "date_1900_02_28_serial",
+      "formula": "=N(DATE(1900,2,28))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 59.0
+      }
+    },
+    {
+      "id": "date_1900_ghost_serial",
+      "formula": "=N(DATE(1900,2,29))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "date_1900_03_01_serial",
+      "formula": "=N(DATE(1900,3,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 61.0
+      }
+    },
+    {
+      "id": "weeknum_mid_year_default",
+      "formula": "=WEEKNUM(DATE(2024,7,4))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 27.0
+      }
+    },
+    {
+      "id": "weeknum_jan_1_default",
+      "formula": "=WEEKNUM(DATE(2024,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weeknum_monday_type",
+      "formula": "=WEEKNUM(DATE(2024,1,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weeknum_iso_type_21",
+      "formula": "=WEEKNUM(DATE(2024,1,1),21)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weeknum_iso_jan_1_2023_is_52",
+      "formula": "=WEEKNUM(DATE(2023,1,1),21)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 52.0
+      }
+    },
+    {
+      "id": "weeknum_invalid_type_is_num",
+      "formula": "=WEEKNUM(DATE(2024,1,1),99)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "isoweeknum_mid_year",
+      "formula": "=ISOWEEKNUM(DATE(2024,7,4))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 27.0
+      }
+    },
+    {
+      "id": "isoweeknum_jan_1_2023",
+      "formula": "=ISOWEEKNUM(DATE(2023,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 52.0
+      }
+    },
+    {
+      "id": "isoweeknum_dec_31_2024",
+      "formula": "=ISOWEEKNUM(DATE(2024,12,31))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "yearfrac_basis_0_half_year",
+      "formula": "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "yearfrac_basis_1_half_leap_year",
+      "formula": "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.4972677595628415
+      }
+    },
+    {
+      "id": "yearfrac_basis_2_half_leap_year",
+      "formula": "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5055555555555555
+      }
+    },
+    {
+      "id": "yearfrac_basis_3_half_leap_year",
+      "formula": "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.4986301369863014
+      }
+    },
+    {
+      "id": "yearfrac_basis_4_half_year",
+      "formula": "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "yearfrac_one_full_year_basis_1",
+      "formula": "=YEARFRAC(DATE(2023,1,1),DATE(2024,1,1),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "yearfrac_leap_basis_1",
+      "formula": "=YEARFRAC(DATE(2024,2,28),DATE(2024,3,1),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.00546448087431694
+      }
+    },
+    {
+      "id": "yearfrac_invalid_basis_is_num",
+      "formula": "=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "datedif_years",
+      "formula": "=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),\"Y\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "datedif_months",
+      "formula": "=DATEDIF(DATE(2024,1,15),DATE(2024,7,1),\"M\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "datedif_days",
+      "formula": "=DATEDIF(DATE(2024,1,1),DATE(2024,1,15),\"D\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "datedif_ym",
+      "formula": "=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),\"YM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "datedif_yd_same_month_day",
+      "formula": "=DATEDIF(DATE(2020,3,15),DATE(2024,3,15),\"YD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "datedif_md_same_day",
+      "formula": "=DATEDIF(DATE(2024,1,15),DATE(2024,7,15),\"MD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "datedif_end_before_start_is_num",
+      "formula": "=DATEDIF(DATE(2024,7,1),DATE(2020,3,15),\"Y\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "datedif_unknown_unit_is_num",
+      "formula": "=DATEDIF(DATE(2024,1,1),DATE(2024,12,31),\"X\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "networkdays_one_week",
+      "formula": "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "networkdays_two_weeks",
+      "formula": "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,12))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "networkdays_single_day_weekday",
+      "formula": "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "networkdays_single_day_weekend",
+      "formula": "=NETWORKDAYS(DATE(2024,1,6),DATE(2024,1,6))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "networkdays_with_array_holidays",
+      "formula": "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),{45292,45293})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "networkdays_reversed_range",
+      "formula": "=NETWORKDAYS(DATE(2024,1,5),DATE(2024,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "workday_forward_5",
+      "formula": "=WORKDAY(DATE(2024,1,1),5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45299.0
+      }
+    },
+    {
+      "id": "workday_backward_5",
+      "formula": "=WORKDAY(DATE(2024,1,15),-5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45299.0
+      }
+    },
+    {
+      "id": "workday_zero_days",
+      "formula": "=WORKDAY(DATE(2024,1,3),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45294.0
+      }
+    },
+    {
+      "id": "workday_with_array_holidays",
+      "formula": "=WORKDAY(DATE(2024,1,1),5,{45293,45294})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    },
+    {
+      "id": "days360_us_method",
+      "formula": "=DAYS360(DATE(2024,2,15),DATE(2024,3,31))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46.0
+      }
+    },
+    {
+      "id": "days360_european_method",
+      "formula": "=DAYS360(DATE(2024,1,31),DATE(2024,3,31),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "days360_end_31_start_lt_30",
+      "formula": "=DAYS360(DATE(2024,2,15),DATE(2024,3,31),FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46.0
+      }
+    },
+    {
+      "id": "days360_full_year",
+      "formula": "=DAYS360(DATE(2024,1,1),DATE(2025,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "networkdays_intl_default",
+      "formula": "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "networkdays_intl_explicit_1",
+      "formula": "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "networkdays_intl_string_mask",
+      "formula": "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),\"0000011\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "networkdays_intl_sun_only",
+      "formula": "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,7),11)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "workday_intl_default",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,1),5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45299.0
+      }
+    },
+    {
+      "id": "workday_intl_sun_only",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,1),5,11)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45297.0
+      }
+    },
+    {
+      "id": "workday_intl_string_mask",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,1),5,\"0000011\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45299.0
+      }
+    },
+    {
+      "id": "year_leap_feb_29",
+      "formula": "=YEAR(DATE(2024,2,29))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "year_serial_zero",
+      "formula": "=YEAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1900.0
+      }
+    },
+    {
+      "id": "year_text_date_string",
+      "formula": "=YEAR(\"2024-12-31\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "year_large_serial",
+      "formula": "=YEAR(50000)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2036.0
+      }
+    },
+    {
+      "id": "month_leap_feb_29",
+      "formula": "=MONTH(DATE(2024,2,29))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "month_serial_zero",
+      "formula": "=MONTH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "month_year_end",
+      "formula": "=MONTH(DATE(2024,12,31))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "month_text_date_string",
+      "formula": "=MONTH(\"2024-07-04\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 7.0
+      }
+    },
+    {
+      "id": "day_leap_feb_29",
+      "formula": "=DAY(DATE(2024,2,29))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 29.0
+      }
+    },
+    {
+      "id": "day_month_end_31",
+      "formula": "=DAY(DATE(2024,12,31))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 31.0
+      }
+    },
+    {
+      "id": "day_serial_zero",
+      "formula": "=DAY(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "day_text_date_string",
+      "formula": "=DAY(\"2024-07-04\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "hour_midnight",
+      "formula": "=HOUR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "hour_noon",
+      "formula": "=HOUR(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "hour_end_of_day",
+      "formula": "=HOUR(0.99999)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 23.0
+      }
+    },
+    {
+      "id": "hour_with_date_serial",
+      "formula": "=HOUR(DATE(2024,4,22)+0.75)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "minute_midnight",
+      "formula": "=MINUTE(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "minute_noon",
+      "formula": "=MINUTE(0.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "minute_quarter_hour",
+      "formula": "=MINUTE(TIME(13,15,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "minute_with_date_serial",
+      "formula": "=MINUTE(DATE(2024,4,22)+TIME(0,45,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45.0
+      }
+    },
+    {
+      "id": "second_midnight",
+      "formula": "=SECOND(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "second_end_of_day",
+      "formula": "=SECOND(TIME(23,59,59))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 59.0
+      }
+    },
+    {
+      "id": "second_zero_of_round_minute",
+      "formula": "=SECOND(TIME(13,30,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "second_with_date_serial",
+      "formula": "=SECOND(DATE(2024,4,22)+TIME(0,0,30))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "time_seconds_only",
+      "formula": "=TIME(0,0,30)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.00034722222222222224
+      }
+    },
+    {
+      "id": "weekday_type_11_monday_first",
+      "formula": "=WEEKDAY(DATE(2024,4,22),11)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weekday_type_17_saturday_first",
+      "formula": "=WEEKDAY(DATE(2024,4,22),17)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "edate_negative_months",
+      "formula": "=EDATE(DATE(2024,4,22),-3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45313.0
+      }
+    },
+    {
+      "id": "edate_zero_months",
+      "formula": "=EDATE(DATE(2024,4,22),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45404.0
+      }
+    },
+    {
+      "id": "edate_end_of_month_rolls",
+      "formula": "=EDATE(DATE(2023,1,31),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44985.0
+      }
+    },
+    {
+      "id": "edate_two_year_jump",
+      "formula": "=EDATE(DATE(2024,4,22),24)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 46134.0
+      }
+    },
+    {
+      "id": "eomonth_negative_offset",
+      "formula": "=EOMONTH(DATE(2024,4,15),-1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45382.0
+      }
+    },
+    {
+      "id": "eomonth_leap_february",
+      "formula": "=EOMONTH(DATE(2024,1,15),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45351.0
+      }
+    },
+    {
+      "id": "eomonth_non_leap_february",
+      "formula": "=EOMONTH(DATE(2023,1,15),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 44985.0
+      }
+    },
+    {
+      "id": "days_same_date",
+      "formula": "=DAYS(DATE(2024,4,22),DATE(2024,4,22))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "days_text_date_strings",
+      "formula": "=DAYS(\"2024-05-01\",\"2024-04-22\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.0
+      }
+    },
+    {
+      "id": "days_year_span",
+      "formula": "=DAYS(DATE(2025,1,1),DATE(2024,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 366.0
+      }
+    },
+    {
+      "id": "days360_reverse_order",
+      "formula": "=DAYS360(DATE(2024,3,31),DATE(2024,2,15))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -45.0
+      }
+    },
+    {
+      "id": "isoweeknum_jan_4_is_week_1",
+      "formula": "=ISOWEEKNUM(DATE(2024,1,4))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "isoweeknum_dec_28_late_year",
+      "formula": "=ISOWEEKNUM(DATE(2024,12,28))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 52.0
+      }
+    },
+    {
+      "id": "networkdays_intl_sun_mon_weekend",
+      "formula": "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,14),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "networkdays_intl_with_holidays",
+      "formula": "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12),1,{45292,45293})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 8.0
+      }
+    },
+    {
+      "id": "workday_large_offset",
+      "formula": "=WORKDAY(DATE(2024,1,1),50)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45362.0
+      }
+    },
+    {
+      "id": "workday_intl_sun_mon_weekend",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,1),5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45297.0
+      }
+    },
+    {
+      "id": "workday_intl_with_holidays",
+      "formula": "=WORKDAY.INTL(DATE(2024,1,1),5,1,{45293,45294})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45301.0
+      }
+    }
+  ]
+}

@@ -179,6 +179,43 @@ Per-variant overrides live in `tests/oracle/variants/<target>/divergence.yaml`
 and get merged on top of the primary file (variant entries win on key
 collision).
 
+## Setup-cell address forms
+
+Each entry in a case's `setup` map is keyed by a cell address. Two forms
+are accepted:
+
+  * **Bare A1** — e.g. `A1`, `BC42`. Targets the default sheet
+    (`Sheet1`). This is the historical and most common form.
+  * **Sheet-qualified A1** — e.g. `Sheet2!A1`, `'My Sheet'!B5`. The
+    driver creates the named sheet inside the case's workbook on first
+    reference; the C++ verifier mirrors this with `wb.add_sheet(name)`.
+    Suites that use any sheet-qualified key run in per-case-workbook
+    mode (one `books.add()` per case) so cross-sheet state is isolated
+    case-by-case.
+
+Single-quoted sheet names are required when the name has spaces or
+other characters Excel forbids in bare references; Excel's `''` escape
+for an embedded apostrophe is honoured.
+
+The formula under test is always placed at `Sheet1!Z1`; cross-sheet
+references in the formula resolve through whatever sheets the setup
+created.
+
+## Open follow-ups
+
+  * **Structured references (`Table1[Col1]`, `Table1[@Col1]`, totals
+    rows, …)** — the engine has full `StructuredRef` evaluation
+    (`src/eval/tree_walker.cpp:1218`), but no oracle suite yet. Adding
+    one requires (1) a `tables:` block in the YAML schema, (2)
+    `ListObjects.Add` plumbing in `windows_excel.py` /
+    `macos_excel.py`, and (3) `wb.set_tables([...])` wiring in the C++
+    `oracle_test.cpp`. Deliberately staged into a separate change
+    because the schema extension is broader than `cross_sheet_refs`.
+  * **`#GETTING_DATA`** — Excel's transient async sentinel (RTD /
+    Power Query refresh). Formulon has no async evaluator, so this is
+    structurally unreachable; not tracked as a divergence and not
+    added to `_ERR_DISPLAY_NAMES` until a Formulon-side need surfaces.
+
 ## Architecture
 
 ```
@@ -205,15 +242,30 @@ and the current host:
 | `windows_excel` | ❌ | ✅ direct | ✅ via wsl_bridge | ❌ |
 | `wsl_bridge` (explicit) | ❌ | ❌ | ✅ direct | ❌ |
 
-The WSL2 bridge ferries one JSON command file and one JSON result file
-between WSL Python and Windows Python via `wslpath -w`. Wire format:
+The WSL2 bridge spawns Windows-side `python.exe -m
+tools.oracle.drivers.windows_excel --serve` once per oracle-gen run and
+keeps it alive for the whole batch, ferrying newline-delimited JSON
+requests over stdin/stdout. Without persistence, 90+ suites paid one
+Excel cold-start each (5–15 s); with it, Excel boots once and every
+subsequent suite reuses the workbook. Wire format (one JSON object per
+line, no framing):
 
 ```json
-// input.json
+// stdin → server
 {"version": 1, "command": "run_suite", "suite_name": "...", "cases": [...]}
-// output.json
+{"version": 1, "command": "probe_environment"}
+{"version": 1, "command": "shutdown"}                                  // sent on __exit__
+// stdout ← server
+{"version": 1, "type": "ready", "environment": {...}}                   // sent on startup
 {"version": 1, "environment": {...}, "results": [{"id": ..., "kind": ..., "value": ...}]}
+{"version": 1, "type": "error",  "error": "..."}                        // surfaced on failure
 ```
+
+The driver runs the Windows Python with `-X utf8=1` so traceback text
+and Excel error strings come back as UTF-8 regardless of the host
+console code page (CP932 on ja-JP, CP1252 on de-DE, etc.) — WSLENV
+does not forward `PYTHONUTF8`, so the command-line flag is the only
+reliable lever.
 
 ## Troubleshooting
 

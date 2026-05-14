@@ -1,0 +1,74 @@
+{
+  "suite": "munit",
+  "description": "MUNIT(n) — n-by-n identity matrix; spill array reduced to scalar via INDEX / SUMPRODUCT for oracle capture.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "munit_index_diagonal",
+      "formula": "=INDEX(MUNIT(3), 2, 2)",
+      "setup": {},
+      "skipped": "INDEX cannot navigate the ArrayValue returned by a nested MUNIT call; underlying resolve_range_arg limitation. Unit tests in tests/unit/eval/builtins/dynamic_array_test.cpp validate identity-matrix content."
+    },
+    {
+      "id": "munit_index_off_diagonal",
+      "formula": "=INDEX(MUNIT(3), 1, 3)",
+      "setup": {},
+      "skipped": "INDEX cannot navigate the ArrayValue returned by a nested MUNIT call; underlying resolve_range_arg limitation. Unit tests cover off-diagonal=0 directly."
+    },
+    {
+      "id": "munit_size_one",
+      "formula": "=INDEX(MUNIT(1), 1, 1)",
+      "setup": {},
+      "skipped": "INDEX cannot navigate the ArrayValue returned by a nested MUNIT(1) call; underlying resolve_range_arg limitation. Unit test BuiltinsMunit.OneReturns1x1 covers the n=1 boundary."
+    },
+    {
+      "id": "munit_fractional_truncates",
+      "formula": "=INDEX(MUNIT(3.7), 3, 3)",
+      "setup": {},
+      "skipped": "INDEX cannot navigate the ArrayValue returned by a nested MUNIT(3.7) call; underlying resolve_range_arg limitation. Unit test BuiltinsMunit.FractionalArgTruncates covers truncate-toward-zero semantics."
+    },
+    {
+      "id": "munit_sumproduct_trace",
+      "formula": "=SUMPRODUCT(MUNIT(4))",
+      "setup": {},
+      "skipped": "SUMPRODUCT cannot navigate the ArrayValue returned by a nested MUNIT(4) call; underlying resolve_range_arg limitation. Identity-matrix trace=n is covered indirectly by unit tests."
+    },
+    {
+      "id": "munit_zero_value_error",
+      "formula": "=MUNIT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "munit_negative_value_error",
+      "formula": "=MUNIT(-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "munit_text_value_error",
+      "formula": "=MUNIT(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "suite": "textsplit",
+  "description": "TEXTSPLIT rectangle-shaping splitter — six perspectives spanning 1D row split, 2D grid split, ignore_empty collapse, delimiter-array union (longest match wins), ragged-row padding, and match_mode out-of-range error.",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T23:44:10Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "textsplit_col_delim_basic",
+      "formula": "=TEXTSPLIT(\"a,b,c\", \",\")",
+      "setup": {},
+      "skipped": "Spill-producing TEXTSPLIT returns ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsTextSplit.ScalarColDelimSplitsIntoRow covers semantics."
+    },
+    {
+      "id": "textsplit_col_delim_no_match",
+      "formula": "=TEXTSPLIT(\"abc\", \",\")",
+      "setup": {},
+      "skipped": "Spill-producing TEXTSPLIT returns 1x1 ArrayValue when no delimiter matches; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.NoMatchYieldsSingleCellArray covers semantics."
+    },
+    {
+      "id": "textsplit_both_delim_2x2",
+      "formula": "=TEXTSPLIT(\"a,b;c,d\", \",\", \";\")",
+      "setup": {},
+      "skipped": "Spill-producing TEXTSPLIT returns 2x2 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsTextSplit.BothDelimitersYield2DGrid covers semantics."
+    },
+    {
+      "id": "textsplit_ignore_empty_collapse",
+      "formula": "=TEXTSPLIT(\"a,,b\", \",\", , TRUE)",
+      "setup": {},
+      "skipped": "Spill-producing TEXTSPLIT with ignore_empty=TRUE returns ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.IgnoreEmptyDropsEmptyTokens covers semantics."
+    },
+    {
+      "id": "textsplit_delim_array_union",
+      "formula": "=TEXTSPLIT(\"a,b;c\", {\",\",\";\"})",
+      "setup": {},
+      "skipped": "Spill-producing TEXTSPLIT with delimiter array returns ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.ArrayOfColDelimitersSplitsOnAny covers semantics including longest-match precedence."
+    },
+    {
+      "id": "textsplit_ragged_pad_na",
+      "formula": "=TEXTSPLIT(\"a,b;c\", \",\", \";\")",
+      "setup": {},
+      "skipped": "Spill-producing TEXTSPLIT pads ragged rows in ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.RaggedRowsPaddedWithNaByDefault covers #N/A pad semantics."
+    },
+    {
+      "id": "textsplit_match_mode_invalid",
+      "formula": "=TEXTSPLIT(\"a,b\", \",\", , , 2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}
