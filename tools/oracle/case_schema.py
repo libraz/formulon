@@ -53,11 +53,23 @@ class Tolerance:
 class Case:
     """A single oracle case.
 
-    `setup` maps A1 addresses ("A1", "BC42") to value records; the Python
-    generator writes these into the Excel workbook before triggering a
-    calc. `formula` is the formula under test — always spelled with a
-    leading `=` in the YAML to match how the Formulon tokenizer and Excel
-    itself read it.
+    `setup` maps cell addresses to value records; the Python generator
+    writes these into the Excel workbook before triggering a calc. The
+    address can be either:
+
+      * A bare A1 reference (``"A1"``, ``"BC42"``) — applies to the
+        default sheet (``"Sheet1"``).
+      * A sheet-qualified A1 reference (``"Sheet2!A1"``,
+        ``"'My Sheet'!B5"``) — the driver creates the named sheet on
+        first reference. The single-quoted form is required when the
+        sheet name contains a space or other special character, matching
+        Excel's own quoting convention.
+
+    `formula` is the formula under test — always spelled with a leading
+    `=` in the YAML to match how the Formulon tokenizer and Excel itself
+    read it. It is always placed at ``Sheet1!Z1`` (the formula cell
+    convention; cross-sheet refs from the formula resolve through the
+    setup-populated sheets).
 
     `tolerance`, if set, overrides the suite default for this case only.
 

@@ -1,0 +1,77 @@
+suite: iterative_calc
+description: >
+  Iterative-calc convergence. With Excel's
+  "Enable iterative calculation" toggle ON (`Application.Iteration =
+  True` on COM, `enable_iterative_calculation` on appscript), circular
+  formulas converge to a fixed point instead of raising #CIRC!. The
+  driver flips that flag for this suite via `options.iterative`; Excel
+  defaults are MaxIterations=100, MaxChange=0.001, which give exact
+  integer fixed points for monotonic clamp formulas and ~3 decimal
+  digits of agreement for slow linear convergence (the smoothing case
+  stops at MaxChange before reaching the theoretical fixed point of 10).
+tolerance: { abs: 1.0e-3, rel: 1.0e-3 }
+locale: ja-JP
+options:
+  iterative: true
+cases:
+  # =========================================================================
+  # Monotonic clamp counter. Each iteration adds 1 until 5 is reached,
+  # then the IF clamps. Within 100 iterations the result is an exact 5.
+  # =========================================================================
+
+  - id: iter_clamp_counter_to_5
+    description: 'Z1 = IF(Z1>=5, 5, Z1+1) — clamp counter, converges exactly to 5'
+    formula: '=IF(Z1>=5, 5, Z1+1)'
+    tolerance: { abs: 0.0, rel: 0.0 }
+
+  # =========================================================================
+  # Self-reference linear smoothing: x = x/2 + 1 -> fixed point 2.
+  # Decays geometrically; default 100 iterations from x=0 yield ~2.
+  # =========================================================================
+
+  - id: iter_halving_fixed_point
+    description: 'Z1 = Z1/2 + 1 — geometric decay to fixed point 2'
+    formula: '=Z1/2 + 1'
+
+  # =========================================================================
+  # Heavier smoothing: x = x*0.9 + 1 -> fixed point 10. Slower convergence
+  # exercises the iteration budget; default MaxChange (0.001) gates exit.
+  # =========================================================================
+
+  - id: iter_smoothing_fixed_point
+    description: 'Z1 = Z1*0.9 + 1 — slow smoothing, fixed point 10'
+    formula: '=Z1*0.9 + 1'
+
+  # =========================================================================
+  # Composite circularity through a second cell. A1 self-clamps to 10 (its
+  # own value participates in its formula), and Z1 reads A1. Within one
+  # Calculate cycle Excel iterates both formulas in lockstep until the
+  # clamp fires; final Z1 = A1 = 10.
+  # =========================================================================
+
+  - id: iter_two_cell_clamp_via_setup
+    description: 'A1 self-clamps to 10; Z1 = A1 — composite circularity via setup cell'
+    setup:
+      A1: '=IF(A1>=10, 10, A1+1)'
+    formula: '=A1'
+    tolerance: { abs: 0.0, rel: 0.0 }
+
+  # =========================================================================
+  # Bounded oscillator: x = MIN(x+1, 7). Excel applies the clamp once x
+  # reaches 7, exact integer fixed point.
+  # =========================================================================
+
+  - id: iter_min_clamp_to_7
+    description: 'Z1 = MIN(Z1+1, 7) — clamp by MIN, exact fixed point 7'
+    formula: '=MIN(Z1+1, 7)'
+    tolerance: { abs: 0.0, rel: 0.0 }
+
+  # =========================================================================
+  # Pure clamp without arithmetic, just to pin that re-evaluation honours
+  # the constant when nothing else changes.
+  # =========================================================================
+
+  - id: iter_constant_passthrough
+    description: 'Z1 = 42 — no circularity; result must be 42 even with iterative on'
+    formula: '=42'
+    tolerance: { abs: 0.0, rel: 0.0 }

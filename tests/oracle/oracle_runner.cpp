@@ -78,6 +78,32 @@ bool is_win_datevalue_roundtrip_readback_artifact(std::string_view variant_tag, 
 
 }  // namespace
 
+std::pair<std::string, std::string> split_sheet_qualified_addr(const std::string& key) {
+  const std::size_t bang = key.rfind('!');
+  if (bang == std::string::npos) {
+    return {std::string{}, key};
+  }
+  std::string sheet = key.substr(0, bang);
+  std::string addr = key.substr(bang + 1);
+  if (sheet.size() >= 2 && sheet.front() == '\'' && sheet.back() == '\'') {
+    sheet = sheet.substr(1, sheet.size() - 2);
+    // Excel's `''` escape inside a quoted sheet name collapses to a
+    // single apostrophe.
+    std::string unescaped;
+    unescaped.reserve(sheet.size());
+    for (std::size_t i = 0; i < sheet.size(); ++i) {
+      if (sheet[i] == '\'' && i + 1 < sheet.size() && sheet[i + 1] == '\'') {
+        unescaped.push_back('\'');
+        ++i;
+      } else {
+        unescaped.push_back(sheet[i]);
+      }
+    }
+    sheet.swap(unescaped);
+  }
+  return {std::move(sheet), std::move(addr)};
+}
+
 bool a1_to_row_col(const std::string& a1, std::uint32_t* out_row, std::uint32_t* out_col) {
   if (a1.empty() || out_row == nullptr || out_col == nullptr)
     return false;

@@ -1,0 +1,86 @@
+suite: spill_collision
+description: >
+  Dynamic-array spill collision (#SPILL!). When a 365-era formula at the
+  formula cell would spill into a rectangle whose downstream cells are
+  not blank, Excel suppresses the spill and the formula cell itself
+  reports #SPILL!. This suite probes the closure: clean spill (control),
+  column blocker, row blocker, mid-rectangle blocker, and merged-cell
+  blocker. The formula always lives at Z1 (the xlwings driver convention),
+  so blockers are placed in cells the would-be spill rectangle covers.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # Control: nothing blocks the spill rectangle, so the formula cell holds
+  # the anchor value (the top-left of the spill).
+  # =========================================================================
+
+  - id: spill_clean_anchor
+    description: 'SEQUENCE(3) at Z1 with nothing in Z2:Z3 -> anchor reads 1'
+    formula: '=SEQUENCE(3)'
+
+  # =========================================================================
+  # Vertical spill blocked one cell below the anchor. The whole spill
+  # rectangle is suppressed and Z1 itself reports #SPILL!.
+  # =========================================================================
+
+  - id: spill_vertical_blocked_adjacent
+    description: 'SEQUENCE(3) at Z1; Z2 holds a value -> #SPILL!'
+    setup: { Z2: "blocker" }
+    formula: '=SEQUENCE(3)'
+
+  - id: spill_vertical_blocked_tail
+    description: 'SEQUENCE(5) at Z1; Z5 (last cell of the spill) holds a value -> #SPILL!'
+    setup: { Z5: "blocker" }
+    formula: '=SEQUENCE(5)'
+
+  # =========================================================================
+  # Horizontal spill blocked. SEQUENCE(1, 3) spills Z1:AB1.
+  # =========================================================================
+
+  - id: spill_horizontal_blocked
+    description: 'SEQUENCE(1, 3) at Z1 spills Z1:AB1; AA1 blocks -> #SPILL!'
+    setup: { AA1: "blocker" }
+    formula: '=SEQUENCE(1, 3)'
+
+  # =========================================================================
+  # 2D spill blocked at an interior cell. SEQUENCE(2, 2) spills Z1:AA2.
+  # =========================================================================
+
+  - id: spill_2d_blocked_interior
+    description: 'SEQUENCE(2, 2) at Z1 spills Z1:AA2; AA2 blocks -> #SPILL!'
+    setup: { AA2: "blocker" }
+    formula: '=SEQUENCE(2, 2)'
+
+  # =========================================================================
+  # UNIQUE spill blocked. Same #SPILL! mechanism applies to every dynamic-
+  # array producer, not just SEQUENCE — pick UNIQUE so the closure is not
+  # SEQUENCE-only.
+  # =========================================================================
+
+  - id: spill_unique_blocked
+    description: 'UNIQUE({1;2;3}) at Z1 would spill 3 rows; Z3 blocks -> #SPILL!'
+    setup: { Z3: 42 }
+    formula: '=UNIQUE({1;2;3})'
+
+  # =========================================================================
+  # Blocker is itself a formula (not a literal). Excel still considers the
+  # cell non-blank because the formula resolves to a string, so #SPILL!.
+  # =========================================================================
+
+  - id: spill_blocked_by_formula_value
+    description: 'SEQUENCE(3) at Z1; Z2 = =LEN("x") -> #SPILL! (blocker non-blank)'
+    setup:
+      Z2: '=LEN("x")'
+    formula: '=SEQUENCE(3)'
+
+  # =========================================================================
+  # Blocker is a formula that resolves to an empty string. Excel treats
+  # the cell as non-blank because the formula exists, so #SPILL! still.
+  # =========================================================================
+
+  - id: spill_blocked_by_empty_string_formula
+    description: 'SEQUENCE(3) at Z1; Z2 = ="" -> #SPILL! (non-blank cell holding "")'
+    setup:
+      Z2: '=""'
+    formula: '=SEQUENCE(3)'

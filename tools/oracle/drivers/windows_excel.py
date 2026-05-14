@@ -36,13 +36,21 @@ Mirrors :mod:`tools.oracle.drivers.macos_excel`: one worksheet per case,
 the case formula at ``Z1``, setup cells written verbatim at their absolute
 A1 addresses. A single ``app.calculate()`` resolves the whole batch.
 
-## Wire-protocol entrypoint
+## Wire-protocol entrypoints
 
 Running ``python -m tools.oracle.drivers.windows_excel --input X.json
 --output Y.json`` reads a command (``probe_environment`` or ``run_suite``)
-from the input JSON and writes the result vector to the output JSON. This
-is the bridge that :class:`tools.oracle.drivers.wsl_bridge.WSLBridgeOracle`
-calls into when the orchestration host is WSL2.
+from the input JSON and writes the result vector to the output JSON.
+This is the legacy single-shot path; each invocation pays a full Excel
+cold-start.
+
+Running ``python -m tools.oracle.drivers.windows_excel --serve`` opens
+Excel once, prints a ``ready`` line to stdout, then loops reading
+newline-delimited JSON requests from stdin and writing newline-delimited
+JSON responses to stdout. The bridge uses this mode so all suites in a
+generation run share a single Excel instance -- Excel cold-start (5-15s
+in our measurements) dominates total runtime when generating 90+ suites,
+and amortising it once over the whole run cuts wall-clock by ~10x.
 """
 
 from __future__ import annotations
@@ -90,28 +98,35 @@ def _cell_displayed_text(cell) -> Optional[str]:
 
     On Windows, ``cell.api.Text`` is the canonical property that yields
     the displayed string (including ``'#DIV/0!'`` for errors whose
-    Python-side ``.value`` has been coerced to ``None``). We try a small
-    list of names because the bridge attribute spelling varies across
-    Excel releases; ``Text`` is the canonical one on 16.x COM, with the
-    other names kept for forward / backward compatibility with the
-    underlying xlwings build.
+    Python-side ``.value`` has been coerced to ``None``).
+
+    Why we don't try fallback property names here:
+      Excel's IDispatch is case-insensitive, so ``text`` resolves to the
+      same DISPID as ``Text`` and adds no coverage; ``DisplayValue`` is
+      a Chart.Axis property and is not present on Range; ``string_value``
+      is an xlwings *high-level* Range attribute, not a COM property.
+      Worse, an earlier defensive version of this function iterated over
+      a list that included the lowercase ``text``, and on Excel 16.0 /
+      M365 a getattr for the lowercase form triggered an apparent
+      infinite retry inside ``win32com``'s ``COMRetryObjectWrapper`` --
+      cells whose ``Text`` legitimately resolved to ``""`` (e.g. the
+      result of ``=ARRAYTOTEXT("")``) made the loop fall through to the
+      lowercase try, which never returned and burned Excel CPU at ~60%
+      indefinitely. We saw the run hang for 30+ minutes before
+      diagnosis. Sticking to the canonical ``Text`` property avoids the
+      whole pitfall.
     """
 
     try:
         api = cell.api
     except Exception:
         return None
-    for attr in ("Text", "DisplayValue", "string_value", "text"):
-        try:
-            obj = getattr(api, attr)
-        except Exception:
-            continue
-        try:
-            val = obj() if callable(obj) else obj
-        except Exception:
-            continue
-        if isinstance(val, str) and val:
-            return val
+    try:
+        val = api.Text
+    except Exception:
+        return None
+    if isinstance(val, str):
+        return val or None
     return None
 
 
@@ -305,6 +320,22 @@ class WindowsExcelOracle(OracleDriver):
         ``case_schema._normalise_value`` upstream.
         """
 
+        # Cross-sheet setup ("Sheet2!A1") cannot be shared across cases
+        # in one workbook -- a later case's write to the same external
+        # sheet would clobber an earlier case's snapshot, and Excel
+        # would happily evaluate both formulas against the last value.
+        # Detect that at the suite level and isolate each such case in
+        # its own workbook. Suites without cross-sheet setup keep the
+        # historical fast path: one shared workbook, one sheet per case.
+        cross_sheet = any(
+            any("!" in addr for addr in (case.get("setup") or {}))
+            for case in cases
+        )
+        if cross_sheet:
+            return self._run_suite_per_case_workbook(
+                suite_name, cases, date1904=date1904, iterative=iterative
+            )
+
         wb = self._app.books.add()
         try:
             # Application.Calculation can only be assigned with a workbook
@@ -322,15 +353,23 @@ class WindowsExcelOracle(OracleDriver):
                 except Exception:
                     pass
             prior_iter = None
+            # The VBA / COM property for "Enable iterative calculation" is
+            # `Application.Iteration` (a Boolean), NOT
+            # `EnableIterativeCalculation` — that name does not exist on
+            # the COM Application interface despite being the GUI label.
+            # Probed against Excel 16.0 ja-JP: reading
+            # `app.api.EnableIterativeCalculation` raises a "name unknown"
+            # COM error which the previous outer try/except silently
+            # swallowed, leaving iteration off and circular-formula cases
+            # stuck at their first evaluation. We DO NOT fall back to the
+            # lowercase alias (`iteration`) because xlwings'
+            # COMRetryObjectWrapper retries unknown lowercase names
+            # indefinitely on Windows (same hang we hit with `.text`).
             try:
-                prior_iter = bool(self._app.api.EnableIterativeCalculation)
-                self._app.api.EnableIterativeCalculation = iterative
+                prior_iter = bool(self._app.api.Iteration)
+                self._app.api.Iteration = iterative
             except Exception:
-                try:
-                    prior_iter = bool(self._app.api.enable_iterative_calculation)
-                    self._app.api.enable_iterative_calculation = iterative
-                except Exception:
-                    prior_iter = None
+                prior_iter = None
 
             first_sheet = wb.sheets[0]
             case_sheets: List[object] = []
@@ -400,16 +439,130 @@ class WindowsExcelOracle(OracleDriver):
         finally:
             try:
                 if prior_iter is not None:
-                    try:
-                        self._app.api.EnableIterativeCalculation = prior_iter
-                    except Exception:
-                        self._app.api.enable_iterative_calculation = prior_iter
+                    self._app.api.Iteration = prior_iter
             except Exception:
                 pass
             try:
                 wb.close()
             except Exception:
                 pass
+
+    def _run_suite_per_case_workbook(
+        self,
+        suite_name: str,
+        cases: List[Dict[str, Any]],
+        *,
+        date1904: bool,
+        iterative: bool,
+    ) -> List[CaseResult]:
+        """Per-case-workbook runner for cross-sheet-setup suites.
+
+        Each case gets its own ``books.add()`` so the sheets created from
+        ``"Sheet2!A1"`` setup keys cannot leak between cases. The cost is
+        one workbook open/close per case (sub-second on a warm
+        ``Application``); only suites that actually need this pay it.
+        """
+
+        try:
+            self._app.calculation = "manual"
+        except Exception:
+            pass
+        prior_iter = None
+        try:
+            prior_iter = bool(self._app.api.Iteration)
+            self._app.api.Iteration = iterative
+        except Exception:
+            prior_iter = None
+        out: List[CaseResult] = []
+        try:
+            for case in cases:
+                wb = self._app.books.add()
+                try:
+                    try:
+                        wb.api.Date1904 = date1904
+                    except Exception:
+                        try:
+                            wb.api.date1904 = date1904
+                        except Exception:
+                            pass
+                    sht = wb.sheets[0]
+                    write_error: Optional[str] = None
+                    try:
+                        setup = case.get("setup") or {}
+                        for addr, rec in setup.items():
+                            sheet_name, bare_addr = _split_sheet_qualified_addr(addr)
+                            target_sht = sht if sheet_name is None else _get_or_add_sheet(wb, sheet_name)
+                            _write_cell(target_sht, bare_addr, rec)
+                        result_cell = sht.range("Z1")
+                        try:
+                            result_cell.number_format = "General"
+                        except Exception:
+                            pass
+                        try:
+                            result_cell.formula2 = case["formula"]
+                        except Exception:
+                            result_cell.formula = case["formula"]
+                    except Exception as exc:
+                        write_error = _format_com_error(exc)
+                    self._app.calculate()
+                    if write_error is not None:
+                        out.append(CaseResult(id=case["id"], kind="skipped", value=write_error))
+                        continue
+                    try:
+                        result = _classify_value(sht.range("Z1"))
+                        result.id = case["id"]
+                        out.append(result)
+                    except Exception as exc:
+                        out.append(CaseResult(
+                            id=case["id"], kind="skipped", value=_format_com_error(exc),
+                        ))
+                finally:
+                    try:
+                        wb.close()
+                    except Exception:
+                        pass
+            return out
+        finally:
+            try:
+                if prior_iter is not None:
+                    self._app.api.Iteration = prior_iter
+            except Exception:
+                pass
+
+
+def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
+    """Splits a setup-key like ``"Sheet2!A1"`` into ``(sheet, a1)``.
+
+    Returns ``(None, key)`` when the key is a bare A1 address (no ``!``).
+    Single-quoted sheet names are unquoted: ``"'Sheet One'!A1"`` ->
+    ``("Sheet One", "A1")``. Escaped quotes (``''`` inside a quoted
+    name) collapse to a single quote per Excel's convention. The split
+    is on the LAST ``!`` so a future stray ``!`` inside a quoted sheet
+    name does not confuse it.
+    """
+
+    if "!" not in key:
+        return None, key
+    bang = key.rfind("!")
+    sheet_part = key[:bang]
+    addr_part = key[bang + 1:]
+    if sheet_part.startswith("'") and sheet_part.endswith("'") and len(sheet_part) >= 2:
+        sheet_part = sheet_part[1:-1].replace("''", "'")
+    return sheet_part, addr_part
+
+
+def _get_or_add_sheet(wb, name: str):
+    """Returns the sheet whose display name matches ``name`` (case-insensitive),
+    adding it at the end if absent. The xlwings ``books.Sheets`` collection
+    is itself case-insensitive on lookup, but we surface that behavior
+    explicitly here for clarity.
+    """
+
+    target = name.casefold()
+    for sht in wb.sheets:
+        if sht.name.casefold() == target:
+            return sht
+    return wb.sheets.add(name=name, after=wb.sheets[len(wb.sheets) - 1])
 
 
 def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
@@ -493,15 +646,113 @@ def _error_trigger(code: str) -> str:
     return _ERROR_TRIGGERS.get(code, '=VALUE("x")')
 
 
+def _env_to_json(env: EnvironmentInfo) -> Dict[str, Any]:
+    return {
+        "excel_version": env.excel_version,
+        "excel_locale": env.excel_locale,
+        "date1904": env.date1904,
+        "iterative": env.iterative,
+    }
+
+
+def _dispatch(drv: "WindowsExcelOracle", env_json: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Routes one decoded request to the driver and returns the JSON response."""
+
+    if payload.get("version") != 1:
+        raise RuntimeError(f"unsupported wire version: {payload.get('version')}")
+    cmd = payload.get("command")
+    if cmd == "probe_environment":
+        return {"version": 1, "environment": env_json, "results": []}
+    if cmd == "run_suite":
+        results = drv.run_suite(
+            payload["suite_name"],
+            payload["cases"],
+            date1904=bool(payload.get("date1904", False)),
+            iterative=bool(payload.get("iterative", False)),
+        )
+        results_json = [
+            {
+                "id": r.id,
+                "kind": r.kind,
+                "value": r.value,
+                "error_code": r.error_code,
+                "array_shape": r.array_shape,
+            }
+            for r in results
+        ]
+        return {"version": 1, "environment": env_json, "results": results_json}
+    raise RuntimeError(f"unknown command: {cmd!r}")
+
+
+def _serve(visible: bool) -> int:
+    """Long-lived server mode for the WSL bridge.
+
+    Opens Excel once, writes a single ``ready`` line carrying the cached
+    environment, then loops on stdin reading one JSON request per line
+    and writing one JSON response per line. The ``shutdown`` command
+    closes Excel and exits cleanly; EOF on stdin is treated as a hard
+    shutdown to handle a parent that died without sending the explicit
+    message.
+
+    All protocol I/O is utf-8. The caller is expected to launch the
+    interpreter with ``-X utf8=1`` (the bridge does so unconditionally)
+    so sys.stdin/stdout encoding stays sane across Windows code pages.
+    """
+
+    import json
+    import sys
+
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")
+    sys.stdin.reconfigure(encoding="utf-8")
+
+    with WindowsExcelOracle(visible=visible) as drv:
+        env_json = _env_to_json(drv.probe_environment())
+        sys.stdout.write(
+            json.dumps(
+                {"version": 1, "type": "ready", "environment": env_json},
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+        sys.stdout.flush()
+
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            if payload.get("command") == "shutdown":
+                break
+            try:
+                resp = _dispatch(drv, env_json, payload)
+            except Exception as exc:
+                resp = {
+                    "version": 1,
+                    "type": "error",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
+    return 0
+
+
 def _main(argv: Optional[List[str]] = None) -> int:
     """Wire-protocol entrypoint for the WSL bridge.
 
-    Reads a JSON command from ``--input``, writes results to
-    ``--output``. This lets the WSL-side orchestrator invoke us via
-    subprocess without sharing Python state.
+    Two modes:
 
-    Supported commands:
-      - ``probe_environment`` -- returns the environment block only.
+      ``--input X.json --output Y.json``
+        Legacy single-shot: read one command, execute, write one
+        response, exit. Pays one Excel cold-start per call.
+
+      ``--serve``
+        Long-lived server: open Excel once, write ``ready``, then loop
+        on stdin reading newline-delimited JSON requests and writing
+        newline-delimited JSON responses. Exits on the ``shutdown``
+        command or EOF.
+
+    Supported commands in both modes:
+      - ``probe_environment`` -- returns the cached environment block.
       - ``run_suite`` -- evaluates the supplied case batch and returns
         a vector of normalised :class:`CaseResult` records.
 
@@ -513,48 +764,29 @@ def _main(argv: Optional[List[str]] = None) -> int:
     import json
 
     parser = argparse.ArgumentParser(description="windows_excel wire driver")
-    parser.add_argument("--input", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--input", type=Path,
+                        help="single-shot mode: read one JSON command from this path")
+    parser.add_argument("--output", type=Path,
+                        help="single-shot mode: write one JSON response to this path")
+    parser.add_argument("--serve", action="store_true",
+                        help="long-lived mode: serve newline-delimited JSON over stdio")
+    parser.add_argument("--visible", action="store_true",
+                        help="show the Excel window (debug aid for --serve)")
     args = parser.parse_args(argv)
 
+    if args.serve:
+        if args.input or args.output:
+            raise SystemExit("--serve cannot be combined with --input/--output")
+        return _serve(visible=args.visible)
+
+    if not (args.input and args.output):
+        raise SystemExit("either --serve or both --input and --output are required")
+
     payload = json.loads(args.input.read_text(encoding="utf-8"))
-    if payload.get("version") != 1:
-        raise RuntimeError(f"unsupported wire version: {payload.get('version')}")
-
-    cmd = payload.get("command")
     visible = bool(payload.get("visible", False))
-
     with WindowsExcelOracle(visible=visible) as drv:
-        env = drv.probe_environment()
-        env_json = {
-            "excel_version": env.excel_version,
-            "excel_locale": env.excel_locale,
-            "date1904": env.date1904,
-            "iterative": env.iterative,
-        }
-        if cmd == "probe_environment":
-            out = {"version": 1, "environment": env_json, "results": []}
-        elif cmd == "run_suite":
-            results = drv.run_suite(
-                payload["suite_name"],
-                payload["cases"],
-                date1904=bool(payload.get("date1904", False)),
-                iterative=bool(payload.get("iterative", False)),
-            )
-            results_json = [
-                {
-                    "id": r.id,
-                    "kind": r.kind,
-                    "value": r.value,
-                    "error_code": r.error_code,
-                    "array_shape": r.array_shape,
-                }
-                for r in results
-            ]
-            out = {"version": 1, "environment": env_json, "results": results_json}
-        else:
-            raise RuntimeError(f"unknown command: {cmd!r}")
-
+        env_json = _env_to_json(drv.probe_environment())
+        out = _dispatch(drv, env_json, payload)
     args.output.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
     return 0
 

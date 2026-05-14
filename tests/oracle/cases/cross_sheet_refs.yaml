@@ -1,0 +1,94 @@
+suite: cross_sheet_refs
+description: >
+  Cross-sheet and 3-D references. The case formula sits at Sheet1!Z1 (the
+  oracle driver convention) and reaches into other sheets via direct
+  Sheet2!A1 references, INDIRECT("Sheet2!A1") runtime resolution, and
+  Excel's 3-D-range syntax (Sheet1:Sheet3!A1). Setup keys carry the
+  Sheet!Addr form; the driver creates the referenced sheet inside the
+  per-case workbook on first use, and the C++ verifier mirrors that
+  inside a single Workbook by adding sheets via add_sheet on first
+  occurrence.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # Direct cross-sheet ref. Sheet2!A1 holds 42; the formula reads it back.
+  # =========================================================================
+
+  - id: direct_sheet2_a1
+    description: 'Direct ref =Sheet2!A1 with Sheet2!A1 = 42 -> 42'
+    setup:
+      'Sheet2!A1': 42
+    formula: '=Sheet2!A1'
+
+  # =========================================================================
+  # SUM aggregating across two sheets. Sheet2!A1=10, Sheet3!A1=20 ->
+  # SUM(Sheet2!A1, Sheet3!A1) = 30.
+  # =========================================================================
+
+  - id: sum_across_two_sheets
+    description: '=SUM(Sheet2!A1, Sheet3!A1) with values 10 and 20 -> 30'
+    setup:
+      'Sheet2!A1': 10
+      'Sheet3!A1': 20
+    formula: '=SUM(Sheet2!A1, Sheet3!A1)'
+
+  # =========================================================================
+  # INDIRECT resolving a runtime-built cross-sheet address. Confirms the
+  # text-to-ref path handles the sheet qualifier.
+  # =========================================================================
+
+  - id: indirect_cross_sheet
+    description: '=INDIRECT("Sheet2!A1") with Sheet2!A1 = 7 -> 7'
+    setup:
+      'Sheet2!A1': 7
+    formula: '=INDIRECT("Sheet2!A1")'
+
+  # =========================================================================
+  # 3-D range. SUM(Sheet2:Sheet3!A1) iterates over A1 on Sheet2 and Sheet3
+  # (inclusive). Mac and Win Excel resolve the sheet range by position in
+  # the workbook, not by name pattern, so we make Sheet2 come before
+  # Sheet3 by writing setup in that order. The driver appends new sheets
+  # to the end on creation, preserving order.
+  # =========================================================================
+
+  - id: three_d_sum_two_sheet_span
+    description: '=SUM(Sheet2:Sheet3!A1) with Sheet2!A1=3, Sheet3!A1=4 -> 7'
+    setup:
+      'Sheet2!A1': 3
+      'Sheet3!A1': 4
+    formula: '=SUM(Sheet2:Sheet3!A1)'
+
+  # =========================================================================
+  # Quoted sheet name with a space. ADDRESS-builder coverage already pins
+  # the text shape; here we exercise the runtime ref-resolution path.
+  # =========================================================================
+
+  - id: quoted_sheet_name_with_space
+    description: "='My Sheet'!A1 with 'My Sheet'!A1 = 99 -> 99"
+    setup:
+      "'My Sheet'!A1": 99
+    formula: "='My Sheet'!A1"
+
+  # =========================================================================
+  # Cross-sheet ref to a missing sheet -> #REF!. The setup intentionally
+  # does not write to Sheet9, and Excel evaluates =Sheet9!A1 against a
+  # nonexistent sheet as the runtime #REF! sentinel.
+  # =========================================================================
+
+  - id: missing_sheet_is_ref_error
+    description: '=Sheet9!A1 with Sheet9 absent from the workbook -> #REF!'
+    setup:
+      'Sheet2!A1': 0
+    formula: '=Sheet9!A1'
+
+  # =========================================================================
+  # 3-D MAX. Probes that the aggregator visits both endpoints inclusively.
+  # =========================================================================
+
+  - id: three_d_max
+    description: '=MAX(Sheet2:Sheet3!A1) with Sheet2!A1=5, Sheet3!A1=12 -> 12'
+    setup:
+      'Sheet2!A1': 5
+      'Sheet3!A1': 12
+    formula: '=MAX(Sheet2:Sheet3!A1)'

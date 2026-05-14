@@ -85,8 +85,19 @@ std::vector<std::pair<std::string, std::string>> configured_variant_dirs();
 
 /// Translates an A1 address ("A1", "BC42") into 0-based `(row, col)`.
 /// Returns `false` on malformed input. Sheet qualifiers are rejected;
-/// goldens only carry local addresses.
+/// callers wanting to parse `"Sheet2!A1"` should first feed the key
+/// through `split_sheet_qualified_addr` (below) and pass only the
+/// returned `addr` part to this function.
 bool a1_to_row_col(const std::string& a1, std::uint32_t* out_row, std::uint32_t* out_col);
+
+/// Splits a setup-key string of the form ``"Sheet2!A1"`` or
+/// ``"'My Sheet'!B5"`` into a sheet name and a bare A1 address. Returns
+/// `(empty_string, key)` for bare keys (no `!` present). Single-quoted
+/// sheet names are unquoted, and the Excel-standard `''` escape for an
+/// embedded apostrophe is collapsed to a single quote. The split is on
+/// the last `!` so a future stray separator in a quoted name does not
+/// confuse the parse.
+std::pair<std::string, std::string> split_sheet_qualified_addr(const std::string& key);
 
 /// Returns the compile-time-configured golden directory, or an empty
 /// string when the build didn't set one. Declared here so tests can call

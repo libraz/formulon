@@ -1,0 +1,152 @@
+suite: intersect_operator
+description: >
+  Range-intersect operator (single space between two range refs). Excel
+  evaluates `A1:C3 B1:B5` as the rectangle common to both operands
+  (B1:B3 here); non-overlapping operands yield #NULL!. The operator is
+  legal anywhere a range is expected (SUM argument, single-cell read in
+  a 365 spill, comparison operand). Coverage spans: aligned intersection
+  in an aggregator, non-overlapping operands, single-cell intersection,
+  whole-column/whole-row intersection, and intersect feeding an INDEX call.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # =========================================================================
+  # Intersect inside SUM. A1:C3 and B1:B5 overlap on B1:B3.
+  # =========================================================================
+
+  - id: intersect_sum_overlap_column
+    description: 'SUM(A1:C3 B1:B5) -> SUM(B1:B3) = 4+5+6 = 15'
+    setup:
+      A1: 1
+      B1: 4
+      C1: 7
+      A2: 2
+      B2: 5
+      C2: 8
+      A3: 3
+      B3: 6
+      C3: 9
+      B4: 99
+      B5: 100
+    formula: '=SUM(A1:C3 B1:B5)'
+
+  # =========================================================================
+  # Intersect inside SUM, row direction. A1:C3 and A2:E2 overlap on A2:C2.
+  # =========================================================================
+
+  - id: intersect_sum_overlap_row
+    description: 'SUM(A1:C3 A2:E2) -> SUM(A2:C2) = 2+5+8 = 15'
+    setup:
+      A1: 1
+      B1: 4
+      C1: 7
+      A2: 2
+      B2: 5
+      C2: 8
+      D2: 11
+      E2: 12
+      A3: 3
+      B3: 6
+      C3: 9
+    formula: '=SUM(A1:C3 A2:E2)'
+
+  # =========================================================================
+  # Single-cell intersection. A1:C3 and B2 overlap on B2 alone. Bare result
+  # at Z1 reads the scalar B2.
+  # =========================================================================
+
+  - id: intersect_single_cell
+    description: 'A1:C3 B2:B2 -> B2 (single overlap cell), read directly at Z1'
+    setup:
+      A1: 1
+      B1: 2
+      C1: 3
+      A2: 4
+      B2: 5
+      C2: 6
+      A3: 7
+      B3: 8
+      C3: 9
+    formula: '=A1:C3 B2:B2'
+
+  # =========================================================================
+  # Non-overlapping operands -> #NULL!.
+  # =========================================================================
+
+  - id: intersect_disjoint_columns_is_null
+    description: 'A1:A3 C1:C3 (disjoint columns) -> #NULL!'
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      C1: 4
+      C2: 5
+      C3: 6
+    formula: '=SUM(A1:A3 C1:C3)'
+
+  - id: intersect_disjoint_rows_is_null
+    description: 'A1:E1 A3:E3 (disjoint rows) -> #NULL!'
+    setup:
+      A1: 1
+      B1: 2
+      A3: 3
+      B3: 4
+    formula: '=SUM(A1:E1 A3:E3)'
+
+  # =========================================================================
+  # Whole-column intersect whole-row -> single cell at the crossing.
+  # B:B intersected with 2:2 -> B2.
+  # =========================================================================
+
+  - id: intersect_whole_col_and_row
+    description: 'B:B 2:2 -> B2 (whole-column / whole-row crossing)'
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 42
+      C2: 4
+      B3: 5
+    formula: '=B:B 2:2'
+
+  # =========================================================================
+  # Intersect feeding INDEX. Confirms the operator returns a real range
+  # (not a coerced scalar) and INDEX can navigate it.
+  # =========================================================================
+
+  - id: intersect_feeds_index_first_row
+    description: 'INDEX(A1:C3 B1:B3, 1) -> B1 (intersection is B1:B3, row 1)'
+    setup:
+      A1: 1
+      B1: 100
+      C1: 3
+      A2: 4
+      B2: 200
+      C2: 6
+      A3: 7
+      B3: 300
+      C3: 9
+    formula: '=INDEX(A1:C3 B1:B3, 1)'
+
+  # =========================================================================
+  # Three-way intersect (left-associative). A1:C3 intersect B1:B5 = B1:B3;
+  # then intersected with 2:2 = B2.
+  # =========================================================================
+
+  - id: intersect_chain_three_ways
+    description: 'A1:C3 B1:B5 2:2 -> B2 (three-way intersect, left-assoc)'
+    setup:
+      A1: 1
+      B1: 2
+      C1: 3
+      A2: 4
+      B2: 77
+      C2: 6
+      A3: 7
+      B3: 8
+      C3: 9
+      B4: 99
+      B5: 100
+      D2: 11
+      E2: 12
+    formula: '=A1:C3 B1:B5 2:2'

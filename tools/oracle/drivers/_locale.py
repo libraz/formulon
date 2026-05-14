@@ -133,6 +133,18 @@ LOCALIZED_ERROR_TO_CANONICAL: Dict[str, str] = {
     "#NOME?": "#NAME?",
     "#NULO!": "#NULL!",
     "#NÚM!": "#NUM!",  # pt: NÚM!
+
+    # ja-JP M365 dynamic-array / runtime error tokens. The classic seven
+    # (#VALUE!, #DIV/0!, #REF!, #NAME?, #NUM!, #N/A, #NULL!) stay in
+    # English on ja-JP Excel, but the M365 additions are translated.
+    # Probed against Microsoft 365 Excel 16.x ja-JP on 2026-05-15.
+    "#スピル!": "#SPILL!",
+    "#計算!": "#CALC!",
+    "#フィールド!": "#FIELD!",
+    "#ブロック!": "#BLOCKED!",
+    "#接続!": "#CONNECT!",
+    "#外部!": "#EXTERNAL!",
+    "#ビジー!": "#BUSY!",
 }
 
 

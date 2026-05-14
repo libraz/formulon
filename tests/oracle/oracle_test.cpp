@@ -530,13 +530,27 @@ TEST_P(OracleTest, Matches) {
 
   if (const JsonValue* setup = param.raw_case.find("setup"); setup && setup->is_object()) {
     for (const auto& entry : setup->as_object()) {
+      // Setup keys may be sheet-qualified ("Sheet2!A1", "'My Sheet'!B5")
+      // or bare A1; the qualifier targets a secondary sheet that we add
+      // to the workbook on first reference. Bare keys still land on the
+      // default Sheet1, preserving the historical default behaviour.
+      auto [sheet_name, bare_addr] = split_sheet_qualified_addr(entry.first);
+      Sheet* target_sheet = &sheet;
+      if (!sheet_name.empty()) {
+        std::size_t idx = wb.sheet_index_by_name(sheet_name);
+        if (idx == static_cast<std::size_t>(-1)) {
+          target_sheet = &wb.add_sheet(sheet_name);
+        } else {
+          target_sheet = &wb.sheet(idx);
+        }
+      }
       std::uint32_t row = 0;
       std::uint32_t col = 0;
-      if (!a1_to_row_col(entry.first, &row, &col)) {
+      if (!a1_to_row_col(bare_addr, &row, &col)) {
         FAIL() << param.suite << "." << param.case_id << ": invalid A1 address '" << entry.first << "'";
         return;
       }
-      const char* err_msg = apply_cell_value(entry.second, sheet, row, col, text_arena);
+      const char* err_msg = apply_cell_value(entry.second, *target_sheet, row, col, text_arena);
       if (err_msg != nullptr) {
         FAIL() << param.suite << "." << param.case_id << ": setup[" << entry.first << "]: " << err_msg;
         return;

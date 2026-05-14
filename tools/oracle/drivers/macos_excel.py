@@ -292,6 +292,17 @@ class ExcelOracle(OracleDriver):
         upstream.
         """
 
+        # Cross-sheet setup ("Sheet2!A1") must be isolated per case --
+        # see the windows_excel.py counterpart for the rationale.
+        cross_sheet = any(
+            any("!" in addr for addr in (case.get("setup") or {}))
+            for case in cases
+        )
+        if cross_sheet:
+            return self._run_suite_per_case_workbook(
+                suite_name, cases, date1904=date1904, iterative=iterative
+            )
+
         wb = self._app.books.add()
         try:
             # Pin per-workbook options before any formula touches volatile
@@ -363,6 +374,88 @@ class ExcelOracle(OracleDriver):
                 wb.close()
             except Exception:
                 pass
+
+    def _run_suite_per_case_workbook(
+        self,
+        suite_name: str,
+        cases: List[Dict[str, Any]],
+        *,
+        date1904: bool,
+        iterative: bool,
+    ) -> List[CaseResult]:
+        """Per-case-workbook runner for cross-sheet-setup suites."""
+
+        prior_iter = None
+        try:
+            prior_iter = bool(self._app.api.enable_iterative_calculation)
+            self._app.api.enable_iterative_calculation = iterative
+        except Exception:
+            prior_iter = None
+        out: List[CaseResult] = []
+        try:
+            for case in cases:
+                wb = self._app.books.add()
+                try:
+                    try:
+                        wb.api.date1904 = date1904
+                    except Exception:
+                        pass
+                    sht = wb.sheets[0]
+                    setup = case.get("setup") or {}
+                    for addr, rec in setup.items():
+                        sheet_name, bare_addr = _split_sheet_qualified_addr(addr)
+                        target_sht = sht if sheet_name is None else _get_or_add_sheet(wb, sheet_name)
+                        _write_cell(target_sht, bare_addr, rec)
+                    result_cell = sht.range("Z1")
+                    try:
+                        result_cell.number_format = "General"
+                    except Exception:
+                        pass
+                    result_cell.formula2 = case["formula"]
+                    self._app.calculate()
+                    result = _classify_value(sht.range("Z1"))
+                    result.id = case["id"]
+                    out.append(result)
+                finally:
+                    try:
+                        wb.close()
+                    except Exception:
+                        pass
+            return out
+        finally:
+            try:
+                if prior_iter is not None:
+                    self._app.api.enable_iterative_calculation = prior_iter
+            except Exception:
+                pass
+
+
+def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
+    """Splits ``"Sheet2!A1"`` into ``("Sheet2", "A1")``; returns ``(None, key)``
+    for bare A1 keys. Mirrors the Windows driver helper -- see
+    ``windows_excel._split_sheet_qualified_addr`` for the quoting rules.
+    """
+
+    if "!" not in key:
+        return None, key
+    bang = key.rfind("!")
+    sheet_part = key[:bang]
+    addr_part = key[bang + 1:]
+    if sheet_part.startswith("'") and sheet_part.endswith("'") and len(sheet_part) >= 2:
+        sheet_part = sheet_part[1:-1].replace("''", "'")
+    return sheet_part, addr_part
+
+
+def _get_or_add_sheet(wb, name: str):
+    """Returns the sheet whose display name matches ``name`` (case-insensitive),
+    adding it at the end if absent.
+    """
+
+    target = name.casefold()
+    for sht in wb.sheets:
+        if sht.name.casefold() == target:
+            return sht
+    return wb.sheets.add(name=name, after=wb.sheets[len(wb.sheets) - 1])
 
 
 def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
