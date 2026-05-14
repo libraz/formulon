@@ -26,11 +26,18 @@ targets:
                                           # (e.g. tests/oracle/variants/<name>/divergence.yaml).
 
   win-365-ja_JP:
-    status: scaffolded
+    # Reserved slot for genuine Microsoft 365 (Windows, ja-JP) goldens.
+    # Goldens previously committed under this target turned out to be
+    # generated on a host whose Click-to-Run package was actually
+    # `ProPlus2019Retail` (Office 2019 Pro Plus perpetual) -- the M365
+    # subscription license was attached but the installed binary set was
+    # never replaced. ARRAYTOTEXT / VALUETOTEXT / XLOOKUP / LET / LAMBDA
+    # and the rest of the post-2019 function set therefore returned
+    # `#NAME?` rather than real values. Those goldens are now under
+    # `win-2019-ja_JP` (see below); this slot stays `wanted` until a
+    # real M365 install regenerates them.
+    status: wanted
     driver: windows_excel
-    # runs_on lists OS values that platform.system() returns. Linux here
-    # means WSL2 -- the bridge driver auto-detects via /proc/version and
-    # refuses on plain Linux.
     runs_on: [Windows, Linux]
     locale: ja-JP
     output_dir: tests/oracle/variants/win-365-ja_JP/golden
@@ -47,6 +54,24 @@ targets:
     # The driver detects the Excel locale via Application.International,
     # so this same target also fits any other locale you happen to run;
     # see the win-365-<other> entries below for canonical names.
+
+  win-2019-ja_JP:
+    # Windows host running Office Professional Plus 2019 (perpetual,
+    # ja-JP). Same Click-to-Run / xlwings plumbing as win-365-ja_JP, but
+    # the function set is frozen at Excel 2019 -- no XLOOKUP, no
+    # ARRAYTOTEXT/VALUETOTEXT, no FILTER/SORT/UNIQUE/SEQUENCE, no
+    # LET/LAMBDA/TEXTBEFORE/TEXTAFTER/TEXTSPLIT. Suites that exercise
+    # those functions land as `#NAME?` here and are filtered through
+    # this target's divergence file. Useful as a baseline for what real
+    # Office 2019 reports back; not a substitute for the canonical
+    # `win-365-ja_JP` target.
+    status: scaffolded
+    driver: windows_excel
+    runs_on: [Windows, Linux]
+    locale: ja-JP
+    output_dir: tests/oracle/variants/win-2019-ja_JP/golden
+    environment_md: tests/oracle/variants/win-2019-ja_JP/ENVIRONMENT.md
+    divergence: tests/oracle/variants/win-2019-ja_JP/divergence.yaml
 
   # ----------------------------------------------------------------------
   # Wanted targets. These slots are reserved so contributors and the core

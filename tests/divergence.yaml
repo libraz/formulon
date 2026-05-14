@@ -1507,13 +1507,13 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: external_stub_arraytotext
-    reason: "ARRAYTOTEXT impl exists but full Excel-format parity (escape rules, locale separators) is unverified; closure deferred to a dedicated suite."
+    reason: "Single-formula smoke probe inside the external_stubs cluster. Dedicated parity coverage now lives in tests/oracle/cases/arraytotext.yaml (escape rules, separators, array shapes, format-arg coercion); this smoke entry stays skip-oracle so the external_stubs cluster remains aligned across the array probes that Formulon still reduces eagerly."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: external_stub_filterxml
-    reason: "FILTERXML uses pugixml's XPath 1.0; Excel's XPath dialect has minor quirks that may diverge. Closure deferred to a dedicated XPath suite."
+    reason: "Single-formula smoke probe inside the external_stubs cluster. Dedicated XPath dialect coverage now lives in tests/oracle/cases/filterxml.yaml (single/multi-node, attribute axis, namespaces, CDATA, entity decoding, XPath 1.0 vs 2.0 boundary); this smoke entry stays skip-oracle to keep external_stubs uniform with the other deferred-to-dedicated-suite cases."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"

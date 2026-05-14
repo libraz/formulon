@@ -1,0 +1,369 @@
+suite: filterxml
+description: >
+  FILTERXML(xml, xpath) parses `xml` and runs `xpath` against it. Excel's
+  documented contract:
+
+    * Empty node set            → #N/A
+    * Malformed XML             → #VALUE!
+    * Malformed XPath           → #VALUE!
+    * Single-node match         → scalar text (the node's inner text)
+    * Multi-node match          → vertical N x 1 spill of node texts
+    * Attribute axis            → attribute value (one per matched attr)
+
+  Formulon implements this against pugixml's XPath 1.0 engine. The two
+  engines (MSXML6 on Windows, equivalent on Mac, pugixml here) all
+  nominally implement XPath 1.0, but each carries subtle quirks worth
+  pinning per host:
+
+    * Default-namespace handling — MSXML/Excel typically requires
+      `local-name()=...` workarounds because FILTERXML does not expose a
+      namespace-prefix registration API. pugixml is the same in that
+      respect, so the probes below pin the workaround pattern.
+    * Non-node-set XPath returns (e.g. `count()`, `string()`, `true()`).
+      Excel docs say xpath must evaluate to a node set; we probe what each
+      host actually returns.
+    * Entity decoding (`&amp;`, `&#10;`, `&#x41;`) — XML parsing should
+      decode these; what reaches FILTERXML is the decoded text.
+    * CDATA sections — content reaches the caller as inner text.
+    * Whitespace in mixed content — `text()` vs element node string-value.
+    * Comment / processing-instruction nodes — `comment()` and
+      `processing-instruction()` axes return inner-text in pugixml; Excel
+      may differ.
+    * XPath 2.0+ features (`for`, `let`, `matches`, sequence types) —
+      must reject as #VALUE!.
+
+  Spill model: in a sheet context the multi-node return spills into
+  adjacent cells via `EvalContext::dispatch_array_result`. In the oracle
+  pipeline each case is written to a single cell so multi-node cases
+  spill below the anchor; the verifier reads the anchor cell, which sees
+  the first node's text. The setup of these probes uses an anchor read,
+  so the recorded golden value is always a scalar text; the full spill
+  shape is exercised separately in `tests/unit/eval/builtins_web_test.cpp`.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # --------------------------------------------------------------------
+  # Single-node element selection
+  # --------------------------------------------------------------------
+  - id: filterxml_single_element_text
+    description: "Single element match returns its inner text"
+    formula: "=FILTERXML(\"<r><a>hello</a></r>\",\"//a\")"
+
+  - id: filterxml_root_element_text
+    description: "Root element selected — returns concatenated text"
+    formula: "=FILTERXML(\"<r>top</r>\",\"/r\")"
+
+  - id: filterxml_nested_path
+    description: "Element selected by full path"
+    formula: "=FILTERXML(\"<r><b><c>deep</c></b></r>\",\"/r/b/c\")"
+
+  - id: filterxml_element_with_attrs_text_only
+    description: "Element with attributes returns only its inner text"
+    formula: "=FILTERXML(\"<r><a id=\"\"1\"\">payload</a></r>\",\"//a\")"
+
+  - id: filterxml_empty_element_text
+    description: "Self-closing element — inner text is empty"
+    formula: "=FILTERXML(\"<r><a/></r>\",\"//a\")"
+
+  - id: filterxml_text_with_leading_trailing_ws
+    description: "Inner text with surrounding whitespace — preserved verbatim"
+    formula: "=FILTERXML(\"<r><a>  spaced  </a></r>\",\"//a\")"
+
+  - id: filterxml_text_unicode_jp
+    description: "Inner text containing Japanese characters"
+    formula: "=FILTERXML(\"<r><a>日本語</a></r>\",\"//a\")"
+
+  # --------------------------------------------------------------------
+  # Multi-node element selection (spill — anchor cell read-back)
+  # --------------------------------------------------------------------
+  - id: filterxml_multi_element_anchor
+    description: "Three sibling <a> elements — anchor cell sees the first"
+    formula: "=FILTERXML(\"<r><a>1</a><a>2</a><a>3</a></r>\",\"//a\")"
+
+  - id: filterxml_multi_element_anchor_text
+    description: "Multi-element with text payloads — anchor cell sees first"
+    formula: "=FILTERXML(\"<r><a>alpha</a><a>beta</a></r>\",\"//a\")"
+
+  - id: filterxml_multi_element_indexed_first
+    description: "Explicit [1] predicate pins first match (XPath is 1-indexed)"
+    formula: "=FILTERXML(\"<r><a>x</a><a>y</a><a>z</a></r>\",\"(//a)[1]\")"
+
+  - id: filterxml_multi_element_indexed_last
+    description: "last() predicate pins last match"
+    formula: "=FILTERXML(\"<r><a>x</a><a>y</a><a>z</a></r>\",\"(//a)[last()]\")"
+
+  - id: filterxml_multi_element_indexed_middle
+    description: "Middle index — (//a)[2]"
+    formula: "=FILTERXML(\"<r><a>x</a><a>y</a><a>z</a></r>\",\"(//a)[2]\")"
+
+  # --------------------------------------------------------------------
+  # Attribute axis
+  # --------------------------------------------------------------------
+  - id: filterxml_single_attribute
+    description: "Single attribute via `//@id` — returns attribute value"
+    formula: "=FILTERXML(\"<r><a id=\"\"v\"\"/></r>\",\"//@id\")"
+
+  - id: filterxml_attribute_axis_anchor
+    description: "Multi-attribute spill — anchor sees first attribute value"
+    formula: "=FILTERXML(\"<r><a id=\"\"x\"\"/><a id=\"\"y\"\"/></r>\",\"//a/@id\")"
+
+  - id: filterxml_attribute_predicate_text
+    description: "Element selected by attribute predicate"
+    formula: "=FILTERXML(\"<r><a id=\"\"1\"\">first</a><a id=\"\"2\"\">second</a></r>\",\"//a[@id='2']\")"
+
+  - id: filterxml_attribute_value_with_entity
+    description: "Attribute value contains an entity-decoded character"
+    formula: "=FILTERXML(\"<r a=\"\"AT&amp;T\"\"/>\",\"//@a\")"
+
+  - id: filterxml_attribute_value_with_single_quote_in_double
+    description: "Attribute value with embedded single-quote — host quoting"
+    formula: "=FILTERXML(\"<r a=\"\"can't\"\"/>\",\"//@a\")"
+
+  # --------------------------------------------------------------------
+  # text() axis vs element string-value
+  # --------------------------------------------------------------------
+  - id: filterxml_text_node_axis
+    description: "text() axis selects a text node directly"
+    formula: "=FILTERXML(\"<r>top<a>mid</a>bot</r>\",\"/r/text()\")"
+
+  - id: filterxml_mixed_content_first_text
+    description: "Mixed content — first text node before any child element"
+    formula: "=FILTERXML(\"<r>before<a>inside</a>after</r>\",\"/r/text()[1]\")"
+
+  - id: filterxml_string_value_of_element_with_children
+    description: "Element containing child element — string-value concatenates descendants"
+    formula: "=FILTERXML(\"<r><a>1<b>2</b>3</a></r>\",\"//a\")"
+
+  # --------------------------------------------------------------------
+  # CDATA sections
+  # --------------------------------------------------------------------
+  - id: filterxml_cdata_inner_text
+    description: "CDATA contents reach the caller as plain text"
+    formula: "=FILTERXML(\"<r><a><![CDATA[<x>literal</x>]]></a></r>\",\"//a\")"
+
+  - id: filterxml_cdata_with_amp_and_lt
+    description: "CDATA preserves `&` and `<` literally (no entity expansion)"
+    formula: "=FILTERXML(\"<r><a><![CDATA[a < b & c]]></a></r>\",\"//a\")"
+
+  # --------------------------------------------------------------------
+  # Entity / numeric character references in PCDATA
+  # --------------------------------------------------------------------
+  - id: filterxml_pcdata_entity_amp
+    description: "&amp; in PCDATA decodes to a single `&`"
+    formula: "=FILTERXML(\"<r><a>AT&amp;T</a></r>\",\"//a\")"
+
+  - id: filterxml_pcdata_entity_lt
+    description: "&lt; in PCDATA decodes to `<`"
+    formula: "=FILTERXML(\"<r><a>a &lt; b</a></r>\",\"//a\")"
+
+  - id: filterxml_pcdata_numeric_char_ref
+    description: "Numeric char ref &#65; decodes to `A`"
+    formula: "=FILTERXML(\"<r><a>&#65;</a></r>\",\"//a\")"
+
+  - id: filterxml_pcdata_hex_char_ref
+    description: "Hex char ref &#x4E2D; decodes to a CJK char"
+    formula: "=FILTERXML(\"<r><a>&#x4E2D;</a></r>\",\"//a\")"
+
+  # --------------------------------------------------------------------
+  # Comments / processing instructions
+  # --------------------------------------------------------------------
+  - id: filterxml_comment_axis
+    description: "comment() axis — pugixml returns the comment text; Excel may diverge"
+    formula: "=FILTERXML(\"<r><!--note--><a>v</a></r>\",\"//comment()\")"
+
+  - id: filterxml_pi_axis
+    description: "processing-instruction() axis — returns PI content"
+    formula: "=FILTERXML(\"<r><?stylesheet href=\"\"x\"\"?><a>v</a></r>\",\"//processing-instruction()\")"
+
+  # --------------------------------------------------------------------
+  # XML declaration / BOM / encoding
+  # --------------------------------------------------------------------
+  - id: filterxml_with_xml_declaration
+    description: "XML declaration line present — parses cleanly"
+    formula: "=FILTERXML(\"<?xml version=\"\"1.0\"\" encoding=\"\"UTF-8\"\"?><r><a>v</a></r>\",\"//a\")"
+
+  - id: filterxml_with_bom_in_string
+    description: "Literal UTF-8 BOM at start of xml string — host-dependent parse outcome"
+    formula: "=FILTERXML(CHAR(239)&CHAR(187)&CHAR(191)&\"<r><a>v</a></r>\",\"//a\")"
+
+  # --------------------------------------------------------------------
+  # Default namespace — Excel's documented workaround pattern
+  # --------------------------------------------------------------------
+  - id: filterxml_default_namespace_naive_path
+    description: "Naive `//a` on default-namespace doc — typically EMPTY (#N/A)"
+    formula: "=FILTERXML(\"<r xmlns=\"\"http://example.com\"\"><a>v</a></r>\",\"//a\")"
+
+  - id: filterxml_default_namespace_local_name_workaround
+    description: "local-name() workaround selects elements regardless of ns"
+    formula: "=FILTERXML(\"<r xmlns=\"\"http://example.com\"\"><a>v</a></r>\",\"//*[local-name()='a']\")"
+
+  - id: filterxml_prefixed_namespace_naive_path
+    description: "Prefixed namespace — naive `//ns:a` requires registered prefix; host-dep"
+    formula: "=FILTERXML(\"<r xmlns:ns=\"\"http://example.com\"\"><ns:a>v</ns:a></r>\",\"//ns:a\")"
+
+  - id: filterxml_prefixed_namespace_local_name_workaround
+    description: "Prefixed namespace — local-name() workaround"
+    formula: "=FILTERXML(\"<r xmlns:ns=\"\"http://example.com\"\"><ns:a>v</ns:a></r>\",\"//*[local-name()='a']\")"
+
+  # --------------------------------------------------------------------
+  # Empty / no-match results — #N/A
+  # --------------------------------------------------------------------
+  - id: filterxml_no_match_returns_na
+    description: "XPath that matches nothing — #N/A"
+    formula: "=FILTERXML(\"<r><a>1</a></r>\",\"//b\")"
+
+  - id: filterxml_empty_root_no_match
+    description: "Empty root, `//*` matches only root — single-element behavior"
+    formula: "=FILTERXML(\"<r/>\",\"//x\")"
+
+  - id: filterxml_predicate_no_match_na
+    description: "Predicate filters everything out — #N/A"
+    formula: "=FILTERXML(\"<r><a id=\"\"1\"\"/></r>\",\"//a[@id='999']\")"
+
+  # --------------------------------------------------------------------
+  # Non-node-set XPath returns — Excel typically #VALUE!, pugixml empty
+  # --------------------------------------------------------------------
+  - id: filterxml_count_function_return
+    description: "XPath returns a number — host-dependent (likely #VALUE! or text coercion)"
+    formula: "=FILTERXML(\"<r><a/><a/></r>\",\"count(//a)\")"
+
+  - id: filterxml_string_function_return
+    description: "XPath returns a string — host-dependent"
+    formula: "=FILTERXML(\"<r><a>v</a></r>\",\"string(//a)\")"
+
+  - id: filterxml_concat_function_return
+    description: "XPath returns concat() — host-dependent"
+    formula: "=FILTERXML(\"<r><a>x</a><b>y</b></r>\",\"concat(//a,//b)\")"
+
+  - id: filterxml_true_function_return
+    description: "XPath returns boolean — host-dependent"
+    formula: "=FILTERXML(\"<r/>\",\"true()\")"
+
+  # --------------------------------------------------------------------
+  # XPath predicate variants
+  # --------------------------------------------------------------------
+  - id: filterxml_predicate_numeric_compare
+    description: "Predicate comparing element text as number (XPath converts text)"
+    formula: "=FILTERXML(\"<r><a>3</a><a>10</a><a>7</a></r>\",\"//a[. > 5]\")"
+
+  - id: filterxml_predicate_contains_function
+    description: "contains() predicate"
+    formula: "=FILTERXML(\"<r><a>apple</a><a>banana</a><a>apricot</a></r>\",\"//a[contains(.,'ap')]\")"
+
+  - id: filterxml_predicate_starts_with_function
+    description: "starts-with() predicate"
+    formula: "=FILTERXML(\"<r><a>foo</a><a>bar</a></r>\",\"//a[starts-with(.,'b')]\")"
+
+  - id: filterxml_predicate_position_range
+    description: "position() predicate selecting first two"
+    formula: "=FILTERXML(\"<r><a>x</a><a>y</a><a>z</a></r>\",\"//a[position()<=2]\")"
+
+  # --------------------------------------------------------------------
+  # XPath 2.0+ features — must reject as #VALUE!
+  # --------------------------------------------------------------------
+  - id: filterxml_xpath2_for_expression_rejected
+    description: "`for` is XPath 2.0 — parse error → #VALUE!"
+    formula: "=FILTERXML(\"<r><a>1</a></r>\",\"for $x in //a return $x\")"
+
+  - id: filterxml_xpath2_let_expression_rejected
+    description: "`let` is XPath 2.0 — parse error → #VALUE!"
+    formula: "=FILTERXML(\"<r><a>1</a></r>\",\"let $x := //a return $x\")"
+
+  - id: filterxml_xpath2_matches_function_rejected
+    description: "`matches()` is XPath 2.0 — parse error → #VALUE!"
+    formula: "=FILTERXML(\"<r><a>1</a></r>\",\"//a[matches(.,'1')]\")"
+
+  # --------------------------------------------------------------------
+  # Malformed XML / XPath — error surface
+  # --------------------------------------------------------------------
+  - id: filterxml_malformed_xml_unclosed_tag
+    description: "Unclosed tag — #VALUE!"
+    formula: "=FILTERXML(\"<r><a></r>\",\"//a\")"
+
+  - id: filterxml_malformed_xml_garbage
+    description: "Not XML at all — #VALUE!"
+    formula: "=FILTERXML(\"not xml at all\",\"//a\")"
+
+  - id: filterxml_malformed_xml_empty_string
+    description: "Empty XML string — #VALUE!"
+    formula: "=FILTERXML(\"\",\"//a\")"
+
+  - id: filterxml_malformed_xml_whitespace_only
+    description: "Whitespace-only XML — host-dep (#VALUE! expected)"
+    formula: "=FILTERXML(\"   \",\"//a\")"
+
+  - id: filterxml_malformed_xpath_triple_slash
+    description: "`///` — XPath parse error → #VALUE!"
+    formula: "=FILTERXML(\"<r><a/></r>\",\"///\")"
+
+  - id: filterxml_malformed_xpath_unterminated_predicate
+    description: "Unterminated `[` predicate — #VALUE!"
+    formula: "=FILTERXML(\"<r><a/></r>\",\"//a[\")"
+
+  - id: filterxml_empty_xpath
+    description: "Empty XPath — #VALUE!"
+    formula: "=FILTERXML(\"<r><a/></r>\",\"\")"
+
+  # --------------------------------------------------------------------
+  # Argument type coercion
+  # --------------------------------------------------------------------
+  - id: filterxml_xml_number_arg
+    description: "Number for xml arg coerces to text — not valid XML → #VALUE!"
+    formula: "=FILTERXML(42,\"//a\")"
+
+  - id: filterxml_xml_bool_arg
+    description: "Boolean for xml arg coerces to \"TRUE\" — not valid XML → #VALUE!"
+    formula: "=FILTERXML(TRUE,\"//a\")"
+
+  - id: filterxml_xpath_number_arg
+    description: "Number for xpath arg — XPath \"1\" is a literal number expression"
+    formula: "=FILTERXML(\"<r><a/></r>\",1)"
+
+  - id: filterxml_xpath_bool_arg
+    description: "Boolean for xpath arg coerces to \"TRUE\" — invalid XPath → #VALUE!"
+    formula: "=FILTERXML(\"<r><a/></r>\",TRUE)"
+
+  # --------------------------------------------------------------------
+  # Error / arity propagation
+  # --------------------------------------------------------------------
+  - id: filterxml_error_in_xml_arg
+    description: "Error in xml arg propagates"
+    formula: "=FILTERXML(1/0,\"//a\")"
+
+  - id: filterxml_error_in_xpath_arg
+    description: "Error in xpath arg propagates"
+    formula: "=FILTERXML(\"<r/>\",1/0)"
+
+  - id: filterxml_arity_one
+    description: "One arg — #VALUE!"
+    formula: "=FILTERXML(\"<r/>\")"
+
+  - id: filterxml_arity_zero
+    description: "Zero args — #VALUE!"
+    formula: "=FILTERXML()"
+
+  - id: filterxml_arity_three
+    description: "Three args — #VALUE!"
+    formula: "=FILTERXML(\"<r/>\",\"//a\",\"extra\")"
+
+  # --------------------------------------------------------------------
+  # Cell-ref inputs — exercise real workbook plumbing
+  # --------------------------------------------------------------------
+  - id: filterxml_xml_from_cell_ref
+    description: "XML text via cell reference"
+    formula: "=FILTERXML(A1,\"//a\")"
+    setup:
+      A1: "<r><a>fromcell</a></r>"
+
+  - id: filterxml_xpath_from_cell_ref
+    description: "XPath via cell reference"
+    formula: "=FILTERXML(\"<r><a>x</a></r>\",A1)"
+    setup:
+      A1: "//a"
+
+  - id: filterxml_both_args_from_cells
+    description: "Both args via cell references"
+    formula: "=FILTERXML(A1,A2)"
+    setup:
+      A1: "<r><a id=\"99\">value</a></r>"
+      A2: "//a/@id"

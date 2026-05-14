@@ -1,0 +1,350 @@
+suite: arraytotext
+description: >
+  ARRAYTOTEXT(array, [format]) serialises an array (or scalar) to text in
+  one of two modes:
+
+    * format=0 (concise, default) — element-by-element rendering separated
+      by a comma+space inter-column delimiter and a semicolon+space
+      inter-row delimiter (en_US/ja-JP). Text passes through unquoted;
+      numbers/booleans/blanks render the same as VALUETOTEXT concise.
+    * format=1 (strict) — wraps the whole result in `{...}` braces. Text
+      elements are wrapped in double-quotes with embedded `"` doubled to
+      `""`. Numbers render bare. The element separators match the array
+      literal grammar: `,` inter-column and `;` inter-row.
+
+  Errors propagate from any element (Excel returns the first error
+  encountered as the function's result, NOT a per-cell error spill).
+
+  Probes are organised by axis:
+
+    * Scalar passthrough — pins ARRAYTOTEXT == VALUETOTEXT for non-array
+      arguments. These should hold today; Formulon's ARRAYTOTEXT_ is a
+      thin alias for VALUETOTEXT_ on scalars.
+    * Strict-mode quoting — embedded quotes, separators, whitespace,
+      Unicode. Sensitive to per-host Excel build quirks.
+    * Array shape — 1xN row, Nx1 column, MxN block, sequences from
+      SEQUENCE / SORT. Until Formulon's spill pipeline materialises these
+      as multi-cell arrays the eager dispatcher reduces the input to its
+      first element, so these cases will diverge until that work lands;
+      capturing Excel's actual output is the whole point of the suite.
+    * Format-arg coercion — bool/text format args, out-of-range values
+      that should surface #VALUE!.
+    * Error propagation — both arguments.
+
+  Locale note: ja-JP Excel keeps `,` and `;` as the inter-column /
+  inter-row separators in strict mode (the array-literal grammar is
+  invariant). Concise mode also uses `,` and `;`; this differs from
+  decimal-comma locales (de-DE, fr-FR) where `\\` and `;` show up. Those
+  variants belong to the win-365-de_DE / -fr_FR targets.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # --------------------------------------------------------------------
+  # Scalar passthrough — concise mode (format=0, default)
+  # --------------------------------------------------------------------
+  - id: arraytotext_scalar_number_default
+    description: "Concise default: integer passes through bare"
+    formula: "=ARRAYTOTEXT(123)"
+
+  - id: arraytotext_scalar_negative_number_default
+    description: "Concise default: negative number keeps sign"
+    formula: "=ARRAYTOTEXT(-7.25)"
+
+  - id: arraytotext_scalar_zero_default
+    description: "Concise default: zero renders as 0"
+    formula: "=ARRAYTOTEXT(0)"
+
+  - id: arraytotext_scalar_decimal_default
+    description: "Concise default: fractional number, no quoting"
+    formula: "=ARRAYTOTEXT(1.5)"
+
+  - id: arraytotext_scalar_small_magnitude_default
+    description: "Concise default: very small number — VALUETOTEXT threshold"
+    formula: "=ARRAYTOTEXT(0.000001)"
+
+  - id: arraytotext_scalar_large_magnitude_default
+    description: "Concise default: very large number, expect scientific notation handoff"
+    formula: "=ARRAYTOTEXT(1.23456789E20)"
+
+  - id: arraytotext_scalar_text_default
+    description: "Concise default: text passes through unquoted"
+    formula: "=ARRAYTOTEXT(\"hello\")"
+
+  - id: arraytotext_scalar_empty_string_default
+    description: "Concise default: empty string renders as empty"
+    formula: "=ARRAYTOTEXT(\"\")"
+
+  - id: arraytotext_scalar_bool_true_default
+    description: "Concise default: TRUE renders uppercase"
+    formula: "=ARRAYTOTEXT(TRUE)"
+
+  - id: arraytotext_scalar_bool_false_default
+    description: "Concise default: FALSE renders uppercase"
+    formula: "=ARRAYTOTEXT(FALSE)"
+
+  # --------------------------------------------------------------------
+  # Scalar passthrough — strict mode (format=1)
+  # --------------------------------------------------------------------
+  - id: arraytotext_scalar_text_strict
+    description: "Strict: scalar text wraps in double-quotes"
+    formula: "=ARRAYTOTEXT(\"hello\",1)"
+
+  - id: arraytotext_scalar_empty_string_strict
+    description: "Strict: empty string is quoted as \"\""
+    formula: "=ARRAYTOTEXT(\"\",1)"
+
+  - id: arraytotext_scalar_number_strict
+    description: "Strict: scalar number stays bare (no braces, no quotes)"
+    formula: "=ARRAYTOTEXT(42,1)"
+
+  - id: arraytotext_scalar_bool_strict
+    description: "Strict: scalar TRUE stays uppercase, no quotes"
+    formula: "=ARRAYTOTEXT(TRUE,1)"
+
+  - id: arraytotext_scalar_text_embedded_quote_strict
+    description: "Strict: embedded \" inside text is doubled to \"\""
+    formula: "=ARRAYTOTEXT(\"a\"\"b\",1)"
+
+  - id: arraytotext_scalar_text_embedded_comma_strict
+    description: "Strict: embedded comma keeps its place inside the quoted token"
+    formula: "=ARRAYTOTEXT(\"a,b\",1)"
+
+  - id: arraytotext_scalar_text_embedded_semicolon_strict
+    description: "Strict: embedded semicolon stays inside the quoted token"
+    formula: "=ARRAYTOTEXT(\"a;b\",1)"
+
+  - id: arraytotext_scalar_text_with_braces_strict
+    description: "Strict: text containing `{` and `}` is not escaped further"
+    formula: "=ARRAYTOTEXT(\"{a}\",1)"
+
+  - id: arraytotext_scalar_text_with_newline_strict
+    description: "Strict: embedded LF — kept verbatim in quoted token"
+    formula: "=ARRAYTOTEXT(\"a\" & CHAR(10) & \"b\",1)"
+
+  - id: arraytotext_scalar_text_with_tab_strict
+    description: "Strict: embedded tab — kept verbatim"
+    formula: "=ARRAYTOTEXT(\"a\" & CHAR(9) & \"b\",1)"
+
+  - id: arraytotext_scalar_text_unicode_jp_strict
+    description: "Strict: Japanese text inside quoted token"
+    formula: "=ARRAYTOTEXT(\"日本語\",1)"
+
+  - id: arraytotext_scalar_text_with_backslash_strict
+    description: "Strict: backslash is not an escape char in Excel — passes through"
+    formula: "=ARRAYTOTEXT(\"a\\b\",1)"
+
+  # --------------------------------------------------------------------
+  # 1xN row arrays — concise vs strict
+  # --------------------------------------------------------------------
+  - id: arraytotext_row_numbers_default
+    description: "Row of numbers, concise: `a, b, c`"
+    formula: "=ARRAYTOTEXT({1,2,3})"
+
+  - id: arraytotext_row_numbers_strict
+    description: "Row of numbers, strict: `{a,b,c}`"
+    formula: "=ARRAYTOTEXT({1,2,3},1)"
+
+  - id: arraytotext_row_text_default
+    description: "Row of text, concise: unquoted, comma-separated"
+    formula: "=ARRAYTOTEXT({\"a\",\"b\",\"c\"})"
+
+  - id: arraytotext_row_text_strict
+    description: "Row of text, strict: each element quoted"
+    formula: "=ARRAYTOTEXT({\"a\",\"b\",\"c\"},1)"
+
+  - id: arraytotext_row_mixed_default
+    description: "Row mixing number, text, bool, concise mode"
+    formula: "=ARRAYTOTEXT({1,\"two\",TRUE})"
+
+  - id: arraytotext_row_mixed_strict
+    description: "Row mixing number, text, bool, strict mode"
+    formula: "=ARRAYTOTEXT({1,\"two\",TRUE},1)"
+
+  - id: arraytotext_row_with_embedded_quote_strict
+    description: "Row element containing `\"` — strict mode escapes to `\"\"`"
+    formula: "=ARRAYTOTEXT({\"a\"\"b\",\"c\"},1)"
+
+  - id: arraytotext_row_with_embedded_separators_strict
+    description: "Row elements containing `,` and `;` — strict keeps them inside quotes"
+    formula: "=ARRAYTOTEXT({\"a,b\",\"c;d\"},1)"
+
+  - id: arraytotext_singleton_row_strict
+    description: "1x1 row {\"only\"} — strict still emits `{\"only\"}` braces"
+    formula: "=ARRAYTOTEXT({\"only\"},1)"
+
+  - id: arraytotext_singleton_row_default
+    description: "1x1 row in concise mode — passthrough as scalar text"
+    formula: "=ARRAYTOTEXT({\"only\"})"
+
+  # --------------------------------------------------------------------
+  # Nx1 column arrays
+  # --------------------------------------------------------------------
+  - id: arraytotext_column_numbers_default
+    description: "Column of numbers, concise: semicolon+space row separator"
+    formula: "=ARRAYTOTEXT({1;2;3})"
+
+  - id: arraytotext_column_numbers_strict
+    description: "Column of numbers, strict: `{a;b;c}`"
+    formula: "=ARRAYTOTEXT({1;2;3},1)"
+
+  - id: arraytotext_column_text_default
+    description: "Column of text, concise"
+    formula: "=ARRAYTOTEXT({\"x\";\"y\";\"z\"})"
+
+  - id: arraytotext_column_text_strict
+    description: "Column of text, strict"
+    formula: "=ARRAYTOTEXT({\"x\";\"y\";\"z\"},1)"
+
+  # --------------------------------------------------------------------
+  # MxN block arrays
+  # --------------------------------------------------------------------
+  - id: arraytotext_2x2_numbers_default
+    description: "2x2 numbers, concise"
+    formula: "=ARRAYTOTEXT({1,2;3,4})"
+
+  - id: arraytotext_2x2_numbers_strict
+    description: "2x2 numbers, strict: `{a,b;c,d}`"
+    formula: "=ARRAYTOTEXT({1,2;3,4},1)"
+
+  - id: arraytotext_2x3_mixed_default
+    description: "2x3 mix of text and numbers, concise"
+    formula: "=ARRAYTOTEXT({\"a\",1,TRUE;\"b\",2,FALSE})"
+
+  - id: arraytotext_2x3_mixed_strict
+    description: "2x3 mix, strict — quoting / brace order"
+    formula: "=ARRAYTOTEXT({\"a\",1,TRUE;\"b\",2,FALSE},1)"
+
+  # --------------------------------------------------------------------
+  # Dynamic-array producers — SEQUENCE / TRANSPOSE / ROW
+  # --------------------------------------------------------------------
+  - id: arraytotext_sequence_row_default
+    description: "SEQUENCE(1,5) → 1x5 row, concise"
+    formula: "=ARRAYTOTEXT(SEQUENCE(1,5))"
+
+  - id: arraytotext_sequence_row_strict
+    description: "SEQUENCE(1,5) → 1x5 row, strict"
+    formula: "=ARRAYTOTEXT(SEQUENCE(1,5),1)"
+
+  - id: arraytotext_sequence_column_default
+    description: "SEQUENCE(5) → 5x1 column, concise"
+    formula: "=ARRAYTOTEXT(SEQUENCE(5))"
+
+  - id: arraytotext_sequence_column_strict
+    description: "SEQUENCE(5) → 5x1 column, strict"
+    formula: "=ARRAYTOTEXT(SEQUENCE(5),1)"
+
+  - id: arraytotext_sequence_2d_default
+    description: "SEQUENCE(2,3) → 2x3, concise"
+    formula: "=ARRAYTOTEXT(SEQUENCE(2,3))"
+
+  - id: arraytotext_sequence_2d_strict
+    description: "SEQUENCE(2,3) → 2x3, strict"
+    formula: "=ARRAYTOTEXT(SEQUENCE(2,3),1)"
+
+  - id: arraytotext_transposed_row_strict
+    description: "TRANSPOSE({1;2;3}) — 1x3 row from a column source"
+    formula: "=ARRAYTOTEXT(TRANSPOSE({1;2;3}),1)"
+
+  # --------------------------------------------------------------------
+  # Blank handling — empty cells inside an array reference
+  # --------------------------------------------------------------------
+  - id: arraytotext_range_with_blank_default
+    description: "Range with a blank cell — blank renders as empty token in concise"
+    formula: "=ARRAYTOTEXT(A1:A3)"
+    setup:
+      A1: "alpha"
+      A2: null      # blank
+      A3: "gamma"
+
+  - id: arraytotext_range_with_blank_strict
+    description: "Range with a blank cell — blank renders as \"\" in strict"
+    formula: "=ARRAYTOTEXT(A1:A3,1)"
+    setup:
+      A1: "alpha"
+      A2: null      # blank
+      A3: "gamma"
+
+  - id: arraytotext_range_all_blanks_default
+    description: "All-blank range — concise mode separators only"
+    formula: "=ARRAYTOTEXT(A1:A2)"
+    setup:
+      A1: null
+      A2: null
+
+  - id: arraytotext_range_all_blanks_strict
+    description: "All-blank range — strict mode emits `{,}` style"
+    formula: "=ARRAYTOTEXT(A1:A2,1)"
+    setup:
+      A1: null
+      A2: null
+
+  - id: arraytotext_range_mixed_kinds_strict
+    description: "Range mixing text/number/bool/blank — strict mode formatting"
+    formula: "=ARRAYTOTEXT(A1:A4,1)"
+    setup:
+      A1: "name"
+      A2: 42
+      A3: true
+      A4: null
+
+  # --------------------------------------------------------------------
+  # Format-arg coercion
+  # --------------------------------------------------------------------
+  - id: arraytotext_format_true_strict_alias
+    description: "format=TRUE → strict mode (TRUE coerces to 1)"
+    formula: "=ARRAYTOTEXT(\"hi\",TRUE)"
+
+  - id: arraytotext_format_false_concise_alias
+    description: "format=FALSE → concise mode (FALSE coerces to 0)"
+    formula: "=ARRAYTOTEXT(\"hi\",FALSE)"
+
+  - id: arraytotext_format_text_zero
+    description: "format=\"0\" — text-numeric coercion to concise"
+    formula: "=ARRAYTOTEXT(\"hi\",\"0\")"
+
+  - id: arraytotext_format_text_one
+    description: "format=\"1\" — text-numeric coercion to strict"
+    formula: "=ARRAYTOTEXT(\"hi\",\"1\")"
+
+  - id: arraytotext_format_out_of_range_two
+    description: "format=2 — out of {0,1} → #VALUE!"
+    formula: "=ARRAYTOTEXT(\"hi\",2)"
+
+  - id: arraytotext_format_negative
+    description: "format=-1 — out of range → #VALUE!"
+    formula: "=ARRAYTOTEXT(\"hi\",-1)"
+
+  - id: arraytotext_format_text_nonnumeric
+    description: "format=\"abc\" — non-numeric text → #VALUE!"
+    formula: "=ARRAYTOTEXT(\"hi\",\"abc\")"
+
+  # --------------------------------------------------------------------
+  # Error propagation
+  # --------------------------------------------------------------------
+  - id: arraytotext_error_in_value_arg
+    description: "First arg #DIV/0! — propagates the error"
+    formula: "=ARRAYTOTEXT(1/0)"
+
+  - id: arraytotext_error_in_format_arg
+    description: "Format arg #DIV/0! — propagates the error"
+    formula: "=ARRAYTOTEXT(\"hi\",1/0)"
+
+  - id: arraytotext_error_in_array_default
+    description: "Array containing an error — concise mode: first error returned"
+    formula: "=ARRAYTOTEXT({1,NA(),3})"
+
+  - id: arraytotext_error_in_array_strict
+    description: "Array containing an error — strict mode: same error propagation"
+    formula: "=ARRAYTOTEXT({1,NA(),3},1)"
+
+  - id: arraytotext_only_errors_default
+    description: "Array of all errors — first error returned"
+    formula: "=ARRAYTOTEXT({NA(),#DIV/0!})"
+
+  - id: arraytotext_arity_zero
+    description: "Zero args — #VALUE! (Excel signature requires array)"
+    formula: "=ARRAYTOTEXT()"
+
+  - id: arraytotext_arity_three
+    description: "Three args — #VALUE! (Excel signature is at most 2)"
+    formula: "=ARRAYTOTEXT(\"a\",0,0)"
