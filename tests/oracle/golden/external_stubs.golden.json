@@ -1,6 +1,6 @@
 {
   "suite": "external_stubs",
-  "description": "External / stub-only cluster (IMAGE / PY / RTD / STOCKHISTORY / WEBSERVICE / COPILOT / DETECTLANGUAGE / TRANSLATE / ARRAYTOTEXT / FILTERXML / INFO / CUBE×7 / GETPIVOTDATA / PHONETIC). Every member dispatches to an external service or out-of-band workbook metadata that Formulon does not embed; closure is a divergence-only declaration with each case marked skip-oracle in tests/divergence.yaml.",
+  "description": "Unavailable host-service / connection stubs. These functions are recognized by name and arity, but Formulon deliberately returns a deterministic unavailable surface because the required service, network client, runtime, or OLAP connection is outside the pure calculation engine. Real implementations (ARRAYTOTEXT/FILTERXML), environment-bound functions (INFO/CELL), and real lazy forms (GETPIVOTDATA/PHONETIC) are intentionally not part of this suite.",
   "environment": {
     "excel_version": "16.108.1",
     "excel_locale": "ja-JP",
@@ -62,24 +62,6 @@
       "skipped": "TRANSLATE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
     },
     {
-      "id": "external_stub_arraytotext",
-      "formula": "=ARRAYTOTEXT({1;2;3})",
-      "setup": {},
-      "skipped": "ARRAYTOTEXT impl exists but full Excel-format parity (escape rules, locale separators) is unverified; closure deferred to a dedicated suite."
-    },
-    {
-      "id": "external_stub_filterxml",
-      "formula": "=FILTERXML(\"<r><a>1</a><a>2</a></r>\", \"//a\")",
-      "setup": {},
-      "skipped": "FILTERXML uses pugixml's XPath 1.0; Excel's XPath dialect has minor quirks that may diverge. Closure deferred to a dedicated XPath suite."
-    },
-    {
-      "id": "external_stub_info",
-      "formula": "=INFO(\"system\")",
-      "setup": {},
-      "skipped": "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
-    },
-    {
       "id": "external_stub_cubekpimember",
       "formula": "=CUBEKPIMEMBER(\"conn\", \"kpi\", 1)",
       "setup": {},
@@ -120,18 +102,6 @@
       "formula": "=CUBEVALUE(\"conn\", \"[Measures].[Sales]\")",
       "setup": {},
       "skipped": "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
-    },
-    {
-      "id": "external_stub_getpivotdata",
-      "formula": "=GETPIVOTDATA(\"amount\", A1)",
-      "setup": {},
-      "skipped": "GETPIVOTDATA requires a pivot anchor; Formulon has no pivot-table runtime and stubs to #REF!."
-    },
-    {
-      "id": "external_stub_phonetic",
-      "formula": "=PHONETIC(\"テスト\")",
-      "setup": {},
-      "skipped": "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
     }
   ]
 }

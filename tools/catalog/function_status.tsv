@@ -1,0 +1,28 @@
+# Canonical function availability status.
+#
+# Columns: NAME<TAB>STATUS<TAB>NOTE
+#
+# STATUS values:
+#   implemented             Real engine implementation with normal compatibility coverage.
+#   implemented_unverified  Real implementation exists, but Excel dialect/parity coverage is not closed.
+#   environment_bound       Result depends on workbook/host/application state outside pure formula semantics.
+#   unavailable_stub        Name/arity are recognized, but Formulon deliberately returns a fixed unavailable surface.
+#
+# Omitted catalog functions default to implemented.
+CELL	environment_bound	Some info_type keys depend on workbook path, style, protection, and column-width metadata.
+COPILOT	unavailable_stub	Requires a Microsoft 365 Copilot/LLM service; Formulon returns a fixed #NAME? surface.
+CUBEKPIMEMBER	unavailable_stub	Requires a live OLAP cube connection; Formulon returns a fixed #NAME? surface.
+CUBEMEMBER	unavailable_stub	Requires a live OLAP cube connection; Formulon returns a fixed #NAME? surface.
+CUBEMEMBERPROPERTY	unavailable_stub	Requires a live OLAP cube connection; Formulon returns a fixed #NAME? surface.
+CUBERANKEDMEMBER	unavailable_stub	Requires a live OLAP cube connection; Formulon returns a fixed #NAME? surface.
+CUBESET	unavailable_stub	Requires a live OLAP cube connection; Formulon returns a fixed #NAME? surface.
+CUBESETCOUNT	unavailable_stub	Requires a live OLAP cube connection; Formulon returns a fixed #NAME? surface.
+CUBEVALUE	unavailable_stub	Requires a live OLAP cube connection; Formulon returns a fixed #NAME? surface.
+DETECTLANGUAGE	unavailable_stub	Requires a cloud language-detection service; Formulon returns a fixed #NAME? surface.
+IMAGE	unavailable_stub	Requires image fetch/render host support; Formulon returns a fixed #VALUE! surface.
+INFO	environment_bound	Returns host application, OS, open-workbook, and recalc-mode state.
+PY	unavailable_stub	Requires the Microsoft 365 hosted Python runtime; Formulon returns a fixed #NAME? surface.
+RTD	unavailable_stub	Requires an external Real-Time-Data provider; Formulon returns a fixed #N/A surface.
+STOCKHISTORY	unavailable_stub	Requires Microsoft market-data service/network I/O; Formulon returns a fixed #VALUE! surface.
+TRANSLATE	unavailable_stub	Requires a cloud translation service; Formulon returns a fixed #NAME? surface.
+WEBSERVICE	unavailable_stub	Requires HTTP/network I/O; Formulon returns a fixed #VALUE! surface.

@@ -1,12 +1,12 @@
 suite: external_stubs
-description: "External / stub-only cluster (IMAGE / PY / RTD / STOCKHISTORY / WEBSERVICE / COPILOT / DETECTLANGUAGE / TRANSLATE / ARRAYTOTEXT / FILTERXML / INFO / CUBE×7 / GETPIVOTDATA / PHONETIC). Every member dispatches to an external service or out-of-band workbook metadata that Formulon does not embed; closure is a divergence-only declaration with each case marked skip-oracle in tests/divergence.yaml."
+description: "Unavailable host-service / connection stubs. These functions are recognized by name and arity, but Formulon deliberately returns a deterministic unavailable surface because the required service, network client, runtime, or OLAP connection is outside the pure calculation engine. Real implementations (ARRAYTOTEXT/FILTERXML), environment-bound functions (INFO/CELL), and real lazy forms (GETPIVOTDATA/PHONETIC) are intentionally not part of this suite."
 tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # Each case is `mode: skip-oracle`. Stub-return correctness is enforced by
-  # unit tests; oracle parity is impractical because the underlying service
-  # / metadata is unavailable in the oracle harness.
+  # Each case is `mode: skip-oracle`. Fixed unavailable-surface correctness
+  # is enforced by unit tests; oracle parity is impractical because the
+  # underlying service / connection is unavailable in the oracle harness.
   # =========================================================================
 
   - id: external_stub_image
@@ -41,18 +41,6 @@ cases:
     description: "TRANSLATE() calls a translation cloud; Formulon stubs to #NAME?"
     formula: '=TRANSLATE("hello", "en", "ja")'
 
-  - id: external_stub_arraytotext
-    description: "ARRAYTOTEXT() serialises a spill array; impl exists but full Excel-format parity unverified"
-    formula: '=ARRAYTOTEXT({1;2;3})'
-
-  - id: external_stub_filterxml
-    description: "FILTERXML() runs an XPath query; impl exists via pugixml but Excel XPath dialect parity unverified"
-    formula: '=FILTERXML("<r><a>1</a><a>2</a></r>", "//a")'
-
-  - id: external_stub_info
-    description: "INFO() returns environment-specific values (locale, version, paths); not portable across hosts"
-    formula: '=INFO("system")'
-
   - id: external_stub_cubekpimember
     description: "CUBEKPIMEMBER() requires a cube connection; Formulon has none, returns #NAME?"
     formula: '=CUBEKPIMEMBER("conn", "kpi", 1)'
@@ -80,11 +68,3 @@ cases:
   - id: external_stub_cubevalue
     description: "CUBEVALUE() requires a cube connection; Formulon has none, returns #NAME?"
     formula: '=CUBEVALUE("conn", "[Measures].[Sales]")'
-
-  - id: external_stub_getpivotdata
-    description: "GETPIVOTDATA() over a non-pivot anchor (A1) correctly returns #REF! on both engines; pivot tables are wired but A1 has no pivot at this anchor"
-    formula: '=GETPIVOTDATA("amount", A1)'
-
-  - id: external_stub_phonetic
-    description: "PHONETIC() reads OOXML rPh annotations; Formulon does not surface them, so passthrough text differs from Mac"
-    formula: '=PHONETIC("テスト")'

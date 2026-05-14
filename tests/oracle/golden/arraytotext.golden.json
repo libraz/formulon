@@ -1,0 +1,89 @@
+{
+  "suite": "arraytotext",
+  "description": "ARRAYTOTEXT scalar and inline-array serialization probes. These cases are live oracle probes used to close the former implemented_unverified status.",
+  "environment": {
+    "excel_version": "16.109",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T20:03:42Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "arraytotext_scalar_number",
+      "formula": "=ARRAYTOTEXT(123.45)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "123.45"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_concise",
+      "formula": "=ARRAYTOTEXT(\"hello\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hello"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_strict",
+      "formula": "=ARRAYTOTEXT(\"hello\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"hello\"}"
+      }
+    },
+    {
+      "id": "arraytotext_row_vector_concise",
+      "formula": "=ARRAYTOTEXT({1,2,3})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, 2, 3"
+      }
+    },
+    {
+      "id": "arraytotext_col_vector_concise",
+      "formula": "=ARRAYTOTEXT({1;2;3})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, 2, 3"
+      }
+    },
+    {
+      "id": "arraytotext_matrix_mixed_concise",
+      "formula": "=ARRAYTOTEXT({1,\"x\";TRUE,#N/A})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, x, TRUE, #N/A"
+      }
+    },
+    {
+      "id": "arraytotext_matrix_mixed_strict",
+      "formula": "=ARRAYTOTEXT({1,\"x\";TRUE,#N/A},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{1,\"x\";TRUE,#N/A}"
+      }
+    },
+    {
+      "id": "arraytotext_invalid_format",
+      "formula": "=ARRAYTOTEXT({1,2},2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

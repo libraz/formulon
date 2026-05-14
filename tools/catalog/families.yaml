@@ -173,12 +173,12 @@ families:
     min_perspectives_per_member: 1
     cluster_reason: "Non-deterministic; closure is a divergence-only declaration."
 
-  # -- External / stub-only --------------------------------------------------
+  # -- Unavailable host-service / connection stubs ---------------------------
   - name: external_stubs
-    members: [IMAGE, PY, RTD, STOCKHISTORY, WEBSERVICE, COPILOT, DETECTLANGUAGE, TRANSLATE, ARRAYTOTEXT, FILTERXML, CUBEKPIMEMBER, CUBEMEMBER, CUBEMEMBERPROPERTY, CUBERANKEDMEMBER, CUBESET, CUBESETCOUNT, CUBEVALUE, GETPIVOTDATA, PHONETIC]
+    members: [IMAGE, PY, RTD, STOCKHISTORY, WEBSERVICE, COPILOT, DETECTLANGUAGE, TRANSLATE, CUBEKPIMEMBER, CUBEMEMBER, CUBEMEMBERPROPERTY, CUBERANKEDMEMBER, CUBESET, CUBESETCOUNT, CUBEVALUE]
     category_file: tests/oracle/cases/external_stubs.yaml
     min_perspectives_per_member: 1
-    cluster_reason: "Stubs by design; closure is a divergence-only declaration."
+    cluster_reason: "Unavailable fixed-error stubs by design; closure is a divergence-only declaration."
 
   # -- Information / type-introspection / reference family ----------------
   # IS* predicates, T / NA / TYPE / ERROR.TYPE coercion + introspection,

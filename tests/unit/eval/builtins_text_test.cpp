@@ -582,6 +582,52 @@ TEST(TextExact, ErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+// ---------------------------------------------------------------------------
+// ARRAYTOTEXT
+// ---------------------------------------------------------------------------
+
+TEST(TextArrayToText, ScalarConciseMirrorsValueToText) {
+  const Value v = EvalSource("=ARRAYTOTEXT(123.45)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "123.45");
+}
+
+TEST(TextArrayToText, ScalarStrictQuotesText) {
+  const Value v = EvalSource("=ARRAYTOTEXT(\"a\"\"b\",1)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "{\"a\"\"b\"}");
+}
+
+TEST(TextArrayToText, RowVectorConciseKeepsAllElements) {
+  const Value v = EvalSource("=ARRAYTOTEXT({1,2,3})");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "1, 2, 3");
+}
+
+TEST(TextArrayToText, ColumnVectorConciseKeepsAllElements) {
+  const Value v = EvalSource("=ARRAYTOTEXT({1;2;3})");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "1, 2, 3");
+}
+
+TEST(TextArrayToText, MatrixStrictUsesArrayLiteralDelimiters) {
+  const Value v = EvalSource("=ARRAYTOTEXT({1,\"x\";TRUE,#N/A},1)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "{1,\"x\";TRUE,#N/A}");
+}
+
+TEST(TextArrayToText, ErrorValueIsRenderedAsText) {
+  const Value v = EvalSource("=ARRAYTOTEXT(1/0)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "#DIV/0!");
+}
+
+TEST(TextArrayToText, InvalidFormatReturnsValueError) {
+  const Value v = EvalSource("=ARRAYTOTEXT({1,2},2)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

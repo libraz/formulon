@@ -1,0 +1,12 @@
+suite: lazy_forms
+description: "Representative probes for real lazy forms that are not unavailable stubs. Full workbook-backed coverage lives in unit/integration tests; this suite keeps the oracle catalog from treating their existence as part of the external-stub bucket."
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+cases:
+  - id: lazy_getpivotdata_no_pivot
+    description: "GETPIVOTDATA over a non-pivot anchor returns #REF! on both engines"
+    formula: '=GETPIVOTDATA("amount", A1)'
+
+  - id: lazy_phonetic_literal_text
+    description: "PHONETIC literal text passthrough; workbook rPh annotation coverage is unit-tested separately"
+    formula: '=PHONETIC("テスト")'

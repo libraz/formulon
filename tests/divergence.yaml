@@ -1450,14 +1450,12 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
-  # External / stub-only cluster (IMAGE / PY / RTD / STOCKHISTORY /
-  # WEBSERVICE / COPILOT / DETECTLANGUAGE / TRANSLATE / ARRAYTOTEXT /
-  # FILTERXML / INFO / CUBE×7 / GETPIVOTDATA / PHONETIC). Each member
-  # dispatches to a service or out-of-band metadata source the engine does
-  # not embed; oracle parity is impractical because the underlying
-  # service / metadata is unavailable in the harness. Stub return-codes
-  # are covered by unit tests; these entries declare the divergence
-  # cluster and exclude the cases from oracle-verify.
+  # Unavailable host-service / connection stubs. These functions are
+  # recognized by name and arity, but Formulon deliberately returns a
+  # deterministic unavailable surface because the required runtime,
+  # network service, or OLAP connection is outside the pure calculation
+  # engine. Fixed return codes are covered by unit tests; these entries
+  # exclude the representative probes from oracle-verify.
   - id: external_stub_image
     reason: "IMAGE fetches a network image; Formulon does no network I/O and stubs to #VALUE!. Oracle parity requires an embedded image client."
     prefer: formulon
@@ -1506,18 +1504,49 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
-  - id: external_stub_arraytotext
-    reason: "Single-formula smoke probe inside the external_stubs cluster. Dedicated parity coverage now lives in tests/oracle/cases/arraytotext.yaml (escape rules, separators, array shapes, format-arg coercion); this smoke entry stays skip-oracle so the external_stubs cluster remains aligned across the array probes that Formulon still reduces eagerly."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+  # FILTERXML is implemented in Formulon, but Mac Excel 16.109 reports the
+  # function as unavailable (#NAME?). Windows Excel oracle coverage can
+  # replace these Mac-platform divergences when available.
+  - id: filterxml_single_node_text
+    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML while Formulon provides a real XPath implementation for engines where FILTERXML is available."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.109"
     mode: skip-oracle
-  - id: external_stub_filterxml
-    reason: "Single-formula smoke probe inside the external_stubs cluster. Dedicated XPath dialect coverage now lives in tests/oracle/cases/filterxml.yaml (single/multi-node, attribute axis, namespaces, CDATA, entity decoding, XPath 1.0 vs 2.0 boundary); this smoke entry stays skip-oracle to keep external_stubs uniform with the other deferred-to-dedicated-suite cases."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+  - id: filterxml_attribute_value
+    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML while Formulon provides a real XPath implementation for engines where FILTERXML is available."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.109"
     mode: skip-oracle
+  - id: filterxml_no_match_na
+    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XPath semantics; Formulon returns the implemented XPath no-match surface."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.109"
+    mode: skip-oracle
+  - id: filterxml_malformed_xml_value
+    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XML parse semantics; Formulon returns the implemented parse-error surface."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.109"
+    mode: skip-oracle
+  - id: filterxml_malformed_xpath_value
+    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XPath parse semantics; Formulon returns the implemented parse-error surface."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.109"
+    mode: skip-oracle
+  - id: filterxml_numeric_xml_arg_value
+    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before argument/XML semantics; Formulon returns the implemented coerced-XML parse-error surface."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.109"
+    mode: skip-oracle
+
+  # Stale `external_stub_info` removed from external_stubs.yaml: INFO has
+  # its own environment-bound suite (`info_function.yaml`) because it is
+  # host-state-dependent rather than an unavailable fixed-error stub.
   - id: external_stub_info
     reason: "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
     prefer: formulon
@@ -1569,12 +1598,21 @@ entries:
   # Stale `external_stub_getpivotdata` removed 2026-05-02: the case
   # `=GETPIVOTDATA("amount", A1)` evaluates to #REF! on both engines
   # because A1 has no pivot anchor — that is now correct behaviour, not
-  # a divergence. The oracle case in external_stubs.yaml is retained so
-  # the no-pivot-anchor path stays exercised.
+  # a divergence.
+  #
+  # Stale `external_stub_phonetic` removed from external_stubs.yaml:
+  # PHONETIC is a real lazy form. The remaining divergence records the
+  # rPh metadata coverage gap, not an unavailable function stub.
   - id: external_stub_phonetic
     reason: "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
     prefer: mac-excel-365
     first_noted: 2026-04-28
+    last_verified_excel_version: "16.108.1"
+    mode: skip-oracle
+  - id: lazy_phonetic_literal_text
+    reason: "PHONETIC is a real lazy form, but annotated rPh workbook metadata needs a dedicated oracle fixture; unit tests cover literal and workbook-backed behavior meanwhile."
+    prefer: mac-excel-365
+    first_noted: 2026-05-15
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 

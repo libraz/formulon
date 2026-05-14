@@ -1,0 +1,53 @@
+{
+  "suite": "filterxml",
+  "description": "FILTERXML XPath 1.0 scalar-result probes. Multi-node spill shape is covered by unit tests because the current oracle comparator only checks scalar anchor values.",
+  "environment": {
+    "excel_version": "16.109",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-14T20:03:53Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "filterxml_single_node_text",
+      "formula": "=FILTERXML(\"<r><a>hello</a></r>\",\"//a\")",
+      "setup": {},
+      "skipped": "Mac Excel 16.109 returns #NAME? for FILTERXML while Formulon provides a real XPath implementation for engines where FILTERXML is available."
+    },
+    {
+      "id": "filterxml_attribute_value",
+      "formula": "=FILTERXML(\"<r a=\"\"v\"\"/>\",\"//@a\")",
+      "setup": {},
+      "skipped": "Mac Excel 16.109 returns #NAME? for FILTERXML while Formulon provides a real XPath implementation for engines where FILTERXML is available."
+    },
+    {
+      "id": "filterxml_no_match_na",
+      "formula": "=FILTERXML(\"<r><a>1</a></r>\",\"//b\")",
+      "setup": {},
+      "skipped": "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XPath semantics; Formulon returns the implemented XPath no-match surface."
+    },
+    {
+      "id": "filterxml_malformed_xml_value",
+      "formula": "=FILTERXML(\"not xml\",\"//a\")",
+      "setup": {},
+      "skipped": "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XML parse semantics; Formulon returns the implemented parse-error surface."
+    },
+    {
+      "id": "filterxml_malformed_xpath_value",
+      "formula": "=FILTERXML(\"<r/>\",\"///\")",
+      "setup": {},
+      "skipped": "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XPath parse semantics; Formulon returns the implemented parse-error surface."
+    },
+    {
+      "id": "filterxml_numeric_xml_arg_value",
+      "formula": "=FILTERXML(42,\"//a\")",
+      "setup": {},
+      "skipped": "Mac Excel 16.109 returns #NAME? for FILTERXML before argument/XML semantics; Formulon returns the implemented coerced-XML parse-error surface."
+    }
+  ]
+}

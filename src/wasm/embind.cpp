@@ -2245,6 +2245,7 @@ class JsWorkbook {
   }
 
   /// `functionMetadata(name, locale?) -> {name, minArity, maxArity,
+  ///                                        availability,
   ///                                        signatureTemplate?, description?}`.
   /// `locale` is `0` for `en-US` (default) or `1` for `ja-JP`. The
   /// signature / description fields are absent until the locale
@@ -2261,6 +2262,7 @@ class JsWorkbook {
     o.set("name", md.canonical_name != nullptr ? std::string(md.canonical_name) : std::string());
     o.set("minArity", md.min_arity);
     o.set("maxArity", md.max_arity);
+    o.set("availability", static_cast<uint32_t>(md.availability));
     if (md.signature_template != nullptr) {
       o.set("signatureTemplate", std::string(md.signature_template));
     }

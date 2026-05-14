@@ -3437,6 +3437,39 @@ extern "C" fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, std
 
 namespace {
 
+struct FunctionAvailabilityEntry {
+  std::string_view name;
+  fm_function_availability_t availability;
+};
+
+fm_function_availability_t function_availability(std::string_view canonical_name) {
+  static constexpr FunctionAvailabilityEntry kEntries[] = {
+      {"CELL", FM_FUNCTION_ENVIRONMENT_BOUND},
+      {"COPILOT", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"CUBEKPIMEMBER", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"CUBEMEMBER", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"CUBEMEMBERPROPERTY", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"CUBERANKEDMEMBER", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"CUBESET", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"CUBESETCOUNT", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"CUBEVALUE", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"DETECTLANGUAGE", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"IMAGE", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"INFO", FM_FUNCTION_ENVIRONMENT_BOUND},
+      {"PY", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"RTD", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"STOCKHISTORY", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"TRANSLATE", FM_FUNCTION_UNAVAILABLE_STUB},
+      {"WEBSERVICE", FM_FUNCTION_UNAVAILABLE_STUB},
+  };
+  for (const auto& entry : kEntries) {
+    if (entry.name == canonical_name) {
+      return entry.availability;
+    }
+  }
+  return FM_FUNCTION_IMPLEMENTED;
+}
+
 const std::vector<std::string>& sorted_function_names() {
   static const std::vector<std::string> names = []() {
     std::vector<std::string> out;
@@ -3468,6 +3501,7 @@ extern "C" fm_status_t fm_function_metadata(const char* name, fm_locale_t /*loca
   out->canonical_name = def->canonical_name.data();
   out->min_arity = def->min_arity;
   out->max_arity = def->max_arity;
+  out->availability = function_availability(def->canonical_name);
   // Locale metadata table (description / signature_template) is not
   // yet populated — the public ABI documents these as nullable.
   out->signature_template = nullptr;

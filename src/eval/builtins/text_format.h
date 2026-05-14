@@ -9,6 +9,8 @@
 #ifndef FORMULON_EVAL_BUILTINS_TEXT_FORMAT_H_
 #define FORMULON_EVAL_BUILTINS_TEXT_FORMAT_H_
 
+#include "eval/lazy_impls.h"
+
 namespace formulon {
 namespace eval {
 
@@ -17,6 +19,11 @@ class FunctionRegistry;
 /// Registers TEXT, VALUE, and NUMBERVALUE into `registry`. Intended to be
 /// invoked from `register_builtins`.
 void register_text_format_builtins(FunctionRegistry& registry);
+
+/// ARRAYTOTEXT(array, [format]) must preserve the 2-D shape of range and
+/// inline-array arguments, so it rides the lazy dispatch path.
+Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

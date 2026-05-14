@@ -1,12 +1,12 @@
 {
   "suite": "external_stubs",
-  "description": "External / stub-only cluster (IMAGE / PY / RTD / STOCKHISTORY / WEBSERVICE / COPILOT / DETECTLANGUAGE / TRANSLATE / ARRAYTOTEXT / FILTERXML / INFO / CUBE×7 / GETPIVOTDATA / PHONETIC). Every member dispatches to an external service or out-of-band workbook metadata that Formulon does not embed; closure is a divergence-only declaration with each case marked skip-oracle in tests/divergence.yaml.",
+  "description": "Unavailable host-service / connection stubs. These functions are recognized by name and arity, but Formulon deliberately returns a deterministic unavailable surface because the required service, network client, runtime, or OLAP connection is outside the pure calculation engine. Real implementations (ARRAYTOTEXT/FILTERXML), environment-bound functions (INFO/CELL), and real lazy forms (GETPIVOTDATA/PHONETIC) are intentionally not part of this suite.",
   "environment": {
     "excel_version": "16.0",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-05-07T15:19:09Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -62,24 +62,6 @@
       "skipped": "TRANSLATE calls a translation cloud; Formulon does no network I/O and stubs to #NAME!."
     },
     {
-      "id": "external_stub_arraytotext",
-      "formula": "=ARRAYTOTEXT({1;2;3})",
-      "setup": {},
-      "skipped": "Single-formula smoke probe inside the external_stubs cluster. Dedicated parity coverage now lives in tests/oracle/cases/arraytotext.yaml (escape rules, separators, array shapes, format-arg coercion); this smoke entry stays skip-oracle so the external_stubs cluster remains aligned across the array probes that Formulon still reduces eagerly."
-    },
-    {
-      "id": "external_stub_filterxml",
-      "formula": "=FILTERXML(\"<r><a>1</a><a>2</a></r>\", \"//a\")",
-      "setup": {},
-      "skipped": "Single-formula smoke probe inside the external_stubs cluster. Dedicated XPath dialect coverage now lives in tests/oracle/cases/filterxml.yaml (single/multi-node, attribute axis, namespaces, CDATA, entity decoding, XPath 1.0 vs 2.0 boundary); this smoke entry stays skip-oracle to keep external_stubs uniform with the other deferred-to-dedicated-suite cases."
-    },
-    {
-      "id": "external_stub_info",
-      "formula": "=INFO(\"system\")",
-      "setup": {},
-      "skipped": "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
-    },
-    {
       "id": "external_stub_cubekpimember",
       "formula": "=CUBEKPIMEMBER(\"conn\", \"kpi\", 1)",
       "setup": {},
@@ -120,21 +102,6 @@
       "formula": "=CUBEVALUE(\"conn\", \"[Measures].[Sales]\")",
       "setup": {},
       "skipped": "CUBEVALUE requires a live cube connection; Formulon has no OLAP layer and stubs to #NAME!."
-    },
-    {
-      "id": "external_stub_getpivotdata",
-      "formula": "=GETPIVOTDATA(\"amount\", A1)",
-      "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#REF!"
-      }
-    },
-    {
-      "id": "external_stub_phonetic",
-      "formula": "=PHONETIC(\"テスト\")",
-      "setup": {},
-      "skipped": "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
     }
   ]
 }

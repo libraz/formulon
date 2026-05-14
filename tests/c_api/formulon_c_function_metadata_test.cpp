@@ -16,6 +16,7 @@ TEST(FormulonCApiFunctionMetadata, KnownFunctionResolves) {
   EXPECT_EQ(md.min_arity, 1U);
   // SUM is variadic.
   EXPECT_EQ(md.max_arity, 0xFFFFFFFFU);
+  EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
   // signature_template / description are not yet populated.
   EXPECT_EQ(md.signature_template, nullptr);
   EXPECT_EQ(md.description, nullptr);
@@ -33,6 +34,28 @@ TEST(FormulonCApiFunctionMetadata, UnknownFunctionReturnsInvalidArgument) {
   fm_function_metadata_t md{};
   fm_status_t rc = fm_function_metadata("NOT_A_FUNCTION", FM_LOCALE_EN_US, &md);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesUnavailableStubs) {
+  fm_function_metadata_t md{};
+  ASSERT_EQ(fm_function_metadata("WEBSERVICE", FM_LOCALE_EN_US, &md), 0);
+  EXPECT_STREQ(md.canonical_name, "WEBSERVICE");
+  EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
+
+  ASSERT_EQ(fm_function_metadata("CUBEVALUE", FM_LOCALE_EN_US, &md), 0);
+  EXPECT_EQ(md.availability, FM_FUNCTION_UNAVAILABLE_STUB);
+}
+
+TEST(FormulonCApiFunctionMetadata, AvailabilityDistinguishesNonStubSpecialCases) {
+  fm_function_metadata_t md{};
+  ASSERT_EQ(fm_function_metadata("FILTERXML", FM_LOCALE_EN_US, &md), 0);
+  EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
+
+  ASSERT_EQ(fm_function_metadata("INFO", FM_LOCALE_EN_US, &md), 0);
+  EXPECT_EQ(md.availability, FM_FUNCTION_ENVIRONMENT_BOUND);
+
+  ASSERT_EQ(fm_function_metadata("SUM", FM_LOCALE_EN_US, &md), 0);
+  EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
 }
 
 TEST(FormulonCApiFunctionMetadata, NullArgsReturnBindingNullPointer) {

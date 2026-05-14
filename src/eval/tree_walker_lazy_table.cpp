@@ -15,6 +15,7 @@
 #include "eval/aggregate_lazy.h"
 #include "eval/areas_lazy.h"
 #include "eval/builtins/aggregate.h"
+#include "eval/builtins/text_format.h"
 #include "eval/cell_lazy.h"
 #include "eval/conditional_aggregates.h"
 #include "eval/database_lazy.h"
@@ -63,6 +64,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // `strip_future_prefix`, so callers register the canonical bare name.
     // See `eval_anchorarray_lazy`.
     {"ANCHORARRAY", &eval_anchorarray_lazy},
+    {"ARRAYTOTEXT", &eval_arraytotext_lazy},
     {"AREAS", &eval_areas_lazy},
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},

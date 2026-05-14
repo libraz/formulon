@@ -20,7 +20,9 @@
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
 #include "eval/function_registry.h"
+#include "eval/shape_ops_lazy.h"
 #include "eval/text_format/number_format.h"
+#include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "value.h"
@@ -750,16 +752,182 @@ Value ValueToText_(const Value* args, std::uint32_t arity, Arena& arena) {
   return Value::text(arena.intern(text.value()));
 }
 
-// ARRAYTOTEXT(array, [format]) — for a scalar input this is a thin
-// alias for VALUETOTEXT. Arrays are not fully modelled yet; when an
-// array AST reaches here it has already been reduced to its first
-// element by the eager dispatcher, so the behavioural difference only
-// shows up in the as-yet-unimplemented spill pipeline.
+void append_quoted_text(std::string_view src, std::string& out) {
+  out.push_back('"');
+  for (char c : src) {
+    if (c == '"') {
+      out.push_back('"');
+    }
+    out.push_back(c);
+  }
+  out.push_back('"');
+}
+
+bool append_arraytotext_cell(const Value& v, bool strict, std::string& out, ErrorCode* error) {
+  if (v.is_error()) {
+    out.append(display_name(v.as_error()));
+    return true;
+  }
+  if (strict && v.is_text()) {
+    append_quoted_text(v.as_text(), out);
+    return true;
+  }
+  auto text = coerce_to_text(v);
+  if (!text) {
+    *error = text.error();
+    return false;
+  }
+  out.append(text.value());
+  return true;
+}
+
+Value parse_arraytotext_format(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx, bool* strict) {
+  *strict = false;
+  if (call.as_call_arity() < 2U) {
+    return Value::blank();
+  }
+  const Value fmt = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (fmt.is_error()) {
+    return fmt;
+  }
+  auto n = coerce_to_number(fmt);
+  if (!n) {
+    return Value::error(n.error());
+  }
+  if (n.value() == 0.0) {
+    *strict = false;
+    return Value::blank();
+  }
+  if (n.value() == 1.0) {
+    *strict = true;
+    return Value::blank();
+  }
+  return Value::error(ErrorCode::Value);
+}
+
+Value arraytotext_from_array(const ArrayValue& arr, bool strict, Arena& arena) {
+  std::string out;
+  if (strict) {
+    out.push_back('{');
+  }
+  ErrorCode error = ErrorCode::Value;
+  for (std::uint32_t r = 0; r < arr.rows; ++r) {
+    for (std::uint32_t c = 0; c < arr.cols; ++c) {
+      if (r != 0U || c != 0U) {
+        if (strict) {
+          out.push_back(c == 0U ? ';' : ',');
+        } else {
+          out.append(", ");
+        }
+      }
+      const Value& cell = arr.cells[static_cast<std::size_t>(r) * arr.cols + c];
+      if (!append_arraytotext_cell(cell, strict, out, &error)) {
+        return Value::error(error);
+      }
+    }
+  }
+  if (strict) {
+    out.push_back('}');
+  }
+  return Value::text(arena.intern(out));
+}
+
+Value arraytotext_from_array_literal(const parser::AstNode& literal, bool strict, Arena& arena,
+                                     const FunctionRegistry& registry, const EvalContext& ctx) {
+  std::string out;
+  if (strict) {
+    out.push_back('{');
+  }
+  ErrorCode error = ErrorCode::Value;
+  const std::uint32_t rows = literal.as_array_rows();
+  const std::uint32_t cols = literal.as_array_cols();
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c) {
+      if (r != 0U || c != 0U) {
+        if (strict) {
+          out.push_back(c == 0U ? ';' : ',');
+        } else {
+          out.append(", ");
+        }
+      }
+      const Value cell = eval_node(literal.as_array_element(r, c), arena, registry, ctx);
+      if (cell.is_array()) {
+        return Value::error(ErrorCode::Value);
+      }
+      if (!append_arraytotext_cell(cell, strict, out, &error)) {
+        return Value::error(error);
+      }
+    }
+  }
+  if (strict) {
+    out.push_back('}');
+  }
+  return Value::text(arena.intern(out));
+}
+
+// ARRAYTOTEXT(array, [format]) — scalar inputs mirror VALUETOTEXT except
+// that error values are rendered as their display text. Array inputs must
+// preserve row/column shape long enough to emit Excel's concise list or
+// strict array-literal representation.
 Value ArrayToText_(const Value* args, std::uint32_t arity, Arena& arena) {
-  return ValueToText_(args, arity, arena);
+  bool strict = false;
+  if (arity >= 2U) {
+    const Value& fmt = args[1];
+    if (fmt.is_error()) {
+      return fmt;
+    }
+    auto n = coerce_to_number(fmt);
+    if (!n) {
+      return Value::error(n.error());
+    }
+    if (n.value() == 0.0) {
+      strict = false;
+    } else if (n.value() == 1.0) {
+      strict = true;
+    } else {
+      return Value::error(ErrorCode::Value);
+    }
+  }
+  if (args[0].is_array()) {
+    return arraytotext_from_array(*args[0].as_array(), strict, arena);
+  }
+  std::string out;
+  ErrorCode error = ErrorCode::Value;
+  if (!append_arraytotext_cell(args[0], strict, out, &error)) {
+    return Value::error(error);
+  }
+  return Value::text(arena.intern(out));
 }
 
 }  // namespace
+
+Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 1U || arity > 2U) {
+    return Value::error(ErrorCode::Value);
+  }
+  bool strict = false;
+  const Value fmt_status = parse_arraytotext_format(call, arena, registry, ctx, &strict);
+  if (fmt_status.is_error()) {
+    return fmt_status;
+  }
+  const parser::AstNode& array_arg = call.as_call_arg(0);
+  if (array_arg.kind() == parser::NodeKind::ArrayLiteral) {
+    return arraytotext_from_array_literal(array_arg, strict, arena, registry, ctx);
+  }
+  const Value array_v = eval_node_as_array(array_arg, arena, registry, ctx);
+  if (array_v.is_array()) {
+    return arraytotext_from_array(*array_v.as_array(), strict, arena);
+  }
+  std::string out;
+  ErrorCode error = ErrorCode::Value;
+  if (!append_arraytotext_cell(array_v, strict, out, &error)) {
+    return Value::error(error);
+  }
+  return Value::text(arena.intern(out));
+}
 
 void register_text_format_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {

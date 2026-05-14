@@ -64,7 +64,7 @@ Formulon は以下を **意図的にサポートしません**:
 
 ## ステータス
 
-カタログ済み Excel 関数 **522 / 522 を実装 (100%)**。Math & Trig、統計、論理、文字列、日付時刻、ルックアップ、財務、エンジニアリング、情報、データベース、キューブ、2024/2025 追加分 (GROUPBY、PIVOTBY、TRANSLATE、COPILOT など) まで揃っています。
+カタログ済み Excel 関数 **522 / 522 を認識**します。ただし、関数名を認識することと Excel 互換の実処理を持つことは分けています。関数カタログは availability を明示し、実装済み、実装済みだが検証未完了、環境依存、意図的な unavailable stub を区別します。unavailable stub は、Formulon が内蔵しないホストサービスや接続を必要とする関数に限定しています。例: PY、WEBSERVICE、STOCKHISTORY、IMAGE、RTD、TRANSLATE、DETECTLANGUAGE、COPILOT、CUBE* OLAP ファミリ。現在の内訳は `make function-status` で確認できます。
 
 oracle は **92 カテゴリ** を定義し、Mac Excel 365 ja-JP から再生成。Windows Excel 365 ja-JP は `win-365-ja_JP` バリアント golden でカバーしています。新規ワークブックはデフォルトで `win-365-ja_JP` profile を使い、profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切替可能です。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで意図的に未公開です。
 

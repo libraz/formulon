@@ -577,6 +577,9 @@ export interface FunctionMetadataResult {
   readonly minArity?: number;
   /** `0xFFFFFFFF` (i.e. `4294967295`) denotes an unbounded variadic. */
   readonly maxArity?: number;
+  /** Availability class: 0 implemented, 1 implemented_unverified,
+   *  2 environment_bound, 3 unavailable_stub. */
+  readonly availability?: number;
   readonly signatureTemplate?: string;
   readonly description?: string;
 }

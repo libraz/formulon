@@ -906,13 +906,12 @@ groups:
         expected: diverged
 
   # -------------------------------------------------------------------------
-  # External / stub-only cluster. These functions either dispatch to an
-  # external service (network / cloud / Python runtime / RTD COM provider /
-  # cube data source) that Formulon does not embed, or they read out-of-band
-  # workbook metadata (rPh annotations, pivot anchors) the engine does not
-  # carry. Each member returns a fixed error / passthrough surface; the
-  # closure is a divergence-only declaration. The cases yaml carries one
-  # probe per function and divergence.yaml marks each as skip-oracle.
+  # Unavailable host-service / connection stubs. These functions dispatch
+  # to an external service (network / cloud / Python runtime / RTD COM
+  # provider / cube data source) that Formulon deliberately does not embed.
+  # Each member returns a fixed unavailable surface; the closure is a
+  # divergence-only declaration. Real-but-unverified implementations and
+  # lazy forms are tracked separately.
   # -------------------------------------------------------------------------
   - function: "IMAGE"
     aspect: "external image fetch stub"
@@ -970,12 +969,13 @@ groups:
         probe_regex: 'TRANSLATE\("'
         expected: diverged
 
+  # Real implementations whose Excel dialect/parity closure is still open.
   - function: "ARRAYTOTEXT"
     aspect: "spill-array text serialiser"
     behaviors:
       - name: "literal array -> Excel-format text"
         probe_regex: 'ARRAYTOTEXT\(\{'
-        expected: diverged
+        expected: impl
 
   - function: "FILTERXML"
     aspect: "XPath query against XML text"
@@ -1041,7 +1041,7 @@ groups:
         expected: impl
 
   - function: "PHONETIC"
-    aspect: "rPh-annotation lookup stub"
+    aspect: "rPh-annotation lookup"
     behaviors:
       - name: "text passthrough (no rPh)"
         probe_regex: 'PHONETIC\("'

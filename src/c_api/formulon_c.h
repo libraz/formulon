@@ -2098,11 +2098,29 @@ FM_API fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, uint32_t shee
 /* -------------------------------------------------------------------------- */
 
 /**
+ * @brief Coarse availability class for a catalogued function.
+ *
+ * The value distinguishes "the parser/registry recognizes this function"
+ * from "Formulon has a real Excel-compatible implementation." Consumers
+ * should surface `FM_FUNCTION_UNAVAILABLE_STUB` clearly in autocomplete
+ * and migration reports instead of treating it as implemented parity.
+ */
+typedef enum {
+  FM_FUNCTION_IMPLEMENTED = 0,
+  FM_FUNCTION_IMPLEMENTED_UNVERIFIED = 1,
+  FM_FUNCTION_ENVIRONMENT_BOUND = 2,
+  FM_FUNCTION_UNAVAILABLE_STUB = 3
+} fm_function_availability_t;
+
+/**
  * @brief Result shape for `fm_function_metadata`.
  *
  * `canonical_name` is always populated when the function is known.
  * `min_arity` / `max_arity` are pulled from `FunctionDef`; the latter
  * is `0xFFFFFFFFu` (i.e. `eval::kVariadic`) for unbounded variadics.
+ * `availability` reports whether the function is a real implementation,
+ * a real-but-not-fully-verified implementation, host/environment-bound,
+ * or an intentionally unavailable fixed-error stub.
  * `description` and `signature_template` are populated when the
  * locale-specific metadata table has an entry for this function;
  * otherwise both are `NULL`.
@@ -2114,6 +2132,7 @@ typedef struct {
   const char* canonical_name;
   uint32_t min_arity;
   uint32_t max_arity;
+  fm_function_availability_t availability;
   /* `NULL` until the locale metadata table populates it. */
   const char* signature_template;
   /* `NULL` until the locale metadata table populates it. */

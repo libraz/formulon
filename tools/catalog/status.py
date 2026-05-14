@@ -31,6 +31,7 @@ from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = REPO_ROOT / "tools" / "catalog" / "functions.txt"
+STATUS_PATH = REPO_ROOT / "tools" / "catalog" / "function_status.tsv"
 EVAL_DIR = REPO_ROOT / "src" / "eval"
 SPECIAL_FORMS_PATH = EVAL_DIR / "special_forms_catalog.cpp"
 
@@ -145,6 +146,38 @@ def load_catalog(path: Path) -> Tuple[List[Tuple[str, List[str]]], Set[str]]:
     return sections, all_names
 
 
+def load_function_status(path: Path) -> Dict[str, str]:
+    """Parses the optional function availability override table.
+
+    Omitted names default to `implemented`. The parser intentionally stays
+    TSV + stdlib-only so `make function-status` has no PyYAML dependency.
+    """
+    statuses: Dict[str, str] = {}
+    if not path.exists():
+        return statuses
+    valid = {
+        "implemented",
+        "implemented_unverified",
+        "environment_bound",
+        "unavailable_stub",
+    }
+    with path.open("r", encoding="utf-8") as fh:
+        for lineno, raw in enumerate(fh, start=1):
+            line = raw.rstrip("\n")
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            cols = line.split("\t")
+            if len(cols) < 2:
+                raise ValueError(f"{path}:{lineno}: expected NAME<TAB>STATUS")
+            name = cols[0].strip()
+            status = cols[1].strip()
+            if status not in valid:
+                raise ValueError(f"{path}:{lineno}: unknown status {status!r}")
+            statuses[name] = status
+    return statuses
+
+
 # ---- Source scanning -----------------------------------------------------
 
 def scan_registered_names(eval_dir: Path) -> Set[str]:
@@ -218,13 +251,26 @@ def print_full_report(
     sections: Sequence[Tuple[str, Sequence[str]]],
     implemented: Set[str],
     total_names: Set[str],
+    statuses: Dict[str, str],
     section_filter: Optional[str],
 ) -> None:
     total = len(total_names)
     done = len(implemented & total_names)
+    unavailable = sum(1 for n in total_names if statuses.get(n, "implemented") == "unavailable_stub")
+    unverified = sum(1 for n in total_names if statuses.get(n, "implemented") == "implemented_unverified")
+    env_bound = sum(1 for n in total_names if statuses.get(n, "implemented") == "environment_bound")
+    real_impl = done - unavailable
     pct = 0.0 if total == 0 else 100.0 * done / total
-    header = f"Formulon function coverage: {done} / {total} implemented ({pct:.1f}%)"
+    real_pct = 0.0 if total == 0 else 100.0 * real_impl / total
+    header = f"Formulon function recognition: {done} / {total} catalogued ({pct:.1f}%)"
     print(bold(header))
+    print(
+        "Availability: "
+        f"{real_impl}/{total} real implementations ({real_pct:.1f}%), "
+        f"{unavailable} unavailable stubs, "
+        f"{unverified} implemented-unverified, "
+        f"{env_bound} environment-bound"
+    )
     print()
 
     for title, names in sections:
@@ -233,9 +279,22 @@ def print_full_report(
         name_set = set(names)
         impl_here = sorted(n for n in name_set if n in implemented)
         miss_here = sorted(n for n in name_set if n not in implemented)
+        stub_here = sorted(n for n in name_set if statuses.get(n, "implemented") == "unavailable_stub")
+        unverified_here = sorted(n for n in name_set if statuses.get(n, "implemented") == "implemented_unverified")
+        env_here = sorted(n for n in name_set if statuses.get(n, "implemented") == "environment_bound")
         print(bold(f"## {title}"))
-        print(f"  Implemented {_count_line(len(impl_here), len(name_set))}:")
+        print(f"  Recognized {_count_line(len(impl_here), len(name_set))}:")
         print("    " + (" ".join(impl_here) if impl_here else red("(none)")))
+        if stub_here or unverified_here or env_here:
+            if stub_here:
+                print(f"  Unavailable stubs {len(stub_here)}:")
+                print("    " + " ".join(stub_here))
+            if unverified_here:
+                print(f"  Implemented but unverified {len(unverified_here)}:")
+                print("    " + " ".join(unverified_here))
+            if env_here:
+                print(f"  Environment-bound {len(env_here)}:")
+                print("    " + " ".join(env_here))
         print(f"  Missing {len(miss_here)}:")
         if miss_here:
             print("    " + " ".join(miss_here))
@@ -280,6 +339,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "the catalog (the unit-test invariant should keep this empty).",
     )
     parser.add_argument(
+        "--availability",
+        choices=["implemented", "implemented_unverified", "environment_bound", "unavailable_stub"],
+        default=None,
+        help="Print catalog names with the selected availability status.",
+    )
+    parser.add_argument(
         "--category",
         metavar="NAME",
         default=None,
@@ -291,8 +356,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"catalog not found: {CATALOG_PATH}", file=sys.stderr)
         return 2
 
-    sections, catalog_names = load_catalog(CATALOG_PATH)
+    try:
+        sections, catalog_names = load_catalog(CATALOG_PATH)
+        statuses = load_function_status(STATUS_PATH)
+    except ValueError as exc:
+        print(f"catalog status error: {exc}", file=sys.stderr)
+        return 2
     implemented = scan_implemented(REPO_ROOT)
+
+    unknown_status_names = sorted(set(statuses) - catalog_names)
+    if unknown_status_names:
+        print(
+            "catalog status error: function_status.tsv contains names not in functions.txt: "
+            + ", ".join(unknown_status_names),
+            file=sys.stderr,
+        )
+        return 2
 
     if args.orphans:
         print_orphans(catalog_names, implemented)
@@ -300,8 +379,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.missing:
         print_missing_only(sections, implemented, args.category)
         return 0
+    if args.availability:
+        for name in sorted(catalog_names):
+            if statuses.get(name, "implemented") == args.availability:
+                print(name)
+        return 0
 
-    print_full_report(sections, implemented, catalog_names, args.category)
+    print_full_report(sections, implemented, catalog_names, statuses, args.category)
     return 0
 
 
