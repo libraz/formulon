@@ -228,6 +228,27 @@ TEST(BuiltinsHstack, ErrorCellInArrayArgPreserved) {
   EXPECT_DOUBLE_EQ(cells[3].as_number(), 20.0);
 }
 
+TEST(BuiltinsHstack, ErrorCellInArrayLiteralArgPreserved) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=HSTACK({1;#N/A;3}, {4;5;6})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 4.0);
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::NA);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(cells[4].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(cells[5].as_number(), 6.0);
+}
+
 // ---------------------------------------------------------------------------
 // VSTACK
 // ---------------------------------------------------------------------------
@@ -366,6 +387,27 @@ TEST(BuiltinsVstack, PreservesTextCells) {
   EXPECT_EQ(cells[1].as_text(), "beta");
   EXPECT_EQ(cells[2].as_text(), "gamma");
   EXPECT_EQ(cells[3].as_text(), "delta");
+}
+
+TEST(BuiltinsVstack, ErrorCellInArrayLiteralArgPreserved) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=VSTACK({1,2,3}, {#VALUE!,5,6})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 3.0);
+  ASSERT_TRUE(cells[3].is_error());
+  EXPECT_EQ(cells[3].as_error(), ErrorCode::Value);
+  EXPECT_DOUBLE_EQ(cells[4].as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(cells[5].as_number(), 6.0);
 }
 
 }  // namespace

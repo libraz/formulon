@@ -168,7 +168,8 @@ Value eval_trimrange_lazy(const parser::AstNode& call, Arena& arena, const Funct
     const std::size_t src_row_base = (static_cast<std::size_t>(row_start) + r) * in_cols;
     const std::size_t dst_row_base = static_cast<std::size_t>(r) * static_cast<std::size_t>(kept_cols);
     for (std::uint32_t c = 0; c < kept_cols; ++c) {
-      buffer[dst_row_base + c] = in->cells[src_row_base + col_start + c];
+      const Value& cell = in->cells[src_row_base + col_start + c];
+      buffer[dst_row_base + c] = cell.is_blank() ? Value::number(0.0) : cell;
     }
   }
 

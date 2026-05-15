@@ -1,5 +1,5 @@
 suite: regression_advanced
-description: "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (oracle compare_value cannot navigate ArrayValue). Live cases cover scalar error returns — LINEST/TREND/LOGEST/GROWTH share three error perspectives each (shape mismatch, singular system or y<=0, non-numeric cell); FREQUENCY surfaces error-cell propagation from data_array and bins_array. Tolerance widened to 1e-10 for stats-block fit metrics."
+description: "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (committed oracle golden predates array-spill comparison). Live cases cover scalar error returns — LINEST/TREND/LOGEST/GROWTH share three error perspectives each (shape mismatch, singular system or y<=0, non-numeric cell); FREQUENCY surfaces error-cell propagation from data_array and bins_array. Tolerance widened to 1e-10 for stats-block fit metrics."
 tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
 locale: ja-JP
 cases:

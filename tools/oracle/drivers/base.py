@@ -56,9 +56,10 @@ class CaseResult:
 
     Mirrors the on-wire JSON shape the generator will emit. `kind` is one
     of {'blank','number','bool','text','error','array'}. `array_shape` is
-    populated only for spill results; the initial driver flattens arrays
-    to a single value and signals `array_shape is not None` so callers
-    can log.
+    populated only for spill results; array values are flattened row-major.
+    Scalar array cells are represented as JSON primitives where possible
+    (blank -> None, number/bool/text -> primitive), with error cells using
+    `{"kind": "error", "code": "#N/A"}` records.
     """
 
     id: str

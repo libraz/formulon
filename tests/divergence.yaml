@@ -581,37 +581,37 @@ entries:
   # semantics directly. Skip-oracle entries close once the contributor's
   # range_args.cpp ArrayValue navigation lands.
   - id: textsplit_col_delim_basic
-    reason: "Spill-producing TEXTSPLIT returns ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsTextSplit.ScalarColDelimSplitsIntoRow covers semantics."
+    reason: "Spill-producing TEXTSPLIT returns ArrayValue; committed oracle golden predates array-spill comparison, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsTextSplit.ScalarColDelimSplitsIntoRow covers semantics."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: textsplit_col_delim_no_match
-    reason: "Spill-producing TEXTSPLIT returns 1x1 ArrayValue when no delimiter matches; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.NoMatchYieldsSingleCellArray covers semantics."
+    reason: "Spill-producing TEXTSPLIT returns 1x1 ArrayValue when no delimiter matches; committed oracle golden predates array-spill comparison. Unit test BuiltinsTextSplit.NoMatchYieldsSingleCellArray covers semantics."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: textsplit_both_delim_2x2
-    reason: "Spill-producing TEXTSPLIT returns 2x2 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsTextSplit.BothDelimitersYield2DGrid covers semantics."
+    reason: "Spill-producing TEXTSPLIT returns 2x2 ArrayValue; committed oracle golden predates array-spill comparison, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsTextSplit.BothDelimitersYield2DGrid covers semantics."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: textsplit_ignore_empty_collapse
-    reason: "Spill-producing TEXTSPLIT with ignore_empty=TRUE returns ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.IgnoreEmptyDropsEmptyTokens covers semantics."
+    reason: "Spill-producing TEXTSPLIT with ignore_empty=TRUE returns ArrayValue; committed oracle golden predates array-spill comparison. Unit test BuiltinsTextSplit.IgnoreEmptyDropsEmptyTokens covers semantics."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: textsplit_delim_array_union
-    reason: "Spill-producing TEXTSPLIT with delimiter array returns ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.ArrayOfColDelimitersSplitsOnAny covers semantics including longest-match precedence."
+    reason: "Spill-producing TEXTSPLIT with delimiter array returns ArrayValue; committed oracle golden predates array-spill comparison. Unit test BuiltinsTextSplit.ArrayOfColDelimitersSplitsOnAny covers semantics including longest-match precedence."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: textsplit_ragged_pad_na
-    reason: "Spill-producing TEXTSPLIT pads ragged rows in ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsTextSplit.RaggedRowsPaddedWithNaByDefault covers #N/A pad semantics."
+    reason: "Spill-producing TEXTSPLIT pads ragged rows in ArrayValue; committed oracle golden predates array-spill comparison. Unit test BuiltinsTextSplit.RaggedRowsPaddedWithNaByDefault covers #N/A pad semantics."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
@@ -623,13 +623,13 @@ entries:
   # by resolve_range_arg. Unit tests in
   # tests/unit/eval/builtins/stats_test.cpp validate spill content.
   - id: mode_mult_two_way_tie
-    reason: "MODE.MULT returns a 2x1 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit tests validate vertical-spill content directly."
+    reason: "MODE.MULT returns a 2x1 ArrayValue; committed oracle golden predates array-spill comparison, INDEX wrappers blocked by resolve_range_arg. Unit tests validate vertical-spill content directly."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: mode_mult_single_mode_1x1
-    reason: "MODE.MULT with a single mode returns a 1x1 ArrayValue (still vertical-array shape); oracle compare_value only handles scalars. Unit tests validate the boundary."
+    reason: "MODE.MULT with a single mode returns a 1x1 ArrayValue (still vertical-array shape); committed oracle golden predates array-spill comparison. Unit tests validate the boundary."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
@@ -641,13 +641,13 @@ entries:
   # Unit tests in tests/unit/eval/matrix_ops_eval_test.cpp validate
   # product values directly.
   - id: mmult_basic_2x3_3x2
-    reason: "MMULT returns a 2x2 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsMmult.BasicProductFromSheetRanges covers the canonical 2x3 * 3x2 product."
+    reason: "MMULT returns a 2x2 ArrayValue; committed oracle golden predates array-spill comparison, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsMmult.BasicProductFromSheetRanges covers the canonical 2x3 * 3x2 product."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: mmult_identity_right_neutral
-    reason: "MMULT returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMmult.IdentityIsLeftAndRightNeutral covers identity neutrality."
+    reason: "MMULT returns a 2x2 ArrayValue; committed oracle golden predates array-spill comparison. Unit test BuiltinsMmult.IdentityIsLeftAndRightNeutral covers identity neutrality."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
@@ -658,33 +658,33 @@ entries:
   # MMULT. Singular / non-square / error-cell cases stay live (scalar
   # error outputs).
   - id: minverse_identity
-    reason: "MINVERSE returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMinverse.IdentityIsItsOwnInverse covers the boundary."
+    reason: "MINVERSE returns a 2x2 ArrayValue; committed oracle golden predates array-spill comparison. Unit test BuiltinsMinverse.IdentityIsItsOwnInverse covers the boundary."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: minverse_2x2_basic
-    reason: "MINVERSE returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMinverse.TwoByTwoInverse covers a non-trivial inverse."
+    reason: "MINVERSE returns a 2x2 ArrayValue; committed oracle golden predates array-spill comparison. Unit test BuiltinsMinverse.TwoByTwoInverse covers a non-trivial inverse."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
   # GROUPBY spill outputs. The grouped-aggregate result is always a 2D
-  # ArrayValue; oracle compare_value only handles scalars. GROUPBY's own
+  # ArrayValue; committed oracle golden predates array-spill comparison. GROUPBY's own
   # `read_array_arg` helper is independent of resolve_range_arg, so these
   # divergences will close once the oracle compare_value gains
   # ArrayValue-anchor handling (or a per-cell projection contract). Unit
   # tests in tests/unit/eval/builtins_groupby_test.cpp validate spill
   # content for both bare-name and LAMBDA aggregator forms.
   - id: groupby_bare_sum
-    reason: "GROUPBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test GroupBy.BareSumName covers bare-name aggregator dispatch and grouping order."
+    reason: "GROUPBY returns a 2D ArrayValue; committed oracle golden predates array-spill comparison. Unit test GroupBy.BareSumName covers bare-name aggregator dispatch and grouping order."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: groupby_lambda_sum
-    reason: "GROUPBY with a LAMBDA aggregator returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test GroupBy.SingleKeyLambdaAggregatorSum covers inline-LAMBDA dispatch."
+    reason: "GROUPBY with a LAMBDA aggregator returns a 2D ArrayValue; committed oracle golden predates array-spill comparison. Unit test GroupBy.SingleKeyLambdaAggregatorSum covers inline-LAMBDA dispatch."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
@@ -694,19 +694,19 @@ entries:
   # compare_value only handles scalars. Same read_array_arg path as
   # GROUPBY.
   - id: pivotby_bare_sum
-    reason: "PIVOTBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BareSumName covers bare-name aggregator dispatch."
+    reason: "PIVOTBY returns a 2D ArrayValue; committed oracle golden predates array-spill comparison. Unit test PivotBy.BareSumName covers bare-name aggregator dispatch."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: pivotby_lambda_sum
-    reason: "PIVOTBY with a LAMBDA aggregator returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test PivotBy.BasicTwoByTwoLambdaAggregatorSum covers inline-LAMBDA dispatch."
+    reason: "PIVOTBY with a LAMBDA aggregator returns a 2D ArrayValue; committed oracle golden predates array-spill comparison. Unit test PivotBy.BasicTwoByTwoLambdaAggregatorSum covers inline-LAMBDA dispatch."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: pivotby_multi_col_rows_basic
-    reason: "Multi-column PIVOTBY emits a 2D ArrayValue cross-product; oracle compare_value only handles scalars. Unit test PivotBy.MultiColumnRowFieldsBasic covers the K=2 layout (row-keys + col-groups + grand totals); shape captured against Mac Excel 16.108.1 via xlwings INDEX probes."
+    reason: "Multi-column PIVOTBY emits a 2D ArrayValue cross-product; committed oracle golden predates array-spill comparison. Unit test PivotBy.MultiColumnRowFieldsBasic covers the K=2 layout (row-keys + col-groups + grand totals); shape captured against Mac Excel 16.108.1 via xlwings INDEX probes."
     prefer: mac-excel-365
     first_noted: 2026-05-02
     last_verified_excel_version: "16.108.1"
@@ -738,95 +738,95 @@ entries:
 
   # FILTER / UNIQUE / SORT / SORTBY (sort_filter family) — spill-output
   # cases. Each function evaluates its inputs via eval_node_as_array and
-  # returns a 2D ArrayValue. Oracle compare_value only handles scalar
+  # returns a 2D ArrayValue. Committed oracle goldens still carry scalar-only skip records
   # Values; Unit tests under tests/unit/eval/{filter,unique,sort,sortby}
   # _eval_test.cpp exercise the spill content directly.
   - id: filter_row_axis_basic
-    reason: "FILTER row-axis result is a 2D spill (2x1 array); oracle compare_value only handles scalars. Unit tests in filter_eval_test.cpp cover the column-vector mask path."
+    reason: "FILTER row-axis result is a 2D spill (2x1 array); committed oracle golden predates array-spill comparison. Unit tests in filter_eval_test.cpp cover the column-vector mask path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: filter_col_axis_basic
-    reason: "FILTER col-axis result is a 1x2 spill; oracle compare_value only handles scalars. Unit tests in filter_eval_test.cpp cover the row-vector mask path."
+    reason: "FILTER col-axis result is a 1x2 spill; committed oracle golden predates array-spill comparison. Unit tests in filter_eval_test.cpp cover the row-vector mask path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: unique_row_axis_dedup
-    reason: "UNIQUE row-axis result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover row-axis dedup ordering."
+    reason: "UNIQUE row-axis result is a 3x1 spill; committed oracle golden predates array-spill comparison. Unit tests in unique_eval_test.cpp cover row-axis dedup ordering."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: unique_col_axis_dedup
-    reason: "UNIQUE by_col=TRUE result is a 1x3 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover col-axis dedup."
+    reason: "UNIQUE by_col=TRUE result is a 1x3 spill; committed oracle golden predates array-spill comparison. Unit tests in unique_eval_test.cpp cover col-axis dedup."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: unique_exactly_once_keeps_singletons
-    reason: "UNIQUE exactly_once=TRUE result is a 2x1 spill of the rows that occur once; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover this path."
+    reason: "UNIQUE exactly_once=TRUE result is a 2x1 spill of the rows that occur once; committed oracle golden predates array-spill comparison. Unit tests in unique_eval_test.cpp cover this path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: unique_case_insensitive_text
-    reason: "UNIQUE case-insensitive ASCII text dedup yields a 2x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover the case-insensitive equality semantics."
+    reason: "UNIQUE case-insensitive ASCII text dedup yields a 2x1 spill; committed oracle golden predates array-spill comparison. Unit tests in unique_eval_test.cpp cover the case-insensitive equality semantics."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: unique_pass_through_all_distinct
-    reason: "UNIQUE pass-through (all rows distinct) returns a 3x1 spill; oracle compare_value only handles scalars. Unit tests in unique_eval_test.cpp cover identity preservation."
+    reason: "UNIQUE pass-through (all rows distinct) returns a 3x1 spill; committed oracle golden predates array-spill comparison. Unit tests in unique_eval_test.cpp cover identity preservation."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: sort_row_ascending_default
-    reason: "SORT default row-axis ascending yields a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the default ordering."
+    reason: "SORT default row-axis ascending yields a 3x1 spill; committed oracle golden predates array-spill comparison. Unit tests in sort_eval_test.cpp cover the default ordering."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: sort_col_axis_by_col
-    reason: "SORT by_col=TRUE yields a 1x3 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the column-axis path."
+    reason: "SORT by_col=TRUE yields a 1x3 spill; committed oracle golden predates array-spill comparison. Unit tests in sort_eval_test.cpp cover the column-axis path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: sort_descending_order
-    reason: "SORT sort_order=-1 yields a 3x1 descending spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover descending sort."
+    reason: "SORT sort_order=-1 yields a 3x1 descending spill; committed oracle golden predates array-spill comparison. Unit tests in sort_eval_test.cpp cover descending sort."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: sort_mixed_kind_ordering
-    reason: "SORT mixed-kind ordering (Number < Text < Bool < Error < Blank) yields a 4x1 spill; oracle compare_value only handles scalars. Unit tests in sort_eval_test.cpp cover the canonical kind-rank."
+    reason: "SORT mixed-kind ordering (Number < Text < Bool < Error < Blank) yields a 4x1 spill; committed oracle golden predates array-spill comparison. Unit tests in sort_eval_test.cpp cover the canonical kind-rank."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: sortby_single_key_ascending
-    reason: "SORTBY single-key ascending result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover the single-key path."
+    reason: "SORTBY single-key ascending result is a 3x1 spill; committed oracle golden predates array-spill comparison. Unit tests in sortby_eval_test.cpp cover the single-key path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: sortby_single_key_descending
-    reason: "SORTBY single-key descending result is a 3x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover order=-1."
+    reason: "SORTBY single-key descending result is a 3x1 spill; committed oracle golden predates array-spill comparison. Unit tests in sortby_eval_test.cpp cover order=-1."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: sortby_two_key_composite
-    reason: "SORTBY two-key composite sort result is a 4x1 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover multi-key composition."
+    reason: "SORTBY two-key composite sort result is a 4x1 spill; committed oracle golden predates array-spill comparison. Unit tests in sortby_eval_test.cpp cover multi-key composition."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: sortby_row_vector_sorts_cols
-    reason: "SORTBY row-vector key sorts cols, yielding a 1x3 spill; oracle compare_value only handles scalars. Unit tests in sortby_eval_test.cpp cover axis inference."
+    reason: "SORTBY row-vector key sorts cols, yielding a 1x3 spill; committed oracle golden predates array-spill comparison. Unit tests in sortby_eval_test.cpp cover axis inference."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
@@ -840,558 +840,137 @@ entries:
   # tests/unit/eval/{linest,trend,logest_growth,frequency}_eval_test.cpp
   # cover the spill content directly.
   - id: linest_univariate_stats_false
-    reason: "LINEST stats=FALSE returns a 1x(k+1) spill of regression coefficients; oracle compare_value only handles scalars. Unit tests in linest_eval_test.cpp cover the slope/intercept content."
+    reason: "LINEST stats=FALSE returns a 1x(k+1) spill of regression coefficients; committed oracle golden predates array-spill comparison. Unit tests in linest_eval_test.cpp cover the slope/intercept content."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: linest_univariate_stats_true
-    reason: "LINEST stats=TRUE returns a 5x(k+1) statistics matrix (coefficients, SEs, R^2, F, df_resid, ss_reg, ss_resid); oracle compare_value only handles scalars. Unit tests in linest_eval_test.cpp cover the full block."
+    reason: "LINEST stats=TRUE returns a 5x(k+1) statistics matrix (coefficients, SEs, R^2, F, df_resid, ss_reg, ss_resid); committed oracle golden predates array-spill comparison. Unit tests in linest_eval_test.cpp cover the full block."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: linest_multivariate_basic
-    reason: "LINEST multivariate (k>=2) returns a 1x(k+1) spill; oracle compare_value only handles scalars. Unit tests in linest_eval_test.cpp cover multivariate dispatch."
+    reason: "LINEST multivariate (k>=2) returns a 1x(k+1) spill; committed oracle golden predates array-spill comparison. Unit tests in linest_eval_test.cpp cover multivariate dispatch."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: linest_const_false_no_intercept
-    reason: "LINEST const=FALSE returns a spill with intercept slot=0; oracle compare_value only handles scalars. Unit tests in linest_eval_test.cpp cover intercept-suppression."
+    reason: "LINEST const=FALSE returns a spill with intercept slot=0; committed oracle golden predates array-spill comparison. Unit tests in linest_eval_test.cpp cover intercept-suppression."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: trend_univariate_omit_new_x
-    reason: "TREND with new_x omitted returns a column-vector spill of fitted y; oracle compare_value only handles scalars. Unit tests in trend_eval_test.cpp cover the default-new_x path."
+    reason: "TREND with new_x omitted returns a column-vector spill of fitted y; committed oracle golden predates array-spill comparison. Unit tests in trend_eval_test.cpp cover the default-new_x path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: trend_univariate_with_new_x
-    reason: "TREND with explicit new_x returns a vector spill at the new observations; oracle compare_value only handles scalars. Unit tests in trend_eval_test.cpp cover the new_x path."
+    reason: "TREND with explicit new_x returns a vector spill at the new observations; committed oracle golden predates array-spill comparison. Unit tests in trend_eval_test.cpp cover the new_x path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: trend_multivariate_basic
-    reason: "TREND multivariate returns a vector spill at the original observations; oracle compare_value only handles scalars. Unit tests in trend_eval_test.cpp cover multivariate prediction."
+    reason: "TREND multivariate returns a vector spill at the original observations; committed oracle golden predates array-spill comparison. Unit tests in trend_eval_test.cpp cover multivariate prediction."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: trend_const_false_no_intercept
-    reason: "TREND const=FALSE forces fit through the origin and returns a vector spill; oracle compare_value only handles scalars. Unit tests in trend_eval_test.cpp cover intercept-suppression."
+    reason: "TREND const=FALSE forces fit through the origin and returns a vector spill; committed oracle golden predates array-spill comparison. Unit tests in trend_eval_test.cpp cover intercept-suppression."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: logest_univariate_stats_false
-    reason: "LOGEST stats=FALSE returns a 1x(k+1) spill of exp-coefficients; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the m/b extraction."
+    reason: "LOGEST stats=FALSE returns a 1x(k+1) spill of exp-coefficients; committed oracle golden predates array-spill comparison. Unit tests in logest_growth_eval_test.cpp cover the m/b extraction."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: logest_univariate_stats_true
-    reason: "LOGEST stats=TRUE returns a 5x(k+1) matrix (rows 2-5 stay on the linear log scale per Microsoft docs); oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the stats block."
+    reason: "LOGEST stats=TRUE returns a 5x(k+1) matrix (rows 2-5 stay on the linear log scale per Microsoft docs); committed oracle golden predates array-spill comparison. Unit tests in logest_growth_eval_test.cpp cover the stats block."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: logest_multivariate_basic
-    reason: "LOGEST multivariate returns a 1x(k+1) spill of exp-coefficients; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover multivariate exp dispatch."
+    reason: "LOGEST multivariate returns a 1x(k+1) spill of exp-coefficients; committed oracle golden predates array-spill comparison. Unit tests in logest_growth_eval_test.cpp cover multivariate exp dispatch."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: logest_const_false_intercept_one
-    reason: "LOGEST const=FALSE puts exp(0)=1 in the intercept slot of the spill; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the multiplicative-identity slot."
+    reason: "LOGEST const=FALSE puts exp(0)=1 in the intercept slot of the spill; committed oracle golden predates array-spill comparison. Unit tests in logest_growth_eval_test.cpp cover the multiplicative-identity slot."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: growth_univariate_omit_new_x
-    reason: "GROWTH with new_x omitted returns a column-vector exp-fit spill at known_x; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the default-new_x path."
+    reason: "GROWTH with new_x omitted returns a column-vector exp-fit spill at known_x; committed oracle golden predates array-spill comparison. Unit tests in logest_growth_eval_test.cpp cover the default-new_x path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: growth_univariate_with_new_x
-    reason: "GROWTH with explicit new_x returns a vector spill at the new observations; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover the new_x path."
+    reason: "GROWTH with explicit new_x returns a vector spill at the new observations; committed oracle golden predates array-spill comparison. Unit tests in logest_growth_eval_test.cpp cover the new_x path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: growth_multivariate_basic
-    reason: "GROWTH multivariate returns a vector exp-fit spill; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover multivariate exp prediction."
+    reason: "GROWTH multivariate returns a vector exp-fit spill; committed oracle golden predates array-spill comparison. Unit tests in logest_growth_eval_test.cpp cover multivariate exp prediction."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: growth_const_false_no_intercept
-    reason: "GROWTH const=FALSE forces fit through y=1 and returns a vector spill; oracle compare_value only handles scalars. Unit tests in logest_growth_eval_test.cpp cover intercept-suppression."
+    reason: "GROWTH const=FALSE forces fit through y=1 and returns a vector spill; committed oracle golden predates array-spill comparison. Unit tests in logest_growth_eval_test.cpp cover intercept-suppression."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: frequency_basic_three_bins
-    reason: "FREQUENCY returns an (numeric_bins+1)x1 column spill of bucket counts; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover the basic distribution."
+    reason: "FREQUENCY returns an (numeric_bins+1)x1 column spill of bucket counts; committed oracle golden predates array-spill comparison. Unit tests in frequency_eval_test.cpp cover the basic distribution."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: frequency_empty_bins
-    reason: "FREQUENCY with empty bins returns a 1x1 spill containing the count of numeric data; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover the degenerate-bins case."
+    reason: "FREQUENCY with empty bins returns a 1x1 spill containing the count of numeric data; committed oracle golden predates array-spill comparison. Unit tests in frequency_eval_test.cpp cover the degenerate-bins case."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: frequency_text_in_data_skipped
-    reason: "FREQUENCY silently skips non-numeric data cells and returns a column spill; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover the skip-text path."
+    reason: "FREQUENCY silently skips non-numeric data cells and returns a column spill; committed oracle golden predates array-spill comparison. Unit tests in frequency_eval_test.cpp cover the skip-text path."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: frequency_unsorted_bins
-    reason: "FREQUENCY does NOT sort bins internally; the output reflects the given bin order as a column spill; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover unsorted-bin order."
+    reason: "FREQUENCY does NOT sort bins internally; the output reflects the given bin order as a column spill; committed oracle golden predates array-spill comparison. Unit tests in frequency_eval_test.cpp cover unsorted-bin order."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: frequency_all_data_exceeds_bins
-    reason: "FREQUENCY routes data exceeding all bins into the trailing extra slot; the output is a column spill; oracle compare_value only handles scalars. Unit tests in frequency_eval_test.cpp cover the extra-slot fill."
+    reason: "FREQUENCY routes data exceeding all bins into the trailing extra slot; the output is a column spill; committed oracle golden predates array-spill comparison. Unit tests in frequency_eval_test.cpp cover the extra-slot fill."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
   - id: frequency_bins_error_propagates
-    reason: "FREQUENCY silently skips error cells in bins_array (matches Mac Excel) and returns a column spill; oracle compare_value only handles scalars. Unit test BuiltinsFrequency.ErrorInBinsArraySilentlySkipped covers the silent-skip semantics."
+    reason: "FREQUENCY silently skips error cells in bins_array (matches Mac Excel) and returns a column spill; committed oracle golden predates array-spill comparison. Unit test BuiltinsFrequency.ErrorInBinsArraySilentlySkipped covers the silent-skip semantics."
     prefer: mac-excel-365
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
-  # =========================================================================
-  # dynamic_array_reshape spill outputs — oracle compare_value cannot
-  # navigate ArrayValue, so every spill-producing case below is skip-oracle.
-  # Live error cases (#VALUE!, #CALC!) remain in oracle suite. Unit tests in
-  # tests/unit/eval/builtins_*.cpp cover spill content for each function.
-  # =========================================================================
-  # -- CHOOSECOLS --
-  - id: choosecols_multiple_positive
-    reason: "CHOOSECOLS returns a dynamic-array spill (multiple positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: choosecols_negative_index
-    reason: "CHOOSECOLS returns a dynamic-array spill (negative index); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: choosecols_repeated_index
-    reason: "CHOOSECOLS returns a dynamic-array spill (repeated index); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: choosecols_single_positive
-    reason: "CHOOSECOLS returns a dynamic-array spill (single positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- CHOOSEROWS --
-  - id: chooserows_multiple_positive
-    reason: "CHOOSEROWS returns a dynamic-array spill (multiple positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: chooserows_negative_index
-    reason: "CHOOSEROWS returns a dynamic-array spill (negative index); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: chooserows_repeated_index
-    reason: "CHOOSEROWS returns a dynamic-array spill (repeated index); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: chooserows_single_positive
-    reason: "CHOOSEROWS returns a dynamic-array spill (single positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- TRIMRANGE --
-  - id: trimrange_default_trim_both_edges
-    reason: "TRIMRANGE returns a dynamic-array spill (default trim both edges); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: trimrange_trim_rows_zero_keeps_all
-    reason: "TRIMRANGE returns a dynamic-array spill (trim_rows=0 keeps every row); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: trimrange_trim_rows_leading_only
-    reason: "TRIMRANGE returns a dynamic-array spill (trim_rows=1 leading only); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: trimrange_trim_rows_trailing_only
-    reason: "TRIMRANGE returns a dynamic-array spill (trim_rows=2 trailing only); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/trimrange_eval_test.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- DROP --
-  - id: drop_head_cols_positive
-    reason: "DROP returns a dynamic-array spill (head cols positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: drop_head_rows_positive
-    reason: "DROP returns a dynamic-array spill (head rows positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: drop_tail_rows_negative
-    reason: "DROP returns a dynamic-array spill (tail rows negative); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: drop_zero_identity
-    reason: "DROP returns a dynamic-array spill (zero identity); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- EXPAND --
-  - id: expand_col_vector_to_matrix
-    reason: "EXPAND returns a dynamic-array spill (col vector to matrix); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: expand_default_pad_na
-    reason: "EXPAND returns a dynamic-array spill (default pad na); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: expand_explicit_pad_with
-    reason: "EXPAND returns a dynamic-array spill (explicit pad with); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: expand_identity_pass_through
-    reason: "EXPAND returns a dynamic-array spill (identity pass through); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: expand_scalar_to_2x2
-    reason: "EXPAND returns a dynamic-array spill (scalar to 2x2); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- HSTACK --
-  - id: hstack_2d_ragged_row_mismatch
-    reason: "HSTACK returns a dynamic-array spill (2d ragged row mismatch); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: hstack_error_cell_propagates
-    reason: "HSTACK returns a dynamic-array spill (error cell propagates); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: hstack_ragged_padded
-    reason: "HSTACK returns a dynamic-array spill (ragged padded); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: hstack_same_height
-    reason: "HSTACK returns a dynamic-array spill (same height); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: hstack_scalars
-    reason: "HSTACK returns a dynamic-array spill (scalars); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: hstack_single_row
-    reason: "HSTACK returns a dynamic-array spill (single row); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: hstack_three_args
-    reason: "HSTACK returns a dynamic-array spill (three args); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- TAKE --
-  - id: take_count_exceeds_dimension
-    reason: "TAKE returns a dynamic-array spill (count exceeds dimension); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: take_head_cols_positive
-    reason: "TAKE returns a dynamic-array spill (head cols positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: take_head_rows_positive
-    reason: "TAKE returns a dynamic-array spill (head rows positive); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: take_single_cell_result
-    reason: "TAKE returns a dynamic-array spill (single cell result); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: take_tail_cols_negative
-    reason: "TAKE returns a dynamic-array spill (tail cols negative); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: take_tail_rows_negative
-    reason: "TAKE returns a dynamic-array spill (tail rows negative); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- TOCOL --
-  - id: tocol_all_blank_ignore_one_error
-    reason: "TOCOL returns a dynamic-array spill (all blank ignore one error); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: tocol_column_major
-    reason: "TOCOL returns a dynamic-array spill (column major); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: tocol_ignore_blanks
-    reason: "TOCOL returns a dynamic-array spill (ignore blanks); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: tocol_ignore_both
-    reason: "TOCOL returns a dynamic-array spill (ignore both); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: tocol_ignore_errors
-    reason: "TOCOL returns a dynamic-array spill (ignore errors); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: tocol_row_major_default
-    reason: "TOCOL returns a dynamic-array spill (row major default); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: tocol_single_row_to_column
-    reason: "TOCOL returns a dynamic-array spill (single row to column); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- TOROW --
-  - id: torow_all_errors_ignore_two_error
-    reason: "TOROW returns a dynamic-array spill (all errors ignore two error); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: torow_column_major
-    reason: "TOROW returns a dynamic-array spill (column major); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: torow_ignore_blanks
-    reason: "TOROW returns a dynamic-array spill (ignore blanks); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: torow_ignore_both
-    reason: "TOROW returns a dynamic-array spill (ignore both); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: torow_ignore_errors
-    reason: "TOROW returns a dynamic-array spill (ignore errors); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: torow_row_major_default
-    reason: "TOROW returns a dynamic-array spill (row major default); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: torow_single_column_to_row
-    reason: "TOROW returns a dynamic-array spill (single column to row); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- VSTACK --
-  - id: vstack_2d_ragged_col_mismatch
-    reason: "VSTACK returns a dynamic-array spill (2d ragged col mismatch); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: vstack_error_cell_propagates
-    reason: "VSTACK returns a dynamic-array spill (error cell propagates); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: vstack_ragged_padded
-    reason: "VSTACK returns a dynamic-array spill (ragged padded); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: vstack_same_width
-    reason: "VSTACK returns a dynamic-array spill (same width); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: vstack_scalars
-    reason: "VSTACK returns a dynamic-array spill (scalars); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: vstack_single_col
-    reason: "VSTACK returns a dynamic-array spill (single col); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: vstack_three_args
-    reason: "VSTACK returns a dynamic-array spill (three args); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- WRAPCOLS --
-  - id: wrapcols_column_input
-    reason: "WRAPCOLS returns a dynamic-array spill (column input); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wrapcols_count_exceeds_length
-    reason: "WRAPCOLS returns a dynamic-array spill (count exceeds length); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wrapcols_count_one
-    reason: "WRAPCOLS returns a dynamic-array spill (count one); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wrapcols_even_no_padding
-    reason: "WRAPCOLS returns a dynamic-array spill (even no padding); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wrapcols_explicit_pad_with
-    reason: "WRAPCOLS returns a dynamic-array spill (explicit pad with); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wrapcols_odd_default_pad_na
-    reason: "WRAPCOLS returns a dynamic-array spill (odd default pad na); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  # -- WRAPROWS --
-  - id: wraprows_column_input
-    reason: "WRAPROWS returns a dynamic-array spill (column input); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wraprows_count_exceeds_length
-    reason: "WRAPROWS returns a dynamic-array spill (count exceeds length); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wraprows_count_one
-    reason: "WRAPROWS returns a dynamic-array spill (count one); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wraprows_even_no_padding
-    reason: "WRAPROWS returns a dynamic-array spill (even no padding); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wraprows_explicit_pad_with
-    reason: "WRAPROWS returns a dynamic-array spill (explicit pad with); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: wraprows_odd_default_pad_na
-    reason: "WRAPROWS returns a dynamic-array spill (odd default pad na); oracle compare_value cannot navigate ArrayValue. Unit tests in tests/unit/eval/builtins_*.cpp cover spill content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-
   # CELL stub-key divergences. Formulon has no style subsystem yet so
   # CELL("filename") and CELL("prefix", ...) return empty text rather
   # than blank. Mac surfaces blank, but the top-level evaluator's

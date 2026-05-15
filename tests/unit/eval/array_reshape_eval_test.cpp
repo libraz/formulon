@@ -259,6 +259,43 @@ TEST(BuiltinsTocol, IgnoreThreeSkipsBothBlanksAndErrors) {
   EXPECT_DOUBLE_EQ(cells[3].as_number(), 6.0);
 }
 
+TEST(BuiltinsTocol, EmptyTextCellsBecomeBlanksButAreNotIgnored) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=TOCOL({1,\"\",2;\"\",3,\"\"}, 1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 6U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_TRUE(cells[1].is_blank());
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 2.0);
+  EXPECT_TRUE(cells[3].is_blank());
+  EXPECT_DOUBLE_EQ(cells[4].as_number(), 3.0);
+  EXPECT_TRUE(cells[5].is_blank());
+}
+
+TEST(BuiltinsTocol, ArrayLiteralErrorsCanBeIgnored) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=TOCOL({1,#N/A;2,3}, 2)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 3.0);
+}
+
 TEST(BuiltinsTocol, AllSkippedReturnsCalc) {
   // A 3-cell range of blanks with ignore=1 -> nothing kept -> #CALC!.
   Workbook wb = Workbook::create();
@@ -325,6 +362,52 @@ TEST(BuiltinsTorow, ScanByColumnFlag) {
   EXPECT_DOUBLE_EQ(cells[5].as_number(), 6.0);
 }
 
+TEST(BuiltinsTorow, EmptyTextCellsBecomeBlanksButAreNotIgnored) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=TOROW({\"\",1;2,\"\"}, 1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 4U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_TRUE(cells[0].is_blank());
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 2.0);
+  EXPECT_TRUE(cells[3].is_blank());
+}
+
+TEST(BuiltinsTorow, ArrayLiteralErrorsCanBeIgnored) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=TOROW({#VALUE!,1,#N/A,2}, 2)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 2.0);
+}
+
+TEST(BuiltinsTorow, AllArrayLiteralErrorsIgnoredReturnsCalc) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=TOROW({#N/A,#VALUE!}, 2)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
 // ---------------------------------------------------------------------------
 // WRAPROWS
 // ---------------------------------------------------------------------------
@@ -371,6 +454,24 @@ TEST(BuiltinsWraprows, ExactDivisionNoPadding) {
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 2U);
   ASSERT_EQ(v.as_array_cols(), 3U);
+}
+
+TEST(BuiltinsWraprows, WrapCountExceedingLengthClipsToVectorLength) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  for (std::uint32_t c = 0; c < 3U; ++c) {
+    sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
+  }
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=WRAPROWS(A1:C1, 10)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 3.0);
 }
 
 TEST(BuiltinsWraprows, ExplicitPadValueIsUsed) {
@@ -496,6 +597,24 @@ TEST(BuiltinsWrapcols, ExactDivisionNoPadding) {
   EXPECT_DOUBLE_EQ(cells[3].as_number(), 2.0);
   EXPECT_DOUBLE_EQ(cells[4].as_number(), 4.0);
   EXPECT_DOUBLE_EQ(cells[5].as_number(), 6.0);
+}
+
+TEST(BuiltinsWrapcols, WrapCountExceedingLengthClipsToVectorLength) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  for (std::uint32_t c = 0; c < 3U; ++c) {
+    sheet.set_cell_value(0, c, Value::number(static_cast<double>(c + 1)));
+  }
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=WRAPCOLS(A1:C1, 10)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 3.0);
 }
 
 TEST(BuiltinsWrapcols, TwoDimensionalSourceReturnsValue) {

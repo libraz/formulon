@@ -4,7 +4,7 @@ tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # Spill outputs — oracle compare_value cannot navigate ArrayValue, so the
+  # Spill outputs — committed oracle golden predates array-spill comparison, so the
   # two pivot-output cases are registered skip-oracle in
   # tests/divergence.yaml. Unit tests in
   # tests/unit/eval/builtins_pivotby_test.cpp validate spill content.

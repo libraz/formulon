@@ -135,6 +135,27 @@ TEST(BuiltinsTrimRange, ModeZeroPreservesAllRowsAndCols) {
   EXPECT_EQ(v.as_array_cols(), 5U);
 }
 
+TEST(BuiltinsTrimRange, ModeZeroRowsWithDefaultColumnTrimKeepsAllRows) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::number(1));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(2));
+  wb.sheet(0).set_cell_value(2, 1, Value::number(3));
+  wb.sheet(0).set_cell_value(2, 2, Value::number(4));
+  const Value v = EvalIn("=TRIMRANGE(A1:D5, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(cells[4].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(cells[5].as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(cells[6].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(cells[9].as_number(), 0.0);
+}
+
 // ---------------------------------------------------------------------------
 // Mode 1: leading-only
 // ---------------------------------------------------------------------------
@@ -150,6 +171,25 @@ TEST(BuiltinsTrimRange, ModeOneLeadingOnlyKeepsTrailingBlanks) {
   EXPECT_EQ(v.as_array_cols(), 4U);
   ASSERT_TRUE(v.as_array_cells()[0].is_number());
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 7.0);
+}
+
+TEST(BuiltinsTrimRange, ModeOneRowsWithDefaultColumnTrimKeepsTrailingRows) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::number(1));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(2));
+  wb.sheet(0).set_cell_value(2, 1, Value::number(3));
+  wb.sheet(0).set_cell_value(2, 2, Value::number(4));
+  const Value v = EvalIn("=TRIMRANGE(A1:D5, 1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 4U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(cells[4].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(cells[7].as_number(), 0.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +211,25 @@ TEST(BuiltinsTrimRange, ModeTwoTrailingOnlyKeepsLeadingBlanks) {
   const std::size_t last = static_cast<std::size_t>(rows - 1U) * cols + (cols - 1U);
   ASSERT_TRUE(v.as_array_cells()[last].is_number());
   EXPECT_DOUBLE_EQ(v.as_array_cells()[last].as_number(), 9.0);
+}
+
+TEST(BuiltinsTrimRange, ModeTwoRowsWithDefaultColumnTrimKeepsLeadingRows) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::number(1));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(2));
+  wb.sheet(0).set_cell_value(2, 1, Value::number(3));
+  wb.sheet(0).set_cell_value(2, 2, Value::number(4));
+  const Value v = EvalIn("=TRIMRANGE(A1:D5, 2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(cells[4].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(cells[5].as_number(), 4.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +366,8 @@ TEST(BuiltinsTrimRange, SingleColumnLeadingTrim) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 10.0);
   ASSERT_TRUE(v.as_array_cells()[1].is_number());
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 20.0);
-  EXPECT_TRUE(v.as_array_cells()[2].is_blank());
+  ASSERT_TRUE(v.as_array_cells()[2].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 0.0);
 }
 
 // ---------------------------------------------------------------------------

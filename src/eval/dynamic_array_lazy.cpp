@@ -1099,6 +1099,10 @@ bool collect_tocol_torow_cells(const ArrayValue& array, std::int64_t ignore_mask
     if (skip_errors && v.is_error()) {
       return;
     }
+    if (v.is_text() && v.as_text().empty()) {
+      out.push_back(Value::blank());
+      return;
+    }
     out.push_back(v);
   };
 
@@ -1330,11 +1334,13 @@ Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // their cells already laid out left-to-right / top-to-bottom in
   // `cells` (since rows or cols == 1). Total cell count is rows * cols.
   const std::size_t n = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
-  // Output rows is ceil(n / wrap_count); output cols is wrap_count.
-  // The trailing row is padded with `pad` if the division leaves a remainder.
-  const std::uint32_t out_cols = wrap_count;
+  // Excel does not extend the final shape beyond the source length when the
+  // requested wrap count exceeds the vector length.
+  const std::uint32_t effective_wrap =
+      static_cast<std::uint32_t>(std::min<std::size_t>(static_cast<std::size_t>(wrap_count), n));
+  const std::uint32_t out_cols = effective_wrap;
   const std::uint32_t out_rows =
-      static_cast<std::uint32_t>((n + static_cast<std::size_t>(wrap_count) - 1) / wrap_count);
+      static_cast<std::uint32_t>((n + static_cast<std::size_t>(effective_wrap) - 1) / effective_wrap);
   const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
   Value* buffer = nullptr;
   ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer);
@@ -1358,12 +1364,13 @@ Value eval_wrapcols_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return err;
   }
   const std::size_t n = static_cast<std::size_t>(vector_arr->rows) * static_cast<std::size_t>(vector_arr->cols);
-  // Output rows is wrap_count; output cols is ceil(n / wrap_count). Cells
-  // fill column-major: the i-th input cell goes to (i % wrap_count, i /
-  // wrap_count). Trailing slots in the final column become `pad`.
-  const std::uint32_t out_rows = wrap_count;
+  // Excel does not extend the final shape beyond the source length when the
+  // requested wrap count exceeds the vector length.
+  const std::uint32_t effective_wrap =
+      static_cast<std::uint32_t>(std::min<std::size_t>(static_cast<std::size_t>(wrap_count), n));
+  const std::uint32_t out_rows = effective_wrap;
   const std::uint32_t out_cols =
-      static_cast<std::uint32_t>((n + static_cast<std::size_t>(wrap_count) - 1) / wrap_count);
+      static_cast<std::uint32_t>((n + static_cast<std::size_t>(effective_wrap) - 1) / effective_wrap);
   const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
   Value* buffer = nullptr;
   ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buffer);

@@ -522,14 +522,17 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
     return Value::array(make_array_value(arena, rr.rows, rr.cols, rr.cells));
   }
 
-  // ArrayLiteral: walk the literal via the existing flatten helper.
+  // ArrayLiteral in array context preserves per-cell errors instead of
+  // short-circuiting the whole argument.
   if (k == parser::NodeKind::ArrayLiteral) {
     std::vector<Value> cells;
-    std::uint32_t rows = 0;
-    std::uint32_t cols = 0;
-    Value err = Value::blank();
-    if (!flatten_array_literal(target, arena, registry, ctx, &cells, &rows, &cols, &err)) {
-      return err;
+    const std::uint32_t rows = target.as_array_rows();
+    const std::uint32_t cols = target.as_array_cols();
+    cells.reserve(static_cast<std::size_t>(rows) * cols);
+    for (std::uint32_t r = 0; r < rows; ++r) {
+      for (std::uint32_t c = 0; c < cols; ++c) {
+        cells.push_back(eval_node(target.as_array_element(r, c), arena, registry, ctx));
+      }
     }
     return Value::array(make_array_value(arena, rows, cols, cells));
   }

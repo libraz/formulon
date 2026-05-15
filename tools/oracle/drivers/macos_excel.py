@@ -193,11 +193,15 @@ def _classify_value(cell) -> CaseResult:
         cols = 0
         if rows > 0 and isinstance(v[0], list):
             cols = len(v[0])
-            flat = [item for row in v for item in row]
+            flat = [
+                _array_cell_from_scalar(_classify_python_scalar(item))
+                for row in v
+                for item in row
+            ]
         else:
             cols = rows
             rows = 1
-            flat = list(v)
+            flat = [_array_cell_from_scalar(_classify_python_scalar(item)) for item in v]
         return CaseResult(
             id="",
             kind="array",
@@ -205,6 +209,88 @@ def _classify_value(cell) -> CaseResult:
             array_shape=[rows, cols],
         )
     return CaseResult(id="", kind="text", value=str(v))
+
+
+def _classify_python_scalar(v: Any) -> CaseResult:
+    """Classifies a scalar value already extracted from an xlwings array."""
+
+    if isinstance(v, _dt.datetime):
+        return CaseResult(id="", kind="number", value=_datetime_to_serial(v))
+    if isinstance(v, _dt.date):  # pragma: no cover - xlwings mostly returns datetime
+        combined = _dt.datetime(v.year, v.month, v.day)
+        return CaseResult(id="", kind="number", value=_datetime_to_serial(combined))
+    if isinstance(v, bool):
+        return CaseResult(id="", kind="bool", value=bool(v))
+    if isinstance(v, (int, float)):
+        return CaseResult(id="", kind="number", value=float(v))
+    if v is None or v == "":
+        return CaseResult(id="", kind="blank")
+    if isinstance(v, str):
+        canon = normalise_error_token(v)
+        if canon is not None:
+            return CaseResult(id="", kind="error", error_code=canon)
+        return CaseResult(id="", kind="text", value=v)
+    return CaseResult(id="", kind="text", value=str(v))
+
+
+def _array_cell_from_scalar(result: CaseResult) -> Any:
+    if result.kind == "blank":
+        return None
+    if result.kind in {"number", "bool", "text"}:
+        return result.value
+    if result.kind == "error":
+        return {"kind": "error", "code": result.error_code or "#UNKNOWN!"}
+    return {"kind": result.kind, "value": result.value}
+
+
+def _write_spill_shape_probe(sht, anchor_addr: str = "Z1") -> bool:
+    """Writes helper formulas that report the dynamic spill shape, if any."""
+
+    try:
+        rows_cell = sht.range("XFD1")
+        cols_cell = sht.range("XFD2")
+        rows_cell.formula2 = f"=ROWS({anchor_addr}#)"
+        cols_cell.formula2 = f"=COLUMNS({anchor_addr}#)"
+    except Exception:
+        return False
+    return True
+
+
+def _clear_spill_shape_probe(sht) -> None:
+    try:
+        sht.range("XFD1").clear_contents()
+        sht.range("XFD2").clear_contents()
+    except Exception:
+        pass
+
+
+def _read_spill_shape_probe(sht) -> Optional["tuple[int, int]"]:
+    rows = _classify_value(sht.range("XFD1"))
+    cols = _classify_value(sht.range("XFD2"))
+    if not rows.kind == cols.kind == "number":
+        return None
+    row_count = int(rows.value)
+    col_count = int(cols.value)
+    if row_count <= 0 or col_count <= 0:
+        return None
+    return row_count, col_count
+
+
+def _classify_result_cell(sht, anchor_addr: str = "Z1") -> CaseResult:
+    """Classifies the anchor scalar or the full dynamic spill if present."""
+
+    shape = _read_spill_shape_probe(sht)
+    if shape is None:
+        return _classify_value(sht.range(anchor_addr))
+    rows, cols = shape
+    if rows == 1 and cols == 1:
+        return _classify_value(sht.range(anchor_addr))
+    anchor = sht.range(anchor_addr)
+    flat: List[Any] = []
+    for r in range(rows):
+        for c in range(cols):
+            flat.append(_array_cell_from_scalar(_classify_value(anchor.offset(r, c))))
+    return CaseResult(id="", kind="array", value=flat, array_shape=[rows, cols])
 
 
 class ExcelOracle(OracleDriver):
@@ -326,6 +412,7 @@ class ExcelOracle(OracleDriver):
             # extra AppleEvents per case but makes the batch correct.
             first_sheet = wb.sheets[0]
             case_sheets: List[object] = []
+            write_errors: Dict[str, str] = {}
             for i, case in enumerate(cases):
                 if i == 0:
                     sht = first_sheet
@@ -339,30 +426,42 @@ class ExcelOracle(OracleDriver):
                 sht.name = f"c{i + 1:03d}_{safe_id}"[:31]
                 case_sheets.append(sht)
 
-                setup = case.get("setup") or {}
-                for addr, rec in setup.items():
-                    _write_cell(sht, addr, rec)
-                result_cell = sht.range("Z1")
-                # Pin the result cell to General format. Otherwise Excel
-                # auto-formats DATE()/TIME() results as m/d/yyyy and
-                # xlwings hands us a Python datetime (or None for the
-                # 1900-02-29 ghost day) instead of the raw serial we
-                # want to capture.
                 try:
-                    result_cell.number_format = "General"
-                except Exception:
-                    pass
-                result_cell.formula2 = case["formula"]
+                    setup = case.get("setup") or {}
+                    for addr, rec in setup.items():
+                        _write_cell(sht, addr, rec)
+                    result_cell = sht.range("Z1")
+                    # Pin the result cell to General format. Otherwise Excel
+                    # auto-formats DATE()/TIME() results as m/d/yyyy and
+                    # xlwings hands us a Python datetime (or None for the
+                    # 1900-02-29 ghost day) instead of the raw serial we
+                    # want to capture.
+                    try:
+                        result_cell.number_format = "General"
+                    except Exception:
+                        pass
+                    result_cell.formula2 = case["formula"]
+                except Exception as exc:
+                    write_errors[case["id"]] = _format_mac_error(exc)
 
             # Single recalc across all sheets once every formula is written.
             self._app.calculate()
 
             out: List[CaseResult] = []
             for case, sht in zip(cases, case_sheets):
-                cell = sht.range("Z1")
-                result = _classify_value(cell)
-                result.id = case["id"]
-                out.append(result)
+                if case["id"] in write_errors:
+                    out.append(CaseResult(id=case["id"], kind="skipped", value=write_errors[case["id"]]))
+                    continue
+                try:
+                    if _write_spill_shape_probe(sht):
+                        self._app.calculate()
+                    result = _classify_result_cell(sht)
+                    result.id = case["id"]
+                    out.append(result)
+                except Exception as exc:
+                    out.append(CaseResult(id=case["id"], kind="skipped", value=_format_mac_error(exc)))
+                finally:
+                    _clear_spill_shape_probe(sht)
             return out
         finally:
             try:
@@ -413,9 +512,12 @@ class ExcelOracle(OracleDriver):
                         pass
                     result_cell.formula2 = case["formula"]
                     self._app.calculate()
-                    result = _classify_value(sht.range("Z1"))
+                    if _write_spill_shape_probe(sht):
+                        self._app.calculate()
+                    result = _classify_result_cell(sht)
                     result.id = case["id"]
                     out.append(result)
+                    _clear_spill_shape_probe(sht)
                 finally:
                     try:
                         wb.close()
@@ -489,6 +591,10 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
         rng.formula2 = trigger
         return
     raise ValueError(f"unknown cell kind: {kind}")
+
+
+def _format_mac_error(exc: BaseException) -> str:
+    return f"{type(exc).__name__}: {exc}"[:200]
 
 
 _SHEET_FORBIDDEN = set("\\/?*[]:")

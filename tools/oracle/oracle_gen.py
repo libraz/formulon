@@ -25,6 +25,7 @@ import argparse
 import datetime as _dt
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -47,6 +48,38 @@ DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden"
 DEFAULT_ENV_FILE = REPO_ROOT / "tests" / "oracle" / "ENVIRONMENT.md"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
+
+
+class ProgressBar:
+    """Small dependency-free progress reporter for long Excel runs."""
+
+    def __init__(self, total: int, *, enabled: bool) -> None:
+        self.total = max(total, 0)
+        self.enabled = enabled
+        self.done = 0
+        self.started = time.monotonic()
+        self.interactive = sys.stderr.isatty()
+
+    def step(self, n: int, label: str = "") -> None:
+        if not self.enabled:
+            return
+        self.done = min(self.total, self.done + max(n, 0))
+        elapsed = time.monotonic() - self.started
+        pct = 100.0 if self.total == 0 else (self.done / self.total) * 100.0
+        width = 28
+        filled = width if self.total == 0 else int(width * self.done / self.total)
+        bar = "#" * filled + "-" * (width - filled)
+        suffix = f" {label}" if label else ""
+        line = (
+            f"  [{bar}] {self.done}/{self.total} "
+            f"{pct:5.1f}% elapsed={elapsed:5.1f}s{suffix}"
+        )
+        if self.interactive:
+            print("\r" + line, end="", file=sys.stderr, flush=True)
+            if self.done >= self.total:
+                print(file=sys.stderr, flush=True)
+        else:
+            print(line, file=sys.stderr, flush=True)
 
 
 def _load_targets(path: Path) -> Dict[str, object]:
@@ -108,9 +141,6 @@ def _result_to_json(result: CaseResult) -> Dict[str, object]:
     if result.kind == "error":
         return {"kind": "error", "code": result.error_code or "#UNKNOWN!"}
     if result.kind == "array":
-        # Arrays are emitted but the C++ verifier doesn't yet understand
-        # them — they currently fail with "unknown expect kind: array",
-        # which is the desired outcome until spill tests are wired.
         return {
             "kind": "array",
             "value": result.value,
@@ -257,6 +287,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Run only the named suite(s); defaults to all YAML files.",
     )
     parser.add_argument(
+        "--case",
+        action="append",
+        default=None,
+        metavar="ID",
+        help="Run only the named case id(s) within the selected suite(s).",
+    )
+    parser.add_argument(
         "--target",
         default=None,
         metavar="NAME",
@@ -296,6 +333,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--visible", action="store_true",
         help="Show the Excel window during generation (debug aid).",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print per-suite progress around driver calls.",
+    )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="Show a progress bar while batches complete.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Run each suite through the driver in chunks of N cases. "
+            "Useful when Excel hangs on large dynamic-array batches."
+        ),
+    )
     args = parser.parse_args(argv)
 
     # Resolve target metadata. Errors here are fatal — we'd rather refuse
@@ -326,6 +383,28 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.suite:
         wanted = set(args.suite)
         suites = [(p, s) for (p, s) in suites if s.name in wanted]
+    if args.case:
+        if args.golden_dir is None:
+            print(
+                "oracle-gen: --case is diagnostic-only; pass --golden-dir "
+                "to avoid overwriting committed suite goldens with a subset.",
+                file=sys.stderr,
+            )
+            return 2
+        wanted_cases = set(args.case)
+        filtered_suites = []
+        for path, suite in suites:
+            suite = case_schema.Suite(
+                name=suite.name,
+                description=suite.description,
+                locale=suite.locale,
+                tolerance=suite.tolerance,
+                options=suite.options,
+                cases=[c for c in suite.cases if c.id in wanted_cases],
+            )
+            if suite.cases:
+                filtered_suites.append((path, suite))
+        suites = filtered_suites
     if not suites:
         print(f"oracle-gen: no YAML suites found in {args.cases_dir}")
         return 0
@@ -416,12 +495,40 @@ def main(argv: Optional[List[str]] = None) -> int:
                     iterative=suite.options.get("iterative", False),
                 )
                 this_env_json = _env_to_json(env_copy, iso_now)
-                results = oracle.run_suite(
-                    suite.name,
-                    case_inputs,
-                    date1904=env_copy.date1904,
-                    iterative=env_copy.iterative,
+                results: List[CaseResult] = []
+                if args.batch_size and args.batch_size < 1:
+                    raise ValueError("--batch-size must be >= 1")
+                batch_size = args.batch_size or len(case_inputs) or 1
+                progress = ProgressBar(
+                    len(case_inputs),
+                    enabled=args.progress or args.verbose,
                 )
+                for start in range(0, len(case_inputs), batch_size):
+                    batch = case_inputs[start : start + batch_size]
+                    if args.verbose:
+                        first = batch[0]["id"] if batch else ""
+                        last = batch[-1]["id"] if batch else ""
+                        if not progress.interactive:
+                            print(
+                                f"  running cases {start + 1}-{start + len(batch)}"
+                                f"/{len(case_inputs)} ({first}..{last})...",
+                                flush=True,
+                            )
+                    else:
+                        first = ""
+                        last = ""
+                    results.extend(
+                        oracle.run_suite(
+                            suite.name,
+                            batch,
+                            date1904=env_copy.date1904,
+                            iterative=env_copy.iterative,
+                        )
+                    )
+                    label = f"{first}..{last}" if first and last else ""
+                    progress.step(len(batch), label=label)
+                if args.verbose:
+                    print(f"  captured {len(results)} result(s)", flush=True)
                 # Drivers may report per-case runtime skips (e.g. a
                 # formula that the COM bridge refused on this build);
                 # merge those into the divergence-derived skip set so
