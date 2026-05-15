@@ -9,9 +9,9 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WebAssembly-lightgrey)](https://github.com/libraz/formulon)
 [![Docs](https://img.shields.io/badge/docs-formulon.libraz.net-blue)](https://formulon.libraz.net)
 
-**Formulon は Excel 互換の計算エンジンです。** C++17 で書かれたコアエンジンが、Excel 365 (ja-JP) の挙動を bit 単位で再現することを目指しています。同じエンジンをブラウザ (WebAssembly)、Python、ネイティブ CLI から呼び出せるので、どの環境でもワークブックは同じ値に再計算されます。
+**Formulon は Excel 互換の計算エンジンです。** C++17 製のコアエンジンが、既定では **Windows Excel 365 (ja-JP)** の挙動に合わせて数式を評価します。実 Excel から取得した oracle データで互換性を確認し、既知の差分はすべて理由つきで追跡しています。同じエンジンをブラウザ (WebAssembly)、Python、ネイティブ CLI から使えるため、どの実行環境でも同じワークブックを同じ結果に再計算できます。
 
-Excel 本体・Microsoft ランタイム・COM オートメーションは不要です。WASM はブラウザ、Node、Python では `wasmtime` 経由で動作し、ネイティブ CLI パッケージは `darwin-arm64` / `linux-x64` / `linux-arm64` を対象に配布しています。
+Excel 本体、Microsoft ランタイム、COM オートメーションは実行時には不要です。WASM 版はブラウザと Node で動作し、Python 版は `wasmtime` 経由で同じ WASM コアを呼び出します。ネイティブ CLI は `darwin-arm64` / `linux-x64` / `linux-arm64` 向けに配布しています。
 
 ## インストール
 
@@ -24,57 +24,74 @@ CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/release
 
 ## 特徴
 
-- **「目標」ではなく、検証済みの互換性。** デフォルトのプロファイルは `win-365-ja_JP`、一次 oracle は Mac Excel 365 (ja-JP)、Windows Excel 365 (ja-JP) もバリアント golden でカバーしています。出力は実 Excel から再生成した golden と bit 単位で照合され、許容している差分 (超越関数の ulp 差、揮発関数のスナップショット、Formulon が意図的に Excel 側の不整合を訂正しているケース) は [`tests/divergence.yaml`](tests/divergence.yaml) に理由と最終確認 Excel ビルドつきで全件記録しています。
-- **C++ コア 1 本、どこでも同じ結果。** JS 系の競合はブラウザ用とサーバ用にロジックを二重に持ちがちですが、Formulon は WASM / Python / CLI のすべてに同じエンジンを配ります。二つめの実装が drift する余地がありません。
-- **厳格な WASM サイズ予算。** 目標 1.65 MB (Brotli 530 KB)、ハード上限 1.9 MB (Brotli 600 KB)。CI でハード上限を強制し、超える機能は載せません。
-- **小さな依存。** ランタイム依存は `miniz` (zip/deflate)、`pugixml` (XML + XPath 1.0)、`PCRE2` (`REGEX*` 用の Excel 互換方言)、`double-conversion` (Grisu3 最短往復 `dtoa`) の 4 つのみ。線形代数、UTF-8 処理、数値変換の大半は内製です。
-- **読める / 監査できるコード。** `Expected<T, Error>` ベースのエラー処理、RAII、`-fno-exceptions -fno-rtti`、Google C++ Style。
+- **互換性を oracle で確認します。** 既定の profile は `win-365-ja_JP` です。primary oracle は Mac Excel 365 (ja-JP) で、Windows Excel 365 (ja-JP) は variant golden として管理しています。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
+- **C++ コア 1 本で動きます。** ブラウザ、Python、CLI のために別々の計算ロジックを持たず、同じエンジンを配布します。実装が複数に分かれて結果がずれる、という問題を避けています。
+- **WASM サイズに上限を置いています。** 目標は 1.65 MB、Brotli 圧縮で 530 KB。ハード上限は 1.9 MB / 600 KB です。CI で上限を確認し、超える機能は入れません。
+- **依存は小さく保っています。** ランタイム依存は `miniz` (zip/deflate)、`pugixml` (XML + XPath 1.0)、`PCRE2` (`REGEX*`)、`double-conversion` (Grisu3 `dtoa`) の 4 つです。線形代数、UTF-8 処理、数値変換の多くはリポジトリ内で実装しています。
+- **監査しやすい C++ を優先します。** `Expected<T, Error>` ベースのエラー処理、RAII、`-fno-exceptions -fno-rtti`、Google C++ Style を採用しています。
 
 ## 使いどころ
 
-Excel を起動せずにスプレッドシートを計算したい、すべての場面で:
+Excel を起動せずにスプレッドシートを計算したい場面で使えます。
 
-- バッチジョブやデータパイプラインで `.xlsx` をヘッドレスに再計算する
-- Web アプリ内 (ブラウザ) で Excel 風の数式を評価する
-- 社内ツール・ボット・ノートブックに計算機能を組み込む
-- 数式の検証、レガシースプレッドシートの移行
+- バッチジョブやデータパイプラインで `.xlsx` をヘッドレス再計算する
+- Web アプリの中で Excel 風の数式を評価する
+- 社内ツール、ボット、ノートブックに計算機能を組み込む
+- 数式の検証や、レガシースプレッドシートの移行に使う
 
-## やらないこと (恒久的 non-goal)
+## やらないこと
 
-Formulon は以下を **意図的にサポートしません**:
+Formulon は以下を **意図的にサポートしません**。
 
 | 項目 | 理由 |
 |------|------|
 | VBA の実行 | セキュリティ上の理由。`vbaProject.bin` はバイト列としてだけ保存し、実行はしません。 |
-| 旧 `.xls` (BIFF8 / Excel 97–2003) | Excel 365 互換というスコープの外。 |
-| Chart / Drawing のレンダリング | 描画レイヤの責務。計算エンジンの仕事ではありません。 |
+| 旧 `.xls` (BIFF8 / Excel 97-2003) | Excel 365 互換というスコープの外。 |
+| グラフ / 図形のレンダリング | 描画レイヤの責務。計算エンジンの仕事ではありません。 |
 | PowerQuery (M) / DAX | 別エンジン・別問題。 |
 | Pivot キャッシュの再計算 | 構造は保持しますが、再計算は対象外。 |
 | スプレッドシート UI 本体 | 薄い UI 統合 API は計画していますが、描画自体は呼び出し側の責任です。 |
 
-これらは「まだやっていない」ではなく **恒久的** non-goal です。スコープは意図的に有限です。
+これらは「まだやっていない」機能ではなく、スコープ外として固定しています。
 
 ## パッケージ
 
 | 配布元 | パッケージ名 | 内容 |
 |--------|-------------|------|
-| npm | [`@libraz/formulon`](https://www.npmjs.com/package/@libraz/formulon) | WASM ESM モジュール (型定義同梱)。Node 18+ / ブラウザ / Worker 対応。 |
-| PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、platform-specific runtime は `pip` が `wasmtime` として解決します。 |
+| npm | [`@libraz/formulon`](https://www.npmjs.com/package/@libraz/formulon) | WASM ESM モジュール。型定義同梱。Node 18+ / ブラウザ / Worker 対応。 |
+| PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、`wasmtime` は `pip` が解決します。 |
 | GitHub Releases | `formulon-cli-<platform-arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
 
 ## ステータス
 
-カタログ済み Excel 関数 **522 / 522 を認識**します。ただし、関数名を認識することと Excel 互換の実処理を持つことは分けています。関数カタログは availability を明示し、実装済み、実装済みだが検証未完了、環境依存、意図的な unavailable stub を区別します。unavailable stub は、Formulon が内蔵しないホストサービスや接続を必要とする関数に限定しています。例: PY、WEBSERVICE、STOCKHISTORY、IMAGE、RTD、TRANSLATE、DETECTLANGUAGE、COPILOT、CUBE* OLAP ファミリ。現在の内訳は `make function-status` で確認できます。
+カタログ済み Excel 関数は **522 / 522 を認識**します。ただし、「関数名を知っている」ことと「Excel 互換の実装がある」ことは分けて扱います。現在の内訳は `make function-status` で確認できます。
 
-oracle は **92 カテゴリ** を定義し、Mac Excel 365 ja-JP から再生成。Windows Excel 365 ja-JP は `win-365-ja_JP` バリアント golden でカバーしています。新規ワークブックはデフォルトで `win-365-ja_JP` profile を使い、profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切替可能です。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで意図的に未公開です。
+| 区分 | 件数 | 意味 | 例 |
+|------|------|------|----|
+| 実装済み | 507 | 通常の計算エンジン内で評価できる関数。unit / oracle で検証しています。 | 数学、統計、検索、テキスト、動的配列など |
+| 実装済み・検証継続中 | 0 | 実装はあるが、Excel との細部差分を oracle で追加確認している関数。 | 現時点ではなし |
+| 環境依存 | 2 | ホスト環境やワークブック状態によって値が変わるため、固定 golden だけでは扱いにくい関数。 | `INFO`, `CELL` |
+| unavailable stub | 15 | Formulon が内蔵しない外部サービス、ネットワーク、COM、OLAP 接続などが必要な関数。固定のエラー面だけを返します。 | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
-実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、parity 検証を行っています。OOXML reader / writer は sheets / styles / 条件付き書式 / コメント / ハイパーリンク / 結合セル / 入力規則 / 定義済み名前 / テーブル / ピボットテーブルを round-trip します。MS-XLSB reader / writer も実装済み。ワークブック操作 (シート追加 / リネーム / 移動、数式書き換えを伴う行・列の挿入 / 削除、partial recalc、反復計算ソルバの進捗コールバック) は C ABI を経由して WASM / Python / CLI のすべての surface に露出しています。
+oracle は **92 カテゴリ** あります。primary oracle は Mac Excel 365 ja-JP から再生成し、Windows Excel 365 ja-JP は `win-365-ja_JP` variant golden でカバーしています。
+
+現在のローカル検証結果:
+
+- unit test: `5788/5788` passed
+- primary oracle: `3843` passed / `80` documented skips
+- 直近で更新した Windows 365 focus set (`ENCODEURL`, `FILTERXML`, `GROUPBY`, `PIVOTBY`, `REGEX*`, `JIS` width probes): `130` passed / `22` documented skips
+
+残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。
+
+新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
+
+実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、parity を検証しています。OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer も実装済みです。シート追加、リネーム、移動、数式書き換えを伴う行・列の挿入 / 削除、partial recalc、反復計算ソルバの進捗コールバックは、C ABI 経由で WASM / Python / CLI から使えます。
 
 不具合報告・oracle 差分レポート・ご意見はいつでも歓迎しています。
 
 ## コントリビューション
 
-いちばん助かるのは、**手元の Excel から oracle データを寄贈していただくこと**です。Mac ja-JP 以外の Excel 365 をお持ちなら `make oracle-contribute` 一発で Excel を駆動して golden を取得し、PR の手順までガイドします。詳細とコミュニティ駆動である理由は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+いちばん助かるのは、**手元の Excel から oracle データを提供していただくこと**です。Mac ja-JP 以外の Excel 365 をお持ちなら、`make oracle-contribute` で Excel を駆動して golden を取得し、PR の手順まで進められます。詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
 
 ## ライセンス
 
