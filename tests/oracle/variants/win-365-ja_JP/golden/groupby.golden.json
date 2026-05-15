@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T23:44:10Z"
+    "generated_at": "2026-05-15T02:55:28Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -17,13 +17,19 @@
       "id": "groupby_bare_sum",
       "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, 0)",
       "setup": {},
-      "skipped": "GROUPBY returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test GroupBy.BareSumName covers bare-name aggregator dispatch and grouping order."
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "groupby_lambda_sum",
       "formula": "=GROUPBY({\"A\";\"B\";\"A\";\"C\"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0)",
       "setup": {},
-      "skipped": "GROUPBY with a LAMBDA aggregator returns a 2D ArrayValue; oracle compare_value only handles scalars. Unit test GroupBy.SingleKeyLambdaAggregatorSum covers inline-LAMBDA dispatch."
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "groupby_unknown_name_error",
