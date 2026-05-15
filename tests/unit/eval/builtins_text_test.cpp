@@ -7,13 +7,20 @@
 // `builtins_value_numbervalue_test.cpp` next to their shared format engine.
 
 #include <string_view>
+#include <utility>
+#include <vector>
 
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
+#include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -35,6 +42,22 @@ Value EvalSource(std::string_view src) {
     return Value::error(ErrorCode::Name);
   }
   return evaluate(*root, eval_arena);
+}
+
+Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  const EvalContext ctx(wb, current, state);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -626,6 +649,43 @@ TEST(TextArrayToText, InvalidFormatReturnsValueError) {
   const Value v = EvalSource("=ARRAYTOTEXT({1,2},2)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(TextArrayToText, RangeConcisePreservesRectangleCells) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1));
+  sheet.set_cell_value(0, 1, Value::number(2));
+  sheet.set_cell_value(1, 0, Value::number(3));
+  sheet.set_cell_value(1, 1, Value::number(4));
+
+  const Value v = EvalSourceIn("=ARRAYTOTEXT(A1:B2)", wb, sheet);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "1, 2, 3, 4");
+}
+
+TEST(TextArrayToText, RangeStrictUsesArrayLiteralShape) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1));
+  sheet.set_cell_value(0, 1, Value::text("x"));
+  sheet.set_cell_value(1, 0, Value::boolean(true));
+  sheet.set_cell_value(1, 1, Value::error(ErrorCode::NA));
+
+  const Value v = EvalSourceIn("=ARRAYTOTEXT(A1:B2,1)", wb, sheet);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "{1,\"x\";TRUE,#N/A}");
+}
+
+TEST(TextArrayToText, SpillRangeStrictUsesCommittedSpillShape) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  std::vector<Value> cells = {Value::number(10), Value::number(20), Value::number(30)};
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
+
+  const Value v = EvalSourceIn("=ARRAYTOTEXT(A1#,1)", wb, sheet);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "{10;20;30}");
 }
 
 }  // namespace

@@ -225,6 +225,33 @@ TEST(BuiltinsWebFilterXml, AttributeNodeReturnsAttributeValue) {
   EXPECT_EQ(v.as_text(), "v");
 }
 
+TEST(BuiltinsWebFilterXml, DefaultNamespaceCanBeQueriedWithLocalName) {
+  const Value v = EvalSource("=FILTERXML(\"<r xmlns=\"\"urn:x\"\"><a>v</a></r>\",\"//*[local-name()=\"\"a\"\"]\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "v");
+}
+
+TEST(BuiltinsWebFilterXml, CdataReturnsTextContent) {
+  const Value v = EvalSource("=FILTERXML(\"<r><![CDATA[a<b&c]]></r>\",\"//r\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a<b&c");
+}
+
+TEST(BuiltinsWebFilterXml, EntityReferencesAreDecoded) {
+  const Value v = EvalSource("=FILTERXML(\"<r>a&amp;b&#10;&#x41;</r>\",\"//r\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "a&b\nA");
+}
+
+TEST(BuiltinsWebFilterXml, TextAxisOverMixedContentSpillsTextNodes) {
+  const Value v = EvalSource("=FILTERXML(\"<r>a<b>B</b>c</r>\",\"//r/text()\")");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "a");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "c");
+}
+
 TEST(BuiltinsWebFilterXml, PropagatesErrorInFirstArg) {
   const Value v = EvalSource("=FILTERXML(1/0,\"//a\")");
   ASSERT_TRUE(v.is_error());

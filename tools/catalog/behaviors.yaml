@@ -981,8 +981,12 @@ groups:
     aspect: "XPath query against XML text"
     behaviors:
       - name: "well-formed XML + XPath"
+        # Primary Mac Excel 16.109 goldens mark FILTERXML as skipped
+        # because the function returns #NAME? on Mac. Windows variants
+        # and the shared case corpus provide the live XPath coverage, so
+        # the behavior expectation remains implemented.
         probe_regex: 'FILTERXML\("<'
-        expected: diverged
+        expected: impl
 
   - function: "CUBEKPIMEMBER"
     aspect: "OLAP KPI lookup stub"

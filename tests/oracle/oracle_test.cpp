@@ -161,6 +161,8 @@ std::string format_value(const Value& v) {
       return std::string("text(\"") + std::string(v.as_text()) + "\")";
     case ValueKind::Error:
       return std::string("error(") + display_name(v.as_error()) + ")";
+    case ValueKind::Array:
+      return "array(" + std::to_string(v.as_array_rows()) + "x" + std::to_string(v.as_array_cols()) + ")";
     default:
       return "<unsupported>";
   }
@@ -335,6 +337,46 @@ bool numbers_match(double want, double got, double tol_abs, double tol_rel) {
   return tol_rel > 0.0 && scale > 0.0 && diff / scale <= tol_rel;
 }
 
+std::string compare_value(const JsonValue& expect, const Value& raw_actual, double tol_abs, double tol_rel,
+                          std::string_view compare_mode);
+
+std::string compare_json_scalar(const JsonValue& expect, const Value& actual, double tol_abs, double tol_rel,
+                                std::string_view compare_mode) {
+  if (expect.is_null()) {
+    return actual.is_blank() ? std::string{} : "expected blank, got " + format_value(actual);
+  }
+  if (expect.is_number()) {
+    if (!actual.is_number())
+      return "expected number, got " + format_value(actual);
+    return numbers_match(expect.as_number(), actual.as_number(), tol_abs, tol_rel)
+               ? std::string{}
+               : "number mismatch: expected " + std::to_string(expect.as_number()) + ", got " +
+                     std::to_string(actual.as_number());
+  }
+  if (expect.is_bool()) {
+    if (!actual.is_boolean())
+      return "expected bool, got " + format_value(actual);
+    return actual.as_boolean() == expect.as_bool()
+               ? std::string{}
+               : std::string("bool mismatch: expected ") + (expect.as_bool() ? "TRUE" : "FALSE") + ", got " +
+                     (actual.as_boolean() ? "TRUE" : "FALSE");
+  }
+  if (expect.is_string()) {
+    if (!actual.is_text())
+      return "expected text, got " + format_value(actual);
+    if (expect.as_string() == actual.as_text())
+      return {};
+    if (compare_mode == "complex_text") {
+      return compare_complex_text(expect.as_string(), std::string(actual.as_text()), tol_abs, tol_rel);
+    }
+    return "text mismatch: expected \"" + expect.as_string() + "\", got \"" + std::string(actual.as_text()) + "\"";
+  }
+  if (expect.is_object()) {
+    return compare_value(expect, actual, tol_abs, tol_rel, compare_mode);
+  }
+  return "array golden cell is not scalar";
+}
+
 // Compares `actual` to the golden `expect` JSON record under the given
 // tolerance. Returns an empty string on match; otherwise a human-readable
 // diff message.
@@ -344,11 +386,6 @@ bool numbers_match(double want, double got, double tol_abs, double tol_rel) {
 // alternative routine when the strict byte-equality check fails.
 std::string compare_value(const JsonValue& expect, const Value& raw_actual, double tol_abs, double tol_rel,
                           std::string_view compare_mode) {
-  // Anchor projection: Excel reports the top-left scalar of any spill
-  // region while xlwings reads back only that cell. Formulon's eval
-  // surfaces the full Array; project it down so the kind dispatch
-  // below sees the same scalar Excel reports.
-  const Value& actual = anchor_or_self(raw_actual);
   if (!expect.is_object())
     return "golden 'expect' is not an object";
   const JsonValue* kind_v = expect.find("kind");
@@ -356,6 +393,49 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
     return "golden 'expect' missing 'kind'";
   }
   const std::string& kind = kind_v->as_string();
+
+  if (kind == "array") {
+    if (!raw_actual.is_array())
+      return "expected array, got " + format_value(raw_actual);
+    const JsonValue* shape_v = expect.find("shape");
+    if (shape_v == nullptr || !shape_v->is_array())
+      return "array golden missing 'shape'";
+    const auto& shape = shape_v->as_array();
+    if (shape.size() != 2 || !shape[0].is_number() || !shape[1].is_number())
+      return "array golden has invalid 'shape'";
+    const auto want_rows = static_cast<std::uint32_t>(shape[0].as_number());
+    const auto want_cols = static_cast<std::uint32_t>(shape[1].as_number());
+    if (raw_actual.as_array_rows() != want_rows || raw_actual.as_array_cols() != want_cols) {
+      return "array shape mismatch: expected " + std::to_string(want_rows) + "x" + std::to_string(want_cols) +
+             ", got " + std::to_string(raw_actual.as_array_rows()) + "x" + std::to_string(raw_actual.as_array_cols());
+    }
+    const JsonValue* value_v = expect.find("value");
+    if (value_v == nullptr) {
+      return {};
+    }
+    if (!value_v->is_array())
+      return "array golden 'value' is not an array";
+    const auto& expected_cells = value_v->as_array();
+    const std::size_t n = static_cast<std::size_t>(want_rows) * static_cast<std::size_t>(want_cols);
+    if (expected_cells.size() != n)
+      return "array golden value length mismatch: expected " + std::to_string(n) + ", got " +
+             std::to_string(expected_cells.size());
+    const Value* actual_cells = raw_actual.as_array_cells();
+    for (std::size_t i = 0; i < n; ++i) {
+      std::string diff = compare_json_scalar(expected_cells[i], actual_cells[i], tol_abs, tol_rel, compare_mode);
+      if (!diff.empty()) {
+        return "array cell " + std::to_string(i) + ": " + diff;
+      }
+    }
+    return {};
+  }
+
+  // Anchor projection: Excel reports the top-left scalar of any spill
+  // region while xlwings reads back only that cell. Formulon's eval
+  // surfaces the full Array; project it down so scalar expectations see
+  // the same value Excel reports. Full array expectations above bypass
+  // this projection and compare shape + cells.
+  const Value& actual = anchor_or_self(raw_actual);
 
   if (kind == "blank") {
     if (actual.is_blank())

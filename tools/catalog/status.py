@@ -34,6 +34,7 @@ CATALOG_PATH = REPO_ROOT / "tools" / "catalog" / "functions.txt"
 STATUS_PATH = REPO_ROOT / "tools" / "catalog" / "function_status.tsv"
 EVAL_DIR = REPO_ROOT / "src" / "eval"
 SPECIAL_FORMS_PATH = EVAL_DIR / "special_forms_catalog.cpp"
+C_API_PATH = REPO_ROOT / "src" / "c_api" / "formulon_c.cpp"
 
 # Matches builtin entries inside a `FunctionDef` array initialiser, of
 # the form `{"SUM", 1u, kVariadic, &Sum, ...}`. The arity column is the
@@ -57,6 +58,9 @@ SPECIAL_FORMS_BLOCK_RE = re.compile(
     r"kNames\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.DOTALL
 )
 SPECIAL_FORMS_NAME_RE = re.compile(r'"([A-Z][A-Z0-9_.]*)"')
+C_API_AVAILABILITY_RE = re.compile(
+    r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*FM_FUNCTION_([A-Z_]+)\s*\}'
+)
 
 
 # ---- ANSI helpers --------------------------------------------------------
@@ -176,6 +180,24 @@ def load_function_status(path: Path) -> Dict[str, str]:
                 raise ValueError(f"{path}:{lineno}: unknown status {status!r}")
             statuses[name] = status
     return statuses
+
+
+def load_c_api_availability(path: Path) -> Dict[str, str]:
+    """Parses the explicit non-default availability table in formulon_c.cpp."""
+    if not path.exists():
+        return {}
+    enum_to_status = {
+        "IMPLEMENTED_UNVERIFIED": "implemented_unverified",
+        "ENVIRONMENT_BOUND": "environment_bound",
+        "UNAVAILABLE_STUB": "unavailable_stub",
+    }
+    out: Dict[str, str] = {}
+    text = path.read_text(encoding="utf-8", errors="replace")
+    for m in C_API_AVAILABILITY_RE.finditer(text):
+        status = enum_to_status.get(m.group(2))
+        if status is not None:
+            out[m.group(1)] = status
+    return out
 
 
 # ---- Source scanning -----------------------------------------------------
@@ -322,6 +344,33 @@ def print_orphans(catalog_names: Set[str], implemented: Set[str]) -> None:
         print(name)
 
 
+def check_c_api_availability(statuses: Dict[str, str]) -> int:
+    """Checks that function_status.tsv and the C ABI availability table agree.
+
+    The C ABI table only lists non-default statuses; omitted names mean
+    `implemented`, matching function_status.tsv's defaulting rule.
+    """
+    c_api = load_c_api_availability(C_API_PATH)
+    interesting_statuses = {
+        "implemented_unverified",
+        "environment_bound",
+        "unavailable_stub",
+    }
+    wanted = {name: status for name, status in statuses.items() if status in interesting_statuses}
+    drift = []
+    for name in sorted(set(wanted) | set(c_api)):
+        want = wanted.get(name, "implemented")
+        got = c_api.get(name, "implemented")
+        if want != got:
+            drift.append((name, want, got))
+    if not drift:
+        return 0
+    print("C API availability drift:", file=sys.stderr)
+    for name, want, got in drift:
+        print(f"  {name}: function_status.tsv={want}, c_api={got}", file=sys.stderr)
+    return 1
+
+
 # ---- main ----------------------------------------------------------------
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -343,6 +392,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         choices=["implemented", "implemented_unverified", "environment_bound", "unavailable_stub"],
         default=None,
         help="Print catalog names with the selected availability status.",
+    )
+    parser.add_argument(
+        "--check-c-api-availability",
+        action="store_true",
+        help="Exit 1 if function_status.tsv and the C ABI availability table drift.",
     )
     parser.add_argument(
         "--category",
@@ -376,6 +430,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.orphans:
         print_orphans(catalog_names, implemented)
         return 0
+    if args.check_c_api_availability:
+        return check_c_api_availability(statuses)
     if args.missing:
         print_missing_only(sections, implemented, args.category)
         return 0

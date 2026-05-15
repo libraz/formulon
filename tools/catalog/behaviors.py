@@ -107,6 +107,7 @@ class Case:
 
     id: str
     formula: str
+    source: str
 
 
 @dataclass
@@ -118,6 +119,8 @@ class Observation:
     n_match: int
     n_diverged: int
     n_live: int
+    live_sources: Tuple[str, ...] = ()
+    diverged_sources: Tuple[str, ...] = ()
 
 
 # ---- Soft YAML import ----------------------------------------------------
@@ -245,7 +248,7 @@ def load_oracle_cases(cases_dir: Path) -> List[Case]:
             formula = raw.get("formula")
             if not isinstance(cid, str) or not isinstance(formula, str):
                 continue
-            cases.append(Case(id=cid, formula=formula))
+            cases.append(Case(id=cid, formula=formula, source=yaml_path.name))
     return cases
 
 
@@ -272,11 +275,16 @@ def observe(
     """
     n_match = 0
     n_diverged = 0
+    live_sources = set()
+    diverged_sources = set()
     for case in cases:
         if _match(behavior, case.formula):
             n_match += 1
             if case.id in divergence:
                 n_diverged += 1
+                diverged_sources.add(case.source)
+            else:
+                live_sources.add(case.source)
     n_live = n_match - n_diverged
     if n_match == 0:
         status = "missing"
@@ -290,6 +298,8 @@ def observe(
         n_match=n_match,
         n_diverged=n_diverged,
         n_live=n_live,
+        live_sources=tuple(sorted(live_sources)),
+        diverged_sources=tuple(sorted(diverged_sources)),
     )
 
 
@@ -307,6 +317,16 @@ def _drift_marker(obs: Observation) -> str:
     if obs.status == obs.behavior.expected:
         return " "
     return red("!")
+
+
+def _source_summary(obs: Observation) -> str:
+    sources = obs.live_sources if obs.n_live > 0 else obs.diverged_sources
+    if not sources:
+        return ""
+    shown = ", ".join(sources[:3])
+    if len(sources) > 3:
+        shown += f", +{len(sources) - 3}"
+    return f" source={shown}"
 
 
 def print_report(
@@ -340,7 +360,7 @@ def print_report(
                 f"  {marker} {beh.name:<44} "
                 f"expected={beh.expected:<9} observed={_status_label(obs.status):<18} "
                 f"(match={obs.n_match}, live={obs.n_live}, diverged={obs.n_diverged}) "
-                f"{dim(probe_repr)}"
+                f"{dim(probe_repr)}{dim(_source_summary(obs))}"
             )
             print(line)
         print()
@@ -390,7 +410,7 @@ def check_drift(
             f"  {beh.group_function} :: {beh.name}: "
             f"expected={beh.expected}, observed={obs.status} "
             f"(match={obs.n_match}, live={obs.n_live}, diverged={obs.n_diverged}) "
-            f"[{probe_repr}]",
+            f"[{probe_repr}]{_source_summary(obs)}",
             file=sys.stderr,
         )
     return 1
@@ -472,4 +492,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except BrokenPipeError:
+        try:
+            sys.stdout.close()
+        finally:
+            sys.exit(0)

@@ -271,6 +271,11 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/catalog/behaviors.py --check
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  add_test(
+    NAME FunctionAvailabilityDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/catalog/status.py --check-c-api-availability
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Marked SLOW because the YAML-vocabulary scan reads the whole behaviour
   # corpus and is the single largest non-oracle test (~1 s in release).
   # Behaviour drift is checked by `make test-slow` and CI's nightly tier
