@@ -96,30 +96,30 @@ TEST(EvalLet, FunctionCallOnBoundValue) {
   EXPECT_EQ(v.as_number(), 5.0);
 }
 
-TEST(EvalHostProfile, WinHostUnavailableSpecialFormsAndFutureFunctionsAreNameErrors) {
+TEST(EvalHostProfile, WinHostKeepsModernExcel365FunctionsAvailable) {
   Value v = EvalSourceWithHost("=LET(x, 1, x)", ExcelHost::kWin365);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
 
   v = EvalSourceWithHost("=LAMBDA(x, x+1)(5)", ExcelHost::kWin365);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 6.0);
 
   v = EvalSourceWithHost("=SEQUENCE(3)", ExcelHost::kWin365);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
 
   v = EvalSourceWithHost("=VALUETOTEXT(1)", ExcelHost::kWin365);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "1");
 
-  v = EvalSourceWithHost("=UNIQUE({1;1}, FALSE, TRUE)", ExcelHost::kWin365);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  v = EvalSourceWithHost("=UNIQUE({1;1;2})", ExcelHost::kWin365);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 2U);
 
   v = EvalSourceWithHost("=TEXTSPLIT(\"a,b\", \",\")", ExcelHost::kWin365);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_cols(), 2U);
 }
 
 // ---------------------------------------------------------------------------

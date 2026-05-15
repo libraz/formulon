@@ -11,7 +11,7 @@ cases:
     formula: "=ENCODEURL(\"a/b c?d=1&e=2\")"
 
   - id: encodeurl_unreserved_passthrough
-    description: "RFC 3986 unreserved set passes through unchanged"
+    description: "Excel ENCODEURL percent-encodes tilde even though RFC 3986 classifies it as unreserved"
     formula: "=ENCODEURL(\"ABCabc012-_.~\")"
 
   - id: encodeurl_japanese_utf8
@@ -23,6 +23,7 @@ cases:
 
   - id: encodeurl_empty_string
     formula: "=ENCODEURL(\"\")"
+    compare_mode: empty_string_readback
 
   - id: encodeurl_percent_self_encodes
     description: "'%' is not unreserved and encodes to %25"

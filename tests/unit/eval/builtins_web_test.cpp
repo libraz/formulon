@@ -67,11 +67,10 @@ TEST(BuiltinsWebEncodeUrl, QueryStringCharsAreEncoded) {
   EXPECT_EQ(v.as_text(), "a%2Fb%20c%3Fd%3D1%26e%3D2");
 }
 
-TEST(BuiltinsWebEncodeUrl, UnreservedCharsPassThroughUnchanged) {
-  // RFC 3986 unreserved: A-Z a-z 0-9 - _ . ~
+TEST(BuiltinsWebEncodeUrl, ExcelEncodesTilde) {
   const Value v = EvalSource("=ENCODEURL(\"ABCabc012-_.~\")");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "ABCabc012-_.~");
+  EXPECT_EQ(v.as_text(), "ABCabc012-_.%7E");
 }
 
 TEST(BuiltinsWebEncodeUrl, UsesUppercaseHex) {
@@ -153,12 +152,12 @@ TEST(BuiltinsWebFilterXml, MultiNodeSetReturnsArray) {
   ASSERT_TRUE(v.is_array());
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 1U);
-  ASSERT_TRUE(v.as_array_cells()[0].is_text());
-  ASSERT_TRUE(v.as_array_cells()[1].is_text());
-  ASSERT_TRUE(v.as_array_cells()[2].is_text());
-  EXPECT_EQ(v.as_array_cells()[0].as_text(), "1");
-  EXPECT_EQ(v.as_array_cells()[1].as_text(), "2");
-  EXPECT_EQ(v.as_array_cells()[2].as_text(), "3");
+  ASSERT_TRUE(v.as_array_cells()[0].is_number());
+  ASSERT_TRUE(v.as_array_cells()[1].is_number());
+  ASSERT_TRUE(v.as_array_cells()[2].is_number());
+  EXPECT_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_EQ(v.as_array_cells()[1].as_number(), 2.0);
+  EXPECT_EQ(v.as_array_cells()[2].as_number(), 3.0);
 }
 
 TEST(BuiltinsWebFilterXml, MultiNodeSetSpillAnchorMatchesFirstNode) {
@@ -169,8 +168,8 @@ TEST(BuiltinsWebFilterXml, MultiNodeSetSpillAnchorMatchesFirstNode) {
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 2U);
   ASSERT_EQ(v.as_array_cols(), 1U);
-  EXPECT_EQ(v.as_array_cells()[0].as_text(), "1");
-  EXPECT_EQ(v.as_array_cells()[1].as_text(), "2");
+  EXPECT_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_EQ(v.as_array_cells()[1].as_number(), 2.0);
 }
 
 TEST(BuiltinsWebFilterXml, AttributeAxisSpillsAcrossMatches) {
@@ -188,7 +187,7 @@ TEST(BuiltinsWebFilterXml, AttributeAxisSpillsAcrossMatches) {
 TEST(BuiltinsWebFilterXml, EmptyNodeSetReturnsNotAvailable) {
   const Value v = EvalSource("=FILTERXML(\"<r><a>1</a></r>\",\"//b\")");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsWebFilterXml, MalformedXmlReturnsValue) {
@@ -248,8 +247,10 @@ TEST(BuiltinsWebFilterXml, TextAxisOverMixedContentSpillsTextNodes) {
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 2U);
   ASSERT_EQ(v.as_array_cols(), 1U);
-  EXPECT_EQ(v.as_array_cells()[0].as_text(), "a");
-  EXPECT_EQ(v.as_array_cells()[1].as_text(), "c");
+  EXPECT_TRUE(v.as_array_cells()[0].is_error());
+  EXPECT_EQ(v.as_array_cells()[0].as_error(), ErrorCode::Value);
+  EXPECT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsWebFilterXml, PropagatesErrorInFirstArg) {

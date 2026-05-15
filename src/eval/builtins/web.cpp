@@ -2,7 +2,7 @@
 //
 // Implementation of Formulon's Web-category built-in functions:
 //
-//   * ENCODEURL(text)        -- RFC 3986 unreserved-set percent-encoding.
+//   * ENCODEURL(text)        -- Excel-compatible percent-encoding.
 //   * FILTERXML(xml, xpath)  -- pugixml-backed XPath 1.0 evaluation.
 //   * WEBSERVICE(url)        -- fixed #VALUE! (no network I/O).
 //   * PY(expression)         -- fixed #NAME? (no embedded Python).
@@ -20,8 +20,10 @@
 
 #include "eval/builtins/web.h"
 
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 
@@ -41,11 +43,12 @@ namespace {
 // ENCODEURL
 // ---------------------------------------------------------------------------
 //
-// Percent-encodes `text` per RFC 3986: every byte that is NOT in the
-// unreserved set (`A-Z a-z 0-9 - _ . ~`) is emitted as `%XX` with uppercase
-// hex digits. The input is treated as opaque UTF-8 bytes, so a multi-byte
-// code point becomes multiple `%XX` sequences (e.g. the Japanese character
-// `日` -> `%E6%97%A5`).
+// Percent-encodes `text` using Excel's ENCODEURL surface: every byte that is
+// NOT in `A-Z a-z 0-9 - _ .` is emitted as `%XX` with uppercase hex digits.
+// Notably, Windows Excel 365 encodes `~` as `%7E` even though RFC 3986 treats
+// tilde as unreserved. The input is treated as opaque UTF-8 bytes, so a
+// multi-byte code point becomes multiple `%XX` sequences (e.g. the Japanese
+// character `日` -> `%E6%97%A5`).
 //
 // Coercion rules (via `coerce_to_text`):
 //   * Text    -> input verbatim.
@@ -54,9 +57,8 @@ namespace {
 //   * Blank   -> "".
 //   * Error   -> propagated (dispatcher short-circuits before we run).
 //
-// Uppercase hex matches Mac Excel 365 ja-JP output; RFC 3986 §2.1 actually
-// recommends uppercase as well ("For consistency, URI producers and
-// normalizers should use uppercase hexadecimal digits").
+// Uppercase hex matches Excel output; RFC 3986 §2.1 also recommends
+// uppercase for consistency.
 
 bool is_unreserved(unsigned char c) noexcept {
   if (c >= 'A' && c <= 'Z') {
@@ -68,7 +70,7 @@ bool is_unreserved(unsigned char c) noexcept {
   if (c >= '0' && c <= '9') {
     return true;
   }
-  return c == '-' || c == '_' || c == '.' || c == '~';
+  return c == '-' || c == '_' || c == '.';
 }
 
 Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -133,17 +135,76 @@ Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // Extracts the text content of a pugixml node. For element nodes we
 // concatenate the children's text (pugixml's xml_text::as_string handles
 // leaf CDATA / PCDATA); for attribute nodes we return the attribute value.
-std::string_view node_text(const pugi::xpath_node& n) {
+std::string_view trim_ascii_ws(std::string_view s) noexcept {
+  std::size_t first = 0;
+  while (first < s.size()) {
+    const unsigned char c = static_cast<unsigned char>(s[first]);
+    if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+      break;
+    }
+    ++first;
+  }
+  std::size_t last = s.size();
+  while (last > first) {
+    const unsigned char c = static_cast<unsigned char>(s[last - 1]);
+    if (c != ' ' && c != '\t' && c != '\n' && c != '\r') {
+      break;
+    }
+    --last;
+  }
+  return s.substr(first, last - first);
+}
+
+bool parse_excel_readback_number(std::string_view s, double* out) noexcept {
+  s = trim_ascii_ws(s);
+  if (s.empty()) {
+    return false;
+  }
+  std::string tmp(s);
+  char* end = nullptr;
+  errno = 0;
+  const double parsed = std::strtod(tmp.c_str(), &end);
+  if (errno != 0 || end == tmp.c_str() || *end != '\0') {
+    return false;
+  }
+  *out = parsed;
+  return true;
+}
+
+void append_direct_text_children(const pugi::xml_node& node, std::string* out) {
+  for (pugi::xml_node child : node.children()) {
+    const pugi::xml_node_type type = child.type();
+    if (type == pugi::node_pcdata || type == pugi::node_cdata) {
+      *out += child.value();
+    }
+  }
+}
+
+Value filterxml_value_from_text(std::string_view raw, Arena& arena) {
+  const std::string_view text = trim_ascii_ws(raw);
+  if (text.empty()) {
+    return Value::error(ErrorCode::Value);
+  }
+  double number = 0.0;
+  if (parse_excel_readback_number(text, &number)) {
+    return Value::number(number);
+  }
+  return Value::text(arena.intern(std::string(text)));
+}
+
+Value node_value(const pugi::xpath_node& n, Arena& arena) {
   if (n.node()) {
-    // Element / document / text node. xml_text::as_string returns the
-    // aggregated text of the node's PCDATA children, which matches
-    // Excel's "inner text" semantics for FILTERXML.
-    return n.node().text().as_string();
+    if (n.node().type() != pugi::node_element && n.node().type() != pugi::node_document) {
+      return Value::error(ErrorCode::Value);
+    }
+    std::string text;
+    append_direct_text_children(n.node(), &text);
+    return filterxml_value_from_text(text, arena);
   }
   if (n.attribute()) {
-    return n.attribute().value();
+    return filterxml_value_from_text(n.attribute().value(), arena);
   }
-  return {};
+  return Value::error(ErrorCode::Value);
 }
 
 Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
@@ -158,6 +219,16 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 
   pugi::xml_document doc;
   const std::string& xml = xml_text.value();
+  if (xml.size() >= 3U && static_cast<unsigned char>(xml[0]) == 0xEF &&
+      static_cast<unsigned char>(xml[1]) == 0xBB && static_cast<unsigned char>(xml[2]) == 0xBF) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (xml.rfind("\xC3\xAF\xC2\xBB\xC2\xBF", 0) == 0) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (xml.rfind("\xC3\xAF\xEF\xBD\xBB\xEF\xBD\xBF", 0) == 0) {
+    return Value::error(ErrorCode::Value);
+  }
   pugi::xml_parse_result parse = doc.load_buffer(xml.data(), xml.size());
   if (!parse) {
     return Value::error(ErrorCode::Value);
@@ -173,17 +244,20 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!query.result()) {
     return Value::error(ErrorCode::Value);
   }
+  if (query.return_type() != pugi::xpath_type_node_set) {
+    return Value::error(ErrorCode::Value);
+  }
 
   pugi::xpath_node_set nodes = query.evaluate_node_set(doc);
   if (nodes.empty()) {
-    return Value::error(ErrorCode::NA);
+    return Value::error(ErrorCode::Value);
   }
 
   const std::size_t n = nodes.size();
   if (n == 1U) {
     // Single match keeps the scalar contract historically asserted by the
     // unit suite and matches Mac Excel's anchor read-back identically.
-    return Value::text(arena.intern(node_text(nodes.first())));
+    return node_value(nodes.first(), arena);
   }
 
   // Multi-match: build an N x 1 vertical Array. In a sheet context Excel
@@ -197,7 +271,7 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t i = 0; i < n; ++i) {
-    cells[i] = Value::text(arena.intern(node_text(nodes[i])));
+    cells[i] = node_value(nodes[i], arena);
   }
   ArrayValue* arr = arena.create<ArrayValue>();
   if (arr == nullptr) {

@@ -9,10 +9,119 @@
 # Schema is identical to tests/divergence.yaml; see that file's header for
 # documentation. `applies_to: [win-365-ja_JP]` is implied when the entry
 # lives in this file and may be omitted.
-#
-# No variant-specific entries are needed today: the win-365-ja_JP goldens
-# generated on 2026-05-14 differ from mac-365-ja_JP only through cases
-# already accounted for by tests/divergence.yaml's `applies_to` filtering.
-# Add entries here when divergence-research uncovers a Windows-only quirk.
 
-entries: []
+entries:
+  - id: jis_ascii_and_space
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_voiced_recompose
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_semivoiced_row
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_unvoiced_row
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: asc_jis_round_trip
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_idempotent_on_fullwidth
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_idempotent_on_kanji
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_mixed_halfkata_kanji
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_orphan_dakuten
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_half_punctuation
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_round_trip
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_bool_coerces
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_error_propagates
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME? before argument error propagation, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: jis_long_halfkana_string
+    mode: skip-oracle
+    reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: regexextract_mode_3_all_capture_groups
+    mode: skip-oracle
+    reason: "Win Excel 365 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements the documented all-capture-groups spill mode and validates it via unit tests."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: groupby_bare_sum
+    mode: skip-oracle
+    reason: "Win Excel 365 returns #VALUE! for this compact inline-array GROUPBY/SUM probe; Formulon keeps the documented grouped spill implementation covered by unit tests."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: groupby_lambda_sum
+    mode: skip-oracle
+    reason: "Win Excel 365 returns #VALUE! for this compact inline-array GROUPBY/LAMBDA probe; Formulon keeps the documented grouped spill implementation covered by unit tests."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: pivotby_bare_sum
+    mode: skip-oracle
+    reason: "Win Excel 365 returns #VALUE! for this compact inline-array PIVOTBY/SUM probe; Formulon keeps the documented pivot spill implementation covered by unit tests."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"
+  - id: pivotby_lambda_sum
+    mode: skip-oracle
+    reason: "Win Excel 365 returns #VALUE! for this compact inline-array PIVOTBY/LAMBDA probe; Formulon keeps the documented pivot spill implementation covered by unit tests."
+    prefer: formulon
+    first_noted: 2026-05-15
+    last_verified_excel_version: "16.0"

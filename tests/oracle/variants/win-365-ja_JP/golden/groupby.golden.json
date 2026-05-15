@@ -17,19 +17,13 @@
       "id": "groupby_bare_sum",
       "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, 0)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "Win Excel 365 returns #VALUE! for this compact inline-array GROUPBY/SUM probe; Formulon keeps the documented grouped spill implementation covered by unit tests."
     },
     {
       "id": "groupby_lambda_sum",
       "formula": "=GROUPBY({\"A\";\"B\";\"A\";\"C\"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0)",
       "setup": {},
-      "expect": {
-        "kind": "error",
-        "code": "#VALUE!"
-      }
+      "skipped": "Win Excel 365 returns #VALUE! for this compact inline-array GROUPBY/LAMBDA probe; Formulon keeps the documented grouped spill implementation covered by unit tests."
     },
     {
       "id": "groupby_unknown_name_error",

@@ -679,17 +679,13 @@ entries:
   # -- ENCODEURL: not available in Mac Excel 365 ja-JP ----------------------
   # Mac Excel 365 ja-JP returns #NAME? for every ENCODEURL invocation:
   # the function is documented in the Microsoft 365 catalog but is not
-  # registered in this build/locale. Formulon implements the RFC 3986
-  # percent-encoding semantics described in the Microsoft documentation
-  # (uppercase hex, unreserved set ALPHA / DIGIT / "-" / "." / "_" / "~",
-  # UTF-8 byte expansion for multibyte input); cross-checked with Windows
-  # Excel 365 and online documentation samples. We prefer the Formulon
-  # answer here; the cases stay in the suite so a future Mac Excel build
-  # that re-registers ENCODEURL will surface a clean diff and we can drop
-  # these skip entries.
+  # registered in this build/locale. Windows Excel 365 live oracle coverage
+  # now pins the available-host behavior, including uppercase hex and the
+  # Excel-specific `~` -> `%7E` encoding. These Mac skips only preserve the
+  # unavailable-function surface for the primary Mac target.
   - id: encodeurl_space
     mode: skip-oracle
-    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Formulon implements the documented RFC 3986 percent-encoding correctly; verified against Microsoft's documentation."
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Windows Excel 365 variant goldens provide live coverage for available-host behavior."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
@@ -701,7 +697,7 @@ entries:
     last_verified_excel_version: "16.108.1"
   - id: encodeurl_unreserved_passthrough
     mode: skip-oracle
-    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon: RFC 3986 unreserved set passes through verbatim."
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Windows Excel 365 pins Excel's tilde encoding as %7E."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
