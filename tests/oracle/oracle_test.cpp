@@ -51,6 +51,13 @@ namespace {
 using formulon::parser::AstNode;
 using formulon::parser::Parser;
 
+struct SetupFormulaCell {
+  std::size_t sheet_index = 0;
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::string formula;
+};
+
 // Maps the golden JSON's `"#DIV/0!"` style display name to the matching
 // ErrorCode enum. Returns `false` on an unknown code.
 bool display_name_to_code(std::string_view name, ErrorCode* out) {
@@ -343,6 +350,9 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
 std::string compare_json_scalar(const JsonValue& expect, const Value& actual, double tol_abs, double tol_rel,
                                 std::string_view compare_mode) {
   if (expect.is_null()) {
+    if (compare_mode == "empty_string_readback" && actual.is_text() && actual.as_text().empty()) {
+      return {};
+    }
     return actual.is_blank() ? std::string{} : "expected blank, got " + format_value(actual);
   }
   if (expect.is_number()) {
@@ -362,6 +372,9 @@ std::string compare_json_scalar(const JsonValue& expect, const Value& actual, do
                      (actual.as_boolean() ? "TRUE" : "FALSE");
   }
   if (expect.is_string()) {
+    if (compare_mode == "empty_string_readback" && expect.as_string().empty() && actual.is_blank()) {
+      return {};
+    }
     if (!actual.is_text())
       return "expected text, got " + format_value(actual);
     if (expect.as_string() == actual.as_text())
@@ -440,6 +453,9 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
   if (kind == "blank") {
     if (actual.is_blank())
       return {};
+    if (compare_mode == "empty_string_readback" && actual.is_text() && actual.as_text().empty()) {
+      return {};
+    }
     return "expected blank, got " + format_value(actual);
   }
   if (kind == "number") {
@@ -486,6 +502,10 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
         return {};
       }
       return "numeric text mismatch: expected \"" + want_text + "\", got " + std::to_string(got);
+    }
+
+    if (compare_mode == "empty_string_readback" && want_text.empty() && actual.is_blank()) {
+      return {};
     }
 
     if (!actual.is_text())
@@ -589,6 +609,7 @@ TEST_P(OracleTest, Matches) {
   }
   Sheet& sheet = wb.sheet(0);
   Arena text_arena;
+  std::vector<SetupFormulaCell> setup_formulas;
 
   // Determine the formula-under-test cell up-front so we can pre-register the
   // formula text on the target cell before applying setup. This lets setup
@@ -616,11 +637,14 @@ TEST_P(OracleTest, Matches) {
       // default Sheet1, preserving the historical default behaviour.
       auto [sheet_name, bare_addr] = split_sheet_qualified_addr(entry.first);
       Sheet* target_sheet = &sheet;
+      std::size_t target_sheet_index = 0;
       if (!sheet_name.empty()) {
         std::size_t idx = wb.sheet_index_by_name(sheet_name);
         if (idx == static_cast<std::size_t>(-1)) {
+          target_sheet_index = wb.sheet_count();
           target_sheet = &wb.add_sheet(sheet_name);
         } else {
+          target_sheet_index = idx;
           target_sheet = &wb.sheet(idx);
         }
       }
@@ -635,7 +659,41 @@ TEST_P(OracleTest, Matches) {
         FAIL() << param.suite << "." << param.case_id << ": setup[" << entry.first << "]: " << err_msg;
         return;
       }
+      const JsonValue* kind_v = entry.second.find("kind");
+      const JsonValue* setup_formula_v = entry.second.find("formula");
+      if (kind_v != nullptr && kind_v->is_string() && kind_v->as_string() == "formula" && setup_formula_v != nullptr &&
+          setup_formula_v->is_string()) {
+        setup_formulas.push_back({target_sheet_index, row, col, setup_formula_v->as_string()});
+      }
     }
+  }
+
+  // Materialise setup formulas before evaluating the formula under test.
+  // This matters for dynamic-array setup like `A1=SEQUENCE(3)`: Excel has
+  // already committed the A1:A3 spill by the time `=SUM(A1#)` or
+  // `=_xlfn.ANCHORARRAY(A1)` runs. The oracle harness previously stored the
+  // formula text only, so spill-aware consumers saw no committed region.
+  const eval::FunctionRegistry& registry = eval::default_registry();
+  eval::EvalState setup_state;
+  for (const SetupFormulaCell& setup_formula : setup_formulas) {
+    Sheet& setup_sheet = wb.sheet(setup_formula.sheet_index);
+    std::string_view setup_body = setup_formula.formula;
+    if (!setup_body.empty() && setup_body.front() == '=') {
+      setup_body.remove_prefix(1);
+    }
+    Arena setup_parse_arena;
+    Arena setup_eval_arena;
+    Parser setup_parser(setup_body, setup_parse_arena);
+    AstNode* setup_root = setup_parser.parse();
+    ASSERT_NE(setup_root, nullptr) << param.suite << "." << param.case_id << ": setup formula parse failed for '"
+                                   << setup_formula.formula << "'";
+    eval::EvalContext setup_ctx = eval::EvalContext(wb, setup_sheet, setup_state)
+                                      .with_excel_profile(wb.excel_profile())
+                                      .with_mutable_sheet(setup_sheet)
+                                      .with_formula_cell(setup_formula.row, setup_formula.col);
+    Value setup_value = eval::evaluate(*setup_root, setup_eval_arena, registry, setup_ctx);
+    setup_value = setup_ctx.dispatch_array_result(setup_value);
+    setup_sheet.set_cell_cached_value(setup_formula.row, setup_formula.col, setup_value);
   }
 
   // Parse and evaluate the formula through the default registry. Leading '='
@@ -654,7 +712,6 @@ TEST_P(OracleTest, Matches) {
   // Use the full evaluator entry point so recursive cell refs, cycle
   // detection, and the default function registry all kick in — matching
   // what a real Formulon calc would do.
-  const eval::FunctionRegistry& registry = eval::default_registry();
   eval::EvalState state;
   eval::EvalContext ctx = eval::EvalContext(wb, sheet, state).with_excel_profile(wb.excel_profile());
   // Anchor the formula at its own cell so zero-arg ROW() / COLUMN() return

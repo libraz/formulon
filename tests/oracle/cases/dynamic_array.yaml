@@ -81,11 +81,9 @@ cases:
   # explicit `_xlfn.ANCHORARRAY(...)` literal so the closure-check
   # function-name regex matches.
   #
-  # Cases that depend on a spill source (setup formula like
-  # `=SEQUENCE(...)`) are marked skip-oracle in tests/divergence.yaml
-  # because the static oracle harness does not materialize setup-formula
-  # spills before evaluating the test formula — same harness limitation
-  # documented for `spill_ref_after_sequence_sum` above.
+  # The oracle harness materializes setup-formula spills before evaluating
+  # the formula under test, so setup sources like `A1: =SEQUENCE(...)`
+  # behave like already-calculated worksheet spills.
 
   - id: anchorarray_static_value_anchor
     description: "B1 holds a static number, not a spill anchor. Formulon: #REF!. Mac probe via xlwings reads blank because Mac does not evaluate `=_xlfn.ANCHORARRAY(...)` typed via the formula2 API and Z1 displays as blank — see divergence.yaml. Unit-test coverage in spill_ref_eval_test.cpp covers the documented #REF! semantics."

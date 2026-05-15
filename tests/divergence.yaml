@@ -43,142 +43,24 @@
 #                                                     # immediately.
 
 entries:
-  # -- xlwings empty-string round-trip gap ---------------------------------
+  # -- xlwings empty-string / blank read-back gaps -------------------------
   # The Mac xlwings driver cannot write a cell holding the empty string
   # "": assigning "" leaves the cell genuinely blank from Excel's point of
-  # view. Symmetrically, reading a cell whose formula returned "" comes
-  # back as None (blank) rather than as the text "". Both directions
-  # break the four cases below. These are genuine Formulon-vs-Excel
-  # agreements that we cannot round-trip through the current oracle
-  # infrastructure; revisit if we replace xlwings with AppleScript/COM
-  # direct writes. Kept in the YAML so the divergences are visible.
+  # view. Formula results that return "" are verified with
+  # compare_mode=empty_string_readback; the remaining skipped cases below
+  # need an actual setup-cell empty string, or hit xlwings blank read-back
+  # for rejected formulas. Revisit if the oracle pipeline moves to a bridge
+  # that can preserve Excel empty-string cells and rejected-formula errors.
   - id: isblank_of_empty_string
     mode: skip-oracle
     reason: "xlwings writes \"\" as a blank cell, so Excel reports ISBLANK=TRUE even though Formulon correctly says FALSE."
     prefer: formulon
     first_noted: 2026-04-23
-  - id: t_of_number
-    mode: skip-oracle
-    reason: "xlwings classifies the empty-string result of =T(42) as blank on read-back; Formulon returns text(\"\") which is strictly correct."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: t_of_bool
-    mode: skip-oracle
-    reason: "Same xlwings \"\" -> blank read-back gap as t_of_number."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: t_of_blank_cell
-    mode: skip-oracle
-    reason: "Same xlwings \"\" -> blank read-back gap as t_of_number."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: left_zero_count
-    mode: skip-oracle
-    reason: "LEFT(\"abcdef\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: mid_start_beyond_length
-    mode: skip-oracle
-    reason: "MID with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: mid_zero_length
-    mode: skip-oracle
-    reason: "MID(...,n,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: rept_zero_count
-    mode: skip-oracle
-    reason: "REPT(s,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: leftb_zero_count
-    mode: skip-oracle
-    reason: "LEFTB(\"hello\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: midb_start_beyond
-    mode: skip-oracle
-    reason: "MIDB with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: text_empty_format
-    mode: skip-oracle
-    reason: "=TEXT(42, \"\") -> \"\" which xlwings read-back classifies as blank. Formulon correctly returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: roman_zero_is_empty
-    mode: skip-oracle
-    reason: "ROMAN(0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-23
-  - id: unary_plus_empty_string
-    mode: skip-oracle
-    reason: "=+\"\" -> \"\" (unary plus is identity); xlwings reads the empty string back as blank. Formulon returns text(\"\")."
-    prefer: formulon
-    first_noted: 2026-04-25
   - id: countif_notequal_empty_over_mixed
     mode: skip-oracle
     reason: "xlwings writes \"\" as a blank cell, so Excel's COUNTIF(range, \"<>\") over a range with a literal-\"\" cell sees one fewer populated cell than Formulon's in-memory model. Formulon returns 3, Mac records 2 due to the xlwings round-trip gap."
     prefer: formulon
     first_noted: 2026-04-25
-  - id: right_zero_count
-    reason: "RIGHT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: concatenate_empty_strings
-    reason: "CONCATENATE() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: upper_empty
-    reason: "UPPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: lower_empty
-    reason: "LOWER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: proper_empty
-    reason: "PROPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: trim_only_spaces
-    reason: "TRIM() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: rept_empty_string
-    reason: "REPT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: hyperlink_empty_friendly
-    reason: "HYPERLINK() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-
-  # -- ISFORMULA of non-reference literals ---------------------------------
-  # Mac Excel 365 returns `#VALUE!` for ISFORMULA(42) and
-  # ISFORMULA("A1"), matching the documented rule that ISFORMULA expects
-  # a reference. xlwings reads that specific error back as blank (the
-  # CVErr path the driver uses mis-maps #VALUE! from these argument
-  # shapes), so the golden records `kind: blank` rather than the actual
-  # error. Formulon correctly surfaces `#VALUE!`. Skipped until we
-  # replace the xlwings read-back with an AppleScript/COM path.
   - id: isformula_of_literal_number_is_value
     mode: skip-oracle
     reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
@@ -392,8 +274,9 @@ entries:
   # -- LAMBDA family (oracle-close family=lambda, 2026-04-28) ---------------
   # The LAMBDA helper implementation is now live for anchor unwrap, MAP
   # shape extension, and MAKEARRAY per-cell error spills. The remaining
-  # entries are Mac Excel/xlwings read-back quirks where an otherwise
-  # inspectable spill reports a blank anchor when one output element errors.
+  # entries need evaluator-side error propagation through inline array
+  # literals / higher-order helper inputs before they can be live oracle
+  # cases.
 
   # Gap 1: LAMBDA-helper anchor unwrap — closed 2026-05-01.
   # BYROW / BYCOL / MAP / SCAN / MAKEARRAY (and SEQUENCE / TRANSPOSE in the
@@ -405,19 +288,19 @@ entries:
   # cases with additional Mac-side quirks remain.
   - id: bycol_error_in_column
     mode: skip-oracle
-    reason: "BYCOL with an errored source column produces a per-column spill including the error. Mac Excel 16.109/xlwings reads the anchor as blank when one output column errors; Formulon preserves the per-column spill result."
+    reason: "BYCOL with an errored inline-array source column should produce a per-column spill including the error. Formulon currently loses the inline-array expression error before BYCOL sees it; keep skipped until evaluator-side error propagation is fixed."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.109"
   - id: map_error_propagation
     mode: skip-oracle
-    reason: "MAP propagating an element error produces a spill with the error in that element. Mac Excel 16.109/xlwings reads the anchor as blank for this spill; Formulon preserves the per-element spill result."
+    reason: "MAP propagating an inline-array element error should preserve that error in the output spill. Formulon currently loses the inline-array expression error before MAP sees it; keep skipped until evaluator-side error propagation is fixed."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.109"
   - id: scan_error_in_element
     mode: skip-oracle
-    reason: "SCAN propagating an element error produces a downstream error spill. Mac Excel 16.109/xlwings reads the anchor as blank for this spill; Formulon preserves the downstream error result."
+    reason: "SCAN propagating an inline-array element error should produce downstream error spill cells. Formulon currently loses the inline-array expression error before SCAN sees it; keep skipped until evaluator-side error propagation is fixed."
     prefer: mac-excel-365
     first_noted: 2026-04-28
     last_verified_excel_version: "16.109"
@@ -501,70 +384,19 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
-  # REGEXEXTRACT spill-mode results — Mac's xlwings oracle generator
-  # captures only the spill anchor cell (a scalar), while Formulon's
-  # impl correctly returns an ArrayValue. Modes 1 (N x 1) and 2 (1 x G)
-  # therefore look like text-vs-array-shape mismatches even though both
-  # carry the same first element. Mode 3 (N x G) is additionally not
-  # exposed on Mac 16.108.1 (returns #VALUE!). Unit tests in
-  # tests/unit/eval/builtins_regex_test.cpp validate the spill shapes.
-  - id: regexextract_mode_1_all_matches
-    reason: "Spill-mode result; xlwings captures only the spill anchor cell. Formulon correctly returns the (N x 1) array; unit tests validate the shape."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: regexextract_mode_2_capture_groups
-    reason: "Spill-mode result; xlwings captures only the spill anchor cell. Formulon correctly returns the (1 x G) array; unit tests validate the shape."
-    prefer: formulon
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
+  # REGEXEXTRACT spill-mode results — modes 1 (1 x N) and 2 (1 x G) are
+  # now captured as full arrays by the spill-shape oracle probe. Mode 3
+  # remains skipped until Mac Excel exposes return_mode=3.
   - id: regexextract_mode_3_all_capture_groups
-    reason: "Mac Excel 365 16.108.1 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
+    reason: "Mac Excel 365 16.109 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
     prefer: formulon
     first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.109"
     mode: skip-oracle
 
-  # MUNIT spill-navigation cases. INDEX / SUMPRODUCT currently cannot
-  # navigate the ArrayValue returned by a nested call (MUNIT, SEQUENCE,
-  # MAKEARRAY, etc.) because resolve_range_arg only special-cases OFFSET /
-  # CHOOSE / IF / ROW / COLUMN. Mac Excel handles every array-returning
-  # call uniformly. Once resolve_range_arg gains a generic ArrayValue
-  # fallback, drop these entries and flip the matching behaviors back to
-  # `expected: impl`. The direct error cases (n<=0, text) still close
-  # cleanly without the fix.
-  - id: munit_index_diagonal
-    reason: "INDEX cannot navigate the ArrayValue returned by a nested MUNIT call; underlying resolve_range_arg limitation. Unit tests in tests/unit/eval/builtins/dynamic_array_test.cpp validate identity-matrix content."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: munit_index_off_diagonal
-    reason: "INDEX cannot navigate the ArrayValue returned by a nested MUNIT call; underlying resolve_range_arg limitation. Unit tests cover off-diagonal=0 directly."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: munit_size_one
-    reason: "INDEX cannot navigate the ArrayValue returned by a nested MUNIT(1) call; underlying resolve_range_arg limitation. Unit test BuiltinsMunit.OneReturns1x1 covers the n=1 boundary."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: munit_fractional_truncates
-    reason: "INDEX cannot navigate the ArrayValue returned by a nested MUNIT(3.7) call; underlying resolve_range_arg limitation. Unit test BuiltinsMunit.FractionalArgTruncates covers truncate-toward-zero semantics."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: munit_sumproduct_trace
-    reason: "SUMPRODUCT cannot navigate the ArrayValue returned by a nested MUNIT(4) call; underlying resolve_range_arg limitation. Identity-matrix trace=n is covered indirectly by unit tests."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
+  # Stale MUNIT spill-navigation entries removed 2026-05-15:
+  # resolve_range_arg now unwraps generic Value::Array results, so
+  # INDEX(MUNIT(...)) and SUMPRODUCT(MUNIT(...)) are live oracle cases.
 
   # GROUPBY/PIVOTBY simple aggregator forms. Mac Excel 16.109 returns
   # #VALUE! for these compact inline-array formulas, while Formulon
@@ -617,27 +449,6 @@ entries:
     first_noted: 2026-05-15
     last_verified_excel_version: "16.109"
     mode: skip-oracle
-  # CELL stub-key divergences. Formulon has no style subsystem yet so
-  # CELL("filename") and CELL("prefix", ...) return empty text rather
-  # than blank. Mac surfaces blank, but the top-level evaluator's
-  # blank-as-zero rule (tree_walker.cpp evaluate()) would collapse a
-  # blank stub to 0 -- the empty-text stub keeps the documented MVP
-  # semantics intact. Once Formulon gains workbook-path / cell-style
-  # metadata these stubs will become live and the entries can be
-  # removed.
-  - id: cell_filename_default
-    reason: "Mac returns blank for an unsaved workbook; Formulon stubs to empty text to dodge the top-level blank-as-zero rule. Will close when the workbook gains a path field."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-  - id: cell_prefix_default
-    reason: "Mac returns blank for a cell with no alignment-prefix character; Formulon stubs to empty text to dodge the top-level blank-as-zero rule. Will close when the cell-style subsystem lands."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
-
   # Volatile / non-deterministic cluster (NOW / TODAY / RAND / RANDBETWEEN /
   # RANDARRAY). Each function's result is intrinsically non-reproducible —
   # NOW/TODAY drift over wall-clock time, the RAND family draws from a
@@ -844,42 +655,12 @@ entries:
   # -- SEQUENCE / TRANSPOSE / SpillRef -------------------------------------
   # The SEQUENCE / TRANSPOSE families' "anchor not unwrapped" entries were
   # closed 2026-05-01 alongside the LAMBDA-helper unwrap (see comment near
-  # the BYROW block). One residual divergence in `sequence_zero_rows_value`
-  # remains because the error path pre-empts the anchor projection — kept
-  # for re-verification once oracle-gen reflects the live Mac result.
-  - id: sequence_zero_rows_value
-    mode: skip-oracle
-    reason: "SEQUENCE error path returns Error scalar but golden registers an array-shaped error in some configurations; re-verify after oracle-gen rerun captures the live Mac result post-anchor-unwrap landing."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-  - id: spill_ref_after_sequence_sum
-    mode: skip-oracle
-    reason: "Spill-ref `A1#` consumed by SUM requires the spill region to be materialized in the workbook, but the oracle harness evaluates the formula in isolation; SUM sees the bare Array reference and produces a different result than Excel's resolved spill region."
-    prefer: mac-excel-365
-    first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
-
-  - id: anchorarray_resolves_sequence_sum
-    mode: skip-oracle
-    reason: "_xlfn.ANCHORARRAY(A1) over a setup-formula spill source (A1=SEQUENCE(3)) requires the spill region to be materialized before the test formula is evaluated. The static oracle harness evaluates the test formula in isolation, so spill_region_at_anchor(A1) returns null and ANCHORARRAY surfaces #REF!. Same harness limitation as spill_ref_after_sequence_sum above."
-    prefer: mac-excel-365
-    first_noted: 2026-05-02
-    last_verified_excel_version: "16.108.2"
-
-  - id: anchorarray_resolves_sequence_rows
-    mode: skip-oracle
-    reason: "_xlfn.ANCHORARRAY(A1) requires the A1=SEQUENCE(3) spill source to be materialized before the test formula evaluates. Same harness limitation as spill_ref_after_sequence_sum."
-    prefer: mac-excel-365
-    first_noted: 2026-05-02
-    last_verified_excel_version: "16.108.2"
-
-  - id: anchorarray_offset_resolved_anchor
-    mode: skip-oracle
-    reason: "_xlfn.ANCHORARRAY(OFFSET(A1,1,0)) requires the A2=SEQUENCE(2,2) spill source to be materialized before the test formula evaluates. Same harness limitation as spill_ref_after_sequence_sum."
-    prefer: mac-excel-365
-    first_noted: 2026-05-02
-    last_verified_excel_version: "16.108.2"
+  # the BYROW block). Stale `sequence_zero_rows_value` removed 2026-05-15:
+  # the scalar error path is now live as #VALUE!.
+  # Stale setup-spill materialization entries removed 2026-05-15:
+  # oracle_test now evaluates setup formula cells and commits dynamic-array
+  # spills before running the formula under test, so `A1#` and
+  # `_xlfn.ANCHORARRAY(A1)` over setup formulas are live oracle cases.
 
   - id: anchorarray_static_value_anchor
     mode: skip-oracle

@@ -386,7 +386,10 @@
       "id": "roman_zero_is_empty",
       "formula": "=ROMAN(0)",
       "setup": {},
-      "skipped": "ROMAN(0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "roman_four",

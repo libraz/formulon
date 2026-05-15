@@ -212,15 +212,15 @@ TEST(RegexExtract, Mode0CaseInsensitiveExplicit) {
 }
 
 // ---------------------------------------------------------------------------
-// REGEXEXTRACT — return_mode 1 (column array of all matches)
+// REGEXEXTRACT — return_mode 1 (row array of all matches)
 // ---------------------------------------------------------------------------
 
-TEST(RegexExtract, Mode1AllMatchesColumn) {
+TEST(RegexExtract, Mode1AllMatchesRow) {
   const Value v = EvalSource("=REGEXEXTRACT(\"abc 123 def 456 ghi 789\", \"\\d+\", 1)");
   ASSERT_TRUE(v.is_array());
   const ArrayValue* arr = v.as_array();
-  EXPECT_EQ(arr->rows, 3U);
-  EXPECT_EQ(arr->cols, 1U);
+  EXPECT_EQ(arr->rows, 1U);
+  EXPECT_EQ(arr->cols, 3U);
   ASSERT_TRUE(arr->cells[0].is_text());
   EXPECT_EQ(arr->cells[0].as_text(), "123");
   ASSERT_TRUE(arr->cells[1].is_text());

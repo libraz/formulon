@@ -31,7 +31,7 @@ KINDS = {"blank", "number", "bool", "text", "error", "formula"}
 # strict byte-equality (the historical behaviour). Any other value selects
 # a structured comparator on the verifier side; see `compare_value` in
 # `tests/oracle/oracle_test.cpp`.
-COMPARE_MODES = {"exact", "complex_text"}
+COMPARE_MODES = {"exact", "complex_text", "empty_string_readback"}
 
 
 @dataclass

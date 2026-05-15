@@ -103,6 +103,11 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     *out_err = v;
     return false;
   }
+  if (v.is_array()) {
+    *out_rows = v.as_array_rows();
+    *out_cols = v.as_array_cols();
+    return true;
+  }
   *out_rows = 1U;
   *out_cols = 1U;
   return true;

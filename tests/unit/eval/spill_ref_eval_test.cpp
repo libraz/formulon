@@ -555,6 +555,29 @@ TEST(AnchorArrayLazy, SumOverAnchorArray) {
   EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
 }
 
+TEST(AnchorArrayLazy, RowsColumnsOverAnchorArrayUseSpillShape) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 2U,
+                                 std::vector<Value>{Value::number(1.0), Value::number(2.0), Value::number(3.0),
+                                                    Value::number(4.0), Value::number(5.0), Value::number(6.0)}));
+
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+
+  Arena rows_parse_arena;
+  Arena rows_eval_arena;
+  const Value rows = EvalUnder("=ROWS(_xlfn.ANCHORARRAY(A1))", &rows_parse_arena, &rows_eval_arena, ctx);
+  ASSERT_TRUE(rows.is_number()) << rows.debug_to_string();
+  EXPECT_DOUBLE_EQ(rows.as_number(), 3.0);
+
+  Arena cols_parse_arena;
+  Arena cols_eval_arena;
+  const Value cols = EvalUnder("=COLUMNS(_xlfn.ANCHORARRAY(A1))", &cols_parse_arena, &cols_eval_arena, ctx);
+  ASSERT_TRUE(cols.is_number()) << cols.debug_to_string();
+  EXPECT_DOUBLE_EQ(cols.as_number(), 2.0);
+}
+
 TEST(AnchorArrayLazy, SumOverSequenceCallFlattens) {
   // The eager dispatcher's generic Array-result flatten kicks in here:
   // SEQUENCE returns a Value::Array, which the fallback unpacks row-major

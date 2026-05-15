@@ -160,6 +160,7 @@ cases:
 
   - id: roman_zero_is_empty
     formula: "=ROMAN(0)"
+    compare_mode: empty_string_readback
 
   - id: roman_four
     formula: "=ROMAN(4)"

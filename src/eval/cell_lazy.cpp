@@ -350,9 +350,8 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     // No filesystem path on the Workbook yet. Mac returns blank when the
     // workbook has never been saved; we surface empty text instead so
     // the top-level blank-as-zero rule (`evaluate()` in tree_walker)
-    // does not collapse the result to 0. The discrepancy is logged as a
-    // divergence; the case is skip-oracle until the workbook gains a
-    // path field.
+    // does not collapse the result to 0. Oracle verification accepts the
+    // xlwings "" read-back artifact via empty_string_readback.
     return arena_text(arena, "");
   }
   if (key == "format") {
@@ -371,8 +370,8 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     // No text-alignment metadata yet (apostrophe / caret / quote /
     // backslash). Mac returns blank when no prefix character is set;
     // we surface empty text instead so the top-level blank-as-zero rule
-    // does not collapse the result to 0. Tracked as a divergence;
-    // skip-oracle until the style subsystem lands.
+    // does not collapse the result to 0. Oracle verification accepts the
+    // xlwings "" read-back artifact via empty_string_readback.
     return arena_text(arena, "");
   }
   if (key == "protect") {

@@ -359,7 +359,10 @@
       "id": "unary_plus_empty_string",
       "formula": "=+\"\"",
       "setup": {},
-      "skipped": "=+\"\" -> \"\" (unary plus is identity); xlwings reads the empty string back as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "number_plus_empty_string",

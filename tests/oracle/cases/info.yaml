@@ -97,13 +97,16 @@ cases:
   - id: t_of_number
     description: "T returns empty string for non-text"
     formula: "=T(42)"
+    compare_mode: empty_string_readback
 
   - id: t_of_bool
     formula: "=T(TRUE)"
+    compare_mode: empty_string_readback
 
   - id: t_of_blank_cell
     setup: {}
     formula: "=T(A1)"
+    compare_mode: empty_string_readback
 
   # -- N (number coercion) -------------------------------------------------
   - id: n_of_number

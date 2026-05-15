@@ -176,6 +176,7 @@ cases:
   # -- TEXT: empty format -------------------------------------------------
   - id: text_empty_format
     formula: "=TEXT(42, \"\")"
+    compare_mode: empty_string_readback
 
   # -- TEXT: bool / blank coercion ----------------------------------------
   - id: text_bool_true_coerces

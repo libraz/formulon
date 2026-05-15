@@ -727,6 +727,23 @@ Value CallMUnit(Arena& arena, Value n) {
   return def->impl(buf, 1U, arena);
 }
 
+Value EvalMUnitFormula(std::string_view src) {
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  EXPECT_TRUE(p.errors().empty()) << "unexpected errors for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  Workbook wb = test::mac_workbook();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::workbook_context(wb, sheet, state);
+  return evaluate(*root, eval_arena, default_registry(), ctx);
+}
+
 TEST(BuiltinsMunit, ThreeReturns3x3Identity) {
   Arena arena;
   const Value v = CallMUnit(arena, Value::number(3));
@@ -757,6 +774,22 @@ TEST(BuiltinsMunit, FractionalArgTruncates) {
   const Value v = CallMUnit(arena, Value::number(3.7));
   ASSERT_TRUE(v.is_array());
   EXPECT_EQ(v.as_array_rows(), 3U);
+}
+
+TEST(BuiltinsMunit, IndexCanNavigateNestedMunit) {
+  const Value diagonal = EvalMUnitFormula("=INDEX(MUNIT(3), 2, 2)");
+  ASSERT_TRUE(diagonal.is_number()) << diagonal.debug_to_string();
+  EXPECT_DOUBLE_EQ(diagonal.as_number(), 1.0);
+
+  const Value off_diagonal = EvalMUnitFormula("=INDEX(MUNIT(3), 1, 3)");
+  ASSERT_TRUE(off_diagonal.is_number()) << off_diagonal.debug_to_string();
+  EXPECT_DOUBLE_EQ(off_diagonal.as_number(), 0.0);
+}
+
+TEST(BuiltinsMunit, SumproductCanNavigateNestedMunit) {
+  const Value v = EvalMUnitFormula("=SUMPRODUCT(MUNIT(4))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
 }
 
 TEST(BuiltinsMunit, ZeroArgReturnsValue) {

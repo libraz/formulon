@@ -98,7 +98,10 @@
       "id": "left_zero_count",
       "formula": "=LEFT(\"abcdef\",0)",
       "setup": {},
-      "skipped": "LEFT(\"abcdef\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "left_negative_is_value",
@@ -131,7 +134,10 @@
       "id": "right_zero_count",
       "formula": "=RIGHT(\"abcdef\",0)",
       "setup": {},
-      "skipped": "RIGHT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "right_more_than_length",
@@ -164,13 +170,19 @@
       "id": "mid_start_beyond_length",
       "formula": "=MID(\"ab\",10,3)",
       "setup": {},
-      "skipped": "MID with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "mid_zero_length",
       "formula": "=MID(\"abcdef\",2,0)",
       "setup": {},
-      "skipped": "MID(...,n,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "mid_start_zero_is_value",
@@ -288,7 +300,10 @@
       "id": "concatenate_empty_strings",
       "formula": "=CONCATENATE(\"\",\"\",\"\")",
       "setup": {},
-      "skipped": "CONCATENATE() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "exact_same",
@@ -474,7 +489,10 @@
       "id": "upper_empty",
       "formula": "=UPPER(\"\")",
       "setup": {},
-      "skipped": "UPPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "upper_already_upper",
@@ -507,7 +525,10 @@
       "id": "lower_empty",
       "formula": "=LOWER(\"\")",
       "setup": {},
-      "skipped": "LOWER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "lower_already_lower",
@@ -540,7 +561,10 @@
       "id": "proper_empty",
       "formula": "=PROPER(\"\")",
       "setup": {},
-      "skipped": "PROPER() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "proper_single_word",
@@ -591,7 +615,10 @@
       "id": "trim_only_spaces",
       "formula": "=TRIM(\"     \")",
       "setup": {},
-      "skipped": "TRIM() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "trim_strips_fullwidth_space",
@@ -696,7 +723,10 @@
       "id": "rept_zero_count",
       "formula": "=REPT(\"ab\",0)",
       "setup": {},
-      "skipped": "REPT(s,0) -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "rept_negative_is_value",
@@ -720,7 +750,10 @@
       "id": "rept_empty_string",
       "formula": "=REPT(\"\",5)",
       "setup": {},
-      "skipped": "REPT() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "textjoin_simple",
@@ -1081,7 +1114,10 @@
       "id": "leftb_zero_count",
       "formula": "=LEFTB(\"hello\", 0)",
       "setup": {},
-      "skipped": "LEFTB(\"hello\",0) -> \"\"; xlwings read-back classifies as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "leftb_split_kanji_one_byte",
@@ -1213,7 +1249,10 @@
       "id": "midb_start_beyond",
       "formula": "=MIDB(\"abc\", 10, 3)",
       "setup": {},
-      "skipped": "MIDB with start beyond length -> \"\"; xlwings reads as blank. Formulon returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "midb_start_zero_is_value",
@@ -1777,7 +1816,10 @@
       "id": "hyperlink_empty_friendly",
       "formula": "=HYPERLINK(\"http://example.com\", \"\")",
       "setup": {},
-      "skipped": "HYPERLINK() returns empty string; xlwings reports it as blank cell (COM round-trip artifact). Unit tests in tests/unit/eval/builtins_text_test.cpp cover empty-string return."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     }
   ]
 }

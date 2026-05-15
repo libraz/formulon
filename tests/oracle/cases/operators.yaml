@@ -136,6 +136,7 @@ cases:
 
   - id: unary_plus_empty_string
     formula: "=+\"\""
+    compare_mode: empty_string_readback
 
   - id: number_plus_empty_string
     formula: "=1+\"\""

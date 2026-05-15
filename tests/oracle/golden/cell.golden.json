@@ -177,7 +177,10 @@
       "id": "cell_prefix_default",
       "formula": "=CELL(\"prefix\", A1)",
       "setup": {},
-      "skipped": "Mac returns blank for a cell with no alignment-prefix character; Formulon stubs to empty text to dodge the top-level blank-as-zero rule. Will close when the cell-style subsystem lands."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "cell_protect_default",
@@ -192,7 +195,10 @@
       "id": "cell_filename_default",
       "formula": "=CELL(\"filename\")",
       "setup": {},
-      "skipped": "Mac returns blank for an unsaved workbook; Formulon stubs to empty text to dodge the top-level blank-as-zero rule. Will close when the workbook gains a path field."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "cell_unknown_info_type",

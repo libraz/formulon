@@ -2,11 +2,11 @@
   "suite": "text_regex",
   "description": "REGEXTEST / REGEXEXTRACT / REGEXREPLACE — PCRE2-backed regex closure against Mac Excel 365 (ja-JP).",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.109",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T09:20:07Z"
+    "generated_at": "2026-05-15T02:38:24Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -71,19 +71,39 @@
       "id": "regexextract_mode_1_all_matches",
       "formula": "=REGEXEXTRACT(\"foo123bar456\", \"[0-9]+\", 1)",
       "setup": {},
-      "skipped": "Spill-mode result; xlwings captures only the spill anchor cell. Formulon correctly returns the (N x 1) array; unit tests validate the shape."
+      "expect": {
+        "kind": "array",
+        "value": [
+          "123",
+          "456"
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
     },
     {
       "id": "regexextract_mode_2_capture_groups",
       "formula": "=REGEXEXTRACT(\"john@example\", \"(\\w+)@(\\w+)\", 2)",
       "setup": {},
-      "skipped": "Spill-mode result; xlwings captures only the spill anchor cell. Formulon correctly returns the (1 x G) array; unit tests validate the shape."
+      "expect": {
+        "kind": "array",
+        "value": [
+          "john",
+          "example"
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
     },
     {
       "id": "regexextract_mode_3_all_capture_groups",
       "formula": "=REGEXEXTRACT(\"a1 b2 c3\", \"(\\w)(\\d)\", 3)",
       "setup": {},
-      "skipped": "Mac Excel 365 16.108.1 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
+      "skipped": "Mac Excel 365 16.109 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements per MS docs and validates via unit tests."
     },
     {
       "id": "regexextract_no_match",

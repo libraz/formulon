@@ -192,8 +192,8 @@ TEST(BuiltinsCellType, EmptyStringFormulaIsB) {
 TEST(BuiltinsCellFilename, AlwaysEmpty) {
   // Mac surfaces blank for an unsaved workbook, but Formulon returns
   // empty text so the top-level blank-as-zero rule does not collapse
-  // the result to 0. Tracked as a documented divergence in
-  // tests/divergence.yaml.
+  // the result to 0. The oracle case uses empty_string_readback because
+  // xlwings reads Excel's "" result as blank.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"filename\")", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
@@ -224,7 +224,8 @@ TEST(BuiltinsCellParentheses, AlwaysZero) {
 TEST(BuiltinsCellPrefix, AlwaysEmpty) {
   // Mac surfaces blank for a cell with no alignment prefix, but Formulon
   // returns empty text so the top-level blank-as-zero rule does not
-  // collapse the result to 0. Tracked in tests/divergence.yaml.
+  // collapse the result to 0. The oracle case uses empty_string_readback
+  // because xlwings reads Excel's "" result as blank.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"prefix\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());

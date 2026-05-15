@@ -637,12 +637,12 @@ groups:
       - name: "mode 0 first-match scalar"
         probe_regex: 'REGEXEXTRACT\([^,]+,\s*"\[0-9\]\+"\)'
         expected: impl
-      - name: "mode 1 all-matches column"
+      - name: "mode 1 all-matches row"
         probe_regex: 'REGEXEXTRACT\([^,]+,\s*"\[0-9\]\+",\s*1\)'
-        expected: diverged
+        expected: impl
       - name: "mode 2 capture groups row"
         probe_regex: 'REGEXEXTRACT\([^,]+,[^,]+,\s*2\)'
-        expected: diverged
+        expected: impl
       - name: "mode 3 capture groups matrix"
         probe_regex: 'REGEXEXTRACT\([^,]+,[^,]+,\s*3\)'
         expected: diverged
@@ -705,19 +705,19 @@ groups:
     behaviors:
       - name: "diagonal element = 1"
         probe_regex: 'INDEX\(MUNIT\(3\),\s*2,\s*2\)'
-        expected: diverged
+        expected: impl
       - name: "off-diagonal element = 0"
         probe_regex: 'INDEX\(MUNIT\(3\),\s*1,\s*3\)'
-        expected: diverged
+        expected: impl
       - name: "n=1 is 1x1 identity"
         probe_regex: 'INDEX\(MUNIT\(1\),'
-        expected: diverged
+        expected: impl
       - name: "fractional n truncates toward zero"
         probe_regex: 'MUNIT\(3\.7\)'
-        expected: diverged
+        expected: impl
       - name: "SUMPRODUCT trace equals n"
         probe_regex: 'SUMPRODUCT\(MUNIT\('
-        expected: diverged
+        expected: impl
       - name: "n=0 -> #VALUE!"
         probe: '=MUNIT(0)'
         expected: impl
@@ -729,11 +729,11 @@ groups:
         expected: impl
 
   # -------------------------------------------------------------------------
-  # CELL(info_type, [reference]) — 12 info_type keys split between impl
-  # (address/col/row/contents/type) and stubs (format/color/parentheses/
-  # prefix/protect/filename/width). The stub keys are expected to diverge
-  # from Mac Excel until the style subsystem lands; the impl keys close
-  # cleanly.
+  # CELL(info_type, [reference]) — 12 info_type keys split between reference
+  # lookups (address/col/row/contents/type) and metadata defaults
+  # (format/color/parentheses/prefix/protect/filename/width). Empty-string
+  # defaults such as prefix/filename use empty_string_readback in oracle
+  # cases because xlwings reads Excel's "" result back as a blank cell.
   # -------------------------------------------------------------------------
   - function: "CELL"
     aspect: "info_type dispatch"
@@ -764,13 +764,13 @@ groups:
         expected: impl
       - name: "prefix"
         probe_regex: 'CELL\("prefix",'
-        expected: diverged
+        expected: impl
       - name: "protect"
         probe_regex: 'CELL\("protect",'
         expected: impl
       - name: "filename"
         probe_regex: 'CELL\("filename"'
-        expected: diverged
+        expected: impl
       - name: "unknown info_type -> #VALUE!"
         probe: 'CELL("nonsense"'
         expected: impl
@@ -2864,7 +2864,7 @@ groups:
         expected: impl
       - name: "all-empty-string args"
         probe: '=CONCATENATE("","","")'
-        expected: diverged
+        expected: impl
 
   - function: "CONCAT"
     aspect: "modern concatenation accepting ranges and arrays"
@@ -2893,7 +2893,7 @@ groups:
         expected: impl
       - name: "empty string passthrough"
         probe: '=UPPER("")'
-        expected: diverged
+        expected: impl
       - name: "already-uppercase identity"
         probe: '=UPPER("HELLO")'
         expected: impl
@@ -2912,7 +2912,7 @@ groups:
         expected: impl
       - name: "empty string passthrough"
         probe: '=LOWER("")'
-        expected: diverged
+        expected: impl
       - name: "already-lowercase identity"
         probe: '=LOWER("hello")'
         expected: impl
@@ -2931,7 +2931,7 @@ groups:
         expected: impl
       - name: "empty string passthrough"
         probe: '=PROPER("")'
-        expected: diverged
+        expected: impl
       - name: "single-word capitalisation"
         probe: '=PROPER("hello")'
         expected: impl
@@ -2956,7 +2956,7 @@ groups:
         expected: impl
       - name: "only-spaces input returns empty"
         probe: '=TRIM("     ")'
-        expected: diverged
+        expected: impl
       - name: "ideographic full-width space U+3000 stripped (ja-JP)"
         probe: '=TRIM("　a　")'
         expected: impl
@@ -2991,7 +2991,7 @@ groups:
         expected: impl
       - name: "zero count returns empty string"
         probe: '=RIGHT("abcdef",0)'
-        expected: diverged
+        expected: impl
       - name: "count exceeds length returns full string"
         probe: '=RIGHT("ab",10)'
         expected: impl
@@ -3007,10 +3007,10 @@ groups:
         expected: impl
       - name: "start beyond length yields empty"
         probe: '=MID("ab",10,3)'
-        expected: diverged
+        expected: impl
       - name: "zero-length window -> empty"
         probe: '=MID("abcdef",2,0)'
-        expected: diverged
+        expected: impl
       - name: "start_num=0 -> #VALUE! (1-based)"
         probe: '=MID("abcdef",0,3)'
         expected: impl
@@ -3102,7 +3102,7 @@ groups:
         expected: impl
       - name: "zero count -> empty string"
         probe: '=REPT("ab",0)'
-        expected: diverged
+        expected: impl
       - name: "negative count -> #VALUE!"
         probe: '=REPT("ab",-1)'
         expected: impl
@@ -3111,7 +3111,7 @@ groups:
         expected: impl
       - name: "empty source string regardless of count"
         probe: '=REPT("",5)'
-        expected: diverged
+        expected: impl
 
   - function: "TEXTJOIN"
     aspect: "delimited join with ignore_empty flag and range source"
@@ -3301,7 +3301,7 @@ groups:
         expected: impl
       - name: "empty friendly_name -> empty display text"
         probe: '=HYPERLINK("http://example.com", "")'
-        expected: diverged
+        expected: impl
 
   - function: "LEN"
     aspect: "UTF-16 unit count with type coercion"
@@ -3337,9 +3337,9 @@ groups:
       - name: "count exceeds length returns full string"
         probe: '=LEFT("ab",10)'
         expected: impl
-      - name: "zero count -> empty string (xlwings divergence)"
+      - name: "zero count -> empty string"
         probe: '=LEFT("abcdef",0)'
-        expected: diverged
+        expected: impl
       - name: "negative count -> #VALUE!"
         probe: '=LEFT("abcdef",-1)'
         expected: impl
@@ -3469,9 +3469,9 @@ groups:
       - name: "start byte mid-DBCS char -> head pad space"
         probe: '=MIDB("あいうえお", 2, 4)'
         expected: impl
-      - name: "start byte beyond length -> empty (xlwings divergence)"
+      - name: "start byte beyond length -> empty"
         probe: '=MIDB("abc", 10, 3)'
-        expected: diverged
+        expected: impl
       - name: "start byte 0 -> #VALUE!"
         probe: '=MIDB("abc", 0, 3)'
         expected: impl
@@ -5925,13 +5925,13 @@ groups:
         expected: impl
       - name: "number returns blank"
         probe: "=T(42)"
-        expected: diverged
+        expected: impl
       - name: "bool returns blank"
         probe: "=T(TRUE)"
-        expected: diverged
+        expected: impl
       - name: "blank cell returns blank"
         probe: "=T(A1)"
-        expected: diverged
+        expected: impl
       - name: "error propagates"
         probe: "=T(NA())"
         expected: impl
@@ -7109,7 +7109,7 @@ groups:
         expected: impl
       - name: "ROMAN(0) returns empty string"
         probe: "=ROMAN(0)"
-        expected: diverged
+        expected: impl
       - name: "negative input -> #VALUE!"
         probe: "=ROMAN(-1)"
         expected: impl
@@ -10325,8 +10325,8 @@ groups:
     behaviors:
       # Anchor-unwrap landed 2026-05-01 (tests/oracle/oracle_anchor.{h,cpp}),
       # so the oracle now compares Excel's anchor scalar against Formulon's
-      # spilled Array projected to its top-left cell. The error path
-      # (rows = 0) remains skip-oracle pending re-verification.
+      # spilled Array projected to its top-left cell. Scalar error paths
+      # are live oracle cases too.
       - name: "single-arg column vector"
         probe: "=SEQUENCE(3)"
         expected: impl
@@ -10341,7 +10341,7 @@ groups:
         expected: impl
       - name: "rows = 0 -> #VALUE!"
         probe: "=SEQUENCE(0)"
-        expected: diverged
+        expected: impl
 
   - function: "TRANSPOSE"
     aspect: "dynamic-array dimension swap"
@@ -10370,23 +10370,23 @@ groups:
   # written with the `_xlfn.ANCHORARRAY(...)` form so the closure-check
   # function-name regex matches; the `_xlfn.` prefix is stripped before
   # dispatch, so callers see the bare ANCHORARRAY at evaluation time. Some
-  # behaviors are `diverged` because the static oracle harness does not
-  # materialize setup-formula spill regions before evaluating the test
-  # formula (same harness limitation as `spill_ref_after_sequence_sum` in
-  # tests/divergence.yaml).
+  # Setup-formula spill sources are materialized by the oracle harness before
+  # the formula under test runs. Non-spill anchors remain diverged because Mac
+  # Excel/xlwings reads the explicit `_xlfn.ANCHORARRAY(...)` probe as blank
+  # while Formulon surfaces the documented #REF! for a non-spill anchor.
   # -------------------------------------------------------------------------
   - function: "ANCHORARRAY"
     aspect: "spill-anchor lookup (OOXML internal `ref#` encoding)"
     behaviors:
       - name: "SUM over spill from SEQUENCE source"
         probe: "=SUM(_xlfn.ANCHORARRAY(A1))"
-        expected: diverged
+        expected: impl
       - name: "ROWS over spill from SEQUENCE source"
         probe: "=ROWS(_xlfn.ANCHORARRAY(A1))"
-        expected: diverged
+        expected: impl
       - name: "OFFSET-resolved spill anchor"
         probe: "_xlfn.ANCHORARRAY(OFFSET("
-        expected: diverged
+        expected: impl
       - name: "non-anchor static-value cell"
         probe: "_xlfn.ANCHORARRAY(B1)"
         expected: diverged

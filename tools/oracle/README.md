@@ -179,6 +179,29 @@ Per-variant overrides live in `tests/oracle/variants/<target>/divergence.yaml`
 and get merged on top of the primary file (variant entries win on key
 collision).
 
+### Re-probing skipped cases
+
+To check whether a newer Excel build can now capture a historical
+`skip-oracle` case, generate a temporary divergence file that leaves every
+other skip in place:
+
+```bash
+tools/oracle/.venv/bin/python tools/oracle/reprobe_divergence.py \
+  --output /tmp/formulon-reprobe-divergence.yaml \
+  --allow-case regexextract_mode_3_all_capture_groups
+
+tools/oracle/.venv/bin/python tools/oracle/oracle_gen.py \
+  --target mac-365-ja_JP \
+  --suite text_regex \
+  --golden-dir /tmp/formulon-reprobe-golden \
+  --divergence /tmp/formulon-reprobe-divergence.yaml \
+  --progress
+```
+
+Use `--allow-case` multiple times to probe a set. Keeping all unrelated
+skips prevents accidental hangs from volatile / external-service /
+catastrophic-regex cases while still letting the target case run.
+
 ## Setup-cell address forms
 
 Each entry in a case's `setup` map is keyed by a cell address. Two forms

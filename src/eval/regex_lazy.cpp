@@ -395,7 +395,7 @@ Value extract_mode0(const KernelResult& kr, std::string_view subject, Arena& are
   return text_from_span(subject, m.whole_start, m.whole_end, arena);
 }
 
-// mode 1: column array (N x 1) of all whole matches.
+// mode 1: row array (1 x N) of all whole matches.
 Value extract_mode1(const KernelResult& kr, std::string_view subject, Arena& arena) {
   if (kr.matches.empty()) {
     return Value::error(ErrorCode::NA);
@@ -413,8 +413,8 @@ Value extract_mode1(const KernelResult& kr, std::string_view subject, Arena& are
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  out->rows = n;
-  out->cols = 1U;
+  out->rows = 1U;
+  out->cols = n;
   out->cells = cells;
   return Value::array(out);
 }

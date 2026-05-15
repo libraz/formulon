@@ -36,7 +36,7 @@ cases:
     formula: '=REGEXEXTRACT("foo123bar456", "[0-9]+")'
 
   - id: regexextract_mode_1_all_matches
-    description: "Mode 1 returns column array of all whole matches"
+    description: "Mode 1 returns row array of all whole matches"
     formula: '=REGEXEXTRACT("foo123bar456", "[0-9]+", 1)'
 
   - id: regexextract_mode_2_capture_groups

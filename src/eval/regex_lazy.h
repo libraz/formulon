@@ -46,7 +46,7 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
 /// `REGEXEXTRACT(text, pattern, [return_mode=0], [case_sensitivity=0])`.
 /// `return_mode` selects the result shape:
 ///   * 0 -> scalar text of the first whole match.
-///   * 1 -> column array (N x 1) of all whole matches.
+///   * 1 -> row array (1 x N) of all whole matches.
 ///   * 2 -> row array (1 x G) of capture groups from the FIRST match.
 ///   * 3 -> 2D array (N x G) of capture groups from every match.
 /// Modes 2 and 3 yield `#VALUE!` when the pattern has no capture groups

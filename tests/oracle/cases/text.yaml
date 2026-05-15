@@ -38,6 +38,7 @@ cases:
 
   - id: left_zero_count
     formula: "=LEFT(\"abcdef\",0)"
+    compare_mode: empty_string_readback
 
   - id: left_negative_is_value
     formula: "=LEFT(\"abcdef\",-1)"
@@ -51,6 +52,7 @@ cases:
   - id: right_zero_count
     description: "RIGHT with zero count returns empty string"
     formula: "=RIGHT(\"abcdef\",0)"
+    compare_mode: empty_string_readback
 
   - id: right_more_than_length
     description: "RIGHT with count greater than length returns full string"
@@ -66,9 +68,11 @@ cases:
   - id: mid_start_beyond_length
     description: "Excel: start > length yields empty string"
     formula: "=MID(\"ab\",10,3)"
+    compare_mode: empty_string_readback
 
   - id: mid_zero_length
     formula: "=MID(\"abcdef\",2,0)"
+    compare_mode: empty_string_readback
 
   - id: mid_start_zero_is_value
     description: "Excel: MID(...,0,n) -> #VALUE! (start is 1-based)"
@@ -116,6 +120,7 @@ cases:
   - id: concatenate_empty_strings
     description: "Empty strings concatenate to empty"
     formula: "=CONCATENATE(\"\",\"\",\"\")"
+    compare_mode: empty_string_readback
 
   # -- EXACT ---------------------------------------------------------------
   - id: exact_same
@@ -196,6 +201,7 @@ cases:
   - id: upper_empty
     description: "UPPER passthrough of empty string"
     formula: "=UPPER(\"\")"
+    compare_mode: empty_string_readback
 
   - id: upper_already_upper
     description: "UPPER of already-uppercase is identity"
@@ -212,6 +218,7 @@ cases:
   - id: lower_empty
     description: "LOWER passthrough of empty string"
     formula: "=LOWER(\"\")"
+    compare_mode: empty_string_readback
 
   - id: lower_already_lower
     description: "LOWER of already-lowercase is identity"
@@ -228,6 +235,7 @@ cases:
   - id: proper_empty
     description: "PROPER passthrough of empty string"
     formula: "=PROPER(\"\")"
+    compare_mode: empty_string_readback
 
   - id: proper_single_word
     description: "PROPER capitalises a single word"
@@ -252,6 +260,7 @@ cases:
   - id: trim_only_spaces
     description: "TRIM of only-spaces -> empty"
     formula: "=TRIM(\"     \")"
+    compare_mode: empty_string_readback
 
   - id: trim_strips_fullwidth_space
     description: "TRIM strips ideographic space U+3000 in ja-JP locale -> 'a'"
@@ -298,6 +307,7 @@ cases:
 
   - id: rept_zero_count
     formula: "=REPT(\"ab\",0)"
+    compare_mode: empty_string_readback
 
   - id: rept_negative_is_value
     formula: "=REPT(\"ab\",-1)"
@@ -309,6 +319,7 @@ cases:
   - id: rept_empty_string
     description: "REPT of empty string is empty regardless of count"
     formula: "=REPT(\"\",5)"
+    compare_mode: empty_string_readback
 
   # -- TEXTJOIN ------------------------------------------------------------
   - id: textjoin_simple
@@ -458,6 +469,7 @@ cases:
 
   - id: leftb_zero_count
     formula: "=LEFTB(\"hello\", 0)"
+    compare_mode: empty_string_readback
 
   - id: leftb_split_kanji_one_byte
     description: "Budget 1 splits the 2-byte kanji: probe pad-with-space behaviour"
@@ -517,6 +529,7 @@ cases:
 
   - id: midb_start_beyond
     formula: "=MIDB(\"abc\", 10, 3)"
+    compare_mode: empty_string_readback
 
   - id: midb_start_zero_is_value
     formula: "=MIDB(\"abc\", 0, 3)"
@@ -757,3 +770,4 @@ cases:
   - id: hyperlink_empty_friendly
     description: "Empty friendly_name still returns the empty string (not the URL)"
     formula: "=HYPERLINK(\"http://example.com\", \"\")"
+    compare_mode: empty_string_readback

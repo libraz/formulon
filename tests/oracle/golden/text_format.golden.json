@@ -437,7 +437,10 @@
       "id": "text_empty_format",
       "formula": "=TEXT(42, \"\")",
       "setup": {},
-      "skipped": "=TEXT(42, \"\") -> \"\" which xlwings read-back classifies as blank. Formulon correctly returns text(\"\")."
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "text_bool_true_coerces",
