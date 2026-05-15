@@ -1,13 +1,12 @@
 suite: groupby
-description: GROUPBY dynamic-array group-and-aggregate (Excel 365). Six perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name -> #NAME?, field_headers out-of-range -> #VALUE!, filter_array length mismatch -> #VALUE!, and filter_array empty selection -> #CALC!. Spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT.
+description: GROUPBY dynamic-array group-and-aggregate (Excel 365). Six perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name -> #NAME?, field_headers out-of-range -> #VALUE!, filter_array length mismatch -> #VALUE!, and filter_array empty selection -> #CALC!. The two compact inline-array aggregator formulas are skipped for Mac Excel 16.109, which returns #VALUE! while Formulon implements the documented spill behavior.
 tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # Spill outputs — committed oracle golden predates array-spill comparison, so the
-  # two grouped-output cases are registered skip-oracle in
-  # tests/divergence.yaml. Unit tests in
-  # tests/unit/eval/builtins_groupby_test.cpp validate spill content.
+  # Mac Excel 16.109 returns #VALUE! for these compact inline-array
+  # aggregator formulas. Unit tests validate Formulon's documented spill
+  # behavior.
   # =========================================================================
 
   - id: groupby_bare_sum

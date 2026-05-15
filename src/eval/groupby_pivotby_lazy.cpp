@@ -45,6 +45,13 @@ struct AggregatorRef {
   const FunctionDef* function_def = nullptr;  // valid when kind == Function
 };
 
+std::string_view grand_total_label(const EvalContext& ctx) {
+  if (ctx.excel_profile().locale == ExcelLocale::kJaJP) {
+    return "合計";
+  }
+  return "Grand Total";
+}
+
 // Resolves the third argument (the aggregator) into an `AggregatorRef`.
 // Returns true on success and writes the resolved aggregator to `*out`.
 // Returns false on failure and writes the appropriate scalar error to
@@ -815,7 +822,7 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   bool emit_grand_total = (total_depth != 0);
   if (emit_grand_total) {
     grand_total_row.assign(out_cols, Value::blank());
-    grand_total_row[0] = Value::text(arena.intern("Grand Total"));
+    grand_total_row[0] = Value::text(arena.intern(grand_total_label(ctx)));
     const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
     const std::vector<Value> totals =
         aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
@@ -978,18 +985,10 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   //   5. Optional BOTTOM grand-total row (when row_total_depth > 0): same
   //      shape as TOP.
   //
-  // Reference: Mac Excel ja-JP 16.108.1 layouts captured via xlwings probe
-  // (data not committed). Known divergences from Mac Excel's surface:
-  //   - Mac defaults: field_headers=0, row_total_depth=+1.
-  //     Formulon defaults: field_headers=3, row_total_depth=-1
-  //     (set above at arg parsing) — preserved to keep existing test
-  //     contracts. Documented as a default-value divergence.
-  //   - When output_emits_header AND L >= 1, Mac Excel emits an extra
-  //     leading row with the col_fields header label at column K. We omit
-  //     that row to keep the col-axis label region a clean L rows tall.
-  //   - ja-JP localized labels (合計 / 行フィールド N / 列フィールド N /
-  //     値 N) are NOT emitted; Formulon uses English equivalents
-  //     ("Grand Total" / "Field N" / "Value N").
+  // Reference: Mac Excel ja-JP 16.109 layouts captured via xlwings-backed
+  // oracle goldens. Known divergence from Mac Excel's localized surface:
+  // synthesized field/value labels still use English defaults
+  // ("Field N" / "Value N") rather than ja-JP labels.
 
   // -- arg 3: aggregator ----------------------------------------------------
   AggregatorRef agg;
@@ -1008,13 +1007,13 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
 
-  // -- arg 5: row_total_depth ∈ {-2,-1,0,1,2}, default -1 ------------------
-  // The grand-total row (showing column totals) defaults to the TOP of the
-  // result. ±2 (subtotal rows) is deferred and silently degrades to ±1 in
-  // the single-column row_fields scope of this commit.
+  // -- arg 5: row_total_depth ∈ {-2,-1,0,1,2}, default +1 ------------------
+  // The grand-total row (showing column totals) defaults to the BOTTOM of
+  // the result. ±2 (subtotal rows) is deferred and silently degrades to ±1
+  // in the single-column row_fields scope of this commit.
   static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
-  int row_total_depth = -1;
-  if (!read_optional_int_in_set(call, 5, arity, -1, arena, registry, ctx, kTotalDepths,
+  int row_total_depth = 1;
+  if (!read_optional_int_in_set(call, 5, arity, 1, arena, registry, ctx, kTotalDepths,
                                 sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &row_total_depth, &err)) {
     return err;
   }
@@ -1315,7 +1314,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       // Outermost level (level == 0): "Grand Total" tiled V times. Inner
       // levels: blank V times.
       if (level == 0U) {
-        const Value gt = Value::text(arena.intern("Grand Total"));
+        const Value gt = Value::text(arena.intern(grand_total_label(ctx)));
         for (std::uint32_t v = 0; v < val_cols; ++v) {
           row[grand_total_block_start + v] = gt;
         }
@@ -1356,6 +1355,17 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return row;
   };
 
+  auto render_col_fields_header_row = [&]() {
+    std::vector<Value> row(out_cols, Value::blank());
+    for (std::uint32_t level = 0; level < col_levels; ++level) {
+      const std::uint32_t dst = body_block_start + level * val_cols;
+      if (dst < out_cols) {
+        row[dst] = col_fields->cells[level];
+      }
+    }
+    return row;
+  };
+
   // Helper: render one body row (per row-group rg).
   auto render_body_row = [&](std::size_t rg) {
     std::vector<Value> row(out_cols, Value::blank());
@@ -1372,7 +1382,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       }
     }
     // Grand-total block: row totals per value column.
-    if (emit_row_totals_col) {
+    if (emit_row_totals_col && val_cols == 1U) {
       for (std::uint32_t v = 0; v < val_cols; ++v) {
         row[grand_total_block_start + v] = row_totals[rg][v];
       }
@@ -1383,7 +1393,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // Helper: render a TOP/BOTTOM grand-total row (column totals).
   auto render_totals_row = [&]() {
     std::vector<Value> row(out_cols, Value::blank());
-    row[0] = Value::text(arena.intern("Grand Total"));
+    row[0] = Value::text(arena.intern(grand_total_label(ctx)));
     // Cells [1..K-1] stay blank (the rest of the row-keys columns).
     for (std::size_t ci = 0; ci < n_cols; ++ci) {
       const std::size_t cg = col_order[ci];
@@ -1392,7 +1402,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         row[base + v] = col_totals[cg][v];
       }
     }
-    if (emit_row_totals_col) {
+    if (emit_row_totals_col && val_cols == 1U) {
       for (std::uint32_t v = 0; v < val_cols; ++v) {
         row[grand_total_block_start + v] = grand_totals[v];
       }
@@ -1434,7 +1444,7 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       row[out_col_idx] = col_fields->cells[static_cast<std::size_t>(col_repr[cg]) * col_levels];
     }
     if (emit_row_totals_col) {
-      row[grand_total_block_start] = Value::text(arena.intern("Grand Total"));
+      row[grand_total_block_start] = Value::text(arena.intern(grand_total_label(ctx)));
     }
     return row;
   };
@@ -1449,6 +1459,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   } else {
     // Multi-column layout: always emit L col-axis label rows; emit a
     // separate header row when output_emits_header is true.
+    if (layout.output_emits_header && (field_headers == 1 || field_headers == 3)) {
+      out_rows.push_back(render_col_fields_header_row());
+    }
     for (std::uint32_t level = 0; level < col_levels; ++level) {
       out_rows.push_back(render_col_axis_row(level));
     }

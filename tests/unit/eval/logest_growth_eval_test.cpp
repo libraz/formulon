@@ -286,6 +286,22 @@ TEST(BuiltinsGrowth, ConstFalseForcesUnitScale) {
   EXPECT_NEAR(v.as_array_cells()[1].as_number(), 64.0, kLooseEps);
 }
 
+TEST(BuiltinsGrowth, OmittedNewXWithConstFalseUsesKnownX) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=GROWTH({2;4;8;16}, {1;2;3;4}, , FALSE)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 4U);
+  EXPECT_NEAR(v.as_array_cells()[0].as_number(), 2.0, kLooseEps);
+  EXPECT_NEAR(v.as_array_cells()[1].as_number(), 4.0, kLooseEps);
+  EXPECT_NEAR(v.as_array_cells()[2].as_number(), 8.0, kLooseEps);
+  EXPECT_NEAR(v.as_array_cells()[3].as_number(), 16.0, kLooseEps);
+}
+
 TEST(BuiltinsGrowth, NonPositiveYReturnsNum) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);

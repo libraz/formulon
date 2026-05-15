@@ -1,10 +1,10 @@
 suite: matrix
-description: Matrix-algebra family — MMULT, MDETERM, MINVERSE. Fifteen perspectives across the cluster (5 per function) covering shape products, identity neutrality, singularity, non-square errors, and non-numeric / error-cell propagation. Spill outputs from MMULT and MINVERSE flow through the same skip-oracle path as MUNIT and TEXTSPLIT (committed oracle golden predates array-spill comparison).
+description: Matrix-algebra family — MMULT, MDETERM, MINVERSE. Fifteen perspectives across the cluster (5 per function) covering shape products, identity neutrality, singularity, non-square errors, and non-numeric / error-cell propagation. Spill outputs from MMULT and MINVERSE are captured live by the array-aware oracle harness.
 tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # MMULT — matrix product. Spill cases skip-oracle; error cases live.
+  # MMULT — matrix product. Spill and error cases are live.
   # =========================================================================
 
   - id: mmult_basic_2x3_3x2
@@ -52,7 +52,7 @@ cases:
     formula: '=MDETERM({1,2,3;4,5,6})'
 
   # =========================================================================
-  # MINVERSE — matrix inverse. Spill cases skip-oracle; error cases live.
+  # MINVERSE — matrix inverse. Spill and error cases are live.
   # =========================================================================
 
   - id: minverse_identity

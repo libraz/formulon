@@ -4,9 +4,8 @@ tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # Spill cases — committed oracle golden predates array-spill comparison, so each
-  # is registered skip-oracle in tests/divergence.yaml. Unit tests cover
-  # spill correctness directly.
+  # Spill cases are live now that the oracle harness captures array shape
+  # and flattened values.
   # =========================================================================
 
   - id: mode_mult_two_way_tie

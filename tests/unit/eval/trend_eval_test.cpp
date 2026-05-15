@@ -181,6 +181,21 @@ TEST(BuiltinsTrend, ConstFalseForcesThroughOrigin) {
   EXPECT_NEAR(v.as_array_cells()[1].as_number(), 10.0, kEps);
 }
 
+TEST(BuiltinsTrend, OmittedNewXWithConstFalseUsesKnownX) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=TREND({2;4;6}, {1;2;3}, , FALSE)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  EXPECT_NEAR(v.as_array_cells()[0].as_number(), 2.0, kEps);
+  EXPECT_NEAR(v.as_array_cells()[1].as_number(), 4.0, kEps);
+  EXPECT_NEAR(v.as_array_cells()[2].as_number(), 6.0, kEps);
+}
+
 // ---------------------------------------------------------------------------
 // Orientation — column / row inputs
 // ---------------------------------------------------------------------------

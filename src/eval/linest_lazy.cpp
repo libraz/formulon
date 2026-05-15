@@ -132,6 +132,10 @@ bool eval_bool_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegis
   return false;
 }
 
+bool is_omitted_arg(const parser::AstNode& arg) {
+  return arg.kind() == parser::NodeKind::Literal && arg.as_literal().is_blank();
+}
+
 /// Solves `A * X = B` in-place via rank-aware Gauss-Jordan with partial
 /// pivoting. `aug` is a row-major `n x w` buffer with `w = n + extra`
 /// and the augmented columns laid out to the right of `A`. On return,
@@ -799,7 +803,7 @@ Value eval_trend_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     }
   }
   const ArrayValue* new_x_arr = nullptr;
-  if (arity >= 3U) {
+  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
     if (!resolve_array_value(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
       return err;
     }
@@ -957,7 +961,7 @@ Value eval_growth_lazy(const parser::AstNode& call, Arena& arena, const Function
     }
   }
   const ArrayValue* new_x_arr = nullptr;
-  if (arity >= 3U) {
+  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
     if (!resolve_array_value(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
       return err;
     }

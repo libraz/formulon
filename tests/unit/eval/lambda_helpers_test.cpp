@@ -271,10 +271,18 @@ TEST(LambdaHelpersMap, ThreeArrayElementwiseSum) {
 }
 
 TEST(LambdaHelpersMap, ShapeMismatchYieldsNAError) {
-  // 2x2 vs 1x2 mismatch -> #N/A.
+  // MAP extends to the largest input shape and feeds #N/A for missing
+  // elements in shorter arrays.
   const Value v = EvalSrc("=MAP({1,2;3,4}, {10,20}, LAMBDA(a, b, a+b))");
-  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 22.0);
+  ASSERT_TRUE(v.as_array_cells()[2].is_error());
+  EXPECT_EQ(v.as_array_cells()[2].as_error(), ErrorCode::NA);
+  ASSERT_TRUE(v.as_array_cells()[3].is_error());
+  EXPECT_EQ(v.as_array_cells()[3].as_error(), ErrorCode::NA);
 }
 
 TEST(LambdaHelpersMap, LambdaArityVsArrayCountMismatch) {
@@ -293,11 +301,13 @@ TEST(LambdaHelpersMap, MultiCellLambdaReturnYieldsCalcError) {
 }
 
 TEST(LambdaHelpersMap, ErrorInCellPropagates) {
-  // An explicit `#DIV/0!` cell in the input surfaces that error from
-  // inside the lambda body's first arithmetic op (`x*2`).
+  // An explicit `#DIV/0!` cell in the input surfaces in that output
+  // slot; sibling cells continue evaluating.
   const Value v = EvalSrc("=MAP({1, #DIV/0!}, LAMBDA(x, x*2))");
-  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 2.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Div0);
 }
 
 TEST(LambdaHelpersMap, OneDimensionalInputPreservesShape) {
@@ -492,6 +502,17 @@ TEST(LambdaHelpersMakeArray, MultiCellLambdaReturnYieldsCalcError) {
   const Value v = EvalSrc("=MAKEARRAY(2, 2, LAMBDA(r, c, SEQUENCE(1, 2)))");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
+TEST(LambdaHelpersMakeArray, LambdaErrorFillsEachCell) {
+  const Value v = EvalSrc("=MAKEARRAY(2, 2, LAMBDA(r, c, 1/0))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    ASSERT_TRUE(v.as_array_cells()[i].is_error());
+    EXPECT_EQ(v.as_array_cells()[i].as_error(), ErrorCode::Div0);
+  }
 }
 
 }  // namespace

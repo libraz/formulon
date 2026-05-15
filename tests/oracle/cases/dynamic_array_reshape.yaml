@@ -1,5 +1,5 @@
 suite: dynamic_array_reshape
-description: dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS. 11 members × 7 perspectives = 77 cases. Spill outputs flow through skip-oracle (committed oracle golden predates array-spill comparison); live cases focus on scalar errors and 1×1 spills. TRIMRANGE deferred.
+description: dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE. Spill outputs and scalar errors are captured live by the array-aware oracle harness.
 tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
@@ -280,8 +280,8 @@ cases:
 
   # =========================================================================
   # TRIMRANGE — uses cell-range setups so blank cells are real Blank values
-  # (array literals cannot express the Blank variant). 4 spill cases route
-  # through skip-oracle; 3 live cases cover scalar errors.
+  # (array literals cannot express the Blank variant). Spill and scalar
+  # error cases are live.
   # =========================================================================
   - id: trimrange_default_trim_both_edges
     description: "TRIMRANGE A1:D5 default mode trims leading row 1, trailing rows 4-5, leading col A, trailing col D -> 2x2 spill {1,2;3,4}"

@@ -243,13 +243,10 @@ TEST(BuiltinsFrequency, OneArgRejected) {
 }
 
 TEST(BuiltinsFrequency, BinsTakenAsGivenNotSorted) {
-  // bins given out of order -> Excel does not sort them; bucketing
-  // follows "first bin where x <= bin" in given order.
+  // bins given out of order -> Excel sorts numeric bins ascending before
+  // bucketing.
   // data = {1, 5, 10}, bins = {7, 3}.
-  // value 1: 1 <= 7 -> bin0 (the "7"); count 1.
-  // value 5: 5 <= 7 -> bin0; count 2.
-  // value 10: 10 > 7 and 10 > 3 -> extra (bin2); count 1.
-  // Result: {2; 0; 1}.
+  // sorted bins = {3, 7}; result: {1; 1; 1}.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -260,8 +257,8 @@ TEST(BuiltinsFrequency, BinsTakenAsGivenNotSorted) {
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 3U);
   const Value* c = v.as_array_cells();
-  EXPECT_DOUBLE_EQ(c[0].as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(c[1].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(c[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(c[1].as_number(), 1.0);
   EXPECT_DOUBLE_EQ(c[2].as_number(), 1.0);
 }
 

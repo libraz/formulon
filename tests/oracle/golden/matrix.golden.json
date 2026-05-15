@@ -1,12 +1,12 @@
 {
   "suite": "matrix",
-  "description": "Matrix-algebra family — MMULT, MDETERM, MINVERSE. Fifteen perspectives across the cluster (5 per function) covering shape products, identity neutrality, singularity, non-square errors, and non-numeric / error-cell propagation. Spill outputs from MMULT and MINVERSE flow through the same skip-oracle path as MUNIT and TEXTSPLIT (oracle compare_value cannot navigate ArrayValue).",
+  "description": "Matrix-algebra family — MMULT, MDETERM, MINVERSE. Fifteen perspectives across the cluster (5 per function) covering shape products, identity neutrality, singularity, non-square errors, and non-numeric / error-cell propagation. Spill outputs from MMULT and MINVERSE flow through the same skip-oracle path as MUNIT and TEXTSPLIT (committed oracle golden predates array-spill comparison).",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.109",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T17:35:25Z"
+    "generated_at": "2026-05-15T01:14:38Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -17,13 +17,37 @@
       "id": "mmult_basic_2x3_3x2",
       "formula": "=MMULT({1,2,3;4,5,6}, {7,8;9,10;11,12})",
       "setup": {},
-      "skipped": "MMULT returns a 2x2 ArrayValue; oracle compare_value only handles scalars, INDEX wrappers blocked by resolve_range_arg. Unit test BuiltinsMmult.BasicProductFromSheetRanges covers the canonical 2x3 * 3x2 product."
+      "expect": {
+        "kind": "array",
+        "value": [
+          58.0,
+          64.0,
+          139.0,
+          154.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "mmult_identity_right_neutral",
       "formula": "=MMULT({7,8;9,10}, {1,0;0,1})",
       "setup": {},
-      "skipped": "MMULT returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMmult.IdentityIsLeftAndRightNeutral covers identity neutrality."
+      "expect": {
+        "kind": "array",
+        "value": [
+          7.0,
+          8.0,
+          9.0,
+          10.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "mmult_inner_dim_mismatch_value",
@@ -101,13 +125,37 @@
       "id": "minverse_identity",
       "formula": "=MINVERSE({1,0;0,1})",
       "setup": {},
-      "skipped": "MINVERSE returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMinverse.IdentityIsItsOwnInverse covers the boundary."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "minverse_2x2_basic",
       "formula": "=MINVERSE({4,3;6,3})",
       "setup": {},
-      "skipped": "MINVERSE returns a 2x2 ArrayValue; oracle compare_value only handles scalars. Unit test BuiltinsMinverse.TwoByTwoInverse covers a non-trivial inverse."
+      "expect": {
+        "kind": "array",
+        "value": [
+          -0.5,
+          0.5,
+          1.0,
+          -0.6666666666666666
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
     },
     {
       "id": "minverse_singular_num",

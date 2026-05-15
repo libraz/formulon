@@ -78,36 +78,36 @@ const Value& Cell(const Value& v, std::uint32_t r, std::uint32_t c) {
 TEST(PivotBy, BasicTwoByTwoLambdaAggregatorSum) {
   // Row groups: A, B. Col groups: X, Y.
   // Body: (A,X)=1, (A,Y)=2, (B,X)=3, (B,Y)=4.
-  // With default field_headers=3, row_total_depth=-1, col_total_depth=1:
-  //   header row, top grand-total row, then 2 body rows.
+  // With default field_headers=3, row_total_depth=1, col_total_depth=1:
+  //   header row, 2 body rows, then bottom grand-total row.
   const Value v = EvalSrc(
       "=PIVOTBY({\"R\";\"A\";\"A\";\"B\";\"B\"}, {\"C\";\"X\";\"Y\";\"X\";\"Y\"},"
       "         {\"V\";1;2;3;4}, LAMBDA(v, SUM(v)))");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  // Layout: header row + top grand-total row + 2 body rows = 4 rows.
+  // Layout: header row + 2 body rows + bottom grand-total row = 4 rows.
   // Cols: row label + 2 col keys + grand-total = 4 cols.
   EXPECT_EQ(v.as_array_rows(), 4U);
   EXPECT_EQ(v.as_array_cols(), 4U);
-  // Header row: ["R", "X", "Y", "Grand Total"].
+  // Header row: ["R", "X", "Y", "合計"].
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "R");
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "Y");
-  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Grand Total");
-  // Top grand total row: ["Grand Total", X-total=4, Y-total=6, total=10].
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "Grand Total");
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 6.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 10.0);
+  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "合計");
   // A row: [A, 1, 2, 3].
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A");
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 1.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 3.0);
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 3.0);
   // B row: [B, 3, 4, 7].
-  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "B");
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 3.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 7.0);
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "B");
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 7.0);
+  // Bottom grand total row: ["合計", X-total=4, Y-total=6, total=10].
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 6.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 10.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -243,8 +243,8 @@ TEST(PivotBy, RowTotalDepthPositiveOneColumnTotalsAtBottom) {
       "         {1;2;3;4}, SUM, 0, 1, 0, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
-  // Last row is the totals row: ["Grand Total", X-total=4, Y-total=6].
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "Grand Total");
+  // Last row is the totals row: ["合計", X-total=4, Y-total=6].
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
   EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 6.0);
 }
@@ -255,7 +255,7 @@ TEST(PivotBy, RowTotalDepthNegativeOneColumnTotalsAtTop) {
       "         {1;2;3;4}, SUM, 0, -1, 0, 0, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
-  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "Grand Total");
+  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "合計");
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 0, 2).as_number(), 6.0);
 }
@@ -505,7 +505,7 @@ TEST(PivotBy, MismatchedRowCountsColVsValuesYieldsValueError) {
 
 TEST(PivotBy, MultiColumnRowFieldsBasic) {
   // K=2, L=1, V=1, fh=0. Formulon defaults for the rest:
-  //   row_total_depth=-1 (totals at TOP), col_total_depth=1 (totals at RIGHT).
+  //   row_total_depth=1 (totals at BOTTOM), col_total_depth=1 (totals at RIGHT).
   // rows = L + 0 + nR + 1 = 1 + 0 + 2 + 1 = 4
   // cols = K + nC*V + V = 2 + 2 + 1 = 5
   const Value v = EvalSrc(
@@ -514,30 +514,30 @@ TEST(PivotBy, MultiColumnRowFieldsBasic) {
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 4U);
   EXPECT_EQ(v.as_array_cols(), 5U);
-  // Row 0 (col-axis label row): [null, null, "X", "Y", "Grand Total"].
+  // Row 0 (col-axis label row): [null, null, "X", "Y", "合計"].
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
   EXPECT_TRUE(Cell(v, 0, 1).is_blank());
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Y");
-  EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Grand Total");
-  // Row 1 (top grand-total row): ["Grand Total", null, 4, 2, 6].
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "Grand Total");
-  EXPECT_TRUE(Cell(v, 1, 1).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "合計");
+  // Row 1 ((A,P) group): X=1+3=4, Y=blank, total=4.
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "P");
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 4).as_number(), 6.0);
-  // Row 2 ((A,P) group): X=1+3=4, Y=blank, total=4.
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A");
-  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "P");
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
-  EXPECT_TRUE(Cell(v, 2, 3).is_blank());
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 4.0);
-  // Row 3 ((B,Q) group): X=blank, Y=2, total=2.
-  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "B");
-  EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "Q");
-  EXPECT_TRUE(Cell(v, 3, 2).is_blank());
+  EXPECT_TRUE(Cell(v, 1, 3).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 4).as_number(), 4.0);
+  // Row 2 ((B,Q) group): X=blank, Y=2, total=2.
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "B");
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "Q");
+  EXPECT_TRUE(Cell(v, 2, 2).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 2.0);
+  // Row 3 (bottom grand-total row): ["合計", null, 4, 2, 6].
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "合計");
+  EXPECT_TRUE(Cell(v, 3, 1).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 6.0);
 }
 
 TEST(PivotBy, MultiColumnColFieldsBasic) {
@@ -549,31 +549,31 @@ TEST(PivotBy, MultiColumnColFieldsBasic) {
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 5U);
   EXPECT_EQ(v.as_array_cols(), 4U);
-  // Row 0 (outermost col-axis level): [null, "X", "Y", "Grand Total"].
+  // Row 0 (outermost col-axis level): [null, "X", "Y", "合計"].
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "Y");
-  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Grand Total");
+  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "合計");
   // Row 1 (innermost col-axis level): [null, "M", "N", null].
   EXPECT_TRUE(Cell(v, 1, 0).is_blank());
   EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "M");
   EXPECT_EQ(std::string(Cell(v, 1, 2).as_text()), "N");
   EXPECT_TRUE(Cell(v, 1, 3).is_blank());
-  // Row 2 (top grand total): ["Grand Total", 4, 2, 6].
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "Grand Total");
+  // Row 2 (A): [A, 4, blank, 4].
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A");
   EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 6.0);
-  // Row 3 (A): [A, 4, blank, 4].
-  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "A");
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 4.0);
-  EXPECT_TRUE(Cell(v, 3, 2).is_blank());
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 4.0);
-  // Row 4 (B): [B, blank, 2, 2].
-  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "B");
-  EXPECT_TRUE(Cell(v, 4, 1).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 2).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 4.0);
+  // Row 3 (B): [B, blank, 2, 2].
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "B");
+  EXPECT_TRUE(Cell(v, 3, 1).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 2.0);
+  // Row 4 (bottom grand total): ["合計", 4, 2, 6].
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 1).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 2).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 6.0);
 }
 
 TEST(PivotBy, MultiColumnValuesBasic) {
@@ -585,40 +585,39 @@ TEST(PivotBy, MultiColumnValuesBasic) {
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 4U);
   EXPECT_EQ(v.as_array_cols(), 7U);
-  // Row 0 (col-axis labels tiled V=2 per col group, "Grand Total" tiled V=2):
-  //   [null, "X", "X", "Y", "Y", "Grand Total", "Grand Total"].
+  // Row 0 (col-axis labels tiled V=2 per col group, "合計" tiled V=2):
+  //   [null, "X", "X", "Y", "Y", "合計", "合計"].
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Y");
   EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Y");
-  EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "Grand Total");
-  EXPECT_EQ(std::string(Cell(v, 0, 6).as_text()), "Grand Total");
-  // Row 1 (top grand totals): ["Grand Total", X-tot v0=4, X-tot v1=40,
-  //                            Y-tot v0=2, Y-tot v1=20, grand v0=6, grand v1=60].
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "Grand Total");
+  EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "合計");
+  EXPECT_EQ(std::string(Cell(v, 0, 6).as_text()), "合計");
+  // Row 1 (A): [A, 4, 40, blank, blank, blank, blank].
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 40.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 4).as_number(), 20.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 5).as_number(), 6.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 1, 6).as_number(), 60.0);
-  // Row 2 (A): [A, 4, 40, blank, blank, 4, 40].
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A");
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 40.0);
-  EXPECT_TRUE(Cell(v, 2, 3).is_blank());
-  EXPECT_TRUE(Cell(v, 2, 4).is_blank());
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 5).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 6).as_number(), 40.0);
-  // Row 3 (B): [B, blank, blank, 2, 20, 2, 20].
-  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "B");
-  EXPECT_TRUE(Cell(v, 3, 1).is_blank());
-  EXPECT_TRUE(Cell(v, 3, 2).is_blank());
+  EXPECT_TRUE(Cell(v, 1, 3).is_blank());
+  EXPECT_TRUE(Cell(v, 1, 4).is_blank());
+  EXPECT_TRUE(Cell(v, 1, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 1, 6).is_blank());
+  // Row 2 (B): [B, blank, blank, 2, 20, blank, blank].
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "B");
+  EXPECT_TRUE(Cell(v, 2, 1).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 2).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 20.0);
+  EXPECT_TRUE(Cell(v, 2, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 6).is_blank());
+  // Row 3 (bottom grand totals).
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 40.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 2.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 20.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 5).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 6).as_number(), 20.0);
+  EXPECT_TRUE(Cell(v, 3, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 3, 6).is_blank());
 }
 
 TEST(PivotBy, MultiColumnAllAxes) {
@@ -632,15 +631,15 @@ TEST(PivotBy, MultiColumnAllAxes) {
   EXPECT_EQ(v.as_array_rows(), 5U);
   EXPECT_EQ(v.as_array_cols(), 8U);
   // Row 0 (outer col-axis): [null, null, "X", "X", "Y", "Y",
-  //                          "Grand Total", "Grand Total"].
+  //                          "合計", "合計"].
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
   EXPECT_TRUE(Cell(v, 0, 1).is_blank());
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Y");
   EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "Y");
-  EXPECT_EQ(std::string(Cell(v, 0, 6).as_text()), "Grand Total");
-  EXPECT_EQ(std::string(Cell(v, 0, 7).as_text()), "Grand Total");
+  EXPECT_EQ(std::string(Cell(v, 0, 6).as_text()), "合計");
+  EXPECT_EQ(std::string(Cell(v, 0, 7).as_text()), "合計");
   // Row 1 (inner col-axis): [null, null, "M", "M", "N", "N", null, null].
   EXPECT_TRUE(Cell(v, 1, 0).is_blank());
   EXPECT_TRUE(Cell(v, 1, 1).is_blank());
@@ -650,64 +649,64 @@ TEST(PivotBy, MultiColumnAllAxes) {
   EXPECT_EQ(std::string(Cell(v, 1, 5).as_text()), "N");
   EXPECT_TRUE(Cell(v, 1, 6).is_blank());
   EXPECT_TRUE(Cell(v, 1, 7).is_blank());
-  // Row 2 (top grand total): ["Grand Total", null, 4, 40, 2, 20, 6, 60].
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "Grand Total");
-  EXPECT_TRUE(Cell(v, 2, 1).is_blank());
+  // Row 2 ((A,P)): [A, P, 4, 40, null, null, null, null].
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "P");
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 40.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 5).as_number(), 20.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 6).as_number(), 6.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 7).as_number(), 60.0);
-  // Row 3 ((A,P)): [A, P, 4, 40, null, null, 4, 40].
-  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "A");
-  EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "P");
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 40.0);
-  EXPECT_TRUE(Cell(v, 3, 4).is_blank());
-  EXPECT_TRUE(Cell(v, 3, 5).is_blank());
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 6).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 7).as_number(), 40.0);
-  // Row 4 ((B,Q)): [B, Q, null, null, 2, 20, 2, 20].
-  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "B");
-  EXPECT_EQ(std::string(Cell(v, 4, 1).as_text()), "Q");
-  EXPECT_TRUE(Cell(v, 4, 2).is_blank());
-  EXPECT_TRUE(Cell(v, 4, 3).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 4).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 6).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 7).is_blank());
+  // Row 3 ((B,Q)): [B, Q, null, null, 2, 20, null, null].
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "B");
+  EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "Q");
+  EXPECT_TRUE(Cell(v, 3, 2).is_blank());
+  EXPECT_TRUE(Cell(v, 3, 3).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 5).as_number(), 20.0);
+  EXPECT_TRUE(Cell(v, 3, 6).is_blank());
+  EXPECT_TRUE(Cell(v, 3, 7).is_blank());
+  // Row 4 (bottom grand total): ["合計", null, 4, 40, 2, 20, null, null].
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "合計");
+  EXPECT_TRUE(Cell(v, 4, 1).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 2).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 40.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 4).as_number(), 2.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 5).as_number(), 20.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 4, 6).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 4, 7).as_number(), 20.0);
+  EXPECT_TRUE(Cell(v, 4, 6).is_blank());
+  EXPECT_TRUE(Cell(v, 4, 7).is_blank());
 }
 
 TEST(PivotBy, MultiColumnRowsWithFieldHeadersThree) {
   // K=2, L=1, V=1, fh=3 (inputs have header, output emits header).
-  // rows = 1 + 1 + 2 + 1 = 5, cols = 2 + 2 + 1 = 5.
+  // rows = 1 col-field header + 1 col-axis + 1 output header + 1 total + 2 body = 6.
   const Value v = EvalSrc(
       "=PIVOTBY({\"R1\",\"R2\";\"A\",\"P\";\"B\",\"Q\";\"A\",\"P\"},"
       "         {\"C\";\"X\";\"Y\";\"X\"},"
       "         {\"V\";1;2;3}, SUM, 3)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(v.as_array_rows(), 5U);
+  EXPECT_EQ(v.as_array_rows(), 6U);
   EXPECT_EQ(v.as_array_cols(), 5U);
-  // Row 0 (col-axis labels from col_fields data row 0 reps):
-  //   [null, null, "X", "Y", "Grand Total"].
+  // Row 0 (col-field header): [null, null, "C", null, null].
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
   EXPECT_TRUE(Cell(v, 0, 1).is_blank());
-  EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
-  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Y");
-  EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Grand Total");
-  // Row 1 (header row): ["R1", "R2", "V", "V", "V"].
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "R1");
-  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "R2");
-  EXPECT_EQ(std::string(Cell(v, 1, 2).as_text()), "V");
-  EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "V");
-  EXPECT_EQ(std::string(Cell(v, 1, 4).as_text()), "V");
-  // Row 2 (top grand total).
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "Grand Total");
-  EXPECT_TRUE(Cell(v, 2, 1).is_blank());
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 6.0);
+  EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "C");
+  EXPECT_TRUE(Cell(v, 0, 3).is_blank());
+  EXPECT_TRUE(Cell(v, 0, 4).is_blank());
+  // Row 1 (col-axis labels from col_fields data row 0 reps):
+  //   [null, null, "X", "Y", "合計"].
+  EXPECT_TRUE(Cell(v, 1, 0).is_blank());
+  EXPECT_TRUE(Cell(v, 1, 1).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 1, 2).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 1, 4).as_text()), "合計");
+  // Row 2 (header row): ["R1", "R2", "V", "V", "V"].
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "R1");
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "R2");
+  EXPECT_EQ(std::string(Cell(v, 2, 2).as_text()), "V");
+  EXPECT_EQ(std::string(Cell(v, 2, 3).as_text()), "V");
+  EXPECT_EQ(std::string(Cell(v, 2, 4).as_text()), "V");
   // Row 3 ((A,P)): [A, P, 4, blank, 4].
   EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "A");
   EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "P");
@@ -720,57 +719,71 @@ TEST(PivotBy, MultiColumnRowsWithFieldHeadersThree) {
   EXPECT_TRUE(Cell(v, 4, 2).is_blank());
   EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 2.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 4).as_number(), 2.0);
+  // Row 5 (bottom grand total).
+  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "合計");
+  EXPECT_TRUE(Cell(v, 5, 1).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 2).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 3).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 4).as_number(), 6.0);
 }
 
 TEST(PivotBy, MultiColumnValuesWithFieldHeadersThree) {
   // K=1, L=1, V=2, fh=3.
-  // rows = 1 + 1 + 2 + 1 = 5, cols = 1 + 2*2 + 2 = 7.
+  // rows = 1 col-field header + 1 col-axis + 1 output header + 1 total + 2 body = 6.
   const Value v = EvalSrc(
       "=PIVOTBY({\"Region\";\"A\";\"B\";\"A\"}, {\"Cat\";\"X\";\"Y\";\"X\"},"
       "         {\"S\",\"C\";1,10;2,20;3,30}, SUM, 3)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(v.as_array_rows(), 5U);
+  EXPECT_EQ(v.as_array_rows(), 6U);
   EXPECT_EQ(v.as_array_cols(), 7U);
-  // Row 0: [null, "X", "X", "Y", "Y", "Grand Total", "Grand Total"].
+  // Row 0: [null, "Cat", null, null, null, null, null].
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
-  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
-  EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
-  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Y");
-  EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Y");
-  EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "Grand Total");
-  EXPECT_EQ(std::string(Cell(v, 0, 6).as_text()), "Grand Total");
-  // Row 1: ["Region", "S", "C", "S", "C", "S", "C"].
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "Region");
-  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "S");
-  EXPECT_EQ(std::string(Cell(v, 1, 2).as_text()), "C");
-  EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "S");
-  EXPECT_EQ(std::string(Cell(v, 1, 4).as_text()), "C");
-  EXPECT_EQ(std::string(Cell(v, 1, 5).as_text()), "S");
-  EXPECT_EQ(std::string(Cell(v, 1, 6).as_text()), "C");
-  // Row 2 (top grand total).
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "Grand Total");
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 40.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 20.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 5).as_number(), 6.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 6).as_number(), 60.0);
-  // Row 3 (A): [A, 4, 40, blank, blank, 4, 40].
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "Cat");
+  EXPECT_TRUE(Cell(v, 0, 2).is_blank());
+  EXPECT_TRUE(Cell(v, 0, 3).is_blank());
+  EXPECT_TRUE(Cell(v, 0, 4).is_blank());
+  EXPECT_TRUE(Cell(v, 0, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 0, 6).is_blank());
+  // Row 1: [null, "X", "X", "Y", "Y", "合計", "合計"].
+  EXPECT_TRUE(Cell(v, 1, 0).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 1, 2).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 1, 4).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 1, 5).as_text()), "合計");
+  EXPECT_EQ(std::string(Cell(v, 1, 6).as_text()), "合計");
+  // Row 2: ["Region", "S", "C", "S", "C", "S", "C"].
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "Region");
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "S");
+  EXPECT_EQ(std::string(Cell(v, 2, 2).as_text()), "C");
+  EXPECT_EQ(std::string(Cell(v, 2, 3).as_text()), "S");
+  EXPECT_EQ(std::string(Cell(v, 2, 4).as_text()), "C");
+  EXPECT_EQ(std::string(Cell(v, 2, 5).as_text()), "S");
+  EXPECT_EQ(std::string(Cell(v, 2, 6).as_text()), "C");
+  // Row 3 (A): [A, 4, 40, blank, blank, blank, blank].
   EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "A");
   EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 40.0);
   EXPECT_TRUE(Cell(v, 3, 3).is_blank());
   EXPECT_TRUE(Cell(v, 3, 4).is_blank());
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 5).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 6).as_number(), 40.0);
-  // Row 4 (B): [B, blank, blank, 2, 20, 2, 20].
+  EXPECT_TRUE(Cell(v, 3, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 3, 6).is_blank());
+  // Row 4 (B): [B, blank, blank, 2, 20, blank, blank].
   EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "B");
   EXPECT_TRUE(Cell(v, 4, 1).is_blank());
   EXPECT_TRUE(Cell(v, 4, 2).is_blank());
   EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 2.0);
   EXPECT_DOUBLE_EQ(Cell(v, 4, 4).as_number(), 20.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 4, 5).as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 4, 6).as_number(), 20.0);
+  EXPECT_TRUE(Cell(v, 4, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 4, 6).is_blank());
+  // Row 5 (bottom grand total).
+  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 1).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 2).as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 3).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 4).as_number(), 20.0);
+  EXPECT_TRUE(Cell(v, 5, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 5, 6).is_blank());
 }
 
 TEST(PivotBy, MultiColumnValuesWithFieldHeadersTwoSynth) {
@@ -783,10 +796,10 @@ TEST(PivotBy, MultiColumnValuesWithFieldHeadersTwoSynth) {
   EXPECT_EQ(v.as_array_rows(), 5U);
   EXPECT_EQ(v.as_array_cols(), 7U);
   // Row 0 (col-axis labels from col_fields data row 0 reps):
-  //   [null, "X", "X", "Y", "Y", "Grand Total", "Grand Total"].
+  //   [null, "X", "X", "Y", "Y", "合計", "合計"].
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
-  EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "Grand Total");
+  EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "合計");
   // Row 1 (synth header row):
   //   ["Field 1", "Value 1", "Value 2", "Value 1", "Value 2", "Value 1", "Value 2"].
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "Field 1");
@@ -798,7 +811,9 @@ TEST(PivotBy, MultiColumnValuesWithFieldHeadersTwoSynth) {
   EXPECT_EQ(std::string(Cell(v, 1, 6).as_text()), "Value 2");
   // Body sanity check (full coverage in MultiColumnValuesBasic).
   EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 4.0);
-  EXPECT_DOUBLE_EQ(Cell(v, 2, 6).as_number(), 60.0);
+  EXPECT_TRUE(Cell(v, 2, 6).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 1).as_number(), 4.0);
+  EXPECT_TRUE(Cell(v, 4, 6).is_blank());
 }
 
 TEST(PivotBy, MultiColumnRowsWithFilterArray) {
@@ -811,13 +826,13 @@ TEST(PivotBy, MultiColumnRowsWithFilterArray) {
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 4U);
-  // Row 0: [null, null, "X", "Grand Total"].
+  // Row 0: [null, null, "X", "合計"].
   EXPECT_TRUE(Cell(v, 0, 0).is_blank());
   EXPECT_TRUE(Cell(v, 0, 1).is_blank());
   EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
-  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Grand Total");
-  // Row 1 (top grand total): ["Grand Total", null, 4, 4].
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "Grand Total");
+  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "合計");
+  // Row 1 (top grand total): ["合計", null, 4, 4].
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "合計");
   EXPECT_TRUE(Cell(v, 1, 1).is_blank());
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 4.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 3).as_number(), 4.0);

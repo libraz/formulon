@@ -2,6 +2,7 @@
 
 #include "eval/lambda_helpers_lazy.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -348,12 +349,11 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     arrays[i] = a;
   }
 
-  const std::uint32_t rows = arrays[0]->rows;
-  const std::uint32_t cols = arrays[0]->cols;
+  std::uint32_t rows = arrays[0]->rows;
+  std::uint32_t cols = arrays[0]->cols;
   for (std::uint32_t i = 1; i < array_count; ++i) {
-    if (arrays[i]->rows != rows || arrays[i]->cols != cols) {
-      return Value::error(ErrorCode::NA);
-    }
+    rows = std::max(rows, arrays[i]->rows);
+    cols = std::max(cols, arrays[i]->cols);
   }
 
   // The lambda is the last positional argument. Its parameter count must
@@ -383,15 +383,22 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
 
   const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   for (std::size_t idx = 0; idx < total; ++idx) {
+    const std::uint32_t r = static_cast<std::uint32_t>(idx / cols);
+    const std::uint32_t c = static_cast<std::uint32_t>(idx % cols);
     for (std::uint32_t k = 0; k < array_count; ++k) {
-      args[k] = arrays[k]->cells[idx];
+      if (r >= arrays[k]->rows || c >= arrays[k]->cols) {
+        args[k] = Value::error(ErrorCode::NA);
+      } else {
+        args[k] = arrays[k]->cells[static_cast<std::size_t>(r) * arrays[k]->cols + c];
+      }
     }
     // MAP per-cell args are scalars from the input arrays; no AST hint
     // needed because range-aware functions inside the lambda body would
     // see a single cell either way.
     const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, array_count, arena, registry, ctx);
     if (res.is_error()) {
-      return res;
+      out_cells[idx] = res;
+      continue;
     }
     // Anchor-unwrap a 1x1 Array result; multi-cell Arrays / lambda values
     // still surface #CALC!.
@@ -547,7 +554,8 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
       // hint is needed because no consumer would ever see them as a range.
       const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
       if (res.is_error()) {
-        return res;
+        out_cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols) + c] = res;
+        continue;
       }
       // Anchor-unwrap a 1x1 Array result; multi-cell Arrays / lambda
       // values still surface #CALC!.

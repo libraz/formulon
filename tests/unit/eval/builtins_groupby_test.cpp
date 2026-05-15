@@ -225,8 +225,8 @@ TEST(GroupBy, TotalDepthOneGrandTotalAtBottom) {
   const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 1, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
-  // Last row is the grand total: "Grand Total" / 30.
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "Grand Total");
+  // Last row is the grand total: "合計" / 30.
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
   EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 30.0);
 }
 
@@ -234,7 +234,7 @@ TEST(GroupBy, TotalDepthNegativeOneGrandTotalAtTop) {
   const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, -1, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_EQ(v.as_array_rows(), 3U);
-  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "Grand Total");
+  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "合計");
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 30.0);
 }
 

@@ -1,10 +1,10 @@
 suite: sort_filter
-description: "Dynamic-array filter / dedupe / sort family — FILTER, UNIQUE, SORT, SORTBY (Excel 365). 24 perspectives (6 per function); spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (committed oracle golden predates array-spill comparison). Live cases cover scalar fallback and error returns — FILTER if_empty scalar, FILTER no-match #CALC!, FILTER mask shape #VALUE!, FILTER include error propagation, UNIQUE exactly_once-empty #CALC!, SORT sort_index out-of-range #VALUE!, SORT invalid sort_order #VALUE!, SORTBY shape mismatch #VALUE!, SORTBY invalid order #VALUE!."
+description: "Dynamic-array filter / dedupe / sort family — FILTER, UNIQUE, SORT, SORTBY (Excel 365). 24 perspectives (6 per function); spill outputs, scalar fallback, and scalar errors are captured live by the array-aware oracle harness."
 tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # FILTER — 2 spill (skip-oracle), 4 live.
+  # FILTER — 2 spill, 4 scalar/error cases.
   # =========================================================================
 
   - id: filter_row_axis_basic
@@ -32,7 +32,7 @@ cases:
     formula: '=FILTER({1;2;3}, {TRUE;#N/A;TRUE})'
 
   # =========================================================================
-  # UNIQUE — 5 spill (skip-oracle), 1 live.
+  # UNIQUE — 5 spill, 1 scalar/error case.
   # =========================================================================
 
   - id: unique_row_axis_dedup
@@ -60,7 +60,7 @@ cases:
     formula: '=UNIQUE({"X";"Y";"Z"})'
 
   # =========================================================================
-  # SORT — 4 spill (skip-oracle), 2 live.
+  # SORT — 4 spill, 2 scalar/error cases.
   # =========================================================================
 
   - id: sort_row_ascending_default
@@ -88,7 +88,7 @@ cases:
     formula: '=SORT({TRUE;"x";1;#N/A})'
 
   # =========================================================================
-  # SORTBY — 4 spill (skip-oracle), 2 live.
+  # SORTBY — 4 spill, 2 scalar/error cases.
   # =========================================================================
 
   - id: sortby_single_key_ascending

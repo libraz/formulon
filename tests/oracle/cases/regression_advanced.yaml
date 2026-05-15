@@ -1,10 +1,11 @@
 suite: regression_advanced
-description: "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (committed oracle golden predates array-spill comparison). Live cases cover scalar error returns — LINEST/TREND/LOGEST/GROWTH share three error perspectives each (shape mismatch, singular system or y<=0, non-numeric cell); FREQUENCY surfaces error-cell propagation from data_array and bins_array. Tolerance widened to 1e-10 for stats-block fit metrics."
+description: "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Array-aware oracle capture makes most spill outputs live; remaining skip-oracle entries are limited to numerically unstable perfect-fit F-statistic slots and an empty bins-array literal read-back quirk. Tolerance widened to 1e-10 for stats-block fit metrics."
 tolerance: { abs: 1.0e-10, rel: 1.0e-10 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # LINEST — 4 spill (skip-oracle), 3 live.
+  # LINEST — spill and error cases are live except the perfect-fit
+  # stats=TRUE F-statistic slot.
   # =========================================================================
 
   - id: linest_univariate_stats_false
@@ -36,7 +37,7 @@ cases:
     formula: '=LINEST({1;"x";3}, {1;2;3})'
 
   # =========================================================================
-  # TREND — 4 spill (skip-oracle), 3 live.
+  # TREND — spill and error cases are live.
   # =========================================================================
 
   - id: trend_univariate_omit_new_x
@@ -68,7 +69,8 @@ cases:
     formula: '=TREND({1;"x";3}, {1;2;3})'
 
   # =========================================================================
-  # LOGEST — 4 spill (skip-oracle), 3 live.
+  # LOGEST — spill and error cases are live except the perfect-fit
+  # stats=TRUE F-statistic slot.
   # =========================================================================
 
   - id: logest_univariate_stats_false
@@ -100,7 +102,7 @@ cases:
     formula: '=LOGEST({1;"x";3}, {1;2;3})'
 
   # =========================================================================
-  # GROWTH — 4 spill (skip-oracle), 3 live.
+  # GROWTH — spill and error cases are live.
   # =========================================================================
 
   - id: growth_univariate_omit_new_x
@@ -132,7 +134,8 @@ cases:
     formula: '=GROWTH({1;"x";3}, {1;2;3})'
 
   # =========================================================================
-  # FREQUENCY — 5 spill (skip-oracle), 2 live.
+  # FREQUENCY — spill and error cases are live except the empty bins
+  # array-literal read-back quirk.
   # =========================================================================
 
   - id: frequency_basic_three_bins
@@ -148,7 +151,7 @@ cases:
     formula: '=FREQUENCY({1;"x";5;"y";9}, {3;6;9})'
 
   - id: frequency_unsorted_bins
-    description: "FREQUENCY({1;2;3;4;5;6}, {6;3;9}) -> 4x1 spill (Excel does NOT sort bins)"
+    description: "FREQUENCY({1;2;3;4;5;6}, {6;3;9}) -> 4x1 spill (Excel sorts numeric bins ascending)"
     formula: '=FREQUENCY({1;2;3;4;5;6}, {6;3;9})'
 
   - id: frequency_all_data_exceeds_bins
@@ -160,5 +163,5 @@ cases:
     formula: '=FREQUENCY({1;#N/A;3}, {2;4})'
 
   - id: frequency_bins_error_propagates
-    description: "FREQUENCY({1;2;3}, {2;#N/A}) -> 2x1 spill {2;1} (Formulon and Mac both silently skip error cells in bins_array). Spill output skip-oracle."
+    description: "FREQUENCY({1;2;3}, {2;#N/A}) -> 2x1 spill {2;1} (Formulon and Mac both silently skip error cells in bins_array)."
     formula: '=FREQUENCY({1;2;3}, {2;#N/A})'

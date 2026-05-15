@@ -22,6 +22,7 @@
 
 #include "eval/regression_lazy.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -465,10 +466,10 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
   }
 
-  // Distil bins_array into a flat numeric vector preserving given order.
+  // Distil bins_array into a flat numeric vector.
   // Non-numeric cells (including Bool) drop out; Excel does not coerce
-  // here. The "as-given" ordering is required for Excel-compatible
-  // bucketing — we deliberately do NOT sort.
+  // here. Excel buckets against numeric bins in ascending order, even
+  // when the source bins_array is unsorted.
   std::vector<double> bins;
   bins.reserve(bins_arr.cells.size());
   for (const Value& v : bins_arr.cells) {
@@ -476,7 +477,12 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
       bins.push_back(v.as_number());
     }
   }
+  std::sort(bins.begin(), bins.end());
   const std::size_t n_bins = bins.size();
+
+  if (bins_arr.cells.empty()) {
+    return Value::blank();
+  }
 
   // Allocate the count buffer. Even with zero numeric bins the result is
   // a 1x1 array containing the total numeric data count (matches Mac
