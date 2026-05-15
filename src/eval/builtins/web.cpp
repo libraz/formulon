@@ -219,8 +219,8 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 
   pugi::xml_document doc;
   const std::string& xml = xml_text.value();
-  if (xml.size() >= 3U && static_cast<unsigned char>(xml[0]) == 0xEF &&
-      static_cast<unsigned char>(xml[1]) == 0xBB && static_cast<unsigned char>(xml[2]) == 0xBF) {
+  if (xml.size() >= 3U && static_cast<unsigned char>(xml[0]) == 0xEF && static_cast<unsigned char>(xml[1]) == 0xBB &&
+      static_cast<unsigned char>(xml[2]) == 0xBF) {
     return Value::error(ErrorCode::Value);
   }
   if (xml.rfind("\xC3\xAF\xC2\xBB\xC2\xBF", 0) == 0) {
