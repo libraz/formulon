@@ -500,16 +500,6 @@ TEST(BuiltinsOffset, MacHostMultiCellInScalarContextReturnsTopLeft) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsOffset, WinHostRejectsMultiCellScalarContext) {
-  Workbook wb = test::win_workbook();
-  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
-  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
-
-  const Value v = EvalSourceIn("=OFFSET(A1,0,0,1,2)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
 TEST(BuiltinsOffset, MacHostBaseRangeInScalarContextReturnsTopLeft) {
   // `OFFSET(A1:B2, 0, 0)` defaults height/width from the base -> a 2x2
   // rectangle starting at A1. Scalar context samples A1 (dynamic-array
@@ -526,19 +516,6 @@ TEST(BuiltinsOffset, MacHostBaseRangeInScalarContextReturnsTopLeft) {
   const Value v_scalar = EvalSourceIn("=OFFSET(A1:B2,0,0,1,1)", wb, wb.sheet(0));
   ASSERT_TRUE(v_scalar.is_number());
   EXPECT_DOUBLE_EQ(v_scalar.as_number(), 100.0);
-}
-
-TEST(BuiltinsOffset, WinHostRejectsNegativeHeightAndWidth) {
-  Workbook wb = test::win_workbook();
-  wb.sheet(0).set_cell_value(1, 2, Value::number(42.0));
-
-  Value v = EvalSourceIn("=OFFSET(C3,0,0,-2,1)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-
-  v = EvalSourceIn("=OFFSET(C3,0,0,1,-2)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsOffset, ArityBelowMinIsError) {

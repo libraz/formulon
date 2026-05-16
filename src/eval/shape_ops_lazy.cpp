@@ -689,9 +689,6 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
   Value v = Value::blank();
   if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::RangeOp ||
       arg.kind() == parser::NodeKind::SpillRef || is_range_producing_call(arg)) {
-    if (ctx.excel_profile().host == ExcelHost::kWin365 && arg.kind() == parser::NodeKind::RangeOp) {
-      return Value::error(ErrorCode::Value);
-    }
     v = eval_node_as_array(arg, arena, registry, ctx);
   } else {
     v = eval_node(arg, arena, registry, ctx);

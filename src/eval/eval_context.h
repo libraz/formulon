@@ -226,6 +226,34 @@ class EvalContext {
     return copy;
   }
 
+  /// Returns a copy of `*this` whose recursive-evaluation `state()` is
+  /// `&state`. Used by the iterative-calc driver to run each fixed-point
+  /// pass against a fresh memoisation map / in-progress stack so stale
+  /// memos from the previous pass never leak forward.
+  EvalContext with_state(EvalState& state) const noexcept {
+    EvalContext copy = *this;
+    copy.state_ = &state;
+    return copy;
+  }
+
+  /// Returns a copy of `*this` with the `evaluate()`-level iterative-calc
+  /// fixed-point driver suppressed. The recalc engine owns iterative-calc
+  /// resolution itself (via `RecalcEngine` + the SCC iterative solver), so
+  /// each per-cell `evaluate()` it issues must run a single pass — not
+  /// re-drive a nested fixed-point loop. The direct-`evaluate()` path used
+  /// by the CLI and the oracle harness leaves this unset so the
+  /// `evaluate()`-level driver runs.
+  EvalContext with_iterative_driver_suppressed() const noexcept {
+    EvalContext copy = *this;
+    copy.suppress_iterative_driver_ = true;
+    return copy;
+  }
+
+  /// True when the `evaluate()`-level iterative-calc driver is suppressed
+  /// for this context (the recalc engine sets this; see
+  /// `with_iterative_driver_suppressed`).
+  bool iterative_driver_suppressed() const noexcept { return suppress_iterative_driver_; }
+
   /// Returns a copy of `*this` whose `name_env()` is `env`. Used by the LET
   /// evaluator to extend scope for each binding initialiser and the body
   /// without touching the parent context (which may be shared between
@@ -365,6 +393,10 @@ class EvalContext {
   // `evaluate()` retain the pre-existing behaviour).
   std::uint32_t* eval_depth_counter_ = nullptr;
   std::uint32_t* lambda_depth_counter_ = nullptr;
+  // When true, the top-level `evaluate()` iterative-calc fixed-point driver
+  // is skipped. Set by the recalc engine, which drives iterative calc
+  // itself; left false for direct-`evaluate()` callers.
+  bool suppress_iterative_driver_ = false;
 };
 
 /// Fluent builder for the workbook-aware, state-carrying flavour of

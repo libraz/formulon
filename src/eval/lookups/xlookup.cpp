@@ -130,11 +130,18 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, bool wildcards, Ex
     // XLOOKUP / XMATCH exact mode treats kana / full-width variants
     // identically to Mac Excel. Full-width digits are NOT folded for
     // lookups (Mac asymmetry — see jp_fold.h).
+    //
+    // The Windows path keeps the broad kana fold OFF (Windows Excel does
+    // not fold hiragana<->katakana or plain half/full width in lookups —
+    // see lookup_kana_folding_probes) but still composes a half-width
+    // voicing mark onto its base (`ｶﾞ` -> `ガ`): a base + standalone ﾞ /
+    // ﾟ is a malformed encoding both Windows and Mac compose before the
+    // exact-match compare.
     const bool jp_fold = uses_mac_jp_text_folding(profile);
     const std::string pat_lower = jp_fold ? fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false)
-                                          : strings::to_ascii_lower(lookup.as_text());
+                                          : strings::to_ascii_lower(compose_jp_halfwidth_voicing(lookup.as_text()));
     const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false)
-                                           : strings::to_ascii_lower(cell.as_text());
+                                           : strings::to_ascii_lower(compose_jp_halfwidth_voicing(cell.as_text()));
     if (wildcards) {
       return wildcard_match(pat_lower, cell_lower);
     }
@@ -369,9 +376,6 @@ bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, 
 /// lands with dynamic arrays.
 Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
-  if (ctx.excel_profile().host == ExcelHost::kWin365) {
-    return Value::error(ErrorCode::Name);
-  }
   const std::uint32_t arity = call.as_call_arity();
   if (arity < 3U || arity > 6U) {
     return Value::error(ErrorCode::Value);
@@ -486,9 +490,6 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
 /// search mode codes is identical (invalid codes -> `#VALUE!`).
 Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  if (ctx.excel_profile().host == ExcelHost::kWin365) {
-    return Value::error(ErrorCode::Name);
-  }
   const std::uint32_t arity = call.as_call_arity();
   if (arity < 2U || arity > 4U) {
     return Value::error(ErrorCode::Value);

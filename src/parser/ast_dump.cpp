@@ -165,6 +165,17 @@ void DumpInto(const AstNode& node, std::string& out) {
       return;
     }
 
+    case NodeKind::Ref3D: {
+      out.append("(ref3d ");
+      out.append(node.as_ref3d_sheet_begin());
+      out.push_back(':');
+      out.append(node.as_ref3d_sheet_end());
+      out.push_back(' ');
+      out.append(format_a1(node.as_ref3d_cell()));
+      out.push_back(')');
+      return;
+    }
+
     case NodeKind::StructuredRef: {
       out.append("(struct-ref ");
       out.append(node.as_structured_ref_table());

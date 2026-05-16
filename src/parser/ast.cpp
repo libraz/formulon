@@ -121,6 +121,29 @@ AstNode* make_external_ref(Arena& arena, std::uint32_t book_id, std::string_view
   return n;
 }
 
+AstNode* make_ref3d(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell) {
+  // Heap-allocate the payload so the AstNode union stays within its size
+  // budget, mirroring make_external_ref.
+  auto* payload = arena.create<AstNode::Ref3DPayload>();
+  if (payload == nullptr) {
+    return nullptr;
+  }
+  payload->sheet_begin = arena.intern(sheet_begin);
+  payload->sheet_end = arena.intern(sheet_end);
+  payload->cell = cell;
+  // The span endpoints carry the sheet identity; the inner cell ref is
+  // always sheet-less.
+  payload->cell.sheet = {};
+  payload->cell.sheet_quoted = false;
+  AstNode* n = arena.create<AstNode>();
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->kind_ = NodeKind::Ref3D;
+  n->data_.ref3d = payload;
+  return n;
+}
+
 AstNode* make_structured_ref(Arena& arena, std::string_view table, std::string_view column,
                              StructuredRefModifier modifier) {
   AstNode* n = arena.create<AstNode>();
@@ -389,6 +412,21 @@ std::string_view AstNode::as_external_ref_sheet() const {
 const Reference& AstNode::as_external_ref_cell() const {
   FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_cell on non-ExternalRef");
   return data_.external_ref->cell;
+}
+
+std::string_view AstNode::as_ref3d_sheet_begin() const {
+  FM_CHECK(kind_ == NodeKind::Ref3D, "AstNode::as_ref3d_sheet_begin on non-Ref3D");
+  return data_.ref3d->sheet_begin;
+}
+
+std::string_view AstNode::as_ref3d_sheet_end() const {
+  FM_CHECK(kind_ == NodeKind::Ref3D, "AstNode::as_ref3d_sheet_end on non-Ref3D");
+  return data_.ref3d->sheet_end;
+}
+
+const Reference& AstNode::as_ref3d_cell() const {
+  FM_CHECK(kind_ == NodeKind::Ref3D, "AstNode::as_ref3d_cell on non-Ref3D");
+  return data_.ref3d->cell;
 }
 
 std::string_view AstNode::as_structured_ref_table() const {

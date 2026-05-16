@@ -195,6 +195,42 @@ void FormatExternalRef(const AstNode& node, std::string& out) {
   out.append(format_a1(cell_no_sheet));
 }
 
+// Appends `sheet`, single-quoting it when it contains characters outside the
+// bare-name set, mirroring FormatExternalRef's heuristic.
+void AppendSheetNameQuoted(std::string_view sheet, std::string& out) {
+  bool needs_quote = sheet.empty();
+  for (char c : sheet) {
+    const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
+    if (!ok) {
+      needs_quote = true;
+      break;
+    }
+  }
+  if (needs_quote) {
+    out.push_back('\'');
+    for (char c : sheet) {
+      if (c == '\'') {
+        out.push_back('\'');
+      }
+      out.push_back(c);
+    }
+    out.push_back('\'');
+  } else {
+    out.append(sheet);
+  }
+}
+
+void FormatRef3D(const AstNode& node, std::string& out) {
+  AppendSheetNameQuoted(node.as_ref3d_sheet_begin(), out);
+  out.push_back(':');
+  AppendSheetNameQuoted(node.as_ref3d_sheet_end(), out);
+  out.push_back('!');
+  Reference cell_no_sheet = node.as_ref3d_cell();
+  cell_no_sheet.sheet = {};
+  cell_no_sheet.sheet_quoted = false;
+  out.append(format_a1(cell_no_sheet));
+}
+
 void FormatStructuredRef(const AstNode& node, std::string& out) {
   out.append(node.as_structured_ref_table());
   // Two AST shapes need handling:
@@ -479,6 +515,9 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
     }
     case NodeKind::ExternalRef:
       FormatExternalRef(node, out);
+      return;
+    case NodeKind::Ref3D:
+      FormatRef3D(node, out);
       return;
     case NodeKind::StructuredRef:
       FormatStructuredRef(node, out);

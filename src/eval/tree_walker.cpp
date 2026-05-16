@@ -6,6 +6,7 @@
 #include "eval/tree_walker.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -13,7 +14,9 @@
 
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/iterative_solver.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
@@ -25,6 +28,7 @@
 #include "eval/structured_ref.h"
 #include "eval/tree_walker_lazy_table.h"
 #include "parser/ast.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -41,6 +45,42 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+// Returns true when a dynamic-array result anchored at `(anchor_row,
+// anchor_col)` with the given shape would collide with an already-occupied
+// cell, in which case Excel surfaces `#SPILL!` at the anchor instead of
+// spilling. A cell other than the anchor is "occupied" when it carries a
+// formula (even one evaluating to `""`) or a non-blank cached value; a
+// genuinely blank cell does not block.
+//
+// This is the read-only counterpart of `Sheet::commit_spill`'s collision
+// scan: the production recalc path commits through `commit_spill` (which
+// also clears any stale phantom region first), so this helper only runs on
+// the read-only evaluation path where no spill is committed.
+bool spill_would_collide(const Sheet& sheet, std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                         std::uint32_t cols) {
+  if (static_cast<std::uint64_t>(anchor_row) + rows > Sheet::kMaxRows ||
+      static_cast<std::uint64_t>(anchor_col) + cols > Sheet::kMaxCols) {
+    return true;
+  }
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c) {
+      const std::uint32_t row = anchor_row + r;
+      const std::uint32_t col = anchor_col + c;
+      if (row == anchor_row && col == anchor_col) {
+        continue;
+      }
+      const Cell* cell = sheet.cell_at(row, col);
+      if (cell == nullptr) {
+        continue;
+      }
+      if (!cell->formula_text.empty() || !cell->cached_value.is_blank()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Recursive evaluator
@@ -474,6 +514,47 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
+    // 3-D reference argument (`SUM(Sheet2:Sheet3!A1)`): resolve the inclusive
+    // sheet span by workbook order, read the referenced cell from each sheet,
+    // and flatten the resulting cells into the values vector. Mirrors the
+    // RangeOp / SpillRef branches; the same provenance filters apply because
+    // a 3-D ref is a range shape. A span endpoint that names a missing sheet
+    // surfaces `#REF!`. Errors short-circuit per `propagate_errors`.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref3D) {
+      const Workbook* wb = ctx.workbook();
+      const parser::Reference& cell = arg_node.as_ref3d_cell();
+      ErrorCode ref3d_err = ErrorCode::Ref;
+      std::size_t begin_idx = static_cast<std::size_t>(-1);
+      std::size_t end_idx = static_cast<std::size_t>(-1);
+      if (wb != nullptr) {
+        begin_idx = wb->sheet_index_by_name(arg_node.as_ref3d_sheet_begin());
+        end_idx = wb->sheet_index_by_name(arg_node.as_ref3d_sheet_end());
+      }
+      if (wb == nullptr || begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
+          cell.is_full_col || cell.is_full_row || cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols) {
+        const Value err = Value::error(ref3d_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      had_range_shaped_arg = true;
+      const std::size_t lo = std::min(begin_idx, end_idx);
+      const std::size_t hi = std::max(begin_idx, end_idx);
+      std::vector<Value> ref3d_cells;
+      ref3d_cells.reserve(hi - lo + 1);
+      for (std::size_t s = lo; s <= hi; ++s) {
+        parser::Reference per_sheet = cell;
+        per_sheet.sheet = wb->sheet(s).name();
+        ref3d_cells.push_back(ctx.resolve_ref(per_sheet, arena, registry));
+      }
+      Value range_err = Value::blank();
+      if (!append_range_sourced_values(*def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
+        return range_err;
+      }
+      continue;
+    }
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
       had_range_shaped_arg = true;
       const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
@@ -529,6 +610,63 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       Value range_err = Value::blank();
       const std::vector<Value>& expanded_values = expanded.value();
       if (!append_range_sourced_values(*def, expanded_values.data(), expanded_values.size(), &values, &range_err)) {
+        return range_err;
+      }
+      continue;
+    }
+    // Intersection operator as a range-aware function argument: Excel's
+    // space operator (`A1:C3 B1:B5`) yields the overlapping rectangle,
+    // and an aggregator must see every cell of that rectangle rather
+    // than the single anchor `eval_node` would collapse it to. Compute
+    // the clipped intersection rectangle and flatten it row-major,
+    // mirroring the RangeOp branch above. Disjoint operands -> #NULL!.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::IntersectOp) {
+      std::string_view isect_sheet;
+      std::uint32_t isect_r1 = 0;
+      std::uint32_t isect_c1 = 0;
+      std::uint32_t isect_r2 = 0;
+      std::uint32_t isect_c2 = 0;
+      bool isect_disjoint = false;
+      ErrorCode isect_err = ErrorCode::Value;
+      if (!compute_intersect_rect(arg_node.as_intersect_lhs(), arg_node.as_intersect_rhs(), arena, registry, ctx,
+                                  &isect_sheet, &isect_r1, &isect_c1, &isect_r2, &isect_c2, &isect_disjoint,
+                                  &isect_err)) {
+        const Value err = Value::error(isect_err);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      if (isect_disjoint) {
+        const Value err = Value::error(ErrorCode::Null);
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      had_range_shaped_arg = true;
+      parser::Reference isect_lhs{};
+      parser::Reference isect_rhs{};
+      isect_lhs.sheet = isect_sheet;
+      isect_lhs.row = isect_r1;
+      isect_lhs.col = isect_c1;
+      isect_rhs.sheet = isect_sheet;
+      isect_rhs.row = isect_r2;
+      isect_rhs.col = isect_c2;
+      auto isect_expanded = ctx.expand_range(isect_lhs, isect_rhs, arena, registry);
+      if (!isect_expanded) {
+        const Value err = Value::error(isect_expanded.error());
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      Value range_err = Value::blank();
+      const std::vector<Value>& isect_values = isect_expanded.value();
+      if (!append_range_sourced_values(*def, isect_values.data(), isect_values.size(), &values, &range_err)) {
         return range_err;
       }
       continue;
@@ -946,16 +1084,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
             target.col = fc;
             return ctx.resolve_ref(target, arena, registry);
           }
-        } else if (ctx.excel_profile().host == ExcelHost::kWin365) {
-          if (fr >= r1 && fr <= r2 && fc >= c1 && fc <= c2) {
-            target.row = fr;
-            target.col = fc;
-            return ctx.resolve_ref(target, arena, registry);
-          }
-          return Value::error(ErrorCode::Value);
-        }
-        if (ctx.excel_profile().host == ExcelHost::kWin365) {
-          return Value::error(ErrorCode::Value);
         }
         // 2D range: alignment requires both axes; fall through to top-left.
       }
@@ -1192,6 +1320,25 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     case parser::NodeKind::ExternalRef:
       return Value::error(ErrorCode::Name);
 
+    case parser::NodeKind::Ref3D: {
+      // A 3-D reference (`Sheet2:Sheet3!A1`) denotes one cell across a span
+      // of sheets — a range shape. In scalar context Excel cannot collapse
+      // it to a single value, so it surfaces `#VALUE!`. A span endpoint that
+      // names a missing sheet is `#REF!`, which takes priority. Range-aware
+      // aggregators intercept this node in `dispatch_call` before reaching
+      // here, so this branch only fires for true scalar context.
+      const Workbook* wb = ctx.workbook();
+      if (wb == nullptr) {
+        return Value::error(ErrorCode::Ref);
+      }
+      const std::size_t begin_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_begin());
+      const std::size_t end_idx = wb->sheet_index_by_name(node.as_ref3d_sheet_end());
+      if (begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1)) {
+        return Value::error(ErrorCode::Ref);
+      }
+      return Value::error(ErrorCode::Value);
+    }
+
     case parser::NodeKind::StructuredRef: {
       // Resolve the table reference (`Table[Col]`, `Table[#All]`, ...) to a
       // concrete rectangle on the table's home sheet, then read the cells
@@ -1412,11 +1559,80 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   // See `kMaxEvalDepth` / `kMaxLambdaDepth` for the policy.
   std::uint32_t eval_depth = 0;
   std::uint32_t lambda_depth = 0;
+  const bool is_top_level = ctx.eval_depth_counter() == nullptr;
   EvalContext ctx_with_counters = ctx;
-  if (ctx_with_counters.eval_depth_counter() == nullptr) {
+  if (is_top_level) {
     ctx_with_counters = ctx_with_counters.with_depth_counters(&eval_depth, &lambda_depth);
   }
+
+  // Iterative-calculation driver. When the bound workbook has Excel's
+  // "Enable iterative calculation" option on, a formula anchored at a known
+  // cell is evaluated as a fixed-point iteration rather than once: each pass
+  // runs against a fresh `EvalState` whose memo is pre-seeded with the
+  // anchor cell's value from the previous pass, so a self-referential read
+  // (`=IF(Z1>=5,5,Z1+1)` at Z1) resolves to that prior value instead of
+  // recursing into a circular-reference `#REF!`. The loop stops as soon as
+  // the absolute change between two passes drops below `max_change`, or
+  // after `max_iterations` passes. A non-circular formula simply converges
+  // on the second pass (zero delta). Only the top-level `evaluate()` call
+  // drives the loop; nested re-entry (`resolve_ref`) keeps the ordinary
+  // single-pass behaviour.
+  if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() && ctx.current_sheet() != nullptr &&
+      ctx.workbook() != nullptr && ctx.workbook()->iterative_options().enabled) {
+    const IterativeOptions& iopts = ctx.workbook()->iterative_options();
+    const std::uint32_t max_iter = iopts.max_iterations == 0U ? 1U : iopts.max_iterations;
+    const Sheet* anchor_sheet = ctx.current_sheet();
+    const std::uint32_t anchor_row = ctx.formula_row();
+    const std::uint32_t anchor_col = ctx.formula_col();
+    // Excel seeds a fresh circular cell at 0 before the first pass.
+    Value current = Value::number(0.0);
+    for (std::uint32_t pass = 0; pass < max_iter; ++pass) {
+      EvalState pass_state;
+      // Seed the anchor cell so any self-reference resolves to the previous
+      // pass's value without re-entrant evaluation.
+      pass_state.memoize(anchor_sheet, anchor_row, anchor_col, current);
+      EvalContext pass_ctx = ctx_with_counters.with_state(pass_state);
+      Value next = eval_node(node, arena, registry, pass_ctx);
+      // Apply the blank -> 0 surface contract so a blank-resolving pass is
+      // comparable to a numeric one (matches the contract applied below for
+      // the non-iterative path).
+      if (next.is_blank() && node.kind() != parser::NodeKind::Literal) {
+        next = Value::number(0.0);
+      }
+      // Convergence test: absolute change of the numeric value. A pass that
+      // produces a non-number (or flips kind) is treated as not-yet-converged
+      // so the loop keeps running until the cap.
+      bool converged = false;
+      if (next.is_number() && current.is_number()) {
+        const double delta = std::fabs(next.as_number() - current.as_number());
+        converged = delta < iopts.max_change;
+      }
+      current = next;
+      if (converged) {
+        break;
+      }
+    }
+    return current;
+  }
+
   Value v = eval_node(node, arena, registry, ctx_with_counters);
+  // Dynamic-array spill-collision surface contract. When a 365-era formula
+  // produces a multi-cell array and is anchored at a known formula cell on
+  // a resolvable sheet, Excel reports `#SPILL!` at the anchor if any cell
+  // the result would occupy (other than the anchor) is already non-empty.
+  // The mutable-sheet recalc path commits through `Sheet::commit_spill`,
+  // which runs the authoritative collision scan (and clears stale phantom
+  // regions first); this read-only check covers the path where no spill is
+  // committed (ad-hoc evaluation, the oracle harness) so a blocked spill
+  // still surfaces `#SPILL!` rather than the bare anchor scalar.
+  if (v.is_array() && ctx.mutable_sheet() == nullptr && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
+    const std::uint32_t rows = v.as_array_rows();
+    const std::uint32_t cols = v.as_array_cols();
+    if (rows > 0U && cols > 0U &&
+        spill_would_collide(*ctx.current_sheet(), ctx.formula_row(), ctx.formula_col(), rows, cols)) {
+      return Value::error(ErrorCode::Spill);
+    }
+  }
   // Excel surfaces a non-IIFE LAMBDA expression sitting at the top of a cell
   // formula as `#CALC!`: `=LAMBDA(x, x+1)` is a closure value with no
   // application site, so the cell renderer cannot project it onto a scalar.

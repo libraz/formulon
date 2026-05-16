@@ -73,6 +73,11 @@ enum class NodeKind : std::uint8_t {
   /// must be a single cell (the parser rejects `=A1:B2#`); whole-column /
   /// whole-row anchors are also rejected at parse time.
   SpillRef = 18,
+  /// Three-dimensional reference spanning a contiguous run of sheets
+  /// (`Sheet2:Sheet3!A1`). The payload carries the two endpoint sheet
+  /// names plus the (sheet-less) cell `Reference`; the evaluator expands
+  /// it to one cell per sheet in the inclusive workbook-order span.
+  Ref3D = 19,
 };
 
 /// Binary operator catalog covering arithmetic, concat, and comparisons.
@@ -144,6 +149,11 @@ class AstNode final {
   std::uint32_t as_external_ref_book_id() const;
   std::string_view as_external_ref_sheet() const;
   const Reference& as_external_ref_cell() const;
+
+  // --- Ref3D ---------------------------------------------------------------
+  std::string_view as_ref3d_sheet_begin() const;
+  std::string_view as_ref3d_sheet_end() const;
+  const Reference& as_ref3d_cell() const;
 
   // --- StructuredRef -------------------------------------------------------
   std::string_view as_structured_ref_table() const;
@@ -220,6 +230,7 @@ class AstNode final {
   friend AstNode* make_ref(Arena&, const Reference&);
   friend AstNode* make_spill_ref(Arena&, const Reference&);
   friend AstNode* make_external_ref(Arena&, std::uint32_t, std::string_view, const Reference&);
+  friend AstNode* make_ref3d(Arena&, std::string_view, std::string_view, const Reference&);
   friend AstNode* make_structured_ref(Arena&, std::string_view, std::string_view, StructuredRefModifier);
   friend AstNode* make_name_ref(Arena&, std::string_view);
   friend AstNode* make_unary_op(Arena&, UnaryOp, AstNode*);
@@ -244,6 +255,15 @@ class AstNode final {
   struct ExternalRefPayload {
     std::uint32_t book_id;
     std::string_view sheet;
+    Reference cell;
+  };
+  // Three-dimensional reference payload (`Sheet2:Sheet3!A1`). Stored behind
+  // an arena pointer like ExternalRefPayload so the AstNode union stays
+  // within its size budget. `cell` carries the cell coordinates with an
+  // empty sheet qualifier; the span endpoints are the two sheet names.
+  struct Ref3DPayload {
+    std::string_view sheet_begin;
+    std::string_view sheet_end;
     Reference cell;
   };
   struct StructuredRefPayload {
@@ -307,6 +327,7 @@ class AstNode final {
     Value literal;
     Reference ref;
     const ExternalRefPayload* external_ref;
+    const Ref3DPayload* ref3d;
     StructuredRefPayload structured_ref;
     std::string_view name;
     UnaryPayload unary;
@@ -365,6 +386,12 @@ AstNode* make_spill_ref(Arena& arena, const Reference& r);
 
 /// Builds an `ExternalRef` node referencing `[book_id]sheet!cell`.
 AstNode* make_external_ref(Arena& arena, std::uint32_t book_id, std::string_view sheet, const Reference& cell);
+
+/// Builds a `Ref3D` node referencing `sheet_begin:sheet_end!cell`. The
+/// span is by workbook sheet order, resolved at evaluation time; `cell`'s
+/// own `sheet` qualifier is ignored (the endpoints carry the span). The
+/// sheet-name views are re-interned into `arena`.
+AstNode* make_ref3d(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell);
 
 /// Builds a `StructuredRef` node.  `column` may be empty when the reference
 /// targets the whole table.  `modifier` is `None` for plain `Table[col]`.

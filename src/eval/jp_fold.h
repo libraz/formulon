@@ -85,6 +85,22 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits = tr
 /// digits stay unfolded), pass `true` for COUNTIF / SUMIF parity.
 std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits = false);
 
+/// Composes a half-width voicing mark (U+FF9E ﾞ / U+FF9F ﾟ) onto the
+/// preceding half-width katakana base, emitting the full-width voiced /
+/// semi-voiced katakana (`ｶﾞ` -> `ガ`, `ﾊﾟ` -> `パ`). Every other
+/// codepoint — including plain half-width katakana that is NOT followed
+/// by a voicing mark, hiragana, full-width katakana, and ASCII — passes
+/// through byte-for-byte unchanged.
+///
+/// This is the minimal normalisation Windows Excel 365 applies to the
+/// lookup family: a half-width base + standalone voicing mark is a
+/// malformed encoding that Excel composes before comparing, so
+/// `XLOOKUP("ｶﾞ", ...)` matches a cell holding `ガ`. Unlike
+/// `fold_jp_text`, it does NOT fold plain half/full width or
+/// hiragana<->katakana, matching the Windows-Excel asymmetry pinned by
+/// `tests/oracle/variants/win-365-ja_JP/golden/lookup_kana_folding_probes`.
+std::string compose_jp_halfwidth_voicing(std::string_view input);
+
 }  // namespace eval
 }  // namespace formulon
 

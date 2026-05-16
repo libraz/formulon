@@ -33,10 +33,11 @@ LogicalCoerce logical_coerce_for_host(const Value& v, const EvalContext& ctx, bo
   if (ctx.excel_profile().host != ExcelHost::kWin365 || !v.is_text()) {
     return logical_coerce(v, out_bool, out_err);
   }
-  const std::string_view text = v.as_text();
-  if (text.empty()) {
+  const std::string_view raw = v.as_text();
+  if (raw.empty()) {
     return LogicalCoerce::Skip;
   }
+  const std::string_view text = strings::trim(raw);
   if (strings::case_insensitive_eq(text, "TRUE")) {
     *out_bool = true;
     return LogicalCoerce::HasValue;

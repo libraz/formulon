@@ -63,6 +63,11 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
               .with_mutable_sheet(sheet)
               .with_formula_cell(row, col);
   }
+  // The recalc engine owns iterative-calc resolution (SCC detection + the
+  // iterative solver). Each per-cell evaluation it issues must be a single
+  // pass; suppress the `evaluate()`-level fixed-point driver so the two
+  // mechanisms do not double-iterate or fight over divergence accounting.
+  ctx = ctx.with_iterative_driver_suppressed();
 
   Value result = evaluate(*root, arena, registry, ctx);
   // If the top-level evaluator produced an Array (e.g. a SEQUENCE() at the

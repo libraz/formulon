@@ -242,15 +242,6 @@ TEST(RangeOp, MacHostScalarOutOfRangeFallsBackToTopLeft) {
   EXPECT_EQ(v.as_number(), 33.0);
 }
 
-TEST(RangeOp, WinHostScalarOutOfRangeIsValue) {
-  Workbook wb = test::win_workbook();
-  wb.sheet(0).set_cell_value(2, 0, Value::number(33.0));
-
-  const Value v = EvalSourceAt("=A3:A8", wb, wb.sheet(0), 0U, 11U);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
 TEST(RangeOp, MacHostScalar2DRangeFallsBackToTopLeft) {
   // 2D range A1:B5 -- alignment requires both axes; we fall back to A1.
   Workbook wb = test::mac_workbook();
@@ -262,22 +253,6 @@ TEST(RangeOp, MacHostScalar2DRangeFallsBackToTopLeft) {
   const Value v = EvalSourceAt("=A1:B5", wb, wb.sheet(0), 0U, 25U);
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 11.0);
-}
-
-TEST(RangeOp, WinHost2DRequiresBothAxesAligned) {
-  Workbook wb = test::win_workbook();
-  wb.sheet(0).set_cell_value(0, 0, Value::number(11.0));
-  wb.sheet(0).set_cell_value(0, 1, Value::number(12.0));
-  wb.sheet(0).set_cell_value(1, 0, Value::number(21.0));
-  wb.sheet(0).set_cell_value(1, 1, Value::number(22.0));
-
-  Value v = EvalSourceAt("=A1:B5", wb, wb.sheet(0), 0U, 25U);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-
-  v = EvalSourceAt("=A1:B5", wb, wb.sheet(0), 1U, 1U);
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 22.0);
 }
 
 TEST(RangeOp, ScalarNoFormulaCellFallsBackToTopLeft) {
@@ -302,15 +277,6 @@ TEST(RangeOp, ScalarAtPrefixStrictUnchanged) {
   const Value v = EvalSourceAt("=@A3:A8", wb, wb.sheet(0), 0U, 11U);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
-TEST(RangeOp, WinHostSingleFunctionIsNameError) {
-  Workbook wb = test::win_workbook();
-  wb.sheet(0).set_cell_value(0, 0, Value::number(42.0));
-
-  const Value v = EvalSourceAt("=_xlfn.SINGLE(A1:A5)", wb, wb.sheet(0), 0U, 11U);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
 }  // namespace

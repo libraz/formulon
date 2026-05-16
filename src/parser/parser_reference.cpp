@@ -613,5 +613,43 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
   return nullptr;
 }
 
+// ---------------------------------------------------------------------------
+// 3-D references
+// ---------------------------------------------------------------------------
+
+AstNode* Parser::parse_3d_ref(std::string_view sheet1, TextRange sheet1_range) {
+  // The caller guarantees the current token is `Colon`, the next is an
+  // `Ident` / `SheetName`, and the one after that is `Bang`.
+  advance();  // Colon
+  const Token& sheet2_tok = peek();
+  std::string_view sheet2;
+  if (sheet2_tok.kind == TokenKind::SheetName) {
+    sheet2 = sheet2_tok.text;  // escape-resolved
+  } else {
+    sheet2 = sheet2_tok.lexeme;
+  }
+  advance();  // second sheet name
+  advance();  // Bang
+
+  // Only a single cell reference is supported as the 3-D tail; whole-column /
+  // whole-row 3-D ranges are out of scope.
+  if (peek_kind() != TokenKind::CellRef) {
+    record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
+    return nullptr;
+  }
+  const Token& cell = advance();
+  Reference r;
+  if (!decode_cellref_lexeme(cell.lexeme, &r)) {
+    record_error_with_token(ParseErrorCode::InvalidReference, cell.range, cell.lexeme);
+    return nullptr;
+  }
+  AstNode* n = make_ref3d(arena_, sheet1, sheet2, r);
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->set_range(SpanRange(sheet1_range, cell.range));
+  return n;
+}
+
 }  // namespace parser
 }  // namespace formulon

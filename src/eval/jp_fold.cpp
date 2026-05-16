@@ -197,6 +197,44 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, boo
   return out;
 }
 
+std::string compose_jp_halfwidth_voicing(std::string_view input) {
+  std::string out;
+  out.reserve(input.size());
+  std::size_t i = 0;
+  while (i < input.size()) {
+    std::size_t n = 0;
+    const std::uint32_t cp = decode_utf8_step(input, i, &n);
+
+    // Only a half-width katakana base can absorb a following ﾞ / ﾟ.
+    if (cp >= 0xFF66u && cp <= 0xFF9Du && i + n < input.size()) {
+      const std::uint32_t base = half_to_full_kana_or_punct(cp);
+      if (is_voicing_base(base)) {
+        std::size_t n2 = 0;
+        const std::uint32_t next = decode_utf8_step(input, i + n, &n2);
+        if (next == 0xFF9Eu) {
+          if (const std::uint32_t v = voiced_form(base); v != 0u) {
+            encode_utf8(v, &out);
+            i += n + n2;
+            continue;
+          }
+        } else if (next == 0xFF9Fu) {
+          if (const std::uint32_t s = semi_voiced_form(base); s != 0u) {
+            encode_utf8(s, &out);
+            i += n + n2;
+            continue;
+          }
+        }
+      }
+    }
+
+    // Every other codepoint (including a plain half-width base with no
+    // trailing voicing mark) passes through unchanged.
+    encode_utf8(cp, &out);
+    i += n;
+  }
+  return out;
+}
+
 std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits) {
   // Two-pass: kana fold first (so ｶﾞ -> ガ, Ａ -> a, etc.), then
   // ASCII lowercase. The fold pass already yields half-width ASCII

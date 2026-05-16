@@ -364,9 +364,6 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  if (ctx.excel_profile().host == ExcelHost::kWin365) {
-    return Value::error(ErrorCode::Name);
-  }
   const parser::AstNode& arg = call.as_call_arg(0);
 
   // Mirror the `@`-operator (NodeKind::ImplicitIntersection) projection
@@ -452,9 +449,6 @@ Value eval_sheets_lazy(const parser::AstNode& call, Arena& arena, const Function
   const Value v = eval_node(arg, arena, registry, ctx);
   if (v.is_error()) {
     return v;
-  }
-  if (ctx.excel_profile().host == ExcelHost::kWin365 && v.is_text()) {
-    return Value::error(ErrorCode::Value);
   }
   return Value::error(ErrorCode::NA);
 }

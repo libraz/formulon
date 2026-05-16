@@ -666,12 +666,6 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
     *out_err = ErrorCode::Ref;
     return false;
   }
-  if (ctx.excel_profile().host == ExcelHost::kWin365 &&
-      ((neg_height && abs_height > 1U) || (neg_width && abs_width > 1U))) {
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-
   *out_top_row = static_cast<std::uint32_t>(top_row);
   *out_left_col = static_cast<std::uint32_t>(left_col);
   *out_height = abs_height;
@@ -712,9 +706,6 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (!refs_internal::compute_offset_rect(call, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
                                           &err)) {
     return Value::error(err);
-  }
-  if (ctx.excel_profile().host == ExcelHost::kWin365 && (height != 1U || width != 1U)) {
-    return Value::error(ErrorCode::Value);
   }
   // Scalar context for a multi-cell OFFSET: Excel 365 dynamic-array
   // semantics spill the rectangle, and a reader that samples only the
@@ -990,16 +981,6 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
 
   if (resolved_rect) {
     if (want_row) {
-      if (ctx.excel_profile().host == ExcelHost::kWin365) {
-        out_cells->push_back(Value::number(static_cast<double>(top + 1U)));
-        if (out_rows != nullptr) {
-          *out_rows = 1U;
-        }
-        if (out_cols != nullptr) {
-          *out_cols = 1U;
-        }
-        return true;
-      }
       const std::uint32_t height = bottom - top + 1U;
       out_cells->reserve(height);
       for (std::uint32_t r = top; r <= bottom; ++r) {
@@ -1267,15 +1248,57 @@ bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const Fun
 namespace {
 
 // Resolves an `IntersectOp` operand AST into a rectangle. Accepts the
-// same shapes the `:` operator produces: a `RangeOp` over two
-// `resolve_range_endpoint`-compatible endpoints, a single `Ref`, or a
-// reference-returning `Call`. Whole-column / whole-row inputs surface
-// `#VALUE!`; mismatched cross-sheet endpoints surface `#REF!`. Returns
-// true on success and writes the inclusive 0-based rectangle.
+// same shapes the `:` operator produces plus the shapes that are only
+// meaningful as an intersection operand: a `RangeOp` over two
+// `resolve_range_endpoint`-compatible endpoints, a single `Ref`
+// (including whole-column / whole-row), a reference-returning `Call`,
+// or a nested `IntersectOp` (the `A B C` chain is left-associative, so
+// the outer operator's lhs is itself an `IntersectOp`). Whole-column /
+// whole-row operands resolve to the full sheet band on the free axis;
+// the geometric intersection in `compute_intersect_rect` then clips
+// them against the other operand. Mismatched cross-sheet endpoints
+// surface `#REF!`. Returns true on success and writes the inclusive
+// 0-based rectangle.
 bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                                std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                                ErrorCode* out_err) {
+  if (node.kind() == parser::NodeKind::IntersectOp) {
+    // Left-associative chain: `(lhs rhs)` is itself an intersection
+    // rectangle. A disjoint inner intersection has no overlapping cells,
+    // so an enclosing intersection is necessarily empty too -> #NULL!.
+    bool inner_disjoint = false;
+    if (!compute_intersect_rect(node.as_intersect_lhs(), node.as_intersect_rhs(), arena, registry, ctx, out_sheet,
+                                out_top_row, out_left_col, out_bottom_row, out_right_col, &inner_disjoint, out_err)) {
+      return false;
+    }
+    if (inner_disjoint) {
+      *out_err = ErrorCode::Null;
+      return false;
+    }
+    return true;
+  }
+  if (node.kind() == parser::NodeKind::Ref) {
+    const parser::Reference& r = node.as_ref();
+    if (r.is_full_col) {
+      // Whole column: fixed column, every row of the sheet.
+      *out_sheet = r.sheet;
+      *out_top_row = 0;
+      *out_left_col = r.col;
+      *out_bottom_row = Sheet::kMaxRows - 1U;
+      *out_right_col = r.col;
+      return true;
+    }
+    if (r.is_full_row) {
+      // Whole row: fixed row, every column of the sheet.
+      *out_sheet = r.sheet;
+      *out_top_row = r.row;
+      *out_left_col = 0;
+      *out_bottom_row = r.row;
+      *out_right_col = Sheet::kMaxCols - 1U;
+      return true;
+    }
+  }
   if (node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = node.as_range_lhs();
     const parser::AstNode& rhs_ast = node.as_range_rhs();

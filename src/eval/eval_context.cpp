@@ -16,6 +16,7 @@
 #include "eval/eval_state.h"
 #include "eval/formula_text_utils.h"
 #include "eval/function_registry.h"
+#include "eval/iterative_solver.h"
 #include "eval/spill_committer.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
@@ -158,11 +159,17 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   }
 
   if (!state_->push_cell(prefix.target_sheet, prefix.row, prefix.col)) {
-    // Direct or indirect cycle (possibly spanning sheets). Excel shows
-    // 0 + a warning banner for iterative-calc-disabled cycles, but
-    // Formulon has no banner surface yet; `#REF!` is the closest
-    // Excel-observable error. Iterative calc and SCC pre-detection are a
-    // later phase.
+    // Direct or indirect cycle (possibly spanning sheets). With Excel's
+    // "Enable iterative calculation" option on, a back-edge inside a cycle
+    // resolves to the cell's last computed value (the iterative-calc driver
+    // in `evaluate()` re-runs the anchor formula until it reaches a fixed
+    // point, seeding each pass from the prior value). With iterative calc
+    // off, `#REF!` is the closest Excel-observable error — Excel itself
+    // shows 0 plus a circular-reference warning banner, which Formulon has
+    // no surface for yet.
+    if (workbook_ != nullptr && workbook_->iterative_options().enabled) {
+      return prefix.cell->cached_value;
+    }
     return Value::error(ErrorCode::Ref);
   }
 

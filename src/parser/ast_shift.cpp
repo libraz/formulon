@@ -379,6 +379,10 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
     case NodeKind::ErrorPlaceholder:
     case NodeKind::NameRef:
     case NodeKind::StructuredRef:
+    // A 3-D reference's sheet span is name-based and its cell offset is not
+    // affected by row / column structural edits on any single sheet, so it
+    // round-trips unchanged through the shift transform.
+    case NodeKind::Ref3D:
       return &node;
     case NodeKind::Ref:
       return TransformRef(node, arena, transform);

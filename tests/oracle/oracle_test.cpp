@@ -30,6 +30,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/iterative_solver.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -607,6 +608,19 @@ TEST_P(OracleTest, Matches) {
   } else {
     wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   }
+  // Honour the suite-level iterative-calc flag. The Python generator stamps
+  // `environment.iterative` from the suite's `options.iterative`; when true
+  // the workbook resolves circular formulas via fixed-point iteration
+  // (Excel's "Enable iterative calculation" option) instead of surfacing a
+  // circular-reference error. Defaults match Excel: 100 iterations,
+  // max-change 0.001.
+  if (const JsonValue* iter_v = param.environment.find("iterative");
+      iter_v != nullptr && iter_v->is_bool() && iter_v->as_bool()) {
+    eval::IterativeOptions iopts;
+    iopts.enabled = true;
+    wb.set_iterative_options(iopts);
+  }
+
   Sheet& sheet = wb.sheet(0);
   Arena text_arena;
   std::vector<SetupFormulaCell> setup_formulas;

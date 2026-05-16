@@ -441,23 +441,6 @@ TEST(BuiltinsTranspose, MacHostTransposeRangeArg) {
   EXPECT_EQ(cells[3], Value::number(4.0));
 }
 
-TEST(BuiltinsTranspose, WinHostRangeArgReturnsValue) {
-  Workbook wb = test::win_workbook();
-  Sheet& sheet = wb.sheet(0);
-  sheet.set_cell_value(0U, 0U, Value::number(1.0));
-  sheet.set_cell_value(0U, 1U, Value::number(2.0));
-  sheet.set_cell_value(1U, 0U, Value::number(3.0));
-  sheet.set_cell_value(1U, 1U, Value::number(4.0));
-  EvalState state;
-  const EvalContext ctx = test::workbook_context(wb, sheet, state);
-
-  Arena parse_arena;
-  Arena eval_arena;
-  const Value v = EvalNoDispatch("=TRANSPOSE(A1:B2)", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
-}
-
 TEST(BuiltinsTranspose, Transpose_Scalar) {
   // `=TRANSPOSE(42)` -> 1x1 array with the scalar wrapped. Mac Excel
   // returns the same scalar; the engine wraps it in a degenerate 1x1

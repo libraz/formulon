@@ -366,6 +366,30 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
     }
 
+    case parser::NodeKind::Ref3D: {
+      // A 3-D reference reads the same cell on every sheet in the inclusive
+      // workbook-order span. Register one cell dep per sheet in the span so
+      // an edit to any of them invalidates this formula.
+      const parser::Reference& cell = node.as_ref3d_cell();
+      if (cell.is_full_col || cell.is_full_row || cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols) {
+        return;
+      }
+      if (state.workbook == nullptr) {
+        return;
+      }
+      const std::size_t begin_idx = state.workbook->sheet_index_by_name(node.as_ref3d_sheet_begin());
+      const std::size_t end_idx = state.workbook->sheet_index_by_name(node.as_ref3d_sheet_end());
+      if (begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1)) {
+        return;  // Missing endpoint: evaluator surfaces #REF! at eval time.
+      }
+      const std::size_t lo = std::min(begin_idx, end_idx);
+      const std::size_t hi = std::max(begin_idx, end_idx);
+      for (std::size_t s = lo; s <= hi; ++s) {
+        add_cell_dep(state, CellNodeId{static_cast<std::uint16_t>(s), cell.row, cell.col});
+      }
+      return;
+    }
+
     case parser::NodeKind::StructuredRef:
       walk_structured_ref(node, state);
       return;

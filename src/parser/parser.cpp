@@ -390,11 +390,16 @@ AstNode* Parser::parse() {
   // `RefCandidate` includes structurally reference-shaped token kinds: bare
   // cell refs, identifiers (which may resolve to a defined name or, when
   // followed by `(`, a reference-returning call), a closing paren (which
-  // terminates a parenthesised reference or function call), and a closing
-  // bracket (which terminates a structured reference). The Pratt parser
-  // ultimately decides whether the AST shape allows the intersection.
+  // terminates a parenthesised reference or function call), a closing
+  // bracket (which terminates a structured reference), and a number (the
+  // whole-row form `2:2` begins and ends with a Number, so an intersect
+  // operand like `B:B 2:2` brackets the whitespace with Number on the
+  // right). The Pratt parser ultimately decides whether the AST shape
+  // allows the intersection: a bare-literal operand is re-rejected there,
+  // so admitting Number here only widens the conservative candidate set.
   auto is_ref_candidate = [](TokenKind k) noexcept {
-    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::RParen || k == TokenKind::RBracket;
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::RParen || k == TokenKind::RBracket ||
+           k == TokenKind::Number;
   };
   // Walk `raw` with a sliding window over the most recent non-whitespace
   // token and the next non-whitespace token after each whitespace run. If
@@ -871,6 +876,20 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
     case TokenKind::Ident:
       return parse_ident_or_call_or_full_col();
     case TokenKind::SheetName: {
+      // 3-D reference whose first endpoint is a quoted sheet name
+      // (`'My Sheet':Sheet3!A1`): SheetName followed by `:` then a sheet
+      // name and then `!`.
+      if (peek_kind_at(1) == TokenKind::Colon &&
+          (peek_kind_at(2) == TokenKind::Ident || peek_kind_at(2) == TokenKind::SheetName) &&
+          peek_kind_at(3) == TokenKind::Bang) {
+        const Token& sheet1 = advance();  // SheetName
+        AstNode* n3d = parse_3d_ref(sheet1.text, sheet1.range);
+        if (n3d != nullptr) {
+          return n3d;
+        }
+        skip_to_sync(ctx);
+        return make_recovery_placeholder(sheet1.range);
+      }
       const Token& sheet = advance();
       AstNode* n = parse_sheet_qualified_ref(sheet.text, /*quoted=*/true, sheet.range);
       if (n != nullptr) {

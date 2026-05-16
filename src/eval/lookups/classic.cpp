@@ -521,11 +521,8 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
         return Value::error(ErrorCode::Value);
       }
       if (col_idx == 0U) {
-        if (ctx.excel_profile().host == ExcelHost::kWin365) {
-          return Value::error(ErrorCode::Value);
-        }
         // Whole-row spill: collapse to the first cell of the selected
-        // row, matching Mac Excel's non-spilling placement anchor (the
+        // row, matching Excel's non-spilling placement anchor (the
         // oracle case `index_zero_col` reads this back as the first
         // element).
         if (row_idx > rows) {

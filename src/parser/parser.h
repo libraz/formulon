@@ -153,6 +153,13 @@ class Parser {
   AstNode* parse_unary_prefix_atom(UnaryOp op, SyncContext ctx);
   AstNode* parse_ident_or_call_or_full_col();
   AstNode* parse_sheet_qualified_ref(std::string_view sheet, bool quoted, TextRange sheet_range);
+  // Parses the tail of a 3-D reference `<sheet1>:<sheet2>!<cellref>`. The
+  // caller has identified `sheet1` (its name and source range) and verified
+  // that the current token is `Colon` followed by an `Ident` / `SheetName`
+  // and then `Bang`. Consumes the colon, second sheet name, bang, and cell
+  // reference. Returns a `Ref3D` node, or `nullptr` on a malformed cell
+  // reference after recording a diagnostic.
+  AstNode* parse_3d_ref(std::string_view sheet1, TextRange sheet1_range);
   AstNode* parse_cellref_atom();
   AstNode* parse_full_row_or_number(const Token& first);
 
