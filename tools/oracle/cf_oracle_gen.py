@@ -85,6 +85,49 @@ def _ensure_darwin() -> None:
         )
 
 
+def _assert_m365_or_abort() -> None:
+    """Aborts when the attached Excel install is not Microsoft 365.
+
+    cf_oracle_gen does not go through the OracleDriver abstraction (it
+    uses xlwings directly), so the M365 sentinel is open-coded here.
+    Mirrors :meth:`OracleDriver.assert_m365_or_abort` in
+    ``tools/oracle/drivers/base.py`` -- see that method for the full
+    rationale (win-2019 archive incident).
+
+    Raises:
+        RuntimeError: when Excel returns ``#NAME?`` for ARRAYTOTEXT.
+    """
+
+    import xlwings as xw  # type: ignore
+
+    app = xw.App(visible=False, add_book=False)
+    app.display_alerts = False
+    try:
+        _sentinel_wb = app.books.add()
+        try:
+            _sht = _sentinel_wb.sheets[0]
+            _sht.range("A1").formula2 = "=ARRAYTOTEXT(1)"
+            app.calculate()
+            _v = _sht.range("A1").value
+            if isinstance(_v, str) and _v == "#NAME?":
+                raise RuntimeError(
+                    "Excel does not recognise ARRAYTOTEXT — this Excel "
+                    "install is pre-M365 (Office 2019 or earlier). "
+                    "Formulon's oracle requires Microsoft 365. "
+                    "See CONTRIBUTING.md."
+                )
+        finally:
+            try:
+                _sentinel_wb.close()
+            except Exception:
+                pass
+    finally:
+        try:
+            app.quit()
+        except Exception:
+            pass
+
+
 def _addr(row: int, col: int) -> str:
     """Returns A1-style address from 0-based row/col."""
     name = ""
@@ -983,7 +1026,11 @@ def _process_suite(case_path: Path, golden_path: Path) -> None:
 
 
 def main() -> int:
-    _ensure_darwin()
+    try:
+        _ensure_darwin()
+    except RuntimeError as exc:
+        print(f"cf-oracle-gen: {exc}", file=sys.stderr)
+        return 2
 
     try:
         import xlwings  # noqa: F401
@@ -993,6 +1040,15 @@ def main() -> int:
             f"[cf-oracle-gen] missing dependency: {exc}; run `make oracle-setup`",
             file=sys.stderr,
         )
+        return 2
+
+    # M365 sentinel: refuse to run on Office 2019 / pre-M365. The two
+    # OracleDriver-based gens enforce this via assert_m365_or_abort();
+    # cf_oracle_gen uses xlwings directly so the check is open-coded.
+    try:
+        _assert_m365_or_abort()
+    except RuntimeError as exc:
+        print(f"cf-oracle-gen: {exc}", file=sys.stderr)
         return 2
 
     parser = argparse.ArgumentParser()

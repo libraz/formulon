@@ -15,6 +15,26 @@ can give the project today:
 
 ## Donating oracle data
 
+### Requirements: Microsoft 365 only
+
+Oracle data must come from **Excel 365** (Microsoft 365 subscription).
+Office 2019 and earlier are not supported and PRs containing goldens
+generated against them will not be merged.
+
+Post-2019 functions — `ARRAYTOTEXT`, `LAMBDA`, and the entire
+dynamic-array family (`SORT`, `FILTER`, `UNIQUE`, `XLOOKUP`, …) —
+silently return `#NAME?` on Office 2019 with no warning. Generating
+goldens on such an install would bake `#NAME?` into the JSON for every
+one of those functions, which is the exact failure mode that produced
+the now-deleted `win-2019-ja_JP` archive.
+
+The oracle harness enforces this at the tool level: all three
+generators (`oracle-gen`, `oracle-gen-cf`, `oracle-gen-workbook`) run a
+startup sentinel that evaluates `=ARRAYTOTEXT(1)` and aborts with a
+clear error message if Excel does not recognise it. You should never
+hit this in practice, but it is your safety net if you accidentally
+target the wrong install.
+
 ### Why we ask the community for this
 
 Formulon's 1-bit compatibility is anchored to a single primary oracle:

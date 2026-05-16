@@ -380,6 +380,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     iso_now = _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
     with oracle_cm as oracle:
+        # Sentinel: refuse to start when Excel is pre-M365. Mirrors the
+        # check in oracle_gen.py; see OracleDriver.assert_m365_or_abort
+        # for the why (win-2019 archive incident).
+        try:
+            oracle.assert_m365_or_abort()
+        except RuntimeError as exc:
+            print(f"workbook-oracle-gen: {exc}", file=sys.stderr)
+            return 2
+
         env = oracle.probe_environment()
         env_json = _env_to_json(env, iso_now)
 

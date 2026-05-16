@@ -146,6 +146,56 @@ class OracleDriver(abc.ABC):
         normalise; it trusts upstream `case_schema` to have done so.
         """
 
+    def assert_m365_or_abort(self) -> None:
+        """Aborts when the attached Excel install is not Microsoft 365.
+
+        Probes the live Excel instance with `=ARRAYTOTEXT(1)`. The function
+        is post-2019 (introduced with the dynamic-array family), so an
+        install older than M365 returns `#NAME?` -- silently, with no
+        warning. Continuing past that point would bake `#NAME?` into the
+        golden JSON for every post-2019 function and contaminate the
+        oracle, which is the exact failure mode that produced the
+        now-deleted `win-2019-ja_JP` archive.
+
+        Raises:
+            RuntimeError: when Excel returns `#NAME?` for ARRAYTOTEXT, or
+                when the driver reports the sentinel suite as skipped
+                (the write-errors path: a driver that cannot evaluate the
+                sentinel cannot evaluate the real suite either, so we
+                refuse rather than emit partial goldens).
+
+        Any other observed shape (text result, number, blank, etc.) is
+        treated as a pass and returns silently. The base class trusts the
+        :meth:`run_suite` contract; it does not type-check unexpected
+        results.
+        """
+
+        message = (
+            "Excel does not recognise ARRAYTOTEXT — this Excel install is "
+            "pre-M365 (Office 2019 or earlier).\n"
+            "\n"
+            "Formulon's oracle requires Microsoft 365 (Excel build 16.0 "
+            "with the post-2019 dynamic-array / LAMBDA function set). "
+            "Generating goldens on Office 2019 silently bakes #NAME? "
+            "results into the JSON for every post-2019 function — exactly "
+            "the failure mode that produced the now-deleted win-2019 "
+            "archive.\n"
+            "\n"
+            "Upgrade to Excel 365 (https://www.microsoft.com/microsoft-365) "
+            "and retry, or run a Microsoft 365 install on a different host."
+        )
+        results = self.run_suite(
+            "__formulon_m365_sentinel__",
+            [{"id": "sentinel", "formula": "=ARRAYTOTEXT(1)", "setup": {}}],
+        )
+        if not results:
+            return
+        result = results[0]
+        if result.kind == "error" and result.error_code == "#NAME?":
+            raise RuntimeError(message)
+        if result.kind == "skipped":
+            raise RuntimeError(message)
+
     def run_workbook_case(self, case: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluates one declarative workbook case and returns the result.
 

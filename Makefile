@@ -295,7 +295,22 @@ size-check:
 # See tools/oracle/README.md.
 ORACLE_DIR := tools/oracle
 ORACLE_VENV := $(ORACLE_DIR)/.venv
-ORACLE_GEN := $(ORACLE_VENV)/bin/python tools/oracle/oracle_gen.py
+ORACLE_PY := $(ORACLE_VENV)/bin/python
+ORACLE_GEN := $(ORACLE_PY) tools/oracle/oracle_gen.py
+
+# All `oracle-gen*` targets below run an M365 sentinel at startup and
+# abort with a clear error on Office 2019 / pre-M365 Excel. The check is
+# implemented by OracleDriver.assert_m365_or_abort (formula + workbook
+# tracks) and a parallel open-coded probe in cf_oracle_gen (CF track).
+
+# Shared venv guard for the oracle-gen* targets. Each target prefixes
+# this with `@$(call require_oracle_venv,<target-name>)` so the error
+# message names the actual target the user invoked.
+define require_oracle_venv
+if [ ! -x "$(ORACLE_PY)" ]; then \
+  echo "$(1): run 'make oracle-setup' first"; exit 1; \
+fi
+endef
 
 oracle-setup:
 	@uname_s=$$(uname -s); \
@@ -343,36 +358,20 @@ oracle-setup-wsl:
 	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py setup --target win-365-ja_JP || true
 
 oracle-gen:
-	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
-	  echo "oracle-gen: run 'make oracle-setup' first"; \
-	  exit 1; \
-	fi
+	@$(call require_oracle_venv,oracle-gen)
 	@$(ORACLE_GEN) $(if $(SUITE),--suite $(SUITE),) $(if $(TARGET),--target $(TARGET),)
 
-# Conditional-formatting oracle generator. Builds an xlsx per CF case
-# via openpyxl, opens it under Mac Excel 365, and records resolved
-# DisplayFormat fills back into tests/oracle/golden_cf/<suite>.golden.json.
-# macOS only. See tools/oracle/cf_oracle_gen.py for the supported rule
-# subset.
+# CF (conditional-formatting) track. macOS-only; see cf_oracle_gen.py for
+# the supported rule subset.
 oracle-gen-cf:
-	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
-	  echo "oracle-gen-cf: run 'make oracle-setup' first"; \
-	  exit 1; \
-	fi
-	@$(ORACLE_VENV)/bin/python tools/oracle/cf_oracle_gen.py $(if $(SUITE),--suite $(SUITE),)
+	@$(call require_oracle_venv,oracle-gen-cf)
+	@$(ORACLE_PY) tools/oracle/cf_oracle_gen.py $(if $(SUITE),--suite $(SUITE),)
 
-# Workbook oracle generator. Drives Excel to capture workbook-level
-# behaviour -- pivot tables + print areas / pagination -- for the
-# declarative cases under tests/oracle/cases_wb/, writing golden JSON to
-# tests/oracle/golden_wb/. The target is auto-detected from the host OS:
-# a Windows / WSL2 host generates the win-365-ja_JP primary, a macOS host
-# the mac-365-ja_JP variant. Pass TARGET=<name> to override.
+# Workbook track (pivot tables + print areas). Target is auto-detected
+# from the host OS; pass TARGET=<name> to override.
 oracle-gen-workbook:
-	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
-	  echo "oracle-gen-workbook: run 'make oracle-setup' first"; \
-	  exit 1; \
-	fi
-	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py workbook \
+	@$(call require_oracle_venv,oracle-gen-workbook)
+	@$(ORACLE_PY) tools/oracle/cli.py workbook \
 	  $(if $(TARGET),--target $(TARGET),) $(if $(SUITE),--suite $(SUITE),)
 
 # oracle-verify shells to `ctest -L oracle`, which already selects the
@@ -402,34 +401,31 @@ oracle-verify:
 #
 # Override the auto-detected target with TARGET=<name> when needed.
 oracle-contribute:
-	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	@if [ ! -x "$(ORACLE_PY)" ]; then \
 	  echo "oracle-contribute: venv missing -- bootstrapping via oracle-setup..."; \
 	  $(MAKE) oracle-setup; \
 	fi
-	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py contribute \
-	  $(if $(TARGET),--target $(TARGET),)
+	@$(ORACLE_PY) tools/oracle/cli.py contribute $(if $(TARGET),--target $(TARGET),)
 
 # Lists every contribution target known to `tools/oracle/targets.yaml`
-# along with the current host's runnable subset. Referenced from
-# `oracle-contribute`'s auto-detect failure path so the operator can see
-# the valid `TARGET=...` values without leaving the shell.
+# along with the current host's runnable subset.
 oracle-contribute-list:
-	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	@if [ ! -x "$(ORACLE_PY)" ]; then \
 	  echo "oracle-contribute-list: venv missing -- bootstrapping via oracle-setup..."; \
 	  $(MAKE) oracle-setup; \
 	fi
-	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py list
+	@$(ORACLE_PY) tools/oracle/cli.py list
 
 # -- IronCalc secondary oracle --------------------------------------------
 # Imports xlsx fixtures vendored from IronCalc (dual MIT / Apache-2.0)
 # into Formulon's golden JSON schema, then runs the secondary verifier
 # registered under the `ironcalc` CTest label.
 ironcalc-import:
-	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	@if [ ! -x "$(ORACLE_PY)" ]; then \
 	  echo "ironcalc-import: run 'make oracle-setup' first (or 'cd tools/oracle && rye sync')"; \
 	  exit 1; \
 	fi
-	@$(ORACLE_VENV)/bin/python tools/oracle/ironcalc_import.py
+	@$(ORACLE_PY) tools/oracle/ironcalc_import.py
 
 ironcalc-verify:
 	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \

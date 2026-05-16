@@ -440,6 +440,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     with oracle_cm as oracle:
+        # Sentinel: refuse to start when Excel is pre-M365 (Office 2019
+        # or earlier). Without this check the generator silently bakes
+        # #NAME? into the golden for every post-2019 function -- the
+        # exact failure mode that produced the now-deleted win-2019
+        # archive. See OracleDriver.assert_m365_or_abort.
+        try:
+            oracle.assert_m365_or_abort()
+        except RuntimeError as exc:
+            print(f"oracle-gen: {exc}", file=sys.stderr)
+            return 2
+
         env = oracle.probe_environment()
 
         # Reconcile detected vs declared locale:
