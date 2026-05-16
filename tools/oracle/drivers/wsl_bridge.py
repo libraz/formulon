@@ -75,8 +75,9 @@ class WSLBridgeOracle(OracleDriver):
     spawns ``python.exe ... --serve``, waits for the ``ready`` line
     (which also carries the cached environment), and ``__exit__``
     sends a ``shutdown`` command and reaps the process. All
-    :meth:`probe_environment` / :meth:`run_suite` calls flow through the
-    same long-lived stdio pipe, so Excel cold-start is paid once.
+    :meth:`probe_environment`, :meth:`run_suite`, and
+    :meth:`run_workbook_case` calls flow through the same long-lived
+    stdio pipe, so Excel cold-start is paid once.
     """
 
     def __init__(self, *, win_python: str, visible: bool = False) -> None:
@@ -265,3 +266,19 @@ class WSLBridgeOracle(OracleDriver):
             )
             for r in out["results"]
         ]
+
+    def run_workbook_case(self, case: Dict[str, Any]) -> Dict[str, Any]:
+        out = self._invoke(
+            {
+                "version": 1,
+                "command": "run_workbook_case",
+                "case": case,
+            }
+        )
+        expect = out.get("expect")
+        if not isinstance(expect, dict):
+            raise RuntimeError(
+                f"windows_excel bridge returned malformed run_workbook_case "
+                f"response: {out!r}"
+            )
+        return expect

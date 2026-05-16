@@ -1,0 +1,33 @@
+{
+  "suite": "example_smoke",
+  "kind": "workbook",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-16T19:37:30Z"
+  },
+  "cases": [
+    {
+      "id": "two_cells_one_sheet",
+      "spec": {
+        "id": "two_cells_one_sheet",
+        "description": "One sheet with two cell values. Exercises the declarative `sheets` block and confirms the case-file shape validates.",
+        "sheets": {
+          "Sheet1": {
+            "A1": {
+              "kind": "number",
+              "value": 10.0
+            },
+            "B1": {
+              "kind": "text",
+              "value": "hello"
+            }
+          }
+        }
+      },
+      "expect": {}
+    }
+  ]
+}

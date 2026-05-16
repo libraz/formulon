@@ -1,0 +1,1537 @@
+{
+  "suite": "pivot_aggregations",
+  "kind": "workbook",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-16T19:35:54Z"
+  },
+  "cases": [
+    {
+      "id": "count_by_region",
+      "spec": {
+        "id": "count_by_region",
+        "description": "COUNT(Amount) grouped by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A6": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B6": {
+              "kind": "number",
+              "value": 25.0
+            },
+            "A7": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B7": {
+              "kind": "number",
+              "value": 75.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B7",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Count"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "個数 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 3.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 3.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 6.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "average_by_region",
+      "spec": {
+        "id": "average_by_region",
+        "description": "AVERAGE(Amount) grouped by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 100.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Average"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "平均 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 150.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 200.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 175.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "max_by_region",
+      "spec": {
+        "id": "max_by_region",
+        "description": "MAX(Amount) grouped by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 175.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 220.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Max"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "最大 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 175.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 300.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 300.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "min_by_region",
+      "spec": {
+        "id": "min_by_region",
+        "description": "MIN(Amount) grouped by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 40.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 220.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Min"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "最小 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 40.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 220.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 40.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "product_by_region",
+      "spec": {
+        "id": "product_by_region",
+        "description": "PRODUCT(Amount) grouped by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Factor"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 2.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 3.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 4.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 5.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Factor",
+              "agg": "Product"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "積 / Factor"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 6.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 20.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 120.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "count_numbers_by_region",
+      "spec": {
+        "id": "count_numbers_by_region",
+        "description": "CountNumbers(Amount) grouped by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A6": {
+              "kind": "text",
+              "value": "West"
+            },
+            "B6": {
+              "kind": "number",
+              "value": 80.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B6",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "CountNumbers"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 5,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "数値の個数 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 2.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 2.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "West"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 1.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 5.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "multi_data_fields_sum_count",
+      "spec": {
+        "id": "multi_data_fields_sum_count",
+        "description": "Two data fields - SUM(Amount) and COUNT(Amount) - by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 300.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            },
+            {
+              "field": "Amount",
+              "agg": "Count"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 3,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "value": {
+                "kind": "text",
+                "value": "個数 / Amount2"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 150.0
+              }
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 2.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 500.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 2.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 650.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 4.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "multi_data_fields_sum_average",
+      "spec": {
+        "id": "multi_data_fields_sum_average",
+        "description": "Two data fields - SUM and AVERAGE of Amount - by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 400.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            },
+            {
+              "field": "Amount",
+              "agg": "Average"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 3,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "value": {
+                "kind": "text",
+                "value": "平均 / Amount2"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 400.0
+              }
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 200.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 600.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 300.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 1000.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 250.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "stddev_by_region",
+      "spec": {
+        "id": "stddev_by_region",
+        "description": "Sample standard deviation StdDev(Amount) grouped by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 10.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 20.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 30.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 40.0
+            },
+            "A6": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B6": {
+              "kind": "number",
+              "value": 60.0
+            },
+            "A7": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B7": {
+              "kind": "number",
+              "value": 80.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B7",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "StdDev"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "標本標準偏差 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 10.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 20.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 26.076809620810597
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "var_population_by_region",
+      "spec": {
+        "id": "var_population_by_region",
+        "description": "Population variance VarP(Amount) grouped by Region.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 10.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 20.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 30.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 40.0
+            },
+            "A6": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B6": {
+              "kind": "number",
+              "value": 60.0
+            },
+            "A7": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B7": {
+              "kind": "number",
+              "value": 80.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B7",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "VarP"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "分散 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 66.66666666666667
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 266.6666666666667
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 566.6666666666666
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

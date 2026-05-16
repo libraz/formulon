@@ -561,10 +561,10 @@ class ExcelOracle(OracleDriver):
 
         pivot_spec = case.get("pivot")
         if not isinstance(pivot_spec, dict):
-            raise RuntimeError(
-                f"workbook case {case.get('id')!r} has neither a 'pivot' "
-                "nor a 'print' block"
-            )
+            # Both feature blocks are optional in the case schema (see
+            # tests/oracle/cases_wb/README.md); a no-feature case --
+            # typically a schema smoke -- yields an empty expect block.
+            return {}
         # The macOS object model does not expose a stable PivotCaches API
         # comparable to Windows COM. Rather than emit a divergent golden,
         # surface a clear skip so the operator runs the Windows primary

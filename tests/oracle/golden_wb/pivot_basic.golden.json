@@ -1,0 +1,1644 @@
+{
+  "suite": "pivot_basic",
+  "kind": "workbook",
+  "environment": {
+    "excel_version": "16.0",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-05-16T19:34:12Z"
+  },
+  "cases": [
+    {
+      "id": "single_row_sum",
+      "spec": {
+        "id": "single_row_sum",
+        "description": "One row field (Region) with SUM(Amount).",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Product"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C3": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C5": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A6": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B6": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C6": {
+              "kind": "number",
+              "value": 25.0
+            },
+            "A7": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B7": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C7": {
+              "kind": "number",
+              "value": 75.0
+            },
+            "A8": {
+              "kind": "text",
+              "value": "West"
+            },
+            "B8": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C8": {
+              "kind": "number",
+              "value": 120.0
+            },
+            "A9": {
+              "kind": "text",
+              "value": "West"
+            },
+            "B9": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C9": {
+              "kind": "number",
+              "value": 80.0
+            },
+            "A10": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B10": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C10": {
+              "kind": "number",
+              "value": 40.0
+            },
+            "A11": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B11": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C11": {
+              "kind": "number",
+              "value": 210.0
+            },
+            "A12": {
+              "kind": "text",
+              "value": "West"
+            },
+            "B12": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C12": {
+              "kind": "number",
+              "value": 60.0
+            },
+            "A13": {
+              "kind": "text",
+              "value": "East"
+            },
+            "B13": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C13": {
+              "kind": "number",
+              "value": 90.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:C13",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 6,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "East"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 90.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 215.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 785.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "West"
+              }
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 260.0
+              }
+            },
+            {
+              "r": 5,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 1350.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "two_row_fields",
+      "spec": {
+        "id": "two_row_fields",
+        "description": "Two row fields (Region, Product) nested, SUM(Amount).",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Product"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C3": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C5": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A6": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B6": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C6": {
+              "kind": "number",
+              "value": 25.0
+            },
+            "A7": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B7": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C7": {
+              "kind": "number",
+              "value": 75.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:C7",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region",
+            "Product"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 8,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 175.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "Gadget"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 50.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "Widget"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 125.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 575.0
+              }
+            },
+            {
+              "r": 5,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "Gadget"
+              }
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 375.0
+              }
+            },
+            {
+              "r": 6,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "Widget"
+              }
+            },
+            {
+              "r": 6,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 200.0
+              }
+            },
+            {
+              "r": 7,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 7,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 750.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "row_and_col_fields",
+      "spec": {
+        "id": "row_and_col_fields",
+        "description": "Region on rows, Product on columns, SUM(Amount).",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Product"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B3": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C3": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B4": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C4": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C5": {
+              "kind": "number",
+              "value": 300.0
+            },
+            "A6": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B6": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C6": {
+              "kind": "number",
+              "value": 25.0
+            },
+            "A7": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B7": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C7": {
+              "kind": "number",
+              "value": 75.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:C7",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "col_fields": [
+            "Product"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 5,
+          "cols": 4,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "列ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "Gadget"
+              }
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "value": {
+                "kind": "text",
+                "value": "Widget"
+              }
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 50.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 125.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "value": {
+                "kind": "number",
+                "value": 175.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 375.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 200.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "value": {
+                "kind": "number",
+                "value": 575.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 425.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 325.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 3,
+              "value": {
+                "kind": "number",
+                "value": 750.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "grand_totals_off",
+      "spec": {
+        "id": "grand_totals_off",
+        "description": "Region rows, SUM(Amount), both grand totals disabled.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 25.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ],
+          "grand_totals": {
+            "rows": false,
+            "cols": false
+          }
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 3,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 150.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 225.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "grand_totals_rows_only",
+      "spec": {
+        "id": "grand_totals_rows_only",
+        "description": "Region rows, Product cols, SUM, only the row grand total kept.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Product"
+            },
+            "C1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B3": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C3": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B4": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "C4": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B5": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "C5": {
+              "kind": "number",
+              "value": 25.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:C5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "col_fields": [
+            "Product"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ],
+          "grand_totals": {
+            "rows": true,
+            "cols": false
+          }
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 4,
+          "cols": 4,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "列ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "Gadget"
+              }
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "value": {
+                "kind": "text",
+                "value": "Widget"
+              }
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 50.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 100.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "value": {
+                "kind": "number",
+                "value": 150.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 200.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 25.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 3,
+              "value": {
+                "kind": "number",
+                "value": 225.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "anchor_offset",
+      "spec": {
+        "id": "anchor_offset",
+        "description": "Pivot anchored away from A1 to exercise anchor-relative grids.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 50.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B4",
+          "anchor": "Report!C5",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!C5",
+          "rows": 4,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 150.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 200.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 350.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "col_field_only",
+      "spec": {
+        "id": "col_field_only",
+        "description": "Product on columns only, no row field, SUM(Amount).",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Product"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 100.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 200.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "Widget"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 50.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "Gadget"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 25.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "col_fields": [
+            "Product"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 3,
+          "cols": 4,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "列ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 2,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 0,
+              "c": 3,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "blank"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "Gadget"
+              }
+            },
+            {
+              "r": 1,
+              "c": 2,
+              "value": {
+                "kind": "text",
+                "value": "Widget"
+              }
+            },
+            {
+              "r": 1,
+              "c": 3,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 225.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 2,
+              "value": {
+                "kind": "number",
+                "value": 150.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 3,
+              "value": {
+                "kind": "number",
+                "value": 375.0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "single_record_per_group",
+      "spec": {
+        "id": "single_record_per_group",
+        "description": "Each Region appears once; SUM degenerates to the value itself.",
+        "sheets": {
+          "Data": {
+            "A1": {
+              "kind": "text",
+              "value": "Region"
+            },
+            "B1": {
+              "kind": "text",
+              "value": "Amount"
+            },
+            "A2": {
+              "kind": "text",
+              "value": "North"
+            },
+            "B2": {
+              "kind": "number",
+              "value": 111.0
+            },
+            "A3": {
+              "kind": "text",
+              "value": "South"
+            },
+            "B3": {
+              "kind": "number",
+              "value": 222.0
+            },
+            "A4": {
+              "kind": "text",
+              "value": "West"
+            },
+            "B4": {
+              "kind": "number",
+              "value": 333.0
+            },
+            "A5": {
+              "kind": "text",
+              "value": "East"
+            },
+            "B5": {
+              "kind": "number",
+              "value": 444.0
+            }
+          },
+          "Report": {}
+        },
+        "pivot": {
+          "source": "Data!A1:B5",
+          "anchor": "Report!A1",
+          "row_fields": [
+            "Region"
+          ],
+          "data_fields": [
+            {
+              "field": "Amount",
+              "agg": "Sum"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "pivot": {
+          "anchor": "Report!A1",
+          "rows": 6,
+          "cols": 2,
+          "grid": [
+            {
+              "r": 0,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "行ラベル"
+              }
+            },
+            {
+              "r": 0,
+              "c": 1,
+              "value": {
+                "kind": "text",
+                "value": "合計 / Amount"
+              }
+            },
+            {
+              "r": 1,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "East"
+              }
+            },
+            {
+              "r": 1,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 444.0
+              }
+            },
+            {
+              "r": 2,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "North"
+              }
+            },
+            {
+              "r": 2,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 111.0
+              }
+            },
+            {
+              "r": 3,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "South"
+              }
+            },
+            {
+              "r": 3,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 222.0
+              }
+            },
+            {
+              "r": 4,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "West"
+              }
+            },
+            {
+              "r": 4,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 333.0
+              }
+            },
+            {
+              "r": 5,
+              "c": 0,
+              "value": {
+                "kind": "text",
+                "value": "総計"
+              }
+            },
+            {
+              "r": 5,
+              "c": 1,
+              "value": {
+                "kind": "number",
+                "value": 1110.0
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

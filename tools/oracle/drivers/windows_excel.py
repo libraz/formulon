@@ -39,8 +39,9 @@ A1 addresses. A single ``app.calculate()`` resolves the whole batch.
 ## Wire-protocol entrypoints
 
 Running ``python -m tools.oracle.drivers.windows_excel --input X.json
---output Y.json`` reads a command (``probe_environment`` or ``run_suite``)
-from the input JSON and writes the result vector to the output JSON.
+--output Y.json`` reads a command (``probe_environment``, ``run_suite``,
+or ``run_workbook_case``) from the input JSON and writes the response
+JSON to the output path.
 This is the legacy single-shot path; each invocation pays a full Excel
 cold-start.
 
@@ -652,10 +653,11 @@ class WindowsExcelOracle(OracleDriver):
             return self._run_print_case(case, print_spec)
         if isinstance(pivot_spec, dict):
             return self._run_pivot_case(case, pivot_spec)
-        raise RuntimeError(
-            f"workbook case {case.get('id')!r} has neither a 'pivot' nor a "
-            "'print' block"
-        )
+        # The case schema marks both feature blocks optional (see
+        # tests/oracle/cases_wb/README.md), so a no-feature case --
+        # typically a schema smoke -- yields an empty expect block
+        # rather than a per-case failure.
+        return {}
 
     def _run_pivot_case(
         self, case: Dict[str, Any], pivot_spec: Dict[str, Any]
@@ -863,15 +865,54 @@ def _build_pivot_table(wb, pivot_spec: Dict[str, Any]):
     if not isinstance(anchor, str) or not anchor:
         raise RuntimeError("pivot block missing string 'anchor'")
 
+    # Resolve the declarative anchor "Report!A1" to the destination
+    # cell's COM Range, since CreatePivotTable accepts a Range here and
+    # the string form has the same fully-qualified requirement as
+    # SourceData. We also drive the source resolution through a Range
+    # object so PivotCaches.Create does not have to parse the address
+    # itself.
+    src_sheet_name, src_addr = _split_sheet_qualified_addr(source)
+    anchor_sheet_name, anchor_addr = _split_sheet_qualified_addr(anchor)
+    if src_sheet_name is None:
+        raise RuntimeError(
+            f"pivot source must be sheet-qualified (e.g. 'Data!A1:C13'); got {source!r}"
+        )
+    if anchor_sheet_name is None:
+        raise RuntimeError(
+            f"pivot anchor must be sheet-qualified (e.g. 'Report!A1'); got {anchor!r}"
+        )
+
+    def _find_sheet(name: str):
+        for sht in wb.sheets:
+            if sht.name.casefold() == name.casefold():
+                return sht
+        return None
+
+    src_sheet = _find_sheet(src_sheet_name)
+    anchor_sheet = _find_sheet(anchor_sheet_name)
+    if src_sheet is None:
+        raise RuntimeError(
+            f"pivot source references unknown sheet {src_sheet_name!r}"
+        )
+    if anchor_sheet is None:
+        raise RuntimeError(
+            f"pivot anchor references unknown sheet {anchor_sheet_name!r}"
+        )
+
+    source_range_api = src_sheet.range(src_addr).api
+    anchor_range_api = anchor_sheet.range(anchor_addr).api
+
+    # Activate the anchor sheet so CreatePivotTable's destination is on
+    # the active sheet -- some Excel builds reject creating a pivot
+    # whose destination is on an inactive sheet with E_INVALIDARG.
+    try:
+        anchor_sheet.activate()
+    except Exception:
+        pass
+
     api = wb.api
-    cache = api.PivotCaches().Create(
-        SourceType=_XL_DATABASE,
-        SourceData=source,
-    )
-    pivot = cache.CreatePivotTable(
-        TableDestination=anchor,
-        TableName="FormulonPivot",
-    )
+    cache = api.PivotCaches().Create(_XL_DATABASE, source_range_api)
+    pivot = cache.CreatePivotTable(anchor_range_api, "FormulonPivot")
 
     for field_name in pivot_spec.get("row_fields") or []:
         pivot.PivotFields(field_name).Orientation = _XL_ORIENT_ROW
@@ -1148,6 +1189,25 @@ def _format_com_error(exc: BaseException) -> str:
             descr = ""
             if len(args) >= 2 and isinstance(args[1], str):
                 descr = args[1]
+            # pywin32 com_error.args = (hresult, source, excepinfo, argerr)
+            # excepinfo = (wcode, source, description, helpfile, helpcontext, scode)
+            # When the HRESULT is the generic DISP_E_EXCEPTION the real
+            # Excel error message lives in excepinfo[2], so pull it out.
+            extras: List[str] = []
+            if len(args) >= 3 and args[2] is not None:
+                info = args[2]
+                if isinstance(info, tuple) and len(info) >= 3:
+                    src = info[1] if isinstance(info[1], str) else ""
+                    info_descr = info[2] if isinstance(info[2], str) else ""
+                    scode = info[5] if len(info) >= 6 else None
+                    if info_descr.strip():
+                        extras.append(info_descr.strip())
+                    if src.strip():
+                        extras.append(f"source={src.strip()}")
+                    if isinstance(scode, int):
+                        extras.append(f"scode=0x{scode & 0xFFFFFFFF:08X}")
+            if extras:
+                descr = (descr + " -- " if descr else "") + "; ".join(extras)
             return f"COM {hresult}: {descr}".strip().rstrip(":")
     except Exception:
         pass
@@ -1214,6 +1274,9 @@ def _dispatch(drv: "WindowsExcelOracle", env_json: Dict[str, Any], payload: Dict
             for r in results
         ]
         return {"version": 1, "environment": env_json, "results": results_json}
+    if cmd == "run_workbook_case":
+        expect = drv.run_workbook_case(payload["case"])
+        return {"version": 1, "environment": env_json, "expect": expect}
     raise RuntimeError(f"unknown command: {cmd!r}")
 
 
@@ -1288,6 +1351,9 @@ def _main(argv: Optional[List[str]] = None) -> int:
       - ``probe_environment`` -- returns the cached environment block.
       - ``run_suite`` -- evaluates the supplied case batch and returns
         a vector of normalised :class:`CaseResult` records.
+      - ``run_workbook_case`` -- builds the declarative workbook spec
+        carried by ``case`` and returns the observed pivot/print
+        ``expect`` mapping.
 
     Wire-format version is pinned to 1; any future schema change must
     bump it both here and in the WSL bridge.
