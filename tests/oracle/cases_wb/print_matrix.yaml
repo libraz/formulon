@@ -1,0 +1,341 @@
+suite: print_matrix
+kind: workbook
+description: >
+  Parameter-matrix oracle cases for empirical rule discovery: each case
+  varies a single axis (Zoom, FitToPages, data density, or print-title
+  depth) while pinning every other axis to a baseline value. The point
+  is to make the *effect* of each axis observable in isolation, so the
+  Excel-actual goldens together with the spec yield the transformation
+  rule (e.g. how Excel's VPageBreaks.Count behaves under sparse data,
+  whether Fit overrides Zoom, how PrintTitleRows subtracts from body).
+  No golden is committed: matrix golden generation needs a Windows +
+  Excel host. See the Windows-side handoff (next to this file) for
+  capture procedure and the residual failures each row targets.
+
+cases:
+  # --- Axis A: Zoom (4 cases) --------------------------------------------
+  # Pinned: FitToPages=OFF, dense data (A1:H30 every cell), A4 portrait.
+  # Variable: scale in {100, 75, 50, 25}.
+  # Disambiguates: how Zoom scales body capacity / break count alone.
+  - id: zoom_100_dense_fit_off
+    description: Baseline zoom 100% on dense A1:H30 with FitToPages OFF.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: zoom_75_dense_fit_off
+    description: Zoom 75% on the same dense grid; expect fewer breaks than 100%.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 75}
+
+  - id: zoom_50_dense_fit_off
+    description: Zoom 50% on the same dense grid; expect noticeably fewer breaks.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 50}
+
+  - id: zoom_25_dense_fit_off
+    description: Zoom 25% on the same dense grid; expect a single page.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 25}
+
+  # --- Axis B: FitToPages (4 cases) --------------------------------------
+  # Pinned: Zoom=100 (ignored when Fit active), dense data, A4 portrait.
+  # Variable: (fit_to_width, fit_to_height) in
+  #     (0, 0)  -- baseline, Zoom in effect
+  #     (1, 0)  -- fit width only
+  #     (0, 1)  -- fit height only
+  #     (2, 2)  -- fit both, max 2x2 pages
+  # Disambiguates: whether (0,0) ignores Fit, whether Fit overrides Zoom
+  # when both are present, how Excel rounds page count under Fit.
+  - id: fit_off_zoom_100_dense
+    description: FitToPages OFF with Zoom 100; baseline against zoom_100_dense_fit_off.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 100, fit_to_width: 0, fit_to_height: 0}
+
+  - id: fit_width_1_zoom_100_dense
+    description: FitToWidth=1 with Zoom 100; should collapse vertical breaks.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 100, fit_to_width: 1, fit_to_height: 0}
+
+  - id: fit_height_1_zoom_100_dense
+    description: FitToHeight=1 with Zoom 100; should collapse horizontal breaks.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 100, fit_to_width: 0, fit_to_height: 1}
+
+  - id: fit_2x2_zoom_100_dense
+    description: FitToPages 2x2 with Zoom 100; expect at most 4 pages.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 100, fit_to_width: 2, fit_to_height: 2}
+
+  # --- Axis C: Data density (3 cases) ------------------------------------
+  # Pinned: Zoom=100, FitToPages OFF, A4 portrait, same column widths +
+  # row heights, same print_area A1:H30.
+  # Variable: which cells are populated within A1:H30.
+  #     dense           -- every cell populated
+  #     sparse_corners  -- only A1 + H30 + middle (D15)
+  #     col_sparse      -- only column A populated, row 1..30
+  # Disambiguates: whether Excel's VPageBreaks.Count suppresses breaks
+  # inside blank stretches (the leading hypothesis behind the 6 v_breaks
+  # divergences in the prior closure attempt).
+  - id: density_dense_baseline
+    description: Every cell populated in A1:H30; same geometry as fit_off baseline.
+    sheets:
+      Sheet1:
+        A1: x
+        A2: x
+        A3: x
+        A4: x
+        A5: x
+        A6: x
+        A7: x
+        A8: x
+        A9: x
+        A10: x
+        A15: x
+        A20: x
+        A25: x
+        A30: x
+        D1: x
+        D15: x
+        D30: x
+        H1: x
+        H15: x
+        H30: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: density_sparse_corners
+    description: Only A1, D15, H30 populated; blank stretches between.
+    sheets:
+      Sheet1:
+        A1: x
+        D15: x
+        H30: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: density_col_sparse_only_a
+    description: Only column A is populated (rows 1..30); columns B..H blank.
+    sheets:
+      Sheet1:
+        A1: x
+        A5: x
+        A10: x
+        A15: x
+        A20: x
+        A25: x
+        A30: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  # --- Axis D: Print-title row depth (3 cases) ---------------------------
+  # Pinned: Zoom=100, FitToPages OFF, A4 portrait, A1:D40 dense.
+  # Variable: print_titles.rows depth in {"1:1", "1:3", "1:5"}.
+  # Disambiguates: how Excel subtracts the repeat-rows height from the
+  # per-page body height (linear? rounded down to row boundary?).
+  - id: print_titles_repeat_1_row
+    description: Print titles repeat row 1 only on a dense A1:D40 grid.
+    sheets:
+      Sheet1:
+        A1: H
+        B1: H
+        C1: H
+        D1: H
+        A40: X
+        A20: X
+        D20: X
+    print:
+      sheet: Sheet1
+      print_area: A1:D40
+      print_titles: {rows: "1:1"}
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: print_titles_repeat_3_rows
+    description: Print titles repeat rows 1..3 on the same dense A1:D40 grid.
+    sheets:
+      Sheet1:
+        A1: H
+        B1: H
+        C1: H
+        D1: H
+        A2: H
+        B2: H
+        C2: H
+        D2: H
+        A3: H
+        B3: H
+        C3: H
+        D3: H
+        A40: X
+        A20: X
+        D20: X
+    print:
+      sheet: Sheet1
+      print_area: A1:D40
+      print_titles: {rows: "1:3"}
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: print_titles_repeat_5_rows
+    description: Print titles repeat rows 1..5 on the same dense A1:D40 grid.
+    sheets:
+      Sheet1:
+        A1: H
+        B1: H
+        C1: H
+        D1: H
+        A2: H
+        B2: H
+        C2: H
+        D2: H
+        A3: H
+        B3: H
+        C3: H
+        D3: H
+        A4: H
+        B4: H
+        C4: H
+        D4: H
+        A5: H
+        B5: H
+        C5: H
+        D5: H
+        A40: X
+        A20: X
+        D20: X
+    print:
+      sheet: Sheet1
+      print_area: A1:D40
+      print_titles: {rows: "1:5"}
+      page_setup: {orientation: portrait, paper: 9, scale: 100}

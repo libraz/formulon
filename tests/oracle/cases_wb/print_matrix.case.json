@@ -1,0 +1,799 @@
+{
+  "suite": "print_matrix",
+  "kind": "workbook",
+  "description": "Parameter-matrix oracle cases for empirical rule discovery: each case varies a single axis (Zoom, FitToPages, data density, or print-title depth) while pinning every other axis to a baseline value. The point is to make the *effect* of each axis observable in isolation, so the Excel-actual goldens together with the spec yield the transformation rule (e.g. how Excel's VPageBreaks.Count behaves under sparse data, whether Fit overrides Zoom, how PrintTitleRows subtracts from body). No golden is committed: matrix golden generation needs a Windows + Excel host. See the Windows-side handoff (next to this file) for capture procedure and the residual failures each row targets.\n",
+  "cases": [
+    {
+      "id": "zoom_100_dense_fit_off",
+      "description": "Baseline zoom 100% on dense A1:H30 with FitToPages OFF.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "zoom_75_dense_fit_off",
+      "description": "Zoom 75% on the same dense grid; expect fewer breaks than 100%.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 75
+        }
+      }
+    },
+    {
+      "id": "zoom_50_dense_fit_off",
+      "description": "Zoom 50% on the same dense grid; expect noticeably fewer breaks.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 50
+        }
+      }
+    },
+    {
+      "id": "zoom_25_dense_fit_off",
+      "description": "Zoom 25% on the same dense grid; expect a single page.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 25
+        }
+      }
+    },
+    {
+      "id": "fit_off_zoom_100_dense",
+      "description": "FitToPages OFF with Zoom 100; baseline against zoom_100_dense_fit_off.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100,
+          "fit_to_width": 0,
+          "fit_to_height": 0
+        }
+      }
+    },
+    {
+      "id": "fit_width_1_zoom_100_dense",
+      "description": "FitToWidth=1 with Zoom 100; should collapse vertical breaks.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100,
+          "fit_to_width": 1,
+          "fit_to_height": 0
+        }
+      }
+    },
+    {
+      "id": "fit_height_1_zoom_100_dense",
+      "description": "FitToHeight=1 with Zoom 100; should collapse horizontal breaks.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100,
+          "fit_to_width": 0,
+          "fit_to_height": 1
+        }
+      }
+    },
+    {
+      "id": "fit_2x2_zoom_100_dense",
+      "description": "FitToPages 2x2 with Zoom 100; expect at most 4 pages.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100,
+          "fit_to_width": 2,
+          "fit_to_height": 2
+        }
+      }
+    },
+    {
+      "id": "density_dense_baseline",
+      "description": "Every cell populated in A1:H30; same geometry as fit_off baseline.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A3": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A4": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A5": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A6": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A7": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A8": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A9": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A10": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A15": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A20": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A25": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H15": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "density_sparse_corners",
+      "description": "Only A1, D15, H30 populated; blank stretches between.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "density_col_sparse_only_a",
+      "description": "Only column A is populated (rows 1..30); columns B..H blank.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A5": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A10": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A15": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A20": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A25": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "print_titles_repeat_1_row",
+      "description": "Print titles repeat row 1 only on a dense A1:D40 grid.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A40": {
+            "kind": "text",
+            "value": "X"
+          },
+          "A20": {
+            "kind": "text",
+            "value": "X"
+          },
+          "D20": {
+            "kind": "text",
+            "value": "X"
+          }
+        }
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:D40",
+        "print_titles": {
+          "rows": "1:1"
+        },
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "print_titles_repeat_3_rows",
+      "description": "Print titles repeat rows 1..3 on the same dense A1:D40 grid.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C2": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D2": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A3": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C3": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D3": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A40": {
+            "kind": "text",
+            "value": "X"
+          },
+          "A20": {
+            "kind": "text",
+            "value": "X"
+          },
+          "D20": {
+            "kind": "text",
+            "value": "X"
+          }
+        }
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:D40",
+        "print_titles": {
+          "rows": "1:3"
+        },
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "print_titles_repeat_5_rows",
+      "description": "Print titles repeat rows 1..5 on the same dense A1:D40 grid.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D1": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C2": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D2": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A3": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C3": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D3": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A4": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C4": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D4": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A5": {
+            "kind": "text",
+            "value": "H"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "H"
+          },
+          "C5": {
+            "kind": "text",
+            "value": "H"
+          },
+          "D5": {
+            "kind": "text",
+            "value": "H"
+          },
+          "A40": {
+            "kind": "text",
+            "value": "X"
+          },
+          "A20": {
+            "kind": "text",
+            "value": "X"
+          },
+          "D20": {
+            "kind": "text",
+            "value": "X"
+          }
+        }
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:D40",
+        "print_titles": {
+          "rows": "1:5"
+        },
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    }
+  ]
+}
