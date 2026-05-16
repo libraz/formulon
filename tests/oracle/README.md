@@ -158,10 +158,12 @@ Variant TEST_P parameter names get a `__<target>` suffix
 (`Oracle/OracleTest.Matches/<suite>_<case_id>__<target>`) so primary and
 variant entries are always distinguishable.
 
-Avoid using a broad `ctest -L VARIANT` as a quick check unless you intend to
-run every checked-in variant. It includes legacy targets such as
-`win-2019-ja_JP` and can be both slow and noisy when those historical
-goldens intentionally lag the active Windows 365 target.
+A broad `ctest -L VARIANT` run covers every checked-in variant under
+`variants/`; it can be slow, so scope it with `--gtest_filter` when you only
+need one target. Historical data that is no longer a maintained target —
+notably the mislabelled Office 2019 capture — lives under
+`tests/oracle/reference/` and is deliberately excluded from the variant
+harness.
 
 Generation is host-dependent — see `tools/oracle/README.md` for the
 multi-target setup walkthrough (`make oracle-setup`, target manifest,
