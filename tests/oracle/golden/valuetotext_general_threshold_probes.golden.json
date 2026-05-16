@@ -341,7 +341,10 @@
       "id": "vtt_general_int_1234567890123456",
       "formula": "=VALUETOTEXT(1234567890123456)",
       "setup": {},
-      "skipped": "16-sig-digit integer literal: Mac truncates to '1234567890123450', %.15g rounds to '1234567890123460'. Beyond Excel's 15-sig-digit display contract; Formulon matches IEEE 754 round-to-nearest-even and would require custom 15-digit truncation logic to match Mac. See divergence.yaml."
+      "expect": {
+        "kind": "text",
+        "value": "1234567890123450"
+      }
     },
     {
       "id": "vtt_general_zero",

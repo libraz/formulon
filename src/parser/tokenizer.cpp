@@ -122,6 +122,62 @@ std::uint32_t row_digits_to_index(std::string_view digits) noexcept {
   return static_cast<std::uint32_t>(v);
 }
 
+// Excel stores numbers with at most 15 significant digits; any digit past
+// the fifteenth is set to zero (truncation, not rounding). Returns the
+// lexeme with that rule applied, or an empty string when no truncation is
+// needed (the caller then uses the original lexeme).
+//
+// The lexeme is sign-free (a leading `-`/`+` is a separate token), so this
+// operates purely on the digit/dot/exponent string.
+std::string truncate_to_excel_precision(std::string_view lex) {
+  // Split into mantissa M and exponent suffix E at the first 'e'/'E'.
+  std::size_t exp_pos = lex.size();
+  for (std::size_t i = 0; i < lex.size(); ++i) {
+    if (lex[i] == 'e' || lex[i] == 'E') {
+      exp_pos = i;
+      break;
+    }
+  }
+  const std::string_view mantissa = lex.substr(0, exp_pos);
+  const std::string_view exponent = lex.substr(exp_pos);
+
+  std::string result;
+  result.reserve(lex.size());
+  bool seen_dot = false;
+  bool found_significant = false;
+  int sig_count = 0;
+
+  for (char ch : mantissa) {
+    if (ch == '.') {
+      result.push_back(ch);
+      seen_dot = true;
+      continue;
+    }
+    // Leading zeros (before the first nonzero digit) are not significant.
+    if (!found_significant && ch == '0') {
+      result.push_back(ch);
+      continue;
+    }
+    // First nonzero digit, or any digit after it, is significant.
+    found_significant = true;
+    ++sig_count;
+    if (sig_count <= 15) {
+      result.push_back(ch);
+    } else if (!seen_dot) {
+      // Integer-position digit past the fifteenth: zero it (keep magnitude).
+      result.push_back('0');
+    }
+    // Fractional-position digit past the fifteenth: drop it entirely.
+  }
+
+  // No digit past the fifteenth -> no truncation; signal "use original".
+  if (sig_count <= 15) {
+    return std::string();
+  }
+  result.append(exponent);
+  return result;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -755,8 +811,13 @@ void Tokenizer::scan_number() {
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
     return;
   }
-  const std::size_t n = lex.size();
-  std::memcpy(buf, lex.data(), n);
+  // Apply Excel's 15-significant-digit rule before strtod. The truncated
+  // string is never longer than the original lexeme, so buf is large enough.
+  // The original lexeme is still recorded on the token for diagnostics.
+  const std::string truncated = truncate_to_excel_precision(lex);
+  const std::string_view numeric_text = truncated.empty() ? lex : std::string_view(truncated);
+  const std::size_t n = numeric_text.size();
+  std::memcpy(buf, numeric_text.data(), n);
   buf[n] = '\0';
   char* end_ptr = nullptr;
   const double value = std::strtod(buf, &end_ptr);

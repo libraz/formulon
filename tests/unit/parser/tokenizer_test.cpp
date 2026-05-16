@@ -153,6 +153,32 @@ TEST(TokenizerNumberLiterals, RejectsOverlongNumberLiteralAsInvalid) {
   EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidNumberLiteral);
 }
 
+TEST(TokenizerNumberLiterals, FifteenSignificantDigitTruncation) {
+  // Excel stores at most 15 significant digits; digits past the fifteenth
+  // are zeroed (truncation + zero-fill, not rounding). These are the four
+  // oracle-divergence literals plus two that need no truncation.
+  struct Case {
+    const char* literal;
+    double expected;
+  };
+  const Case cases[] = {
+      {"1234567890123456", 1234567890123450.0},
+      {"99999999999999990000", 99999999999999900000.0},
+      {"12345678901234567", 12345678901234500.0},
+      {"1.23456789012345678", 1.23456789012345},
+      {"0.000000007123456", 0.000000007123456},  // 7 sig digits, unchanged
+      {"1000000000000000000", 1000000000000000000.0},
+  };
+  for (const auto& c : cases) {
+    Tokenizer tz(c.literal);
+    const auto& v = tz.tokens();
+    ASSERT_EQ(v.size(), 2u) << c.literal;  // Number + Eof
+    EXPECT_EQ(v[0].kind, TokenKind::Number) << c.literal;
+    EXPECT_DOUBLE_EQ(v[0].number, c.expected) << c.literal;
+    EXPECT_TRUE(tz.errors().empty()) << c.literal;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // StringLiterals
 // ---------------------------------------------------------------------------
