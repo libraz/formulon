@@ -1,0 +1,17 @@
+suite: example_smoke
+kind: workbook
+description: >
+  Smoke case for the workbook oracle pipeline. Carries a trivial
+  mini-workbook spec with no pivot / print blocks, purely so the schema
+  validator has something real to exercise. No golden is committed: the
+  workbook track's golden generation needs a Windows + Excel host.
+
+cases:
+  - id: two_cells_one_sheet
+    description: >
+      One sheet with two cell values. Exercises the declarative `sheets`
+      block and confirms the case-file shape validates.
+    sheets:
+      Sheet1:
+        A1: 10
+        B1: hello

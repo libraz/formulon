@@ -621,6 +621,125 @@ class WindowsExcelOracle(OracleDriver):
             except Exception:
                 pass
 
+    # -----------------------------------------------------------------------
+    # Workbook oracle track (pivot tables)
+    # -----------------------------------------------------------------------
+
+    def run_workbook_case(self, case: Dict[str, Any]) -> Dict[str, Any]:
+        """Builds the declarative workbook via COM and reads it back.
+
+        ``case`` is a declarative workbook spec (see
+        ``tools/oracle/workbook_case_schema.py``). The case is dispatched
+        on which feature block it carries -- ``pivot`` or ``print``. The
+        returned mapping is the golden ``expect`` block, either:
+
+            { "pivot": { "anchor": "Sheet2!A1", "rows": N, "cols": M,
+                         "grid": [ {"r":0,"c":0,"value":{...}}, ... ] } }
+
+        or:
+
+            { "print": { "print_area": "A1:H80",
+                         "h_breaks": [..], "v_breaks": [..], "pages": N } }
+
+        Raises ``RuntimeError`` (catchable -- the generator marks the
+        suite failed) when the case carries neither block or the COM
+        automation fails.
+        """
+
+        pivot_spec = case.get("pivot")
+        print_spec = case.get("print")
+        if isinstance(print_spec, dict):
+            return self._run_print_case(case, print_spec)
+        if isinstance(pivot_spec, dict):
+            return self._run_pivot_case(case, pivot_spec)
+        raise RuntimeError(
+            f"workbook case {case.get('id')!r} has neither a 'pivot' nor a "
+            "'print' block"
+        )
+
+    def _run_pivot_case(
+        self, case: Dict[str, Any], pivot_spec: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Builds and reads back a PivotTable case via COM."""
+
+        wb = self._app.books.add()
+        try:
+            self._build_workbook_sheets(wb, case)
+            anchor = _build_pivot_table(wb, pivot_spec)
+            grid, rows, cols = _read_pivot_grid(wb, anchor)
+            return {
+                "pivot": {
+                    "anchor": pivot_spec.get("anchor", ""),
+                    "rows": rows,
+                    "cols": cols,
+                    "grid": grid,
+                }
+            }
+        except Exception as exc:
+            raise RuntimeError(
+                f"pivot automation failed for case {case.get('id')!r}: "
+                f"{_format_com_error(exc)}"
+            ) from exc
+        finally:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+    def _run_print_case(
+        self, case: Dict[str, Any], print_spec: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Applies print settings via COM and reads back the pagination.
+
+        Excel computes automatic page breaks itself; this reads the
+        resolved ``PrintArea``, every ``HPageBreaks`` / ``VPageBreaks``
+        location, and the physical page count.
+        """
+
+        wb = self._app.books.add()
+        try:
+            self._build_workbook_sheets(wb, case)
+            return {"print": _apply_and_read_print(wb, print_spec)}
+        except Exception as exc:
+            raise RuntimeError(
+                f"print automation failed for case {case.get('id')!r}: "
+                f"{_format_com_error(exc)}"
+            ) from exc
+        finally:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+    def _build_workbook_sheets(self, wb, case: Dict[str, Any]) -> None:
+        """Materialises the declarative ``sheets`` block into ``wb``.
+
+        Also applies the optional ``column_widths`` / ``row_heights``
+        layout maps. Cell values follow the normalised ``{kind, value}``
+        shape ``_write_cell`` already understands.
+        """
+
+        sheets = case.get("sheets") or {}
+        for sheet_name, cells in sheets.items():
+            sht = _get_or_add_sheet(wb, sheet_name)
+            for addr, rec in (cells or {}).items():
+                _write_cell(sht, addr, rec)
+
+        widths = case.get("column_widths") or {}
+        for col_key, width in widths.items():
+            # Apply against the first sheet; workbook cases that need a
+            # per-sheet width map can extend the schema later.
+            try:
+                wb.sheets[0].range(f"{col_key}1").column_width = float(width)
+            except Exception:
+                pass
+        heights = case.get("row_heights") or {}
+        for row_key, height in heights.items():
+            try:
+                wb.sheets[0].range(f"A{row_key}").row_height = float(height)
+            except Exception:
+                pass
+
 
 def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
     """Splits a setup-key like ``"Sheet2!A1"`` into ``(sheet, a1)``.
@@ -688,6 +807,328 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
             rng.formula = trigger
         return
     raise ValueError(f"unknown cell kind: {kind}")
+
+
+# Excel `XlConsolidationFunction` constants, keyed by the declarative
+# `agg` name. Mirrors the `Aggregation` enum the C++ builder accepts.
+# Numeric values are the documented Office automation constants so the
+# driver does not depend on the `win32com` constant cache being warm.
+_XL_CONSOLIDATION = {
+    "Sum": -4157,
+    "Count": -4112,
+    "Average": -4106,
+    "Max": -4136,
+    "Min": -4139,
+    "Product": -4149,
+    "CountNumbers": -4113,
+    "StdDev": -4155,
+    "StdDevP": -4156,
+    "Var": -4164,
+    "VarP": -4165,
+}
+
+# Excel `XlPivotFieldOrientation` constants.
+_XL_ORIENT_ROW = 1
+_XL_ORIENT_COLUMN = 2
+_XL_ORIENT_PAGE = 3
+_XL_ORIENT_DATA = 4
+
+# Excel `XlPivotTableSourceType.xlDatabase`.
+_XL_DATABASE = 1
+
+# Excel `XlLayoutRowType` values for `RowAxisLayout`.
+_XL_COMPACT_ROW = 0
+_XL_TABULAR_ROW = 1
+_XL_OUTLINE_ROW = 2
+
+_PIVOT_LAYOUT_MODES = {
+    "Compact": _XL_COMPACT_ROW,
+    "Tabular": _XL_TABULAR_ROW,
+    "Outline": _XL_OUTLINE_ROW,
+}
+
+
+def _build_pivot_table(wb, pivot_spec: Dict[str, Any]):
+    """Creates a PivotTable in ``wb`` from a declarative ``pivot`` block.
+
+    Returns the ``PivotTable.TableRange2`` COM range so the caller can
+    read the rendered grid back. The ``pivot`` block shape is documented
+    on ``tests/oracle/workbook_builder.h``.
+    """
+
+    source = pivot_spec.get("source")
+    anchor = pivot_spec.get("anchor")
+    if not isinstance(source, str) or not source:
+        raise RuntimeError("pivot block missing string 'source'")
+    if not isinstance(anchor, str) or not anchor:
+        raise RuntimeError("pivot block missing string 'anchor'")
+
+    api = wb.api
+    cache = api.PivotCaches().Create(
+        SourceType=_XL_DATABASE,
+        SourceData=source,
+    )
+    pivot = cache.CreatePivotTable(
+        TableDestination=anchor,
+        TableName="FormulonPivot",
+    )
+
+    for field_name in pivot_spec.get("row_fields") or []:
+        pivot.PivotFields(field_name).Orientation = _XL_ORIENT_ROW
+    for field_name in pivot_spec.get("col_fields") or []:
+        pivot.PivotFields(field_name).Orientation = _XL_ORIENT_COLUMN
+
+    for data_field in pivot_spec.get("data_fields") or []:
+        field_name = data_field.get("field")
+        agg = data_field.get("agg", "Sum")
+        consolidation = _XL_CONSOLIDATION.get(agg)
+        if consolidation is None:
+            raise RuntimeError(f"unknown aggregation {agg!r}")
+        field = pivot.PivotFields(field_name)
+        field.Orientation = _XL_ORIENT_DATA
+        field.Function = consolidation
+
+    # Manual item filters: hide the named items on their field.
+    for filter_spec in pivot_spec.get("filters") or []:
+        field_name = filter_spec.get("field")
+        for item_name in filter_spec.get("hide") or []:
+            try:
+                pivot.PivotFields(field_name).PivotItems(item_name).Visible = False
+            except Exception:
+                pass
+
+    layout = pivot_spec.get("layout")
+    if isinstance(layout, str) and layout in _PIVOT_LAYOUT_MODES:
+        try:
+            pivot.RowAxisLayout(_PIVOT_LAYOUT_MODES[layout])
+        except Exception:
+            pass
+
+    grand = pivot_spec.get("grand_totals") or {}
+    if isinstance(grand, dict):
+        if "rows" in grand:
+            pivot.RowGrand = bool(grand["rows"])
+        if "cols" in grand:
+            pivot.ColumnGrand = bool(grand["cols"])
+
+    pivot.RefreshTable()
+    return pivot.TableRange2
+
+
+# Excel `XlPageOrientation` constants.
+_XL_PORTRAIT = 1
+_XL_LANDSCAPE = 2
+
+_PRINT_ORIENTATIONS = {
+    "portrait": _XL_PORTRAIT,
+    "landscape": _XL_LANDSCAPE,
+}
+
+# `GET.DOCUMENT(50)` is the Excel-4 macro that returns the page count;
+# used as a fallback when `PageSetup.Pages.Count` is unavailable.
+_GET_DOCUMENT_PAGE_COUNT = 50
+
+
+def _resolve_print_sheet(wb, print_spec: Dict[str, Any]):
+    """Returns the worksheet the `print` block names, or raises."""
+
+    sheet_name = print_spec.get("sheet")
+    if not isinstance(sheet_name, str) or not sheet_name:
+        raise RuntimeError("print block missing string 'sheet'")
+    target = sheet_name.casefold()
+    for sht in wb.sheets:
+        if sht.name.casefold() == target:
+            return sht
+    raise RuntimeError(f"print 'sheet' names an unknown sheet {sheet_name!r}")
+
+
+def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Applies the declarative `print` block to ``wb`` and reads the result.
+
+    Returns the golden ``expect.print`` mapping:
+
+        { "print_area": "A1:H80", "h_breaks": [..0-based rows..],
+          "v_breaks": [..0-based cols..], "pages": N }
+
+    Page break locations come straight from Excel's automatic
+    pagination (``HPageBreaks`` / ``VPageBreaks``); the 1-based COM
+    row / column indices are converted to the 0-based indices the C++
+    engine reports.
+    """
+
+    sht = _resolve_print_sheet(wb, print_spec)
+    ws = sht.api
+    page_setup = ws.PageSetup
+
+    # --- print area ----------------------------------------------------------
+    print_area = print_spec.get("print_area")
+    if isinstance(print_area, str) and print_area:
+        page_setup.PrintArea = print_area
+
+    # --- print titles --------------------------------------------------------
+    titles = print_spec.get("print_titles")
+    if isinstance(titles, dict):
+        rows = titles.get("rows")
+        cols = titles.get("cols")
+        if isinstance(rows, str) and rows:
+            page_setup.PrintTitleRows = f"{sht.name}!{rows}"
+        if isinstance(cols, str) and cols:
+            page_setup.PrintTitleColumns = f"{sht.name}!{cols}"
+
+    # --- page setup ----------------------------------------------------------
+    setup = print_spec.get("page_setup")
+    if isinstance(setup, dict):
+        orientation = setup.get("orientation")
+        if orientation in _PRINT_ORIENTATIONS:
+            page_setup.Orientation = _PRINT_ORIENTATIONS[orientation]
+        if setup.get("paper") is not None:
+            try:
+                page_setup.PaperSize = int(setup["paper"])
+            except Exception:
+                pass
+        fit_w = int(setup.get("fit_to_width") or 0)
+        fit_h = int(setup.get("fit_to_height") or 0)
+        if fit_w or fit_h:
+            page_setup.Zoom = False
+            page_setup.FitToPagesWide = fit_w if fit_w else False
+            page_setup.FitToPagesTall = fit_h if fit_h else False
+        elif setup.get("scale") is not None:
+            page_setup.Zoom = int(setup["scale"])
+
+    # --- manual breaks -------------------------------------------------------
+    breaks = print_spec.get("manual_breaks")
+    if isinstance(breaks, dict):
+        for row1 in breaks.get("rows") or []:
+            try:
+                ws.Rows(int(row1)).PageBreak = 1  # xlPageBreakManual
+            except Exception:
+                pass
+        for col_letter in breaks.get("cols") or []:
+            try:
+                ws.Columns(str(col_letter)).PageBreak = 1
+            except Exception:
+                pass
+
+    # --- read back -----------------------------------------------------------
+    # Touch ResetAllPageBreaks-free; reading the collections forces Excel
+    # to recompute the automatic layout.
+    resolved_area = ""
+    try:
+        resolved_area = str(page_setup.PrintArea or "")
+    except Exception:
+        resolved_area = ""
+    resolved_area = _normalise_print_area(resolved_area)
+
+    h_breaks: List[int] = []
+    try:
+        for i in range(1, int(ws.HPageBreaks.Count) + 1):
+            # `.Location.Row` is the 1-based row the break precedes.
+            h_breaks.append(int(ws.HPageBreaks(i).Location.Row) - 1)
+    except Exception:
+        pass
+    v_breaks: List[int] = []
+    try:
+        for i in range(1, int(ws.VPageBreaks.Count) + 1):
+            v_breaks.append(int(ws.VPageBreaks(i).Location.Column) - 1)
+    except Exception:
+        pass
+    h_breaks.sort()
+    v_breaks.sort()
+
+    pages = 0
+    try:
+        pages = int(page_setup.Pages.Count)
+    except Exception:
+        try:
+            pages = int(
+                wb.app.api.ExecuteExcel4Macro(
+                    f"GET.DOCUMENT({_GET_DOCUMENT_PAGE_COUNT})"
+                )
+            )
+        except Exception:
+            pages = 0
+
+    return {
+        "print_area": resolved_area,
+        "h_breaks": h_breaks,
+        "v_breaks": v_breaks,
+        "pages": pages,
+    }
+
+
+def _normalise_print_area(area: str) -> str:
+    """Strips ``$`` anchors and ``Sheet!`` qualifiers from a print area.
+
+    Excel reports ``PrintArea`` fully qualified and anchored
+    (``Sheet1!$A$1:$H$80``); the C++ engine compares against a bare
+    ``A1:H80`` form, so both sides normalise the same way.
+    """
+
+    out_parts: List[str] = []
+    for part in area.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        bang = token.rfind("!")
+        if bang != -1:
+            token = token[bang + 1:]
+        token = token.replace("$", "")
+        out_parts.append(token)
+    return ",".join(out_parts)
+
+
+def _read_pivot_grid(wb, table_range) -> "tuple[List[Dict[str, Any]], int, int]":
+    """Reads every cell of ``table_range`` into an anchor-relative grid.
+
+    Returns ``(grid, rows, cols)`` where ``grid`` is a list of
+    ``{"r", "c", "value"}`` records (``r`` / ``c`` are 0-based offsets
+    from the pivot anchor) and ``value`` is the normalised ``{kind,
+    value}`` record produced by ``_classify_value``.
+    """
+
+    rows = int(table_range.Rows.Count)
+    cols = int(table_range.Columns.Count)
+    top = int(table_range.Row)
+    left = int(table_range.Column)
+    sht = table_range.Worksheet
+
+    grid: List[Dict[str, Any]] = []
+    for r in range(rows):
+        for c in range(cols):
+            com_cell = sht.Cells(top + r, left + c)
+            result = _classify_value(_CellAdapter(com_cell))
+            grid.append(
+                {
+                    "r": r,
+                    "c": c,
+                    "value": _grid_value_record(result),
+                }
+            )
+    return grid, rows, cols
+
+
+def _grid_value_record(result: CaseResult) -> Dict[str, Any]:
+    """Shapes a ``CaseResult`` into the golden grid's ``{kind, value}``."""
+
+    if result.kind == "blank":
+        return {"kind": "blank"}
+    if result.kind == "error":
+        return {"kind": "error", "code": result.error_code or "#UNKNOWN!"}
+    return {"kind": result.kind, "value": result.value}
+
+
+class _CellAdapter:
+    """Adapts a raw COM ``Range`` to the small surface ``_classify_value``
+    expects (a ``.value`` attribute plus the COM passthrough used by the
+    error / displayed-text fallbacks).
+    """
+
+    def __init__(self, com_cell) -> None:
+        self.api = com_cell
+
+    @property
+    def value(self) -> Any:
+        return self.api.Value
 
 
 def _format_com_error(exc: BaseException) -> str:

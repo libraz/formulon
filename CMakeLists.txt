@@ -159,6 +159,9 @@ set(FORMULON_CORE_SOURCES
   src/pivot/pivot_evaluator.cpp
   src/pivot/pivot_index.cpp
   src/pivot/pivot_layout.cpp
+  src/print/page_setup.cpp
+  src/print/print_area.cpp
+  src/print/pagination.cpp
   src/eval/coerce.cpp
   src/eval/compiler.cpp
   src/eval/optimizer.cpp

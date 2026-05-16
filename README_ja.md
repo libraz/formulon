@@ -83,6 +83,8 @@ oracle は **92 カテゴリ** あります。primary oracle は Mac Excel 365 j
 
 残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。
 
+数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があります。印刷・改ページエンジン (`src/print/`)、ピボットの評価・レイアウト、宣言的なピボット / 印刷 oracle ケースが揃っており、`formulon_workbook_oracle_tests` ハーネスで検証します。信頼できる PivotTable 自動化には Windows Excel の COM が必要なため、この track の primary は `win-365-ja_JP` です。oracle ハーネスとケースはコミット済みですが、Excel との golden 取得は Windows Excel での実行待ちです。
+
 新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
 
 実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、parity を検証しています。OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer も実装済みです。シート追加、リネーム、移動、数式書き換えを伴う行・列の挿入 / 削除、partial recalc、反復計算ソルバの進捗コールバックは、C ABI 経由で WASM / Python / CLI から使えます。

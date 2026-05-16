@@ -1,0 +1,245 @@
+suite: pivot_aggregations
+kind: workbook
+description: >
+  Aggregation-function coverage for the pivot oracle: COUNT, AVERAGE,
+  MAX, MIN, PRODUCT, CountNumbers, and multi data-field pivots. Each case
+  reuses a small sales dataset on a "Data" sheet and pivots onto
+  "Report". No golden is committed: pivot golden generation needs a
+  Windows + Excel host.
+
+cases:
+  - id: count_by_region
+    description: COUNT(Amount) grouped by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: 50
+        A4: South
+        B4: 200
+        A5: South
+        B5: 300
+        A6: North
+        B6: 25
+        A7: South
+        B7: 75
+      Report: {}
+    pivot:
+      source: Data!A1:B7
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Count}
+
+  - id: average_by_region
+    description: AVERAGE(Amount) grouped by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: 200
+        A4: South
+        B4: 300
+        A5: South
+        B5: 100
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Average}
+
+  - id: max_by_region
+    description: MAX(Amount) grouped by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: 175
+        A4: South
+        B4: 300
+        A5: South
+        B5: 220
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Max}
+
+  - id: min_by_region
+    description: MIN(Amount) grouped by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: 40
+        A4: South
+        B4: 300
+        A5: South
+        B5: 220
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Min}
+
+  - id: product_by_region
+    description: PRODUCT(Amount) grouped by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Factor
+        A2: North
+        B2: 2
+        A3: North
+        B3: 3
+        A4: South
+        B4: 4
+        A5: South
+        B5: 5
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Factor, agg: Product}
+
+  - id: count_numbers_by_region
+    description: CountNumbers(Amount) grouped by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: 50
+        A4: South
+        B4: 200
+        A5: South
+        B5: 300
+        A6: West
+        B6: 80
+      Report: {}
+    pivot:
+      source: Data!A1:B6
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: CountNumbers}
+
+  - id: multi_data_fields_sum_count
+    description: Two data fields - SUM(Amount) and COUNT(Amount) - by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: 50
+        A4: South
+        B4: 200
+        A5: South
+        B5: 300
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+        - {field: Amount, agg: Count}
+
+  - id: multi_data_fields_sum_average
+    description: Two data fields - SUM and AVERAGE of Amount - by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: 300
+        A4: South
+        B4: 200
+        A5: South
+        B5: 400
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+        - {field: Amount, agg: Average}
+
+  - id: stddev_by_region
+    description: Sample standard deviation StdDev(Amount) grouped by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 10
+        A3: North
+        B3: 20
+        A4: North
+        B4: 30
+        A5: South
+        B5: 40
+        A6: South
+        B6: 60
+        A7: South
+        B7: 80
+      Report: {}
+    pivot:
+      source: Data!A1:B7
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: StdDev}
+
+  - id: var_population_by_region
+    description: Population variance VarP(Amount) grouped by Region.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 10
+        A3: North
+        B3: 20
+        A4: North
+        B4: 30
+        A5: South
+        B5: 40
+        A6: South
+        B6: 60
+        A7: South
+        B7: 80
+      Report: {}
+    pivot:
+      source: Data!A1:B7
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: VarP}

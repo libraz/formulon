@@ -185,6 +185,70 @@ if(FORMULON_ORACLE_VARIANTS)
     DISCOVERY_MODE PRE_TEST
     PROPERTIES LABELS "VARIANT"
   )
+
+  # -------------------------------------------------------------------------
+  # Workbook variant oracle target (opt-in)
+  #
+  # Mirrors formulon_oracle_variant_tests for the workbook track: loads
+  # goldens from tests/oracle/variants/<tag>/golden_wb/ (note `golden_wb`,
+  # not `golden`) and tags each TEST_P parameter with `__<tag>`. The scan is
+  # a parallel pass over the same variants/ root because the workbook track
+  # uses a separate golden tree; the discovered list is baked in as a
+  # compile-time default and FORMULON_WORKBOOK_ORACLE_VARIANT_DIRS overrides
+  # it at runtime. With no variant golden_wb dirs present the binary builds
+  # and registers zero cases, so the build stays green.
+  # -------------------------------------------------------------------------
+
+  set(_wb_variant_dirs_default "")
+  if(EXISTS "${_variant_root}")
+    file(GLOB _variant_subdirs RELATIVE "${_variant_root}" "${_variant_root}/*")
+    foreach(_tag IN LISTS _variant_subdirs)
+      set(_golden_wb "${_variant_root}/${_tag}/golden_wb")
+      if(IS_DIRECTORY "${_golden_wb}")
+        if(_wb_variant_dirs_default STREQUAL "")
+          set(_wb_variant_dirs_default "${_tag}=${_golden_wb}")
+        else()
+          set(_wb_variant_dirs_default "${_wb_variant_dirs_default}:${_tag}=${_golden_wb}")
+        endif()
+      endif()
+    endforeach()
+  endif()
+
+  add_executable(formulon_workbook_oracle_variant_tests
+    json_reader.cpp
+    oracle_runner.cpp
+    workbook_builder.cpp
+    workbook_oracle_runner.cpp
+    workbook_oracle_test.cpp
+  )
+
+  target_link_libraries(formulon_workbook_oracle_variant_tests
+    PRIVATE
+      formulon_static
+      gtest_main
+  )
+
+  target_include_directories(formulon_workbook_oracle_variant_tests
+    PRIVATE
+      ${CMAKE_SOURCE_DIR}/src
+      ${CMAKE_SOURCE_DIR}
+  )
+
+  # Empty primary dir so the binary loads ONLY variants.
+  # wb_variant_dirs_default gets the configure-time scan; the runtime env
+  # var FORMULON_WORKBOOK_ORACLE_VARIANT_DIRS still overrides.
+  target_compile_definitions(formulon_workbook_oracle_variant_tests
+    PRIVATE
+      FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR=""
+      FORMULON_WORKBOOK_ORACLE_VARIANT_DIRS_DEFAULT="${_wb_variant_dirs_default}"
+  )
+
+  formulon_apply_warnings(formulon_workbook_oracle_variant_tests)
+
+  gtest_discover_tests(formulon_workbook_oracle_variant_tests
+    DISCOVERY_MODE PRE_TEST
+    PROPERTIES LABELS "VARIANT"
+  )
 endif()
 
 # ---------------------------------------------------------------------------
@@ -220,5 +284,90 @@ target_include_directories(formulon_cf_oracle_tests
 formulon_apply_warnings(formulon_cf_oracle_tests)
 
 gtest_discover_tests(formulon_cf_oracle_tests
+  PROPERTIES LABELS "oracle"
+)
+
+# ---------------------------------------------------------------------------
+# Workbook oracle target
+#
+# Pins Formulon's workbook-level behaviour (pivot tables + print areas)
+# against committed golden JSON. Cases are declarative mini-workbook specs
+# under cases_wb/<suite>.case.json; the golden JSON under golden_wb/ is
+# produced by tools/oracle/workbook_oracle_gen.py on a Windows + Excel
+# host. When no golden files exist (the default state before that
+# generator has been run) the binary links and runs but registers zero
+# parameterized cases, so the build stays green.
+#
+# Registered separately from formulon_oracle_tests because the workbook
+# spec / result data model is structurally different from the Value-result
+# schema the function oracle uses. The pivot / print verifier itself lands
+# in a later phase; this binary is the scaffolding.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_workbook_oracle_tests
+  json_reader.cpp
+  oracle_runner.cpp
+  workbook_builder.cpp
+  workbook_oracle_runner.cpp
+  workbook_oracle_test.cpp
+)
+
+target_link_libraries(formulon_workbook_oracle_tests
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_workbook_oracle_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
+)
+
+target_compile_definitions(formulon_workbook_oracle_tests
+  PRIVATE
+    FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden_wb"
+)
+
+formulon_apply_warnings(formulon_workbook_oracle_tests)
+
+gtest_discover_tests(formulon_workbook_oracle_tests
+  DISCOVERY_MODE PRE_TEST
+  PROPERTIES LABELS "oracle"
+)
+
+# ---------------------------------------------------------------------------
+# Workbook builder unit test
+#
+# Direct gtest for `build_pivot_from_spec`, the test-harness builder that
+# turns a declarative workbook + pivot spec into in-memory engine objects.
+# This binary is the phase's real local verification while the
+# workbook-oracle golden-diff path stays dormant (no Windows-Excel host to
+# generate pivot goldens). Built unconditionally and registered under the
+# "oracle" CTest label.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_workbook_builder_test
+  json_reader.cpp
+  oracle_runner.cpp
+  workbook_builder.cpp
+  workbook_builder_test.cpp
+)
+
+target_link_libraries(formulon_workbook_builder_test
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_workbook_builder_test
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}
+)
+
+formulon_apply_warnings(formulon_workbook_builder_test)
+
+gtest_discover_tests(formulon_workbook_builder_test
   PROPERTIES LABELS "oracle"
 )

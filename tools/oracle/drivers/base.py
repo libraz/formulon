@@ -145,3 +145,27 @@ class OracleDriver(abc.ABC):
         (mapping A1 -> `{kind, value, ...}` record). The driver does not
         normalise; it trusts upstream `case_schema` to have done so.
         """
+
+    def run_workbook_case(self, case: Dict[str, Any]) -> Dict[str, Any]:
+        """Evaluates one declarative workbook case and returns the result.
+
+        The workbook oracle track covers workbook-level features that are
+        NOT formula results -- pivot tables and print areas. `case` is the
+        declarative mini-workbook spec (`sheets`, `column_widths`,
+        `row_heights`, and the optional `pivot` / `print` feature blocks)
+        validated by `tools/oracle/workbook_case_schema.py`. The returned
+        mapping is the observed pivot / print result, written verbatim
+        into the golden's `expect` block.
+
+        This base implementation is a stub. A later phase fills it in for
+        each concrete driver via the helper steps `build_workbook`,
+        `build_pivot`, and `apply_print`; the Windows COM driver lands
+        first because reliable PivotTable automation needs it. Until then
+        the workbook generator surfaces this as a clean
+        "workbook driver not yet implemented" message.
+        """
+
+        raise NotImplementedError(
+            "run_workbook_case is not implemented yet; the pivot/print "
+            "driver lands in a later phase"
+        )

@@ -1,0 +1,107 @@
+suite: print_fit
+kind: workbook
+description: >
+  Scale vs fit-to-page oracle cases: explicit reduced / enlarged scale
+  percentages against fit-to-width / fit-to-height collapse. Every case
+  uses the same wide-or-tall table whose breaks the scale or fit toggle
+  changes. No golden is committed: print golden generation needs a
+  Windows + Excel host.
+
+cases:
+  - id: scale_100_baseline
+    description: A wide table at 100% scale; vertical breaks present.
+    sheets:
+      Sheet1:
+        A1: x
+        H1: x
+    column_widths:
+      A:H: 30
+    print:
+      sheet: Sheet1
+      print_area: A1:H1
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: scale_50_shrinks_breaks
+    description: The same wide table at 50% scale fits more columns per page.
+    sheets:
+      Sheet1:
+        A1: x
+        H1: x
+    column_widths:
+      A:H: 30
+    print:
+      sheet: Sheet1
+      print_area: A1:H1
+      page_setup: {orientation: portrait, paper: 9, scale: 50}
+
+  - id: fit_to_width_one_collapses_vertical
+    description: fit_to_width 1 squeezes every column onto a single page-wide.
+    sheets:
+      Sheet1:
+        A1: x
+        H1: x
+    column_widths:
+      A:H: 30
+    print:
+      sheet: Sheet1
+      print_area: A1:H1
+      page_setup: {orientation: portrait, paper: 9, fit_to_width: 1, fit_to_height: 0}
+
+  - id: fit_to_height_one_collapses_horizontal
+    description: fit_to_height 1 squeezes every row onto a single page-tall.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:A30
+      page_setup: {orientation: portrait, paper: 9, fit_to_width: 0, fit_to_height: 1}
+
+  - id: fit_to_width_two_allows_one_break
+    description: fit_to_width 2 permits two page-columns, so one vertical break stays.
+    sheets:
+      Sheet1:
+        A1: x
+        H1: x
+    column_widths:
+      A:H: 30
+    print:
+      sheet: Sheet1
+      print_area: A1:H1
+      page_setup: {orientation: portrait, paper: 9, fit_to_width: 2, fit_to_height: 0}
+
+  - id: fit_to_page_both_axes
+    description: fit_to_width and fit_to_height both 1 collapse a tall-wide table.
+    sheets:
+      Sheet1:
+        A1: x
+        H30: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, fit_to_width: 1, fit_to_height: 1}
+
+  - id: scale_25_extreme_shrink
+    description: A tall-wide table at 25% scale collapses to a single page.
+    sheets:
+      Sheet1:
+        A1: x
+        H30: x
+    column_widths:
+      A:H: 30
+    row_heights:
+      "1": 80
+      "30": 80
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 25}

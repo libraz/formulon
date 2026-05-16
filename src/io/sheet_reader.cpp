@@ -371,6 +371,30 @@ void ApplySheetPrTabHidden(const pugi::xml_node& worksheet, SheetView& view) {
   }
 }
 
+/// Parses `<sheetFormatPr defaultColWidth defaultRowHeight baseColWidth/>`
+/// into `defaults`. The element appears before `<cols>` in the worksheet
+/// part. Absent attributes leave the corresponding fields at their
+/// struct defaults; `defaultColWidth` / `defaultRowHeight` also set the
+/// `has_*` flags so a consumer can distinguish an explicit `0` from an
+/// absent attribute.
+void ApplySheetFormatDefaults(const pugi::xml_node& worksheet, SheetFormatDefaults& defaults) {
+  pugi::xml_node fmt = worksheet.child("sheetFormatPr");
+  if (!fmt) {
+    return;
+  }
+  if (pugi::xml_attribute attr = fmt.attribute("defaultColWidth"); attr) {
+    defaults.default_col_width = std::strtod(attr.value(), nullptr);
+    defaults.has_default_col_width = true;
+  }
+  if (pugi::xml_attribute attr = fmt.attribute("defaultRowHeight"); attr) {
+    defaults.default_row_height = std::strtod(attr.value(), nullptr);
+    defaults.has_default_row_height = true;
+  }
+  if (pugi::xml_attribute attr = fmt.attribute("baseColWidth"); attr) {
+    defaults.base_col_width = std::strtod(attr.value(), nullptr);
+  }
+}
+
 /// Parses `<cols><col min max width hidden outlineLevel/></cols>` into
 /// `layout.columns`. Entries that omit `width` are skipped: the layout
 /// model only carries explicit width overrides, and pure
@@ -474,6 +498,7 @@ Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet
   SheetLayout& layout = sheet.mutable_layout();
   ApplySheetView(worksheet, view);
   ApplySheetPrTabHidden(worksheet, view);
+  ApplySheetFormatDefaults(worksheet, sheet.mutable_format_defaults());
   ApplyColumnLayouts(worksheet, layout);
   ApplyRowOverrides(worksheet, layout);
   return Expected<void, Error>::Ok();

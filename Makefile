@@ -31,7 +31,8 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         python-package python-test python-wheel \
         parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
-        oracle-gen oracle-gen-cf oracle-verify oracle-contribute oracle-contribute-list \
+        oracle-gen oracle-gen-cf oracle-gen-workbook \
+        oracle-verify oracle-contribute oracle-contribute-list \
         ironcalc-import ironcalc-verify \
         fuzz-parser fuzz-xlsx fuzz-eval bench coverage mutation \
         function-status behavior-status
@@ -360,16 +361,37 @@ oracle-gen-cf:
 	fi
 	@$(ORACLE_VENV)/bin/python tools/oracle/cf_oracle_gen.py $(if $(SUITE),--suite $(SUITE),)
 
+# Workbook oracle generator. Drives Excel to capture workbook-level
+# behaviour -- pivot tables + print areas / pagination -- for the
+# declarative cases under tests/oracle/cases_wb/, writing golden JSON to
+# tests/oracle/golden_wb/. The target is auto-detected from the host OS:
+# a Windows / WSL2 host generates the win-365-ja_JP primary, a macOS host
+# the mac-365-ja_JP variant. Pass TARGET=<name> to override.
+oracle-gen-workbook:
+	@if [ ! -x "$(ORACLE_VENV)/bin/python" ]; then \
+	  echo "oracle-gen-workbook: run 'make oracle-setup' first"; \
+	  exit 1; \
+	fi
+	@$(ORACLE_VENV)/bin/python tools/oracle/cli.py workbook \
+	  $(if $(TARGET),--target $(TARGET),) $(if $(SUITE),--suite $(SUITE),)
+
+# oracle-verify shells to `ctest -L oracle`, which already selects the
+# workbook oracle binary: formulon_workbook_oracle_tests carries the
+# "oracle" CTest label, so the workbook track is verified alongside the
+# formula and CF tracks with no extra selector.
 oracle-verify:
 	@if [ ! -f $(BUILD_DIR)/CMakeCache.txt ]; then \
 	  echo "oracle-verify: run 'make build' first"; exit 1; \
 	fi
 	@$(CMAKE) --build $(BUILD_DIR) --target formulon_oracle_tests --parallel
+	@$(CMAKE) --build $(BUILD_DIR) --target formulon_workbook_oracle_tests --parallel
 	@# gtest_discover_tests caches the parameter list keyed by binary
 	@# timestamp, but our goldens aren't a build input. Force
-	@# rediscovery so newly regenerated golden/*.golden.json files land
-	@# in the ctest test list on the next run.
+	@# rediscovery so newly regenerated golden*/*.golden.json files land
+	@# in the ctest test list on the next run -- for both the formula
+	@# track (golden/) and the workbook track (golden_wb/).
 	@rm -f $(BUILD_DIR)/tests/oracle/formulon_oracle_tests*_tests.cmake
+	@rm -f $(BUILD_DIR)/tests/oracle/formulon_workbook_oracle_tests*_tests.cmake
 	@(cd $(BUILD_DIR) && $(CTEST) -L oracle --output-on-failure --timeout 60)
 
 # One-command contributor onramp. Runs oracle-setup when the venv is

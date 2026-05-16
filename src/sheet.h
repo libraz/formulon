@@ -247,18 +247,117 @@ struct SheetLayout {
   std::vector<RowLayout> row_overrides;
 };
 
+/// OOXML spec default values for worksheet print/format attributes.
+///
+/// These mirror the `<defaultValue>` entries in the ECMA-376 schema for the
+/// `<sheetFormatPr>`, `<pageSetup>` and `<pageMargins>` elements. They are
+/// named so the struct member initializers below carry no bare literals.
+namespace ooxml_defaults {
+
+/// `<sheetFormatPr baseColWidth>` default (characters).
+inline constexpr double kBaseColWidthChars = 8.0;
+
+/// `<pageSetup paperSize>` default (9 = A4).
+inline constexpr std::uint32_t kPaperSize = 9;
+
+/// `<pageSetup scale>` default (percentage).
+inline constexpr std::uint32_t kPageScalePercent = 100;
+
+/// `<pageMargins left>` / `<pageMargins right>` default (inches).
+inline constexpr double kPageMarginSideInches = 0.7;
+
+/// `<pageMargins top>` / `<pageMargins bottom>` default (inches).
+inline constexpr double kPageMarginTopBottomInches = 0.75;
+
+/// `<pageMargins header>` / `<pageMargins footer>` default (inches).
+inline constexpr double kPageMarginHeaderFooterInches = 0.3;
+
+}  // namespace ooxml_defaults
+
+/// Worksheet default column/row metrics from the `<sheetFormatPr>` element.
+///
+/// `<sheetFormatPr>` carries the metrics Excel applies to columns and rows
+/// that have no explicit `<col>` / `<row>` override. The pagination engine
+/// needs these defaults to size un-overridden tracks. The `has_*` flags
+/// record whether the source attribute was present, so a consumer can tell
+/// an explicit `0` from an absent attribute. The field names declared here
+/// are stable.
+struct SheetFormatDefaults {
+  double default_col_width = 0.0;   ///< `defaultColWidth`, in OOXML character-width units.
+  double default_row_height = 0.0;  ///< `defaultRowHeight`, in points.
+  /// `baseColWidth`, in characters (OOXML spec default 8).
+  double base_col_width = ooxml_defaults::kBaseColWidthChars;
+  bool has_default_col_width = false;   ///< True when `defaultColWidth` was present.
+  bool has_default_row_height = false;  ///< True when `defaultRowHeight` was present.
+};
+
+/// A single manual page break.
+///
+/// Mirrors the OOXML `<brk id="..." min="..." max="..." man="..."/>` element
+/// inside `<rowBreaks>` / `<colBreaks>`. `id` is the 0-based row or column
+/// index the break sits *before* (OOXML stores it 1-based; the reader
+/// normalises to 0-based). `min` / `max` bound the span the break applies to.
+struct ManualBreak {
+  std::uint32_t id = 0;   ///< 0-based row/column index the break precedes.
+  std::uint32_t min = 0;  ///< Span start (0-based).
+  std::uint32_t max = 0;  ///< Span end (0-based).
+  bool manual = true;     ///< True for a user-placed break (`man="1"`).
+};
+
+/// Page orientation as stored in `<pageSetup orientation="...">`.
+enum class Orientation { kDefault, kPortrait, kLandscape };
+
+/// Structured page setup parsed from `<pageSetup>` and `<sheetPr>`.
+///
+/// Parsed alongside `SheetPrintSettings::page_setup_xml`; the raw string
+/// remains the source of truth for the writer. These fields exist so the
+/// pagination engine can reason about orientation, paper size and scaling
+/// without re-parsing XML. Missing attributes keep the defaults shown.
+struct PageSetup {
+  Orientation orientation = Orientation::kDefault;  ///< `orientation` attribute.
+  /// `paperSize`; OOXML default 9 (A4).
+  std::uint32_t paper_size = ooxml_defaults::kPaperSize;
+  /// `scale`, as a percentage.
+  std::uint32_t scale = ooxml_defaults::kPageScalePercent;
+  std::uint32_t fit_to_width = 1;   ///< `fitToWidth`, in pages.
+  std::uint32_t fit_to_height = 1;  ///< `fitToHeight`, in pages.
+  bool fit_to_page = false;         ///< True when `<sheetPr><pageSetUpPr fitToPage="1"/>`.
+};
+
+/// Structured page margins parsed from `<pageMargins>`.
+///
+/// Parsed alongside `SheetPrintSettings::page_margins_xml`; the raw string
+/// remains the source of truth for the writer. All values are in inches.
+/// The defaults match the OOXML spec defaults.
+struct PageMargins {
+  double left = ooxml_defaults::kPageMarginSideInches;            ///< Left margin, inches.
+  double right = ooxml_defaults::kPageMarginSideInches;           ///< Right margin, inches.
+  double top = ooxml_defaults::kPageMarginTopBottomInches;        ///< Top margin, inches.
+  double bottom = ooxml_defaults::kPageMarginTopBottomInches;     ///< Bottom margin, inches.
+  double header = ooxml_defaults::kPageMarginHeaderFooterInches;  ///< Header margin, inches.
+  double footer = ooxml_defaults::kPageMarginHeaderFooterInches;  ///< Footer margin, inches.
+};
+
 /// Passive round-trip storage for worksheet print/page configuration.
 ///
 /// The page setup surface has many Excel-specific attributes and may point
-/// at a binary `printerSettings*.bin` part through `r:id`. Keep the XML
-/// fragments raw for now so a read/save cycle preserves user-authored print
-/// settings without pretending the engine understands every field.
+/// at a binary `printerSettings*.bin` part through `r:id`. The XML fragments
+/// stay raw so a read/save cycle preserves user-authored print settings
+/// verbatim; the structured `page_setup` / `page_margins` / break vectors
+/// are parsed *alongside* the raw strings for consumers (such as the
+/// pagination engine) that need typed access.
 struct SheetPrintSettings {
   std::string sheet_pr_xml;      ///< Raw `<sheetPr>` when it carries page setup metadata.
   std::string page_margins_xml;  ///< Raw `<pageMargins .../>`.
   std::string page_setup_xml;    ///< Raw `<pageSetup .../>`.
   std::string printer_settings_rid;
   std::string printer_settings_path;  ///< Package path, e.g. `xl/printerSettings/printerSettings1.bin`.
+
+  PageSetup page_setup;      ///< Structured view of `<pageSetup>` + `<pageSetUpPr>`.
+  PageMargins page_margins;  ///< Structured view of `<pageMargins>`.
+
+  std::vector<ManualBreak> manual_row_breaks;  ///< `<rowBreaks>` entries, 0-based ids.
+  std::vector<ManualBreak> manual_col_breaks;  ///< `<colBreaks>` entries, 0-based ids.
 };
 
 /// Hash for `CellAddress` suitable for `std::unordered_map`.
@@ -656,6 +755,16 @@ class Sheet {
   /// reorder entries without an extra accessor pair per field.
   SheetLayout& mutable_layout() noexcept { return layout_; }
 
+  /// Read-only access to the sheet's `<sheetFormatPr>` default metrics
+  /// (default column width / row height). Populated by the OOXML
+  /// reader; carries struct defaults when the element is absent.
+  const SheetFormatDefaults& format_defaults() const noexcept { return format_defaults_; }
+
+  /// Mutable access to the sheet's `<sheetFormatPr>` default metrics.
+  /// Exposed so the OOXML reader can populate fields without an extra
+  /// accessor pair per attribute.
+  SheetFormatDefaults& mutable_format_defaults() noexcept { return format_defaults_; }
+
   /// Read-only access to raw print/page setup metadata captured by the
   /// OOXML reader.
   const SheetPrintSettings& print_settings() const noexcept { return print_settings_; }
@@ -728,6 +837,9 @@ class Sheet {
   // Per-sheet layout overrides (column spans + row overrides). Empty by
   // default; populated by the OOXML reader from `<cols>` / `<row>` entries.
   SheetLayout layout_;
+  // Default column width / row height from `<sheetFormatPr>`. Carries
+  // struct defaults when the element is absent.
+  SheetFormatDefaults format_defaults_;
   // Raw print/page setup metadata and its optional printerSettings rel.
   SheetPrintSettings print_settings_;
 };

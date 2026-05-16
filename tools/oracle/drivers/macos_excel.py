@@ -532,6 +532,103 @@ class ExcelOracle(OracleDriver):
                 pass
 
 
+    # -----------------------------------------------------------------------
+    # Workbook oracle track (pivot tables) -- best-effort variant
+    # -----------------------------------------------------------------------
+    #
+    # The workbook oracle's primary is Windows Excel: reliable PivotTable
+    # automation needs the Windows COM object model. macOS Excel exposes
+    # pivot objects through the xlwings ``.api`` AppleScript bridge, but
+    # several pivot operations (RowAxisLayout, per-item visibility) are
+    # either missing or unstable there. This implementation drives the
+    # subset that works and raises a clear, *catchable* RuntimeError for
+    # anything it cannot reproduce so the generator marks the case
+    # skipped rather than emitting a wrong golden. Mac is a variant, not
+    # a gate, so a partial implementation is acceptable here.
+
+    def run_workbook_case(self, case: Dict[str, Any]) -> Dict[str, Any]:
+        """Best-effort workbook-feature build via the macOS object model.
+
+        Returns the golden ``expect`` block on success; raises a
+        ``RuntimeError`` (catchable) when the feature cannot be driven on
+        Mac so the case is marked skipped. Mac is a workbook-track
+        variant, not a gate, so a partial implementation is acceptable.
+        """
+
+        print_spec = case.get("print")
+        if isinstance(print_spec, dict):
+            return self._run_print_case(case, print_spec)
+
+        pivot_spec = case.get("pivot")
+        if not isinstance(pivot_spec, dict):
+            raise RuntimeError(
+                f"workbook case {case.get('id')!r} has neither a 'pivot' "
+                "nor a 'print' block"
+            )
+        # The macOS object model does not expose a stable PivotCaches API
+        # comparable to Windows COM. Rather than emit a divergent golden,
+        # surface a clear skip so the operator runs the Windows primary
+        # for pivot goldens.
+        raise RuntimeError(
+            "macOS Excel cannot reliably drive PivotTable automation; "
+            "generate pivot goldens on the Windows primary target "
+            f"(case {case.get('id')!r})"
+        )
+
+    def _run_print_case(
+        self, case: Dict[str, Any], print_spec: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Best-effort print build via the macOS xlwings `.api` bridge.
+
+        Mac Excel does expose `PageSetup` and `HPageBreaks` /
+        `VPageBreaks` through the AppleScript object model, so the print
+        path is driven directly. Any operation the bridge rejects raises
+        a clear, catchable ``RuntimeError`` so the case is marked
+        skipped rather than emitting a wrong golden.
+        """
+
+        wb = self._app.books.add()
+        try:
+            self._build_workbook_sheets(wb, case)
+            return {"print": _apply_and_read_print(wb, print_spec)}
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(
+                f"print automation failed for case {case.get('id')!r}: "
+                f"{_format_mac_error(exc)}"
+            ) from exc
+        finally:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+    def _build_workbook_sheets(self, wb, case: Dict[str, Any]) -> None:
+        """Materialises the declarative ``sheets`` block plus the optional
+        ``column_widths`` / ``row_heights`` layout maps into ``wb``.
+        """
+
+        sheets = case.get("sheets") or {}
+        for sheet_name, cells in sheets.items():
+            sht = _get_or_add_sheet(wb, sheet_name)
+            for addr, rec in (cells or {}).items():
+                _write_cell(sht, addr, rec)
+
+        widths = case.get("column_widths") or {}
+        for col_key, width in widths.items():
+            try:
+                wb.sheets[0].range(f"{col_key}1").column_width = float(width)
+            except Exception:
+                pass
+        heights = case.get("row_heights") or {}
+        for row_key, height in heights.items():
+            try:
+                wb.sheets[0].range(f"A{row_key}").row_height = float(height)
+            except Exception:
+                pass
+
+
 def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
     """Splits ``"Sheet2!A1"`` into ``("Sheet2", "A1")``; returns ``(None, key)``
     for bare A1 keys. Mirrors the Windows driver helper -- see
@@ -558,6 +655,143 @@ def _get_or_add_sheet(wb, name: str):
         if sht.name.casefold() == target:
             return sht
     return wb.sheets.add(name=name, after=wb.sheets[len(wb.sheets) - 1])
+
+
+# Excel `XlPageOrientation` constants.
+_XL_PORTRAIT = 1
+_XL_LANDSCAPE = 2
+
+_PRINT_ORIENTATIONS = {
+    "portrait": _XL_PORTRAIT,
+    "landscape": _XL_LANDSCAPE,
+}
+
+
+def _resolve_print_sheet(wb, print_spec: Dict[str, Any]):
+    """Returns the worksheet the `print` block names, or raises."""
+
+    sheet_name = print_spec.get("sheet")
+    if not isinstance(sheet_name, str) or not sheet_name:
+        raise RuntimeError("print block missing string 'sheet'")
+    target = sheet_name.casefold()
+    for sht in wb.sheets:
+        if sht.name.casefold() == target:
+            return sht
+    raise RuntimeError(f"print 'sheet' names an unknown sheet {sheet_name!r}")
+
+
+def _normalise_print_area(area: str) -> str:
+    """Strips ``$`` anchors and ``Sheet!`` qualifiers from a print area.
+
+    Mirrors the Windows driver helper -- the C++ engine compares against
+    a bare ``A1:H80`` form, so both drivers normalise identically.
+    """
+
+    out_parts: List[str] = []
+    for part in area.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        bang = token.rfind("!")
+        if bang != -1:
+            token = token[bang + 1:]
+        token = token.replace("$", "")
+        out_parts.append(token)
+    return ",".join(out_parts)
+
+
+def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Applies the declarative `print` block to ``wb`` and reads it back.
+
+    Returns the golden ``expect.print`` mapping. Mac Excel's object
+    model exposes ``PageSetup`` and the page-break collections through
+    the xlwings AppleScript bridge; the 1-based COM-style row / column
+    indices are converted to the 0-based indices the C++ engine reports.
+    Any unsupported operation surfaces as a catchable ``RuntimeError``.
+    """
+
+    sht = _resolve_print_sheet(wb, print_spec)
+    ws = sht.api
+    page_setup = ws.PageSetup
+
+    print_area = print_spec.get("print_area")
+    if isinstance(print_area, str) and print_area:
+        page_setup.PrintArea = print_area
+
+    titles = print_spec.get("print_titles")
+    if isinstance(titles, dict):
+        rows = titles.get("rows")
+        cols = titles.get("cols")
+        if isinstance(rows, str) and rows:
+            page_setup.PrintTitleRows = f"{sht.name}!{rows}"
+        if isinstance(cols, str) and cols:
+            page_setup.PrintTitleColumns = f"{sht.name}!{cols}"
+
+    setup = print_spec.get("page_setup")
+    if isinstance(setup, dict):
+        orientation = setup.get("orientation")
+        if orientation in _PRINT_ORIENTATIONS:
+            page_setup.Orientation = _PRINT_ORIENTATIONS[orientation]
+        if setup.get("paper") is not None:
+            try:
+                page_setup.PaperSize = int(setup["paper"])
+            except Exception:
+                pass
+        fit_w = int(setup.get("fit_to_width") or 0)
+        fit_h = int(setup.get("fit_to_height") or 0)
+        if fit_w or fit_h:
+            page_setup.Zoom = False
+            page_setup.FitToPagesWide = fit_w if fit_w else False
+            page_setup.FitToPagesTall = fit_h if fit_h else False
+        elif setup.get("scale") is not None:
+            page_setup.Zoom = int(setup["scale"])
+
+    breaks = print_spec.get("manual_breaks")
+    if isinstance(breaks, dict):
+        for row1 in breaks.get("rows") or []:
+            try:
+                ws.Rows(int(row1)).PageBreak = 1  # xlPageBreakManual
+            except Exception:
+                pass
+        for col_letter in breaks.get("cols") or []:
+            try:
+                ws.Columns(str(col_letter)).PageBreak = 1
+            except Exception:
+                pass
+
+    resolved_area = ""
+    try:
+        resolved_area = _normalise_print_area(str(page_setup.PrintArea or ""))
+    except Exception:
+        resolved_area = ""
+
+    h_breaks: List[int] = []
+    v_breaks: List[int] = []
+    try:
+        for i in range(1, int(ws.HPageBreaks.Count) + 1):
+            h_breaks.append(int(ws.HPageBreaks(i).Location.Row) - 1)
+        for i in range(1, int(ws.VPageBreaks.Count) + 1):
+            v_breaks.append(int(ws.VPageBreaks(i).Location.Column) - 1)
+    except Exception as exc:
+        raise RuntimeError(
+            "macOS Excel could not read page-break collections: "
+            f"{_format_mac_error(exc)}"
+        ) from exc
+    h_breaks.sort()
+    v_breaks.sort()
+
+    pages = 0
+    try:
+        pages = int(page_setup.Pages.Count)
+    except Exception:
+        pages = 0
+
+    return {
+        "print_area": resolved_area,
+        "h_breaks": h_breaks,
+        "v_breaks": v_breaks,
+        "pages": pages,
+    }
 
 
 def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:

@@ -1,0 +1,248 @@
+{
+  "suite": "print_pagination",
+  "kind": "workbook",
+  "description": "Page-break (pagination) oracle cases: wide tables forcing vertical breaks via set column widths, tall tables forcing horizontal breaks via set row heights, and manual row / column page breaks. Every case carries an anchor cell plus a column-widths / row-heights map so the pagination geometry is deterministic. No golden is committed: print golden generation needs a Windows + Excel host.\n",
+  "cases": [
+    {
+      "id": "wide_table_vertical_breaks",
+      "description": "Eight wide columns; only three fit per A4-portrait page.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H1",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "tall_table_horizontal_breaks",
+      "description": "Thirty 80pt-tall rows overflow the A4-portrait body height.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "row_heights": {
+        "1": 80,
+        "10": 80,
+        "20": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:A30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "manual_row_break",
+      "description": "A short print area split by a manual row break before row 5.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A10": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:A10",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        },
+        "manual_breaks": {
+          "rows": [
+            5
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual_col_break",
+      "description": "A narrow print area split by a manual column break before D.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "F1": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:F1",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        },
+        "manual_breaks": {
+          "cols": [
+            "D"
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual_row_and_col_breaks",
+      "description": "A grid split by both a manual row break and a column break.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "F12": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:F12",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        },
+        "manual_breaks": {
+          "rows": [
+            6
+          ],
+          "cols": [
+            "C"
+          ]
+        }
+      }
+    },
+    {
+      "id": "landscape_wide_table",
+      "description": "A wide table on A4 landscape; the wider body fits more columns.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H1",
+        "page_setup": {
+          "orientation": "landscape",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "tall_and_wide_table",
+      "description": "A table that overflows both axes, producing a grid of pages.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "row_heights": {
+        "1": 80,
+        "30": 80
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "manual_break_inside_used_range_fallback",
+      "description": "A manual row break with no explicit print area (used-range fallback).",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A12": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        },
+        "manual_breaks": {
+          "rows": [
+            7
+          ]
+        }
+      }
+    }
+  ]
+}

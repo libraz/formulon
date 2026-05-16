@@ -209,6 +209,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_evaluator_test.cpp
   unit/cf/cf_types_test.cpp
+  unit/print/page_setup_test.cpp
+  unit/print/print_area_test.cpp
+  unit/print/pagination_test.cpp
   unit/registry_catalog_test.cpp
 )
 

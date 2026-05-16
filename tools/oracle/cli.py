@@ -9,6 +9,7 @@ contributors through a one-command donation flow.
 Subcommands:
     cli.py list                              # print available targets
     cli.py gen [--target NAME] [--all]       # delegate to oracle_gen
+    cli.py workbook [--target NAME]          # workbook track (pivot / print)
     cli.py setup [--target NAME]             # run preflight checks
     cli.py contribute [--target NAME]        # contributor onramp:
                                              #   banner + preflight + gen
@@ -39,12 +40,13 @@ from typing import Any, Dict, List, Optional, Tuple
 # Local imports — accept both `python3 tools/oracle/cli.py` (no package)
 # and `python3 -m tools.oracle.cli` (package-style).
 try:  # pragma: no cover - trivial fallback
-    from tools.oracle import oracle_gen
+    from tools.oracle import oracle_gen, workbook_oracle_gen
     from tools.oracle.drivers import resolve_win_python
     from tools.oracle.drivers._locale import COUNTRY_CODE_TO_BCP47
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import oracle_gen  # type: ignore
+    import workbook_oracle_gen  # type: ignore
     from drivers import resolve_win_python  # type: ignore
     from drivers._locale import COUNTRY_CODE_TO_BCP47  # type: ignore
 
@@ -173,6 +175,29 @@ def _cmd_gen(args: argparse.Namespace) -> int:
             if args.strict:
                 return rc
     return overall
+
+
+def _cmd_workbook(args: argparse.Namespace) -> int:
+    """Generates goldens for the workbook oracle track.
+
+    Delegates to `workbook_oracle_gen.main`. When `--target` is omitted
+    that entry point auto-detects the target from the host OS (a Windows
+    / WSL2 host -> the win-365-ja_JP primary, a macOS host -> the
+    mac-365-ja_JP variant), reading the `tracks.workbook` section of
+    targets.yaml. The subcommand exists so the workbook track is
+    reachable through the same CLI as the formula `gen` flow.
+    """
+
+    gen_argv: List[str] = ["--targets-file", str(args.targets_file)]
+    if args.target:
+        gen_argv.extend(["--target", args.target])
+    if args.suite:
+        for s in args.suite:
+            gen_argv.extend(["--suite", s])
+    if args.visible:
+        gen_argv.append("--visible")
+    print("[oracle-cli] track=workbook")
+    return workbook_oracle_gen.main(gen_argv)
 
 
 _STATUS_PASS = "PASS"
@@ -1099,6 +1124,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_gen.add_argument("--strict", action="store_true")
     p_gen.add_argument("--visible", action="store_true")
     p_gen.set_defaults(func=_cmd_gen)
+
+    p_wb = sub.add_parser(
+        "workbook",
+        help="Generate goldens for the workbook oracle track (pivot / print).",
+    )
+    p_wb.add_argument(
+        "--target",
+        default=None,
+        help="Target name (default: auto-detected from the host OS).",
+    )
+    p_wb.add_argument(
+        "--suite",
+        action="append",
+        default=None,
+        metavar="NAME",
+        help="Restrict to the named suite(s); forwarded to workbook_oracle_gen.",
+    )
+    p_wb.add_argument("--visible", action="store_true")
+    p_wb.set_defaults(func=_cmd_workbook)
 
     p_setup = sub.add_parser(
         "setup",

@@ -1,0 +1,101 @@
+suite: print_basic
+kind: workbook
+description: >
+  Basic print-area / page-setup oracle cases: explicit and absent print
+  areas, A4 vs Letter paper, portrait vs landscape orientation, print
+  titles, and a multi-area print range. Every case carries a small
+  populated grid on "Sheet1" and a print block describing the page
+  setup. No golden is committed: print golden generation needs a
+  Windows + Excel host.
+
+cases:
+  - id: explicit_print_area_a4_portrait
+    description: An explicit A1:D20 print area on A4 portrait at 100% scale.
+    sheets:
+      Sheet1:
+        A1: H
+        D20: X
+    print:
+      sheet: Sheet1
+      print_area: A1:D20
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: absent_print_area_used_range_fallback
+    description: No print area; the engine falls back to the used range.
+    sheets:
+      Sheet1:
+        A1: 1
+        B2: 2
+        C3: 3
+    print:
+      sheet: Sheet1
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: letter_portrait
+    description: A4-shaped grid on US Letter paper, portrait.
+    sheets:
+      Sheet1:
+        A1: H
+        F30: X
+    print:
+      sheet: Sheet1
+      print_area: A1:F30
+      page_setup: {orientation: portrait, paper: 1, scale: 100}
+
+  - id: a4_landscape
+    description: A4 landscape orientation swaps the body width and height.
+    sheets:
+      Sheet1:
+        A1: H
+        F30: X
+    print:
+      sheet: Sheet1
+      print_area: A1:F30
+      page_setup: {orientation: landscape, paper: 9, scale: 100}
+
+  - id: print_titles_repeat_rows
+    description: A print area with a repeat-rows print title.
+    sheets:
+      Sheet1:
+        A1: Header
+        A40: X
+    print:
+      sheet: Sheet1
+      print_area: A1:D40
+      print_titles: {rows: "1:1"}
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: print_titles_repeat_rows_and_cols
+    description: A print area with both repeat-rows and repeat-columns titles.
+    sheets:
+      Sheet1:
+        A1: Corner
+        H40: X
+    print:
+      sheet: Sheet1
+      print_area: A1:H40
+      print_titles: {rows: "1:1", cols: "A:A"}
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: multi_area_print_range
+    description: A comma-separated multi-area print range.
+    sheets:
+      Sheet1:
+        A1: 1
+        B2: 2
+        E1: 3
+        F5: 4
+    print:
+      sheet: Sheet1
+      print_area: A1:B2,E1:F5
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: single_cell_print_area
+    description: A degenerate single-cell print area.
+    sheets:
+      Sheet1:
+        C3: only
+    print:
+      sheet: Sheet1
+      print_area: C3:C3
+      page_setup: {orientation: portrait, paper: 9, scale: 100}

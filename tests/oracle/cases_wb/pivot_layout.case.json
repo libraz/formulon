@@ -1,0 +1,924 @@
+{
+  "suite": "pivot_layout",
+  "kind": "workbook",
+  "description": "Layout and filtering coverage for the pivot oracle: Compact vs Tabular vs Outline report layout, subtotal rendering for multi-level row hierarchies, and manual item filters that hide row / column items. Each case reuses a small sales dataset on a \"Data\" sheet and pivots onto \"Report\". No golden is committed: pivot golden generation needs a Windows + Excel host.",
+  "cases": [
+    {
+      "id": "compact_layout",
+      "description": "Two row fields rendered in Compact layout (the default).",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Compact"
+      }
+    },
+    {
+      "id": "tabular_layout",
+      "description": "Two row fields rendered in Tabular layout.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Tabular"
+      }
+    },
+    {
+      "id": "outline_layout",
+      "description": "Two row fields rendered in Outline layout.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Outline"
+      }
+    },
+    {
+      "id": "subtotals_two_level",
+      "description": "Two-level row hierarchy (Region > Product); the Region-level subtotal rows must render between the leaf rows.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 25.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A6": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B6": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C6": {
+            "kind": "number",
+            "value": 300.0
+          },
+          "A7": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B7": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C7": {
+            "kind": "number",
+            "value": 75.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C7",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Tabular"
+      }
+    },
+    {
+      "id": "filter_hide_row_item",
+      "description": "Manual filter hides the \"South\" row item.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B3": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B4": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "West"
+          },
+          "B5": {
+            "kind": "number",
+            "value": 80.0
+          },
+          "A6": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B6": {
+            "kind": "number",
+            "value": 25.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:B6",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "filters": [
+          {
+            "field": "Region",
+            "hide": [
+              "South"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "filter_hide_multiple_items",
+      "description": "Manual filter hides two row items (South and West).",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B3": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B4": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "West"
+          },
+          "B5": {
+            "kind": "number",
+            "value": 80.0
+          },
+          "A6": {
+            "kind": "text",
+            "value": "East"
+          },
+          "B6": {
+            "kind": "number",
+            "value": 90.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:B6",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "filters": [
+          {
+            "field": "Region",
+            "hide": [
+              "South",
+              "West"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "filter_hide_col_item",
+      "description": "Manual filter hides a column item (Gadget) on the Product axis.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region"
+        ],
+        "col_fields": [
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "filters": [
+          {
+            "field": "Product",
+            "hide": [
+              "Gadget"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tabular_no_grand_totals",
+      "description": "Tabular layout with both grand totals disabled.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Tabular",
+        "grand_totals": {
+          "rows": false,
+          "cols": false
+        }
+      }
+    },
+    {
+      "id": "filter_with_col_field",
+      "description": "Region rows, Product columns, a row-item filter hiding \"West\" and a column-item filter hiding \"Gadget\" combined.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          },
+          "A6": {
+            "kind": "text",
+            "value": "West"
+          },
+          "B6": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C6": {
+            "kind": "number",
+            "value": 120.0
+          },
+          "A7": {
+            "kind": "text",
+            "value": "West"
+          },
+          "B7": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C7": {
+            "kind": "number",
+            "value": 80.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C7",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region"
+        ],
+        "col_fields": [
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "filters": [
+          {
+            "field": "Region",
+            "hide": [
+              "West"
+            ]
+          },
+          {
+            "field": "Product",
+            "hide": [
+              "Gadget"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "outline_subtotals",
+      "description": "Outline layout with a two-level row hierarchy and subtotals.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Product"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "A3": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B3": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "A5": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B5": {
+            "kind": "text",
+            "value": "Gadget"
+          },
+          "C5": {
+            "kind": "number",
+            "value": 300.0
+          },
+          "A6": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B6": {
+            "kind": "text",
+            "value": "Widget"
+          },
+          "C6": {
+            "kind": "number",
+            "value": 25.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:C6",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region",
+          "Product"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ],
+        "layout": "Outline"
+      }
+    }
+  ]
+}

@@ -429,6 +429,70 @@ std::string RelationshipRefId(const pugi::xml_node& node) {
   return rid;
 }
 
+/// Populates the structured `PageSetup` fields from a `<pageSetup>` node.
+/// The raw XML string remains the writer's source of truth; this is an
+/// additive parse for consumers that need typed access. Missing
+/// attributes keep the struct defaults. `fit_to_page` is set separately
+/// from `<sheetPr><pageSetUpPr>`.
+void ApplyStructuredPageSetup(const pugi::xml_node& page_setup, PageSetup& out) {
+  if (pugi::xml_attribute attr = page_setup.attribute("orientation"); attr) {
+    const std::string_view value = attr.value();
+    if (value == "portrait") {
+      out.orientation = Orientation::kPortrait;
+    } else if (value == "landscape") {
+      out.orientation = Orientation::kLandscape;
+    } else {
+      out.orientation = Orientation::kDefault;
+    }
+  }
+  if (pugi::xml_attribute attr = page_setup.attribute("paperSize"); attr) {
+    out.paper_size = static_cast<std::uint32_t>(attr.as_uint(out.paper_size));
+  }
+  if (pugi::xml_attribute attr = page_setup.attribute("scale"); attr) {
+    out.scale = static_cast<std::uint32_t>(attr.as_uint(out.scale));
+  }
+  if (pugi::xml_attribute attr = page_setup.attribute("fitToWidth"); attr) {
+    out.fit_to_width = static_cast<std::uint32_t>(attr.as_uint(out.fit_to_width));
+  }
+  if (pugi::xml_attribute attr = page_setup.attribute("fitToHeight"); attr) {
+    out.fit_to_height = static_cast<std::uint32_t>(attr.as_uint(out.fit_to_height));
+  }
+}
+
+/// Populates the structured `PageMargins` fields from a `<pageMargins>`
+/// node. Additive alongside the raw XML string; missing attributes keep
+/// the struct defaults.
+void ApplyStructuredPageMargins(const pugi::xml_node& page_margins, PageMargins& out) {
+  out.left = page_margins.attribute("left").as_double(out.left);
+  out.right = page_margins.attribute("right").as_double(out.right);
+  out.top = page_margins.attribute("top").as_double(out.top);
+  out.bottom = page_margins.attribute("bottom").as_double(out.bottom);
+  out.header = page_margins.attribute("header").as_double(out.header);
+  out.footer = page_margins.attribute("footer").as_double(out.footer);
+}
+
+/// Reads the `<brk>` children of a `<rowBreaks>` / `<colBreaks>` node
+/// into `out`. OOXML stores the break index 1-based in the `id`
+/// attribute; this normalises to 0-based (clamping at 0). The
+/// `count` / `manualBreakCount` wrapper attributes are ignored — only
+/// the `<brk>` entries themselves are honoured.
+void ReadManualBreaks(const pugi::xml_node& breaks_node, std::vector<ManualBreak>& out) {
+  if (!breaks_node) {
+    return;
+  }
+  for (pugi::xml_node brk = breaks_node.child("brk"); brk; brk = brk.next_sibling("brk")) {
+    ManualBreak entry;
+    const unsigned int raw_id = brk.attribute("id").as_uint(0);
+    entry.id = raw_id > 0U ? raw_id - 1U : 0U;
+    entry.min = static_cast<std::uint32_t>(brk.attribute("min").as_uint(0));
+    entry.max = static_cast<std::uint32_t>(brk.attribute("max").as_uint(0));
+    if (pugi::xml_attribute man = brk.attribute("man"); man) {
+      entry.manual = man.as_bool(true);
+    }
+    out.push_back(entry);
+  }
+}
+
 template <typename Fn>
 Expected<void, Error> VisitRelationshipNodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
                                              Fn&& fn) {
@@ -1243,16 +1307,25 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
 
       SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
       pugi::xml_node worksheet = sheet_doc.child("worksheet");
-      if (pugi::xml_node sheet_pr = worksheet.child("sheetPr"); sheet_pr && sheet_pr.child("pageSetUpPr")) {
-        print.sheet_pr_xml = RawXml(sheet_pr);
+      if (pugi::xml_node sheet_pr = worksheet.child("sheetPr"); sheet_pr) {
+        if (pugi::xml_node page_setup_pr = sheet_pr.child("pageSetUpPr"); page_setup_pr) {
+          print.sheet_pr_xml = RawXml(sheet_pr);
+          print.page_setup.fit_to_page = page_setup_pr.attribute("fitToPage").as_bool(false);
+        }
       }
       if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
         print.page_margins_xml = RawXml(page_margins);
+        ApplyStructuredPageMargins(page_margins, print.page_margins);
       }
       if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
         print.page_setup_xml = RawXml(page_setup);
         print.printer_settings_rid = RelationshipRefId(page_setup);
+        ApplyStructuredPageSetup(page_setup, print.page_setup);
       }
+      // Manual page breaks. `<rowBreaks>` / `<colBreaks>` are otherwise
+      // dropped; capture them structurally so a save cycle preserves them.
+      ReadManualBreaks(worksheet.child("rowBreaks"), print.manual_row_breaks);
+      ReadManualBreaks(worksheet.child("colBreaks"), print.manual_col_breaks);
     }
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives

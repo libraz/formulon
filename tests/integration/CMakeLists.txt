@@ -19,6 +19,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   recalc_text_lifetime_test.cpp
   sheet_features_roundtrip_test.cpp
   sheet_layout_roundtrip_test.cpp
+  sheet_print_geometry_roundtrip_test.cpp
   sheet_ops_test.cpp
   spill_collision_test.cpp
   styles_roundtrip_test.cpp

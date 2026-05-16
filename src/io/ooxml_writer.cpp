@@ -1086,6 +1086,48 @@ std::string PageSetupWithRelationshipId(std::string page_setup_xml, std::string_
   return page_setup_xml;
 }
 
+/// Emits a `<rowBreaks>` or `<colBreaks>` block for the given manual
+/// breaks. Returns an empty string when `breaks` is empty so the caller
+/// adds no bytes. The stored 0-based break index is converted back to
+/// OOXML's 1-based form; `count` and `manualBreakCount` mirror the entry
+/// count.
+std::string BuildPageBreaksXml(std::string_view element, const std::vector<ManualBreak>& breaks) {
+  if (breaks.empty()) {
+    return {};
+  }
+  // Rough size estimate so the buffer rarely reallocates: a fixed
+  // allowance for the wrapper element plus one allowance per `<brk>`.
+  constexpr std::size_t kBreaksWrapperReserveBytes = 48U;
+  constexpr std::size_t kPerBreakReserveBytes = 48U;
+  std::string out;
+  out.reserve(kBreaksWrapperReserveBytes + breaks.size() * kPerBreakReserveBytes);
+  const std::string count = std::to_string(breaks.size());
+  out.push_back('<');
+  out.append(element);
+  out.append(" count=\"");
+  out.append(count);
+  out.append("\" manualBreakCount=\"");
+  out.append(count);
+  out.append("\">");
+  for (const ManualBreak& brk : breaks) {
+    out.append("<brk id=\"");
+    out.append(std::to_string(static_cast<std::uint64_t>(brk.id) + 1U));
+    out.append("\" min=\"");
+    out.append(std::to_string(brk.min));
+    out.append("\" max=\"");
+    out.append(std::to_string(brk.max));
+    out.append("\"");
+    if (brk.manual) {
+      out.append(" man=\"1\"");
+    }
+    out.append("/>");
+  }
+  out.append("</");
+  out.append(element);
+  out.push_back('>');
+  return out;
+}
+
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
@@ -1110,9 +1152,10 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n");
   // ECMA-376 element order: sheetPr -> dimension -> sheetViews ->
   // sheetFormatPr -> cols -> sheetData -> conditionalFormatting ->
-  // tableParts. We currently emit a subset; the helpers stay quiet
-  // when their underlying field is at default values so absent
-  // metadata yields no extra bytes.
+  // pageMargins -> pageSetup -> rowBreaks -> colBreaks -> tableParts.
+  // We currently emit a subset; the helpers stay quiet when their
+  // underlying field is at default values so absent metadata yields no
+  // extra bytes.
   if (!print.sheet_pr_xml.empty()) {
     out.append("  ");
     out.append(print.sheet_pr_xml);
@@ -1172,6 +1215,22 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     out.append("  ");
     out.append(page_setup_xml);
     out.push_back('\n');
+  }
+  // Manual page breaks. ECMA-376 places <rowBreaks>/<colBreaks> after
+  // <pageSetup> and before drawing parts / <tableParts>.
+  {
+    const std::string row_breaks_xml = BuildPageBreaksXml("rowBreaks", print.manual_row_breaks);
+    if (!row_breaks_xml.empty()) {
+      out.append("  ");
+      out.append(row_breaks_xml);
+      out.push_back('\n');
+    }
+    const std::string col_breaks_xml = BuildPageBreaksXml("colBreaks", print.manual_col_breaks);
+    if (!col_breaks_xml.empty()) {
+      out.append("  ");
+      out.append(col_breaks_xml);
+      out.push_back('\n');
+    }
   }
   if (!sheet_tables.empty()) {
     out.append("  <tableParts count=\"");

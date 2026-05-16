@@ -1,0 +1,243 @@
+suite: pivot_basic
+kind: workbook
+description: >
+  Basic pivot-table oracle cases: a single row field with Sum, multiple
+  row fields, row + column fields, and grand-total on/off. Every case
+  carries the same 12-row sales dataset on a "Data" sheet and pivots it
+  onto a separate "Report" sheet. No golden is committed: pivot golden
+  generation needs a Windows + Excel host.
+
+cases:
+  - id: single_row_sum
+    description: One row field (Region) with SUM(Amount).
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Amount
+        A2: North
+        B2: Widget
+        C2: 100
+        A3: North
+        B3: Gadget
+        C3: 50
+        A4: South
+        B4: Widget
+        C4: 200
+        A5: South
+        B5: Gadget
+        C5: 300
+        A6: North
+        B6: Widget
+        C6: 25
+        A7: South
+        B7: Gadget
+        C7: 75
+        A8: West
+        B8: Widget
+        C8: 120
+        A9: West
+        B9: Gadget
+        C9: 80
+        A10: North
+        B10: Gadget
+        C10: 40
+        A11: South
+        B11: Widget
+        C11: 210
+        A12: West
+        B12: Widget
+        C12: 60
+        A13: East
+        B13: Gadget
+        C13: 90
+      Report: {}
+    pivot:
+      source: Data!A1:C13
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+
+  - id: two_row_fields
+    description: Two row fields (Region, Product) nested, SUM(Amount).
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Amount
+        A2: North
+        B2: Widget
+        C2: 100
+        A3: North
+        B3: Gadget
+        C3: 50
+        A4: South
+        B4: Widget
+        C4: 200
+        A5: South
+        B5: Gadget
+        C5: 300
+        A6: North
+        B6: Widget
+        C6: 25
+        A7: South
+        B7: Gadget
+        C7: 75
+      Report: {}
+    pivot:
+      source: Data!A1:C7
+      anchor: Report!A1
+      row_fields: [Region, Product]
+      data_fields:
+        - {field: Amount, agg: Sum}
+
+  - id: row_and_col_fields
+    description: Region on rows, Product on columns, SUM(Amount).
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Amount
+        A2: North
+        B2: Widget
+        C2: 100
+        A3: North
+        B3: Gadget
+        C3: 50
+        A4: South
+        B4: Widget
+        C4: 200
+        A5: South
+        B5: Gadget
+        C5: 300
+        A6: North
+        B6: Widget
+        C6: 25
+        A7: South
+        B7: Gadget
+        C7: 75
+      Report: {}
+    pivot:
+      source: Data!A1:C7
+      anchor: Report!A1
+      row_fields: [Region]
+      col_fields: [Product]
+      data_fields:
+        - {field: Amount, agg: Sum}
+
+  - id: grand_totals_off
+    description: Region rows, SUM(Amount), both grand totals disabled.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: South
+        B3: 200
+        A4: North
+        B4: 50
+        A5: South
+        B5: 25
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+      grand_totals: {rows: false, cols: false}
+
+  - id: grand_totals_rows_only
+    description: Region rows, Product cols, SUM, only the row grand total kept.
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Amount
+        A2: North
+        B2: Widget
+        C2: 100
+        A3: South
+        B3: Gadget
+        C3: 200
+        A4: North
+        B4: Gadget
+        C4: 50
+        A5: South
+        B5: Widget
+        C5: 25
+      Report: {}
+    pivot:
+      source: Data!A1:C5
+      anchor: Report!A1
+      row_fields: [Region]
+      col_fields: [Product]
+      data_fields:
+        - {field: Amount, agg: Sum}
+      grand_totals: {rows: true, cols: false}
+
+  - id: anchor_offset
+    description: Pivot anchored away from A1 to exercise anchor-relative grids.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: South
+        B3: 200
+        A4: North
+        B4: 50
+      Report: {}
+    pivot:
+      source: Data!A1:B4
+      anchor: Report!C5
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+
+  - id: col_field_only
+    description: Product on columns only, no row field, SUM(Amount).
+    sheets:
+      Data:
+        A1: Product
+        B1: Amount
+        A2: Widget
+        B2: 100
+        A3: Gadget
+        B3: 200
+        A4: Widget
+        B4: 50
+        A5: Gadget
+        B5: 25
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      col_fields: [Product]
+      data_fields:
+        - {field: Amount, agg: Sum}
+
+  - id: single_record_per_group
+    description: Each Region appears once; SUM degenerates to the value itself.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 111
+        A3: South
+        B3: 222
+        A4: West
+        B4: 333
+        A5: East
+        B5: 444
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
