@@ -1027,14 +1027,44 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
                 page_setup.PaperSize = int(setup["paper"])
             except Exception:
                 pass
+        # Pre-baseline: clear FitToPages and pin Zoom=100 before applying
+        # the caller's intent. Excel's workbook template default is
+        # `FitToPages=ON` in some installs, which would contaminate a
+        # Zoom-only or Fit-OFF case where the caller never sets the Fit
+        # axis explicitly. See tests/oracle/cases_wb/print_matrix.* --
+        # the per-block "pin everything else" guarantee relies on this.
+        try:
+            page_setup.FitToPagesWide = False
+        except Exception:
+            pass
+        try:
+            page_setup.FitToPagesTall = False
+        except Exception:
+            pass
+        try:
+            page_setup.Zoom = 100
+        except Exception:
+            pass
         fit_w = int(setup.get("fit_to_width") or 0)
         fit_h = int(setup.get("fit_to_height") or 0)
         if fit_w or fit_h:
-            page_setup.Zoom = False
-            page_setup.FitToPagesWide = fit_w if fit_w else False
-            page_setup.FitToPagesTall = fit_h if fit_h else False
+            try:
+                page_setup.Zoom = False
+            except Exception:
+                pass
+            try:
+                page_setup.FitToPagesWide = fit_w if fit_w else False
+            except Exception:
+                pass
+            try:
+                page_setup.FitToPagesTall = fit_h if fit_h else False
+            except Exception:
+                pass
         elif setup.get("scale") is not None:
-            page_setup.Zoom = int(setup["scale"])
+            try:
+                page_setup.Zoom = int(setup["scale"])
+            except Exception:
+                pass
 
     # --- manual breaks -------------------------------------------------------
     breaks = print_spec.get("manual_breaks")
@@ -1089,12 +1119,63 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             pages = 0
 
+    # Round-trip read what Excel actually applied. Without this, a case
+    # where Excel disagreed with the spec (e.g. FitToPages override of
+    # Zoom) is indistinguishable from a true engine bug. This is a load-
+    # bearing diagnostic for the print_matrix suite (see
+    # tests/oracle/cases_wb/print_matrix.HANDOFF.md, removed once the
+    # matrix landed).
+    applied: Dict[str, Any] = {
+        "zoom": _read_zoom_value(page_setup),
+        "fit_to_width": _read_fit_value(page_setup, "FitToPagesWide"),
+        "fit_to_height": _read_fit_value(page_setup, "FitToPagesTall"),
+    }
+
     return {
         "print_area": resolved_area,
         "h_breaks": h_breaks,
         "v_breaks": v_breaks,
         "pages": pages,
+        "applied_page_setup": applied,
     }
+
+
+def _read_zoom_value(page_setup) -> Any:
+    """Returns the post-apply Zoom: int percent, or `False` when Fit-active.
+
+    Excel's COM ``PageSetup.Zoom`` is ``False`` when "Fit to" pagination
+    is engaged, else an integer percent (10..400). Boolean is checked
+    before numeric because Python's ``isinstance(False, int)`` is True.
+    """
+
+    try:
+        val = page_setup.Zoom
+    except Exception:
+        return None
+    if isinstance(val, bool):
+        return False if val is False else True
+    if isinstance(val, (int, float)):
+        return int(val)
+    return None
+
+
+def _read_fit_value(page_setup, name: str) -> Any:
+    """Returns the post-apply ``FitToPagesWide/Tall``: int or False (auto).
+
+    Excel returns ``False`` for the "auto" / unset axis and an integer
+    (1..32767) when constrained. Same bool-before-int ordering applies
+    as for Zoom.
+    """
+
+    try:
+        val = getattr(page_setup, name)
+    except Exception:
+        return None
+    if isinstance(val, bool):
+        return False
+    if isinstance(val, (int, float)):
+        return int(val)
+    return None
 
 
 def _normalise_print_area(area: str) -> str:
