@@ -639,10 +639,12 @@ TEST(TextArrayToText, MatrixStrictUsesArrayLiteralDelimiters) {
   EXPECT_EQ(v.as_text(), "{1,\"x\";TRUE,#N/A}");
 }
 
-TEST(TextArrayToText, ErrorValueIsRenderedAsText) {
+TEST(TextArrayToText, ScalarErrorArgPropagates) {
+  // A lone error argument propagates like any other function; only errors
+  // *inside* a multi-cell array render as their display text.
   const Value v = EvalSource("=ARRAYTOTEXT(1/0)");
-  ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "#DIV/0!");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
 TEST(TextArrayToText, InvalidFormatReturnsValueError) {

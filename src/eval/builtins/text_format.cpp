@@ -892,6 +892,9 @@ Value ArrayToText_(const Value* args, std::uint32_t arity, Arena& arena) {
   if (args[0].is_array()) {
     return arraytotext_from_array(*args[0].as_array(), strict, arena);
   }
+  if (args[0].is_error()) {
+    return args[0];
+  }
   std::string out;
   ErrorCode error = ErrorCode::Value;
   if (!append_arraytotext_cell(args[0], strict, out, &error)) {
@@ -919,7 +922,16 @@ Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   }
   const Value array_v = eval_node_as_array(array_arg, arena, registry, ctx);
   if (array_v.is_array()) {
-    return arraytotext_from_array(*array_v.as_array(), strict, arena);
+    const ArrayValue& arr = *array_v.as_array();
+    // A lone 1x1 error argument propagates rather than rendering as the
+    // error's display text (eval_node_as_array wraps scalar args).
+    if (arr.rows == 1U && arr.cols == 1U && arr.cells[0].is_error()) {
+      return arr.cells[0];
+    }
+    return arraytotext_from_array(arr, strict, arena);
+  }
+  if (array_v.is_error()) {
+    return array_v;
   }
   std::string out;
   ErrorCode error = ErrorCode::Value;

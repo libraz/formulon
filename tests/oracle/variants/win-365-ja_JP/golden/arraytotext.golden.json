@@ -82,7 +82,8 @@
       "setup": {},
       "expect": {
         "kind": "blank"
-      }
+      },
+      "compare_mode": "empty_string_readback"
     },
     {
       "id": "arraytotext_scalar_bool_true_default",

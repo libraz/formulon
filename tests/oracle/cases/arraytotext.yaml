@@ -73,6 +73,7 @@ cases:
   - id: arraytotext_scalar_empty_string_default
     description: "Concise default: empty string renders as empty"
     formula: "=ARRAYTOTEXT(\"\")"
+    compare_mode: empty_string_readback
 
   - id: arraytotext_scalar_bool_true_default
     description: "Concise default: TRUE renders uppercase"
