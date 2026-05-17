@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-05-18
+
+### Added
+
+- Workbook oracle track for pivot tables and print/pagination, driven
+  through a WSL2->Windows Excel bridge with the `win-365-ja_JP` profile
+  as primary. Mac and Windows tracks share a single comparator.
+- Function-availability classification distinguishing win-365-only from
+  cross-version functions; win-365 mode-switch semantics now match the
+  oracle for the primary `win-365-ja_JP` profile.
+- Print pagination captures margins and `PageBreakPreview` reads,
+  retiring three divergence skips.
+
+### Fixed
+
+- Parser truncates numeric literals to Excel's 15-significant-digit
+  representation.
+- `ARRAYTOTEXT` propagates a scalar error argument through to the result.
+- `PIVOTBY` layout, `MAP` / `MAKEARRAY` error spills, `FREQUENCY` bin
+  ordering, `WRAPROWS` / `WRAPCOLS` shape, and `TRIMRANGE` blank
+  handling align with the Mac Excel oracle.
+- Print pagination suppresses auto-column breaks; the min-title-reserve
+  floor avoids inverted-scale page-break drift at scale <= 50.
+- OOXML round-trip preserves unknown workbook rels and shifts
+  shared-formula refs correctly across cell moves (close residual cases
+  from v0.9.1).
+
+### Changed
+
+- Internal refactors split 12 large translation units into per-area
+  files, extracted opcode metadata, introduced a binding-codegen
+  pipeline for simple passthroughs, and added a shared `tests/util`
+  library used by 60 test files. No user-visible API change.
+
+See the
+[GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.2)
+for the full auto-generated change list.
+
 ## [0.9.1] - 2026-05-11
 
 ### Added
@@ -44,6 +82,7 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/libraz/formulon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/libraz/formulon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/libraz/formulon/releases/tag/v0.9.0
