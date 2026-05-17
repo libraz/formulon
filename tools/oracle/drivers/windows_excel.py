@@ -969,6 +969,17 @@ _PRINT_ORIENTATIONS = {
 # used as a fallback when `PageSetup.Pages.Count` is unavailable.
 _GET_DOCUMENT_PAGE_COUNT = 50
 
+# `XlWindowView.xlPageBreakPreview` -- the view mode that forces Excel
+# to actually paginate, so subsequent reads of HPageBreaks /
+# VPageBreaks / Pages.Count reflect the print layout rather than the
+# editing layout.
+_XL_PAGE_BREAK_PREVIEW = 2
+
+# Excel COM reports `PageSetup.LeftMargin` etc. in points (72 pt = 1
+# inch). The Formulon `PageMargins` struct works in inches, so we
+# divide on read.
+_POINTS_PER_INCH = 72.0
+
 
 def _resolve_print_sheet(wb, print_spec: Dict[str, Any]):
     """Returns the worksheet the `print` block names, or raises."""
@@ -1090,45 +1101,69 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
         resolved_area = ""
     resolved_area = _normalise_print_area(resolved_area)
 
-    h_breaks: List[int] = []
+    # Force a true pagination pass by activating the sheet and switching
+    # the window into PageBreakPreview view. Without this, at low Zoom
+    # (e.g. 25%, 50%) `PageSetup.Pages.Count` returns inflated values that
+    # do NOT reconcile with `HPageBreaks` / `VPageBreaks` -- the count is
+    # influenced by the display zoom rather than the printable layout.
+    # PageBreakPreview makes Excel actually paginate before we read, so
+    # Pages.Count matches (H+1)*(V+1). Restored afterwards.
+    prior_view = None
     try:
-        for i in range(1, int(ws.HPageBreaks.Count) + 1):
-            # `.Location.Row` is the 1-based row the break precedes.
-            h_breaks.append(int(ws.HPageBreaks(i).Location.Row) - 1)
+        sht.activate()
+        active_window = wb.app.api.ActiveWindow
+        prior_view = active_window.View
+        active_window.View = _XL_PAGE_BREAK_PREVIEW
     except Exception:
-        pass
-    v_breaks: List[int] = []
-    try:
-        for i in range(1, int(ws.VPageBreaks.Count) + 1):
-            v_breaks.append(int(ws.VPageBreaks(i).Location.Column) - 1)
-    except Exception:
-        pass
-    h_breaks.sort()
-    v_breaks.sort()
+        prior_view = None
 
-    pages = 0
     try:
-        pages = int(page_setup.Pages.Count)
-    except Exception:
+        h_breaks: List[int] = []
         try:
-            pages = int(
-                wb.app.api.ExecuteExcel4Macro(
-                    f"GET.DOCUMENT({_GET_DOCUMENT_PAGE_COUNT})"
-                )
-            )
+            for i in range(1, int(ws.HPageBreaks.Count) + 1):
+                # `.Location.Row` is the 1-based row the break precedes.
+                h_breaks.append(int(ws.HPageBreaks(i).Location.Row) - 1)
         except Exception:
-            pages = 0
+            pass
+        v_breaks: List[int] = []
+        try:
+            for i in range(1, int(ws.VPageBreaks.Count) + 1):
+                v_breaks.append(int(ws.VPageBreaks(i).Location.Column) - 1)
+        except Exception:
+            pass
+        h_breaks.sort()
+        v_breaks.sort()
+
+        pages = 0
+        try:
+            pages = int(page_setup.Pages.Count)
+        except Exception:
+            try:
+                pages = int(
+                    wb.app.api.ExecuteExcel4Macro(
+                        f"GET.DOCUMENT({_GET_DOCUMENT_PAGE_COUNT})"
+                    )
+                )
+            except Exception:
+                pages = 0
+    finally:
+        if prior_view is not None:
+            try:
+                wb.app.api.ActiveWindow.View = prior_view
+            except Exception:
+                pass
 
     # Round-trip read what Excel actually applied. Without this, a case
     # where Excel disagreed with the spec (e.g. FitToPages override of
-    # Zoom) is indistinguishable from a true engine bug. This is a load-
-    # bearing diagnostic for the print_matrix suite (see
-    # tests/oracle/cases_wb/print_matrix.HANDOFF.md, removed once the
-    # matrix landed).
+    # Zoom, or workbook-template margin overrides) is indistinguishable
+    # from a true engine bug. Load-bearing diagnostic for the print_matrix
+    # follow-up matrix (see print_matrix.FOLLOWUP.HANDOFF.md, removed
+    # once the second round of goldens landed).
     applied: Dict[str, Any] = {
         "zoom": _read_zoom_value(page_setup),
         "fit_to_width": _read_fit_value(page_setup, "FitToPagesWide"),
         "fit_to_height": _read_fit_value(page_setup, "FitToPagesTall"),
+        "margins": _read_margins(page_setup),
     }
 
     return {
@@ -1176,6 +1211,42 @@ def _read_fit_value(page_setup, name: str) -> Any:
     if isinstance(val, (int, float)):
         return int(val)
     return None
+
+
+_MARGIN_ATTRS = (
+    ("left", "LeftMargin"),
+    ("right", "RightMargin"),
+    ("top", "TopMargin"),
+    ("bottom", "BottomMargin"),
+    ("header", "HeaderMargin"),
+    ("footer", "FooterMargin"),
+)
+
+
+def _read_margins(page_setup) -> Dict[str, Any]:
+    """Returns the post-apply page margins in inches.
+
+    Excel's COM `PageSetup.{Left,Right,Top,Bottom,Header,Footer}Margin`
+    are points; we divide by 72 so the golden surfaces inches (matching
+    Formulon's `PageMargins` struct and OOXML's <pageMargins> tag, which
+    are both inch-denominated). The body-height calibration hunt in the
+    print_matrix follow-up needs these values to distinguish "Excel
+    applied the OOXML defaults" from "Excel applied a workbook-template
+    preset that we never asked for".
+    """
+
+    out: Dict[str, Any] = {}
+    for key, attr in _MARGIN_ATTRS:
+        try:
+            val = getattr(page_setup, attr)
+        except Exception:
+            out[key] = None
+            continue
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            out[key] = round(float(val) / _POINTS_PER_INCH, 6)
+        else:
+            out[key] = None
+    return out
 
 
 def _normalise_print_area(area: str) -> str:

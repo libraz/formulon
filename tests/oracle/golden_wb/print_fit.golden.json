@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-16T19:28:34Z"
+    "generated_at": "2026-05-17T07:04:32Z"
   },
   "cases": [
     {
@@ -44,7 +44,20 @@
           "print_area": "A1:H1",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -83,7 +96,20 @@
           "print_area": "A1:H1",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 2
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": 50,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -123,7 +149,20 @@
           "print_area": "A1:H1",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": false,
+            "fit_to_width": 1,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -164,7 +203,20 @@
           "print_area": "A1:A30",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": false,
+            "fit_to_width": false,
+            "fit_to_height": 1,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -204,7 +256,20 @@
           "print_area": "A1:H1",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": false,
+            "fit_to_width": 2,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -248,7 +313,20 @@
           "print_area": "A1:H30",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": false,
+            "fit_to_width": 1,
+            "fit_to_height": 1,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -289,9 +367,27 @@
       "expect": {
         "print": {
           "print_area": "A1:H30",
-          "h_breaks": [],
-          "v_breaks": [],
-          "pages": 6
+          "h_breaks": [
+            18
+          ],
+          "v_breaks": [
+            3,
+            6
+          ],
+          "pages": 6,
+          "applied_page_setup": {
+            "zoom": 25,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     }

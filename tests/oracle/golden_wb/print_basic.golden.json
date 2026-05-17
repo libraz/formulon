@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-16T19:28:16Z"
+    "generated_at": "2026-05-17T07:04:32Z"
   },
   "cases": [
     {
@@ -41,7 +41,20 @@
           "print_area": "A1:D20",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -80,7 +93,20 @@
           "print_area": "",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -116,7 +142,20 @@
           "print_area": "A1:F30",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -154,7 +193,20 @@
             26
           ],
           "v_breaks": [],
-          "pages": 2
+          "pages": 2,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -192,10 +244,23 @@
         "print": {
           "print_area": "A1:D40",
           "h_breaks": [
-            39
+            26
           ],
           "v_breaks": [],
-          "pages": 2
+          "pages": 2,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -234,10 +299,23 @@
         "print": {
           "print_area": "A1:H40",
           "h_breaks": [
-            39
+            26
           ],
           "v_breaks": [],
-          "pages": 2
+          "pages": 2,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -281,7 +359,20 @@
           "print_area": "A1:B2,E1:F5",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 2
+          "pages": 2,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     },
@@ -313,7 +404,20 @@
           "print_area": "C3",
           "h_breaks": [],
           "v_breaks": [],
-          "pages": 1
+          "pages": 1,
+          "applied_page_setup": {
+            "zoom": 100,
+            "fit_to_width": false,
+            "fit_to_height": false,
+            "margins": {
+              "left": 0.7,
+              "right": 0.7,
+              "top": 0.75,
+              "bottom": 0.75,
+              "header": 0.3,
+              "footer": 0.3
+            }
+          }
         }
       }
     }

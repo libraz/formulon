@@ -756,37 +756,6 @@ entries:
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
 
-  # -- Workbook track: pagination driver-artifact cases -------------------
-  # The Windows COM workbook-oracle driver returns `Pages.Count` via an API
-  # that disagrees with `HPageBreaks.Count * VPageBreaks.Count + 1`. For
-  # the three cases below, the captured golden's `pages` value is
-  # internally inconsistent with its own (empty) break arrays -- e.g.
-  # `pages=6` alongside `h_breaks=[], v_breaks=[]`, which by the formula
-  # `(H+1)*(V+1)` would yield 1. Formulon correctly derives `pages=1` from
-  # its break arithmetic; matching the driver's number would require
-  # encoding a contradiction. Re-capture is queued (the Windows driver
-  # needs to read PrintPreview's page count rather than the display-zoom
-  # page count); until that data lands, gate these out so the workbook
-  # track's diff-zero check stays meaningful.
-  - id: scale_25_extreme_shrink
-    applies_to: [win-365-ja_JP]
-    mode: skip-oracle
-    reason: "Windows COM driver returns Pages.Count=6 with h_breaks=[], v_breaks=[]; by (H+1)*(V+1) the count is 1. Formulon computes 1 correctly. Re-capture pending (PrintPreview.Pages.Count vs display Pages.Count)."
-    prefer: formulon
-    first_noted: 2026-05-17
-  - id: zoom_50_dense_fit_off
-    applies_to: [win-365-ja_JP]
-    mode: skip-oracle
-    reason: "Windows COM driver returns Pages.Count=4 with h_breaks=[], v_breaks=[]; same driver-artifact pattern as scale_25_extreme_shrink. Re-capture pending."
-    prefer: formulon
-    first_noted: 2026-05-17
-  - id: zoom_25_dense_fit_off
-    applies_to: [win-365-ja_JP]
-    mode: skip-oracle
-    reason: "Windows COM driver returns Pages.Count=6 with h_breaks=[], v_breaks=[]; same driver-artifact pattern as scale_25_extreme_shrink. Re-capture pending."
-    prefer: formulon
-    first_noted: 2026-05-17
-
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a
