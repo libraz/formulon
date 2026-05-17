@@ -345,23 +345,27 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   std::vector<std::uint32_t> all_v;
   std::uint32_t total_pages = 0;
   for (const CellRange& rect : effective_areas) {
-    std::vector<double> col_points;
-    col_points.reserve(rect.last_col - rect.first_col + 1);
-    for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
-      col_points.push_back(ColumnCharsToPoints(ColumnWidthChars(sheet, col)) * scale);
-    }
     std::vector<double> row_points;
     row_points.reserve(rect.last_row - rect.first_row + 1);
     for (std::uint32_t row = rect.first_row; row <= rect.last_row; ++row) {
       row_points.push_back(RowHeightPoints(sheet, row) * scale);
     }
 
-    AxisInput col_axis;
-    col_axis.first = rect.first_col;
-    col_axis.track_sizes = std::move(col_points);
-    col_axis.manual = &settings.manual_col_breaks;
-    col_axis.limit_pt = body.width_pt;
-    const std::uint32_t col_pages = WalkAxis(col_axis, &all_v);
+    // Excel never auto-breaks columns: a wide print area renders on a
+    // single page-column at the chosen scale (and is clipped at the right
+    // margin), regardless of geometric overflow. Both VPageBreaks and
+    // Pages.Count ignore automatic column overflow; only manually-inserted
+    // column breaks contribute. See tests/oracle/cases_wb/print_matrix.yaml
+    // Block C (density variants of A1:H30 all yield v_breaks=[] pages=1)
+    // and tests/oracle/cases_wb/print_pagination.yaml wide_table_vertical_
+    // breaks / landscape_wide_table / tall_and_wide_table (all pages=1).
+    std::uint32_t col_pages = 1;
+    for (const ManualBreak& brk : settings.manual_col_breaks) {
+      if (brk.id > rect.first_col && brk.id <= rect.last_col) {
+        all_v.push_back(brk.id);
+        ++col_pages;
+      }
+    }
 
     AxisInput row_axis;
     row_axis.first = rect.first_row;
