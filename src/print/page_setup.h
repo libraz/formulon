@@ -51,14 +51,13 @@ PaperDimensions resolve_paper_dimensions(std::uint32_t paper_size) noexcept;
 /// Takes the paper dimensions for `setup.paper_size`, swaps width and
 /// height when `setup.orientation == Orientation::kLandscape`, then
 /// subtracts the left+right margins from the width and the top+bottom
-/// margins from the height (margins are inches; converted via
-/// `kPointsPerInch`).
+/// margins plus the header/footer band heights from the height (margins
+/// are inches; converted via `kPointsPerInch`).
 ///
-/// Header and footer margins are intentionally excluded: in Excel's basic
-/// page model the header/footer occupy a band that overlaps the top/bottom
-/// margins rather than shrinking the cell body, so folding them into the
-/// body computation would double-count. The body area is therefore driven
-/// solely by the four side margins.
+/// Excel paginates the cell body strictly between the header and footer
+/// bands: a row only fits on a page when it sits below `top + header`
+/// and above `bottom + footer`, so the body height shrinks by both
+/// side-margin pairs.
 PrintableArea compute_printable_area(const PageSetup& setup, const PageMargins& margins) noexcept;
 
 }  // namespace print

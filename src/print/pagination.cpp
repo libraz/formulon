@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -145,6 +146,20 @@ CellRange BoundingBox(const std::vector<CellRange>& ranges) {
   return box;
 }
 
+/// Returns the rectangular intersection of `a` and `b`, or `std::nullopt`
+/// when they are disjoint.
+std::optional<CellRange> Intersect(const CellRange& a, const CellRange& b) {
+  CellRange out;
+  out.first_row = std::max(a.first_row, b.first_row);
+  out.first_col = std::max(a.first_col, b.first_col);
+  out.last_row = std::min(a.last_row, b.last_row);
+  out.last_col = std::min(a.last_col, b.last_col);
+  if (out.first_row > out.last_row || out.first_col > out.last_col) {
+    return std::nullopt;
+  }
+  return out;
+}
+
 /// True when `index` is the target of a manual break in `breaks`.
 bool HasManualBreakAt(const std::vector<ManualBreak>& breaks, std::uint32_t index) {
   return std::any_of(breaks.begin(), breaks.end(), [index](const ManualBreak& brk) { return brk.id == index; });
@@ -229,73 +244,147 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   }
   const Sheet& sheet = wb.sheet(sheet_index);
 
-  // 1. Resolve the print area; fall back to the used range.
+  // 1. Resolve the print area. The reported `result.print_area` mirrors
+  // Excel's `PageSetup.PrintArea` exactly: empty when the workbook
+  // defines no print area, even if the sheet has populated cells. The
+  // used-range fallback is a *pagination* concern only, not a reporting
+  // one, so it lives in a separate `effective_area` used solely to size
+  // and walk the page grid below.
   auto area_or = resolve_print_area(wb, sheet_index);
   if (!area_or) {
     return area_or.error();
   }
   PaginationResult result;
   result.print_area = area_or.value();
+
+  // Excel's `HPageBreaks` / `VPageBreaks` are populated against the
+  // *populated* region of the print area, not its full geometric span:
+  // a print area whose four corners are blank effectively paginates
+  // against the (possibly much smaller) populated bounding box. Compute
+  // the populated box once so each print-area rectangle can be
+  // intersected with it below.
+  CellRange used_box;
+  const bool has_used_range = ComputeUsedRange(sheet, &used_box);
+
+  std::vector<CellRange> effective_areas;
   if (result.print_area.empty()) {
-    CellRange used;
-    if (!ComputeUsedRange(sheet, &used)) {
-      // An empty sheet with no print area produces no pages.
+    // No explicit print area: fall back to the used range. An empty
+    // sheet with no print area produces no pages.
+    if (!has_used_range) {
       return result;
     }
-    result.print_area.push_back(used);
+    effective_areas.push_back(used_box);
+  } else if (!has_used_range) {
+    // Explicit print area on an otherwise-empty sheet: Excel still
+    // paginates the declared geometry (the area defines the page grid
+    // even when no cell carries content).
+    effective_areas = result.print_area;
+  } else {
+    // Intersect each declared rectangle with the populated bounding box.
+    // A rectangle whose populated intersection is empty contributes no
+    // pages (Excel reports zero breaks across such an area).
+    for (const CellRange& r : result.print_area) {
+      if (auto isect = Intersect(r, used_box); isect.has_value()) {
+        effective_areas.push_back(*isect);
+      }
+    }
+    if (effective_areas.empty()) {
+      return result;
+    }
   }
 
-  const CellRange box = BoundingBox(result.print_area);
-
-  // 2 & 3. Size every column and row of the bounding box, in points.
-  std::vector<double> col_points;
-  col_points.reserve(box.last_col - box.first_col + 1);
-  double total_width = 0.0;
-  for (std::uint32_t col = box.first_col; col <= box.last_col; ++col) {
-    const double pts = ColumnCharsToPoints(ColumnWidthChars(sheet, col));
-    col_points.push_back(pts);
-    total_width += pts;
-  }
-  std::vector<double> row_points;
-  row_points.reserve(box.last_row - box.first_row + 1);
-  double total_height = 0.0;
-  for (std::uint32_t row = box.first_row; row <= box.last_row; ++row) {
-    const double pts = RowHeightPoints(sheet, row);
-    row_points.push_back(pts);
-    total_height += pts;
-  }
-
-  // 4. Printable body area and the model scale factor.
+  // 2. Printable body area is determined once from the page setup.
   const SheetPrintSettings& settings = sheet.print_settings();
-  const PrintableArea body = compute_printable_area(settings.page_setup, settings.page_margins);
-  const double scale = ComputeScaleFactor(settings.page_setup, body, total_width, total_height);
+  PrintableArea body = compute_printable_area(settings.page_setup, settings.page_margins);
 
-  // Apply the scale to cell sizes (a factor below 1.0 shrinks cells so
-  // more fit per page).
-  for (double& v : col_points) {
-    v *= scale;
+  // Print titles (repeat-rows / repeat-columns) are reprinted on every
+  // page, so they steal body extent that is otherwise available for
+  // data rows / columns. Subtract their summed sizes once: pagination
+  // walks the (full) print area, and the smaller body limit naturally
+  // forces a break sooner.
+  auto titles_or = resolve_print_titles(wb, sheet_index);
+  if (!titles_or) {
+    return titles_or.error();
   }
-  for (double& v : row_points) {
-    v *= scale;
+  const PrintTitles& titles = titles_or.value();
+  if (titles.repeat_rows.has_value()) {
+    const auto [first, last] = *titles.repeat_rows;
+    double title_height = 0.0;
+    for (std::uint32_t row = first; row <= last; ++row) {
+      title_height += RowHeightPoints(sheet, row);
+    }
+    body.height_pt = std::max(0.0, body.height_pt - title_height);
+  }
+  if (titles.repeat_cols.has_value()) {
+    const auto [first, last] = *titles.repeat_cols;
+    double title_width = 0.0;
+    for (std::uint32_t col = first; col <= last; ++col) {
+      title_width += ColumnCharsToPoints(ColumnWidthChars(sheet, col));
+    }
+    body.width_pt = std::max(0.0, body.width_pt - title_width);
   }
 
-  // 5. Walk both axes, honouring manual breaks.
-  AxisInput col_axis;
-  col_axis.first = box.first_col;
-  col_axis.track_sizes = std::move(col_points);
-  col_axis.manual = &settings.manual_col_breaks;
-  col_axis.limit_pt = body.width_pt;
-  const std::uint32_t col_pages = WalkAxis(col_axis, &result.v_breaks);
+  // 3. The model scale factor is shared across every effective area:
+  // Excel applies a single sheet-wide `<pageSetup scale>` / `fitToPage`
+  // factor, so we size the factor against the union bounding box.
+  const CellRange union_box = BoundingBox(effective_areas);
+  double union_total_width = 0.0;
+  for (std::uint32_t col = union_box.first_col; col <= union_box.last_col; ++col) {
+    union_total_width += ColumnCharsToPoints(ColumnWidthChars(sheet, col));
+  }
+  double union_total_height = 0.0;
+  for (std::uint32_t row = union_box.first_row; row <= union_box.last_row; ++row) {
+    union_total_height += RowHeightPoints(sheet, row);
+  }
+  const double scale = ComputeScaleFactor(settings.page_setup, body, union_total_width, union_total_height);
 
-  AxisInput row_axis;
-  row_axis.first = box.first_row;
-  row_axis.track_sizes = std::move(row_points);
-  row_axis.manual = &settings.manual_row_breaks;
-  row_axis.limit_pt = body.height_pt;
-  const std::uint32_t row_pages = WalkAxis(row_axis, &result.h_breaks);
+  // 4. Paginate each rectangle independently and aggregate the breaks.
+  // Excel's `HPageBreaks` / `VPageBreaks` collections report the union
+  // of breaks across all areas; the page count sums across areas.
+  std::vector<std::uint32_t> all_h;
+  std::vector<std::uint32_t> all_v;
+  std::uint32_t total_pages = 0;
+  for (const CellRange& rect : effective_areas) {
+    std::vector<double> col_points;
+    col_points.reserve(rect.last_col - rect.first_col + 1);
+    for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
+      col_points.push_back(ColumnCharsToPoints(ColumnWidthChars(sheet, col)) * scale);
+    }
+    std::vector<double> row_points;
+    row_points.reserve(rect.last_row - rect.first_row + 1);
+    for (std::uint32_t row = rect.first_row; row <= rect.last_row; ++row) {
+      row_points.push_back(RowHeightPoints(sheet, row) * scale);
+    }
 
-  // 6. Total page count.
-  result.page_count = col_pages * row_pages;
+    AxisInput col_axis;
+    col_axis.first = rect.first_col;
+    col_axis.track_sizes = std::move(col_points);
+    col_axis.manual = &settings.manual_col_breaks;
+    col_axis.limit_pt = body.width_pt;
+    const std::uint32_t col_pages = WalkAxis(col_axis, &all_v);
+
+    AxisInput row_axis;
+    row_axis.first = rect.first_row;
+    row_axis.track_sizes = std::move(row_points);
+    row_axis.manual = &settings.manual_row_breaks;
+    row_axis.limit_pt = body.height_pt;
+    const std::uint32_t row_pages = WalkAxis(row_axis, &all_h);
+
+    total_pages += col_pages * row_pages;
+  }
+
+  // 5. Sort and de-duplicate aggregated break positions: Excel's COM
+  // collections are ascending and never repeat.
+  auto sort_unique = [](std::vector<std::uint32_t>* v) {
+    std::sort(v->begin(), v->end());
+    v->erase(std::unique(v->begin(), v->end()), v->end());
+  };
+  sort_unique(&all_h);
+  sort_unique(&all_v);
+
+  result.h_breaks = std::move(all_h);
+  result.v_breaks = std::move(all_v);
+  result.page_count = total_pages;
   return result;
 }
 

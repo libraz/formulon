@@ -45,6 +45,7 @@ TEST(PageSetupTest, LandscapeSwapsWidthAndHeight) {
   setup.paper_size = 9;
   PageMargins margins;
   margins.left = margins.right = margins.top = margins.bottom = 0.0;
+  margins.header = margins.footer = 0.0;
 
   setup.orientation = Orientation::kPortrait;
   const PrintableArea portrait = compute_printable_area(setup, margins);
@@ -60,13 +61,15 @@ TEST(PageSetupTest, PrintableAreaSubtractsDefaultMargins) {
   PageSetup setup;
   setup.paper_size = 9;  // A4.
   setup.orientation = Orientation::kPortrait;
-  PageMargins margins;  // OOXML defaults: 0.7in sides, 0.75in top/bottom.
+  PageMargins margins;  // OOXML defaults: 0.7in sides, 0.75in top/bottom,
+                        // 0.3in header/footer.
 
   const PrintableArea area = compute_printable_area(setup, margins);
   // A4 portrait is ~595.27 x 841.89 pt; 1.4in side margin = 100.8 pt,
-  // 1.5in top/bottom = 108 pt.
+  // 1.5in top/bottom = 108 pt, 0.6in header+footer band = 43.2 pt,
+  // plus a 28 pt header/footer text reservation (one line each).
   EXPECT_NEAR(area.width_pt, 595.27 - 100.8, kTol);
-  EXPECT_NEAR(area.height_pt, 841.89 - 108.0, kTol);
+  EXPECT_NEAR(area.height_pt, 841.89 - 108.0 - 43.2 - 28.0, kTol);
 }
 
 TEST(PageSetupTest, PrintableAreaSubtractsCustomMargins) {
@@ -78,10 +81,13 @@ TEST(PageSetupTest, PrintableAreaSubtractsCustomMargins) {
   margins.right = 1.0;
   margins.top = 0.5;
   margins.bottom = 0.5;
+  margins.header = 0.25;
+  margins.footer = 0.25;
 
   const PrintableArea area = compute_printable_area(setup, margins);
-  EXPECT_NEAR(area.width_pt, 612.0 - 144.0, kTol);  // 2in horizontal.
-  EXPECT_NEAR(area.height_pt, 792.0 - 72.0, kTol);  // 1in vertical.
+  EXPECT_NEAR(area.width_pt, 612.0 - 144.0, kTol);                // 2in horizontal.
+  EXPECT_NEAR(area.height_pt, 792.0 - 72.0 - 36.0 - 28.0, kTol);  // 1in vertical + 0.5in H/F band
+                                                                  // + 28pt text reservation.
 }
 
 TEST(PageSetupTest, OversizedMarginsClampBodyToZero) {

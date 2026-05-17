@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/pivot_locale.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
@@ -279,10 +280,23 @@ TEST_P(WorkbookOracleTest, Matches) {
       return true;
     };
 
+    auto format_vec = [](const std::vector<std::uint32_t>& vec) -> std::string {
+      std::string out = "[";
+      for (std::size_t i = 0; i < vec.size(); ++i) {
+        if (i > 0) {
+          out += ",";
+        }
+        out += std::to_string(vec[i]);
+      }
+      out += "]";
+      return out;
+    };
     const bool h_ok = breaks_within_tolerance(pag.h_breaks, exp_h);
     const bool v_ok = breaks_within_tolerance(pag.v_breaks, exp_v);
-    EXPECT_TRUE(h_ok) << "h_breaks differ beyond the +/-1 pagination tolerance";
-    EXPECT_TRUE(v_ok) << "v_breaks differ beyond the +/-1 pagination tolerance";
+    EXPECT_TRUE(h_ok) << "h_breaks differ beyond the +/-1 pagination tolerance: got=" << format_vec(pag.h_breaks)
+                      << " want=" << format_vec(exp_h);
+    EXPECT_TRUE(v_ok) << "v_breaks differ beyond the +/-1 pagination tolerance: got=" << format_vec(pag.v_breaks)
+                      << " want=" << format_vec(exp_v);
 
     if (const JsonValue* pages_v = print_expect->find("pages"); pages_v != nullptr && pages_v->is_number()) {
       const auto expected_pages = static_cast<std::uint32_t>(pages_v->as_number());
@@ -312,7 +326,8 @@ TEST_P(WorkbookOracleTest, Matches) {
   auto result_or = pivot::evaluate(built.table, built.cache);
   ASSERT_TRUE(static_cast<bool>(result_or)) << "pivot::evaluate failed: " << result_or.error().message;
 
-  auto cells_or = pivot::layout(built.table, result_or.value());
+  const pivot::PivotLayoutOptions layout_options = eval::pivot_layout_options_for(built.workbook->excel_profile());
+  auto cells_or = pivot::layout(built.table, result_or.value(), layout_options);
   ASSERT_TRUE(static_cast<bool>(cells_or)) << "pivot::layout failed: " << cells_or.error().message;
   const pivot::PivotCells& cells = cells_or.value();
 

@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "eval/compat.h"
+#include "eval/pivot_locale.h"
 #include "io/a1_ref.h"
 #include "io/defined_names.h"
 #include "tests/oracle/oracle_runner.h"
@@ -409,11 +411,37 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
     table.mutable_col_field_order().push_back(idx);
   }
 
+  // Excel's compact layout (the default) implicitly shows a subtotal
+  // row for every non-leaf row field. The declarative spec does not
+  // model that directly, so flip `subtotal_top` on every row / col
+  // field that has at least one descendant on the same axis. The
+  // leaf-most field on each axis is left alone — its values already
+  // occupy the data rows / columns.
+  if (table.mutable_row_field_order().size() > 1) {
+    for (std::size_t i = 0; i + 1 < table.mutable_row_field_order().size(); ++i) {
+      const std::uint32_t idx = table.mutable_row_field_order()[i];
+      table.mutable_fields()[idx].subtotal_top = true;
+    }
+  }
+  if (table.mutable_col_field_order().size() > 1) {
+    for (std::size_t i = 0; i + 1 < table.mutable_col_field_order().size(); ++i) {
+      const std::uint32_t idx = table.mutable_col_field_order()[i];
+      table.mutable_fields()[idx].subtotal_top = true;
+    }
+  }
+
   // --- table: data fields --------------------------------------------------
+  // Excel auto-disambiguates the displayed source-field name when the
+  // same source column is aggregated more than once on the value axis
+  // (e.g. Sum(Amount) + Count(Amount) renders as "合計 / Amount" and
+  // "個数 / Amount2"). Track the running per-source-name occurrence
+  // count so the synthesised display names match the Excel pivot UI.
   const JsonValue* data_v = pivot.find("data_fields");
   if (data_v == nullptr || !data_v->is_array() || data_v->as_array().empty()) {
     return invalid("pivot block needs a non-empty 'data_fields' array");
   }
+  const eval::ExcelProfile profile = workbook->excel_profile();
+  std::map<std::string, std::uint32_t> source_name_occurrences;
   for (const JsonValue& df : data_v->as_array()) {
     if (!df.is_object()) {
       return invalid("pivot 'data_fields' entries must be objects");
@@ -432,8 +460,16 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
     }
     ASSIGN_OR_RETURN(Aggregation agg, aggregation_from_string(agg_v->as_string()));
     table.mutable_fields()[idx].axis = PivotAxis::Value;
+
+    const std::string& source = field_v->as_string();
+    const std::uint32_t occurrence = ++source_name_occurrences[source];
+    std::string display_source = source;
+    if (occurrence > 1) {
+      display_source += std::to_string(occurrence);
+    }
+
     PivotDataField data_field;
-    data_field.name = agg_v->as_string() + " of " + field_v->as_string();
+    data_field.name = eval::data_field_display_name(agg, display_source, profile);
     data_field.field_index = idx;
     data_field.aggregation = agg;
     table.mutable_data_fields().push_back(std::move(data_field));

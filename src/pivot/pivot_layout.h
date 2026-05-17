@@ -31,9 +31,26 @@ enum class PivotCellKind : std::uint8_t {
   Blank = 7,
 };
 
+/// Per-locale label overrides for the pivot grid projection.
+///
+/// All fields except `grand_total_label` / `values_label` default to empty.
+/// When `row_labels_label` (or `column_labels_label`) is empty the
+/// projection keeps the historical English layout: the row-field (resp.
+/// column-field) display name occupies the corresponding header cell.
+/// When non-empty, the projection switches to Excel's "compact form"
+/// placeholder layout used by Excel 365 and below, where the row-field
+/// name is replaced by a single localized "Row Labels" placeholder.
+///
+/// Subtotal rows / columns synthesise their label by appending
+/// `subtotal_suffix` to the parent group label. When the suffix is empty
+/// the projection falls back to `" " + grand_total_label` so existing
+/// English consumers see "North Grand Total" unchanged.
 struct PivotLayoutOptions {
   std::string grand_total_label = "Grand Total";
   std::string values_label = "Values";
+  std::string row_labels_label;     ///< e.g. "行ラベル"; empty disables.
+  std::string column_labels_label;  ///< e.g. "列ラベル"; empty disables.
+  std::string subtotal_suffix;      ///< e.g. " 集計"; empty falls back to grand_total_label.
 };
 
 struct PivotCell {

@@ -187,12 +187,11 @@ TEST(PaginationTest, UsedRangeIsPaginatedWhenPrintAreaAbsent) {
 
   auto result = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  ASSERT_EQ(result.value().print_area.size(), 1U);
-  // Used range spans A1:E3 (rows 0..2, cols 0..4).
-  EXPECT_EQ(result.value().print_area.front().first_row, 0U);
-  EXPECT_EQ(result.value().print_area.front().first_col, 0U);
-  EXPECT_EQ(result.value().print_area.front().last_row, 2U);
-  EXPECT_EQ(result.value().print_area.front().last_col, 4U);
+  // `result.print_area` mirrors Excel's `PageSetup.PrintArea` exactly:
+  // empty when no `_xlnm.Print_Area` defined name is set, even if the
+  // sheet has populated cells. The used range is only consulted
+  // internally to size the page grid.
+  EXPECT_TRUE(result.value().print_area.empty());
   EXPECT_EQ(result.value().page_count, 1U);
 }
 
