@@ -290,54 +290,9 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
 }
 
 // ---- Style pool counts ----------------------------------------------
-
-Napi::Value Workbook::FontCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  uint32_t n = 0;
-  if (fm_styles_get_font_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
-}
-
-Napi::Value Workbook::FillCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  uint32_t n = 0;
-  if (fm_styles_get_fill_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
-}
-
-Napi::Value Workbook::BorderCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  uint32_t n = 0;
-  if (fm_styles_get_border_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
-}
-
-Napi::Value Workbook::XfCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  uint32_t n = 0;
-  if (fm_styles_get_cell_xf_count(handle_, &n) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, n);
-}
+//
+// `FontCount` / `FillCount` / `BorderCount` / `XfCount` are now emitted
+// by the binding codegen (see `src/node_addon/generated/styles_counts.cc`).
 
 // ---- Conditional formatting -----------------------------------------
 

@@ -1,0 +1,6 @@
+# Runtime dependencies for tools/codegen/gen_bindings.py.
+#
+# Already vendored by the oracle venv (`tools/oracle/.venv`), so most
+# developers do not need to install separately. CI installs into the
+# default Python environment.
+PyYAML>=6.0

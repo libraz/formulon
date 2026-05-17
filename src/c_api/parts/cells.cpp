@@ -197,19 +197,8 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(cons
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_cell_count: NULL argument");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_cell_count: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
-  }
-  *out_count = wb->workbook().sheet(sheet_index).cell_count();
-  return 0;
-}
+// `fm_workbook_cell_count` is now emitted by the binding codegen (see
+// `src/c_api/generated/sheet_counts.cpp`).
 
 extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, uint32_t* out_row,
                                            uint32_t* out_col, const char** out_formula, fm_value_t* out_value) {

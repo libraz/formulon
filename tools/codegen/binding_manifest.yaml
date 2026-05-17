@@ -1,0 +1,103 @@
+# Binding manifest.
+#
+# Source of truth for simple-passthrough binding methods that exist in
+# all three bindings (C ABI / embind / N-API). The Python generator
+# (gen_bindings.py) emits the implementation glue into
+# src/{c_api,wasm,node_addon}/generated/<area>.{cpp,cc}; the public C
+# ABI declarations stay in src/c_api/formulon_c.h (hand-written).
+#
+# Two body kinds are supported so far:
+#   - direct_size_t: C ABI returns `size_t` directly, no sheet arg.
+#   - status_uint32_out: C ABI returns `fm_status_t`, writes a uint32
+#     count into an out param; may take a sheet_index in front.
+#
+# Each entry describes one C ABI function plus its embind and N-API
+# JS-facing method names. The JS surface (method name on the Workbook
+# class) is identical across embind / N-API; only the C++ identifier
+# casing differs (camelCase for embind, PascalCase for N-API).
+
+version: 1
+
+functions:
+  # ----- Direct size_t getters: workbook-level pools ---------------------
+  - name: fm_workbook_sheet_count
+    area: workbook_counts
+    body: direct_size_t
+    accessor: "wb->workbook().sheet_count()"
+    js_method: sheetCount
+    embind_cpp: sheetCount
+    node_cpp: SheetCount
+
+  - name: fm_workbook_defined_name_count
+    area: workbook_counts
+    body: direct_size_t
+    accessor: "wb->workbook().defined_names().size()"
+    js_method: definedNameCount
+    embind_cpp: definedNameCount
+    node_cpp: DefinedNameCount
+
+  - name: fm_workbook_table_count
+    area: workbook_counts
+    body: direct_size_t
+    accessor: "wb->workbook().tables().size()"
+    js_method: tableCount
+    embind_cpp: tableCount
+    node_cpp: TableCount
+
+  - name: fm_workbook_passthrough_count
+    area: workbook_counts
+    body: direct_size_t
+    accessor: "wb->workbook().passthrough_parts().size()"
+    js_method: passthroughCount
+    embind_cpp: passthroughCount
+    node_cpp: PassthroughCount
+
+  # ----- status + uint32 out: styles pools -------------------------------
+  - name: fm_styles_get_font_count
+    area: styles_counts
+    body: status_uint32_out
+    accessor: "wb->workbook().styles().fonts.size()"
+    js_method: fontCount
+    embind_cpp: fontCount
+    node_cpp: FontCount
+
+  - name: fm_styles_get_fill_count
+    area: styles_counts
+    body: status_uint32_out
+    accessor: "wb->workbook().styles().fills.size()"
+    js_method: fillCount
+    embind_cpp: fillCount
+    node_cpp: FillCount
+
+  - name: fm_styles_get_border_count
+    area: styles_counts
+    body: status_uint32_out
+    accessor: "wb->workbook().styles().borders.size()"
+    js_method: borderCount
+    embind_cpp: borderCount
+    node_cpp: BorderCount
+
+  - name: fm_styles_get_cell_xf_count
+    area: styles_counts
+    body: status_uint32_out
+    accessor: "wb->workbook().styles().cell_xfs.size()"
+    js_method: xfCount
+    embind_cpp: xfCount
+    node_cpp: XfCount
+
+  # ----- status + size_t out, with sheet_index arg -----------------------
+  - name: fm_workbook_cell_count
+    area: sheet_counts
+    body: status_sizet_out_with_sheet
+    accessor: "wb->workbook().sheet(sheet_index).cell_count()"
+    js_method: cellCount
+    embind_cpp: cellCount
+    node_cpp: CellCount
+
+  - name: fm_workbook_pivot_count
+    area: sheet_counts
+    body: status_sizet_out_with_sheet
+    accessor: "wb->workbook().sheet(sheet_index).pivot_tables().size()"
+    js_method: pivotCount
+    embind_cpp: pivotCount
+    node_cpp: PivotCount

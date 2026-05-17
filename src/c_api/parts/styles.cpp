@@ -179,45 +179,12 @@ extern "C" fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_i
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_font_count(fm_workbook_t* wb, uint32_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_font_count: NULL argument");
-  }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().fonts.size());
-  return 0;
-}
-
-extern "C" fm_status_t fm_styles_get_fill_count(fm_workbook_t* wb, uint32_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_fill_count: NULL argument");
-  }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().fills.size());
-  return 0;
-}
-
-extern "C" fm_status_t fm_styles_get_border_count(fm_workbook_t* wb, uint32_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_border_count: NULL argument");
-  }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().borders.size());
-  return 0;
-}
-
-extern "C" fm_status_t fm_styles_get_cell_xf_count(fm_workbook_t* wb, uint32_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_cell_xf_count: NULL argument");
-  }
-  *out_count = static_cast<uint32_t>(wb->workbook().styles().cell_xfs.size());
-  return 0;
-}
+// `fm_styles_get_{font,fill,border,cell_xf}_count` are now emitted by
+// the binding codegen (see `src/c_api/generated/styles_counts.cpp`).
+// `fm_styles_get_cell_style_count` /
+// `fm_styles_get_cell_style_xf_count` stay hand-written because the JS
+// surface only exposes them on the embind binding; they are not part of
+// the cross-binding manifest.
 
 extern "C" fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();

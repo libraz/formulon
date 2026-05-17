@@ -56,13 +56,8 @@ Napi::Value Workbook::MoveSheet(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
-Napi::Value Workbook::SheetCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(fm_workbook_sheet_count(handle_)));
-}
+// `Workbook::SheetCount` is now emitted by the binding codegen (see
+// `src/node_addon/generated/workbook_counts.cc`).
 
 Napi::Value Workbook::SheetName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -97,19 +92,11 @@ Napi::Value Workbook::DeleteCols(const Napi::CallbackInfo& info) {
 }
 
 // ---- Iteration / metadata accessors ---------------------------------
-
-Napi::Value Workbook::CellCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  std::size_t count = 0;
-  if (fm_workbook_cell_count(handle_, sheet, &count) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(count));
-}
+//
+// `CellCount` / `DefinedNameCount` / `TableCount` / `PassthroughCount`
+// / `PivotCount` are now emitted by the binding codegen (see
+// `src/node_addon/generated/workbook_counts.cc` and
+// `src/node_addon/generated/sheet_counts.cc`).
 
 Napi::Value Workbook::CellAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
@@ -141,14 +128,6 @@ Napi::Value Workbook::CellAt(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Value Workbook::DefinedNameCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(fm_workbook_defined_name_count(handle_)));
-}
-
 Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
@@ -168,14 +147,6 @@ Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
   out.Set("name", Napi::String::New(env, name != nullptr ? name : ""));
   out.Set("formula", Napi::String::New(env, formula != nullptr ? formula : ""));
   return out;
-}
-
-Napi::Value Workbook::TableCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(fm_workbook_table_count(handle_)));
 }
 
 Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
@@ -203,14 +174,6 @@ Napi::Value Workbook::TableAt(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Value Workbook::PassthroughCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(fm_workbook_passthrough_count(handle_)));
-}
-
 Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
@@ -228,19 +191,6 @@ Napi::Value Workbook::PassthroughAt(const Napi::CallbackInfo& info) {
   out.Set("status", MakeOkStatus(env));
   out.Set("path", Napi::String::New(env, path != nullptr ? path : ""));
   return out;
-}
-
-Napi::Value Workbook::PivotCount(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return Napi::Number::New(env, 0);
-  }
-  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  std::size_t count = 0;
-  if (fm_workbook_pivot_count(handle_, sheet, &count) != 0) {
-    return Napi::Number::New(env, 0);
-  }
-  return Napi::Number::New(env, static_cast<double>(count));
 }
 
 Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {

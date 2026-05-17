@@ -324,6 +324,9 @@ set(FORMULON_CORE_SOURCES
   src/c_api/parts/trace.cpp
   src/c_api/parts/version.cpp
   src/c_api/parts/workbook.cpp
+  src/c_api/generated/sheet_counts.cpp
+  src/c_api/generated/styles_counts.cpp
+  src/c_api/generated/workbook_counts.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})

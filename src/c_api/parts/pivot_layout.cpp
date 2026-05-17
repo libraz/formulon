@@ -73,21 +73,8 @@ const char* store_cstr(TextStore& store, std::string_view text) {
 
 }  // namespace
 
-extern "C" fm_status_t fm_workbook_pivot_count(const fm_workbook_t* wb, std::size_t sheet_index,
-                                               std::size_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_count: NULL argument");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_count: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
-  }
-  *out_count = wb->workbook().sheet(sheet_index).pivot_tables().size();
-  return 0;
-}
+// `fm_workbook_pivot_count` is now emitted by the binding codegen (see
+// `src/c_api/generated/sheet_counts.cpp`).
 
 extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::size_t sheet_index,
                                                 std::size_t pivot_index, fm_pivot_cells_t** out) {

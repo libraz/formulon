@@ -157,12 +157,8 @@ JsStatus JsWorkbook::deleteCols(uint32_t sheet, uint32_t col, uint32_t count) {
   return invoke_row_col_edit(fm_workbook_delete_cols, sheet, col, count);
 }
 
-uint32_t JsWorkbook::sheetCount() const {
-  if (handle_ == nullptr) {
-    return 0;
-  }
-  return static_cast<uint32_t>(fm_workbook_sheet_count(handle_));
-}
+// `JsWorkbook::sheetCount` is now emitted by the binding codegen (see
+// `src/wasm/generated/workbook_counts.cpp`).
 
 JsStringResult JsWorkbook::sheetName(uint32_t idx) const {
   JsStringResult r;

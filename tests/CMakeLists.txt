@@ -288,6 +288,17 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/catalog/status.py --check-c-api-availability
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # Snapshot test for the binding codegen: invokes `gen_bindings.py --check`
+  # in dry-run mode and fails if the on-disk generated files have drifted
+  # away from what the manifest would now emit. Fast (<50 ms in release);
+  # belongs in the fast-loop gate because a stale generated file silently
+  # breaks the build later in a much more confusing way.
+  add_test(
+    NAME BindingCodegenDrift
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest discover -s
+            ${CMAKE_SOURCE_DIR}/tests/codegen -p "*_test.py"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Marked SLOW because the YAML-vocabulary scan reads the whole behaviour
   # corpus and is the single largest non-oracle test (~1 s in release).
   # Behaviour drift is checked by `make test-slow` and CI's nightly tier

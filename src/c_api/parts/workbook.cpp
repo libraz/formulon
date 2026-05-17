@@ -113,13 +113,9 @@ extern "C" void fm_buffer_free(uint8_t* bytes) {
 // ---------------------------------------------------------------------------
 // Sheets
 // ---------------------------------------------------------------------------
-
-extern "C" size_t fm_workbook_sheet_count(const fm_workbook_t* wb) {
-  if (wb == nullptr) {
-    return 0;
-  }
-  return wb->workbook().sheet_count();
-}
+//
+// `fm_workbook_sheet_count` is now emitted by the binding codegen (see
+// `src/c_api/generated/workbook_counts.cpp`).
 
 extern "C" fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb, size_t index, const char** out_utf8) {
   clear_last_error();
@@ -251,13 +247,10 @@ extern "C" fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet
 // ---------------------------------------------------------------------------
 // Defined names / tables / passthrough parts (read-side iteration)
 // ---------------------------------------------------------------------------
-
-extern "C" size_t fm_workbook_defined_name_count(const fm_workbook_t* wb) {
-  if (wb == nullptr) {
-    return 0;
-  }
-  return wb->workbook().defined_names().size();
-}
+//
+// `fm_workbook_defined_name_count`, `fm_workbook_table_count`, and
+// `fm_workbook_passthrough_count` are now emitted by the binding
+// codegen (see `src/c_api/generated/workbook_counts.cpp`).
 
 extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
                                                    const char** out_formula) {
@@ -275,13 +268,6 @@ extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size
   *out_name = names[idx].name.c_str();
   *out_formula = names[idx].formula.c_str();
   return 0;
-}
-
-extern "C" size_t fm_workbook_table_count(const fm_workbook_t* wb) {
-  if (wb == nullptr) {
-    return 0;
-  }
-  return wb->workbook().tables().size();
 }
 
 extern "C" fm_status_t fm_workbook_table_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
@@ -302,13 +288,6 @@ extern "C" fm_status_t fm_workbook_table_at(const fm_workbook_t* wb, size_t idx,
   *out_ref = tables[idx].ref.c_str();
   *out_sheet_index = tables[idx].sheet_index;
   return 0;
-}
-
-extern "C" size_t fm_workbook_passthrough_count(const fm_workbook_t* wb) {
-  if (wb == nullptr) {
-    return 0;
-  }
-  return wb->workbook().passthrough_parts().size();
 }
 
 extern "C" fm_status_t fm_workbook_passthrough_at(const fm_workbook_t* wb, size_t idx, const char** out_path) {

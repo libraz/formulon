@@ -278,50 +278,12 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
 }
 
 // ---- Style count accessors ---------------------------------------------
-
-uint32_t JsWorkbook::fontCount() const {
-  if (handle_ == nullptr) {
-    return 0U;
-  }
-  uint32_t n = 0;
-  if (fm_styles_get_font_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
-}
-
-uint32_t JsWorkbook::fillCount() const {
-  if (handle_ == nullptr) {
-    return 0U;
-  }
-  uint32_t n = 0;
-  if (fm_styles_get_fill_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
-}
-
-uint32_t JsWorkbook::borderCount() const {
-  if (handle_ == nullptr) {
-    return 0U;
-  }
-  uint32_t n = 0;
-  if (fm_styles_get_border_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
-}
-
-uint32_t JsWorkbook::xfCount() const {
-  if (handle_ == nullptr) {
-    return 0U;
-  }
-  uint32_t n = 0;
-  if (fm_styles_get_cell_xf_count(handle_, &n) != 0) {
-    return 0U;
-  }
-  return n;
-}
+//
+// `fontCount` / `fillCount` / `borderCount` / `xfCount` are now emitted
+// by the binding codegen (see `src/wasm/generated/styles_counts.cpp`).
+// `cellStyleCount` / `cellStyleXfCount` stay here because they have no
+// N-API counterpart and are therefore not part of the cross-binding
+// manifest.
 
 uint32_t JsWorkbook::cellStyleCount() const {
   if (handle_ == nullptr) {

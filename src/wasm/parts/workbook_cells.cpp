@@ -98,17 +98,11 @@ emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t
 }
 
 // ---- Iteration / metadata accessors -------------------------------------
-
-uint32_t JsWorkbook::cellCount(uint32_t sheet) const {
-  if (handle_ == nullptr) {
-    return 0;
-  }
-  std::size_t count = 0;
-  if (fm_workbook_cell_count(handle_, sheet, &count) != 0) {
-    return 0;
-  }
-  return static_cast<uint32_t>(count);
-}
+//
+// `cellCount` / `definedNameCount` / `tableCount` / `passthroughCount`
+// / `pivotCount` are now emitted by the binding codegen (see
+// `src/wasm/generated/workbook_counts.cpp` and
+// `src/wasm/generated/sheet_counts.cpp`).
 
 emscripten::val JsWorkbook::cellAt(uint32_t sheet, uint32_t idx) const {
   emscripten::val o = emscripten::val::object();
@@ -133,13 +127,6 @@ emscripten::val JsWorkbook::cellAt(uint32_t sheet, uint32_t idx) const {
   return o;
 }
 
-uint32_t JsWorkbook::definedNameCount() const {
-  if (handle_ == nullptr) {
-    return 0;
-  }
-  return static_cast<uint32_t>(fm_workbook_defined_name_count(handle_));
-}
-
 emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
@@ -157,13 +144,6 @@ emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
   o.set("name", name != nullptr ? std::string(name) : std::string());
   o.set("formula", formula != nullptr ? std::string(formula) : std::string());
   return o;
-}
-
-uint32_t JsWorkbook::tableCount() const {
-  if (handle_ == nullptr) {
-    return 0;
-  }
-  return static_cast<uint32_t>(fm_workbook_table_count(handle_));
 }
 
 emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
@@ -189,13 +169,6 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   return o;
 }
 
-uint32_t JsWorkbook::passthroughCount() const {
-  if (handle_ == nullptr) {
-    return 0;
-  }
-  return static_cast<uint32_t>(fm_workbook_passthrough_count(handle_));
-}
-
 emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {
@@ -211,17 +184,6 @@ emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {
   o.set("status", ok_status());
   o.set("path", path != nullptr ? std::string(path) : std::string());
   return o;
-}
-
-uint32_t JsWorkbook::pivotCount(uint32_t sheet) const {
-  if (handle_ == nullptr) {
-    return 0;
-  }
-  std::size_t count = 0;
-  if (fm_workbook_pivot_count(handle_, sheet, &count) != 0) {
-    return 0;
-  }
-  return static_cast<uint32_t>(count);
 }
 
 emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) const {
