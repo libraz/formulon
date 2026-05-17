@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `PERCENTILE.EXC` at the upper boundary (`pos == n`) now consistently
+  returns `#NUM!`, matching Mac Excel. Previously one of two internal
+  code paths returned the largest sample value.
+
+### Changed
+
+- Internal refactors deduplicate aggregate kernels shared by
+  `SUBTOTAL` and `AGGREGATE`, numeric-argument helpers, RGB-hex
+  parsing, sheet-index validation, and OOXML/XLSB relative-path
+  resolution; split `ooxml_writer.cpp`, `number_format_tokenizer.cpp`,
+  and `stats.cpp` into per-area files. No user-visible API change.
+
 ## [0.9.2] - 2026-05-18
 
 ### Added
