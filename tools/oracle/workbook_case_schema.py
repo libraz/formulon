@@ -312,7 +312,10 @@ def validate_golden_json(doc: Any) -> List[str]:
     seen: Set[str] = set()
     for i, case in enumerate(cases):
         where = _at("cases", i)
-        _require_keys(case, ["id", "spec", "expect"], where)
+        # A divergence.yaml skip-oracle entry produces a case with
+        # `"skipped": "<reason>"` in place of `"expect"`. Accept either
+        # shape; the C++ runner / test surfaces the skip via GTEST_SKIP.
+        _require_keys(case, ["id", "spec"], where)
         cid = case["id"]
         if not isinstance(cid, str) or not cid:
             raise ValidationError(f"{where}/id: expected non-empty string")
@@ -321,8 +324,14 @@ def validate_golden_json(doc: Any) -> List[str]:
         seen.add(cid)
         if not isinstance(case["spec"], dict):
             raise ValidationError(f"{where}/spec: expected mapping")
-        if not isinstance(case["expect"], dict):
+        has_expect = "expect" in case
+        has_skipped = "skipped" in case
+        if not has_expect and not has_skipped:
+            raise ValidationError(f"{where}: missing required key 'expect' or 'skipped'")
+        if has_expect and not isinstance(case["expect"], dict):
             raise ValidationError(f"{where}/expect: expected mapping")
+        if has_skipped and (not isinstance(case["skipped"], str) or not case["skipped"]):
+            raise ValidationError(f"{where}/skipped: expected non-empty string")
         ids.append(cid)
     return ids
 
