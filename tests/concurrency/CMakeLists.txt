@@ -24,6 +24,7 @@ add_executable(formulon_concurrency_tests scheduler_test.cpp)
 target_link_libraries(formulon_concurrency_tests
   PRIVATE
     formulon_static
+    formulon_test_util
     gtest_main
     Threads::Threads
 )

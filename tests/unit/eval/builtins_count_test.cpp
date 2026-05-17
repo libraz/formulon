@@ -26,6 +26,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -35,40 +36,8 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Parses `src` and evaluates it via the default function registry. Arenas
-// are reset on each call to avoid cross-test contamination while keeping
-// text payloads readable for the assertions that follow.
-Value EvalSource(std::string_view src) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  return evaluate(*root, eval_arena);
-}
-
-// Parses `src` and evaluates it against a bound workbook + current sheet.
-// Used by tests that exercise range expansion through `expand_range`.
-Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  EvalState state;
-  const EvalContext ctx(wb, current, state);
-  return evaluate(*root, eval_arena, default_registry(), ctx);
-}
+using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // Invokes a registered function impl directly with `arity` arguments.
 // Used for Blank-containing cases that cannot be expressed in formula

@@ -18,6 +18,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
 #include "workbook.h"
@@ -26,39 +27,8 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Parses `src` and evaluates it via the default function registry. The
-// thread-local arenas keep text payloads readable for the immediately
-// following EXPECT_*. Each call resets the arenas to avoid cross-test
-// contamination.
-Value EvalSource(std::string_view src) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  return evaluate(*root, eval_arena);
-}
-
-Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  EvalState state;
-  const EvalContext ctx(wb, current, state);
-  return evaluate(*root, eval_arena, default_registry(), ctx);
-}
+using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // ---------------------------------------------------------------------------
 // UPPER

@@ -6,6 +6,11 @@ include(FetchGoogleTest)
 
 include(GoogleTest)
 
+# Shared test infrastructure (Arena holders, EvalSource wrappers,
+# WorkbookBuilder, EXPECT_VALUE_* macros). Declared before the
+# individual test executables so they can link against it.
+add_subdirectory(util)
+
 set(FORMULON_UNIT_TEST_SOURCES
   unit/expected_test.cpp
   unit/error_test.cpp
@@ -222,6 +227,7 @@ add_executable(formulon_unit_tests ${FORMULON_UNIT_TEST_SOURCES})
 target_link_libraries(formulon_unit_tests
   PRIVATE
     formulon_static
+    formulon_test_util
     gtest_main
 )
 

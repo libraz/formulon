@@ -14,6 +14,7 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -22,21 +23,7 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Parses `src` and evaluates it through the default function registry
-// with no bound workbook. Shared between the scalar-only rate tests.
-Value EvalSource(std::string_view src) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  return evaluate(*root, eval_arena);
-}
+using formulon::test::EvalSource;
 
 // ---------------------------------------------------------------------------
 // DISC

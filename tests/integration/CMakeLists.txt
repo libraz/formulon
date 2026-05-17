@@ -33,6 +33,7 @@ add_executable(formulon_integration_tests ${FORMULON_INTEGRATION_TEST_SOURCES})
 target_link_libraries(formulon_integration_tests
   PRIVATE
     formulon_static
+    formulon_test_util
     gtest_main
 )
 

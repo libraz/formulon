@@ -20,6 +20,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
 #include "workbook.h"
@@ -28,45 +29,11 @@ namespace formulon {
 namespace eval {
 namespace {
 
+using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
+
 // Local pi copy; see `builtins_math2_test.cpp` for the rationale.
 constexpr double kPi = 3.14159265358979323846;
-
-// Parses `src` and evaluates it via the default function registry. Arenas
-// are thread-local and reset per call so text payloads remain readable for
-// the immediately following EXPECT_*.
-Value EvalSource(std::string_view src) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  return evaluate(*root, eval_arena);
-}
-
-// Bound-workbook variant for cases that need A1-style cell references.
-// Used by the GCD / LCM blank-scalar policy tests where Mac Excel 365
-// distinguishes between a Ref-to-blank-cell scalar arg (#VALUE!) and a
-// range argument whose cells happen to be blank (returns 0).
-Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  EvalState state;
-  const EvalContext ctx(wb, current, state);
-  return evaluate(*root, eval_arena, default_registry(), ctx);
-}
 
 // ---------------------------------------------------------------------------
 // FACT

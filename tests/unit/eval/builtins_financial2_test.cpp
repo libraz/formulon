@@ -24,6 +24,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -33,39 +34,8 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Parses `src` and evaluates it through the default function registry
-// with no bound workbook. Shared between scalar-only financial tests.
-Value EvalSource(std::string_view src) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  return evaluate(*root, eval_arena);
-}
-
-// Parses `src` and evaluates against a bound workbook + current sheet.
-// Used by FVSCHEDULE-from-range and MIRR-from-range tests.
-Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& current) {
-  static thread_local Arena parse_arena;
-  static thread_local Arena eval_arena;
-  parse_arena.reset();
-  eval_arena.reset();
-  parser::Parser p(src, parse_arena);
-  parser::AstNode* root = p.parse();
-  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
-  if (root == nullptr) {
-    return Value::error(ErrorCode::Name);
-  }
-  EvalState state;
-  const EvalContext ctx(wb, current, state);
-  return evaluate(*root, eval_arena, default_registry(), ctx);
-}
+using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // ---------------------------------------------------------------------------
 // DOLLARDE
