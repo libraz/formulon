@@ -77,13 +77,13 @@ oracle は **92 カテゴリ** あります。primary oracle は Mac Excel 365 j
 
 現在のローカル検証結果:
 
-- unit test: `5788/5788` passed
-- primary oracle: `3843` passed / `80` documented skips
-- 直近で更新した Windows 365 focus set (`ENCODEURL`, `FILTERXML`, `GROUPBY`, `PIVOTBY`, `REGEX*`, `JIS` width probes): `130` passed / `22` documented skips
+- fast test: `14342/14342` passed
+- primary formula oracle: `4026/4026` passed / `166` documented skips
+- workbook oracle (pivot + print): `35/41` passed / `6` documented skips (win-365-ja_JP scoped)
 
-残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。
+残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `515` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る `7` 件 (`FILTERXML`, `ARRAYTOTEXT`, `CONCAT`, `CHAR`, `TRUE`, `GETPIVOTDATA`, `PHONETIC`) は oracle metadata 側の課題 — Excel での golden 採取がまだ、または behavior taxonomy が未整備 — であり、実装と Excel の出力が不一致というわけではありません。
 
-数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があります。印刷・改ページエンジン (`src/print/`)、ピボットの評価・レイアウト、宣言的なピボット / 印刷 oracle ケースが揃っており、`formulon_workbook_oracle_tests` ハーネスで検証します。信頼できる PivotTable 自動化には Windows Excel の COM が必要なため、この track の primary は `win-365-ja_JP` です。oracle ハーネスとケースはコミット済みですが、Excel との golden 取得は Windows Excel での実行待ちです。
+数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があります。信頼できる PivotTable 自動化には Windows Excel の COM が必要なため、この track の primary は `win-365-ja_JP` です。golden 採取は完了しており、pivot suite は `28/28` closure、`print_basic` / `print_pagination` / `print_fit` / `print_matrix` の 4 suite が `formulon_workbook_oracle_tests` ハーネスで `35/41` ケース pass。残り `6` ケースは Excel の PageBreakPreview に `PageSetup.Zoom <= 50` で発生する既知の COM quirk (低スケールで列の auto-break が直感に逆らって増える挙動。VBA コミュニティで documented) のため `win-365-ja_JP` scope で divergence-skip 登録しています。
 
 新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
 
