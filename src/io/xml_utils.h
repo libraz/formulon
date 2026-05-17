@@ -132,6 +132,24 @@ bool attr_bool(const pugi::xml_node& n, const char* name, bool def = false);
 Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector<std::uint8_t>& bytes,
                                       std::string_view reader_module, std::string_view part_name);
 
+/// Parses an OOXML hex colour string into a packed `0xAARRGGBB` value.
+///
+/// Accepts two forms, matching the OOXML lexicon Excel emits across
+/// `<color rgb="..."/>` attributes (used by both style records in
+/// `xl/styles.xml` and conditional-formatting rules in
+/// `xl/worksheets/sheet*.xml`):
+///
+///   - 8-hex `AARRGGBB` — fully specified ARGB.
+///   - 6-hex `RRGGBB`   — alpha defaults to opaque `0xFF` (some Excel
+///                        exports drop the alpha nibbles for fully
+///                        opaque colours).
+///
+/// Returns `fallback` on any malformed input: empty string, wrong
+/// length, or a non-hex character. The caller picks the fallback that
+/// makes sense for its context (e.g. `0xFF000000` for opaque black, or
+/// `0` for "no colour set").
+std::uint32_t parse_rgb_hex(std::string_view hex, std::uint32_t fallback) noexcept;
+
 /// Appends every `<t>` text descendant of `node` (whether a direct child or
 /// inside a nested `<r>` rich-text run) to `out`, in document order.
 /// `<rPh>` phonetic-guide subtrees are always skipped: kana annotations

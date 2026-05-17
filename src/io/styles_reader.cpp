@@ -29,40 +29,18 @@ namespace {
 /// Parses an OOXML `<color>` element attached to a style record.
 ///
 /// Recognises `rgb="AARRGGBB"` (8-hex) and `rgb="RRGGBB"` (6-hex; alpha
-/// defaults to opaque `0xFF`). Falls back to `0` when the element is
-/// absent or unparseable; the caller (which already has a default
-/// fallback in mind for "no colour set") does not need to distinguish
-/// the two.
+/// defaults to opaque `0xFF`). Falls back to `fallback` when the element
+/// is absent or the attribute is missing / malformed; the caller (which
+/// already has a default fallback in mind for "no colour set") does not
+/// need to distinguish the cases.
+///
+/// The hex-decoding loop is shared with `cf_reader.cpp` via
+/// `parse_rgb_hex()` in `xml_utils.h`.
 std::uint32_t ParseColorArgb(const pugi::xml_node& color, std::uint32_t fallback) {
   if (!color) {
     return fallback;
   }
-  const std::string_view rgb = color.attribute("rgb").value();
-  if (rgb.empty()) {
-    return fallback;
-  }
-  // Accept both 8-char and 6-char hex.
-  if (rgb.size() != 6 && rgb.size() != 8) {
-    return fallback;
-  }
-  std::uint32_t out = 0;
-  for (char c : rgb) {
-    std::uint32_t digit = 0;
-    if (c >= '0' && c <= '9') {
-      digit = static_cast<std::uint32_t>(c - '0');
-    } else if (c >= 'a' && c <= 'f') {
-      digit = static_cast<std::uint32_t>(c - 'a' + 10);
-    } else if (c >= 'A' && c <= 'F') {
-      digit = static_cast<std::uint32_t>(c - 'A' + 10);
-    } else {
-      return fallback;
-    }
-    out = (out << 4U) | digit;
-  }
-  if (rgb.size() == 6) {
-    out |= 0xFF000000U;
-  }
-  return out;
+  return parse_rgb_hex(color.attribute("rgb").value(), fallback);
 }
 
 /// Maps OOXML border-style strings to the integer ordinal stored in

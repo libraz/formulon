@@ -19,6 +19,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -86,14 +87,12 @@ formulon::RowLayout* upsert_row_override(formulon::SheetLayout& layout, std::uin
 
 extern "C" fm_status_t fm_sheet_get_column_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
+  if (out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_sheet_get_column_count: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_column_count: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_column_count"); rc != 0) {
+    return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).layout().columns.size();
   return 0;
@@ -102,13 +101,11 @@ extern "C" fm_status_t fm_sheet_get_column_count(const fm_workbook_t* wb, size_t
 extern "C" fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                            fm_column_layout_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_column: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_column: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_column"); rc != 0) {
+    return rc;
   }
   const auto& cols = wb->workbook().sheet(sheet_index).layout().columns;
   if (idx >= cols.size()) {
@@ -126,14 +123,12 @@ extern "C" fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet
 
 extern "C" fm_status_t fm_sheet_get_row_override_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
+  if (out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_sheet_get_row_override_count: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_row_override_count: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_row_override_count"); rc != 0) {
+    return rc;
   }
   *out_count = wb->workbook().sheet(sheet_index).layout().row_overrides.size();
   return 0;
@@ -142,14 +137,12 @@ extern "C" fm_status_t fm_sheet_get_row_override_count(const fm_workbook_t* wb, 
 extern "C" fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t sheet_index, size_t idx,
                                                  fm_row_layout_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_sheet_get_row_override: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_row_override: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_row_override"); rc != 0) {
+    return rc;
   }
   const auto& rows = wb->workbook().sheet(sheet_index).layout().row_overrides;
   if (idx >= rows.size()) {
@@ -167,13 +160,11 @@ extern "C" fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t
 
 extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_view: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_view: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_view"); rc != 0) {
+    return rc;
   }
   const formulon::SheetView& v = wb->workbook().sheet(sheet_index).view();
   out->zoom_scale = v.zoom_scale;
@@ -186,13 +177,8 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                  double width) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_column_width: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_width: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_width"); rc != 0) {
+    return rc;
   }
   if (last < first) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_width: last < first",
@@ -206,14 +192,8 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                   int32_t hidden) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_set_column_hidden: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_hidden: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_hidden"); rc != 0) {
+    return rc;
   }
   if (last < first) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_hidden: last < first",
@@ -227,14 +207,8 @@ extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t shee
 extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                    uint8_t level) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_sheet_set_column_outline: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_outline: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_column_outline"); rc != 0) {
+    return rc;
   }
   if (last < first) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_outline: last < first",
@@ -247,13 +221,8 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
 
 extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_index, uint32_t row, double height) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_row_height: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_row_height: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_row_height"); rc != 0) {
+    return rc;
   }
   formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
   entry->height = height;
@@ -262,13 +231,8 @@ extern "C" fm_status_t fm_sheet_set_row_height(fm_workbook_t* wb, size_t sheet_i
 
 extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_index, uint32_t row, int32_t hidden) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_row_hidden: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_row_hidden: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_row_hidden"); rc != 0) {
+    return rc;
   }
   formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
   entry->hidden = (hidden != 0);
@@ -277,13 +241,8 @@ extern "C" fm_status_t fm_sheet_set_row_hidden(fm_workbook_t* wb, size_t sheet_i
 
 extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint8_t level) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_row_outline: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_row_outline: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_row_outline"); rc != 0) {
+    return rc;
   }
   formulon::RowLayout* entry = upsert_row_override(wb->workbook().sheet(sheet_index).mutable_layout(), row);
   entry->outline_level = level;
@@ -292,13 +251,8 @@ extern "C" fm_status_t fm_sheet_set_row_outline(fm_workbook_t* wb, size_t sheet_
 
 extern "C" fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, uint32_t zoom_scale) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_zoom: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_zoom: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_zoom"); rc != 0) {
+    return rc;
   }
   // Clamp to the OOXML-valid `[10, 400]` interval; out-of-range values
   // are rounded to the nearest endpoint rather than rejected so JS
@@ -316,13 +270,8 @@ extern "C" fm_status_t fm_sheet_set_zoom(fm_workbook_t* wb, size_t sheet_index, 
 extern "C" fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, uint32_t freeze_rows,
                                            uint32_t freeze_cols) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_freeze: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_freeze: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_freeze"); rc != 0) {
+    return rc;
   }
   formulon::SheetView& view = wb->workbook().sheet(sheet_index).mutable_view();
   view.freeze_rows = freeze_rows;
@@ -332,13 +281,8 @@ extern "C" fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index
 
 extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index, int32_t hidden) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_tab_hidden: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_tab_hidden: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_tab_hidden"); rc != 0) {
+    return rc;
   }
   wb->workbook().sheet(sheet_index).mutable_view().tab_hidden = (hidden != 0);
   return 0;

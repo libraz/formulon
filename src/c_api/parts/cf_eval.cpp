@@ -30,6 +30,7 @@
 #include "value.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -109,14 +110,12 @@ extern "C" fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, si
                                                      uint32_t first_col, uint32_t last_row, uint32_t last_col,
                                                      double today_serial, fm_cf_results_t** out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_cf_evaluate_range: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_cf_evaluate_range: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_cf_evaluate_range"); rc != 0) {
+    return rc;
   }
   // Stack-allocated arena and eval context: the CF walker is purely
   // synchronous and the engine consumes both before returning. Binding

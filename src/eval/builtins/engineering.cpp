@@ -403,7 +403,9 @@ Expected<int, ErrorCode> coerce_shift(const Value& v) {
   return static_cast<int>(t);
 }
 
-Value BitAnd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+using BitwiseOp = std::uint64_t (*)(std::uint64_t, std::uint64_t);
+
+Value apply_bitwise_op(const Value* args, BitwiseOp op) {
   auto a = coerce_48_bit_unsigned(args[0]);
   if (!a) {
     return Value::error(a.error());
@@ -412,31 +414,19 @@ Value BitAnd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!b) {
     return Value::error(b.error());
   }
-  return Value::number(static_cast<double>(a.value() & b.value()));
+  return Value::number(static_cast<double>(op(a.value(), b.value())));
+}
+
+Value BitAnd(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
+  return apply_bitwise_op(args, [](std::uint64_t a, std::uint64_t b) { return a & b; });
 }
 
 Value BitOr(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto a = coerce_48_bit_unsigned(args[0]);
-  if (!a) {
-    return Value::error(a.error());
-  }
-  auto b = coerce_48_bit_unsigned(args[1]);
-  if (!b) {
-    return Value::error(b.error());
-  }
-  return Value::number(static_cast<double>(a.value() | b.value()));
+  return apply_bitwise_op(args, [](std::uint64_t a, std::uint64_t b) { return a | b; });
 }
 
 Value BitXor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto a = coerce_48_bit_unsigned(args[0]);
-  if (!a) {
-    return Value::error(a.error());
-  }
-  auto b = coerce_48_bit_unsigned(args[1]);
-  if (!b) {
-    return Value::error(b.error());
-  }
-  return Value::number(static_cast<double>(a.value() ^ b.value()));
+  return apply_bitwise_op(args, [](std::uint64_t a, std::uint64_t b) { return a ^ b; });
 }
 
 // Applies a left-then-right or right-then-left shift according to sign.

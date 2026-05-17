@@ -142,6 +142,30 @@ Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector
   return Expected<void, Error>::Ok();
 }
 
+std::uint32_t parse_rgb_hex(std::string_view hex, std::uint32_t fallback) noexcept {
+  if (hex.size() != 6 && hex.size() != 8) {
+    return fallback;
+  }
+  std::uint32_t out = 0;
+  for (char c : hex) {
+    std::uint32_t digit = 0;
+    if (c >= '0' && c <= '9') {
+      digit = static_cast<std::uint32_t>(c - '0');
+    } else if (c >= 'a' && c <= 'f') {
+      digit = static_cast<std::uint32_t>(c - 'a' + 10);
+    } else if (c >= 'A' && c <= 'F') {
+      digit = static_cast<std::uint32_t>(c - 'A' + 10);
+    } else {
+      return fallback;
+    }
+    out = (out << 4U) | digit;
+  }
+  if (hex.size() == 6) {
+    out |= 0xFF000000U;
+  }
+  return out;
+}
+
 std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {
   std::size_t count = 0;
 

@@ -21,6 +21,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::invalidate_pivot_result;
@@ -43,14 +44,12 @@ extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t s
                                                 std::uint32_t cache_id, std::uint32_t anchor_row,
                                                 std::uint32_t anchor_col, std::size_t* out_pivot_index) {
   clear_last_error();
-  if (wb == nullptr || utf8_name == nullptr || out_pivot_index == nullptr) {
+  if (utf8_name == nullptr || out_pivot_index == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_create: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_create: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_pivot_create"); rc != 0) {
+    return rc;
   }
   if (find_cache(wb->workbook(), cache_id) == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -70,13 +69,8 @@ extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t s
 
 extern "C" fm_status_t fm_workbook_pivot_remove(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_pivot_remove: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_remove: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_pivot_remove"); rc != 0) {
+    return rc;
   }
   formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   auto& pivots = sheet.mutable_pivot_tables();

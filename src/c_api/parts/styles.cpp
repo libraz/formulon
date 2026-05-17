@@ -15,6 +15,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -28,13 +29,11 @@ namespace {
 /// (the default xf) when no cell exists at the address.
 fm_status_t resolve_xf(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row, std::uint32_t col,
                        std::uint32_t* out_xf_index, const char* fn) {
-  if (wb == nullptr || out_xf_index == nullptr) {
+  if (out_xf_index == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
   }
-  if (sheet >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, fn,
-        "sheet_index=" + std::to_string(sheet) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_u32(wb, sheet, fn); rc != 0) {
+    return rc;
   }
   const formulon::Cell* cell = wb->workbook().sheet(sheet).cell_at(row, col);
   *out_xf_index = (cell != nullptr) ? cell->xf_index : 0U;

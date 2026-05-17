@@ -234,54 +234,25 @@ Expected<std::vector<cf::CFCellRange>, Error> ParseSqref(std::string_view sqref)
   return out;
 }
 
-/// Decodes one hex digit. Returns -1 on a non-hex character.
-int HexDigit(char c) {
-  if (c >= '0' && c <= '9')
-    return c - '0';
-  if (c >= 'a' && c <= 'f')
-    return 10 + (c - 'a');
-  if (c >= 'A' && c <= 'F')
-    return 10 + (c - 'A');
-  return -1;
-}
-
 /// Parses a `<color rgb="AARRGGBB">` attribute into a `cf::Color`. The
 /// alpha channel is optional in the spec (some Excel exports drop it
 /// for fully-opaque colours, emitting `RRGGBB` only); both 6- and 8-hex
 /// forms are accepted. Returns opaque black on malformed input — the
 /// caller is free to drop the rule, but in practice CF colours are
 /// either valid or absent.
+///
+/// The hex-decoding loop is shared with `styles_reader.cpp` via
+/// `parse_rgb_hex()` in `xml_utils.h`; this wrapper only unpacks the
+/// packed `0xAARRGGBB` value into the `cf::Color` channels.
 cf::Color ParseRgbColor(std::string_view rgb) {
+  // 0xFF000000 (opaque black) preserves the legacy fallback for every
+  // malformed case: empty string, wrong length, or non-hex character.
+  const std::uint32_t packed = parse_rgb_hex(rgb, 0xFF000000U);
   cf::Color out{};
-  if (rgb.empty()) {
-    return out;
-  }
-  std::size_t off = 0;
-  if (rgb.size() == 8) {
-    const int a_hi = HexDigit(rgb[0]);
-    const int a_lo = HexDigit(rgb[1]);
-    if (a_hi < 0 || a_lo < 0) {
-      return cf::Color{};
-    }
-    out.a = static_cast<std::uint8_t>((a_hi << 4) | a_lo);
-    off = 2;
-  } else if (rgb.size() == 6) {
-    out.a = 255;
-  } else {
-    return cf::Color{};
-  }
-  const int r_hi = HexDigit(rgb[off]);
-  const int r_lo = HexDigit(rgb[off + 1]);
-  const int g_hi = HexDigit(rgb[off + 2]);
-  const int g_lo = HexDigit(rgb[off + 3]);
-  const int b_hi = HexDigit(rgb[off + 4]);
-  const int b_lo = HexDigit(rgb[off + 5]);
-  if (r_hi < 0 || r_lo < 0 || g_hi < 0 || g_lo < 0 || b_hi < 0 || b_lo < 0) {
-    return cf::Color{};
-  }
-  out.r = static_cast<std::uint8_t>((r_hi << 4) | r_lo);
-  out.g = static_cast<std::uint8_t>((g_hi << 4) | g_lo);
-  out.b = static_cast<std::uint8_t>((b_hi << 4) | b_lo);
+  out.a = static_cast<std::uint8_t>((packed >> 24U) & 0xFFU);
+  out.r = static_cast<std::uint8_t>((packed >> 16U) & 0xFFU);
+  out.g = static_cast<std::uint8_t>((packed >> 8U) & 0xFFU);
+  out.b = static_cast<std::uint8_t>(packed & 0xFFU);
   return out;
 }
 

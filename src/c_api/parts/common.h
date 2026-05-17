@@ -90,7 +90,9 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, 
 
 // Bounds-check for the uint32-typed sheet index used by the sheet UI
 // surface. Mirrors `check_sheet_index` but accepts the ABI's uint32.
-fm_status_t check_sheet_u32(fm_workbook_t* wb, std::uint32_t sheet, const char* fn);
+// Accepts `const` so read-only entry points (`fm_sheet_get_*`) can share
+// the same validator as the mutators.
+fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const char* fn);
 
 }  // namespace parts
 }  // namespace c_api

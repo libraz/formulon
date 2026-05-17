@@ -23,6 +23,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_range_count;
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -119,13 +120,11 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
 
 extern "C" fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t* out_count) {
   clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
+  if (out_count == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_count: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_cf_count: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_count"); rc != 0) {
+    return rc;
   }
   std::size_t total = 0;
   for (const auto& block : wb->workbook().sheet(sheet_index).conditional_formats()) {
@@ -138,13 +137,11 @@ extern "C" fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, std::size_t sh
 extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t sheet_index, std::size_t idx,
                                           fm_cf_rule_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_get_at: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_cf_get_at: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_get_at"); rc != 0) {
+    return rc;
   }
   const auto& blocks = wb->workbook().sheet(sheet_index).conditional_formats();
   std::size_t b = 0;
@@ -159,13 +156,8 @@ extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t s
 
 extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet_index, fm_cf_rule_t rule) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_add_rule: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_cf_add_rule: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_add_rule"); rc != 0) {
+    return rc;
   }
   if (rule.sqref_count == 0) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
@@ -256,13 +248,8 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
 
 extern "C" fm_status_t fm_sheet_cf_remove_at(fm_workbook_t* wb, std::size_t sheet_index, std::size_t idx) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_remove_at: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_cf_remove_at: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_remove_at"); rc != 0) {
+    return rc;
   }
   auto& blocks = wb->workbook().sheet(sheet_index).mutable_conditional_formats();
   std::size_t b = 0;
@@ -280,13 +267,8 @@ extern "C" fm_status_t fm_sheet_cf_remove_at(fm_workbook_t* wb, std::size_t shee
 
 extern "C" fm_status_t fm_sheet_cf_clear(fm_workbook_t* wb, std::size_t sheet_index) {
   clear_last_error();
-  if (wb == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_cf_clear: wb is NULL");
-  }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_cf_clear: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_clear"); rc != 0) {
+    return rc;
   }
   wb->workbook().sheet(sheet_index).mutable_conditional_formats().clear();
   return 0;

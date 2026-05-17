@@ -25,6 +25,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/ooxml/package_validator.h"
 #include "io/passthrough_part.h"
 #include "io/xlsb/record.h"
 #include "io/zip_reader.h"
@@ -72,70 +73,16 @@ std::string NormalisePartName(std::string_view raw) {
 }
 
 /// Resolves an OOXML rels target relative to a base directory, normalising
-/// `.` / `..` segments. Mirror of the OOXML reader's helper, restated
-/// here so we don't drag the OOXML reader header into this TU.
+/// `.` / `..` segments. Thin wrapper over the OOXML package validator's
+/// shared helper so both readers share a single path-traversal defence.
 ///
-/// Path-traversal hardening matches the OOXML variant: a `Target` with
-/// excess `..` segments or a leading `/` (package-absolute) is refused
-/// with `kIoZipSlip`.
+/// Path-traversal hardening: a `Target` with excess `..` segments or a
+/// leading `/` (package-absolute) is refused with `kIoZipSlip`. The
+/// surfaced error context is the validator's standard `context=ooxml_reader`
+/// flavour; xlsb's xml envelope is structurally identical to xlsx, so the
+/// shared diagnostic stays accurate for both.
 Expected<std::string, Error> ResolveRelativePath(std::string_view base_dir, std::string_view target) {
-  if (!target.empty() && target.front() == '/') {
-    std::string ctx("context=xlsb_reader base_dir=");
-    ctx.append(base_dir);
-    ctx.append(" target=");
-    ctx.append(target);
-    return make_error(FormulonErrorCode::kIoZipSlip, "rels target uses package-absolute path; refusing to resolve",
-                      std::move(ctx));
-  }
-  std::vector<std::string> stack;
-  std::size_t start = 0;
-  for (std::size_t i = 0; i <= base_dir.size(); ++i) {
-    if (i == base_dir.size() || base_dir[i] == '/') {
-      if (i > start) {
-        stack.emplace_back(base_dir.substr(start, i - start));
-      }
-      start = i + 1;
-    }
-  }
-  start = 0;
-  for (std::size_t i = 0; i <= target.size(); ++i) {
-    if (i == target.size() || target[i] == '/') {
-      if (i > start) {
-        std::string_view seg = target.substr(start, i - start);
-        if (seg == ".") {
-          // skip
-        } else if (seg == "..") {
-          if (stack.empty()) {
-            std::string ctx("context=xlsb_reader base_dir=");
-            ctx.append(base_dir);
-            ctx.append(" target=");
-            ctx.append(target);
-            return make_error(FormulonErrorCode::kIoZipSlip, "rels target escapes package root via '..' traversal",
-                              std::move(ctx));
-          }
-          stack.pop_back();
-        } else {
-          stack.emplace_back(seg);
-        }
-      }
-      start = i + 1;
-    }
-  }
-  std::string out;
-  for (std::size_t i = 0; i < stack.size(); ++i) {
-    if (i > 0) {
-      out.push_back('/');
-    }
-    out.append(stack[i]);
-  }
-  if (out.empty()) {
-    std::string ctx("context=xlsb_reader base_dir=");
-    ctx.append(base_dir);
-    ctx.append(" target=");
-    ctx.append(target);
-    return make_error(FormulonErrorCode::kIoZipSlip, "rels target resolves to empty path", std::move(ctx));
-  }
-  return out;
+  return ooxml::resolve_relative_path(base_dir, target);
 }
 
 std::string DirOf(std::string_view path) {

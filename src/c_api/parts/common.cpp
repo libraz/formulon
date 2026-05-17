@@ -128,7 +128,7 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index, 
   return 0;
 }
 
-fm_status_t check_sheet_u32(fm_workbook_t* wb, std::uint32_t sheet, const char* fn) {
+fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const char* fn) {
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, fn);
   }

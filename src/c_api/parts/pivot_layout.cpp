@@ -27,6 +27,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
@@ -79,15 +80,13 @@ const char* store_cstr(TextStore& store, std::string_view text) {
 extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::size_t sheet_index,
                                                 std::size_t pivot_index, fm_pivot_cells_t** out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_pivot_layout: NULL argument");
   }
   *out = nullptr;
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_pivot_layout: sheet_index out of range",
-                             "sheet_index=" + std::to_string(sheet_index));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_pivot_layout"); rc != 0) {
+    return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   if (pivot_index >= sheet.pivot_tables().size()) {

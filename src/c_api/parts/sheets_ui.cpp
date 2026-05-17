@@ -424,13 +424,12 @@ extern "C" fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, std::uint32
 extern "C" fm_status_t fm_sheet_get_protection(const fm_workbook_t* wb, uint32_t sheet_index,
                                                fm_sheet_protection_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_sheet_get_protection: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_get_protection: sheet_index out of range");
+  if (auto rc = check_sheet_u32(wb, sheet_index, "fm_sheet_get_protection"); rc != 0) {
+    return rc;
   }
   const formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).protection();
   out->enabled = p.enabled ? 1 : 0;
@@ -461,13 +460,12 @@ extern "C" fm_status_t fm_sheet_get_protection(const fm_workbook_t* wb, uint32_t
 extern "C" fm_status_t fm_sheet_set_protection(fm_workbook_t* wb, uint32_t sheet_index,
                                                const fm_sheet_protection_t* in) {
   clear_last_error();
-  if (wb == nullptr || in == nullptr) {
+  if (in == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_sheet_set_protection: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_set_protection: sheet_index out of range");
+  if (auto rc = check_sheet_u32(wb, sheet_index, "fm_sheet_set_protection"); rc != 0) {
+    return rc;
   }
   formulon::SheetProtection& p = wb->workbook().sheet(sheet_index).mutable_protection();
   // Helper for pointer->string deep copy with NULL-as-empty semantics.

@@ -23,6 +23,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
@@ -80,18 +81,14 @@ fm_status_t trace_impl(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32
                        std::uint32_t depth, fm_cell_nodes_t** out) {
   clear_last_error();
   constexpr const char* fn_name = kPrecedents ? "fm_workbook_precedents" : "fm_workbook_dependents";
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(
         formulon::FormulonErrorCode::kBindingNullPointer,
         kPrecedents ? "fm_workbook_precedents: NULL argument" : "fm_workbook_dependents: NULL argument");
   }
-  if (sheet >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument,
-        kPrecedents ? "fm_workbook_precedents: sheet out of range" : "fm_workbook_dependents: sheet out of range",
-        "sheet=" + std::to_string(sheet));
+  if (auto rc = check_sheet_u32(wb, sheet, fn_name); rc != 0) {
+    return rc;
   }
-  (void)fn_name;
   const auto& graph = wb->workbook().recalc_engine().dep_graph();
   formulon::eval::CellNodeId seed{static_cast<std::uint16_t>(sheet), row, col};
   auto neighbors = [&graph](formulon::eval::CellNodeId node) {

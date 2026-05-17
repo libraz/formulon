@@ -22,6 +22,7 @@
 #include "workbook.h"
 
 using formulon::c_api::parts::check_sheet_index;
+using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::intern_text;
 using formulon::c_api::parts::set_binding_error;
@@ -114,13 +115,11 @@ extern "C" fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_i
 extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                              fm_value_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_get_value: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_get_value",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_value"); rc != 0) {
+    return rc;
   }
   // `resolve_cell_value` is the spill-aware accessor: phantoms of a
   // dynamic-array spill surface their array cell rather than the raw
@@ -139,14 +138,12 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
 extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                   const char** out_text) {
   clear_last_error();
-  if (wb == nullptr || out_text == nullptr) {
+  if (out_text == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_lambda_text_at: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_lambda_text_at: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_lambda_text_at"); rc != 0) {
+    return rc;
   }
   const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
   if (cell == nullptr || !cell->cached_value.is_lambda()) {
@@ -203,13 +200,11 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(cons
 extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet_index, size_t idx, uint32_t* out_row,
                                            uint32_t* out_col, const char** out_formula, fm_value_t* out_value) {
   clear_last_error();
-  if (wb == nullptr || out_row == nullptr || out_col == nullptr || out_value == nullptr) {
+  if (out_row == nullptr || out_col == nullptr || out_value == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_cell_at: NULL argument");
   }
-  if (sheet_index >= wb->workbook().sheet_count()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_cell_at: sheet_index out of range",
-        "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(wb->workbook().sheet_count()));
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_cell_at"); rc != 0) {
+    return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   // Materialise the sorted address vector. This is O(N log N) in the
@@ -253,12 +248,11 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
 extern "C" fm_status_t fm_workbook_spill_info(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
                                               std::uint32_t col, fm_spill_info_t* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
+  if (out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_spill_info: NULL argument");
   }
-  if (sheet >= wb->workbook().sheet_count()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_spill_info: sheet out of range", "sheet=" + std::to_string(sheet));
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_workbook_spill_info"); rc != 0) {
+    return rc;
   }
   *out = fm_spill_info_t{};
   const auto& s = wb->workbook().sheet(sheet);
