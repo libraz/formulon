@@ -496,7 +496,7 @@ TEST(PivotBy, MismatchedRowCountsColVsValuesYieldsValueError) {
 //
 // The general K x L x V layout (K = row_fields->cols, L = col_fields->cols,
 // V = values->cols, all >= 1) is documented in
-// `src/eval/groupby_pivotby_lazy.cpp` near the top of `eval_pivotby_lazy`.
+// `src/eval/groupby_pivotby/pivotby.cpp` near the top of `eval_pivotby_lazy`.
 // The fixtures here use Formulon's defaults (field_headers=3,
 // row_total_depth=-1, col_total_depth=1) which differ from Mac Excel's
 // defaults; that is a documented, intentional divergence preserving the

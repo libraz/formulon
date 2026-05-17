@@ -123,8 +123,17 @@ set(FORMULON_CORE_SOURCES
   src/io/comments_writer.cpp
   src/io/defined_names.cpp
   src/io/ooxml_reader.cpp
+  src/io/ooxml/external_link_reader.cpp
+  src/io/ooxml/package_validator.cpp
+  src/io/ooxml/pivot_target_reader.cpp
+  src/io/ooxml/sheet_aux_rels_reader.cpp
+  src/io/ooxml/workbook_rels_reader.cpp
   src/io/ooxml_writer.cpp
   src/io/ooxml_writer_cell.cpp
+  src/io/ooxml/cell_ref_writer.cpp
+  src/io/ooxml/emission_plan.cpp
+  src/io/ooxml/relationship_writer.cpp
+  src/io/ooxml/zip_part_writer.cpp
   src/io/pivot_cache_reader.cpp
   src/io/pivot_cache_writer.cpp
   src/io/pivot_table_reader.cpp
@@ -148,6 +157,9 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/sst_writer.cpp
   src/io/xlsb/writer.cpp
   src/cf/cf_evaluator.cpp
+  src/cf/cf_helpers.cpp
+  src/cf/rule_match.cpp
+  src/cf/scale_evaluator.cpp
   src/parser/tokenizer.cpp
   src/parser/ast.cpp
   src/parser/ast_dump.cpp
@@ -157,6 +169,10 @@ set(FORMULON_CORE_SOURCES
   src/parser/parser_atoms.cpp
   src/parser/parser_reference.cpp
   src/parser/ref_transforms.cpp
+  src/pivot/aggregator.cpp
+  src/pivot/filter_engine.cpp
+  src/pivot/hierarchy_builder.cpp
+  src/pivot/layout_generator.cpp
   src/pivot/pivot_evaluator.cpp
   src/pivot/pivot_index.cpp
   src/pivot/pivot_layout.cpp
@@ -228,6 +244,9 @@ set(FORMULON_CORE_SOURCES
   src/eval/text_format/number_format.cpp
   src/eval/text_format/number_format_tokenizer.cpp
   src/eval/text_format/number_format_render.cpp
+  src/eval/text_format/render_numeric.cpp
+  src/eval/text_format/render_date.cpp
+  src/eval/text_format/render_fraction.cpp
   src/eval/stats/special_functions.cpp
   src/eval/tree_walker.cpp
   src/eval/tree_walker_lazy_table.cpp
@@ -252,8 +271,15 @@ set(FORMULON_CORE_SOURCES
   src/eval/cell_lazy.cpp
   src/eval/conditional_aggregates.cpp
   src/eval/database_lazy.cpp
-  src/eval/dynamic_array_lazy.cpp
-  src/eval/groupby_pivotby_lazy.cpp
+  src/eval/dynamic_array/anchor.cpp
+  src/eval/dynamic_array/common.cpp
+  src/eval/dynamic_array/filtering.cpp
+  src/eval/dynamic_array/indexing.cpp
+  src/eval/dynamic_array/layout.cpp
+  src/eval/dynamic_array/reshape.cpp
+  src/eval/groupby_pivotby/common.cpp
+  src/eval/groupby_pivotby/groupby.cpp
+  src/eval/groupby_pivotby/pivotby.cpp
   src/eval/lambda_format.cpp
   src/eval/lambda_helpers_lazy.cpp
   src/eval/matrix_ops_lazy.cpp
@@ -265,7 +291,10 @@ set(FORMULON_CORE_SOURCES
   src/eval/linest_lazy.cpp
   src/eval/textsplit_lazy.cpp
   src/eval/trimrange_lazy.cpp
-  src/eval/reference_lazy.cpp
+  src/eval/reference/common.cpp
+  src/eval/reference/indirect.cpp
+  src/eval/reference/intersection.cpp
+  src/eval/reference/offset.cpp
   src/eval/regression_lazy.cpp
   src/eval/series_sum_lazy.cpp
   src/eval/rank_lazy.cpp
@@ -275,7 +304,24 @@ set(FORMULON_CORE_SOURCES
   src/eval/phonetic_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp
-  src/c_api/formulon_c.cpp
+  src/c_api/internal/value_marshal.cpp
+  src/c_api/parts/cells.cpp
+  src/c_api/parts/cf_eval.cpp
+  src/c_api/parts/cf_mutate.cpp
+  src/c_api/parts/common.cpp
+  src/c_api/parts/diagnostics.cpp
+  src/c_api/parts/external_links.cpp
+  src/c_api/parts/function_catalog.cpp
+  src/c_api/parts/pivot_cache.cpp
+  src/c_api/parts/pivot_internal.cpp
+  src/c_api/parts/pivot_layout.cpp
+  src/c_api/parts/pivot_table.cpp
+  src/c_api/parts/sheet_layout.cpp
+  src/c_api/parts/sheets_ui.cpp
+  src/c_api/parts/styles.cpp
+  src/c_api/parts/trace.cpp
+  src/c_api/parts/version.cpp
+  src/c_api/parts/workbook.cpp
 )
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})

@@ -17,8 +17,9 @@
 // Each returns `true` on success and writes the flattened cells +
 // rectangle dimensions through out-params; on failure returns `false`
 // and writes the Excel error code through `*out_err_code`. Split out of
-// `reference_lazy.h` so range-aware aggregator TUs don't have to pull
-// in the INDIRECT/OFFSET impl declarations.
+// the original `reference_lazy.h` so range-aware aggregator TUs don't
+// have to pull in the INDIRECT / OFFSET impl declarations. The bodies
+// live in `src/eval/reference/offset.cpp`.
 
 #ifndef FORMULON_EVAL_RANGE_EXPANDERS_H_
 #define FORMULON_EVAL_RANGE_EXPANDERS_H_

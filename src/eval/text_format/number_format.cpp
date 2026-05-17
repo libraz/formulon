@@ -19,6 +19,8 @@
 #include <vector>
 
 #include "eval/text_format/number_format_types.h"
+#include "eval/text_format/render_date.h"
+#include "eval/text_format/render_numeric.h"
 
 namespace formulon {
 namespace text_format {

@@ -1,11 +1,15 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
-// OOXML reader implementation. Walks the in-memory package via
-// `ZipReader`, parses the four package-structure parts with pugixml,
-// builds a Workbook whose sheets reflect the `<sheets>` order from
-// `xl/workbook.xml`, and then drives the per-sheet cell parser
-// (`io::read_sheet_data`) so each `<c>` lands in the workbook with its
-// formula registered against the recalc engine.
+// OOXML reader orchestrator. Walks the in-memory package via
+// `ZipReader`, dispatches each part to a focused helper module, and
+// assembles the resulting Workbook. The per-part logic lives under
+// `src/io/ooxml/` (package validation + path normalisation, workbook
+// rels, sheet aux rels, external links, pivot cache target resolution)
+// and under sibling readers (`sheet_reader`, `cf_reader`, `tables_reader`,
+// `sst_reader`, `styles_reader`, `comments_reader`, `pivot_cache_reader`,
+// `pivot_table_reader`); this file owns only the read pipeline order
+// and the bookkeeping that ties the loaded parts back onto the
+// workbook.
 //
 // Shared-strings (`xl/sharedStrings.xml`) resolution is wired in: the
 // SST is loaded ahead of the per-sheet read loop, each sheet queues its
@@ -13,8 +17,7 @@
 // a final resolution pass replaces the placeholder `Text("")` values
 // with views into the SST. Styles (`xl/styles.xml`) is parsed for
 // validation only — the runtime style model lands when the formatter
-// pipeline begins consuming it. Defined names and tables remain
-// deferred.
+// pipeline begins consuming it.
 
 #include "io/ooxml_reader.h"
 
@@ -35,15 +38,17 @@
 #include "io/comments_reader.h"
 #include "io/defined_names.h"
 #include "io/defined_names_internal.h"
-#include "io/external_links.h"
-#include "io/ooxml_defs.h"
+#include "io/ooxml/external_link_reader.h"
+#include "io/ooxml/package_validator.h"
+#include "io/ooxml/pivot_target_reader.h"
+#include "io/ooxml/sheet_aux_rels_reader.h"
+#include "io/ooxml/workbook_rels_reader.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
-#include "io/unknown_relationship.h"
 #include "io/workbook_kind.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
@@ -54,7 +59,6 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
-#include "utils/structured_log.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -62,48 +66,12 @@ namespace formulon {
 namespace io {
 namespace {
 
-// Relationship type URIs used by Excel-produced packages live in
-// `io/ooxml_defs.h` and are shared with the writer.
-
-// Content types we expect to see referenced from `[Content_Types].xml`.
-// We only look up the workbook content type to verify the package is
-// well-formed and to discriminate between `.xlsx` / `.xlsm` / `.xltx` /
-// `.xltm` packages; the full content-type registry is built in a later
-// bundle (which will recognise the worksheet, styles, sharedStrings,
-// etc. content types as well).
-constexpr std::string_view kCtWorkbookXlsx =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
-constexpr std::string_view kCtWorkbookXlsm = "application/vnd.ms-excel.sheet.macroEnabled.main+xml";
-constexpr std::string_view kCtWorkbookXltx =
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml";
-constexpr std::string_view kCtWorkbookXltm = "application/vnd.ms-excel.template.macroEnabled.main+xml";
+// Content type for the binary printer-settings part; the orchestrator
+// stamps it onto the passthrough record when it captures a sheet's
+// printer-settings bytes (the sheet aux-rels reader only resolves the
+// path; the orchestrator owns the round-trip wrapping).
 constexpr std::string_view kCtPrinterSettings =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
-
-/// Returns the matching `WorkbookKind` for `content_type`, or
-/// `std::nullopt` when the string does not match any of the four
-/// recognised workbook variants. Comparison is case-sensitive — Excel
-/// emits the canonical lowercase form and we follow [OPC] §10's strict
-/// matching rules.
-struct DetectedKind {
-  io::WorkbookKind kind;
-  bool recognised;
-};
-DetectedKind DetectWorkbookKind(std::string_view content_type) {
-  if (content_type == kCtWorkbookXlsx) {
-    return {io::WorkbookKind::kXlsx, true};
-  }
-  if (content_type == kCtWorkbookXlsm) {
-    return {io::WorkbookKind::kXlsm, true};
-  }
-  if (content_type == kCtWorkbookXltx) {
-    return {io::WorkbookKind::kXltx, true};
-  }
-  if (content_type == kCtWorkbookXltm) {
-    return {io::WorkbookKind::kXltm, true};
-  }
-  return {io::WorkbookKind::kXlsx, false};
-}
 
 struct StringXmlWriter final : pugi::xml_writer {
   std::string* dst = nullptr;
@@ -120,287 +88,6 @@ std::string RawXml(const pugi::xml_node& node) {
   sink.dst = &out;
   node.print(sink, /*indent=*/"", pugi::format_raw);
   return out;
-}
-
-/// Returns true if `content_type` references one of the four known
-/// workbook variants. Used to gate "looks like a spreadsheet package"
-/// without committing to the kind discriminator yet.
-bool IsKnownWorkbookContentType(std::string_view content_type) {
-  return content_type == kCtWorkbookXlsx || content_type == kCtWorkbookXlsm || content_type == kCtWorkbookXltx ||
-         content_type == kCtWorkbookXltm;
-}
-
-/// Returns the part path the package-level rels file points at for
-/// `OfficeDocument`. The OOXML spec allows arbitrary placement (Excel
-/// always uses `/xl/workbook.xml`), so we follow the relationship rather
-/// than hard-coding the path. Path is normalised to drop any leading
-/// slash so the result is directly consumable as a ZIP entry name.
-Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::uint8_t>& rels_bytes) {
-  pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, rels_bytes, "ooxml_reader", "package-level rels"));
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
-                      "context=ooxml_reader part=_rels/.rels");
-  }
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
-    const std::string_view type = attr_str(rel, "Type");
-    if (type == kRelOfficeDocument) {
-      std::string target(attr_str(rel, "Target"));
-      if (target.empty()) {
-        return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                          "package-level rels: empty Target for OfficeDocument",
-                          "context=ooxml_reader part=_rels/.rels");
-      }
-      // Normalise: relationship targets may be absolute (`/xl/...`) or
-      // relative (`xl/...`). The ZIP catalogue stores names relative to
-      // the package root with no leading slash.
-      if (!target.empty() && target.front() == '/') {
-        target.erase(0, 1);
-      }
-      return target;
-    }
-  }
-  return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                    "package-level rels: no OfficeDocument relationship found",
-                    "context=ooxml_reader part=_rels/.rels");
-}
-
-/// Verifies that `[Content_Types].xml` references a workbook content
-/// type at least once and returns the corresponding `WorkbookKind`.
-///
-/// The package is considered well-formed if any `<Override>` declares
-/// either one of the four known workbook content types (xlsx / xlsm /
-/// xltx / xltm) OR a content type that ends in
-/// `spreadsheetml.sheet.main+xml` / similar — we are intentionally
-/// strict here and only accept the four canonical strings. Anything
-/// else yields a structured-log warning and a `kXlsx` fallback so
-/// Excel-compatibility-first behaviour is preserved (the engine still
-/// reads cells from non-canonical packages).
-///
-/// The full content-type registry is deferred to a later bundle.
-Expected<io::WorkbookKind, Error> VerifyContentTypes(const std::vector<std::uint8_t>& ct_bytes) {
-  pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "ooxml_reader", "[Content_Types].xml"));
-  pugi::xml_node root = doc.child("Types");
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
-                      "context=ooxml_reader part=[Content_Types].xml");
-  }
-  // We need to recognise one of two situations:
-  //   (a) An Override carries one of the four canonical workbook
-  //       content types — we accept the package and pin the kind.
-  //   (b) An Override exists for `/xl/workbook.xml` (or whatever the
-  //       package-level rels file points at) but with an unfamiliar
-  //       content type. We still accept the package for round-trip
-  //       reads but log a warning and fall back to `kXlsx`.
-  // The package-level rels file is parsed later in the pipeline; at
-  // this point we walk every Override looking for a recognised kind
-  // first, and only if we find none do we record the first
-  // workbook-shaped override (heuristic: ContentType ends in
-  // `+xml` and the part name is a candidate workbook). Keeping the
-  // logic simple here matches the original "saw_workbook" heuristic
-  // while extending it to four kinds.
-  bool any_workbook_like = false;
-  std::string first_unknown_ct;
-  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
-    if (std::string_view(node.name()) != "Override") {
-      continue;
-    }
-    const std::string_view ct = attr_str(node, "ContentType");
-    if (IsKnownWorkbookContentType(ct)) {
-      return DetectWorkbookKind(ct).kind;
-    }
-    // Heuristic for case (b): part name targets `xl/workbook.xml`
-    // (the canonical Excel placement) but with a content type we do
-    // not recognise. Surface the first such occurrence so the warning
-    // names the actual offender.
-    if (first_unknown_ct.empty()) {
-      const std::string_view part_name = attr_str(node, "PartName");
-      if (part_name == "/xl/workbook.xml" || part_name == "xl/workbook.xml") {
-        first_unknown_ct.assign(ct);
-        any_workbook_like = true;
-      }
-    }
-  }
-  if (any_workbook_like) {
-    StructuredLog("ooxml.reader.unknown_workbook_content_type")
-        .field("content_type", first_unknown_ct)
-        .field("fallback_kind", std::string_view("kXlsx"))
-        .warn();
-    return io::WorkbookKind::kXlsx;
-  }
-  return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: no workbook content-type override",
-                    "context=ooxml_reader part=[Content_Types].xml");
-}
-
-/// One entry from `[Content_Types].xml`'s `<Override>` list, paired with
-/// its declared content type. The reader uses the content type (a) to
-/// decide whether the part is interesting at all (we only consume
-/// recognised content types) and (b) so the writer slice can re-emit
-/// the `<Override>` for passthrough parts verbatim.
-struct OverrideEntry {
-  std::string part_name;     // package-relative, no leading slash
-  std::string content_type;  // verbatim ContentType= attribute value
-};
-
-/// Lists every part name advertised by `[Content_Types].xml`'s `<Override>`
-/// elements together with its content type. `<Default>` entries are
-/// ignored: they describe extensions rather than specific parts and the
-/// passthrough flow only carries Override-registered parts.
-///
-/// Returns an error when the bytes do not parse as XML or carry no
-/// `<Types>` root: silently substituting an empty list would erase every
-/// passthrough part on round-trip and produce a corrupt package without
-/// surfacing the cause. `VerifyContentTypes` runs over the same buffer
-/// and detects the same defects, but this slice may be invoked
-/// independently in future code paths, so we make it self-consistent.
-Expected<std::vector<OverrideEntry>, Error> ListOverridePartEntries(const std::vector<std::uint8_t>& ct_bytes) {
-  std::vector<OverrideEntry> out;
-  pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "ooxml_reader", "[Content_Types].xml"));
-  pugi::xml_node root = doc.child("Types");
-  if (!root) {
-    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
-                      "context=ooxml_reader part=[Content_Types].xml");
-  }
-  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
-    if (std::string_view(node.name()) == "Override") {
-      std::string part_name(attr_str(node, "PartName"));
-      if (!part_name.empty() && part_name.front() == '/') {
-        part_name.erase(0, 1);
-      }
-      if (part_name.empty()) {
-        continue;
-      }
-      std::string content_type(attr_str(node, "ContentType"));
-      out.push_back(OverrideEntry{std::move(part_name), std::move(content_type)});
-    }
-  }
-  return out;
-}
-
-/// Builds a path relative to `base_dir`. OOXML rels Target attributes are
-/// relative to the part that owns the rels file (e.g. `xl/_rels/workbook.xml.rels`
-/// has its Targets resolved against `xl/`). We collapse `..` segments so
-/// `worksheets/sheet1.xml` resolved against `xl/` yields `xl/worksheets/sheet1.xml`,
-/// and `../theme/theme1.xml` resolved against `xl/` would yield `theme/theme1.xml`.
-///
-/// Path-traversal hardening: a hostile rels file may carry a `Target` like
-/// `../../../etc/passwd` whose `..` segments outnumber the prefix
-/// directories and thus escape the package root. The resolver rejects any
-/// such input — including absolute-path targets that begin with `/`
-/// (those are package-relative by spec, but a writer that emits one is
-/// signalling a non-portable path that we treat as malformed) — by
-/// surfacing `kIoZipSlip`. Callers must propagate the error and refuse to
-/// open the package.
-Expected<std::string, Error> ResolveRelativePath(std::string_view base_dir, std::string_view target) {
-  // Absolute-path targets are not permitted in well-formed OOXML rels
-  // files. A writer that emits `Target="/xl/..."` is either misbehaving
-  // or attempting path traversal; in either case the result is not safe
-  // to consume because the path no longer participates in `..`-segment
-  // accounting that defends the package root.
-  if (!target.empty() && target.front() == '/') {
-    std::string ctx("context=ooxml_reader base_dir=");
-    ctx.append(base_dir);
-    ctx.append(" target=");
-    ctx.append(target);
-    return make_error(FormulonErrorCode::kIoZipSlip, "rels target uses package-absolute path; refusing to resolve",
-                      std::move(ctx));
-  }
-
-  std::vector<std::string> stack;
-  // Seed the stack from `base_dir`.
-  std::size_t start = 0;
-  for (std::size_t i = 0; i <= base_dir.size(); ++i) {
-    if (i == base_dir.size() || base_dir[i] == '/') {
-      if (i > start) {
-        stack.emplace_back(base_dir.substr(start, i - start));
-      }
-      start = i + 1;
-    }
-  }
-  // Append the target, applying `.` / `..` normalisation. Track whether
-  // any `..` segment failed to find a directory to pop so we can refuse
-  // a target that escapes the package root.
-  start = 0;
-  for (std::size_t i = 0; i <= target.size(); ++i) {
-    if (i == target.size() || target[i] == '/') {
-      if (i > start) {
-        std::string_view seg = target.substr(start, i - start);
-        if (seg == ".") {
-          // skip
-        } else if (seg == "..") {
-          if (stack.empty()) {
-            std::string ctx("context=ooxml_reader base_dir=");
-            ctx.append(base_dir);
-            ctx.append(" target=");
-            ctx.append(target);
-            return make_error(FormulonErrorCode::kIoZipSlip, "rels target escapes package root via '..' traversal",
-                              std::move(ctx));
-          }
-          stack.pop_back();
-        } else {
-          stack.emplace_back(seg);
-        }
-      }
-      start = i + 1;
-    }
-  }
-  std::string out;
-  for (std::size_t i = 0; i < stack.size(); ++i) {
-    if (i > 0) {
-      out.push_back('/');
-    }
-    out.append(stack[i]);
-  }
-  if (out.empty()) {
-    std::string ctx("context=ooxml_reader base_dir=");
-    ctx.append(base_dir);
-    ctx.append(" target=");
-    ctx.append(target);
-    return make_error(FormulonErrorCode::kIoZipSlip, "rels target resolves to empty path", std::move(ctx));
-  }
-  return out;
-}
-
-/// Returns the directory portion of `path` (everything up to the last
-/// `/`, exclusive). Empty for top-level paths like `_rels/.rels`. Used as
-/// the base directory for resolving relative relationship targets.
-std::string DirOf(std::string_view path) {
-  const std::size_t pos = path.find_last_of('/');
-  if (pos == std::string_view::npos) {
-    return {};
-  }
-  return std::string(path.substr(0, pos));
-}
-
-/// Returns the `.rels` file path corresponding to any OOXML part path.
-/// For example, `xl/worksheets/sheet1.xml` becomes
-/// `xl/worksheets/_rels/sheet1.xml.rels`; top-level parts similarly
-/// produce `_rels/<file>.rels`.
-std::string RelsPathForPart(std::string_view part_path) {
-  const std::size_t slash = part_path.find_last_of('/');
-  std::string out;
-  if (slash == std::string_view::npos) {
-    out.append("_rels/").append(part_path).append(".rels");
-  } else {
-    out.append(part_path.substr(0, slash));
-    out.append("/_rels/");
-    out.append(part_path.substr(slash + 1));
-    out.append(".rels");
-  }
-  return out;
-}
-
-/// Returns the Office relationship id from nodes that may spell it as
-/// either `r:id` or bare `id`.
-std::string RelationshipRefId(const pugi::xml_node& node) {
-  std::string rid = node.attribute("r:id").value();
-  if (rid.empty()) {
-    rid = node.attribute("id").value();
-  }
-  return rid;
 }
 
 /// Populates the structured `PageSetup` fields from a `<pageSetup>` node.
@@ -467,463 +154,15 @@ void ReadManualBreaks(const pugi::xml_node& breaks_node, std::vector<ManualBreak
   }
 }
 
-template <typename Fn>
-Expected<void, Error> VisitRelationshipNodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
-                                             Fn&& fn) {
-  auto rels_bytes_or = zip.read_entry(rels_path);
-  if (!rels_bytes_or) {
-    return rels_bytes_or.error();
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
-
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(rels_path);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    std::string message(label);
-    message.append(": pugixml parse failed");
-    return make_error(FormulonErrorCode::kIoXmlParse, std::move(message), std::move(ctx));
-  }
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    std::string ctx("context=ooxml_reader part=");
-    ctx.append(rels_path);
-    std::string message(label);
-    message.append(": missing <Relationships>");
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, std::move(message), std::move(ctx));
-  }
-
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
-    auto status = fn(rel);
-    if (!status) {
-      return status.error();
-    }
-  }
-  return Expected<void, Error>::Ok();
-}
-
-/// Aggregated workbook-relationship lookup: per-sheet `rId -> path` map
-/// plus optional resolved paths for the `sharedStrings` and `styles`
-/// parts. Empty `sst_path` / `styles_path` mean "no such relationship",
-/// which is legal — the package can omit either part.
-///
-/// `pivot_cache_definition_paths_by_rid` carries the resolved part path
-/// for every `<Relationship Type=".../pivotCacheDefinition">` entry,
-/// keyed by relationship id. The workbook's `<pivotCaches>` element
-/// (parsed by `read_ooxml`) joins each `cacheId` to its definition path
-/// through this map.
-struct WorkbookRels {
-  std::unordered_map<std::string, std::string> sheet_targets;
-  std::string sst_path;
-  std::string styles_path;
-  std::unordered_map<std::string, std::string> pivot_cache_definition_paths_by_rid;
-  std::unordered_map<std::string, std::string> external_link_paths_by_rid;
-  // Relationship entries with Type URIs we don't recognise (theme,
-  // calcChain, vbaProject, customXml, ...). Captured verbatim so the
-  // writer can re-emit them, keeping passthrough-listed parts reachable
-  // in the package graph.
-  std::vector<UnknownRelationship> unknown_rels;
-};
-
-/// Loads `<workbook_dir>/_rels/<workbook_filename>.rels` (if present) and
-/// returns the relationship-id -> resolved target-path map for each
-/// worksheet relationship, plus the resolved target paths for the
-/// shared-strings and styles relationships when present.
-Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string_view workbook_path) {
-  WorkbookRels rels;
-  const std::string rels_path = RelsPathForPart(workbook_path);
-  if (!zip.has_entry(rels_path)) {
-    // Excel always emits this; treat absence as a broken package.
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook rels: part not found",
-                      "context=ooxml_reader rels_path=" + rels_path);
-  }
-
-  const std::string base_dir = DirOf(workbook_path);
-  auto visit_status =
-      VisitRelationshipNodes(zip, rels_path, "workbook rels", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        const std::string_view type = attr_str(rel, "Type");
-        const std::string_view target = attr_str(rel, "Target");
-        if (target.empty()) {
-          return Expected<void, Error>::Ok();
-        }
-        if (type == kRelWorksheet) {
-          const std::string id(attr_str(rel, "Id"));
-          if (id.empty()) {
-            return Expected<void, Error>::Ok();
-          }
-          auto resolved = ResolveRelativePath(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.sheet_targets.emplace(id, std::move(resolved).value());
-        } else if (type == kRelSharedStrings) {
-          // Last writer wins on duplicates (Excel never emits more than one,
-          // but defending against malformed inputs costs almost nothing).
-          auto resolved = ResolveRelativePath(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.sst_path = std::move(resolved).value();
-        } else if (type == kRelStyles) {
-          auto resolved = ResolveRelativePath(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.styles_path = std::move(resolved).value();
-        } else if (type == kRelPivotCacheDefinition) {
-          const std::string id(attr_str(rel, "Id"));
-          if (id.empty()) {
-            return Expected<void, Error>::Ok();
-          }
-          auto resolved = ResolveRelativePath(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.pivot_cache_definition_paths_by_rid.emplace(id, std::move(resolved).value());
-        } else if (type == kRelExternalLink) {
-          const std::string id(attr_str(rel, "Id"));
-          if (id.empty()) {
-            return Expected<void, Error>::Ok();
-          }
-          auto resolved = ResolveRelativePath(base_dir, target);
-          if (!resolved) {
-            return resolved.error();
-          }
-          rels.external_link_paths_by_rid.emplace(id, std::move(resolved).value());
-        } else {
-          // Unrecognised Type URI: capture verbatim so the writer can
-          // re-emit the entry. Without this, the matching part (theme,
-          // calcChain, vbaProject, customXml, ...) survives in
-          // passthrough but becomes an orphan in the relationship
-          // graph and Excel opens the file in "needs repair" mode.
-          UnknownRelationship entry;
-          entry.id.assign(attr_str(rel, "Id"));
-          entry.type.assign(type);
-          const bool external = attr_str(rel, "TargetMode") == "External";
-          entry.target_external = external;
-          if (external) {
-            entry.target.assign(target);
-          } else {
-            auto resolved = ResolveRelativePath(base_dir, target);
-            if (!resolved) {
-              return resolved.error();
-            }
-            entry.target = std::move(resolved).value();
-          }
-          rels.unknown_rels.push_back(std::move(entry));
-        }
-        return Expected<void, Error>::Ok();
-      });
-  if (!visit_status) {
-    return visit_status.error();
-  }
-  return rels;
-}
-
-/// Walks `<externalReferences>` in the parsed workbook document and
-/// joins each entry against `wb_rels` to build one `ExternalLinkRecord`
-/// per `<externalReference>` in document order. For each resolved body
-/// part the helper additionally classifies the link kind by peeking at
-/// the body's root element and captures the target URL from the per-link
-/// rels file. Missing / unparseable parts produce an `kUnknown` record
-/// rather than failing the load: round-trip preservation matters more
-/// here than strict validation, and Excel itself tolerates partially-
-/// broken external link sections.
-///
-/// `consumed_rels_paths` collects the paths of per-link rels files the
-/// reader observed so the caller can mark them as consumed (the writer
-/// regenerates them from the captured records). The body part itself
-/// stays in `passthrough_parts()` because its inner `r:id` references
-/// — captured here in `body_rel_id` — are preserved by-value through
-/// the writer's per-link rels emission.
-struct ExternalLinkLoadResult {
-  std::vector<ExternalLinkRecord> records;
-  std::vector<std::string> consumed_rels_paths;
-};
-
-ExternalLinkLoadResult LoadExternalLinks(const ZipReader& zip, const pugi::xml_node& wb_root,
-                                         const WorkbookRels& wb_rels) {
-  ExternalLinkLoadResult out;
-  pugi::xml_node refs_node = wb_root.child("externalReferences");
-  if (!refs_node) {
-    return out;
-  }
-  std::uint32_t index = 1;
-  for (pugi::xml_node ref = refs_node.child("externalReference"); ref;
-       ref = ref.next_sibling("externalReference"), ++index) {
-    std::string rid = RelationshipRefId(ref);
-    if (rid.empty()) {
-      continue;
-    }
-    auto it = wb_rels.external_link_paths_by_rid.find(rid);
-    if (it == wb_rels.external_link_paths_by_rid.end()) {
-      continue;
-    }
-    ExternalLinkRecord rec;
-    rec.index = index;
-    rec.rel_id = std::move(rid);
-    rec.part_path = it->second;
-    rec.kind = ExternalLinkRecord::Kind::kUnknown;
-
-    // Body part — detect kind and capture the inner r:id reference.
-    if (zip.has_entry(rec.part_path)) {
-      auto body_or = zip.read_entry(rec.part_path);
-      if (body_or) {
-        const std::vector<std::uint8_t>& body_bytes = body_or.value();
-        pugi::xml_document body_doc;
-        pugi::xml_parse_result body_parse =
-            body_doc.load_buffer(body_bytes.data(), body_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-        if (body_parse) {
-          pugi::xml_node link_root = body_doc.child("externalLink");
-          if (link_root) {
-            if (pugi::xml_node book = link_root.child("externalBook"); book) {
-              rec.kind = ExternalLinkRecord::Kind::kExternalBook;
-              rec.body_rel_id = RelationshipRefId(book);
-            } else if (pugi::xml_node ole = link_root.child("oleLink"); ole) {
-              rec.kind = ExternalLinkRecord::Kind::kOleLink;
-              rec.body_rel_id = RelationshipRefId(ole);
-            } else if (link_root.child("ddeLink")) {
-              rec.kind = ExternalLinkRecord::Kind::kDdeLink;
-              // ddeLink carries its connection metadata inline; no inner r:id.
-            }
-          }
-        }
-      }
-    }
-
-    // Per-link rels — capture target URL + target_mode for round-trip.
-    const std::string body_rels_path = RelsPathForPart(rec.part_path);
-    if (zip.has_entry(body_rels_path)) {
-      auto rels_or = zip.read_entry(body_rels_path);
-      if (rels_or) {
-        const std::vector<std::uint8_t>& rels_bytes = rels_or.value();
-        pugi::xml_document rels_doc;
-        pugi::xml_parse_result rels_parse =
-            rels_doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-        if (rels_parse) {
-          pugi::xml_node rels_root = rels_doc.child("Relationships");
-          if (rels_root) {
-            // Pick the relationship whose Id matches the body's inner
-            // r:id when available; otherwise take the first link-typed
-            // relationship as a best-effort fallback.
-            for (pugi::xml_node rel = rels_root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
-              const std::string_view type = rel.attribute("Type").value();
-              if (type != kRelExternalLinkPath && type != kRelOleLink && type != kRelDdeLink) {
-                continue;
-              }
-              const std::string_view rel_id = rel.attribute("Id").value();
-              const bool id_match = !rec.body_rel_id.empty() && rel_id == rec.body_rel_id;
-              if (rec.target.empty() || id_match) {
-                rec.target = rel.attribute("Target").value();
-                const std::string_view target_mode = rel.attribute("TargetMode").value();
-                rec.target_external = (target_mode == "External") || target_mode.empty();
-                if (rec.body_rel_id.empty()) {
-                  rec.body_rel_id = rel_id;
-                }
-                if (id_match) {
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
-      out.consumed_rels_paths.push_back(body_rels_path);
-    }
-    out.records.push_back(std::move(rec));
-  }
-  return out;
-}
-
-/// Loads `sheet_rels_path` and returns the resolved table-part paths it
-/// references. The caller is expected to check `zip.has_entry(...)`
-/// before invoking us; absent rels files are not an error (most sheets
-/// have none) and are handled at the call site.
-///
-/// Each returned path is resolved relative to the sheet's directory so
-/// `Target="../tables/table1.xml"` from `xl/worksheets/_rels/sheet1.xml.rels`
-/// becomes `xl/tables/table1.xml`. Non-table relationships are silently
-/// ignored at this layer; Bundle 2.5+ will widen the categorisation.
-Expected<std::vector<std::string>, Error> LoadSheetTableTargets(const ZipReader& zip, std::string_view sheet_rels_path,
-                                                                std::string_view sheet_dir) {
-  std::vector<std::string> targets;
-  auto visit_status = VisitRelationshipNodes(zip, sheet_rels_path, "sheet rels",
-                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-                                               const std::string_view type = rel.attribute("Type").value();
-                                               const std::string_view target = rel.attribute("Target").value();
-                                               if (target.empty()) {
-                                                 return Expected<void, Error>::Ok();
-                                               }
-                                               if (type == kRelTable) {
-                                                 auto resolved = ResolveRelativePath(sheet_dir, target);
-                                                 if (!resolved) {
-                                                   return resolved.error();
-                                                 }
-                                                 targets.push_back(std::move(resolved).value());
-                                               }
-                                               // Other rel types (printerSettings, drawings, comments, ...) are
-                                               // out of scope for Bundle 2.4. A future bundle may widen this
-                                               // dispatch.
-                                               return Expected<void, Error>::Ok();
-                                             });
-  if (!visit_status) {
-    return visit_status.error();
-  }
-  return targets;
-}
-
-/// Aggregated lookup for the per-sheet auxiliary parts that are not
-/// already covered by `LoadSheetTableTargets` /
-/// `LoadSheetPivotTableTargets`:
-///
-///   * `hyperlink_rid_to_target` — every `rId -> Target` pair under the
-///     hyperlink relationship type. Hyperlink targets are external
-///     URLs (`http://...`, `mailto:...`, `file:...`); the writer
-///     re-emits them verbatim, so we keep them as the raw string the
-///     OOXML producer emitted (no resolution).
-///   * `comments_path` — resolved path of the `kRelComments` target, or
-///     empty when the sheet has none.
-///   * `vml_path` — resolved path of the `kRelVmlDrawing` target, or
-///     empty. Used to detect the legacy bounding-box stub so it gets
-///     marked consumed (passthrough re-emits the bytes).
-///   * `printer_settings_path` — resolved path of the binary printer
-///     settings part referenced by `<pageSetup r:id="...">`, or empty.
-struct SheetAuxRels {
-  std::unordered_map<std::string, std::string> hyperlink_rid_to_target;
-  std::string comments_path;
-  std::string vml_path;
-  std::string printer_settings_rid;
-  std::string printer_settings_path;
-};
-
-Expected<SheetAuxRels, Error> LoadSheetAuxRels(const ZipReader& zip, std::string_view sheet_rels_path,
-                                               std::string_view sheet_dir) {
-  SheetAuxRels out;
-  auto visit_status = VisitRelationshipNodes(zip, sheet_rels_path, "sheet rels",
-                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-                                               const std::string_view type = rel.attribute("Type").value();
-                                               const std::string_view target = rel.attribute("Target").value();
-                                               if (target.empty()) {
-                                                 return Expected<void, Error>::Ok();
-                                               }
-                                               if (type == kRelHyperlink) {
-                                                 const std::string id = rel.attribute("Id").value();
-                                                 if (id.empty()) {
-                                                   return Expected<void, Error>::Ok();
-                                                 }
-                                                 // Hyperlink targets are external URLs — preserve them exactly as
-                                                 // the OOXML producer wrote them (no relative-path resolution).
-                                                 out.hyperlink_rid_to_target.emplace(id, std::string(target));
-                                               } else if (type == kRelComments) {
-                                                 auto resolved = ResolveRelativePath(sheet_dir, target);
-                                                 if (!resolved) {
-                                                   return resolved.error();
-                                                 }
-                                                 out.comments_path = std::move(resolved).value();
-                                               } else if (type == kRelVmlDrawing) {
-                                                 auto resolved = ResolveRelativePath(sheet_dir, target);
-                                                 if (!resolved) {
-                                                   return resolved.error();
-                                                 }
-                                                 out.vml_path = std::move(resolved).value();
-                                               } else if (type == kRelPrinterSettings) {
-                                                 auto resolved = ResolveRelativePath(sheet_dir, target);
-                                                 if (!resolved) {
-                                                   return resolved.error();
-                                                 }
-                                                 out.printer_settings_rid.assign(rel.attribute("Id").value());
-                                                 out.printer_settings_path = std::move(resolved).value();
-                                               }
-                                               return Expected<void, Error>::Ok();
-                                             });
-  if (!visit_status) {
-    return visit_status.error();
-  }
-  return out;
-}
-
-/// Walks `sheet_rels_path` for `kRelPivotTable` entries and returns the
-/// resolved part paths in document order. Mirrors `LoadSheetTableTargets`
-/// in shape; the two helpers stay separate so each consumer site reads
-/// linearly. Non-pivot relationships are silently ignored — the caller
-/// decides which families it cares about.
-Expected<std::vector<std::string>, Error> LoadSheetPivotTableTargets(const ZipReader& zip,
-                                                                     std::string_view sheet_rels_path,
-                                                                     std::string_view sheet_dir) {
-  std::vector<std::string> targets;
-  auto visit_status = VisitRelationshipNodes(zip, sheet_rels_path, "sheet rels",
-                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-                                               const std::string_view type = rel.attribute("Type").value();
-                                               const std::string_view target = rel.attribute("Target").value();
-                                               if (target.empty()) {
-                                                 return Expected<void, Error>::Ok();
-                                               }
-                                               if (type == kRelPivotTable) {
-                                                 auto resolved = ResolveRelativePath(sheet_dir, target);
-                                                 if (!resolved) {
-                                                   return resolved.error();
-                                                 }
-                                                 targets.push_back(std::move(resolved).value());
-                                               }
-                                               return Expected<void, Error>::Ok();
-                                             });
-  if (!visit_status) {
-    return visit_status.error();
-  }
-  return targets;
-}
-
-/// Resolves the records-part target referenced from a
-/// pivotCacheDefinition's own rels file (e.g.
-/// `xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels`). Returns the
-/// resolved path (relative to the package root) of the matching
-/// `kRelPivotCacheRecords` entry, or an empty string when the rels file
-/// is absent or carries no records relationship — both are valid OOXML
-/// states (definition-only caches are uncommon but legal).
-Expected<std::string, Error> LoadPivotCacheRecordsTarget(const ZipReader& zip, std::string_view definition_path) {
-  const std::string rels_path = RelsPathForPart(definition_path);
-  if (!zip.has_entry(rels_path)) {
-    return std::string{};
-  }
-  const std::string base_dir = DirOf(definition_path);
-  std::string records_target;
-  auto visit_status = VisitRelationshipNodes(zip, rels_path, "pivotCache rels",
-                                             [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-                                               const std::string_view type = rel.attribute("Type").value();
-                                               const std::string_view target = rel.attribute("Target").value();
-                                               if (target.empty()) {
-                                                 return Expected<void, Error>::Ok();
-                                               }
-                                               if (type == kRelPivotCacheRecords && records_target.empty()) {
-                                                 auto resolved = ResolveRelativePath(base_dir, target);
-                                                 if (!resolved) {
-                                                   return resolved.error();
-                                                 }
-                                                 records_target = std::move(resolved).value();
-                                               }
-                                               return Expected<void, Error>::Ok();
-                                             });
-  if (!visit_status) {
-    return visit_status.error();
-  }
-  return records_target;
-}
-
 }  // namespace
 
 namespace internal {
 
 Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base_dir, std::string_view target) {
-  return ResolveRelativePath(base_dir, target);
+  return ooxml::resolve_relative_path(base_dir, target);
 }
 
 }  // namespace internal
-
-namespace {}  // namespace
 
 Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   ZipReader zip;
@@ -944,16 +183,16 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     return ct_bytes_or.error();
   }
   const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or.value();
-  auto kind_or = VerifyContentTypes(ct_bytes);
+  auto kind_or = ooxml::verify_content_types(ct_bytes);
   if (!kind_or) {
     return kind_or.error();
   }
   const io::WorkbookKind workbook_kind = kind_or.value();
-  auto override_part_entries_or = ListOverridePartEntries(ct_bytes);
+  auto override_part_entries_or = ooxml::list_override_part_entries(ct_bytes);
   if (!override_part_entries_or) {
     return override_part_entries_or.error();
   }
-  const std::vector<OverrideEntry> override_part_entries = std::move(override_part_entries_or.value());
+  const std::vector<ooxml::OverrideEntry> override_part_entries = std::move(override_part_entries_or.value());
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {
@@ -964,7 +203,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   if (!root_rels_or) {
     return root_rels_or.error();
   }
-  auto wb_path_or = ResolveOfficeDocumentPath(root_rels_or.value());
+  auto wb_path_or = ooxml::resolve_office_document_path(root_rels_or.value());
   if (!wb_path_or) {
     return wb_path_or.error();
   }
@@ -974,11 +213,11 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // sheet rId -> part-path map (for the per-sheet read loop below) and
   // the resolved paths for the sharedStrings / styles parts so we can
   // load them at the right point in the pipeline.
-  auto wb_rels_or = LoadWorkbookRels(zip, workbook_path);
+  auto wb_rels_or = ooxml::load_workbook_rels(zip, workbook_path);
   if (!wb_rels_or) {
     return wb_rels_or.error();
   }
-  WorkbookRels& wb_rels = wb_rels_or.value();
+  ooxml::WorkbookRels& wb_rels = wb_rels_or.value();
 
   // 4. xl/workbook.xml — the <sheets> list (in document order).
   if (!zip.has_entry(workbook_path)) {
@@ -1018,7 +257,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   consumed_parts.insert("[Content_Types].xml");
   consumed_parts.insert("_rels/.rels");
   consumed_parts.insert(workbook_path);
-  consumed_parts.insert(RelsPathForPart(workbook_path));
+  consumed_parts.insert(ooxml::rels_path_for_part(workbook_path));
   std::vector<PassthroughPart> extra_passthrough_parts;
 
   // Collect (display_name, part_path) per sheet in document order. The
@@ -1040,7 +279,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     // accept both the Office-namespaced ("r:id") and the unprefixed
     // ("id") variants because pugixml exposes namespace-prefixed names
     // verbatim and writers in the wild diverge on which one they use.
-    std::string rid = RelationshipRefId(sn);
+    std::string rid = ooxml::relationship_ref_id(sn);
     if (rid.empty()) {
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "workbook.xml: <sheet> missing r:id attribute",
                         "context=ooxml_reader part=" + workbook_path);
@@ -1293,7 +532,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       }
       if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
         print.page_setup_xml = RawXml(page_setup);
-        print.printer_settings_rid = RelationshipRefId(page_setup);
+        print.printer_settings_rid = ooxml::relationship_ref_id(page_setup);
         ApplyStructuredPageSetup(page_setup, print.page_setup);
       }
       // Manual page breaks. `<rowBreaks>` / `<colBreaks>` are otherwise
@@ -1307,10 +546,10 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     // no rels at all. Tables and pivot tables are read in two passes
     // through the same rels file (separate helpers, each scoped to one
     // relationship type) so each consumer site reads linearly.
-    const std::string sheet_rels_path = RelsPathForPart(sheet_path);
+    const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
     if (zip.has_entry(sheet_rels_path)) {
-      const std::string sheet_dir = DirOf(sheet_path);
-      auto targets_or = LoadSheetTableTargets(zip, sheet_rels_path, sheet_dir);
+      const std::string sheet_dir = ooxml::dir_of(sheet_path);
+      auto targets_or = ooxml::load_sheet_table_targets(zip, sheet_rels_path, sheet_dir);
       if (!targets_or) {
         return targets_or.error();
       }
@@ -1338,7 +577,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       // Pivot tables anchored on this sheet. Each part feeds into the
       // pivot-table reader and is attached to the owning sheet; the
       // workbook-level pivot caches are loaded after the sheet loop.
-      auto pivot_targets_or = LoadSheetPivotTableTargets(zip, sheet_rels_path, sheet_dir);
+      auto pivot_targets_or = ooxml::load_sheet_pivot_table_targets(zip, sheet_rels_path, sheet_dir);
       if (!pivot_targets_or) {
         return pivot_targets_or.error();
       }
@@ -1365,7 +604,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         // it (the table already carries `pivot_cache_id`), but we mark
         // the rels file as consumed so it does not surface as an
         // unknown part.
-        const std::string pt_rels_path = RelsPathForPart(pivot_table_path);
+        const std::string pt_rels_path = ooxml::rels_path_for_part(pivot_table_path);
         if (zip.has_entry(pt_rels_path)) {
           consumed_parts.insert(pt_rels_path);
         }
@@ -1374,11 +613,11 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       // Hyperlink / comments / VML auxiliary parts. The rels walker
       // surfaces all three in one pass; missing entries are simply
       // empty in the result.
-      auto aux_or = LoadSheetAuxRels(zip, sheet_rels_path, sheet_dir);
+      auto aux_or = ooxml::load_sheet_aux_rels(zip, sheet_rels_path, sheet_dir);
       if (!aux_or) {
         return aux_or.error();
       }
-      const SheetAuxRels& aux = aux_or.value();
+      const ooxml::SheetAuxRels& aux = aux_or.value();
       // Stitch each hyperlink's `target` from the rels lookup.
       apply_hyperlink_rels(wb.sheet(i).mutable_hyperlinks(), aux.hyperlink_rid_to_target);
 
@@ -1494,7 +733,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // writer from the captured records). Failure-tolerant: malformed
   // sections produce `kUnknown` records rather than failing the load.
   {
-    ExternalLinkLoadResult ext = LoadExternalLinks(zip, wb_root, wb_rels);
+    ooxml::ExternalLinkLoadResult ext = ooxml::load_external_links(zip, wb_root, wb_rels);
     for (const std::string& rels_path : ext.consumed_rels_paths) {
       consumed_parts.insert(rels_path);
     }
@@ -1515,7 +754,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     const std::uint32_t cache_id = pc.attribute("cacheId").as_uint(0U);
     // Accept both "r:id" (Office-namespaced) and bare "id" — same
     // forgiveness as the sheet relationship walk above.
-    std::string rid = RelationshipRefId(pc);
+    std::string rid = ooxml::relationship_ref_id(pc);
     if (rid.empty()) {
       return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook.xml: <pivotCache> missing r:id attribute",
                         "context=ooxml_reader part=" + workbook_path);
@@ -1550,7 +789,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     cache.set_cache_id(cache_id);
     consumed_parts.insert(definition_path);
 
-    auto records_target_or = LoadPivotCacheRecordsTarget(zip, definition_path);
+    auto records_target_or = ooxml::load_pivot_cache_records_target(zip, definition_path);
     if (!records_target_or) {
       return records_target_or.error();
     }
@@ -1578,7 +817,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     // The cache definition may carry its own rels file (it does when
     // there's a records part); mark it consumed so it does not surface
     // as an unknown part.
-    const std::string def_rels_path = RelsPathForPart(definition_path);
+    const std::string def_rels_path = ooxml::rels_path_for_part(definition_path);
     if (zip.has_entry(def_rels_path)) {
       consumed_parts.insert(def_rels_path);
     }
@@ -1592,7 +831,7 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // see `passthrough_part.h` for the rationale.
   std::vector<PassthroughPart> unknown_parts;
   unknown_parts.reserve(override_part_entries.size());
-  for (const OverrideEntry& entry : override_part_entries) {
+  for (const ooxml::OverrideEntry& entry : override_part_entries) {
     if (consumed_parts.find(entry.part_name) != consumed_parts.end()) {
       continue;
     }

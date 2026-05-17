@@ -202,16 +202,20 @@ void tokenize_section(std::string_view fmt, Section& out);
 // fraction formats like `# ?/?`.
 void classify(Section& section, std::string_view fmt) noexcept;
 
-// --- Renderer entry points (implemented in number_format_render.cpp) ---
-
-// Render one numeric section through the walk-tokens pipeline.
-void render_numeric(const Section& section, std::string_view fmt, double value, std::string& out);
-
-// Render the date/time section for the given serial.
-void render_date(const Section& section, std::string_view fmt, double serial, std::string& out);
+// --- Renderer entry points -------------------------------------------
+//
+// Each renderer family owns its own header so apply_format() can include
+// only the variants it actually needs:
+//   * `render_numeric.h`  -> standard numeric / `General` (delegates to
+//                            fractions via `render_fraction.h`).
+//   * `render_date.h`     -> date / time tokens.
+//   * `render_fraction.h` -> `# ?/?` style fractions.
+//   * The text-section walker `render_text_section` lives in
+//     `number_format_render.cpp` and is declared just below.
 
 // Render the text section by walking the raw format bytes. `original` is
-// substituted for every unquoted `@` token.
+// substituted for every unquoted `@` token. Body lives in
+// `number_format_render.cpp`.
 void render_text_section(const Section& section, std::string_view fmt, std::string_view original, std::string& out);
 
 }  // namespace number_format_detail

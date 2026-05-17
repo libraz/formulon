@@ -17,7 +17,7 @@
 // (`""`), whitespace-only text (`" "`), the number `0`, the boolean `FALSE`,
 // and any error value (e.g. `#N/A`) are NOT trimmable. This matches Mac
 // Excel's observed behaviour and mirrors the `skip_blanks` path in TOCOL /
-// TOROW (see `eval/dynamic_array_lazy.cpp`).
+// TOROW (see `eval/dynamic_array/layout.cpp`).
 //
 // A row is considered trimmable iff every cell in it is `Blank`. The same
 // rule applies to columns. Each axis is scanned from the appropriate edge

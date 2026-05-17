@@ -8,11 +8,19 @@
 // inline strings (`t="inlineStr"`); SST emission would force every text
 // cell to walk a side table for no observable gain — the inline form
 // round-trips cleanly already.
+//
+// This TU is now a thin orchestrator: emission planning, relationship
+// emission, miniz wrappers, and cell-reference formatting all live in
+// sibling TUs under `src/io/ooxml/`. The XML body builders (workbook,
+// worksheet, table, hyperlinks, data validations, sheet views, ...)
+// stay here because they each touch the package only through
+// `AddPart()` and are not consumed by any other TU.
 
 #include "io/ooxml_writer.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -26,6 +34,10 @@
 #include "io/comments_writer.h"
 #include "io/defined_names.h"
 #include "io/external_links.h"
+#include "io/ooxml/cell_ref_writer.h"
+#include "io/ooxml/emission_plan.h"
+#include "io/ooxml/relationship_writer.h"
+#include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/passthrough_part.h"
@@ -54,7 +66,6 @@ namespace {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
 // `kXmlDecl` lives in `io/xml_utils.h` and is shared with comments / cf
 // writers (single source of truth for the XML 1.0 prologue).
 //
@@ -65,9 +76,6 @@ namespace {
 
 constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
 constexpr std::string_view kCtXml = "application/xml";
-// The workbook part's content type depends on `Workbook::kind()`; we
-// fetch it via `io::workbook_kind_content_type` at emission time rather
-// than wiring four constants here.
 constexpr std::string_view kCtWorksheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
 constexpr std::string_view kCtStyles = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
 constexpr std::string_view kCtTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
@@ -89,404 +97,22 @@ constexpr std::string_view kRelExtendedProperties =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
 
 // ---------------------------------------------------------------------------
-// Per-package emission plan
-// ---------------------------------------------------------------------------
-
-/// Plan we build up before any miniz call: which sheets own which
-/// table parts, what filename each table uses, what passthrough parts
-/// we'll emit. Centralising this here keeps `BuildContentTypes` /
-/// `AddPart` calls trivial and avoids re-deriving table numbering from
-/// two places.
-struct EmissionPlan {
-  // For each sheet (by 0-based index), the in-source TableMetadata
-  // entries that target it, paired with the package-relative path the
-  // writer assigned (`xl/tables/tableN.xml`). `(table_ref, path)` is
-  // append-only and 1:1 with `<tablePart>` rels.
-  struct PerSheetTable {
-    const TableMetadata* table = nullptr;
-    std::string path;
-    std::uint32_t numeric_id = 0;  // matches the path's `tableN.xml` suffix
-  };
-  std::vector<std::vector<PerSheetTable>> tables_by_sheet;
-  // Workbook-level pivot caches. One entry per `wb.pivot_caches()` in
-  // document order. `numeric_id` drives the package paths; `cache_id`
-  // is the workbook-level identifier consumers see (PivotTable refers
-  // to it via `pivot_cache_id()`); `workbook_rid` is the rId integer
-  // the workbook-rels file assigns to this cache definition.
-  struct PivotCachePlan {
-    const pivot::PivotCache* cache = nullptr;
-    std::uint32_t numeric_id = 0;      // 1-based, package-wide
-    std::string definition_path;       // "xl/pivotCache/pivotCacheDefinition1.xml"
-    std::string records_path;          // "xl/pivotCache/pivotCacheRecords1.xml"
-    std::string definition_rels_path;  // "xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels"
-    std::uint32_t workbook_rid = 0;    // workbook-rels rId number for this cache definition
-    std::uint32_t cache_id = 0;        // PivotCache::cache_id(); used by <pivotCaches> entry
-  };
-  std::vector<PivotCachePlan> pivot_caches;
-  // Pivot tables grouped by owning sheet. Each `numeric_id` is a
-  // package-wide 1-based counter (independent of cache numbering); the
-  // path is `xl/pivotTables/pivotTable<N>.xml`.
-  struct PivotTablePlan {
-    const pivot::PivotTable* table = nullptr;
-    std::uint32_t numeric_id = 0;  // 1-based, package-wide
-    std::string path;              // "xl/pivotTables/pivotTable1.xml"
-  };
-  std::vector<std::vector<PivotTablePlan>> pivot_tables_by_sheet;
-  // Per-sheet comments / VML payload. `numeric_id` matches the
-  // `comments<N>.xml` filename (1-based, package-wide). `vml_path` is
-  // the per-sheet VML drawing path, emitted as a stub when the source
-  // had none and as passthrough bytes otherwise.
-  struct CommentsPlan {
-    std::uint32_t numeric_id = 0;
-    std::string comments_path;                    // "xl/comments<N>.xml"
-    std::string vml_path;                         // "xl/drawings/vmlDrawing<N>.vml"
-    const PassthroughPart* vml_source = nullptr;  // non-null => use bytes verbatim
-  };
-  // One entry per sheet; engaged only for sheets with at least one
-  // comment. Disengaged entries have `numeric_id == 0`.
-  std::vector<CommentsPlan> comments_by_sheet;
-  // External link relationships. One entry per `wb.external_links()` in
-  // document order. `workbook_rid` is the writer-assigned rId integer
-  // for the workbook.xml.rels Relationship and the matching
-  // `<externalReference r:id>` attribute in workbook.xml. The body part
-  // itself rides through `passthrough_parts()`; the per-link rels file
-  // (under `xl/externalLinks/_rels/`) is generated by the writer from
-  // the captured target URL.
-  struct ExternalLinkPlan {
-    const ExternalLinkRecord* record = nullptr;
-    std::uint32_t workbook_rid = 0;
-  };
-  std::vector<ExternalLinkPlan> external_links;
-  // Passthrough parts we will keep. Entries that collide with a
-  // generated path are dropped here (with a warning) so downstream
-  // emission can blindly write everything in the list.
-  std::vector<const PassthroughPart*> passthrough_kept;
-};
-
-std::string RelsPathForPart(std::string_view part_path);
-
-std::string NumberedPartPath(std::string_view prefix, std::uint32_t id, std::string_view suffix) {
-  std::string path;
-  path.reserve(prefix.size() + suffix.size() + 10U);
-  path.append(prefix);
-  path.append(std::to_string(id));
-  path.append(suffix);
-  return path;
-}
-
-/// Returns the set of paths the writer always generates, regardless of
-/// metadata. Used to detect passthrough collisions.
-std::unordered_set<std::string> BuildGeneratedPathSet(
-    const Workbook& wb, const std::vector<EmissionPlan::PerSheetTable>& flat_tables,
-    const std::vector<EmissionPlan::PivotCachePlan>& pivot_caches,
-    const std::vector<std::vector<EmissionPlan::PivotTablePlan>>& pivot_tables_by_sheet,
-    const std::vector<EmissionPlan::CommentsPlan>& comments_by_sheet) {
-  std::unordered_set<std::string> paths;
-  paths.insert("[Content_Types].xml");
-  paths.insert("_rels/.rels");
-  paths.insert("xl/workbook.xml");
-  paths.insert("xl/_rels/workbook.xml.rels");
-  paths.insert("xl/styles.xml");
-  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    paths.insert("xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
-  }
-  for (const EmissionPlan::PerSheetTable& t : flat_tables) {
-    paths.insert(t.path);
-    // Sheet rels for sheets that own tables are also generated.
-  }
-  // Pivot-cache parts: definition, records, and definition rels.
-  for (const EmissionPlan::PivotCachePlan& c : pivot_caches) {
-    paths.insert(c.definition_path);
-    paths.insert(c.records_path);
-    paths.insert(c.definition_rels_path);
-  }
-  // Pivot-table parts (one per pivot table, package-wide).
-  for (const auto& per_sheet : pivot_tables_by_sheet) {
-    for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
-      paths.insert(t.path);
-    }
-  }
-  // Comment / VML parts (one per sheet that has at least one comment).
-  for (const EmissionPlan::CommentsPlan& c : comments_by_sheet) {
-    if (c.numeric_id == 0) {
-      continue;
-    }
-    paths.insert(c.comments_path);
-    paths.insert(c.vml_path);
-  }
-  // Per-link rels files for external links — the writer generates these
-  // from the captured `ExternalLinkRecord`s; the body parts themselves
-  // are passthrough.
-  for (const ExternalLinkRecord& rec : wb.external_links()) {
-    paths.insert(RelsPathForPart(rec.part_path));
-  }
-  // Sheet rels: any sheet that owns at least one table or pivot table.
-  // Computed by callers; we enumerate them here for completeness.
-  return paths;
-}
-
-/// Builds the emission plan. Performs collision detection between
-/// generated and passthrough paths; collisions are logged via
-/// `StructuredLog` (warn) and the passthrough copy is dropped.
-EmissionPlan BuildEmissionPlan(const Workbook& wb) {
-  EmissionPlan plan;
-  plan.tables_by_sheet.assign(wb.sheet_count(), {});
-
-  // Distribute tables to their owning sheets, assigning fallback
-  // numeric ids when the source `id` is 0 (which would collide with
-  // every other id-less table).
-  std::vector<EmissionPlan::PerSheetTable> flat_tables;
-  std::unordered_set<std::uint32_t> used_ids;
-  for (const TableMetadata& t : wb.tables()) {
-    used_ids.insert(t.id);
-  }
-  std::uint32_t next_fallback_id = 1;
-  for (const TableMetadata& t : wb.tables()) {
-    if (t.sheet_index >= wb.sheet_count()) {
-      // Defensive: stale metadata referencing a removed sheet. Skip
-      // rather than crash; round-trip preserves what is consistent.
-      StructuredLog("ooxml_writer.table_skipped")
-          .field("reason", std::string_view("sheet_index_out_of_range"))
-          .field("sheet_index", static_cast<std::int64_t>(t.sheet_index))
-          .field("sheet_count", static_cast<std::int64_t>(wb.sheet_count()))
-          .field("table_name", t.name)
-          .warn();
-      continue;
-    }
-    EmissionPlan::PerSheetTable entry;
-    entry.table = &t;
-    entry.numeric_id = t.id;
-    if (entry.numeric_id == 0) {
-      // Find the first unused fallback id so generated filenames stay
-      // unique across all tables in the package.
-      while (used_ids.count(next_fallback_id) != 0U) {
-        ++next_fallback_id;
-      }
-      entry.numeric_id = next_fallback_id;
-      used_ids.insert(entry.numeric_id);
-      ++next_fallback_id;
-      StructuredLog("ooxml_writer.table_id_fallback")
-          .field("table_name", t.name)
-          .field("assigned_id", static_cast<std::int64_t>(entry.numeric_id))
-          .warn();
-    }
-    entry.path = NumberedPartPath("xl/tables/table", entry.numeric_id, ".xml");
-    plan.tables_by_sheet[t.sheet_index].push_back(entry);
-    flat_tables.push_back(entry);
-  }
-
-  // Pivot caches in document order. The workbook-rels rId integer for
-  // each cache definition starts after the styles relationship: sheets
-  // occupy rId1..rId(N), styles uses rId(N+1), pivot caches use
-  // rId(N+2)+. The numeric_id drives the package-relative path.
-  plan.pivot_caches.reserve(wb.pivot_caches().size());
-  for (std::size_t i = 0; i < wb.pivot_caches().size(); ++i) {
-    const pivot::PivotCache* cache = wb.pivot_caches()[i].get();
-    if (cache == nullptr) {
-      continue;
-    }
-    EmissionPlan::PivotCachePlan entry;
-    entry.cache = cache;
-    entry.numeric_id = static_cast<std::uint32_t>(i + 1);
-    entry.cache_id = cache->cache_id();
-    entry.definition_path = NumberedPartPath("xl/pivotCache/pivotCacheDefinition", entry.numeric_id, ".xml");
-    entry.records_path = NumberedPartPath("xl/pivotCache/pivotCacheRecords", entry.numeric_id, ".xml");
-    entry.definition_rels_path =
-        NumberedPartPath("xl/pivotCache/_rels/pivotCacheDefinition", entry.numeric_id, ".xml.rels");
-    // sheets rId1..rId(sheet_count), styles rId(sheet_count+1),
-    // first cache rId(sheet_count+2). Cast safe: workbook size is
-    // bounded well within uint32 range.
-    entry.workbook_rid = static_cast<std::uint32_t>(wb.sheet_count() + 2 + i);
-    plan.pivot_caches.push_back(std::move(entry));
-  }
-
-  // Pivot tables grouped by sheet, with a package-wide numeric counter.
-  plan.pivot_tables_by_sheet.assign(wb.sheet_count(), {});
-  std::uint32_t next_pivot_table_id = 1;
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    const auto& sheet_pivots = wb.sheet(s).pivot_tables();
-    for (const std::unique_ptr<pivot::PivotTable>& uptr : sheet_pivots) {
-      const pivot::PivotTable* tbl = uptr.get();
-      if (tbl == nullptr) {
-        continue;
-      }
-      EmissionPlan::PivotTablePlan entry;
-      entry.table = tbl;
-      entry.numeric_id = next_pivot_table_id++;
-      entry.path = NumberedPartPath("xl/pivotTables/pivotTable", entry.numeric_id, ".xml");
-      plan.pivot_tables_by_sheet[s].push_back(std::move(entry));
-    }
-  }
-
-  // Comments / VML parts. One package-wide numeric counter; each sheet
-  // with at least one comment gets a `comments<N>.xml` and a matching
-  // `vmlDrawing<N>.vml`. The numeric id matches between the two so the
-  // sheet rels file pairs them by ordinal.
-  plan.comments_by_sheet.assign(wb.sheet_count(), EmissionPlan::CommentsPlan{});
-  std::uint32_t next_comments_id = 1;
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    if (wb.sheet(s).comments().empty()) {
-      continue;
-    }
-    EmissionPlan::CommentsPlan entry;
-    entry.numeric_id = next_comments_id++;
-    entry.comments_path = NumberedPartPath("xl/comments", entry.numeric_id, ".xml");
-    entry.vml_path = NumberedPartPath("xl/drawings/vmlDrawing", entry.numeric_id, ".vml");
-    // Detect whether the workbook still carries the original VML bytes
-    // via passthrough. If so, prefer those bytes over the writer's
-    // stub so the round-trip stays byte-identical for unmodified
-    // sheets.
-    for (const PassthroughPart& part : wb.passthrough_parts()) {
-      if (part.path == entry.vml_path) {
-        entry.vml_source = &part;
-        break;
-      }
-    }
-    plan.comments_by_sheet[s] = std::move(entry);
-  }
-
-  // External link relationships. Assigned rIds follow the pivot caches
-  // in the workbook-rels numbering scheme, mirroring how Excel emits
-  // them when multiple optional sections coexist. The body parts ride
-  // through `passthrough_parts()`; only the per-link rels files are
-  // generated below.
-  {
-    const std::size_t base = static_cast<std::size_t>(wb.sheet_count()) + 2U + plan.pivot_caches.size();
-    for (std::size_t i = 0; i < wb.external_links().size(); ++i) {
-      EmissionPlan::ExternalLinkPlan entry;
-      entry.record = &wb.external_links()[i];
-      entry.workbook_rid = static_cast<std::uint32_t>(base + i);
-      plan.external_links.push_back(entry);
-    }
-  }
-
-  // Collision detection between generated paths and passthrough paths.
-  // Generated paths win; passthrough copy is dropped with a warning.
-  std::unordered_set<std::string> generated =
-      BuildGeneratedPathSet(wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet);
-  // Sheet rels for sheets that own tables, pivot tables, hyperlinks,
-  // comments/VML, or printer settings are also generated.
-  for (std::size_t i = 0; i < plan.tables_by_sheet.size(); ++i) {
-    const bool has_tables = !plan.tables_by_sheet[i].empty();
-    const bool has_pivots = i < plan.pivot_tables_by_sheet.size() && !plan.pivot_tables_by_sheet[i].empty();
-    const bool has_hyperlinks = i < wb.sheet_count() && !wb.sheet(i).hyperlinks().empty();
-    const bool has_comments = i < plan.comments_by_sheet.size() && plan.comments_by_sheet[i].numeric_id != 0;
-    const bool has_print_settings = i < wb.sheet_count() && !wb.sheet(i).print_settings().printer_settings_path.empty();
-    if (has_tables || has_pivots || has_hyperlinks || has_comments || has_print_settings) {
-      generated.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
-    }
-  }
-
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (generated.count(part.path) != 0U) {
-      StructuredLog("ooxml_writer.passthrough_collision")
-          .field("path", part.path)
-          .field("reason", std::string_view("generated_path_wins"))
-          .warn();
-      continue;
-    }
-    plan.passthrough_kept.push_back(&part);
-  }
-
-  return plan;
-}
-
-// ---------------------------------------------------------------------------
 // XML helpers
 // ---------------------------------------------------------------------------
+//
+// Relationship emission helpers (`AppendOverride`, `AppendRelationship`,
+// `RelsPathForPart`, `WithoutXlPrefix`, `TargetRelativeToWorksheet`)
+// live in `io/ooxml/relationship_writer.h`. Cell-reference formatters
+// (`AppendColumnLettersForRef`, `AppendCellRefForRef`,
+// `AppendRangeRef`) live in `io/ooxml/cell_ref_writer.h`. Emission
+// planning (`EmissionPlan`, `BuildEmissionPlan`, `HasPassthroughPart`)
+// lives in `io/ooxml/emission_plan.h`. Miniz wrappers (`ZipWriterGuard`,
+// `AddPart`, `AddPartBytes`) live in `io/ooxml/zip_part_writer.h`.
 
 /// Escapes `text` and appends it as the body of an XML element. Callers
 /// that need attribute escaping should use `AppendXmlEscaped` directly.
 inline void AppendEscaped(std::string& out, std::string_view text) {
   AppendXmlEscaped(out, text);
-}
-
-/// Appends a single `<Override PartName="/<path>" ContentType="<ct>"/>`
-/// entry plus its trailing newline. Used by `BuildContentTypes` for the
-/// per-table / per-pivot / per-comments / passthrough Override blocks
-/// — each emitting bytes-identical fragments before this helper landed.
-/// `path` is escaped to defend against passthrough paths carrying
-/// XML-critical characters; `ct` is a writer-controlled string view from
-/// our content-type table and is emitted verbatim.
-inline void AppendOverride(std::string& out, std::string_view path, std::string_view ct, bool escape_path = false) {
-  out.append("  <Override PartName=\"/");
-  if (escape_path) {
-    AppendXmlEscaped(out, path);
-  } else {
-    out.append(path.data(), path.size());
-  }
-  out.append("\" ContentType=\"");
-  out.append(ct.data(), ct.size());
-  out.append("\"/>\n");
-}
-
-std::string RelsPathForPart(std::string_view part_path) {
-  const std::size_t slash = part_path.find_last_of('/');
-  if (slash == std::string_view::npos) {
-    std::string rels_path("_rels/");
-    rels_path.append(part_path);
-    rels_path.append(".rels");
-    return rels_path;
-  }
-  std::string rels_path;
-  rels_path.append(part_path.substr(0, slash));
-  rels_path.append("/_rels/");
-  rels_path.append(part_path.substr(slash + 1));
-  rels_path.append(".rels");
-  return rels_path;
-}
-
-std::string_view WithoutXlPrefix(std::string_view path) {
-  constexpr std::string_view kXlPrefix = "xl/";
-  if (path.size() >= kXlPrefix.size() && path.substr(0, kXlPrefix.size()) == kXlPrefix) {
-    path.remove_prefix(kXlPrefix.size());
-  }
-  return path;
-}
-
-bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path) {
-  for (const PassthroughPart* part : plan.passthrough_kept) {
-    if (part != nullptr && part->path == path) {
-      return true;
-    }
-  }
-  return false;
-}
-
-std::string TargetRelativeToWorksheet(std::string_view package_path) {
-  constexpr std::string_view kXlPrefix = "xl/";
-  std::string out;
-  if (package_path.size() >= kXlPrefix.size() && package_path.substr(0, kXlPrefix.size()) == kXlPrefix) {
-    out.assign("../");
-    out.append(package_path.substr(kXlPrefix.size()));
-    return out;
-  }
-  out.assign(package_path);
-  return out;
-}
-
-void AppendRelationship(std::string& out, std::string_view id, std::string_view type, std::string_view target,
-                        bool target_external = false, bool escape_target = false) {
-  out.append("  <Relationship Id=\"");
-  AppendXmlEscaped(out, id);
-  out.append("\" Type=\"");
-  out.append(type);
-  out.append("\" Target=\"");
-  if (escape_target) {
-    AppendXmlEscaped(out, target);
-  } else {
-    out.append(target);
-  }
-  if (target_external) {
-    out.append("\" TargetMode=\"External\"/>\n");
-  } else {
-    out.append("\"/>\n");
-  }
-}
-
-void AppendRelationship(std::string& out, std::uint32_t rid, std::string_view type, std::string_view target,
-                        bool target_external = false, bool escape_target = false) {
-  AppendRelationship(out, "rId" + std::to_string(rid), type, target, target_external, escape_target);
 }
 
 // ---------------------------------------------------------------------------
@@ -807,36 +433,6 @@ std::string BuildExternalLinkRels(const ExternalLinkRecord& rec) {
 std::string BuildSheetViewXml(const SheetView& view);
 std::string BuildColsXml(const SheetLayout& layout);
 std::string BuildSheetProtectionXml(const SheetProtection& p);
-
-/// Bijective base-26 column letters (`0 -> A`, `25 -> Z`, `26 -> AA`,
-/// ...). Mirrors `cli/render.cpp`'s helper; kept inline here so the
-/// writer side has no cross-package dependency.
-void AppendColumnLettersForRef(std::string& out, std::uint32_t col) {
-  char buf[4];
-  std::uint32_t i = 0;
-  std::uint32_t v = col + 1;
-  while (v > 0 && i < 4) {
-    const std::uint32_t rem = (v - 1) % 26U;
-    buf[i++] = static_cast<char>('A' + rem);
-    v = (v - 1) / 26U;
-  }
-  while (i > 0) {
-    out.push_back(buf[--i]);
-  }
-}
-
-void AppendCellRefForRef(std::string& out, std::uint32_t row, std::uint32_t col) {
-  AppendColumnLettersForRef(out, col);
-  out.append(std::to_string(row + 1));
-}
-
-void AppendRangeRef(std::string& out, const MergeRange& r) {
-  AppendCellRefForRef(out, r.first_row, r.first_col);
-  if (r.first_row != r.last_row || r.first_col != r.last_col) {
-    out.push_back(':');
-    AppendCellRefForRef(out, r.last_row, r.last_col);
-  }
-}
 
 std::string BuildMergeCellsBlock(const Sheet& sheet) {
   if (sheet.merges().empty()) {
@@ -1385,76 +981,6 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   out.append("  </tableColumns>\n");
   out.append("</table>\n");
   return out;
-}
-
-// ---------------------------------------------------------------------------
-// miniz helpers
-// ---------------------------------------------------------------------------
-
-/// RAII guard around an initialised `mz_zip_archive` writer. The destructor
-/// releases any heap buffer retained by miniz when the writer is abandoned
-/// mid-flight (e.g. an `mz_zip_writer_add_mem` call failed and we early-
-/// returned an error).
-class ZipWriterGuard {
- public:
-  ZipWriterGuard() = default;
-  ZipWriterGuard(const ZipWriterGuard&) = delete;
-  ZipWriterGuard& operator=(const ZipWriterGuard&) = delete;
-  ZipWriterGuard(ZipWriterGuard&&) = delete;
-  ZipWriterGuard& operator=(ZipWriterGuard&&) = delete;
-
-  ~ZipWriterGuard() {
-    if (active_) {
-      // Best-effort cleanup; we're already on an error path.
-      mz_zip_writer_end(&archive_);
-    }
-  }
-
-  bool init() {
-    if (mz_zip_writer_init_heap(&archive_, /*size_to_reserve_at_beginning=*/0,
-                                /*initial_allocation_size=*/8 * 1024) == MZ_FALSE) {
-      return false;
-    }
-    active_ = true;
-    return true;
-  }
-
-  mz_zip_archive* get() noexcept { return &archive_; }
-
-  /// Releases ownership of the underlying archive to the caller. Subsequent
-  /// destruction no longer touches miniz state.
-  void release() noexcept { active_ = false; }
-
- private:
-  mz_zip_archive archive_{};
-  bool active_ = false;
-};
-
-/// Adds a single text part to the archive. Returns an `Error` tagged
-/// with the part path when miniz refuses the write.
-Expected<void, Error> AddPart(mz_zip_archive* archive, std::string_view path, const std::string& body) {
-  const mz_bool ok = mz_zip_writer_add_mem(archive, std::string(path).c_str(), body.data(), body.size(),
-                                           static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
-  if (ok == MZ_FALSE) {
-    std::string context("part=");
-    context.append(path);
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_add_mem failed", std::move(context));
-  }
-  return Expected<void, Error>::Ok();
-}
-
-/// Adds a binary part (passthrough). Same error contract as `AddPart`.
-Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view path,
-                                   const std::vector<std::uint8_t>& body) {
-  const mz_bool ok = mz_zip_writer_add_mem(archive, std::string(path).c_str(), body.data(), body.size(),
-                                           static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
-  if (ok == MZ_FALSE) {
-    std::string context("part=");
-    context.append(path);
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_add_mem failed (passthrough)",
-                      std::move(context));
-  }
-  return Expected<void, Error>::Ok();
 }
 
 // ---------------------------------------------------------------------------

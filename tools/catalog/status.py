@@ -34,7 +34,7 @@ CATALOG_PATH = REPO_ROOT / "tools" / "catalog" / "functions.txt"
 STATUS_PATH = REPO_ROOT / "tools" / "catalog" / "function_status.tsv"
 EVAL_DIR = REPO_ROOT / "src" / "eval"
 SPECIAL_FORMS_PATH = EVAL_DIR / "special_forms_catalog.cpp"
-C_API_PATH = REPO_ROOT / "src" / "c_api" / "formulon_c.cpp"
+C_API_PATH = REPO_ROOT / "src" / "c_api" / "parts" / "function_catalog.cpp"
 
 # Matches builtin entries inside a `FunctionDef` array initialiser, of
 # the form `{"SUM", 1u, kVariadic, &Sum, ...}`. The arity column is the
@@ -183,7 +183,7 @@ def load_function_status(path: Path) -> Dict[str, str]:
 
 
 def load_c_api_availability(path: Path) -> Dict[str, str]:
-    """Parses the explicit non-default availability table in formulon_c.cpp."""
+    """Parses the explicit non-default availability table in parts/function_catalog.cpp."""
     if not path.exists():
         return {}
     enum_to_status = {

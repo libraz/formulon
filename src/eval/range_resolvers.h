@@ -9,12 +9,13 @@
 //   * `range_args.cpp`            - dispatch into expand_* helpers
 //   * `cell_lazy.cpp`             - CELL("address",...) anchor recovery
 //   * `areas_lazy.cpp`            - AREAS() shape introspection
-//   * `dynamic_array_lazy.cpp`    - spill anchor resolution
+//   * `dynamic_array/anchor.cpp`  - spill anchor resolution
 //   * `shape_ops_lazy.cpp`        - ROWS / COLUMNS shape queries
 //
-// Split out of `reference_lazy.h` so consumers that only need rectangle
-// resolution don't have to pull in the INDIRECT/OFFSET impl
-// declarations or the `expand_*_call` family.
+// Split out of the original `reference_lazy.h` so consumers that only
+// need rectangle resolution don't have to pull in the INDIRECT / OFFSET
+// impl declarations or the `expand_*_call` family. The bodies live in
+// `src/eval/reference/intersection.cpp`.
 
 #ifndef FORMULON_EVAL_RANGE_RESOLVERS_H_
 #define FORMULON_EVAL_RANGE_RESOLVERS_H_
@@ -24,6 +25,7 @@
 
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "value.h"  // formulon::ErrorCode
 
 namespace formulon {
 

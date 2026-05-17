@@ -5,10 +5,13 @@
 # Two variants, switched via FM_WASM_VARIANT:
 #
 #   embind (default): the npm @libraz/formulon artifact. Compiles
-#     src/wasm/embind.cpp + formulon_static, links with -lembind, emits
-#     a MODULARIZE'd ES module factory (`createFormulon`). Threads are
-#     wired in via -pthread / -sUSE_PTHREADS=1 / -sPTHREAD_POOL_SIZE=8
-#     so the parallel SCC scheduler can use real Web Workers. Output:
+#     src/wasm/parts/*.cpp + formulon_static, links with -lembind,
+#     emits a MODULARIZE'd ES module factory (`createFormulon`). The
+#     `parts/` split keeps the per-area binding surface manageable;
+#     every TU is compiled with `-frtti` because embind keys its
+#     type-registration tables on `typeid()`. Threads are wired in via
+#     -pthread / -sUSE_PTHREADS=1 / -sPTHREAD_POOL_SIZE=8 so the
+#     parallel SCC scheduler can use real Web Workers. Output:
 #     `<build>/formulon.{js,wasm}`.
 #
 #   capi: the formulon (PyPI) artifact, consumed by wasmtime-py. No
@@ -80,7 +83,20 @@ if(FM_WASM_VARIANT STREQUAL "capi")
 endif()
 
 if(FM_WASM_VARIANT STREQUAL "embind")
-  add_executable(formulon_wasm src/wasm/embind.cpp)
+  # embind glue is now sharded by API surface area under src/wasm/parts/.
+  # Keep the list alphabetical so additions land in a predictable spot.
+  add_executable(formulon_wasm
+    src/wasm/parts/bindings_register.cpp
+    src/wasm/parts/embind_common.cpp
+    src/wasm/parts/workbook_cells.cpp
+    src/wasm/parts/workbook_cf.cpp
+    src/wasm/parts/workbook_core.cpp
+    src/wasm/parts/workbook_misc.cpp
+    src/wasm/parts/workbook_pivot.cpp
+    src/wasm/parts/workbook_sheet_layout.cpp
+    src/wasm/parts/workbook_styles.cpp
+    src/wasm/parts/workbook_ui.cpp
+  )
   target_include_directories(formulon_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
   target_link_libraries(formulon_wasm PRIVATE formulon_static)
 else()

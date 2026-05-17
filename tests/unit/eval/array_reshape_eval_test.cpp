@@ -1,10 +1,12 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the lazy array-reshape dynamic-array spilling builtins:
-// `EXPAND`, `TOCOL`, `TOROW`, `WRAPCOLS`, `WRAPROWS`. These all live in
-// `dynamic_array_lazy.{h,cpp}` and share helpers
-// (`collect_tocol_torow_cells`, `resolve_wrap_args`, `materialise_vector`)
-// in the anonymous namespace.
+// `EXPAND`, `TOCOL`, `TOROW`, `WRAPCOLS`, `WRAPROWS`. `EXPAND` lives in
+// `dynamic_array/reshape.cpp` and the four flatten / wrap functions live
+// in `dynamic_array/layout.cpp`; they share helpers
+// (`collect_tocol_torow_cells`, `resolve_wrap_args`,
+// `dynamic_array::materialise_vector`, `dynamic_array::allocate_array_value`)
+// across the `dynamic_array/common.{h,cpp}` seam.
 
 #include <cstdint>
 #include <string_view>

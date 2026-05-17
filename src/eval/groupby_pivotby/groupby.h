@@ -1,9 +1,8 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
-// Lazy impls for Excel 365's GROUPBY (and, in a follow-up, PIVOTBY) dynamic-
-// array functions. Both produce a 2D spilled result that summarises a tabular
-// input by one or more grouping keys, applying a user-supplied aggregator
-// function per group.
+// Lazy impl for Excel 365's GROUPBY dynamic-array function. GROUPBY produces
+// a 2D spilled result that summarises a tabular input by one or more
+// grouping keys, applying a user-supplied aggregator function per group.
 //
 // GROUPBY signature (Mac Excel 365):
 //
@@ -54,38 +53,14 @@
 //   * Errors in `row_fields` cells become the row's group key (the error
 //     itself); error groups sort after all valid keys.
 //
-// PIVOTBY (signature: row_fields, col_fields, values, function, ...) is the
-// 2D analogue of GROUPBY. It introduces a column-grouping axis: `col_fields`
-// drives a horizontal grouping in addition to the vertical grouping driven
-// by `row_fields`, and the output is a 2D pivot whose body cells are
-// per-(row-group, col-group) aggregates. PIVOTBY shares the aggregator
-// resolution, group-key equality, per-group invocation, and sort/total
-// machinery with GROUPBY (the helpers live in this TU's anonymous namespace
-// and are reused verbatim).
-//
-// Differences vs. GROUPBY argument defaults:
-//   * `field_headers` defaults to `3` (vs. `0`) — pivot output typically
-//     wants both the input row to be treated as a header AND a header to
-//     be emitted on the output's left/top edges.
-//   * `col_total_depth` defaults to `1` (vs. row_total_depth's `-1`) —
-//     grand totals on rows live at the top by default, on columns they
-//     live on the right by default.
-//
-// First-pass scope (this commit): single-column `row_fields`, single-column
-// `col_fields`, single-column `values`, `row_total_depth ∈ {-1, 0, 1}` and
-// `col_total_depth ∈ {-1, 0, 1}` (subtotal placement at ±2 is deferred
-// until the GROUPBY oracle pass settles), and `row_sort_order` /
-// `col_sort_order` ∈ {-1, 0, 1}. Multi-column inputs surface `#VALUE!`.
-//
-// See `eval/lazy_impls.h` for the shared `LazyImpl` signature and the
-// `eval_node` recursion entry point. The GROUPBY impl is wired into the
-// central `kLazyDispatch` table in `tree_walker.cpp` between `FREQUENCY`
-// and `GROWTH` (alphabetical); PIVOTBY between `PERCENTRANK.INC` and
-// `PROB`.
+// See `eval/lazy_impls.h` for the shared `LazyImpl` signature. The GROUPBY
+// impl is wired into the central `kLazyDispatch` table in
+// `tree_walker_lazy_table.cpp`.
 
-#ifndef FORMULON_EVAL_GROUPBY_PIVOTBY_LAZY_H_
-#define FORMULON_EVAL_GROUPBY_PIVOTBY_LAZY_H_
+#ifndef FORMULON_EVAL_GROUPBY_PIVOTBY_GROUPBY_H_
+#define FORMULON_EVAL_GROUPBY_PIVOTBY_GROUPBY_H_
 
+#include "eval/lazy_impls.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -106,14 +81,12 @@ class FunctionRegistry;
 Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);
 
-/// `PIVOTBY(row_fields, col_fields, values, function, [field_headers=3],
-///          [row_total_depth=-1], [row_sort_order=0], [col_total_depth=1],
-///          [col_sort_order=0], [filter_array])` — see the header preamble
-/// for the full contract.
-Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx);
+// Compile-time guard: the lazy impl declared above must convert implicitly
+// to the shared `LazyImpl` function-pointer type published in
+// `eval/lazy_impls.h`.
+inline constexpr LazyImpl kGroupbyLazySignatureWitness = &eval_groupby_lazy;
 
 }  // namespace eval
 }  // namespace formulon
 
-#endif  // FORMULON_EVAL_GROUPBY_PIVOTBY_LAZY_H_
+#endif  // FORMULON_EVAL_GROUPBY_PIVOTBY_GROUPBY_H_

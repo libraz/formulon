@@ -61,8 +61,21 @@ endif()
 # The .node module itself. MODULE so the linker emits a loadable shared
 # object with no `lib` prefix; we additionally force `.node` as the
 # extension and clear the prefix to match Node's loader convention.
+#
+# Source list: keep alphabetical. `addon.cc` is the entry point (Init +
+# NODE_API_MODULE); the rest of the surface lives in per-area TUs under
+# `src/node_addon/parts/` -- see `addon.cc` for the layout map.
 add_library(formulon_node MODULE
   src/node_addon/addon.cc
+  src/node_addon/parts/addon_common.cc
+  src/node_addon/parts/free_funcs.cc
+  src/node_addon/parts/lifecycle.cc
+  src/node_addon/parts/pivot_cache.cc
+  src/node_addon/parts/pivot_table.cc
+  src/node_addon/parts/sheet.cc
+  src/node_addon/parts/sheet_view.cc
+  src/node_addon/parts/styles.cc
+  src/node_addon/parts/workbook_class.cc
 )
 
 target_include_directories(formulon_node PRIVATE

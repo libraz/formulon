@@ -2,7 +2,7 @@
 //
 // Tests for the lazy `UNIQUE(array, [by_col], [exactly_once])` builtin.
 //
-// UNIQUE shares its TU with FILTER (`eval/dynamic_array_lazy.cpp`) and uses
+// UNIQUE shares its TU with FILTER (`eval/dynamic_array/filtering.cpp`) and uses
 // the same `eval_node_as_array` seam to keep `array`'s 2D shape intact, then
 // performs O(n^2) cellwise lane comparisons under Excel-canonical equality
 // (case-insensitive text). Default mode returns first-occurrence distinct

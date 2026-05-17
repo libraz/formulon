@@ -134,7 +134,10 @@ bool spill_would_collide(const Sheet& sheet, std::uint32_t anchor_row, std::uint
 //   XLOOKUP / XMATCH                           -> src/eval/lookups/xlookup.cpp
 //   ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT -> src/eval/shape_ops_lazy.cpp
 //   NETWORKDAYS / WORKDAY                      -> src/eval/workdays_lazy.cpp
-//   INDIRECT / OFFSET                          -> src/eval/reference_lazy.cpp
+//   INDIRECT                                   -> src/eval/reference/indirect.cpp
+//   OFFSET / expand_*_call                     -> src/eval/reference/offset.cpp
+//   resolve_*_call / compute_intersect_rect    -> src/eval/reference/intersection.cpp
+//   parse_a1_ref + shared helpers              -> src/eval/reference/common.cpp
 //   CORREL / COVARIANCE.P / COVARIANCE.S /
 //   SLOPE / INTERCEPT / RSQ / FORECAST.LINEAR /
 //   STEYX / SUMX2PY2 / SUMX2MY2 / SUMXMY2      -> src/eval/regression_lazy.cpp

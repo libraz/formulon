@@ -2,9 +2,9 @@
 //
 // Registers Excel's reference-manipulation builtins whose impls do not need
 // to inspect their arguments' AST shape: currently `ADDRESS`. The lazy
-// reference forms (`INDIRECT`, `OFFSET`) live in `eval/reference_lazy.*`
-// because they dispatch on AST structure (INDIRECT evaluates its text arg,
-// OFFSET needs a Ref or RangeOp node for the base).
+// reference forms (`INDIRECT`, `OFFSET`) live in `eval/reference/` because
+// they dispatch on AST structure (INDIRECT evaluates its text arg, OFFSET
+// needs a Ref or RangeOp node for the base).
 //
 // ADDRESS is a pure scalar text builder: given (row, column, [abs_num],
 // [a1], [sheet_text]) it formats the corresponding A1 or R1C1 spelling

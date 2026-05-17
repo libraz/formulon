@@ -19,6 +19,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_test.cpp
   formulon_c_trace_test.cpp
   partial_recalc_test.cpp
+  value_marshal_test.cpp
   workbook_sheet_ops_test.cpp
 )
 

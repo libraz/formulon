@@ -19,11 +19,16 @@
 #include "eval/cell_lazy.h"
 #include "eval/conditional_aggregates.h"
 #include "eval/database_lazy.h"
-#include "eval/dynamic_array_lazy.h"
+#include "eval/dynamic_array/anchor.h"
+#include "eval/dynamic_array/filtering.h"
+#include "eval/dynamic_array/indexing.h"
+#include "eval/dynamic_array/layout.h"
+#include "eval/dynamic_array/reshape.h"
 #include "eval/financial_lazy.h"
 #include "eval/forecast_ets_lazy.h"
 #include "eval/getpivotdata_lazy.h"
-#include "eval/groupby_pivotby_lazy.h"
+#include "eval/groupby_pivotby/groupby.h"
+#include "eval/groupby_pivotby/pivotby.h"
 #include "eval/hypothesis_lazy.h"
 #include "eval/info_lazy.h"
 #include "eval/lambda_helpers_lazy.h"
@@ -33,7 +38,8 @@
 #include "eval/matrix_ops_lazy.h"
 #include "eval/phonetic_lazy.h"
 #include "eval/rank_lazy.h"
-#include "eval/reference_lazy.h"  // INDIRECT / OFFSET lazy impls
+#include "eval/reference/indirect.h"  // INDIRECT lazy impl
+#include "eval/reference/offset.h"    // OFFSET lazy impl
 #include "eval/regex_lazy.h"
 #include "eval/regression_lazy.h"
 #include "eval/series_sum_lazy.h"
