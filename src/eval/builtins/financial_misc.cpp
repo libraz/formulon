@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "eval/builtins/financial_helpers.h"
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -18,16 +19,11 @@ namespace eval {
 namespace financial_detail {
 namespace {
 
-struct NumberPair {
-  double first;
-  double second;
-};
-
-struct NumberTriple {
-  double first;
-  double second;
-  double third;
-};
+// Re-expose the shared POD types under this TU's anonymous namespace so
+// the impl bodies below read naturally. The NumberQuad type stays local
+// because it is only needed by ISPMT.
+using NumberPair = builtins_detail::NumberPair;
+using NumberTriple = builtins_detail::NumberTriple;
 
 struct NumberQuad {
   double first;
@@ -36,63 +32,35 @@ struct NumberQuad {
   double fourth;
 };
 
-Expected<double, ErrorCode> read_number_at(const Value* args, std::uint32_t index) {
-  auto value = read_required_number(args, index);
-  if (!value) {
-    return value.error();
-  }
-  return value.value();
-}
-
 Expected<NumberPair, ErrorCode> read_non_bool_number_pair(const Value* args, std::uint32_t first_index,
                                                           std::uint32_t second_index) {
   if (args[first_index].kind() == ValueKind::Bool || args[second_index].kind() == ValueKind::Bool) {
     return ErrorCode::Value;
   }
-  auto first = read_number_at(args, first_index);
-  if (!first) {
-    return first.error();
-  }
-  auto second = read_number_at(args, second_index);
-  if (!second) {
-    return second.error();
-  }
-  return NumberPair{first.value(), second.value()};
+  return builtins_detail::read_number_pair(args, first_index, second_index);
 }
 
-Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
-                                                     std::uint32_t second_index, std::uint32_t third_index) {
-  auto first = read_number_at(args, first_index);
-  if (!first) {
-    return first.error();
-  }
-  auto second = read_number_at(args, second_index);
-  if (!second) {
-    return second.error();
-  }
-  auto third = read_number_at(args, third_index);
-  if (!third) {
-    return third.error();
-  }
-  return NumberTriple{first.value(), second.value(), third.value()};
+inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
+                                                            std::uint32_t second_index, std::uint32_t third_index) {
+  return builtins_detail::read_number_triple(args, first_index, second_index, third_index);
 }
 
 Expected<NumberQuad, ErrorCode> read_number_quad(const Value* args, std::uint32_t first_index,
                                                  std::uint32_t second_index, std::uint32_t third_index,
                                                  std::uint32_t fourth_index) {
-  auto first = read_number_at(args, first_index);
+  auto first = builtins_detail::read_required_number(args, first_index);
   if (!first) {
     return first.error();
   }
-  auto second = read_number_at(args, second_index);
+  auto second = builtins_detail::read_required_number(args, second_index);
   if (!second) {
     return second.error();
   }
-  auto third = read_number_at(args, third_index);
+  auto third = builtins_detail::read_required_number(args, third_index);
   if (!third) {
     return third.error();
   }
-  auto fourth = read_number_at(args, fourth_index);
+  auto fourth = builtins_detail::read_required_number(args, fourth_index);
   if (!fourth) {
     return fourth.error();
   }

@@ -19,14 +19,12 @@
 namespace formulon {
 namespace eval {
 
-namespace {
-
 // Parses `s` as a full double using std::strtod. Returns true iff the entire
-// input (no leftover bytes) parsed cleanly and the result is finite; the
-// finiteness guard lets callers treat true as "usable as a number". The stack
-// buffer is sized for any IEEE-754 literal including subnormals; longer
-// inputs take the heap path.
-bool strtod_full(std::string_view s, double* out) {
+// input (no leftover bytes) parsed cleanly; the numeric value is written
+// to `*out` even if it is NaN / Inf, leaving the finiteness check to the
+// caller. The stack buffer is sized for any IEEE-754 literal including
+// subnormals; longer inputs take the heap path.
+bool strtod_full(std::string_view s, double* out) noexcept {
   if (s.empty()) {
     return false;
   }
@@ -55,6 +53,8 @@ bool strtod_full(std::string_view s, double* out) {
   *out = parsed;
   return true;
 }
+
+namespace {
 
 // Currency symbols accepted by Mac Excel 365 for implicit numeric coercion.
 // Allowlist of single-codepoint UTF-8 byte sequences; no locale lookup.
@@ -326,11 +326,69 @@ Expected<std::vector<double>, ErrorCode> collect_numerics(const Value& v, Numeri
         // propagation.
         break;
       case ValueKind::Blank:
+        if (policy.blank_as_zero) {
+          out.push_back(0.0);
+        }
+        break;
       case ValueKind::Array:
       case ValueKind::Ref:
       case ValueKind::Lambda:
         // Always drop. Nested Array would only appear via lambda /
         // dynamic-array machinery that has its own flattening step.
+        break;
+    }
+  }
+  return out;
+}
+
+Expected<std::vector<double>, ErrorCode> collect_numerics(const Value* args, std::uint32_t count,
+                                                          NumericCollectPolicy policy) {
+  // Multi-Value flatten. The dispatcher has already expanded any range
+  // arguments into scalar cells, so walking the flat slice cell-by-cell
+  // and applying the same per-kind policy as the single-Value overload
+  // produces an identical result. Errors short-circuit at the first
+  // offending cell (when `policy.error_on_error_cell` is set), matching
+  // the contract used by the AVERAGE / SMALL / LARGE / "A" families.
+  std::vector<double> out;
+  out.reserve(count);
+  for (std::uint32_t i = 0; i < count; ++i) {
+    const Value& cell = args[i];
+    switch (cell.kind()) {
+      case ValueKind::Number:
+        out.push_back(cell.as_number());
+        break;
+      case ValueKind::Bool:
+        if (policy.include_bool) {
+          out.push_back(cell.as_boolean() ? 1.0 : 0.0);
+        }
+        break;
+      case ValueKind::Text:
+        if (policy.include_text_numeric_literal) {
+          auto coerced = coerce_to_number(cell);
+          if (!coerced) {
+            if (policy.error_on_text) {
+              return coerced.error();
+            }
+            break;
+          }
+          out.push_back(coerced.value());
+        }
+        break;
+      case ValueKind::Error:
+        if (policy.error_on_error_cell) {
+          return cell.as_error();
+        }
+        break;
+      case ValueKind::Blank:
+        if (policy.blank_as_zero) {
+          out.push_back(0.0);
+        }
+        break;
+      case ValueKind::Array:
+      case ValueKind::Ref:
+      case ValueKind::Lambda:
+        // Always drop. Range / Array arguments are expected to have been
+        // expanded by the dispatcher before reaching this helper.
         break;
     }
   }

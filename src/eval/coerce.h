@@ -74,6 +74,17 @@ Expected<std::string, ErrorCode> coerce_to_text(const Value& v);
 /// * `Array`, `Ref`, and `Lambda` yield `#VALUE!`.
 Expected<bool, ErrorCode> coerce_to_bool(const Value& v);
 
+/// Parses `s` as a full double via `std::strtod`. Returns `true` iff the
+/// entire input was consumed (no trailing bytes). The numeric value is
+/// written to `*out` even if it is `NaN` / `Inf`; callers that require a
+/// finite result must run their own `std::isnan` / `std::isinf` guard.
+///
+/// This is the same scanner that `coerce_text_to_number` uses internally
+/// for the numeric-fast-path; it is exposed so the IM* / COMPLEX
+/// parsing helpers can avoid duplicating the stack-buffer + heap-fallback
+/// dance.
+bool strtod_full(std::string_view s, double* out) noexcept;
+
 /// Computes `base ^ exp` with Excel's edge-case handling: a NaN/Inf result
 /// is reported as `#NUM!`. This is shared between the `^` operator and the
 /// `POWER()` builtin so the two paths cannot diverge.
@@ -152,6 +163,12 @@ struct NumericCollectPolicy {
   /// regression families that walk both arrays first to surface the
   /// leftmost error).
   bool error_on_error_cell = true;
+
+  /// If `true`, `Blank` cells contribute `0.0` instead of being dropped.
+  /// Matches the "A"-family contract for direct `Blank` arguments
+  /// (`AVERAGEA(A1, 1)` where A1 is blank counts the blank slot as 0).
+  /// Default `false` keeps the AVERAGE / SUM rule (Blank dropped).
+  bool blank_as_zero = false;
 };
 
 /// Flattens `v` into a vector of `double` according to `policy`.
@@ -166,6 +183,16 @@ struct NumericCollectPolicy {
 /// is set and an `Error` cell is encountered, or if
 /// `policy.error_on_text` is set and a `Text` cell fails `coerce_to_number`.
 Expected<std::vector<double>, ErrorCode> collect_numerics(const Value& v, NumericCollectPolicy policy);
+
+/// Multi-`Value` overload: flattens each of `args[0..count-1]` into the
+/// same output vector, applying `policy` per cell. Used by builtin
+/// dispatchers that receive a flat `Value*` slice (the dispatcher has
+/// already expanded any range arguments into scalar cells), so iterating
+/// the slice directly is equivalent to walking each cell as a scalar
+/// `Value` and accumulating. Errors short-circuit as soon as they are
+/// encountered (no partial result).
+Expected<std::vector<double>, ErrorCode> collect_numerics(const Value* args, std::uint32_t count,
+                                                          NumericCollectPolicy policy);
 
 }  // namespace eval
 }  // namespace formulon

@@ -21,8 +21,6 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
-#include <cstring>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -56,31 +54,13 @@ struct Complex {
 // ---------------------------------------------------------------------------
 
 // Parses a decimal double from `s`. Accepts scientific notation; requires
-// that the *entire* view be consumed (no trailing characters).
-bool parse_double(std::string_view s, double* out) {
-  if (s.empty()) {
-    return false;
-  }
-  char stack_buf[64];
-  char* heap_buf = nullptr;
-  char* buf = stack_buf;
-  const std::size_t n = s.size();
-  if (n + 1 > sizeof(stack_buf)) {
-    heap_buf = static_cast<char*>(std::malloc(n + 1));
-    if (heap_buf == nullptr) {
-      return false;
-    }
-    buf = heap_buf;
-  }
-  std::memcpy(buf, s.data(), n);
-  buf[n] = '\0';
-  char* end_ptr = nullptr;
-  const double v = std::strtod(buf, &end_ptr);
-  const bool ok = end_ptr == buf + n;
-  if (heap_buf != nullptr) {
-    std::free(heap_buf);
-  }
-  if (!ok) {
+// that the entire view be consumed (no trailing characters) and the
+// parsed value to be finite (NaN / Inf are rejected so the IM* impls
+// can treat success as "usable as a number"). Delegates the raw parse
+// to the shared `strtod_full` scanner in `eval/coerce.h`.
+inline bool parse_double(std::string_view s, double* out) {
+  double v = 0.0;
+  if (!strtod_full(s, &v)) {
     return false;
   }
   if (std::isnan(v) || std::isinf(v)) {

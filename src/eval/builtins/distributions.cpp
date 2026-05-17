@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <limits>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -50,68 +51,38 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Mathematical constant pi; matches std::acos(-1.0) on any IEEE-754
-// platform. Used for the lognormal PDF normalisation.
-constexpr double kDistPi = 3.14159265358979323846;
+using builtins_detail::NumberTriple;
+
+// Shared kPi alias kept for readability at the lognormal PDF normalisation
+// site; the value lives in `numeric_helpers.h`.
+constexpr double kDistPi = builtins_detail::kPi;
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
 // Finalises a scalar result: non-finite becomes #NUM!, otherwise wraps in a
-// Value::number. Mirrors the convention used throughout the builtins.
-Value finalize(double r) {
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+// Value::number. Thin alias kept so the impl bodies read naturally.
+inline Value finalize(double r) {
+  return builtins_detail::to_finite_value(r);
 }
 
 // Reads a required numeric argument. Non-finite coerced values surface
 // as #NUM! so the impl bodies never have to re-check for NaN / Inf.
-Expected<double, ErrorCode> read_number(const Value* args, std::uint32_t index) {
-  auto coerced = coerce_to_number(args[index]);
-  if (!coerced) {
-    return coerced.error();
-  }
-  const double v = coerced.value();
-  if (std::isnan(v) || std::isinf(v)) {
-    return ErrorCode::Num;
-  }
-  return v;
+inline Expected<double, ErrorCode> read_number(const Value* args, std::uint32_t index) {
+  return builtins_detail::read_required_number(args, index);
 }
 
 // Reads an optional trailing numeric argument, falling back to
 // `default_value` when arity <= index. Parallels `read_number` for
 // error/non-finite handling.
-Expected<double, ErrorCode> read_optional_number(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                 double default_value) {
-  if (arity <= index) {
-    return default_value;
-  }
-  return read_number(args, index);
+inline Expected<double, ErrorCode> read_optional_number(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                        double default_value) {
+  return builtins_detail::read_optional_number(args, arity, index, default_value);
 }
 
-struct NumberTriple {
-  double first;
-  double second;
-  double third;
-};
-
-Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args) {
-  auto first = read_number(args, 0);
-  if (!first) {
-    return first.error();
-  }
-  auto second = read_number(args, 1);
-  if (!second) {
-    return second.error();
-  }
-  auto third = read_number(args, 2);
-  if (!third) {
-    return third.error();
-  }
-  return NumberTriple{first.value(), second.value(), third.value()};
+inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args) {
+  return builtins_detail::read_number_triple(args, 0, 1, 2);
 }
 
 // Shared bracket-then-Newton inverter for CDF surfaces on a half-open

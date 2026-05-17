@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <random>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -46,12 +47,12 @@ namespace {
 // over surfaces `#NUM!`, matching Excel's overflow code for SEQUENCE.
 constexpr std::size_t kMaxSequenceCells = 1U << 20;  // 1,048,576
 
-Expected<double, ErrorCode> read_optional_number_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
-                                                     double default_value) {
-  if (arity <= index) {
-    return default_value;
-  }
-  return coerce_to_number(args[index]);
+// SEQUENCE / RANDARRAY use the lenient pass-through variant: NaN / Inf are
+// not rejected here because the impls run their own `> 0` / `<=` shape
+// checks downstream which reject NaN by IEEE-754 rule.
+inline Expected<double, ErrorCode> read_optional_number_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
+                                                            double default_value) {
+  return builtins_detail::read_optional_number(args, arity, index, default_value, /*check_finite=*/false);
 }
 
 Expected<bool, ErrorCode> read_optional_bool_arg(const Value* args, std::uint32_t arity, std::uint32_t index,

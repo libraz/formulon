@@ -15,6 +15,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -25,11 +26,8 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Excel uses an internally-stored value of pi rounded to ~15 significant
-// digits. The hard-coded constant here is the same double precision value
-// that `std::acos(-1.0)` would yield on any IEEE 754 system, which keeps
-// `RADIANS(180) == kPi` exact.
-static constexpr double kPi = 3.14159265358979323846;
+using builtins_detail::kPi;
+using builtins_detail::to_finite_value;
 
 // Shared kernel for unary numeric built-ins that follow the
 // "coerce arg → std::*(x) → reject NaN/Inf as #NUM!" pattern. Used by
@@ -40,19 +38,12 @@ static constexpr double kPi = 3.14159265358979323846;
 using DoubleFn = double (*)(double);
 using DomainPredicate = bool (*)(double);
 
-inline Value finite_math_number(double r) {
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
-}
-
 inline Value apply_unary_math(DoubleFn fn, const Value* args) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
     return Value::error(x.error());
   }
-  return finite_math_number(fn(x.value()));
+  return to_finite_value(fn(x.value()));
 }
 
 inline Value apply_guarded_unary_math(DoubleFn fn, DomainPredicate domain, const Value* args) {
@@ -63,7 +54,7 @@ inline Value apply_guarded_unary_math(DoubleFn fn, DomainPredicate domain, const
   if (!domain(x.value())) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_math_number(fn(x.value()));
+  return to_finite_value(fn(x.value()));
 }
 
 bool positive_domain(double x) {
@@ -129,7 +120,7 @@ Value Log(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = std::log(x.value()) / denom;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // LOG10(x) - base-10 logarithm. `x <= 0` -> `#NUM!`.
@@ -151,7 +142,7 @@ Value Radians(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(x.error());
   }
   const double r = x.value() * kPi / 180.0;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // DEGREES(radians) - radians-to-degrees conversion. DEGREES(pi) == 180.
@@ -164,7 +155,7 @@ Value Degrees(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(x.error());
   }
   const double r = x.value() / kPi * 180.0;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // SIN(x) - sine in radians. Excel imposes no domain restriction; only
@@ -224,7 +215,7 @@ Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = std::atan2(y.value(), x.value());
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // --- Hyperbolic functions ----------------------------------------------
@@ -291,7 +282,7 @@ Value Sec(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = 1.0 / c;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // CSC(x) - cosecant, `1 / sin(x)`. `sin(x) == 0` -> `#DIV/0!`.
@@ -305,7 +296,7 @@ Value Csc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = 1.0 / s;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // COT(x) - cotangent, `cos(x) / sin(x)` (equivalently `1 / tan(x)`).
@@ -323,7 +314,7 @@ Value Cot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Div0);
   }
   const double r = std::cos(x.value()) / s;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // ACOT(x) - inverse cotangent, `PI/2 - atan(x)`. Range `(0, PI)`. No
@@ -335,7 +326,7 @@ Value Acot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(x.error());
   }
   const double r = kPi / 2.0 - std::atan(x.value());
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // SECH(x) - hyperbolic secant, `1 / cosh(x)`. `cosh` is always >= 1, so
@@ -353,7 +344,7 @@ Value Sech(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const double r = 1.0 / c;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // CSCH(x) - hyperbolic cosecant, `1 / sinh(x)`. `sinh(0) == 0` -> `#DIV/0!`.
@@ -371,7 +362,7 @@ Value Csch(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const double r = 1.0 / s;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // COTH(x) - hyperbolic cotangent, `cosh(x) / sinh(x)`. `sinh(0) == 0`
@@ -390,7 +381,7 @@ Value Coth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::number((x.value() > 0.0) ? 1.0 : -1.0);
   }
   const double r = std::cosh(x.value()) / s;
-  return finite_math_number(r);
+  return to_finite_value(r);
 }
 
 // ACOTH(x) - inverse hyperbolic cotangent, `atanh(1 / x)`. Domain is
@@ -405,7 +396,7 @@ Value Acoth(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!outside_closed_unit_domain(x.value())) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_math_number(std::atanh(1.0 / x.value()));
+  return to_finite_value(std::atanh(1.0 / x.value()));
 }
 
 }  // namespace

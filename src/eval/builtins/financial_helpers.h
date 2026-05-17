@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <limits>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "eval/date_time.h"
 #include "utils/arena.h"
@@ -30,36 +31,19 @@ namespace financial_detail {
 // back to `default_value` when `arity <= index`. Non-finite coerced values
 // surface as `#NUM!` to match the rest of the math-family argument-handling
 // conventions. The default is returned by value rather than by reference so
-// callers never need to worry about lifetime of a sentinel.
+// callers never need to worry about lifetime of a sentinel. Thin alias to
+// the shared `builtins_detail::read_optional_number` helper.
 inline Expected<double, ErrorCode> read_optional_number(const Value* args, std::uint32_t arity, std::uint32_t index,
                                                         double default_value) {
-  if (arity <= index) {
-    return default_value;
-  }
-  auto coerced = coerce_to_number(args[index]);
-  if (!coerced) {
-    return coerced.error();
-  }
-  const double v = coerced.value();
-  if (std::isnan(v) || std::isinf(v)) {
-    return ErrorCode::Num;
-  }
-  return v;
+  return builtins_detail::read_optional_number(args, arity, index, default_value);
 }
 
 // Reads a required numeric argument at position `index`. Parallels
 // `read_optional_number` above; kept as a separate helper to keep the
-// call sites readable (no "magic default that won't be used").
+// call sites readable (no "magic default that won't be used"). Thin
+// alias to the shared `builtins_detail::read_required_number` helper.
 inline Expected<double, ErrorCode> read_required_number(const Value* args, std::uint32_t index) {
-  auto coerced = coerce_to_number(args[index]);
-  if (!coerced) {
-    return coerced.error();
-  }
-  const double v = coerced.value();
-  if (std::isnan(v) || std::isinf(v)) {
-    return ErrorCode::Num;
-  }
-  return v;
+  return builtins_detail::read_required_number(args, index);
 }
 
 // Reads a required date argument, truncating toward zero. Negative serials
@@ -145,12 +129,10 @@ inline Expected<double, ErrorCode> yearfrac_for_basis(double start, double end, 
 }
 
 // Finalises a scalar financial result: a non-finite value becomes `#NUM!`,
-// otherwise wraps the double in a `Value::number`.
+// otherwise wraps the double in a `Value::number`. Thin alias to the
+// shared `builtins_detail::to_finite_value` helper.
 inline Value finalize(double r) {
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
+  return builtins_detail::to_finite_value(r);
 }
 
 // Normalises the `type` argument (end-vs-begin of period). Excel accepts

@@ -22,6 +22,7 @@
 #include <string>
 #include <utility>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -33,10 +34,8 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Local PI constant used by SQRTPI. Defined locally rather than shared to
-// keep this translation unit self-contained, matching the pattern used in
-// the test files for `kPi`.
-constexpr double kPi = 3.14159265358979323846;
+using builtins_detail::kPi;
+using builtins_detail::to_finite_value;
 
 // Factorial table for n = 0..170 (double precision). 170! is the largest
 // factorial representable as a finite double; 171! overflows to +Inf.
@@ -77,16 +76,8 @@ inline bool try_truncate_nonneg(double x, std::uint64_t max, std::uint64_t* out)
   return true;
 }
 
-Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint32_t index) {
-  auto coerced = coerce_to_number(args[index]);
-  if (!coerced) {
-    return coerced.error();
-  }
-  const double x = coerced.value();
-  if (std::isnan(x) || std::isinf(x)) {
-    return ErrorCode::Num;
-  }
-  return x;
+inline Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint32_t index) {
+  return builtins_detail::read_required_number(args, index);
 }
 
 Expected<std::uint64_t, ErrorCode> read_nonneg_uint_arg(const Value* args, std::uint32_t index, std::uint64_t max) {
@@ -116,13 +107,6 @@ Expected<UIntPair, ErrorCode> read_nonneg_uint_pair(const Value* args, std::uint
     return second.error();
   }
   return UIntPair{first.value(), second.value()};
-}
-
-Value finite_number_or_num(double r) {
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +189,7 @@ Value Combin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (k > n) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_or_num(combin_exact(n, k));
+  return to_finite_value(combin_exact(n, k));
 }
 
 // COMBINA(n, k) - multichoose = C(n+k-1, k). Same error conditions as
@@ -230,7 +214,7 @@ Value CombinA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const std::uint64_t upper = n + k - 1;
-  return finite_number_or_num(combin_exact(upper, k));
+  return to_finite_value(combin_exact(upper, k));
 }
 
 // PERMUT(n, k) - number of k-permutations of n distinct items =
@@ -275,7 +259,7 @@ Value PermutationA(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
   if (n == 0) {
     return Value::number(0.0);
   }
-  return finite_number_or_num(std::pow(static_cast<double>(n), static_cast<double>(k)));
+  return to_finite_value(std::pow(static_cast<double>(n), static_cast<double>(k)));
 }
 
 // MULTINOMIAL(a1, a2, ...) - multinomial coefficient = (sum(a_i))! / prod(a_i!).
@@ -766,7 +750,7 @@ Value SqrtPi(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x.value() < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_or_num(std::sqrt(x.value() * kPi));
+  return to_finite_value(std::sqrt(x.value() * kPi));
 }
 
 }  // namespace

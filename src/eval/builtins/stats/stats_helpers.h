@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -27,8 +28,9 @@ namespace eval {
 namespace stats_detail {
 
 // Mathematical constant pi, used to normalise the standard-normal PDF.
-// Matches `std::acos(-1.0)` on any IEEE-754 system.
-inline constexpr double kStatsPi = 3.14159265358979323846;
+// Alias to the shared constant in `eval/builtins/numeric_helpers.h` so
+// every TU sees the same bit pattern.
+inline constexpr double kStatsPi = builtins_detail::kPi;
 
 // Extracts the numeric values from `args[0..count-1]`. Non-Number values
 // (text / bool / blank after range expansion) are silently skipped. Errors
@@ -46,59 +48,45 @@ std::vector<double> collect_numerics(const Value* args, std::uint32_t count);
 // because the dispatcher short-circuits with `propagate_errors = true`.
 Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count);
 
+// Direct-scalar-aware collector used by SMALL / LARGE. Range-sourced cells
+// that are non-Number have already been dropped by the dispatcher's
+// `range_filter_numeric_only` filter, so this helper only sees Number kinds
+// plus any direct scalar arguments. Direct Number -> kept; direct Bool ->
+// 1.0 / 0.0; direct Text -> strict `coerce_to_number` (propagates
+// `#VALUE!` on unparseable text). Direct Blank is dropped silently, which
+// is where this helper diverges from the "A"-family rule. Errors never
+// reach this helper (dispatcher short-circuits via `propagate_errors`).
+Expected<std::vector<double>, ErrorCode> collect_small_large(const Value* args, std::uint32_t count);
+
 // (mean, sum_of_squared_deviations) pair returned by `compute_mean_ss`.
 struct MeanSS {
   double mean;
   double ss;  // Sum of squared deviations from the mean.
 };
 
-struct NumberPair {
-  double first;
-  double second;
-};
+// Aliases to the shared POD struct types in `numeric_helpers.h`. The
+// stats namespace keeps the type names re-exposed so existing call
+// sites (and the dozens of forward-declared distribution impls below)
+// continue to read naturally.
+using NumberPair = builtins_detail::NumberPair;
+using NumberTriple = builtins_detail::NumberTriple;
 
-struct NumberTriple {
-  double first;
-  double second;
-  double third;
-};
-
+// Stats-specific argument reader: unlike the math / financial / dist
+// counterparts, this one does NOT reject NaN / Inf at the coercion
+// step. Several callers (T.TEST tail handling, CONFIDENCE.NORM size
+// guard) want the raw double so they can apply their own range checks.
 inline Expected<double, ErrorCode> read_number_arg(const Value* args, std::uint32_t index) {
-  auto value = coerce_to_number(args[index]);
-  if (!value) {
-    return value.error();
-  }
-  return value.value();
+  return builtins_detail::read_required_number(args, index, /*check_finite=*/false);
 }
 
 inline Expected<NumberPair, ErrorCode> read_number_pair(const Value* args, std::uint32_t first_index,
                                                         std::uint32_t second_index) {
-  auto first = read_number_arg(args, first_index);
-  if (!first) {
-    return first.error();
-  }
-  auto second = read_number_arg(args, second_index);
-  if (!second) {
-    return second.error();
-  }
-  return NumberPair{first.value(), second.value()};
+  return builtins_detail::read_number_pair(args, first_index, second_index, /*check_finite=*/false);
 }
 
 inline Expected<NumberTriple, ErrorCode> read_number_triple(const Value* args, std::uint32_t first_index,
                                                             std::uint32_t second_index, std::uint32_t third_index) {
-  auto first = read_number_arg(args, first_index);
-  if (!first) {
-    return first.error();
-  }
-  auto second = read_number_arg(args, second_index);
-  if (!second) {
-    return second.error();
-  }
-  auto third = read_number_arg(args, third_index);
-  if (!third) {
-    return third.error();
-  }
-  return NumberTriple{first.value(), second.value(), third.value()};
+  return builtins_detail::read_number_triple(args, first_index, second_index, third_index, /*check_finite=*/false);
 }
 
 inline Expected<bool, ErrorCode> read_bool_arg(const Value* args, std::uint32_t index) {
@@ -110,10 +98,7 @@ inline Expected<bool, ErrorCode> read_bool_arg(const Value* args, std::uint32_t 
 }
 
 inline Value finite_number_result(double value) {
-  if (std::isnan(value) || std::isinf(value)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(value);
+  return builtins_detail::to_finite_value(value);
 }
 
 // Helper: compute `(mean, sum_of_squared_deviations)` over a numeric slice.
@@ -150,6 +135,37 @@ double mean_of(const std::vector<double>& xs) noexcept;
 // applies its own range / truncation rules.
 Expected<double, ErrorCode> read_kth_arg(const Value& v);
 
+// Frequency table used by MODE / MODE.SNGL / MODE.MULT to identify the
+// values tied for the maximum count. Order of `values` / `counts` follows
+// first-occurrence in the input slice. `best_count` is the maximum across
+// `counts` (or 0 if `xs` is empty).
+struct ModeFrequencies {
+  std::vector<double> values;
+  std::vector<std::size_t> counts;
+  std::size_t best_count = 0;
+};
+
+// Builds the first-occurrence-ordered frequency table for MODE / MODE.SNGL
+// / MODE.MULT. O(n^2) by design: the input slices are bounded by Excel's
+// 255-arg limit for direct scalars and ~1M for ranges, but the duplicate
+// detection has to be order-preserving so a hash map would still need a
+// parallel insertion-order vector.
+ModeFrequencies build_mode_frequencies(const std::vector<double>& xs);
+
+// PERCENTILE.INC / QUARTILE.INC kernel: linear interpolation across an
+// already-sorted slice. Callers must pre-sort `xs` and guarantee
+// `!xs.empty()` and `k in [0, 1]`. Returns `#NUM!` only on a non-finite
+// blend (`Inf - Inf`); the empty-input and out-of-range guards live at
+// the callsites.
+Value percentile_inc_sorted(const std::vector<double>& xs, double k);
+
+// PERCENTILE.EXC / QUARTILE.EXC kernel: exclusive interpolation across an
+// already-sorted slice. Callers must pre-sort `xs` and guarantee
+// `!xs.empty()`. The shared kernel applies the open-interval boundary
+// check (`pos < 1 || pos >= n`) and returns `#NUM!` at or beyond the
+// boundary, matching Mac Excel 365.
+Value percentile_exc_sorted(const std::vector<double>& xs, double k);
+
 // Inverse standard-normal CDF. Uses Peter Acklam's rational
 // approximation for the initial guess (good to ~1e-6 in practice across
 // the unit interval) and then runs Halley-method refinement steps to
@@ -167,6 +183,30 @@ double BinomPmf(double k, double n, double prob);
 // T.INV.2T (in `stats_distributions.cpp`) and CONFIDENCE.T (in
 // `stats_distributions_misc.cpp`). Assumes `0 < p < 1` and `df >= 1`.
 double TInvCore(double p, double df) noexcept;
+
+// Value-returning order-statistic builtins implemented in
+// `stats/stats_order.cpp`.
+Value Median(const Value* args, std::uint32_t arity, Arena& arena);
+Value Mode(const Value* args, std::uint32_t arity, Arena& arena);
+Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena);
+Value Large(const Value* args, std::uint32_t arity, Arena& arena);
+Value Small(const Value* args, std::uint32_t arity, Arena& arena);
+Value PercentileInc(const Value* args, std::uint32_t arity, Arena& arena);
+Value PercentileExc(const Value* args, std::uint32_t arity, Arena& arena);
+Value QuartileInc(const Value* args, std::uint32_t arity, Arena& arena);
+Value QuartileExc(const Value* args, std::uint32_t arity, Arena& arena);
+Value TrimMean(const Value* args, std::uint32_t arity, Arena& arena);
+
+// Value-returning higher-moment builtins implemented in
+// `stats/stats_moments.cpp`.
+Value GeoMean(const Value* args, std::uint32_t arity, Arena& arena);
+Value HarMean(const Value* args, std::uint32_t arity, Arena& arena);
+Value DevSq(const Value* args, std::uint32_t arity, Arena& arena);
+Value AveDev(const Value* args, std::uint32_t arity, Arena& arena);
+Value Skew(const Value* args, std::uint32_t arity, Arena& arena);
+Value SkewP(const Value* args, std::uint32_t arity, Arena& arena);
+Value Kurt(const Value* args, std::uint32_t arity, Arena& arena);
+Value Standardize(const Value* args, std::uint32_t arity, Arena& arena);
 
 // Value-returning distribution builtins implemented in
 // `stats/stats_distributions.cpp`.
