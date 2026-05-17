@@ -339,3 +339,78 @@ cases:
       print_area: A1:D40
       print_titles: {rows: "1:5"}
       page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  # --- Axis E: Scale x vertical extent (4 cases) -------------------------
+  # Pinned: 8 cols * 30 chars wide (forces horizontal overflow when
+  # scaled), A4 portrait, FitToPages OFF, all rows default 15pt (NO 80pt
+  # rows that contaminate zoom_* cases).
+  # Variable: (scale, row_count) in {50, 75} x {1 row, 30 rows}.
+  # Disambiguates a residual question round 1 left open:
+  #   print_fit.scale_50_shrinks_breaks (A1:H1, scale 50) -> Excel
+  #     pages=2 (auto-col-pages reported under scale<100)
+  #   print_matrix.zoom_75_dense_fit_off (A1:H30 with 80pt rows, scale 75)
+  #     -> Excel pages=1 (auto-col-pages NOT reported)
+  # These contradict a simple "scale<100 -> count auto-col-pages" rule.
+  # Suspects: (a) Excel's auto-col-page counting depends on vertical
+  # extent of content, (b) the 80pt rows trigger a different code path
+  # in Excel COM that Pages.Count reads. The four cases below isolate
+  # both by holding scale constant across row-count, and row-count
+  # constant across scale. Together with applied_page_setup they should
+  # reveal which axis (or combination) actually controls Pages.Count.
+  - id: scale_50_short_row
+    description: 8 wide cols, 1 row, scale 50. Mirror of print_fit.scale_50_shrinks_breaks but inside print_matrix so applied_page_setup is captured.
+    sheets:
+      Sheet1:
+        A1: x
+        H1: x
+    column_widths:
+      A:H: 30
+    print:
+      sheet: Sheet1
+      print_area: A1:H1
+      page_setup: {orientation: portrait, paper: 9, scale: 50}
+
+  - id: scale_50_flat_rows
+    description: 8 wide cols, 30 rows ALL default 15pt (no tall rows), scale 50. Distinguishes from zoom_50_dense_fit_off which has 80pt rows.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 50}
+
+  - id: scale_75_short_row
+    description: 8 wide cols, 1 row, scale 75. Same content as scale_50_short_row at a different scale; isolates the scale axis at row_count=1.
+    sheets:
+      Sheet1:
+        A1: x
+        H1: x
+    column_widths:
+      A:H: 30
+    print:
+      sheet: Sheet1
+      print_area: A1:H1
+      page_setup: {orientation: portrait, paper: 9, scale: 75}
+
+  - id: scale_75_flat_rows
+    description: 8 wide cols, 30 rows ALL default 15pt, scale 75. Distinguishes from zoom_75_dense_fit_off (which has 80pt rows); isolates the row-count axis at scale=75.
+    sheets:
+      Sheet1:
+        A1: x
+        A30: x
+        H1: x
+        H30: x
+        D15: x
+    column_widths:
+      A:H: 30
+    print:
+      sheet: Sheet1
+      print_area: A1:H30
+      page_setup: {orientation: portrait, paper: 9, scale: 75}

@@ -794,6 +794,142 @@
           "scale": 100
         }
       }
+    },
+    {
+      "id": "scale_50_short_row",
+      "description": "8 wide cols, 1 row, scale 50. Mirror of print_fit.scale_50_shrinks_breaks but inside print_matrix so applied_page_setup is captured.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H1",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 50
+        }
+      }
+    },
+    {
+      "id": "scale_50_flat_rows",
+      "description": "8 wide cols, 30 rows ALL default 15pt (no tall rows), scale 50. Distinguishes from zoom_50_dense_fit_off which has 80pt rows.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 50
+        }
+      }
+    },
+    {
+      "id": "scale_75_short_row",
+      "description": "8 wide cols, 1 row, scale 75. Same content as scale_50_short_row at a different scale; isolates the scale axis at row_count=1.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H1",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 75
+        }
+      }
+    },
+    {
+      "id": "scale_75_flat_rows",
+      "description": "8 wide cols, 30 rows ALL default 15pt, scale 75. Distinguishes from zoom_75_dense_fit_off (which has 80pt rows); isolates the row-count axis at scale=75.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "A30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "x"
+          },
+          "H30": {
+            "kind": "text",
+            "value": "x"
+          },
+          "D15": {
+            "kind": "text",
+            "value": "x"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 30
+      },
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H30",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 75
+        }
+      }
     }
   ]
 }
