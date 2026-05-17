@@ -187,6 +187,168 @@ TEST(FoldAndLower, FullWidthDigitsNotFoldedByDefault) {
   EXPECT_EQ(fold_and_lower("\xEF\xBC\x91", /*fold_fullwidth_digits=*/true), "1");
 }
 
+// ---------------------------------------------------------------------------
+// equal_folded / compare_folded
+// ---------------------------------------------------------------------------
+//
+// These pin the high-level helpers introduced for the lookup / groupby /
+// database refactor. Each test fixes a single flag combination so a
+// future regression in the option plumbing fails loudly.
+
+TEST(EqualFolded, AsciiNoFoldingDefaultCaseInsensitive) {
+  // ASCII pass-through under default options (case_insensitive=true).
+  EXPECT_TRUE(equal_folded("abc", "abc"));
+  EXPECT_TRUE(equal_folded("abc", "ABC"));
+  EXPECT_TRUE(equal_folded("Hello", "HELLO"));
+  EXPECT_FALSE(equal_folded("abc", "abd"));
+  EXPECT_FALSE(equal_folded("abc", "abcd"));
+  EXPECT_TRUE(equal_folded("", ""));
+}
+
+TEST(EqualFolded, CaseSensitiveOption) {
+  FoldCompareOptions cs;
+  cs.case_insensitive = false;
+  EXPECT_TRUE(equal_folded("abc", "abc", cs));
+  EXPECT_FALSE(equal_folded("abc", "ABC", cs));
+  // Folded equality still works under case-sensitive mode: Ａ -> 'A'.
+  EXPECT_TRUE(equal_folded("\xEF\xBC\xA1", "A", cs));
+  EXPECT_FALSE(equal_folded("\xEF\xBC\xA1", "a", cs));
+}
+
+TEST(EqualFolded, HalfwidthFullwidthAscii) {
+  // ＡＢＣ (U+FF21..U+FF23) folds to "ABC"; case-insensitive default
+  // makes both sides equal to "abc".
+  EXPECT_TRUE(equal_folded("\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3", "abc"));
+  EXPECT_TRUE(equal_folded("\xEF\xBC\xA1\xEF\xBC\xA2\xEF\xBC\xA3", "ABC"));
+  // Mixed: ＡBＣ should still fold and compare equal to "abc".
+  EXPECT_TRUE(
+      equal_folded("\xEF\xBC\xA1"
+                   "B\xEF\xBC\xA3",
+                   "abc"));
+}
+
+TEST(EqualFolded, HiraganaToKatakana) {
+  // あ (U+3042) folds to ア (U+30A2); compare against the literal
+  // full-width katakana ア.
+  EXPECT_TRUE(equal_folded("\xE3\x81\x82", "\xE3\x82\xA2"));
+  // Word: あっぷる == アップル.
+  EXPECT_TRUE(equal_folded("\xE3\x81\x82\xE3\x81\xA3\xE3\x81\xB7\xE3\x82\x8B",
+                           "\xE3\x82\xA2\xE3\x83\x83\xE3\x83\x97\xE3\x83\xAB"));
+}
+
+TEST(EqualFolded, LengthDifferenceAfterFolding) {
+  // ｶﾞ (FF76 FF9E, 6 bytes) folds to ガ (U+30AC, 3 bytes). Pre-fold
+  // byte lengths differ; post-fold the strings are byte-equal.
+  EXPECT_TRUE(equal_folded("\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC"));
+  // Disable half-width katakana folding (D-function path): the same
+  // pair no longer compares equal because the LHS stays as the raw
+  // two-codepoint sequence.
+  FoldCompareOptions dfn;
+  dfn.fold_halfwidth_kana = false;
+  EXPECT_FALSE(equal_folded("\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC", dfn));
+}
+
+TEST(EqualFolded, FullwidthDigitOptionGate) {
+  // '１' (U+FF11) folds to '1' when fold_fullwidth_digits=true (criteria
+  // / database parity); stays as the original codepoint and does NOT
+  // compare equal to '1' when fold_fullwidth_digits=false (lookup
+  // parity).
+  FoldCompareOptions criteria;  // defaults
+  EXPECT_TRUE(equal_folded("\xEF\xBC\x91", "1", criteria));
+  FoldCompareOptions lookup;
+  lookup.fold_fullwidth_digits = false;
+  EXPECT_FALSE(equal_folded("\xEF\xBC\x91", "1", lookup));
+}
+
+TEST(CompareFolded, AsciiOrdering) {
+  EXPECT_EQ(compare_folded("abc", "abc"), 0);
+  EXPECT_LT(compare_folded("abc", "abd"), 0);
+  EXPECT_GT(compare_folded("abd", "abc"), 0);
+  // Case-insensitive: "ABC" == "abc".
+  EXPECT_EQ(compare_folded("ABC", "abc"), 0);
+  // Shorter prefix orders before its longer continuation.
+  EXPECT_LT(compare_folded("abc", "abcd"), 0);
+}
+
+TEST(CompareFolded, CaseSensitiveOption) {
+  FoldCompareOptions cs;
+  cs.case_insensitive = false;
+  // 'A' (0x41) < 'a' (0x61) under exact-byte compare.
+  EXPECT_LT(compare_folded("ABC", "abc", cs), 0);
+  // Same byte sequence after the fold compares equal even under
+  // case-sensitive mode.
+  EXPECT_EQ(compare_folded("\xEF\xBC\xA1", "A", cs), 0);
+}
+
+TEST(CompareFolded, FoldedThenCompare) {
+  // ｶﾞ (FF76 FF9E) folds to ガ (U+30AC); equal under default options.
+  EXPECT_EQ(compare_folded("\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC"), 0);
+  // Disable half-width kana folding: now they differ; LHS starts with
+  // 0xEF which sorts after 0xE3.
+  FoldCompareOptions dfn;
+  dfn.fold_halfwidth_kana = false;
+  EXPECT_GT(compare_folded("\xEF\xBD\xB6\xEF\xBE\x9E", "\xE3\x82\xAC", dfn), 0);
+}
+
+// ---------------------------------------------------------------------------
+// value_equal_folded_text / value_compare_folded_text
+// ---------------------------------------------------------------------------
+
+TEST(ValueEqualFoldedText, TextFoldsHiraganaKatakana) {
+  const std::string hira = "\xE3\x81\x82\xE3\x81\xA3";  // あっ
+  const std::string kata = "\xE3\x82\xA2\xE3\x83\x83";  // アッ
+  EXPECT_TRUE(value_equal_folded_text(Value::text(hira), Value::text(kata)));
+}
+
+TEST(ValueEqualFoldedText, NumberCompareDoesNotFold) {
+  // Numbers compare by IEEE-754 `==`; no fold pass is invoked.
+  EXPECT_TRUE(value_equal_folded_text(Value::number(1.5), Value::number(1.5)));
+  EXPECT_FALSE(value_equal_folded_text(Value::number(1.5), Value::number(1.6)));
+  // +0.0 == -0.0 under `==` (mirroring group_cell_equal).
+  EXPECT_TRUE(value_equal_folded_text(Value::number(0.0), Value::number(-0.0)));
+}
+
+TEST(ValueEqualFoldedText, BoolErrorBlankFallbacks) {
+  EXPECT_TRUE(value_equal_folded_text(Value::boolean(true), Value::boolean(true)));
+  EXPECT_FALSE(value_equal_folded_text(Value::boolean(true), Value::boolean(false)));
+  EXPECT_TRUE(value_equal_folded_text(Value::error(ErrorCode::NA), Value::error(ErrorCode::NA)));
+  EXPECT_FALSE(value_equal_folded_text(Value::error(ErrorCode::NA), Value::error(ErrorCode::Value)));
+  EXPECT_TRUE(value_equal_folded_text(Value::blank(), Value::blank()));
+}
+
+TEST(ValueEqualFoldedText, CrossKindNeverEqual) {
+  // Text "1" vs Number 1 -> not equal (Excel-canonical: no coercion).
+  EXPECT_FALSE(value_equal_folded_text(Value::text("1"), Value::number(1.0)));
+  // Number 0 vs Bool FALSE -> distinct kinds.
+  EXPECT_FALSE(value_equal_folded_text(Value::number(0.0), Value::boolean(false)));
+  // Blank vs Text "" -> distinct kinds (Blank != empty Text in
+  // group_cell_equal contract).
+  EXPECT_FALSE(value_equal_folded_text(Value::blank(), Value::text("")));
+}
+
+TEST(ValueCompareFoldedText, OrdersWithinSameKind) {
+  EXPECT_LT(value_compare_folded_text(Value::number(1.0), Value::number(2.0)), 0);
+  EXPECT_GT(value_compare_folded_text(Value::number(2.0), Value::number(1.0)), 0);
+  EXPECT_EQ(value_compare_folded_text(Value::number(1.0), Value::number(1.0)), 0);
+
+  // Text compare uses fold + case-insensitive default.
+  const std::string hira_a = "\xE3\x81\x82";  // あ
+  const std::string kata_a = "\xE3\x82\xA2";  // ア
+  EXPECT_EQ(value_compare_folded_text(Value::text(hira_a), Value::text(kata_a)), 0);
+
+  // Bool: FALSE < TRUE.
+  EXPECT_LT(value_compare_folded_text(Value::boolean(false), Value::boolean(true)), 0);
+}
+
+TEST(ValueCompareFoldedText, CrossKindReturnsZero) {
+  // The contract: cross-kind compare returns 0 so the caller can
+  // impose a bucket-rank tiebreaker. This mirrors the way
+  // `groupby_pivotby_lazy.cpp` separates bucket vs intra-kind
+  // ordering.
+  EXPECT_EQ(value_compare_folded_text(Value::text("a"), Value::number(1.0)), 0);
+  EXPECT_EQ(value_compare_folded_text(Value::number(0.0), Value::boolean(false)), 0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

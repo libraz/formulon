@@ -36,6 +36,7 @@
 #include "io/defined_names.h"
 #include "io/defined_names_internal.h"
 #include "io/external_links.h"
+#include "io/ooxml_defs.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
 #include "io/sheet_reader.h"
@@ -61,35 +62,8 @@ namespace formulon {
 namespace io {
 namespace {
 
-// Relationship type URIs used by Excel-produced packages.
-constexpr std::string_view kRelOfficeDocument =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
-constexpr std::string_view kRelWorksheet =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
-constexpr std::string_view kRelSharedStrings =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
-constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
-constexpr std::string_view kRelTable = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
-constexpr std::string_view kRelPivotCacheDefinition =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
-constexpr std::string_view kRelPivotCacheRecords =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
-constexpr std::string_view kRelPivotTable =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
-constexpr std::string_view kRelHyperlink =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
-constexpr std::string_view kRelComments =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
-constexpr std::string_view kRelVmlDrawing =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
-constexpr std::string_view kRelPrinterSettings =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
-constexpr std::string_view kRelExternalLink =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
-constexpr std::string_view kRelExternalLinkPath =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
-constexpr std::string_view kRelOleLink = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink";
-constexpr std::string_view kRelDdeLink = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink";
+// Relationship type URIs used by Excel-produced packages live in
+// `io/ooxml_defs.h` and are shared with the writer.
 
 // Content types we expect to see referenced from `[Content_Types].xml`.
 // We only look up the workbook content type to verify the package is
@@ -170,9 +144,9 @@ Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::ui
                       "context=ooxml_reader part=_rels/.rels");
   }
   for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
-    const std::string_view type = rel.attribute("Type").value();
+    const std::string_view type = attr_str(rel, "Type");
     if (type == kRelOfficeDocument) {
-      std::string target = rel.attribute("Target").value();
+      std::string target(attr_str(rel, "Target"));
       if (target.empty()) {
         return make_error(FormulonErrorCode::kIoRelationshipBroken,
                           "package-level rels: empty Target for OfficeDocument",
@@ -233,7 +207,7 @@ Expected<io::WorkbookKind, Error> VerifyContentTypes(const std::vector<std::uint
     if (std::string_view(node.name()) != "Override") {
       continue;
     }
-    const std::string_view ct = node.attribute("ContentType").value();
+    const std::string_view ct = attr_str(node, "ContentType");
     if (IsKnownWorkbookContentType(ct)) {
       return DetectWorkbookKind(ct).kind;
     }
@@ -242,7 +216,7 @@ Expected<io::WorkbookKind, Error> VerifyContentTypes(const std::vector<std::uint
     // not recognise. Surface the first such occurrence so the warning
     // names the actual offender.
     if (first_unknown_ct.empty()) {
-      const std::string_view part_name = node.attribute("PartName").value();
+      const std::string_view part_name = attr_str(node, "PartName");
       if (part_name == "/xl/workbook.xml" || part_name == "xl/workbook.xml") {
         first_unknown_ct.assign(ct);
         any_workbook_like = true;
@@ -292,14 +266,14 @@ Expected<std::vector<OverrideEntry>, Error> ListOverridePartEntries(const std::v
   }
   for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
     if (std::string_view(node.name()) == "Override") {
-      std::string part_name = node.attribute("PartName").value();
+      std::string part_name(attr_str(node, "PartName"));
       if (!part_name.empty() && part_name.front() == '/') {
         part_name.erase(0, 1);
       }
       if (part_name.empty()) {
         continue;
       }
-      std::string content_type = node.attribute("ContentType").value();
+      std::string content_type(attr_str(node, "ContentType"));
       out.push_back(OverrideEntry{std::move(part_name), std::move(content_type)});
     }
   }
@@ -571,13 +545,13 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
   const std::string base_dir = DirOf(workbook_path);
   auto visit_status =
       VisitRelationshipNodes(zip, rels_path, "workbook rels", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-        const std::string_view type = rel.attribute("Type").value();
-        const std::string_view target = rel.attribute("Target").value();
+        const std::string_view type = attr_str(rel, "Type");
+        const std::string_view target = attr_str(rel, "Target");
         if (target.empty()) {
           return Expected<void, Error>::Ok();
         }
         if (type == kRelWorksheet) {
-          const std::string id = rel.attribute("Id").value();
+          const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
@@ -601,7 +575,7 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
           }
           rels.styles_path = std::move(resolved).value();
         } else if (type == kRelPivotCacheDefinition) {
-          const std::string id = rel.attribute("Id").value();
+          const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
@@ -611,7 +585,7 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
           }
           rels.pivot_cache_definition_paths_by_rid.emplace(id, std::move(resolved).value());
         } else if (type == kRelExternalLink) {
-          const std::string id = rel.attribute("Id").value();
+          const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
@@ -627,9 +601,9 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
           // passthrough but becomes an orphan in the relationship
           // graph and Excel opens the file in "needs repair" mode.
           UnknownRelationship entry;
-          entry.id.assign(rel.attribute("Id").value());
+          entry.id.assign(attr_str(rel, "Id"));
           entry.type.assign(type);
-          const bool external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+          const bool external = attr_str(rel, "TargetMode") == "External";
           entry.target_external = external;
           if (external) {
             entry.target.assign(target);

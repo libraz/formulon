@@ -28,6 +28,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/rect_iterator.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -427,17 +428,16 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   const Sheet& view_sheet = workbook.sheet(viewport.sheet_id);
   std::vector<CellNodeId> seeds;
   seeds.reserve(static_cast<std::size_t>(viewport.last_row - viewport.first_row + 1U));
-  for (std::uint32_t row = viewport.first_row; row <= viewport.last_row; ++row) {
-    for (std::uint32_t col = viewport.first_col; col <= viewport.last_col; ++col) {
-      // We seed every coordinate inside the viewport regardless of
-      // whether it currently holds a stored cell: a viewport coordinate
-      // that is presently blank may still have inbound dep-graph
-      // edges (e.g. a formula on it that has been cleared but whose
-      // dependents have not been re-registered yet). The closure walk
-      // below tolerates absent nodes.
-      (void)view_sheet;
-      seeds.push_back(CellNodeId{viewport.sheet_id, row, col});
-    }
+  for (auto [row, col] :
+       utils::RectRange(viewport.first_row, viewport.first_col, viewport.last_row, viewport.last_col)) {
+    // We seed every coordinate inside the viewport regardless of
+    // whether it currently holds a stored cell: a viewport coordinate
+    // that is presently blank may still have inbound dep-graph
+    // edges (e.g. a formula on it that has been cleared but whose
+    // dependents have not been re-registered yet). The closure walk
+    // below tolerates absent nodes.
+    (void)view_sheet;
+    seeds.push_back(CellNodeId{viewport.sheet_id, row, col});
   }
 
   // ---- Phase 2: compute the dependency closure backward from seeds. ----

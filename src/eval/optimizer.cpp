@@ -35,32 +35,8 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
-
-// Local copies of the status macros used by `compiler.cpp`. The shared
-// macros in `utils/status_macros.h` lean on `__COUNTER__`, which under
-// `-Werror` is rejected by Emscripten's bundled clang as a C2y
-// extension. We mirror the compiler-tu strategy and use `__LINE__` here.
-#define FM_OPT_CONCAT_INNER(a, b) a##b
-#define FM_OPT_CONCAT(a, b) FM_OPT_CONCAT_INNER(a, b)
-#define FM_OPT_UNIQUE(prefix) FM_OPT_CONCAT(prefix, __LINE__)
-
-#define FM_OPT_RETURN_IF_ERROR(expr) \
-  do {                               \
-    auto _fm_status = (expr);        \
-    if (!_fm_status) {               \
-      return _fm_status.error();     \
-    }                                \
-  } while (0)
-
-#define FM_OPT_ASSIGN_OR_RETURN_IMPL(tmp, lhs, expr) \
-  auto tmp = (expr);                                 \
-  if (!tmp) {                                        \
-    return tmp.error();                              \
-  }                                                  \
-  lhs = std::move(tmp.value())
-
-#define FM_OPT_ASSIGN_OR_RETURN(lhs, expr) FM_OPT_ASSIGN_OR_RETURN_IMPL(FM_OPT_UNIQUE(_fm_opt_tmp_), lhs, expr)
 
 namespace formulon {
 namespace eval {
@@ -300,7 +276,7 @@ Expected<ByteCode, Error> fold_constants_pass(ByteCode in, Arena& arena, Optimiz
           // mirroring those LoadConsts.
           old_to_new[lhs_in_pc] = static_cast<std::uint32_t>(out.code.size());
           old_to_new[rhs_in_pc] = static_cast<std::uint32_t>(out.code.size());
-          FM_OPT_ASSIGN_OR_RETURN(auto k_new, append_constant(out, fr.value));
+          ASSIGN_OR_RETURN(auto k_new, append_constant(out, fr.value));
           Instruction folded{};
           folded.op = OpCode::LoadConst;
           folded.a = k_new;
@@ -327,7 +303,7 @@ Expected<ByteCode, Error> fold_constants_pass(ByteCode in, Arena& arena, Optimiz
           out.code.pop_back();
           out.source_pos.pop_back();
           old_to_new[operand_in_pc] = static_cast<std::uint32_t>(out.code.size());
-          FM_OPT_ASSIGN_OR_RETURN(auto k_new, append_constant(out, fr.value));
+          ASSIGN_OR_RETURN(auto k_new, append_constant(out, fr.value));
           Instruction folded{};
           folded.op = OpCode::LoadConst;
           folded.a = k_new;
@@ -488,10 +464,10 @@ Expected<ByteCode, Error> hoist_branches_pass(ByteCode in, Arena& /*arena*/, Opt
 // ---------------------------------------------------------------------------
 
 Expected<ByteCode, Error> optimize(ByteCode bc, Arena& arena, OptimizerStats* stats) {
-  FM_OPT_ASSIGN_OR_RETURN(ByteCode after_fold, fold_constants_pass(std::move(bc), arena, stats));
-  FM_OPT_ASSIGN_OR_RETURN(ByteCode after_inline, inline_names_pass(std::move(after_fold), arena, stats));
-  FM_OPT_ASSIGN_OR_RETURN(ByteCode after_canon, canonicalize_ranges_pass(std::move(after_inline), arena, stats));
-  FM_OPT_ASSIGN_OR_RETURN(ByteCode after_hoist, hoist_branches_pass(std::move(after_canon), arena, stats));
+  ASSIGN_OR_RETURN(ByteCode after_fold, fold_constants_pass(std::move(bc), arena, stats));
+  ASSIGN_OR_RETURN(ByteCode after_inline, inline_names_pass(std::move(after_fold), arena, stats));
+  ASSIGN_OR_RETURN(ByteCode after_canon, canonicalize_ranges_pass(std::move(after_inline), arena, stats));
+  ASSIGN_OR_RETURN(ByteCode after_hoist, hoist_branches_pass(std::move(after_canon), arena, stats));
   return after_hoist;
 }
 

@@ -21,6 +21,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/workbook_test.cpp
   unit/utils/checked_mul_test.cpp
   unit/utils/double_format_test.cpp
+  unit/utils/rect_iterator_test.cpp
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
   unit/io/a1_ref_test.cpp
@@ -47,6 +48,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/styles_writer_test.cpp
   unit/io/tables_reader_test.cpp
   unit/io/workbook_kind_test.cpp
+  unit/io/xml_utils_test.cpp
   unit/io/zip_reader_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp

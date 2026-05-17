@@ -242,6 +242,101 @@ Expected<double, ErrorCode> apply_pow(double base, double exp) {
   return r;
 }
 
+Expected<double, ErrorCode> matrix_strict_number(const Value& v) {
+  // Matches `forecast_ets_lazy.cpp::coerce_strict_numeric`: Number passes
+  // through raw (NaN / Inf included — matrix-strict callers run their own
+  // finite-result guard at the end), Bool coerces to 1/0, Error
+  // propagates, everything else (Blank, Text, Array, Ref, Lambda) is
+  // `#VALUE!`. The Text rejection is the point of the strict variant.
+  switch (v.kind()) {
+    case ValueKind::Number:
+      return v.as_number();
+    case ValueKind::Bool:
+      return v.as_boolean() ? 1.0 : 0.0;
+    case ValueKind::Error:
+      return v.as_error();
+    case ValueKind::Blank:
+    case ValueKind::Text:
+    case ValueKind::Array:
+    case ValueKind::Ref:
+    case ValueKind::Lambda:
+      return ErrorCode::Value;
+  }
+  return ErrorCode::Value;
+}
+
+Expected<double, ErrorCode> matrix_strict_number_cell(const Value& v, std::uint32_t /*row*/, std::uint32_t /*col*/) {
+  // Row / col are accepted today but unused: matrix-strict callers like
+  // LINEST / FORECAST.ETS have always reported a single propagating
+  // error for the whole matrix. The arguments are reserved so call
+  // sites that already track `(row, col)` for iteration can migrate
+  // without a churn round when structured-log enrichment lands.
+  return matrix_strict_number(v);
+}
+
+Expected<std::vector<double>, ErrorCode> collect_numerics(const Value& v, NumericCollectPolicy policy) {
+  // Single-pass flatten: an Array iterates its row-major cells; any
+  // other kind is treated as a 1-element input. Blank is always
+  // dropped (counting blanks as zero is the "A"-family's job, handled
+  // by a separate helper). Ref / Lambda are always dropped — callers
+  // that care about them resolve refs before calling.
+  std::vector<double> out;
+  std::uint32_t n = 1;
+  const Value* cells = &v;
+  if (v.kind() == ValueKind::Array) {
+    n = v.as_array_rows() * v.as_array_cols();
+    cells = v.as_array_cells();
+  }
+  out.reserve(n);
+  for (std::uint32_t i = 0; i < n; ++i) {
+    const Value& cell = cells[i];
+    switch (cell.kind()) {
+      case ValueKind::Number:
+        out.push_back(cell.as_number());
+        break;
+      case ValueKind::Bool:
+        if (policy.include_bool) {
+          out.push_back(cell.as_boolean() ? 1.0 : 0.0);
+        }
+        break;
+      case ValueKind::Text:
+        if (policy.include_text_numeric_literal) {
+          auto coerced = coerce_to_number(cell);
+          if (!coerced) {
+            if (policy.error_on_text) {
+              return coerced.error();
+            }
+            // Silent skip on unparseable text — matches the lenient
+            // `SMALL` / `LARGE` direct-scalar path when paired with
+            // `include_text_numeric_literal = true, error_on_text = false`.
+            break;
+          }
+          out.push_back(coerced.value());
+        }
+        // include_text_numeric_literal = false: silently skip Text
+        // cells. This is the default AVERAGE / SUM behaviour.
+        break;
+      case ValueKind::Error:
+        if (policy.error_on_error_cell) {
+          return cell.as_error();
+        }
+        // Silent skip — the caller (e.g. regression families) runs its
+        // own error-propagation pass over the unflattened arrays
+        // first, so a stray error here is dropped to avoid double-
+        // propagation.
+        break;
+      case ValueKind::Blank:
+      case ValueKind::Array:
+      case ValueKind::Ref:
+      case ValueKind::Lambda:
+        // Always drop. Nested Array would only appear via lambda /
+        // dynamic-array machinery that has its own flattening step.
+        break;
+    }
+  }
+  return out;
+}
+
 Expected<bool, ErrorCode> coerce_to_bool(const Value& v) {
   switch (v.kind()) {
     case ValueKind::Bool:

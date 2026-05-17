@@ -47,6 +47,7 @@ option(FM_ENABLE_PTHREAD      "Enable multithreaded recalc" ON)
 option(FORMULON_VM_PARITY_CHECK "Enable tree-walker / VM parity assertions" OFF)
 
 include(FormulonWarnings)
+include(FormulonCommonDeps)
 
 # ---------------------------------------------------------------------------
 # Third-party dependencies
@@ -279,23 +280,11 @@ set(FORMULON_CORE_SOURCES
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
 
-target_include_directories(formulon_core
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-)
-
-# Engine core depends on miniz (zip/deflate), pugixml (XML), and pcre2
-# (REGEX* function family). Link PUBLIC so downstream targets
-# (formulon_static, tests, CLI) inherit include dirs and transitive link
-# requirements.
-target_link_libraries(formulon_core
-  PUBLIC
-    formulon::miniz
-    formulon::pugixml
-    formulon::pcre2
-    formulon::double_conversion
-    Threads::Threads
-)
+# Engine core depends on miniz (zip/deflate), pugixml (XML), pcre2
+# (REGEX* function family), and double-conversion (Grisu3 dtoa). The
+# include + PUBLIC link set is shared with formulon_static and the
+# optional shared formulon library; see cmake/FormulonCommonDeps.cmake.
+formulon_apply_common_deps(formulon_core)
 
 formulon_apply_warnings(formulon_core)
 
@@ -308,21 +297,9 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(formulon_static STATIC $<TARGET_OBJECTS:formulon_core>)
 
-target_include_directories(formulon_static
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-)
-
-# $<TARGET_OBJECTS:...> does not propagate usage requirements, so replicate
-# the third-party link dependencies here for downstream consumers.
-target_link_libraries(formulon_static
-  PUBLIC
-    formulon::miniz
-    formulon::pugixml
-    formulon::pcre2
-    formulon::double_conversion
-    Threads::Threads
-)
+# $<TARGET_OBJECTS:...> does not propagate usage requirements, so apply
+# the canonical include + link set directly for downstream consumers.
+formulon_apply_common_deps(formulon_static)
 
 # No per-target warning flags: formulon_static only aggregates objects.
 
@@ -339,20 +316,7 @@ target_link_libraries(formulon_static
 # ---------------------------------------------------------------------------
 if(FM_BUILD_C_API_SHARED)
   add_library(formulon SHARED $<TARGET_OBJECTS:formulon_core>)
-
-  target_include_directories(formulon
-    PUBLIC
-      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-  )
-
-  target_link_libraries(formulon
-    PUBLIC
-      formulon::miniz
-      formulon::pugixml
-      formulon::pcre2
-      formulon::double_conversion
-      Threads::Threads
-  )
+  formulon_apply_common_deps(formulon)
 endif()
 
 # ---------------------------------------------------------------------------

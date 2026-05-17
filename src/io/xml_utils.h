@@ -65,6 +65,62 @@ bool parse_xml_bool_attr(const pugi::xml_attribute& attr);
 /// the attribute value as `std::string_view`.
 bool parse_xml_bool(std::string_view value);
 
+// ---------------------------------------------------------------------------
+// Node + attribute-name typed accessors.
+//
+// These complement the `pugi::xml_attribute` overloads above and remove the
+// `node.attribute("foo").value()` / `as_uint(0)` boilerplate that is repeated
+// in 100+ sites across the OOXML readers. All five overloads share the same
+// shape:
+//
+//   T attr_<type>(const pugi::xml_node& n, const char* name, T def = ...);
+//
+// On a missing or empty attribute they return `def`. On a malformed attribute
+// they return `def` as well — none of these is a structural validator. The
+// caller still has the option to call `node.attribute(name)` directly when
+// it must distinguish "absent" from "present but empty" (e.g. for OOXML
+// flags whose presence alone is meaningful).
+// ---------------------------------------------------------------------------
+
+/// Returns the attribute value as a string_view, or `def` if absent or
+/// empty. The returned view points into pugixml-owned memory and is
+/// valid for the lifetime of the parent `xml_document`.
+inline std::string_view attr_str(const pugi::xml_node& n, const char* name, std::string_view def = {}) {
+  const pugi::xml_attribute a = n.attribute(name);
+  if (!a) {
+    return def;
+  }
+  const char* v = a.value();
+  if (v == nullptr || *v == '\0') {
+    return def;
+  }
+  return v;
+}
+
+/// Returns the attribute value as `uint32_t`, or `def` on missing /
+/// empty / malformed / negative / out-of-range input. Behaviour
+/// matches the legacy `parse_xml_u32_attr(node.attribute(name), def)`
+/// shape so migration is mechanical.
+std::uint32_t attr_u32(const pugi::xml_node& n, const char* name, std::uint32_t def = 0);
+
+/// Returns the attribute value as `int32_t`, or `def` on missing /
+/// empty / malformed / out-of-range input. Behaviour matches the
+/// legacy `parse_xml_i32_attr(node.attribute(name), def)` shape.
+std::int32_t attr_i32(const pugi::xml_node& n, const char* name, std::int32_t def = 0);
+
+/// Returns the attribute value as `double`, or `def` on missing /
+/// empty / malformed input. Delegates to pugi's `as_double(def)`.
+inline double attr_f64(const pugi::xml_node& n, const char* name, double def = 0.0) {
+  return n.attribute(name).as_double(def);
+}
+
+/// Returns the attribute value as `bool`, or `def` if absent. "1" and
+/// any ASCII-case-insensitive spelling of "true" map to true; everything
+/// else (including "0" / "false" / unknown text) maps to false. Matches
+/// the OOXML `xs:boolean` lexicon Excel emits across sheet flags, CF
+/// rule attributes, and pivot toggles.
+bool attr_bool(const pugi::xml_node& n, const char* name, bool def = false);
+
 /// Parses a UTF-8 OOXML part body into `doc`. On failure returns a
 /// `kIoXmlParse` error whose context records `<reader_module>` and
 /// `<part_name>` and includes pugixml's description. The standard

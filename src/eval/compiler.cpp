@@ -43,33 +43,8 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "value.h"
-
-// `status_macros.h` uses `__COUNTER__`, which Emscripten's bundled clang
-// flags as a C2y extension under `-Werror`. The compiler TU expands these
-// macros heavily, so we re-implement the two helpers here using a
-// `__LINE__`-derived name. The behaviour is identical to the shared
-// macros; only the unique-id strategy differs. Scoped to this TU.
-#define FM_COMP_CONCAT_INNER(a, b) a##b
-#define FM_COMP_CONCAT(a, b) FM_COMP_CONCAT_INNER(a, b)
-#define FM_COMP_UNIQUE(prefix) FM_COMP_CONCAT(prefix, __LINE__)
-
-#define FM_RETURN_IF_ERROR(expr) \
-  do {                           \
-    auto _fm_status = (expr);    \
-    if (!_fm_status) {           \
-      return _fm_status.error(); \
-    }                            \
-  } while (0)
-
-#define FM_ASSIGN_OR_RETURN_IMPL(tmp, lhs, expr) \
-  auto tmp = (expr);                             \
-  if (!tmp) {                                    \
-    return tmp.error();                          \
-  }                                              \
-  lhs = std::move(tmp.value())
-
-#define FM_ASSIGN_OR_RETURN(lhs, expr) FM_ASSIGN_OR_RETURN_IMPL(FM_COMP_UNIQUE(_fm_tmp_), lhs, expr)
 
 namespace formulon {
 namespace eval {
@@ -187,11 +162,11 @@ LexicalBinding lookup_lexical_binding(const BodyState& bs, std::string_view name
 
 Expected<void, Error> emit_load_binding(BodyState& bs, const parser::AstNode& node, const LexicalBinding& binding) {
   if (binding.kind == LexicalBinding::Kind::Let) {
-    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLet, binding.slot, 0));
+    RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLet, binding.slot, 0));
     return {};
   }
   if (binding.kind == LexicalBinding::Kind::LambdaArg) {
-    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLambdaArg, binding.slot, 0));
+    RETURN_IF_ERROR(emit(bs, node, OpCode::LoadLambdaArg, binding.slot, 0));
     return {};
   }
   return make_compile_error(FormulonErrorCode::kVmCompileFailed, "internal compiler error: missing lexical binding");
@@ -219,7 +194,7 @@ Expected<std::uint32_t, Error> push_constant(BodyState& bs, Value v) {
   // For Text values, intern the bytes into `string_storage` so the ByteCode
   // owns its character storage.
   if (v.kind() == ValueKind::Text) {
-    FM_ASSIGN_OR_RETURN(auto idx, intern_text_for_constant(bs, v.as_text()));
+    ASSIGN_OR_RETURN(auto idx, intern_text_for_constant(bs, v.as_text()));
     const std::string& slot = bc.string_storage[idx];
     v = Value::text(std::string_view(slot.data(), slot.size()));
   }
@@ -291,26 +266,26 @@ Expected<void, Error> compile_node(BodyState& bs, const parser::AstNode& node);
 // --------------------------------------------------------------------------
 
 Expected<void, Error> compile_literal(BodyState& bs, const parser::AstNode& node) {
-  FM_ASSIGN_OR_RETURN(auto idx, push_constant(bs, node.as_literal()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadConst, idx));
+  ASSIGN_OR_RETURN(auto idx, push_constant(bs, node.as_literal()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadConst, idx));
   return {};
 }
 
 Expected<void, Error> compile_ref(BodyState& bs, const parser::AstNode& node) {
-  FM_ASSIGN_OR_RETURN(auto idx, push_ref(bs, node.as_ref()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadRef, idx));
+  ASSIGN_OR_RETURN(auto idx, push_ref(bs, node.as_ref()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadRef, idx));
   return {};
 }
 
 Expected<void, Error> compile_spill_ref(BodyState& bs, const parser::AstNode& node) {
-  FM_ASSIGN_OR_RETURN(auto idx, push_ref(bs, node.as_spill_ref()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadSpillRef, idx));
+  ASSIGN_OR_RETURN(auto idx, push_ref(bs, node.as_spill_ref()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadSpillRef, idx));
   return {};
 }
 
 Expected<void, Error> compile_external_ref(BodyState& bs, const parser::AstNode& node) {
-  FM_ASSIGN_OR_RETURN(auto sheet_n, push_name(bs, node.as_external_ref_sheet()));
-  FM_ASSIGN_OR_RETURN(auto refs_idx, push_ref(bs, node.as_external_ref_cell()));
+  ASSIGN_OR_RETURN(auto sheet_n, push_name(bs, node.as_external_ref_sheet()));
+  ASSIGN_OR_RETURN(auto refs_idx, push_ref(bs, node.as_external_ref_cell()));
   // Pack book_id (low 16) and refs_idx (high 16) into `b`; sheet_n in `a`.
   const std::uint32_t book_id = node.as_external_ref_book_id();
   if (book_id > 0xFFFFu || refs_idx > 0xFFFFu) {
@@ -318,13 +293,13 @@ Expected<void, Error> compile_external_ref(BodyState& bs, const parser::AstNode&
                               "external ref book_id or refs index exceeds 16-bit budget");
   }
   const std::uint32_t b = (refs_idx << 16) | book_id;
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadExternalRef, sheet_n, b));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadExternalRef, sheet_n, b));
   return {};
 }
 
 Expected<void, Error> compile_structured_ref(BodyState& bs, const parser::AstNode& node) {
-  FM_ASSIGN_OR_RETURN(auto table_n, push_name(bs, node.as_structured_ref_table()));
-  FM_ASSIGN_OR_RETURN(auto col_n, push_name(bs, node.as_structured_ref_column()));
+  ASSIGN_OR_RETURN(auto table_n, push_name(bs, node.as_structured_ref_table()));
+  ASSIGN_OR_RETURN(auto col_n, push_name(bs, node.as_structured_ref_column()));
   if (col_n > 0xFFFFu) {
     return make_compile_error(FormulonErrorCode::kVmNamePoolOverflow,
                               "structured-ref column name index exceeds 16 bits");
@@ -332,7 +307,7 @@ Expected<void, Error> compile_structured_ref(BodyState& bs, const parser::AstNod
   const std::uint32_t modifier = static_cast<std::uint32_t>(node.as_structured_ref_modifier());
   // a = table name, b = (modifier << 16) | column-name index.
   const std::uint32_t b = (modifier << 16) | col_n;
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadStructRef, table_n, b));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadStructRef, table_n, b));
   return {};
 }
 
@@ -341,30 +316,30 @@ Expected<void, Error> compile_name_ref(BodyState& bs, const parser::AstNode& nod
   // Resolve against active LET / Lambda scope first (innermost wins).
   const LexicalBinding binding = lookup_lexical_binding(bs, name);
   if (binding.kind != LexicalBinding::Kind::None) {
-    FM_RETURN_IF_ERROR(emit_load_binding(bs, node, binding));
+    RETURN_IF_ERROR(emit_load_binding(bs, node, binding));
     return {};
   }
   // Fall through to a workbook-scope name lookup at run time.
-  FM_ASSIGN_OR_RETURN(auto idx, push_name(bs, name));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadName, idx));
+  ASSIGN_OR_RETURN(auto idx, push_name(bs, name));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadName, idx));
   return {};
 }
 
 Expected<void, Error> compile_unary(BodyState& bs, const parser::AstNode& node) {
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_unary_operand()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::UnaryOp, static_cast<std::uint32_t>(node.as_unary_op())));
+  RETURN_IF_ERROR(compile_node(bs, node.as_unary_operand()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::UnaryOp, static_cast<std::uint32_t>(node.as_unary_op())));
   return {};
 }
 
 Expected<void, Error> compile_binary(BodyState& bs, const parser::AstNode& node) {
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_binary_lhs()));
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_binary_rhs()));
+  RETURN_IF_ERROR(compile_node(bs, node.as_binary_lhs()));
+  RETURN_IF_ERROR(compile_node(bs, node.as_binary_rhs()));
   const auto op = node.as_binary_op();
   if (op == parser::BinOp::Concat) {
-    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::Concat));
+    RETURN_IF_ERROR(emit(bs, node, OpCode::Concat));
     return {};
   }
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::BinaryOp, static_cast<std::uint32_t>(op)));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::BinaryOp, static_cast<std::uint32_t>(op)));
   return {};
 }
 
@@ -381,35 +356,35 @@ Expected<void, Error> compile_range(BodyState& bs, const parser::AstNode& node) 
   // operator. Because the VM is not yet implemented we keep the IR shape
   // simple: always go through the two-subexpression path and let the VM
   // see two independent operands followed by a reserved BinaryOp slot.
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_range_lhs()));
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_range_rhs()));
+  RETURN_IF_ERROR(compile_node(bs, node.as_range_lhs()));
+  RETURN_IF_ERROR(compile_node(bs, node.as_range_rhs()));
   // Range is encoded as a special BinaryOp variant. The placeholder uses
   // `0xFF` as the op code so the VM can dispatch on it without colliding
   // with `parser::BinOp` values. A future revision may switch to a
   // dedicated `LoadRange` form once the VM lands.
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadRange, 0xFFu));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadRange, 0xFFu));
   return {};
 }
 
 Expected<void, Error> compile_union(BodyState& bs, const parser::AstNode& node) {
   const std::uint32_t arity = node.as_union_arity();
   for (std::uint32_t i = 0; i < arity; ++i) {
-    FM_RETURN_IF_ERROR(compile_node(bs, node.as_union_child(i)));
+    RETURN_IF_ERROR(compile_node(bs, node.as_union_child(i)));
   }
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::Union, arity));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::Union, arity));
   return {};
 }
 
 Expected<void, Error> compile_intersect(BodyState& bs, const parser::AstNode& node) {
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_intersect_lhs()));
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_intersect_rhs()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::Intersect));
+  RETURN_IF_ERROR(compile_node(bs, node.as_intersect_lhs()));
+  RETURN_IF_ERROR(compile_node(bs, node.as_intersect_rhs()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::Intersect));
   return {};
 }
 
 Expected<void, Error> compile_implicit_intersection(BodyState& bs, const parser::AstNode& node) {
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_implicit_intersection_operand()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::ImplicitIntersection));
+  RETURN_IF_ERROR(compile_node(bs, node.as_implicit_intersection_operand()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::ImplicitIntersection));
   return {};
 }
 
@@ -425,18 +400,18 @@ Expected<void, Error> compile_if(BodyState& bs, const parser::AstNode& node) {
   if (arity < 2 || arity > 3) {
     return make_compile_error(FormulonErrorCode::kVmCompileFailed, "IF requires 2 or 3 arguments");
   }
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(0)));
-  FM_ASSIGN_OR_RETURN(auto jif_pc, emit(bs, node, OpCode::JumpIfFalse, 0));
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(1)));
-  FM_ASSIGN_OR_RETURN(auto jmp_pc, emit(bs, node, OpCode::Jump, 0));
+  RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(0)));
+  ASSIGN_OR_RETURN(auto jif_pc, emit(bs, node, OpCode::JumpIfFalse, 0));
+  RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(1)));
+  ASSIGN_OR_RETURN(auto jmp_pc, emit(bs, node, OpCode::Jump, 0));
   // Patch JumpIfFalse to land here.
   bs.out->code[jif_pc].a = static_cast<std::uint32_t>(bs.out->code.size());
   if (arity == 3) {
-    FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(2)));
+    RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(2)));
   } else {
     // IF without else returns FALSE per Excel semantics.
-    FM_ASSIGN_OR_RETURN(auto idx, push_constant(bs, Value::boolean(false)));
-    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadConst, idx));
+    ASSIGN_OR_RETURN(auto idx, push_constant(bs, Value::boolean(false)));
+    RETURN_IF_ERROR(emit(bs, node, OpCode::LoadConst, idx));
   }
   // Patch the unconditional jump to land here.
   bs.out->code[jmp_pc].a = static_cast<std::uint32_t>(bs.out->code.size());
@@ -465,10 +440,10 @@ Expected<void, Error> compile_iferror_or_ifna(BodyState& bs, const parser::AstNo
     return make_compile_error(FormulonErrorCode::kVmCompileFailed, "IFERROR / IFNA require exactly 2 arguments");
   }
   for (std::uint32_t i = 0; i < arity; ++i) {
-    FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(i)));
+    RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(i)));
   }
-  FM_ASSIGN_OR_RETURN(auto name_idx, push_name(bs, node.as_call_name()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::Call, name_idx, arity));
+  ASSIGN_OR_RETURN(auto name_idx, push_name(bs, node.as_call_name()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::Call, name_idx, arity));
   return {};
 }
 
@@ -490,20 +465,20 @@ Expected<void, Error> compile_call(BodyState& bs, const parser::AstNode& node) {
   const std::string_view call_name = node.as_call_name();
   const LexicalBinding binding = lookup_lexical_binding(bs, call_name);
   if (binding.kind != LexicalBinding::Kind::None) {
-    FM_RETURN_IF_ERROR(emit_load_binding(bs, node, binding));
+    RETURN_IF_ERROR(emit_load_binding(bs, node, binding));
     const std::uint32_t lambda_arity = node.as_call_arity();
     for (std::uint32_t k = 0; k < lambda_arity; ++k) {
-      FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(k)));
+      RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(k)));
     }
-    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, lambda_arity));
+    RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, lambda_arity));
     return {};
   }
   const std::uint32_t arity = node.as_call_arity();
   for (std::uint32_t i = 0; i < arity; ++i) {
-    FM_RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(i)));
+    RETURN_IF_ERROR(compile_node(bs, node.as_call_arg(i)));
   }
-  FM_ASSIGN_OR_RETURN(auto name_idx, push_name(bs, node.as_call_name()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::Call, name_idx, arity));
+  ASSIGN_OR_RETURN(auto name_idx, push_name(bs, node.as_call_name()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::Call, name_idx, arity));
   return {};
 }
 
@@ -512,10 +487,10 @@ Expected<void, Error> compile_array_literal(BodyState& bs, const parser::AstNode
   const std::uint32_t cols = node.as_array_cols();
   for (std::uint32_t r = 0; r < rows; ++r) {
     for (std::uint32_t c = 0; c < cols; ++c) {
-      FM_RETURN_IF_ERROR(compile_node(bs, node.as_array_element(r, c)));
+      RETURN_IF_ERROR(compile_node(bs, node.as_array_element(r, c)));
     }
   }
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::MakeArray, rows, cols));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::MakeArray, rows, cols));
   return {};
 }
 
@@ -524,16 +499,16 @@ Expected<void, Error> compile_let(BodyState& bs, const parser::AstNode& node) {
   // Snapshot the LET scope so we can pop our slots when the body is done.
   const std::size_t saved = bs.let_scope.names.size();
   for (std::uint32_t i = 0; i < bindings; ++i) {
-    FM_RETURN_IF_ERROR(compile_node(bs, node.as_let_binding_expr(i)));
+    RETURN_IF_ERROR(compile_node(bs, node.as_let_binding_expr(i)));
     if (bs.next_let_slot > Instruction::kMaxA) {
       return make_compile_error(FormulonErrorCode::kVmLetSlotOverflow, "LET slot index exceeds 24-bit budget");
     }
     const std::uint32_t slot = bs.next_let_slot++;
-    FM_RETURN_IF_ERROR(emit(bs, node, OpCode::StoreLet, slot));
+    RETURN_IF_ERROR(emit(bs, node, OpCode::StoreLet, slot));
     bs.let_scope.names.push_back(node.as_let_binding_name(i));
     bs.let_scope.slots.push_back(slot);
   }
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_let_body()));
+  RETURN_IF_ERROR(compile_node(bs, node.as_let_body()));
   // Pop the bindings we added (later siblings should not see them).
   bs.let_scope.names.resize(saved);
   bs.let_scope.slots.resize(saved);
@@ -559,7 +534,7 @@ Expected<void, Error> compile_lambda(BodyState& bs, const parser::AstNode& node)
   // rebinding). The first emitted index is the array start.
   std::uint32_t name_start = 0;
   for (std::uint32_t i = 0; i < param_count; ++i) {
-    FM_ASSIGN_OR_RETURN(auto idx, push_name(bs, node.as_lambda_param(i)));
+    ASSIGN_OR_RETURN(auto idx, push_name(bs, node.as_lambda_param(i)));
     if (i == 0) {
       name_start = idx;
     }
@@ -578,12 +553,12 @@ Expected<void, Error> compile_lambda(BodyState& bs, const parser::AstNode& node)
   //   <body>
   //   Halt          ; or Return
   //   Lend:
-  FM_ASSIGN_OR_RETURN(auto mk_pc, emit(bs, node, OpCode::MakeLambda, name_start, (optional_count << 16) | param_count));
+  ASSIGN_OR_RETURN(auto mk_pc, emit(bs, node, OpCode::MakeLambda, name_start, (optional_count << 16) | param_count));
   (void)mk_pc;  // The VM walks the next two slots; no explicit reference needed.
-  FM_ASSIGN_OR_RETURN(auto jmp_pc, emit(bs, node, OpCode::Jump, 0));
+  ASSIGN_OR_RETURN(auto jmp_pc, emit(bs, node, OpCode::Jump, 0));
   // Body starts at the next pc.
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_lambda_body()));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::Return));
+  RETURN_IF_ERROR(compile_node(bs, node.as_lambda_body()));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::Return));
   bs.out->code[jmp_pc].a = static_cast<std::uint32_t>(bs.out->code.size());
 
   // Pop the params we pushed.
@@ -595,18 +570,18 @@ Expected<void, Error> compile_lambda(BodyState& bs, const parser::AstNode& node)
 Expected<void, Error> compile_lambda_call(BodyState& bs, const parser::AstNode& node) {
   // Compile the callee first (it ends up below the args on the stack), then
   // the args left-to-right, then `CallLambda arity`.
-  FM_RETURN_IF_ERROR(compile_node(bs, node.as_lambda_call_callee()));
+  RETURN_IF_ERROR(compile_node(bs, node.as_lambda_call_callee()));
   const std::uint32_t arity = node.as_lambda_call_arity();
   for (std::uint32_t i = 0; i < arity; ++i) {
-    FM_RETURN_IF_ERROR(compile_node(bs, node.as_lambda_call_arg(i)));
+    RETURN_IF_ERROR(compile_node(bs, node.as_lambda_call_arg(i)));
   }
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, arity));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::CallLambda, arity));
   return {};
 }
 
 Expected<void, Error> compile_error_literal(BodyState& bs, const parser::AstNode& node) {
-  FM_ASSIGN_OR_RETURN(auto idx, push_constant(bs, Value::error(node.as_error_literal())));
-  FM_RETURN_IF_ERROR(emit(bs, node, OpCode::LoadConst, idx));
+  ASSIGN_OR_RETURN(auto idx, push_constant(bs, Value::error(node.as_error_literal())));
+  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadConst, idx));
   return {};
 }
 
@@ -684,13 +659,13 @@ Expected<ByteCode, Error> compile(const parser::AstNode& root, Arena& arena) {
 
   BodyState bs;
   bs.out = &ctx.bc;
-  FM_RETURN_IF_ERROR(compile_node(bs, root));
-  FM_RETURN_IF_ERROR(emit(bs, root, OpCode::Return));
+  RETURN_IF_ERROR(compile_node(bs, root));
+  RETURN_IF_ERROR(emit(bs, root, OpCode::Return));
   return std::move(ctx.bc);
 }
 
 Expected<ByteCode, Error> compile_and_optimize(const parser::AstNode& root, Arena& arena) {
-  FM_ASSIGN_OR_RETURN(auto bc, compile(root, arena));
+  ASSIGN_OR_RETURN(auto bc, compile(root, arena));
   return optimize(std::move(bc), arena);
 }
 

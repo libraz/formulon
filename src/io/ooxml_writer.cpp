@@ -26,6 +26,7 @@
 #include "io/comments_writer.h"
 #include "io/defined_names.h"
 #include "io/external_links.h"
+#include "io/ooxml_defs.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/passthrough_part.h"
 #include "io/pivot_cache_writer.h"
@@ -56,6 +57,11 @@ namespace {
 
 // `kXmlDecl` lives in `io/xml_utils.h` and is shared with comments / cf
 // writers (single source of truth for the XML 1.0 prologue).
+//
+// Relationship type URIs (the `kRel*` family that is also consumed by
+// the reader) live in `io/ooxml_defs.h`; the writer-only relationship
+// URIs (`kRelCalcChain`, `kRelTheme`, `kRelCoreProperties`,
+// `kRelExtendedProperties`) stay below.
 
 constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
 constexpr std::string_view kCtXml = "application/xml";
@@ -70,44 +76,17 @@ constexpr std::string_view kCtPivotCacheDefinition =
 constexpr std::string_view kCtPivotCacheRecords =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
 constexpr std::string_view kCtPivotTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
-constexpr std::string_view kRelTable = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
-constexpr std::string_view kRelPivotCacheDefinition =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition";
-constexpr std::string_view kRelPivotCacheRecords =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords";
-constexpr std::string_view kRelPivotTable =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
-constexpr std::string_view kRelHyperlink =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
-constexpr std::string_view kRelComments =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
-constexpr std::string_view kRelVmlDrawing =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
+constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
+
+// Writer-only relationship URIs (no reader consumer).
 constexpr std::string_view kRelCalcChain =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
 constexpr std::string_view kRelTheme = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
-constexpr std::string_view kRelSharedStrings =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
-constexpr std::string_view kRelPrinterSettings =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
-
-constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
-constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
-constexpr std::string_view kRelOfficeDocument =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
 constexpr std::string_view kRelCoreProperties =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
 constexpr std::string_view kRelExtendedProperties =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
-constexpr std::string_view kRelWorksheet =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
-constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
-constexpr std::string_view kRelExternalLink =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink";
-constexpr std::string_view kRelExternalLinkPath =
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath";
-constexpr std::string_view kRelOleLink = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleLink";
-constexpr std::string_view kRelDdeLink = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink";
 
 // ---------------------------------------------------------------------------
 // Per-package emission plan

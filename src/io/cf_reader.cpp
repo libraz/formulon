@@ -6,7 +6,6 @@
 #include "io/cf_reader.h"
 
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -288,9 +287,12 @@ cf::Color ParseRgbColor(std::string_view rgb) {
 
 cf::CfValueObject ReadCfvo(const pugi::xml_node& cfvo) {
   cf::CfValueObject out{};
-  out.type = ParseCfvoType(cfvo.attribute("type").value());
-  out.value = cfvo.attribute("val").value();
-  // `gte` is "1" by default; only "0"/"false" toggles to false.
+  out.type = ParseCfvoType(attr_str(cfvo, "type"));
+  out.value = attr_str(cfvo, "val");
+  // `gte` is "1" by default; only an explicit "0" / "false" toggles
+  // it off. The OOXML schema only emits those two spellings, so an
+  // unrecognised token (defensive case) is folded back to the default
+  // `true` to preserve the legacy lenient behaviour.
   const pugi::xml_attribute gte = cfvo.attribute("gte");
   if (gte) {
     const std::string_view text = gte.value();
@@ -307,7 +309,7 @@ void ReadColorScale(const pugi::xml_node& scale, cf::ColorScaleSpec* out) {
     if (name == "cfvo") {
       out->thresholds.push_back(ReadCfvo(child));
     } else if (name == "color") {
-      out->colors.push_back(ParseRgbColor(child.attribute("rgb").value()));
+      out->colors.push_back(ParseRgbColor(attr_str(child, "rgb")));
     }
   }
 }
@@ -329,46 +331,39 @@ void ReadDataBar(const pugi::xml_node& bar, cf::DataBarSpec* out) {
       // as the positive fill. The 2010+ extension lifts negative-fill /
       // axis-color into `<extLst>`, which this PR does not yet consume.
       if (color_idx == 0) {
-        out->fill = ParseRgbColor(child.attribute("rgb").value());
+        out->fill = ParseRgbColor(attr_str(child, "rgb"));
         out->negative_fill = out->fill;
       }
       ++color_idx;
     }
   }
-  const pugi::xml_attribute min_len = bar.attribute("minLength");
-  if (min_len) {
-    const long parsed = std::strtol(min_len.value(), nullptr, 10);
+  // Note: malformed numeric input falls back to def=0, matching the
+  // legacy `std::strtol(_, nullptr, 10)` return-on-error of 0 (which
+  // happens to be in-range and would have stored min/max=0).
+  if (bar.attribute("minLength")) {
+    const std::int32_t parsed = attr_i32(bar, "minLength", 0);
     if (parsed >= 0 && parsed <= 100) {
       out->min_length_pct = static_cast<std::uint8_t>(parsed);
     }
   }
-  const pugi::xml_attribute max_len = bar.attribute("maxLength");
-  if (max_len) {
-    const long parsed = std::strtol(max_len.value(), nullptr, 10);
+  if (bar.attribute("maxLength")) {
+    const std::int32_t parsed = attr_i32(bar, "maxLength", 0);
     if (parsed >= 0 && parsed <= 100) {
       out->max_length_pct = static_cast<std::uint8_t>(parsed);
     }
   }
-  const pugi::xml_attribute show_value = bar.attribute("showValue");
-  if (show_value) {
+  if (const pugi::xml_attribute show_value = bar.attribute("showValue"); show_value) {
     out->show_value = parse_xml_bool_attr(show_value);
   }
 }
 
 void ReadIconSet(const pugi::xml_node& iset, cf::IconSetSpec* out) {
-  out->name = ParseIconSetName(iset.attribute("iconSet").value());
-  const pugi::xml_attribute reverse = iset.attribute("reverse");
-  if (reverse) {
-    out->reverse = parse_xml_bool_attr(reverse);
-  }
-  const pugi::xml_attribute show_value = iset.attribute("showValue");
-  if (show_value) {
-    out->show_value = parse_xml_bool_attr(show_value);
-  }
-  const pugi::xml_attribute percent = iset.attribute("percent");
-  if (percent) {
-    out->percent = parse_xml_bool_attr(percent);
-  }
+  out->name = ParseIconSetName(attr_str(iset, "iconSet"));
+  // OOXML defaults: reverse=false, showValue=true, percent=true. The
+  // current struct defaults map directly through `attr_bool(_, _, def)`.
+  out->reverse = attr_bool(iset, "reverse", out->reverse);
+  out->show_value = attr_bool(iset, "showValue", out->show_value);
+  out->percent = attr_bool(iset, "percent", out->percent);
   for (pugi::xml_node cfvo = iset.child("cfvo"); cfvo; cfvo = cfvo.next_sibling("cfvo")) {
     out->thresholds.push_back(ReadCfvo(cfvo));
   }
@@ -376,45 +371,36 @@ void ReadIconSet(const pugi::xml_node& iset, cf::IconSetSpec* out) {
 
 cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   cf::CFRule out;
-  const pugi::xml_attribute type_attr = rule.attribute("type");
-  out.type = ParseRuleType(type_attr.value());
-  out.priority = parse_xml_i32_attr(rule.attribute("priority"), 1);
-  out.stop_if_true = parse_xml_bool_attr(rule.attribute("stopIfTrue"));
-  const pugi::xml_attribute dxf_attr = rule.attribute("dxfId");
-  if (dxf_attr) {
-    out.dxf_id = static_cast<std::uint32_t>(parse_xml_i32_attr(dxf_attr, 0));
+  out.type = ParseRuleType(attr_str(rule, "type"));
+  out.priority = attr_i32(rule, "priority", 1);
+  out.stop_if_true = attr_bool(rule, "stopIfTrue");
+  if (rule.attribute("dxfId")) {
+    out.dxf_id = static_cast<std::uint32_t>(attr_i32(rule, "dxfId", 0));
   }
-  const pugi::xml_attribute id_attr = rule.attribute("id");
-  if (id_attr) {
-    out.id = id_attr.value();
-  }
+  out.id = attr_str(rule, "id");
 
   if (out.type == cf::RuleType::CellIs) {
-    out.op = ParseCellIsOperator(rule.attribute("operator").value());
+    out.op = ParseCellIsOperator(attr_str(rule, "operator"));
   }
   if (out.type == cf::RuleType::TimePeriod) {
-    out.time_period = ParseTimePeriod(rule.attribute("timePeriod").value());
+    out.time_period = ParseTimePeriod(attr_str(rule, "timePeriod"));
   }
   if (out.type == cf::RuleType::Top10) {
-    out.rank = parse_xml_i32_attr(rule.attribute("rank"), 10);
-    out.percent = parse_xml_bool_attr(rule.attribute("percent"));
-    out.bottom = parse_xml_bool_attr(rule.attribute("bottom"));
+    out.rank = attr_i32(rule, "rank", 10);
+    out.percent = attr_bool(rule, "percent");
+    out.bottom = attr_bool(rule, "bottom");
   }
   if (out.type == cf::RuleType::AboveAverage) {
-    const pugi::xml_attribute above_attr = rule.attribute("aboveAverage");
-    out.above_average = above_attr ? parse_xml_bool_attr(above_attr) : true;
-    out.equal_average = parse_xml_bool_attr(rule.attribute("equalAverage"));
-    const pugi::xml_attribute std_dev_attr = rule.attribute("stdDev");
-    if (std_dev_attr) {
-      out.std_dev = std::strtod(std_dev_attr.value(), nullptr);
+    // `aboveAverage` defaults to true in the OOXML spec.
+    out.above_average = attr_bool(rule, "aboveAverage", true);
+    out.equal_average = attr_bool(rule, "equalAverage");
+    if (rule.attribute("stdDev")) {
+      out.std_dev = attr_f64(rule, "stdDev");
     }
   }
   if (out.type == cf::RuleType::ContainsText || out.type == cf::RuleType::NotContainsText ||
       out.type == cf::RuleType::BeginsWith || out.type == cf::RuleType::EndsWith) {
-    const pugi::xml_attribute text_attr = rule.attribute("text");
-    if (text_attr) {
-      out.text = text_attr.value();
-    }
+    out.text = attr_str(rule, "text");
   }
 
   // Children: <formula>, <colorScale>, <dataBar>, <iconSet> (mutually
@@ -469,7 +455,7 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     }
     cf::ConditionalFormat cfmt;
     cfmt.sqref = std::move(ranges_or.value());
-    cfmt.pivot_scope = parse_xml_bool_attr(block.attribute("pivot"));
+    cfmt.pivot_scope = attr_bool(block, "pivot");
     for (pugi::xml_node rule = block.child("cfRule"); rule; rule = rule.next_sibling("cfRule")) {
       cfmt.rules.push_back(ReadCfRule(rule));
     }

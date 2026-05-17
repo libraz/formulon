@@ -246,5 +246,108 @@ std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits) {
   return strings::to_ascii_lower(fold_jp_text(input, fold_fullwidth_digits, /*fold_halfwidth_kana=*/true));
 }
 
+bool equal_folded(std::string_view a, std::string_view b, FoldCompareOptions opts) {
+  // Cheap pre-fold byte-length check would be wrong: folding can change
+  // the byte length (half-width katakana FF66..FF9D are 3 bytes each and
+  // map to 3-byte full-width katakana, but FF9E/FF9F composition
+  // collapses 6 bytes into 3). Always fold both sides.
+  const std::string fa = fold_jp_text(a, opts.fold_fullwidth_digits, opts.fold_halfwidth_kana);
+  const std::string fb = fold_jp_text(b, opts.fold_fullwidth_digits, opts.fold_halfwidth_kana);
+  if (opts.case_insensitive) {
+    return strings::case_insensitive_eq(fa, fb);
+  }
+  return fa == fb;
+}
+
+int compare_folded(std::string_view a, std::string_view b, FoldCompareOptions opts) {
+  const std::string fa = fold_jp_text(a, opts.fold_fullwidth_digits, opts.fold_halfwidth_kana);
+  const std::string fb = fold_jp_text(b, opts.fold_fullwidth_digits, opts.fold_halfwidth_kana);
+  if (opts.case_insensitive) {
+    return strings::case_insensitive_compare(fa, fb);
+  }
+  // Exact-byte compare: std::string::compare already returns the signed
+  // diff sign we want.
+  const int c = fa.compare(fb);
+  if (c < 0) {
+    return -1;
+  }
+  if (c > 0) {
+    return 1;
+  }
+  return 0;
+}
+
+bool value_equal_folded_text(const Value& a, const Value& b, FoldCompareOptions opts) {
+  if (a.kind() != b.kind()) {
+    return false;
+  }
+  switch (a.kind()) {
+    case ValueKind::Blank:
+      return true;
+    case ValueKind::Number:
+      // IEEE-754 `==` to mirror `group_cell_equal` in
+      // `groupby_pivotby_lazy.cpp`. Callers wanting NaN-aware compare
+      // must do it themselves before calling this helper.
+      return a.as_number() == b.as_number();
+    case ValueKind::Bool:
+      return a.as_boolean() == b.as_boolean();
+    case ValueKind::Error:
+      return a.as_error() == b.as_error();
+    case ValueKind::Text:
+      return equal_folded(a.as_text(), b.as_text(), opts);
+    default:
+      // Array / Ref / Lambda are not produced by cell reads; treat as
+      // not-equal defensively to avoid silent dedup of complex values.
+      return false;
+  }
+}
+
+int value_compare_folded_text(const Value& a, const Value& b, FoldCompareOptions opts) {
+  if (a.kind() != b.kind()) {
+    // Cross-kind: this helper does not impose an ordering — the caller
+    // is expected to bucket-rank kinds before reaching here.
+    return 0;
+  }
+  switch (a.kind()) {
+    case ValueKind::Number: {
+      const double na = a.as_number();
+      const double nb = b.as_number();
+      if (na < nb) {
+        return -1;
+      }
+      if (na > nb) {
+        return 1;
+      }
+      return 0;
+    }
+    case ValueKind::Text:
+      return compare_folded(a.as_text(), b.as_text(), opts);
+    case ValueKind::Bool: {
+      const bool ba = a.as_boolean();
+      const bool bb = b.as_boolean();
+      if (ba == bb) {
+        return 0;
+      }
+      return ba ? 1 : -1;
+    }
+    case ValueKind::Error: {
+      const auto ea = static_cast<int>(a.as_error());
+      const auto eb = static_cast<int>(b.as_error());
+      if (ea < eb) {
+        return -1;
+      }
+      if (ea > eb) {
+        return 1;
+      }
+      return 0;
+    }
+    case ValueKind::Blank:
+      return 0;
+    default:
+      // Array / Ref / Lambda: no defined ordering.
+      return 0;
+  }
+}
+
 }  // namespace eval
 }  // namespace formulon

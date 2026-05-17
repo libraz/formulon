@@ -48,6 +48,8 @@
 #include <string>
 #include <string_view>
 
+#include "value.h"
+
 namespace formulon {
 namespace eval {
 
@@ -100,6 +102,84 @@ std::string fold_and_lower(std::string_view input, bool fold_fullwidth_digits = 
 /// hiragana<->katakana, matching the Windows-Excel asymmetry pinned by
 /// `tests/oracle/variants/win-365-ja_JP/golden/lookup_kana_folding_probes`.
 std::string compose_jp_halfwidth_voicing(std::string_view input);
+
+// ---------------------------------------------------------------------------
+// High-level fold-aware comparison helpers
+// ---------------------------------------------------------------------------
+//
+// Consolidates the ad-hoc `fold_jp_text(a) op fold_jp_text(b)` patterns
+// scattered across `eval/lookups/*.cpp`, `eval/groupby_pivotby_lazy.cpp`,
+// and `eval/database_lazy.cpp`. Each call site previously inlined the
+// double-fold + compare, picking one of:
+//   * groupby      : `fold_jp_text(a) == fold_jp_text(b)` (default flags,
+//                    case-sensitive byte compare)
+//   * lookups      : `case_insensitive_compare(fold_jp_text(a, false),
+//                                              fold_jp_text(b, false))`
+//                    (lookups disable full-width digit folding; D-functions
+//                    additionally disable half-width katakana folding)
+//   * database     : `case_insensitive_eq(fold_jp_text(a, true, false),
+//                                          fold_jp_text(b, true, false))`
+//
+// These helpers cover all three shapes; call sites pick the flag triple
+// (case_insensitive / fold_fullwidth_digits / fold_halfwidth_kana) that
+// matches their Mac Excel oracle row.
+
+/// Options controlling the high-level fold-aware comparisons below.
+///
+/// Default values match the COUNTIF / SUMIF criterion-equality contract:
+/// case-insensitive ASCII compare with full-width digits and half-width
+/// katakana both folded. Lookup callers (MATCH / VLOOKUP / HLOOKUP /
+/// XLOOKUP / XMATCH) pass `fold_fullwidth_digits = false`; D-function
+/// header callers (DSUM / DCOUNT / DGET / etc.) pass both
+/// `fold_fullwidth_digits = true, fold_halfwidth_kana = false`. The
+/// GROUPBY / PIVOTBY key-equality path passes `case_insensitive = false`.
+struct FoldCompareOptions {
+  bool case_insensitive = true;
+  bool fold_fullwidth_digits = true;
+  bool fold_halfwidth_kana = true;
+};
+
+/// Returns true iff `a` and `b` are byte-equal after each is rewritten via
+/// `fold_jp_text` under `opts`. When `opts.case_insensitive` is true the
+/// post-fold compare uses `strings::case_insensitive_eq` (ASCII letters
+/// only); otherwise the compare is exact-byte.
+///
+/// Both inputs are assumed to be valid UTF-8 — the underlying decoder
+/// pass-through clamps malformed bytes but the equality verdict for such
+/// inputs is not specified.
+bool equal_folded(std::string_view a, std::string_view b, FoldCompareOptions opts = {});
+
+/// Lexicographic compare of `a` and `b` after each is rewritten via
+/// `fold_jp_text` under `opts`. Returns a negative value when `a < b`,
+/// zero when `a == b`, and a positive value when `a > b`. When
+/// `opts.case_insensitive` is true the compare uses
+/// `strings::case_insensitive_compare`; otherwise it is a byte-wise
+/// `std::string_view::compare`.
+int compare_folded(std::string_view a, std::string_view b, FoldCompareOptions opts = {});
+
+/// Value-level Text equality with JP folding. Returns true iff `a` and
+/// `b` are Text values that fold-compare equal under `opts`. For any
+/// other kind pair (Number/Number, Bool/Bool, Error/Error, Blank/Blank)
+/// falls back to direct payload equality. Cross-kind pairs are never
+/// equal. Array/Ref/Lambda payloads (which are not produced by cell
+/// reads) are conservatively reported as not equal.
+///
+/// This matches the GROUPBY / UNIQUE-with-fold semantics in
+/// `groupby_pivotby_lazy.cpp::group_cell_equal`. Number compare is
+/// IEEE-754 `==` (so `+0.0 == -0.0` here, mirroring `group_cell_equal`).
+bool value_equal_folded_text(const Value& a, const Value& b, FoldCompareOptions opts = {});
+
+/// Value-level Text-aware ordered compare with JP folding. Returns the
+/// sign of (a - b) when both are the same kind:
+///   * Number: numeric compare.
+///   * Text:   `compare_folded` under `opts`.
+///   * Bool:   FALSE < TRUE.
+///   * Error:  compare by `static_cast<int>` of the error code.
+///   * Blank:  always 0.
+/// For cross-kind pairs the caller is expected to apply its own bucket
+/// ordering first; this helper returns 0 to signal "kinds are equivalent
+/// for ordering purposes — supply your own tiebreaker".
+int value_compare_folded_text(const Value& a, const Value& b, FoldCompareOptions opts = {});
 
 }  // namespace eval
 }  // namespace formulon

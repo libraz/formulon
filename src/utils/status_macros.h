@@ -19,18 +19,18 @@
 #include "utils/expected.h"
 
 // Two-level concatenation macros. The indirection is required so that the
-// token being pasted (typically `__COUNTER__`) is expanded before pasting.
-#define FM_STATUS_MACROS_CONCAT_INNER(a, b) a##b
-#define FM_STATUS_MACROS_CONCAT(a, b) FM_STATUS_MACROS_CONCAT_INNER(a, b)
+// token being pasted (`__LINE__`) is expanded before pasting.
+#define FM_CONCAT_INNER(a, b) a##b
+#define FM_CONCAT(a, b) FM_CONCAT_INNER(a, b)
 
-// Per-call-site unique identifier. `__COUNTER__` is preferred because it is
-// guaranteed unique within a translation unit; `__LINE__` is used as a
-// fallback on the rare compilers that lack `__COUNTER__`.
-#if defined(__COUNTER__)
-#define FM_STATUS_MACROS_UNIQUE(prefix) FM_STATUS_MACROS_CONCAT(prefix, __COUNTER__)
-#else
-#define FM_STATUS_MACROS_UNIQUE(prefix) FM_STATUS_MACROS_CONCAT(prefix, __LINE__)
-#endif
+// Per-call-site unique identifier. We use `__LINE__` rather than the more
+// robust `__COUNTER__` because Emscripten's bundled clang rejects the
+// latter under `-Werror -Wc2y-extensions` (it has not yet promoted the
+// long-standing extension to a non-diagnosed builtin). The trade-off is
+// that callers MUST NOT expand `ASSIGN_OR_RETURN` twice on the same
+// source line: the resulting identifiers would collide. No call site in
+// the codebase does so today; the convention is one macro per line.
+#define FM_UNIQUE(prefix) FM_CONCAT(prefix, __LINE__)
 
 /// Returns from the enclosing function if `expr` evaluates to an error-state
 /// `Expected<...>`. On success falls through.
@@ -53,6 +53,6 @@
 
 /// Evaluates `expr` (which must return an `Expected<T, E>`); on success binds
 /// `lhs` to the unwrapped value, otherwise returns the error to the caller.
-#define ASSIGN_OR_RETURN(lhs, expr) FM_ASSIGN_OR_RETURN_IMPL(FM_STATUS_MACROS_UNIQUE(_fm_tmp_), lhs, expr)
+#define ASSIGN_OR_RETURN(lhs, expr) FM_ASSIGN_OR_RETURN_IMPL(FM_UNIQUE(_fm_tmp_), lhs, expr)
 
 #endif  // FORMULON_UTILS_STATUS_MACROS_H_

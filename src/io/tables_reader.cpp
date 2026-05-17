@@ -31,48 +31,37 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
 
   TableMetadata table;
   table.sheet_index = sheet_index;
-  table.id = parse_xml_u32_attr(root.attribute("id"), 0U);
-  if (pugi::xml_attribute name_attr = root.attribute("name"); name_attr) {
-    table.name = name_attr.value();
-  }
-  if (pugi::xml_attribute disp_attr = root.attribute("displayName"); disp_attr) {
-    table.display_name = disp_attr.value();
-  }
+  table.id = attr_u32(root, "id");
+  table.name = attr_str(root, "name");
+  table.display_name = attr_str(root, "displayName");
 
-  pugi::xml_attribute ref_attr = root.attribute("ref");
-  if (!ref_attr || ref_attr.value() == nullptr || *ref_attr.value() == '\0') {
+  // `ref` is required; an absent / empty value rejects the part.
+  const std::string_view ref_v = attr_str(root, "ref");
+  if (ref_v.empty()) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "table*.xml: missing required ref attribute",
                       "context=tables_reader");
   }
-  table.ref = ref_attr.value();
+  table.ref = ref_v;
 
   // headerRowCount defaults to 1 in the OOXML spec — i.e. tables have a
   // header row by default. Only an explicit "0" disables it.
   if (pugi::xml_attribute hrc = root.attribute("headerRowCount"); hrc) {
-    if (parse_xml_u32_attr(hrc, 1U) == 0U) {
+    if (attr_u32(root, "headerRowCount", 1U) == 0U) {
       table.header_row = false;
     }
   }
   // totalsRowCount defaults to 0 (no totals row).
-  if (pugi::xml_attribute trc = root.attribute("totalsRowCount"); trc) {
-    if (parse_xml_u32_attr(trc, 0U) >= 1U) {
-      table.totals_row = true;
-    }
+  if (attr_u32(root, "totalsRowCount") >= 1U) {
+    table.totals_row = true;
   }
 
   if (pugi::xml_node cols_node = root.child("tableColumns"); cols_node) {
     for (pugi::xml_node col = cols_node.child("tableColumn"); col; col = col.next_sibling("tableColumn")) {
       TableColumn entry;
-      entry.id = parse_xml_u32_attr(col.attribute("id"), 0U);
-      if (pugi::xml_attribute n = col.attribute("name"); n) {
-        entry.name = n.value();
-      }
-      if (pugi::xml_attribute lbl = col.attribute("totalsRowLabel"); lbl) {
-        entry.totals_label = lbl.value();
-      }
-      if (pugi::xml_attribute fn = col.attribute("totalsRowFunction"); fn) {
-        entry.totals_function = fn.value();
-      }
+      entry.id = attr_u32(col, "id");
+      entry.name = attr_str(col, "name");
+      entry.totals_label = attr_str(col, "totalsRowLabel");
+      entry.totals_function = attr_str(col, "totalsRowFunction");
       // Preserve <calculatedColumnFormula> verbatim. Children come
       // after attributes per the OOXML schema, so this lookup runs
       // last for the column. pugixml's `text().as_string()` already

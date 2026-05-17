@@ -27,6 +27,7 @@
 #include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
+#include "utils/rect_iterator.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -642,12 +643,10 @@ bool cf_values_equal(const Value& lhs, const Value& rhs) {
 std::size_t count_matches_in_sqref(const Value& target, const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
   std::size_t count = 0;
   for (const CFCellRange& range : sqref) {
-    for (std::uint32_t row = range.first.row; row <= range.last.row; ++row) {
-      for (std::uint32_t col = range.first.col; col <= range.last.col; ++col) {
-        const Value cell = sheet.resolve_cell_value(row, col);
-        if (cf_values_equal(target, cell)) {
-          ++count;
-        }
+    for (auto [row, col] : utils::RectRange(range.first.row, range.first.col, range.last.row, range.last.col)) {
+      const Value cell = sheet.resolve_cell_value(row, col);
+      if (cf_values_equal(target, cell)) {
+        ++count;
       }
     }
   }
@@ -700,12 +699,10 @@ const ColorScalePopulation* numeric_population_for_cell(const Value& cell_value,
 std::vector<double> collect_numeric_values(const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
   std::vector<double> values;
   for (const CFCellRange& range : sqref) {
-    for (std::uint32_t row = range.first.row; row <= range.last.row; ++row) {
-      for (std::uint32_t col = range.first.col; col <= range.last.col; ++col) {
-        const Value cell = sheet.resolve_cell_value(row, col);
-        if (cell.is_number()) {
-          values.push_back(cell.as_number());
-        }
+    for (auto [row, col] : utils::RectRange(range.first.row, range.first.col, range.last.row, range.last.col)) {
+      const Value cell = sheet.resolve_cell_value(row, col);
+      if (cell.is_number()) {
+        values.push_back(cell.as_number());
       }
     }
   }
@@ -1367,20 +1364,18 @@ std::vector<CFRangeCellMatches> evaluate_cf_for_range(const Sheet& sheet, CFCell
   // `<=` so a single-cell range (first == last) still produces one
   // visit. Callers who need to evaluate one cell should prefer the
   // direct `evaluate_cf_at`; this helper exists for the viewport case.
-  for (std::uint32_t row = range.first.row; row <= range.last.row; ++row) {
-    for (std::uint32_t col = range.first.col; col <= range.last.col; ++col) {
-      CellAddress cell{};
-      cell.row = row;
-      cell.col = col;
-      std::vector<CFMatch> matches = evaluate_cf_at_impl(sheet, cell, host, &cache);
-      if (matches.empty()) {
-        continue;
-      }
-      CFRangeCellMatches entry;
-      entry.cell = cell;
-      entry.matches = std::move(matches);
-      results.push_back(std::move(entry));
+  for (auto [row, col] : utils::RectRange(range.first.row, range.first.col, range.last.row, range.last.col)) {
+    CellAddress cell{};
+    cell.row = row;
+    cell.col = col;
+    std::vector<CFMatch> matches = evaluate_cf_at_impl(sheet, cell, host, &cache);
+    if (matches.empty()) {
+      continue;
     }
+    CFRangeCellMatches entry;
+    entry.cell = cell;
+    entry.matches = std::move(matches);
+    results.push_back(std::move(entry));
   }
   return results;
 }

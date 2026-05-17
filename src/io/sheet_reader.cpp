@@ -265,20 +265,6 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
 
 namespace {
 
-/// Returns true when the OOXML boolean attribute string is "true" /
-/// "1" (case-insensitive). Matches the lexicon Excel emits for sheet
-/// hidden / outline flags.
-bool ParseXmlBool(std::string_view value) noexcept {
-  if (value == "1") {
-    return true;
-  }
-  if (value.size() != 4) {
-    return false;
-  }
-  return (value[0] == 't' || value[0] == 'T') && (value[1] == 'r' || value[1] == 'R') &&
-         (value[2] == 'u' || value[2] == 'U') && (value[3] == 'e' || value[3] == 'E');
-}
-
 /// Saturating cast from a possibly-signed C string to `std::uint8_t`.
 /// Used for `outlineLevel`; OOXML caps the value at 7 but we accept up
 /// to 255 defensively and clamp negatives to 0.
@@ -317,18 +303,17 @@ void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
   if (!sheet_view) {
     return;
   }
-  if (pugi::xml_attribute zoom_attr = sheet_view.attribute("zoomScale"); zoom_attr) {
-    const long raw = std::strtol(zoom_attr.value(), nullptr, 10);
+  if (sheet_view.attribute("zoomScale")) {
+    const std::int32_t raw = attr_i32(sheet_view, "zoomScale", 0);
     if (raw >= 10 && raw <= 400) {
       view.zoom_scale = static_cast<std::uint32_t>(raw);
     }
   }
   pugi::xml_node pane = sheet_view.child("pane");
   if (pane) {
-    const std::string_view state = pane.attribute("state").value();
-    if (state == "frozen") {
-      const long y = std::strtol(pane.attribute("ySplit").value(), nullptr, 10);
-      const long x = std::strtol(pane.attribute("xSplit").value(), nullptr, 10);
+    if (attr_str(pane, "state") == "frozen") {
+      const std::int32_t y = attr_i32(pane, "ySplit", 0);
+      const std::int32_t x = attr_i32(pane, "xSplit", 0);
       if (y > 0) {
         view.freeze_rows = static_cast<std::uint32_t>(y);
       }
@@ -353,14 +338,12 @@ void ApplySheetPrTabHidden(const pugi::xml_node& worksheet, SheetView& view) {
   // Some writers emit `tabHidden` as a direct attribute (`<sheetPr
   // tabHidden="1"/>`); others emit it as a child element with a `val`
   // attribute. Accept both shapes.
-  if (pugi::xml_attribute attr = sheet_pr.attribute("tabHidden"); attr) {
-    if (ParseXmlBool(attr.value())) {
-      view.tab_hidden = true;
-    }
+  if (attr_bool(sheet_pr, "tabHidden")) {
+    view.tab_hidden = true;
   }
   if (pugi::xml_node child = sheet_pr.child("tabHidden"); child) {
-    if (pugi::xml_attribute val = child.attribute("val"); val) {
-      if (ParseXmlBool(val.value())) {
+    if (child.attribute("val")) {
+      if (attr_bool(child, "val")) {
         view.tab_hidden = true;
       }
     } else {
@@ -406,29 +389,26 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
     return;
   }
   for (pugi::xml_node col = cols.child("col"); col; col = col.next_sibling("col")) {
-    pugi::xml_attribute min_attr = col.attribute("min");
-    pugi::xml_attribute max_attr = col.attribute("max");
-    pugi::xml_attribute width_attr = col.attribute("width");
-    if (!min_attr || !max_attr) {
+    if (!col.attribute("min") || !col.attribute("max")) {
       continue;
     }
-    const long min_v = std::strtol(min_attr.value(), nullptr, 10);
-    const long max_v = std::strtol(max_attr.value(), nullptr, 10);
+    const std::int32_t min_v = attr_i32(col, "min", 0);
+    const std::int32_t max_v = attr_i32(col, "max", 0);
     if (min_v < 1 || max_v < min_v) {
       continue;
     }
     ColumnLayout entry;
     entry.first = static_cast<std::uint32_t>(min_v - 1);
     entry.last = static_cast<std::uint32_t>(max_v - 1);
-    if (width_attr) {
-      entry.width = std::strtod(width_attr.value(), nullptr);
+    if (pugi::xml_attribute width_attr = col.attribute("width"); width_attr) {
+      entry.width = attr_f64(col, "width");
     } else {
       // No explicit width override — skip. `customWidth` / `bestFit`
       // alone are not enough to round-trip through the layout model.
       continue;
     }
     if (pugi::xml_attribute hidden_attr = col.attribute("hidden"); hidden_attr) {
-      entry.hidden = ParseXmlBool(hidden_attr.value());
+      entry.hidden = attr_bool(col, "hidden");
     }
     if (pugi::xml_attribute outline_attr = col.attribute("outlineLevel"); outline_attr) {
       entry.outline_level = ParseOutlineLevel(outline_attr.value());
@@ -457,17 +437,17 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     if (!r_attr) {
       continue;
     }
-    const long r_v = std::strtol(r_attr.value(), nullptr, 10);
+    const std::int32_t r_v = attr_i32(row, "r", 0);
     if (r_v < 1) {
       continue;
     }
     RowLayout entry;
     entry.row = static_cast<std::uint32_t>(r_v - 1);
     if (ht_attr) {
-      entry.height = std::strtod(ht_attr.value(), nullptr);
+      entry.height = attr_f64(row, "ht");
     }
     if (hidden_attr) {
-      entry.hidden = ParseXmlBool(hidden_attr.value());
+      entry.hidden = attr_bool(row, "hidden");
     }
     if (outline_attr) {
       entry.outline_level = ParseOutlineLevel(outline_attr.value());
@@ -688,7 +668,7 @@ Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& works
     return out;
   }
   for (pugi::xml_node m = mc.child("mergeCell"); m; m = m.next_sibling("mergeCell")) {
-    const std::string_view ref = m.attribute("ref").value();
+    const std::string_view ref = attr_str(m, "ref");
     if (ref.empty()) {
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "mergeCell: missing/empty ref",
                         "context=sheet_reader part=mergeCells");
@@ -712,7 +692,7 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
     return out;
   }
   for (pugi::xml_node h = node.child("hyperlink"); h; h = h.next_sibling("hyperlink")) {
-    const std::string_view ref = h.attribute("ref").value();
+    const std::string_view ref = attr_str(h, "ref");
     if (ref.empty()) {
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "hyperlink: missing/empty ref",
                         "context=sheet_reader part=hyperlinks");
@@ -729,16 +709,15 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
     hl.row = rc.value().first;
     hl.col = rc.value().second;
     // Accept both Office-namespaced ("r:id") and bare "id" attribute spellings.
-    const std::string_view rid_v = h.attribute("r:id").value();
+    const std::string_view rid_v = attr_str(h, "r:id");
     if (!rid_v.empty()) {
       hl.rid.assign(rid_v);
     } else {
-      const std::string_view id_v = h.attribute("id").value();
-      hl.rid.assign(id_v);
+      hl.rid.assign(attr_str(h, "id"));
     }
-    hl.location.assign(h.attribute("location").value());
-    hl.display.assign(h.attribute("display").value());
-    hl.tooltip.assign(h.attribute("tooltip").value());
+    hl.location.assign(attr_str(h, "location"));
+    hl.display.assign(attr_str(h, "display"));
+    hl.tooltip.assign(attr_str(h, "tooltip"));
     out.push_back(std::move(hl));
   }
   return out;
@@ -769,7 +748,7 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
   }
   for (pugi::xml_node dv = dvs.child("dataValidation"); dv; dv = dv.next_sibling("dataValidation")) {
     DataValidation v;
-    const std::string_view sqref = dv.attribute("sqref").value();
+    const std::string_view sqref = attr_str(dv, "sqref");
     if (sqref.empty()) {
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "dataValidation: missing/empty sqref",
                         "context=sheet_reader part=dataValidations");
@@ -781,7 +760,7 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     v.ranges = std::move(ranges_or.value());
 
     // type
-    const std::string_view t = dv.attribute("type").value();
+    const std::string_view t = attr_str(dv, "type");
     if (t == "whole") {
       v.type = 1;
     } else if (t == "decimal") {
@@ -801,7 +780,7 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     }
 
     // operator
-    const std::string_view op = dv.attribute("operator").value();
+    const std::string_view op = attr_str(dv, "operator");
     if (op == "notBetween") {
       v.op = 1;
     } else if (op == "equal") {
@@ -821,7 +800,7 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     }
 
     // errorStyle
-    const std::string_view es = dv.attribute("errorStyle").value();
+    const std::string_view es = attr_str(dv, "errorStyle");
     if (es == "warning") {
       v.error_style = 1;
     } else if (es == "information") {
@@ -843,10 +822,10 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
       v.show_error_message = parse_xml_bool(sem.value());
     }
 
-    v.error_title.assign(dv.attribute("errorTitle").value());
-    v.error_message.assign(dv.attribute("error").value());
-    v.prompt_title.assign(dv.attribute("promptTitle").value());
-    v.prompt_message.assign(dv.attribute("prompt").value());
+    v.error_title.assign(attr_str(dv, "errorTitle"));
+    v.error_message.assign(attr_str(dv, "error"));
+    v.prompt_title.assign(attr_str(dv, "promptTitle"));
+    v.prompt_message.assign(attr_str(dv, "prompt"));
 
     if (pugi::xml_node f1 = dv.child("formula1"); f1) {
       v.formula1.assign(f1.text().get());
@@ -877,42 +856,31 @@ SheetProtection read_sheet_protection(const pugi::xml_node& worksheet) {
   }
   out.enabled = true;
 
-  // Helper: read a boolean attribute. Defaults to false when the
-  // attribute is absent. "1" / "true" → true; anything else → false
-  // (matches the OOXML xsd:boolean lexical space pugixml exposes).
-  const auto read_bool = [&node](const char* name, bool default_value) {
-    const pugi::xml_attribute attr = node.attribute(name);
-    if (!attr) {
-      return default_value;
-    }
-    return parse_xml_bool(attr.value());
-  };
-
-  out.algorithm_name.assign(node.attribute("algorithmName").value());
-  out.hash_value.assign(node.attribute("hashValue").value());
-  out.salt_value.assign(node.attribute("saltValue").value());
+  out.algorithm_name.assign(attr_str(node, "algorithmName"));
+  out.hash_value.assign(attr_str(node, "hashValue"));
+  out.salt_value.assign(attr_str(node, "saltValue"));
   if (pugi::xml_attribute sc = node.attribute("spinCount"); sc) {
     const long long parsed = sc.as_llong(0);
     out.spin_count = parsed < 0 ? 0U : static_cast<std::uint32_t>(parsed);
   }
-  out.legacy_password.assign(node.attribute("password").value());
+  out.legacy_password.assign(attr_str(node, "password"));
 
-  out.sheet = read_bool("sheet", false);
-  out.objects = read_bool("objects", false);
-  out.scenarios = read_bool("scenarios", false);
-  out.format_cells = read_bool("formatCells", false);
-  out.format_columns = read_bool("formatColumns", false);
-  out.format_rows = read_bool("formatRows", false);
-  out.insert_columns = read_bool("insertColumns", false);
-  out.insert_rows = read_bool("insertRows", false);
-  out.insert_hyperlinks = read_bool("insertHyperlinks", false);
-  out.delete_columns = read_bool("deleteColumns", false);
-  out.delete_rows = read_bool("deleteRows", false);
-  out.select_locked_cells = read_bool("selectLockedCells", false);
-  out.select_unlocked_cells = read_bool("selectUnlockedCells", false);
-  out.sort = read_bool("sort", false);
-  out.auto_filter = read_bool("autoFilter", false);
-  out.pivot_tables = read_bool("pivotTables", false);
+  out.sheet = attr_bool(node, "sheet");
+  out.objects = attr_bool(node, "objects");
+  out.scenarios = attr_bool(node, "scenarios");
+  out.format_cells = attr_bool(node, "formatCells");
+  out.format_columns = attr_bool(node, "formatColumns");
+  out.format_rows = attr_bool(node, "formatRows");
+  out.insert_columns = attr_bool(node, "insertColumns");
+  out.insert_rows = attr_bool(node, "insertRows");
+  out.insert_hyperlinks = attr_bool(node, "insertHyperlinks");
+  out.delete_columns = attr_bool(node, "deleteColumns");
+  out.delete_rows = attr_bool(node, "deleteRows");
+  out.select_locked_cells = attr_bool(node, "selectLockedCells");
+  out.select_unlocked_cells = attr_bool(node, "selectUnlockedCells");
+  out.sort = attr_bool(node, "sort");
+  out.auto_filter = attr_bool(node, "autoFilter");
+  out.pivot_tables = attr_bool(node, "pivotTables");
 
   return out;
 }

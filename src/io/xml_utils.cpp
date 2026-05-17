@@ -82,6 +82,42 @@ bool parse_xml_bool(std::string_view value) {
   return value == "1" || value == "true";
 }
 
+std::uint32_t attr_u32(const pugi::xml_node& n, const char* name, std::uint32_t def) {
+  return parse_xml_u32_attr(n.attribute(name), def);
+}
+
+std::int32_t attr_i32(const pugi::xml_node& n, const char* name, std::int32_t def) {
+  return parse_xml_i32_attr(n.attribute(name), def);
+}
+
+bool attr_bool(const pugi::xml_node& n, const char* name, bool def) {
+  const pugi::xml_attribute a = n.attribute(name);
+  if (!a) {
+    return def;
+  }
+  const char* v = a.value();
+  if (v == nullptr || *v == '\0') {
+    return def;
+  }
+  // Fast path for the canonical "1" / "0" Excel emits.
+  if (v[0] == '1' && v[1] == '\0') {
+    return true;
+  }
+  if (v[0] == '0' && v[1] == '\0') {
+    return false;
+  }
+  // Case-insensitive 4-char "true". Anything else (including "false",
+  // "yes", garbage) maps to false — matches the lenient legacy
+  // `parse_xml_bool_attr` lexicon.
+  if (v[0] != '\0' && v[1] != '\0' && v[2] != '\0' && v[3] != '\0' && v[4] == '\0') {
+    const auto lower = [](char c) -> char { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c; };
+    if (lower(v[0]) == 't' && lower(v[1]) == 'r' && lower(v[2]) == 'u' && lower(v[3]) == 'e') {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool parse_xml_bool_attr(const pugi::xml_attribute& attr) {
   if (!attr) {
     return false;

@@ -24,6 +24,7 @@
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/rect_iterator.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
@@ -275,10 +276,8 @@ void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
     return;
   }
 
-  for (std::uint32_t r = rect.row_first; r <= rect.row_last; ++r) {
-    for (std::uint32_t c = rect.col_first; c <= rect.col_last; ++c) {
-      add_cell_dep(state, CellNodeId{target_sheet_id, r, c});
-    }
+  for (auto [r, c] : utils::RectRange(rect.row_first, rect.col_first, rect.row_last, rect.col_last)) {
+    add_cell_dep(state, CellNodeId{target_sheet_id, r, c});
   }
 }
 

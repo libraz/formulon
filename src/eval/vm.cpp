@@ -56,24 +56,10 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
-
-// `status_macros.h` uses `__COUNTER__`, which Emscripten's bundled clang
-// flags as a C2y extension under `-Werror`. Mirror compiler.cpp's
-// `__LINE__`-derived workaround.
-#define FM_VM_CONCAT_INNER(a, b) a##b
-#define FM_VM_CONCAT(a, b) FM_VM_CONCAT_INNER(a, b)
-#define FM_VM_UNIQUE(prefix) FM_VM_CONCAT(prefix, __LINE__)
-
-#define FM_VM_RETURN_IF_ERROR(expr) \
-  do {                              \
-    auto _fm_status = (expr);       \
-    if (!_fm_status) {              \
-      return _fm_status.error();    \
-    }                               \
-  } while (0)
 
 namespace formulon {
 namespace eval {
@@ -345,7 +331,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         if (pushed.kind() == ValueKind::Text) {
           pushed = Value::text(intern_arena_string(arena, pushed.as_text()));
         }
-        FM_VM_RETURN_IF_ERROR(push_value(s, pushed));
+        RETURN_IF_ERROR(push_value(s, pushed));
         ++pc;
         break;
       }
@@ -355,7 +341,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         if (!r) {
           return r.error();
         }
-        FM_VM_RETURN_IF_ERROR(push_value(s, ctx.resolve_ref(*r.value(), arena, registry)));
+        RETURN_IF_ERROR(push_value(s, ctx.resolve_ref(*r.value(), arena, registry)));
         ++pc;
         break;
       }
@@ -368,7 +354,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // RangeOp scalar fallback when no formula cell is bound. Range-aware
         // aggregator parity is a documented limitation tracked for Bundle
         // 5.3+ optimisation.
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, 2));
+        RETURN_IF_ERROR(require_stack_depth(s, 2));
         const Value rhs = s.stack.back();
         s.stack.pop_back();
         (void)rhs;
@@ -391,7 +377,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
             v = *bound;
           }
         }
-        FM_VM_RETURN_IF_ERROR(push_value(s, v));
+        RETURN_IF_ERROR(push_value(s, v));
         ++pc;
         break;
       }
@@ -407,7 +393,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           return col_n.error();
         }
         const Value v = resolve_struct_ref_op(*table_n.value(), *col_n.value(), arena, registry, ctx);
-        FM_VM_RETURN_IF_ERROR(push_value(s, v));
+        RETURN_IF_ERROR(push_value(s, v));
         ++pc;
         break;
       }
@@ -417,7 +403,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         if (!r) {
           return r.error();
         }
-        FM_VM_RETURN_IF_ERROR(push_value(s, resolve_spill_ref_op(*r.value(), arena, ctx)));
+        RETURN_IF_ERROR(push_value(s, resolve_spill_ref_op(*r.value(), arena, ctx)));
         ++pc;
         break;
       }
@@ -425,7 +411,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
       case OpCode::LoadExternalRef: {
         // External workbook refs are not yet supported anywhere in the
         // engine; mirror the tree-walker's `#NAME?` surfacing.
-        FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Name)));
+        RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Name)));
         ++pc;
         break;
       }
@@ -434,13 +420,13 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         if (ins.a >= s.let_slots.size()) {
           return make_vm_error(FormulonErrorCode::kVmLetSlotMissing, "LoadLet slot not populated");
         }
-        FM_VM_RETURN_IF_ERROR(push_value(s, s.let_slots[ins.a]));
+        RETURN_IF_ERROR(push_value(s, s.let_slots[ins.a]));
         ++pc;
         break;
       }
 
       case OpCode::StoreLet: {
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, 1));
+        RETURN_IF_ERROR(require_stack_depth(s, 1));
         if (ins.a >= s.let_slots.size()) {
           s.let_slots.resize(ins.a + 1U, Value::blank());
         }
@@ -454,14 +440,14 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         if (s.frames.empty() || ins.a >= s.frames.back().args.size()) {
           return make_vm_error(FormulonErrorCode::kVmLetSlotMissing, "LoadLambdaArg outside an active lambda frame");
         }
-        FM_VM_RETURN_IF_ERROR(push_value(s, s.frames.back().args[ins.a]));
+        RETURN_IF_ERROR(push_value(s, s.frames.back().args[ins.a]));
         ++pc;
         break;
       }
 
       case OpCode::Call: {
         const std::uint32_t arity = ins.b;
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, arity));
+        RETURN_IF_ERROR(require_stack_depth(s, arity));
         auto name_p = name_at(bc, ins.a);
         if (!name_p) {
           return name_p.error();
@@ -479,7 +465,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
             // Pop and replace with #VALUE! to match the tree-walker's
             // arity-check failure surface.
             pop_values(s, arity);
-            FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+            RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
             ++pc;
             break;
           }
@@ -502,7 +488,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
               out = Value::number(0.0);
             }
           }
-          FM_VM_RETURN_IF_ERROR(push_value(s, out));
+          RETURN_IF_ERROR(push_value(s, out));
           ++pc;
           break;
         }
@@ -515,13 +501,13 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         const FunctionDef* def = registry.lookup(name);
         if (def == nullptr) {
           pop_values(s, arity);
-          FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Name)));
+          RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Name)));
           ++pc;
           break;
         }
         if (arity < def->min_arity || arity > def->max_arity) {
           pop_values(s, arity);
-          FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+          RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
           ++pc;
           break;
         }
@@ -584,7 +570,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
             }
           }
           if (short_circuit) {
-            FM_VM_RETURN_IF_ERROR(push_value(s, err_v));
+            RETURN_IF_ERROR(push_value(s, err_v));
             ++pc;
             break;
           }
@@ -592,14 +578,14 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // Pass the post-flattening size (may exceed the original `arity`
         // when an Array argument was unpacked).
         const Value out = def->impl(argv.data(), static_cast<std::uint32_t>(argv.size()), arena);
-        FM_VM_RETURN_IF_ERROR(push_value(s, out));
+        RETURN_IF_ERROR(push_value(s, out));
         ++pc;
         break;
       }
 
       case OpCode::CallLambda: {
         const std::uint32_t arity = ins.a;
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, arity + 1U));
+        RETURN_IF_ERROR(require_stack_depth(s, arity + 1U));
         // Stack layout: [..., callee, arg0, ..., arg{arity-1}].
         std::vector<Value> args;
         args.reserve(arity);
@@ -611,9 +597,9 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         s.stack.pop_back();
         if (!callee.is_lambda()) {
           if (callee.is_error()) {
-            FM_VM_RETURN_IF_ERROR(push_value(s, callee));
+            RETURN_IF_ERROR(push_value(s, callee));
           } else {
-            FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+            RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
           }
           ++pc;
           break;
@@ -621,7 +607,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         const LambdaValue* lv = callee.as_lambda();
         const std::uint32_t required = lv->param_count - lv->optional_count;
         if (arity < required || arity > lv->param_count) {
-          FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+          RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
           ++pc;
           break;
         }
@@ -637,7 +623,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           }
         }
         if (err_short) {
-          FM_VM_RETURN_IF_ERROR(push_value(s, err_v));
+          RETURN_IF_ERROR(push_value(s, err_v));
           ++pc;
           break;
         }
@@ -667,7 +653,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
       }
 
       case OpCode::BinaryOp: {
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, 2));
+        RETURN_IF_ERROR(require_stack_depth(s, 2));
         const Value rhs = s.stack.back();
         s.stack.pop_back();
         const Value lhs = s.stack.back();
@@ -679,12 +665,12 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // before this opcode runs, so a Value::Array can only arise from
         // SpillRef / ArrayLiteral, which the parity corpus avoids.)
         if (lhs.is_error()) {
-          FM_VM_RETURN_IF_ERROR(push_value(s, lhs));
+          RETURN_IF_ERROR(push_value(s, lhs));
           ++pc;
           break;
         }
         if (rhs.is_error()) {
-          FM_VM_RETURN_IF_ERROR(push_value(s, rhs));
+          RETURN_IF_ERROR(push_value(s, rhs));
           ++pc;
           break;
         }
@@ -720,39 +706,39 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
             out = apply_comparison(op, lhs, rhs);
             break;
         }
-        FM_VM_RETURN_IF_ERROR(push_value(s, out));
+        RETURN_IF_ERROR(push_value(s, out));
         ++pc;
         break;
       }
 
       case OpCode::UnaryOp: {
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, 1));
+        RETURN_IF_ERROR(require_stack_depth(s, 1));
         const Value operand = s.stack.back();
         s.stack.pop_back();
         const auto op = static_cast<parser::UnaryOp>(ins.a);
         Value out = operand.is_error() ? operand : apply_unary(op, operand);
-        FM_VM_RETURN_IF_ERROR(push_value(s, out));
+        RETURN_IF_ERROR(push_value(s, out));
         ++pc;
         break;
       }
 
       case OpCode::Concat: {
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, 2));
+        RETURN_IF_ERROR(require_stack_depth(s, 2));
         const Value rhs = s.stack.back();
         s.stack.pop_back();
         const Value lhs = s.stack.back();
         s.stack.pop_back();
         if (lhs.is_error()) {
-          FM_VM_RETURN_IF_ERROR(push_value(s, lhs));
+          RETURN_IF_ERROR(push_value(s, lhs));
           ++pc;
           break;
         }
         if (rhs.is_error()) {
-          FM_VM_RETURN_IF_ERROR(push_value(s, rhs));
+          RETURN_IF_ERROR(push_value(s, rhs));
           ++pc;
           break;
         }
-        FM_VM_RETURN_IF_ERROR(push_value(s, apply_concat(lhs, rhs, arena)));
+        RETURN_IF_ERROR(push_value(s, apply_concat(lhs, rhs, arena)));
         ++pc;
         break;
       }
@@ -761,7 +747,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         const std::uint32_t rows = ins.a;
         const std::uint32_t cols = ins.b;
         const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, n));
+        RETURN_IF_ERROR(require_stack_depth(s, n));
         Value* buf = arena.create_array<Value>(n);
         if (buf == nullptr) {
           return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "arena exhausted in MakeArray");
@@ -779,7 +765,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         arr->rows = rows;
         arr->cols = cols;
         arr->cells = buf;
-        FM_VM_RETURN_IF_ERROR(push_value(s, Value::array(arr)));
+        RETURN_IF_ERROR(push_value(s, Value::array(arr)));
         ++pc;
         break;
       }
@@ -831,7 +817,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // VM-emitted lambdas. The cast-pun is contained to this TU.
         lv->body = reinterpret_cast<const parser::AstNode*>(closure);
         lv->captured_env = nullptr;
-        FM_VM_RETURN_IF_ERROR(push_value(s, Value::lambda(lv)));
+        RETURN_IF_ERROR(push_value(s, Value::lambda(lv)));
         ++pc;
         break;
       }
@@ -841,9 +827,9 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // in scalar context; the tree-walker surfaces #VALUE! here. Mirror
         // that by popping the operands and pushing #VALUE!.
         const std::uint32_t count = ins.a;
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, count));
+        RETURN_IF_ERROR(require_stack_depth(s, count));
         pop_values(s, count);
-        FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+        RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
         ++pc;
         break;
       }
@@ -852,10 +838,10 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // Space-as-intersection: also requires Ref payloads the IR has
         // already discarded. Surface #VALUE! to mirror the tree-walker's
         // fallback when the operands aren't Refs.
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, 2));
+        RETURN_IF_ERROR(require_stack_depth(s, 2));
         s.stack.pop_back();
         s.stack.pop_back();
-        FM_VM_RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+        RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
         ++pc;
         break;
       }
@@ -863,7 +849,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
       case OpCode::ImplicitIntersection: {
         // Identity for non-RangeOp operands matches the tree-walker's
         // pass-through; range collapse already happened during LoadRange.
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, 1));
+        RETURN_IF_ERROR(require_stack_depth(s, 1));
         ++pc;
         break;
       }
@@ -877,7 +863,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
       }
 
       case OpCode::JumpIfFalse: {
-        FM_VM_RETURN_IF_ERROR(require_stack_depth(s, 1));
+        RETURN_IF_ERROR(require_stack_depth(s, 1));
         const Value cond = s.stack.back();
         s.stack.pop_back();
         if (ins.a >= code_size) {
@@ -887,7 +873,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // fall through so the taken-branch path can carry it. Tree-walker
         // mirror: `=IF(1/0,"a","b")` returns `#DIV/0!`.
         if (cond.is_error()) {
-          FM_VM_RETURN_IF_ERROR(push_value(s, cond));
+          RETURN_IF_ERROR(push_value(s, cond));
           // Skip the taken branch: jump straight to the merge point. The
           // compiler shape is `then; Jump Lend; Lfalse:`. Easiest mirror is
           // to force-take the false branch so the error flows through it;

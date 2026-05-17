@@ -254,6 +254,51 @@ TEST(ValueTest, AllErrorCodesHaveWireCodeAndDisplayName) {
   }
 }
 
+TEST(ValueTest, ErrorTableMatchesIndividualAccessors) {
+  // The consolidated `kErrorTable` is the single source of truth for both
+  // `display_name` and `ooxml_code`. Pinning the table entries against the
+  // previously hand-written switch values guards against accidental edits
+  // to the table re-ordering codes or drifting from the OOXML wire spec.
+  struct Expected {
+    ErrorCode code;
+    const char* name;
+    std::int32_t wire;
+  };
+  const Expected expected[] = {
+      {ErrorCode::Null, "#NULL!", 0},        {ErrorCode::Div0, "#DIV/0!", 7},
+      {ErrorCode::Value, "#VALUE!", 15},     {ErrorCode::Ref, "#REF!", 23},
+      {ErrorCode::Name, "#NAME?", 29},       {ErrorCode::Num, "#NUM!", 36},
+      {ErrorCode::NA, "#N/A", 42},           {ErrorCode::GettingData, "#GETTING_DATA", 43},
+      {ErrorCode::Spill, "#SPILL!", 14},     {ErrorCode::Calc, "#CALC!", 13},
+      {ErrorCode::Field, "#FIELD!", 10},     {ErrorCode::Blocked, "#BLOCKED!", 12},
+      {ErrorCode::Connect, "#CONNECT!", 11}, {ErrorCode::External, "#EXTERNAL!", 19},
+      {ErrorCode::Busy, "#BUSY!", 16},       {ErrorCode::Python, "#PYTHON!", 17},
+      {ErrorCode::Unknown, "#UNKNOWN!", 9},
+  };
+  // Cover every declared code exactly once; the table size invariant is
+  // also enforced via `static_assert` in `value.h`.
+  ASSERT_EQ(sizeof(kAllErrorCodes) / sizeof(kAllErrorCodes[0]), sizeof(expected) / sizeof(expected[0]));
+  for (const auto& row : expected) {
+    const ErrorCodeInfo& info = error_info(row.code);
+    EXPECT_STREQ(row.name, info.display_name) << "code=" << static_cast<int>(row.code);
+    EXPECT_EQ(row.wire, info.ooxml_code) << "code=" << static_cast<int>(row.code);
+    // Wrapper accessors must agree with the table entry they delegate to.
+    EXPECT_STREQ(row.name, display_name(row.code)) << "code=" << static_cast<int>(row.code);
+    EXPECT_EQ(row.wire, ooxml_code(row.code)) << "code=" << static_cast<int>(row.code);
+  }
+}
+
+TEST(ValueTest, ErrorTableIsConstexprIndexable) {
+  // The table is `constexpr` and indexed by enum ordinal; this test pins
+  // a few spot checks at compile time so a regression that loses the
+  // constexpr-ness (e.g. accidental runtime branching) fails the build.
+  static_assert(error_info(ErrorCode::Null).ooxml_code == 0, "Null wire code");
+  static_assert(error_info(ErrorCode::Div0).ooxml_code == 7, "Div0 wire code");
+  static_assert(error_info(ErrorCode::Unknown).ooxml_code == 9, "Unknown wire code");
+  static_assert(display_name(ErrorCode::Div0)[1] == 'D', "Div0 display starts with #D");
+  SUCCEED();
+}
+
 #if GTEST_HAS_DEATH_TEST
 TEST(ValueDeathTest, AsNumberOnBlankAborts) {
   Value v = Value::blank();

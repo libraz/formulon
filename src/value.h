@@ -20,7 +20,9 @@
 #ifndef FORMULON_VALUE_H_
 #define FORMULON_VALUE_H_
 
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -94,90 +96,65 @@ enum class ErrorCode : std::uint16_t {
   Unknown,
 };
 
-/// Returns the OOXML wire code for `e`, or `-1` when `e` is out of range.
+/// Per-`ErrorCode` lookup row consolidating the Excel-visible display
+/// name and the OOXML wire code into a single source of truth. The table
+/// `kErrorTable` below is indexed directly by the `ErrorCode` ordinal,
+/// which is why `ErrorCode` must remain contiguous and start at 0.
+struct ErrorCodeInfo {
+  /// Tokenised Excel display name (e.g. `"#DIV/0!"`). Static string
+  /// literal with program lifetime.
+  const char* display_name;
+  /// ECMA-376 / [MS-XLSB] wire code (>= 0 for every known code).
+  std::int32_t ooxml_code;
+};
+
+/// One entry per `ErrorCode`, in enum order. Adding a new `ErrorCode`
+/// requires appending a row here — the `static_assert` below catches a
+/// missed update at compile time.
+inline constexpr ErrorCodeInfo kErrorTable[] = {
+    {"#NULL!", 0},          // ErrorCode::Null
+    {"#DIV/0!", 7},         // ErrorCode::Div0
+    {"#VALUE!", 15},        // ErrorCode::Value
+    {"#REF!", 23},          // ErrorCode::Ref
+    {"#NAME?", 29},         // ErrorCode::Name
+    {"#NUM!", 36},          // ErrorCode::Num
+    {"#N/A", 42},           // ErrorCode::NA
+    {"#GETTING_DATA", 43},  // ErrorCode::GettingData
+    {"#SPILL!", 14},        // ErrorCode::Spill
+    {"#CALC!", 13},         // ErrorCode::Calc
+    {"#FIELD!", 10},        // ErrorCode::Field
+    {"#BLOCKED!", 12},      // ErrorCode::Blocked
+    {"#CONNECT!", 11},      // ErrorCode::Connect
+    {"#EXTERNAL!", 19},     // ErrorCode::External
+    {"#BUSY!", 16},         // ErrorCode::Busy
+    {"#PYTHON!", 17},       // ErrorCode::Python
+    {"#UNKNOWN!", 9},       // ErrorCode::Unknown
+};
+
+// `ErrorCode::Unknown` is the last enumerator; the table length must match
+// the enum size exactly so the `kErrorTable[ordinal]` lookup is total.
+static_assert(std::size(kErrorTable) == static_cast<std::size_t>(ErrorCode::Unknown) + 1,
+              "kErrorTable must have one entry per ErrorCode, in enum order");
+
+/// Returns the lookup row for `e`. Precondition: `e` is a valid enumerator
+/// (the in-memory tag is `std::uint16_t` but only the 17 declared codes
+/// produce a defined result).
+constexpr const ErrorCodeInfo& error_info(ErrorCode e) noexcept {
+  return kErrorTable[static_cast<std::size_t>(e)];
+}
+
+/// Returns the OOXML wire code for `e`.
 ///
 /// The mapping follows the ECMA-376 / [MS-XLSB] convention.
 constexpr std::int32_t ooxml_code(ErrorCode e) noexcept {
-  switch (e) {
-    case ErrorCode::Null:
-      return 0;
-    case ErrorCode::Div0:
-      return 7;
-    case ErrorCode::Value:
-      return 15;
-    case ErrorCode::Ref:
-      return 23;
-    case ErrorCode::Name:
-      return 29;
-    case ErrorCode::Num:
-      return 36;
-    case ErrorCode::NA:
-      return 42;
-    case ErrorCode::GettingData:
-      return 43;
-    case ErrorCode::Spill:
-      return 14;
-    case ErrorCode::Calc:
-      return 13;
-    case ErrorCode::Unknown:
-      return 9;
-    case ErrorCode::Field:
-      return 10;
-    case ErrorCode::Connect:
-      return 11;
-    case ErrorCode::Blocked:
-      return 12;
-    case ErrorCode::External:
-      return 19;
-    case ErrorCode::Busy:
-      return 16;
-    case ErrorCode::Python:
-      return 17;
-  }
-  return -1;
+  return error_info(e).ooxml_code;
 }
 
 /// Returns the tokenised Excel display name for `e` (e.g. `"#DIV/0!"`).
 ///
 /// The pointer references a static string literal with program lifetime.
 constexpr const char* display_name(ErrorCode e) noexcept {
-  switch (e) {
-    case ErrorCode::Null:
-      return "#NULL!";
-    case ErrorCode::Div0:
-      return "#DIV/0!";
-    case ErrorCode::Value:
-      return "#VALUE!";
-    case ErrorCode::Ref:
-      return "#REF!";
-    case ErrorCode::Name:
-      return "#NAME?";
-    case ErrorCode::Num:
-      return "#NUM!";
-    case ErrorCode::NA:
-      return "#N/A";
-    case ErrorCode::GettingData:
-      return "#GETTING_DATA";
-    case ErrorCode::Spill:
-      return "#SPILL!";
-    case ErrorCode::Calc:
-      return "#CALC!";
-    case ErrorCode::Field:
-      return "#FIELD!";
-    case ErrorCode::Blocked:
-      return "#BLOCKED!";
-    case ErrorCode::Connect:
-      return "#CONNECT!";
-    case ErrorCode::External:
-      return "#EXTERNAL!";
-    case ErrorCode::Busy:
-      return "#BUSY!";
-    case ErrorCode::Python:
-      return "#PYTHON!";
-    case ErrorCode::Unknown:
-      return "#UNKNOWN!";
-  }
-  return "#UNKNOWN!";
+  return error_info(e).display_name;
 }
 
 /// Scalar `Value` atom of the Formulon calc engine.
