@@ -8,6 +8,7 @@
 // tools/codegen/binding_manifest.yaml. DO NOT EDIT BY HAND.
 // To change behaviour, edit the manifest and re-run the generator.
 
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -25,7 +26,8 @@ using formulon::c_api::parts::set_binding_error;
 extern "C" fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_cell_count: NULL argument");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_cell_count: NULL argument");
   }
   if (sheet_index >= wb->workbook().sheet_count()) {
     return set_binding_error(
@@ -50,3 +52,4 @@ extern "C" fm_status_t fm_workbook_pivot_count(const fm_workbook_t* wb, size_t s
   *out_count = wb->workbook().sheet(sheet_index).pivot_tables().size();
   return 0;
 }
+

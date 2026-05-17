@@ -8,6 +8,7 @@
 // tools/codegen/binding_manifest.yaml. DO NOT EDIT BY HAND.
 // To change behaviour, edit the manifest and re-run the generator.
 
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -49,3 +50,4 @@ extern "C" size_t fm_workbook_table_count(const fm_workbook_t* wb) {
   }
   return wb->workbook().tables().size();
 }
+

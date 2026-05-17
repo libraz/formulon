@@ -7,6 +7,7 @@
 // tools/codegen/binding_manifest.yaml. DO NOT EDIT BY HAND.
 // To change behaviour, edit the manifest and re-run the generator.
 
+
 #include <cstddef>
 #include <cstdint>
 
