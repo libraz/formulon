@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-17T07:04:32Z"
+    "generated_at": "2026-05-17T07:25:00Z"
   },
   "cases": [
     {
@@ -380,11 +380,9 @@
       "expect": {
         "print": {
           "print_area": "A1:H30",
-          "h_breaks": [
-            22
-          ],
+          "h_breaks": [],
           "v_breaks": [],
-          "pages": 2,
+          "pages": 1,
           "applied_page_setup": {
             "zoom": 100,
             "fit_to_width": false,

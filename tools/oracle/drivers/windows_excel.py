@@ -975,6 +975,11 @@ _GET_DOCUMENT_PAGE_COUNT = 50
 # editing layout.
 _XL_PAGE_BREAK_PREVIEW = 2
 
+# PageBreakPreview's "factory default" window zoom. The Application
+# remembers the last PBP zoom across workbooks; pinning to 60 makes
+# the break read independent of which case came before.
+_XL_PAGE_BREAK_PREVIEW_ZOOM = 60
+
 # Excel COM reports `PageSetup.LeftMargin` etc. in points (72 pt = 1
 # inch). The Formulon `PageMargins` struct works in inches, so we
 # divide on read.
@@ -1011,6 +1016,24 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
     sht = _resolve_print_sheet(wb, print_spec)
     ws = sht.api
     page_setup = ws.PageSetup
+
+    # State-leakage defense: clear any automatic / manual breaks the Excel
+    # Application instance may have cached from a prior case, and pin the
+    # editing-view break overlay off so it cannot interact with the
+    # PageBreakPreview read below. Each case opens a fresh workbook, but
+    # the Application is shared across the suite -- without these the
+    # round-2 capture showed identical-spec cases producing different
+    # `pages` / `v_breaks` depending on suite position (see the round-3
+    # handoff). Done BEFORE manual_breaks application so a case-spec
+    # manual break is not wiped by this reset.
+    try:
+        ws.ResetAllPageBreaks()
+    except Exception:
+        pass
+    try:
+        wb.app.api.DisplayPageBreaks = False
+    except Exception:
+        pass
 
     # --- print area ----------------------------------------------------------
     print_area = print_spec.get("print_area")
@@ -1108,16 +1131,53 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
     # influenced by the display zoom rather than the printable layout.
     # PageBreakPreview makes Excel actually paginate before we read, so
     # Pages.Count matches (H+1)*(V+1). Restored afterwards.
+    #
+    # Additionally pin the PBP-mode window zoom to its default (60). PBP
+    # remembers the last zoom used by the *Application*, not the workbook,
+    # so a prior case that left PBP at a different zoom would feed back
+    # into the next case's break read. Round 2 showed identical-spec
+    # cases producing different `v_breaks` depending on suite position;
+    # pinning the zoom is the load-bearing piece of this fix.
     prior_view = None
     try:
         sht.activate()
         active_window = wb.app.api.ActiveWindow
         prior_view = active_window.View
         active_window.View = _XL_PAGE_BREAK_PREVIEW
+        try:
+            active_window.Zoom = _XL_PAGE_BREAK_PREVIEW_ZOOM
+        except Exception:
+            pass
     except Exception:
         prior_view = None
 
     try:
+        # Force a layout settle before reading: recalc, then flip
+        # ScreenUpdating off-then-on. Excel uses the ScreenUpdating
+        # transition as a trigger to re-run the pagination layout; without
+        # it the HPageBreaks / VPageBreaks collections can return stale
+        # counts from the prior case's last layout pass.
+        try:
+            ws.Calculate()
+        except Exception:
+            pass
+        try:
+            wb.app.api.ScreenUpdating = False
+            wb.app.api.ScreenUpdating = True
+        except Exception:
+            pass
+
+        # Dummy-touch the break collections once so Excel's internal
+        # cache is populated before the indexed-read loop. Reading
+        # `.Count` for the first time triggers the pagination recompute;
+        # reading the individual breaks before that recompute completes
+        # has been observed to return entries from the previous case.
+        try:
+            _ = int(ws.HPageBreaks.Count)
+            _ = int(ws.VPageBreaks.Count)
+        except Exception:
+            pass
+
         h_breaks: List[int] = []
         try:
             for i in range(1, int(ws.HPageBreaks.Count) + 1):
