@@ -43,7 +43,9 @@
 
 #include <cmath>
 #include <cstdint>
+#include <vector>
 
+#include "eval/aggregate_kernels.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -91,14 +93,20 @@ bool decode_mode(double raw, Mode* out) {
   return true;
 }
 
-// Streams numeric values from `args` into `cb`. Range-sourced Bool / Text /
+// Collects numeric values from `args` into `out`. Range-sourced Bool / Text /
 // Blank cells are silently dropped (matching SUM's `range_filter_numeric_only`
-// rule). A direct scalar argument that fails coercion (e.g. a Text literal
-// that is not numeric) returns its error code through `*err` and stops the
-// walk; range cells never produce errors here because non-numeric range cells
-// are simply skipped. Returns true on a clean walk.
-template <class Cb>
-bool walk_numeric(const Value* args, std::uint32_t arity, Cb&& cb, ErrorCode* err) {
+// rule). A direct-scalar Error short-circuits the walk and returns its code
+// through `*err`; range-sourced non-numeric cells never produce errors here
+// because the dispatcher would have routed them through that filter. SUBTOTAL
+// is registered with `propagate_errors=false` precisely so errors flow into
+// this helper instead of being short-circuited at the dispatcher, letting the
+// numeric branches reject them but COUNTA (which counts errors) still see
+// them via `run_counta`.
+//
+// Returns true on a clean walk. On false, `*err` carries the propagating
+// error code; `*out` may be partially populated and should be ignored.
+bool collect_numeric(const Value* args, std::uint32_t arity, std::vector<double>* out, ErrorCode* err) {
+  out->reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
     const Value& v = args[i];
     if (v.is_error()) {
@@ -106,7 +114,7 @@ bool walk_numeric(const Value* args, std::uint32_t arity, Cb&& cb, ErrorCode* er
       return false;
     }
     if (v.is_number()) {
-      cb(v.as_number());
+      out->push_back(v.as_number());
       continue;
     }
     // Bool / Text / Blank coming from a range argument are silently
@@ -121,102 +129,61 @@ bool walk_numeric(const Value* args, std::uint32_t arity, Cb&& cb, ErrorCode* er
   return true;
 }
 
+// Converts an `Expected<double, ErrorCode>` from a shared
+// `aggregate_kernels::run_*` call into the `Value` shape SUBTOTAL's
+// dispatcher expects.
+Value lift_kernel_result(Expected<double, ErrorCode> result) {
+  if (!result) {
+    return Value::error(result.error());
+  }
+  return Value::number(result.value());
+}
+
 Value run_sum(const Value* args, std::uint32_t arity) {
-  double total = 0.0;
+  std::vector<double> xs;
   ErrorCode err = ErrorCode::Value;
-  if (!walk_numeric(args, arity, [&](double x) { total += x; }, &err)) {
+  if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  if (std::isnan(total) || std::isinf(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
+  return lift_kernel_result(aggregate_kernels::run_sum(xs));
 }
 
 Value run_product(const Value* args, std::uint32_t arity) {
-  // Empty PRODUCT is 0 (matches the eager PRODUCT impl over an empty,
-  // post-filter range; not the mathematical identity 1).
-  std::uint32_t n = 0;
-  double total = 1.0;
+  std::vector<double> xs;
   ErrorCode err = ErrorCode::Value;
-  if (!walk_numeric(
-          args, arity,
-          [&](double x) {
-            total *= x;
-            ++n;
-          },
-          &err)) {
+  if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  if (n == 0) {
-    return Value::number(0.0);
-  }
-  if (std::isnan(total) || std::isinf(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
+  return lift_kernel_result(aggregate_kernels::run_product(xs));
 }
 
 Value run_min_max(const Value* args, std::uint32_t arity, bool want_max) {
-  bool seen = false;
-  double best = 0.0;
+  std::vector<double> xs;
   ErrorCode err = ErrorCode::Value;
-  if (!walk_numeric(
-          args, arity,
-          [&](double x) {
-            if (!seen) {
-              best = x;
-              seen = true;
-            } else if (want_max ? (x > best) : (x < best)) {
-              best = x;
-            }
-          },
-          &err)) {
+  if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  if (!seen) {
-    return Value::number(0.0);
-  }
-  if (std::isnan(best) || std::isinf(best)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(best);
+  return lift_kernel_result(want_max ? aggregate_kernels::run_max(xs) : aggregate_kernels::run_min(xs));
 }
 
 Value run_average(const Value* args, std::uint32_t arity) {
-  std::uint32_t n = 0;
-  double total = 0.0;
+  std::vector<double> xs;
   ErrorCode err = ErrorCode::Value;
-  if (!walk_numeric(
-          args, arity,
-          [&](double x) {
-            total += x;
-            ++n;
-          },
-          &err)) {
+  if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  if (n == 0) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double avg = total / static_cast<double>(n);
-  if (std::isnan(avg) || std::isinf(avg)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(avg);
+  return lift_kernel_result(aggregate_kernels::run_average(xs));
 }
 
 Value run_count(const Value* args, std::uint32_t arity) {
   std::uint32_t n = 0;
-  ErrorCode err = ErrorCode::Value;
   // Errors do not abort COUNT (Excel's COUNT is provenance-tolerant), so we
-  // walk by hand instead of routing through walk_numeric.
+  // walk by hand instead of going through the numeric-collector helper.
   for (std::uint32_t i = 0; i < arity; ++i) {
     if (args[i].is_number()) {
       ++n;
     }
   }
-  (void)err;
   return Value::number(static_cast<double>(n));
 }
 
@@ -230,59 +197,22 @@ Value run_counta(const Value* args, std::uint32_t arity) {
   return Value::number(static_cast<double>(n));
 }
 
-// Computes population / sample variance. Returns Value::error on overflow,
-// non-finite intermediate, or insufficient sample size; otherwise returns
-// the variance. `population_div` selects the denominator: n for VARP, n-1
-// for VAR. Performs a two-pass mean / sum-of-squared-deviations to keep
-// numerical noise low for large ranges with values clustered around a
-// non-zero mean.
 Value run_variance(const Value* args, std::uint32_t arity, bool population) {
-  std::uint32_t n = 0;
-  double sum = 0.0;
+  std::vector<double> xs;
   ErrorCode err = ErrorCode::Value;
-  if (!walk_numeric(
-          args, arity,
-          [&](double x) {
-            sum += x;
-            ++n;
-          },
-          &err)) {
+  if (!collect_numeric(args, arity, &xs, &err)) {
     return Value::error(err);
   }
-  const std::uint32_t need = population ? 1u : 2u;
-  if (n < need) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double mean = sum / static_cast<double>(n);
-  double sq = 0.0;
-  ErrorCode err2 = ErrorCode::Value;
-  if (!walk_numeric(
-          args, arity,
-          [&](double x) {
-            const double d = x - mean;
-            sq += d * d;
-          },
-          &err2)) {
-    return Value::error(err2);
-  }
-  const double denom = population ? static_cast<double>(n) : static_cast<double>(n - 1);
-  const double var = sq / denom;
-  if (std::isnan(var) || std::isinf(var)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(var);
+  return lift_kernel_result(aggregate_kernels::run_variance(xs, /*sample=*/!population));
 }
 
 Value run_stdev(const Value* args, std::uint32_t arity, bool population) {
-  const Value var = run_variance(args, arity, population);
-  if (!var.is_number()) {
-    return var;
+  std::vector<double> xs;
+  ErrorCode err = ErrorCode::Value;
+  if (!collect_numeric(args, arity, &xs, &err)) {
+    return Value::error(err);
   }
-  const double v = var.as_number();
-  if (v < 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(std::sqrt(v));
+  return lift_kernel_result(aggregate_kernels::run_stdev(xs, /*sample=*/!population));
 }
 
 Value Subtotal(const Value* args, std::uint32_t arity, Arena& /*arena*/) {

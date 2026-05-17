@@ -1,16 +1,19 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
-// Implementation of Formulon's statistical built-in functions:
-// MEDIAN, MODE / MODE.SNGL, LARGE / SMALL, PERCENTILE[.INC],
-// QUARTILE[.INC], STDEV[.S] / STDEV.P, VAR[.S] / VAR.P, plus the "A"
-// family (AVERAGEA / MAXA / MINA / VARA / VARPA / STDEVA / STDEVPA)
-// and the higher-moment descriptive statistics (GEOMEAN / HARMEAN /
-// DEVSQ / AVEDEV / TRIMMEAN / SKEW / SKEW.P / KURT / STANDARDIZE).
-// The probability-distribution catalog (NORM.*, BINOM.DIST, POISSON.DIST,
+// Statistical built-ins: dispersion family (VAR.S / VAR.P / STDEV.S /
+// STDEV.P) plus the "A" variants (AVERAGEA / MAXA / MINA / VARA / VARPA /
+// STDEVA / STDEVPA), the shared collector / moment helpers consumed by
+// the sibling stats TUs, and the central `register_stats_builtins`
+// registrar that wires every entry into the registry.
+//
+// The order-statistic family (MEDIAN / MODE / LARGE / SMALL / PERCENTILE
+// / QUARTILE / TRIMMEAN) lives in `stats/stats_order.cpp`. The higher-
+// moment descriptive family (GEOMEAN / HARMEAN / DEVSQ / AVEDEV / SKEW /
+// SKEW.P / KURT / STANDARDIZE) lives in `stats/stats_moments.cpp`. The
+// probability-distribution catalog (NORM.*, BINOM.DIST, POISSON.DIST,
 // EXPON.DIST, CHISQ.*, T.*, F.*, plus legacy NORMSDIST / TDIST) lives
-// in the sibling `stats/stats_distributions.cpp` translation unit; this
-// file's `register_stats_builtins` is the single place that wires every
-// entry into the registry.
+// in `stats/stats_distributions.cpp` and `stats/stats_distributions_misc.cpp`.
+// All four TUs share `stats/stats_helpers.h` and register here.
 //
 // Argument-type rule (DIFFERENT from SUM / AVERAGE / MIN / MAX / PRODUCT):
 // these functions silently SKIP text, boolean, and blank inputs instead of
@@ -20,23 +23,16 @@
 // only need to filter the non-numeric non-error kinds. Contrast this with
 // `Sum` in `builtins/aggregate.cpp`, which coerces every argument through
 // `coerce_to_number` and surfaces `#VALUE!` on text like `"abc"`.
-//
-// For `LARGE`, `SMALL`, `PERCENTILE.INC`, and `QUARTILE.INC` the dispatcher
-// lays out arguments in source order: any leading range expands into
-// scalar cells, and the trailing scalar (k or quart) lives at
-// `args[arity - 1]`. The data slice is therefore `args[0 .. arity - 2]`.
-// That trimming is done explicitly at each callsite (not in the helper)
-// so the slice boundary stays visible.
 
 #include "eval/builtins/stats.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <vector>
 
+#include "eval/aggregate_kernels.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
@@ -49,16 +45,29 @@ namespace eval {
 namespace stats_detail {
 
 // --- Shared helpers (declared in `stats/stats_helpers.h`). ---------------
+//
+// Each of these is a thin wrapper around `eval::collect_numerics(Value*,
+// count, NumericCollectPolicy)` -- the policy flags pick the per-family
+// type-coercion rule (numeric-only AVERAGE / SUM family, "A"-family with
+// Bool+Text+Blank coercion, SMALL / LARGE direct-scalar with Bool+Text
+// but no Blank). The shared helper consolidates the per-kind switch so
+// the SMALL / LARGE / A-family rule cannot drift from its companions in
+// `eval/coerce.cpp`.
 
 std::vector<double> collect_numerics(const Value* args, std::uint32_t count) {
-  std::vector<double> out;
-  out.reserve(count);
-  for (std::uint32_t i = 0; i < count; ++i) {
-    if (args[i].is_number()) {
-      out.push_back(args[i].as_number());
-    }
+  // Errors never reach this helper because every caller is registered
+  // with `propagate_errors = true`, so the dispatcher short-circuits
+  // before the impl runs. The default policy still has
+  // `error_on_error_cell = true`, but an Error cell at this stage is
+  // unreachable; calling `.value()` directly is safe.
+  NumericCollectPolicy policy;  // Defaults: numbers only.
+  auto collected = eval::collect_numerics(args, count, policy);
+  if (!collected) {
+    // Unreachable in normal operation; return an empty slice so the
+    // caller's subsequent emptiness guard fires gracefully.
+    return {};
   }
-  return out;
+  return std::move(collected.value());
 }
 
 // Direct-scalar-aware collector for SMALL / LARGE. Mirrors the "A"-family
@@ -75,72 +84,22 @@ std::vector<double> collect_numerics(const Value* args, std::uint32_t count) {
 // a dropped optional argument, unresolved Ref, Array, Lambda) is skipped
 // silently, matching AVERAGE-family leniency.
 Expected<std::vector<double>, ErrorCode> collect_small_large(const Value* args, std::uint32_t count) {
-  std::vector<double> out;
-  out.reserve(count);
-  for (std::uint32_t i = 0; i < count; ++i) {
-    const Value& v = args[i];
-    switch (v.kind()) {
-      case ValueKind::Number:
-        out.push_back(v.as_number());
-        break;
-      case ValueKind::Bool:
-        out.push_back(v.as_boolean() ? 1.0 : 0.0);
-        break;
-      case ValueKind::Text: {
-        auto coerced = coerce_to_number(v);
-        if (!coerced) {
-          return coerced.error();
-        }
-        out.push_back(coerced.value());
-        break;
-      }
-      default:
-        // Blank / Error / Array / Ref / Lambda: skip. Errors never reach
-        // here because the dispatcher short-circuits with
-        // `propagate_errors = true`.
-        break;
-    }
-  }
-  return out;
+  NumericCollectPolicy policy;
+  policy.include_bool = true;                  // Direct Bool -> 1 / 0.
+  policy.include_text_numeric_literal = true;  // Direct Text -> strict coerce.
+  policy.error_on_text = true;                 // "Hello" -> #VALUE!.
+  // Blank stays dropped (default `blank_as_zero = false`) -- the SMALL /
+  // LARGE direct-scalar rule diverges from the "A"-family here.
+  return eval::collect_numerics(args, count, policy);
 }
 
 Expected<std::vector<double>, ErrorCode> collect_a(const Value* args, std::uint32_t count) {
-  std::vector<double> out;
-  out.reserve(count);
-  for (std::uint32_t i = 0; i < count; ++i) {
-    const Value& v = args[i];
-    switch (v.kind()) {
-      case ValueKind::Number:
-        out.push_back(v.as_number());
-        break;
-      case ValueKind::Bool:
-        out.push_back(v.as_boolean() ? 1.0 : 0.0);
-        break;
-      case ValueKind::Text: {
-        // Direct Text arguments use strict numeric coercion: `"-1"` becomes
-        // -1, `"Hola"` surfaces #VALUE!. Range-sourced Text cells were
-        // already coerced to 0 by the dispatcher's range_filter_a_coerce,
-        // so by the time we see a Text here it is always a direct arg.
-        auto coerced = coerce_to_number(v);
-        if (!coerced) {
-          return coerced.error();
-        }
-        out.push_back(coerced.value());
-        break;
-      }
-      case ValueKind::Blank:
-        // Direct Blank arguments (e.g. =AVERAGEA(A1, 1) where A1 is blank)
-        // count as 0 per Excel's direct-coercion rule. Range-sourced Blanks
-        // were already dropped by the dispatcher.
-        out.push_back(0.0);
-        break;
-      default:
-        // Errors / arrays / refs: unreachable in practice because the
-        // dispatcher short-circuits on errors and scalar-flattens refs.
-        break;
-    }
-  }
-  return out;
+  NumericCollectPolicy policy;
+  policy.include_bool = true;                  // Direct Bool -> 1 / 0.
+  policy.include_text_numeric_literal = true;  // Direct Text -> strict coerce.
+  policy.error_on_text = true;                 // "Hola" -> #VALUE!.
+  policy.blank_as_zero = true;                 // Direct Blank -> 0 ("A"-family rule).
+  return eval::collect_numerics(args, count, policy);
 }
 
 MeanSS compute_mean_ss(const std::vector<double>& xs) {
@@ -183,7 +142,12 @@ double mean_of(const std::vector<double>& xs) noexcept {
   return s / static_cast<double>(xs.size());
 }
 
-Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool square_root) {
+// Core dispersion kernel shared by VAR.S / VAR.P / STDEV.S / STDEV.P (and
+// indirectly by VARA / VARPA / STDEVA / STDEVPA through
+// `variance_or_stdev_a`). `sample = true` selects the (n - 1) divisor;
+// `square_root = true` selects the stdev branch. Empty / single-element
+// inputs collapse to `#DIV/0!` per the relevant Excel rule.
+static Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool square_root) {
   if (sample ? xs.size() < 2u : xs.empty()) {
     return Value::error(ErrorCode::Div0);
   }
@@ -197,7 +161,10 @@ Value variance_or_stdev(const std::vector<double>& xs, bool sample, bool square_
   return Value::number(r);
 }
 
-Value variance_or_stdev_a(const Value* args, std::uint32_t arity, bool sample, bool square_root) {
+// "A"-family dispatch onto `variance_or_stdev`: collects via `collect_a`
+// (Bool / Text / Blank coerced or dropped per the AVERAGEA rule) then
+// delegates to the shared kernel.
+static Value variance_or_stdev_a(const Value* args, std::uint32_t arity, bool sample, bool square_root) {
   auto collected = collect_a(args, arity);
   if (!collected) {
     return Value::error(collected.error());
@@ -217,44 +184,32 @@ Expected<double, ErrorCode> read_kth_arg(const Value& v) {
   return d;
 }
 
-Value finite_stats_number(double r) {
-  if (std::isnan(r) || std::isinf(r)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(r);
-}
-
 Value percentile_inc_sorted(const std::vector<double>& xs, double k) {
-  const double pos = k * static_cast<double>(xs.size() - 1u);
-  const double floor_pos = std::floor(pos);
-  const auto idx = static_cast<std::size_t>(floor_pos);
-  const double frac = pos - floor_pos;
-  if (frac == 0.0 || idx + 1u >= xs.size()) {
-    return finite_stats_number(xs[idx]);
+  // Delegates to the shared kernel; callers (`PercentileInc`, `QuartileInc`)
+  // have already guaranteed `xs` is non-empty and `k in [0, 1]`, so the
+  // kernel's domain guards are no-ops on this path. The kernel returns
+  // `Expected<double, ErrorCode>` so we lift through `finite_number_result`
+  // for the success path and propagate `#NUM!` verbatim on failure (which
+  // can still arise on a non-finite interpolated blend).
+  auto r = aggregate_kernels::percentile_sorted_inc(xs, k);
+  if (!r) {
+    return Value::error(r.error());
   }
-  return finite_stats_number(xs[idx] + frac * (xs[idx + 1u] - xs[idx]));
+  return finite_number_result(r.value());
 }
 
 Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
-  const std::size_t n = xs.size();
-  const double pos = k * (static_cast<double>(n) + 1.0);
-  const double floor_pos = std::floor(pos);
-  const auto idx = static_cast<std::int64_t>(floor_pos);
-  const double frac = pos - floor_pos;
-  // k <= 1/(n+1) puts idx < 1; k >= n/(n+1) puts idx >= n. Both are the
-  // exclusive-method boundaries and yield `#NUM!` per Excel.
-  if (idx < 1 || idx >= static_cast<std::int64_t>(n)) {
-    return Value::error(ErrorCode::Num);
+  // Same delegation pattern as `percentile_inc_sorted`. The shared kernel
+  // enforces the exclusive-method boundary check `idx < 1 || idx >= n`
+  // (matching Mac Excel 365's `#NUM!` at the open-interval boundaries),
+  // so callers do not have to re-validate `k` against `1/(n+1)` or
+  // `n/(n+1)` themselves.
+  auto r = aggregate_kernels::percentile_sorted_exc(xs, k);
+  if (!r) {
+    return Value::error(r.error());
   }
-  const auto lo = static_cast<std::size_t>(idx - 1);
-  return finite_stats_number(xs[lo] + frac * (xs[lo + 1u] - xs[lo]));
+  return finite_number_result(r.value());
 }
-
-struct ModeFrequencies {
-  std::vector<double> values;
-  std::vector<std::size_t> counts;
-  std::size_t best_count = 0;
-};
 
 ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {
   ModeFrequencies freq;
@@ -351,224 +306,11 @@ double InverseStandardNormal(double p) {
   return z;
 }
 
-// --- Core descriptive-statistics builtins. --------------------------------
-
-// MEDIAN(value, ...) - median of numeric values. Non-numerics are skipped;
-// an empty collection yields `#NUM!`. For an even count the result is the
-// arithmetic mean of the two middle elements.
-static Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  const std::size_t n = xs.size();
-  if ((n % 2u) == 1u) {
-    return Value::number(xs[n / 2u]);
-  }
-  return Value::number(0.5 * (xs[n / 2u - 1u] + xs[n / 2u]));
-}
-
-// MODE / MODE.SNGL(value, ...) - most-frequent numeric value. Ties resolve
-// to the first occurrence in the input order; if every value is unique the
-// result is `#N/A`. Empty numeric slice also yields `#N/A`.
-static Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::NA);
-  }
-  const ModeFrequencies freq = build_mode_frequencies(xs);
-  if (freq.best_count < 2u) {
-    return Value::error(ErrorCode::NA);
-  }
-  for (std::size_t i = 0; i < freq.values.size(); ++i) {
-    if (freq.counts[i] == freq.best_count) {
-      return Value::number(freq.values[i]);
-    }
-  }
-  return Value::error(ErrorCode::NA);
-}
-
-// MODE.MULT(value, ...) - vertical (column) array of every value tied for
-// the maximum frequency. Order is first-occurrence in the input. If no
-// value repeats (or the numeric slice is empty), the result is `#N/A`,
-// matching MODE / MODE.SNGL. The output is always a 1-column array even
-// when only one mode exists (Excel: MODE.MULT({1,2,1}) -> {1} as a 1x1
-// vertical array, which spills as a single cell).
-static Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::NA);
-  }
-  const ModeFrequencies freq = build_mode_frequencies(xs);
-  if (freq.best_count < 2u) {
-    return Value::error(ErrorCode::NA);
-  }
-  std::vector<double> modes;
-  modes.reserve(freq.values.size());
-  for (std::size_t i = 0; i < freq.values.size(); ++i) {
-    if (freq.counts[i] == freq.best_count) {
-      modes.push_back(freq.values[i]);
-    }
-  }
-  const auto rows = static_cast<std::uint32_t>(modes.size());
-  Value* buffer = arena.create_array<Value>(rows);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  for (std::size_t i = 0; i < modes.size(); ++i) {
-    buffer[i] = Value::number(modes[i]);
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = 1u;
-  arr->cells = buffer;
-  return Value::array(arr);
-}
-
-// LARGE(array, k) - k-th largest numeric. Implemented as the SMALL dual:
-// `LARGE(arr, k) == SMALL(arr, N + 1 - k)` with TRUNC indexing on the
-// derived position. The bounds check is performed on the *raw* k, not on
-// the truncated index: Mac Excel 365 rejects `LARGE({10;20;30}, 0.5)`
-// with `#NUM!` even though `TRUNC(N + 1 - 0.5) = 3` would land in range
-// (probe `large_k_below_one_fractional`). Conversely
-// `LARGE({10;20;30}, 1.9)` succeeds because raw k=1.9 satisfies
-// `1 <= k <= N` and `TRUNC(N + 1 - 1.9) = TRUNC(2.1) = 2`, picking the
-// second-largest element (probe `large_k_fractional_truncates`).
-//
-// Direct scalar Text / Bool arguments coerce through `collect_small_large`
-// (Bool -> 1 / 0, Text -> strict numeric coercion with #VALUE! on failure).
-// Range-sourced and array-literal-sourced non-Number cells are dropped by
-// the dispatcher via `range_filter_numeric_only` before reaching this impl.
-Value large_small(const Value* args, std::uint32_t arity, bool want_large) {
-  const std::uint32_t data_count = arity - 1u;
-  auto k_raw = read_kth_arg(args[arity - 1u]);
-  if (!k_raw) {
-    return Value::error(k_raw.error());
-  }
-  const double k = k_raw.value();
-  auto xs_e = collect_small_large(args, data_count);
-  if (!xs_e) {
-    return Value::error(xs_e.error());
-  }
-  std::vector<double>& xs = xs_e.value();
-  const auto n = static_cast<double>(xs.size());
-  if (xs.empty() || k < 1.0 || k > n) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  const double idx_d = want_large ? std::trunc(n + 1.0 - k) : std::trunc(k);
-  const auto idx = static_cast<std::size_t>(idx_d);
-  return Value::number(xs[idx - 1u]);
-}
-
-static Value Large(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return large_small(args, arity, true);
-}
-
-// SMALL(array, k) - k-th smallest numeric. Same shape as LARGE: k is
-// truncated toward zero for indexing, but the bounds check uses the
-// *raw* k. Mac Excel 365 rejects `SMALL({10;20;30}, 3.0001)` with
-// `#NUM!` even though `TRUNC(3.0001) = 3` would land in range (probe
-// `small_k_above_n_fractional`). `SMALL({10;20;30}, 2.999)` succeeds
-// because raw k=2.999 is within `[1, N]` and `TRUNC(2.999) = 2`.
-static Value Small(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return large_small(args, arity, false);
-}
-
-// PERCENTILE.INC(array, k) / PERCENTILE(array, k) - linear-interpolation
-// percentile. k is the fractional rank in [0, 1]; out-of-range yields
-// `#NUM!`. Empty numeric slice yields `#NUM!`. The interpolation point is
-// `pos = k * (n - 1)` (0-based); fractional `pos` blends the two neighbours.
-static Value PercentileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto k_raw = read_kth_arg(args[arity - 1u]);
-  if (!k_raw) {
-    return Value::error(k_raw.error());
-  }
-  const double k = k_raw.value();
-  if (k < 0.0 || k > 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  return percentile_inc_sorted(xs, k);
-}
-
-// PERCENTILE.EXC(array, k) - exclusive-interpolation percentile. `k` must
-// lie strictly inside the open interval (1/(n+1), n/(n+1)); values at or
-// beyond the boundary yield `#NUM!`. Empty numeric slice yields `#NUM!`.
-// The interpolation point is `pos = k * (n + 1)` (1-based); if
-// `1 <= floor(pos) < n` the result is
-// `xs[idx-1] + (pos - idx) * (xs[idx] - xs[idx-1])`.
-static Value PercentileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto k_raw = read_kth_arg(args[arity - 1u]);
-  if (!k_raw) {
-    return Value::error(k_raw.error());
-  }
-  const double k = k_raw.value();
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  return percentile_exc_sorted(xs, k);
-}
-
-// QUARTILE.INC(array, quart) / QUARTILE(array, quart) - quartile by
-// `PERCENTILE.INC(array, quart/4)`. `quart` must be in [0, 5);
-// Excel truncates a fractional `quart` toward zero, so `1.5` is `Q1`.
-static Value QuartileInc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto q_raw = read_kth_arg(args[arity - 1u]);
-  if (!q_raw) {
-    return Value::error(q_raw.error());
-  }
-  const double q_in = q_raw.value();
-  if (q_in < 0.0 || q_in >= 5.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double q = std::trunc(q_in);
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  const double k = q / 4.0;
-  return percentile_inc_sorted(xs, k);
-}
-
-// QUARTILE.EXC(array, quart) - exclusive quartile, equivalent to
-// `PERCENTILE.EXC(array, quart/4)` with `quart` restricted to {1, 2, 3}.
-// Unlike QUARTILE.INC there is no Q0 or Q4: `quart < 1` or `quart >= 4`
-// yields `#NUM!`. Excel truncates a fractional `quart` toward zero, so
-// `quart = 1.5` is treated as `1`. Empty numeric slice yields `#NUM!`.
-static Value QuartileExc(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto q_raw = read_kth_arg(args[arity - 1u]);
-  if (!q_raw) {
-    return Value::error(q_raw.error());
-  }
-  const double q_in = q_raw.value();
-  if (q_in < 1.0 || q_in >= 4.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double q = std::trunc(q_in);
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  const double k = q / 4.0;
-  return percentile_exc_sorted(xs, k);
-}
+// ---------------------------------------------------------------------------
+// Dispersion family: VAR.S / VAR.P / STDEV.S / STDEV.P. Each is a thin
+// wrapper that collects the numeric slice and delegates to
+// `variance_or_stdev`.
+// ---------------------------------------------------------------------------
 
 // VAR.S(value, ...) / VAR(value, ...) - sample variance with divisor n - 1.
 // Fewer than 2 numeric inputs yields `#DIV/0!`.
@@ -620,10 +362,10 @@ static Value AverageA(const Value* args, std::uint32_t arity, Arena& /*arena*/) 
     total += x;
   }
   const double r = total / static_cast<double>(xs.size());
-  return finite_stats_number(r);
+  return finite_number_result(r);
 }
 
-Value extreme_a(const Value* args, std::uint32_t arity, bool want_max) {
+static Value extreme_a(const Value* args, std::uint32_t arity, bool want_max) {
   auto collected = collect_a(args, arity);
   if (!collected) {
     return Value::error(collected.error());
@@ -638,7 +380,7 @@ Value extreme_a(const Value* args, std::uint32_t arity, bool want_max) {
       best = xs[i];
     }
   }
-  return finite_stats_number(best);
+  return finite_number_result(best);
 }
 
 static Value MaxA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
@@ -663,193 +405,6 @@ static Value StdevA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 static Value StdevPA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   return variance_or_stdev_a(args, arity, false, true);
-}
-
-// ---------------------------------------------------------------------------
-// Descriptive-statistics family: GEOMEAN / HARMEAN / DEVSQ / AVEDEV /
-// TRIMMEAN / SKEW / SKEW.P / KURT / STANDARDIZE.
-// ---------------------------------------------------------------------------
-//
-// These share the skip-non-numeric rule of the MEDIAN / VAR family (only
-// `Number` kind participates; Text / Bool / Blank are ignored; Errors are
-// short-circuited by the dispatcher). STANDARDIZE is the odd one out --
-// scalar-only, no range expansion -- but keeping it next to the family
-// clusters the moment-based functions together.
-
-// GEOMEAN(value, ...) - geometric mean. Every numeric input must be
-// strictly positive; a zero or negative value (including a range cell
-// coerced via the numeric provenance rule) yields `#NUM!`. Computed in
-// log-space to avoid overflow for long data sets: exp(mean(ln(x_i))).
-static Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  double log_sum = 0.0;
-  for (double x : xs) {
-    if (x <= 0.0) {
-      return Value::error(ErrorCode::Num);
-    }
-    log_sum += std::log(x);
-  }
-  const double r = std::exp(log_sum / static_cast<double>(xs.size()));
-  return finite_stats_number(r);
-}
-
-// HARMEAN(value, ...) - harmonic mean. Every input must be strictly
-// positive; any value <= 0 yields `#NUM!`. `n / sum(1/x_i)`.
-static Value HarMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  double inv_sum = 0.0;
-  for (double x : xs) {
-    if (x <= 0.0) {
-      return Value::error(ErrorCode::Num);
-    }
-    inv_sum += 1.0 / x;
-  }
-  if (inv_sum == 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double r = static_cast<double>(xs.size()) / inv_sum;
-  return finite_stats_number(r);
-}
-
-// DEVSQ(value, ...) - sum of squared deviations from the mean,
-// `sum((x_i - mean)^2)`. Empty numeric slice yields 0 per Excel (the
-// empty sum is zero; there is no division involved).
-static Value DevSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::number(0.0);
-  }
-  const MeanSS ms = compute_mean_ss(xs);
-  return finite_stats_number(ms.ss);
-}
-
-// AVEDEV(value, ...) - mean absolute deviation from the mean,
-// `sum(|x_i - mean|) / n`. Empty numeric slice yields `#NUM!`.
-static Value AveDev(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double mean = mean_of(xs);
-  double abs_sum = 0.0;
-  for (double x : xs) {
-    abs_sum += std::fabs(x - mean);
-  }
-  const double r = abs_sum / static_cast<double>(xs.size());
-  return finite_stats_number(r);
-}
-
-// TRIMMEAN(array, percent) - mean after trimming `percent / 2` from each
-// tail. `percent` must be in [0, 1); out-of-range yields `#NUM!`. The
-// trimmed count is `floor(n * percent / 2) * 2`, i.e. rounded down to the
-// nearest even integer so the two tails are symmetric. Empty numeric
-// slice yields `#NUM!`.
-static Value TrimMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  const std::uint32_t data_count = arity - 1u;
-  auto p_raw = read_kth_arg(args[arity - 1u]);
-  if (!p_raw) {
-    return Value::error(p_raw.error());
-  }
-  const double percent = p_raw.value();
-  if (percent < 0.0 || percent >= 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::vector<double> xs = collect_numerics(args, data_count);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Num);
-  }
-  std::sort(xs.begin(), xs.end());
-  const std::size_t n = xs.size();
-  const std::size_t trim_each = static_cast<std::size_t>(std::floor(static_cast<double>(n) * percent / 2.0));
-  const std::size_t kept = n - 2u * trim_each;
-  if (kept == 0) {
-    return Value::error(ErrorCode::Num);
-  }
-  double sum = 0.0;
-  for (std::size_t i = trim_each; i < n - trim_each; ++i) {
-    sum += xs[i];
-  }
-  const double r = sum / static_cast<double>(kept);
-  return finite_stats_number(r);
-}
-
-// SKEW(value, ...) - sample skewness,
-// `(n / ((n - 1)(n - 2))) * sum(((x_i - mean) / s)^3)` where `s` is the
-// sample stdev. Requires at least 3 distinct non-zero deviations; fewer
-// than 3 numeric inputs or zero sample variance yields `#DIV/0!`.
-static Value Skew(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto stat = centered_and_scaled(args, arity, 3u, 1.0);
-  if (!stat) {
-    return Value::error(stat.error());
-  }
-  double cubed_sum = 0.0;
-  for (double x : stat.value().xs) {
-    const double z = (x - stat.value().mean) / stat.value().scale;
-    cubed_sum += z * z * z;
-  }
-  const double n = stat.value().n;
-  const double coeff = n / ((n - 1.0) * (n - 2.0));
-  return finite_stats_number(coeff * cubed_sum);
-}
-
-// SKEW.P(value, ...) - population skewness,
-// `(1 / n) * sum(((x_i - mean) / sigma)^3)` where `sigma` is the
-// population stdev. A constant data set (sigma == 0) yields `#DIV/0!`;
-// matching Excel, fewer than 3 numeric inputs also yields `#DIV/0!` so
-// callers never see a degenerate near-symmetric zero.
-static Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto stat = centered_and_scaled(args, arity, 3u, 0.0);
-  if (!stat) {
-    return Value::error(stat.error());
-  }
-  double cubed_sum = 0.0;
-  for (double x : stat.value().xs) {
-    const double z = (x - stat.value().mean) / stat.value().scale;
-    cubed_sum += z * z * z;
-  }
-  return finite_stats_number(cubed_sum / stat.value().n);
-}
-
-// KURT(value, ...) - excess kurtosis (Fisher's definition),
-// `(n(n+1) / ((n-1)(n-2)(n-3))) * sum(((x - mean) / s)^4)
-//   - 3(n-1)^2 / ((n-2)(n-3))`.
-// Requires at least 4 numeric inputs (the cubic denominator collapses
-// otherwise) and non-zero sample variance; both failures yield `#DIV/0!`.
-static Value Kurt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto stat = centered_and_scaled(args, arity, 4u, 1.0);
-  if (!stat) {
-    return Value::error(stat.error());
-  }
-  double quartic_sum = 0.0;
-  for (double x : stat.value().xs) {
-    const double z = (x - stat.value().mean) / stat.value().scale;
-    quartic_sum += z * z * z * z;
-  }
-  const double n = stat.value().n;
-  const double coeff_a = (n * (n + 1.0)) / ((n - 1.0) * (n - 2.0) * (n - 3.0));
-  const double coeff_b = (3.0 * (n - 1.0) * (n - 1.0)) / ((n - 2.0) * (n - 3.0));
-  return finite_stats_number(coeff_a * quartic_sum - coeff_b);
-}
-
-// STANDARDIZE(x, mean, standard_dev) - z-score, `(x - mean) / standard_dev`.
-// Scalar-only: `accepts_ranges` stays false so the dispatcher coerces each
-// argument directly. `standard_dev <= 0` yields `#NUM!`.
-static Value Standardize(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto input = read_number_triple(args, 0, 1, 2);
-  if (!input) {
-    return Value::error(input.error());
-  }
-  const double sd = input.value().third;
-  if (sd <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return finite_stats_number((input.value().first - input.value().second) / sd);
 }
 
 }  // namespace stats_detail

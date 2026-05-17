@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/aggregate_kernels.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -182,64 +183,20 @@ std::vector<double> to_numbers(const std::vector<Value>& cells) {
 }
 
 // ---------------------------------------------------------------------------
-// Mode runners (codes 1..13). These mirror SUBTOTAL's behaviour — empty
-// ranges follow the same Excel conventions: AVERAGE/VAR/STDEV/MEDIAN ->
-// #DIV/0!, MIN/MAX/PRODUCT/SUM -> 0, COUNT/COUNTA -> 0, MODE.SNGL -> #N/A.
+// Mode runners (codes 1..13). The numeric-aggregator slots (SUM / PRODUCT /
+// MIN / MAX / AVERAGE / VAR.* / STDEV.*) all delegate to the shared kernels
+// in `aggregate_kernels.h` so SUBTOTAL and AGGREGATE cannot drift. Empty-
+// range behaviour matches Excel's convention for SUBTOTAL / AGGREGATE:
+// SUM/PRODUCT/MIN/MAX -> 0, AVERAGE/VAR/STDEV -> #DIV/0!, MEDIAN -> #DIV/0!,
+// COUNT/COUNTA -> 0, MODE.SNGL -> #N/A.
 
-Value run_sum(const std::vector<double>& xs) {
-  double total = 0.0;
-  for (double x : xs) {
-    total += x;
+// Lifts an `Expected<double, ErrorCode>` kernel result into the `Value`
+// shape AGGREGATE's dispatcher expects.
+Value lift_kernel_result(Expected<double, ErrorCode> result) {
+  if (!result) {
+    return Value::error(result.error());
   }
-  if (!std::isfinite(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
-}
-
-Value run_product(const std::vector<double>& xs) {
-  if (xs.empty()) {
-    return Value::number(0.0);
-  }
-  double total = 1.0;
-  for (double x : xs) {
-    total *= x;
-  }
-  if (!std::isfinite(total)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(total);
-}
-
-Value run_min_max(const std::vector<double>& xs, bool want_max) {
-  if (xs.empty()) {
-    return Value::number(0.0);
-  }
-  double best = xs[0];
-  for (std::size_t i = 1; i < xs.size(); ++i) {
-    if (want_max ? (xs[i] > best) : (xs[i] < best)) {
-      best = xs[i];
-    }
-  }
-  if (!std::isfinite(best)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(best);
-}
-
-Value run_average(const std::vector<double>& xs) {
-  if (xs.empty()) {
-    return Value::error(ErrorCode::Div0);
-  }
-  double total = 0.0;
-  for (double x : xs) {
-    total += x;
-  }
-  const double avg = total / static_cast<double>(xs.size());
-  if (!std::isfinite(avg)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(avg);
+  return Value::number(result.value());
 }
 
 Value run_count(const std::vector<Value>& cells) {
@@ -258,44 +215,6 @@ Value run_counta(const std::vector<Value>& cells) {
   // The COUNTA branch of `apply_filters` already dropped Blanks; everything
   // remaining contributes 1.
   return Value::number(static_cast<double>(cells.size()));
-}
-
-// Two-pass variance (matches SUBTOTAL's run_variance). Sample uses n-1;
-// population uses n. n < required denominator size -> #DIV/0!.
-Value run_variance(const std::vector<double>& xs, bool population) {
-  const std::size_t n = xs.size();
-  const std::size_t need = population ? 1U : 2U;
-  if (n < need) {
-    return Value::error(ErrorCode::Div0);
-  }
-  double sum = 0.0;
-  for (double x : xs) {
-    sum += x;
-  }
-  const double mean = sum / static_cast<double>(n);
-  double sq = 0.0;
-  for (double x : xs) {
-    const double d = x - mean;
-    sq += d * d;
-  }
-  const double denom = population ? static_cast<double>(n) : static_cast<double>(n - 1);
-  const double var = sq / denom;
-  if (!std::isfinite(var)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(var);
-}
-
-Value run_stdev(const std::vector<double>& xs, bool population) {
-  const Value var = run_variance(xs, population);
-  if (!var.is_number()) {
-    return var;
-  }
-  const double v = var.as_number();
-  if (v < 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(std::sqrt(v));
 }
 
 Value run_median(std::vector<double> xs) {
@@ -363,54 +282,20 @@ Value run_large_small(std::vector<double> xs, double k_raw, bool want_large) {
   return Value::number(picked);
 }
 
-// PERCENTILE.INC — Excel: position = 1 + p*(n-1) (1-based), linear interp.
-// Domain: 0 <= p <= 1; otherwise #NUM!. Empty data -> #NUM!.
+// PERCENTILE.INC. Domain / position-formula logic lives in
+// `aggregate_kernels::percentile_sorted_inc`; this wrapper sorts in place
+// and lifts the kernel result to `Value`.
 Value run_percentile_inc(std::vector<double> xs, double p) {
-  if (xs.empty() || !std::isfinite(p) || p < 0.0 || p > 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
   std::sort(xs.begin(), xs.end());
-  const std::size_t n = xs.size();
-  if (n == 1) {
-    return Value::number(xs[0]);
-  }
-  const double pos = 1.0 + p * static_cast<double>(n - 1);  // 1-based
-  const double floor_pos = std::floor(pos);
-  const auto lo_index = static_cast<std::size_t>(floor_pos) - 1U;  // 0-based
-  const double frac = pos - floor_pos;
-  if (frac == 0.0 || lo_index + 1U >= n) {
-    return Value::number(xs[lo_index]);
-  }
-  const double interpolated = xs[lo_index] + frac * (xs[lo_index + 1] - xs[lo_index]);
-  if (!std::isfinite(interpolated)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(interpolated);
+  return lift_kernel_result(aggregate_kernels::percentile_sorted_inc(xs, p));
 }
 
-// PERCENTILE.EXC — Excel: position = p*(n+1) (1-based), linear interp.
-// Domain: 0 < p < 1 AND p*(n+1) ∈ [1, n]; otherwise #NUM!. Empty -> #NUM!.
+// PERCENTILE.EXC. Domain / position-formula logic lives in
+// `aggregate_kernels::percentile_sorted_exc`; this wrapper sorts in place
+// and lifts the kernel result to `Value`.
 Value run_percentile_exc(std::vector<double> xs, double p) {
-  if (xs.empty() || !std::isfinite(p) || p <= 0.0 || p >= 1.0) {
-    return Value::error(ErrorCode::Num);
-  }
   std::sort(xs.begin(), xs.end());
-  const std::size_t n = xs.size();
-  const double pos = p * static_cast<double>(n + 1);  // 1-based
-  if (pos < 1.0 || pos > static_cast<double>(n)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double floor_pos = std::floor(pos);
-  const auto lo_index = static_cast<std::size_t>(floor_pos) - 1U;  // 0-based
-  const double frac = pos - floor_pos;
-  if (frac == 0.0 || lo_index + 1U >= n) {
-    return Value::number(xs[lo_index]);
-  }
-  const double interpolated = xs[lo_index] + frac * (xs[lo_index + 1] - xs[lo_index]);
-  if (!std::isfinite(interpolated)) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::number(interpolated);
+  return lift_kernel_result(aggregate_kernels::percentile_sorted_exc(xs, p));
 }
 
 // QUARTILE.INC delegates to PERCENTILE.INC at p ∈ {0, 0.25, 0.5, 0.75, 1.0}.
@@ -523,27 +408,27 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
 
   switch (code) {
     case kCodeAverage:
-      return run_average(to_numbers(cells));
+      return lift_kernel_result(aggregate_kernels::run_average(to_numbers(cells)));
     case kCodeCount:
       return run_count(cells);
     case kCodeCountA:
       return run_counta(cells);
     case kCodeMax:
-      return run_min_max(to_numbers(cells), /*want_max=*/true);
+      return lift_kernel_result(aggregate_kernels::run_max(to_numbers(cells)));
     case kCodeMin:
-      return run_min_max(to_numbers(cells), /*want_max=*/false);
+      return lift_kernel_result(aggregate_kernels::run_min(to_numbers(cells)));
     case kCodeProduct:
-      return run_product(to_numbers(cells));
+      return lift_kernel_result(aggregate_kernels::run_product(to_numbers(cells)));
     case kCodeStdevS:
-      return run_stdev(to_numbers(cells), /*population=*/false);
+      return lift_kernel_result(aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/true));
     case kCodeStdevP:
-      return run_stdev(to_numbers(cells), /*population=*/true);
+      return lift_kernel_result(aggregate_kernels::run_stdev(to_numbers(cells), /*sample=*/false));
     case kCodeSum:
-      return run_sum(to_numbers(cells));
+      return lift_kernel_result(aggregate_kernels::run_sum(to_numbers(cells)));
     case kCodeVarS:
-      return run_variance(to_numbers(cells), /*population=*/false);
+      return lift_kernel_result(aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/true));
     case kCodeVarP:
-      return run_variance(to_numbers(cells), /*population=*/true);
+      return lift_kernel_result(aggregate_kernels::run_variance(to_numbers(cells), /*sample=*/false));
     case kCodeMedian:
       return run_median(to_numbers(cells));
     case kCodeModeSngl:

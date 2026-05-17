@@ -133,6 +133,8 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml/cell_ref_writer.cpp
   src/io/ooxml/emission_plan.cpp
   src/io/ooxml/relationship_writer.cpp
+  src/io/ooxml/sheet_xml_builder.cpp
+  src/io/ooxml/workbook_xml_builder.cpp
   src/io/ooxml/zip_part_writer.cpp
   src/io/pivot_cache_reader.cpp
   src/io/pivot_cache_writer.cpp
@@ -232,6 +234,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/stats.cpp
   src/eval/builtins/stats/stats_distributions.cpp
   src/eval/builtins/stats/stats_distributions_misc.cpp
+  src/eval/builtins/stats/stats_moments.cpp
+  src/eval/builtins/stats/stats_order.cpp
   src/eval/builtins/subtotal.cpp
   src/eval/builtins/text.cpp
   src/eval/builtins/text_bahttext.cpp
@@ -242,6 +246,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/builtins/text_width.cpp
   src/eval/builtins/web.cpp
   src/eval/text_format/number_format.cpp
+  src/eval/text_format/number_format_scanner.cpp
+  src/eval/text_format/number_format_section.cpp
   src/eval/text_format/number_format_tokenizer.cpp
   src/eval/text_format/number_format_render.cpp
   src/eval/text_format/render_numeric.cpp
@@ -268,7 +274,8 @@ set(FORMULON_CORE_SOURCES
   src/eval/spill_committer.cpp
   src/eval/special_forms_lazy.cpp
   src/eval/structured_ref.cpp
-  src/eval/aggregate_lazy.cpp
+  src/eval/aggregate_kernels.cpp
+src/eval/aggregate_lazy.cpp
   src/eval/areas_lazy.cpp
   src/eval/cell_lazy.cpp
   src/eval/conditional_aggregates.cpp
