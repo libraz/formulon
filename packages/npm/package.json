@@ -33,7 +33,7 @@
     "xlsx",
     "calculation"
   ],
-  "homepage": "https://github.com/libraz/formulon",
+  "homepage": "https://formulon.libraz.net",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/libraz/formulon.git"
