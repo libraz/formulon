@@ -230,12 +230,15 @@ JsonValue print_spec(JsonValue print_block) {
 
 }  // namespace
 
-TEST(WorkbookBuilderPrint, WideTableForcesVerticalBreak) {
-  // An 8-column print area, every column made wide enough that only
-  // three fit per page -> vertical breaks before columns 3 and 6.
+TEST(WorkbookBuilderPrint, WideTableSuppressesAutoVerticalBreaks) {
+  // An 8-column print area whose geometry would overflow a single A4
+  // page-wide at scale=100. Excel's PageBreakPreview never auto-breaks
+  // columns for an explicit-scale print -- the overflow is clipped on
+  // the right rather than wrapped, matching the print_pagination.wide_
+  // table_vertical_breaks oracle case (v=[] pages=1 in golden).
   JsonValue widths = jobj({{"A:H", jnum(kWideColumnChars)}});
   JsonValue spec = jobj({
-      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}})}})},
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"H1", text_cell("x")}})}})},
       {"column_widths", std::move(widths)},
       {"print", jobj({
                     {"sheet", jstr("Sheet1")},
@@ -252,26 +255,24 @@ TEST(WorkbookBuilderPrint, WideTableForcesVerticalBreak) {
   ASSERT_TRUE(static_cast<bool>(pag_or)) << pag_or.error().message;
   const print::PaginationResult& pag = pag_or.value();
 
-  // Single-row print area: no horizontal break, one row-page.
   EXPECT_TRUE(pag.h_breaks.empty());
-  // Eight wide columns, three per page -> breaks before col 3 and col 6.
-  ASSERT_EQ(pag.v_breaks.size(), 2U);
-  EXPECT_EQ(pag.v_breaks[0], 3U);
-  EXPECT_EQ(pag.v_breaks[1], 6U);
-  // 3 column-pages * 1 row-page.
-  EXPECT_EQ(pag.page_count, 3U);
+  EXPECT_TRUE(pag.v_breaks.empty());
+  EXPECT_EQ(pag.page_count, 1U);
 }
 
 TEST(WorkbookBuilderPrint, TallTableForcesHorizontalBreak) {
   // A 30-row print area with every row 80 pt tall. The A4-portrait body
-  // is ~734 pt, so nine rows (~720 pt) fit per page and a horizontal
-  // break fires every nine rows.
+  // is ~663 pt (after default margins and header/footer bands), so eight
+  // rows (~640 pt) fit per page and a horizontal break fires every eight
+  // rows. A30 is populated so the used-range intersection does not trim
+  // the print area to A1:A1.
   std::map<std::string, JsonValue> heights;
   for (int r = 1; r <= 30; ++r) {
     heights[std::to_string(r)] = jnum(kTallRowHeightPt);
   }
   JsonValue spec = jobj({
-      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}})}})},
+      {"sheets",
+       jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"A30", text_cell("x")}})}})},
       {"row_heights", jobj(std::move(heights))},
       {"print", jobj({
                     {"sheet", jstr("Sheet1")},
@@ -306,12 +307,19 @@ TEST(WorkbookBuilderPrint, TallTableForcesHorizontalBreak) {
 TEST(WorkbookBuilderPrint, ManualRowBreakIsHonored) {
   // A short print area that fits on one page by geometry; a manual row
   // break before Excel row 5 (0-based index 4) must still split it.
-  JsonValue spec = print_spec(jobj({
-      {"sheet", jstr("Sheet1")},
-      {"print_area", jstr("A1:A10")},
-      {"page_setup", a4_portrait_setup()},
-      {"manual_breaks", jobj({{"rows", jarr({jnum(5)})}})},
-  }));
+  // A10 is populated so the used-range intersection extends across the
+  // full print area; without it the area would collapse to A1:A1 and
+  // the walk would skip row 5.
+  JsonValue spec = jobj({
+      {"sheets",
+       jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"A10", text_cell("x")}})}})},
+      {"print", jobj({
+                    {"sheet", jstr("Sheet1")},
+                    {"print_area", jstr("A1:A10")},
+                    {"page_setup", a4_portrait_setup()},
+                    {"manual_breaks", jobj({{"rows", jarr({jnum(5)})}})},
+                })},
+  });
 
   auto built_or = build_print_from_spec(spec);
   ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;

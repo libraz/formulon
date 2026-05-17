@@ -177,6 +177,9 @@ std::vector<WorkbookOracleCase> load_workbook_oracle_cases(const std::string& go
       } else {
         wc.expect = JsonValue::make_object({});
       }
+      if (const JsonValue* skipped_v = c.find("skipped"); skipped_v != nullptr && skipped_v->is_string()) {
+        wc.skipped_reason = skipped_v->as_string();
+      }
       wc.environment = env;
       wc.variant = variant_tag;
       out.push_back(std::move(wc));

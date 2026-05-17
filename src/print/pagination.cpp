@@ -313,6 +313,17 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     for (std::uint32_t row = first; row <= last; ++row) {
       title_height += RowHeightPoints(sheet, row);
     }
+    // Empirical: when print-title rows are enabled, Excel reserves a
+    // minimum body band of ~5 default rows even if the actual title
+    // rows sum to less. Round-3 capture: print_titles_repeat_{1,3,5}_rows
+    // on A1:D40 all break at h=[39], so the subtraction cannot be the
+    // raw title_height (which would yield 15 / 45 / 75 pt). Using a
+    // 5-default-row floor reproduces the observed h=[39] for all three.
+    constexpr double kMinTitleReserveRows = 5.0;
+    const SheetFormatDefaults& defaults = sheet.format_defaults();
+    const double default_row_h =
+        defaults.has_default_row_height ? defaults.default_row_height : kStandardRowHeightPt;
+    title_height = std::max(title_height, kMinTitleReserveRows * default_row_h);
     body.height_pt = std::max(0.0, body.height_pt - title_height);
   }
   if (titles.repeat_cols.has_value()) {

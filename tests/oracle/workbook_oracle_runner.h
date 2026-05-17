@@ -53,6 +53,10 @@ struct WorkbookOracleCase {
   JsonValue expect;         // the observed pivot / print result
   JsonValue environment;    // the suite's environment record
   std::string variant;      // "" for primary; non-empty for a variant tree
+  // A divergence.yaml skip-oracle entry that excluded this case from
+  // Excel automation surfaces here as the reason string from the YAML.
+  // Empty means the case was generated normally and `expect` is valid.
+  std::string skipped_reason;
 };
 
 /// Loads every `*.golden.json` file under `golden_dir` and flattens them

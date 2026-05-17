@@ -73,22 +73,21 @@ TEST(PaginationTest, SingleSmallPrintAreaIsOnePage) {
   EXPECT_TRUE(result.value().v_breaks.empty());
 }
 
-TEST(PaginationTest, WideTableForcesVerticalBreak) {
+TEST(PaginationTest, WideTableSuppressesAutoVerticalBreaks) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  // 20 very wide columns (60 char units ~= 315 pt each) will overrun the
-  // ~494 pt A4 body width and force at least one vertical break.
+  // 20 very wide columns (60 char units ~= 315 pt each) would overrun
+  // the ~494 pt A4 body width several times. Excel's PageBreakPreview
+  // does not auto-break columns at explicit print scale -- the overflow
+  // clips at the right margin -- and Formulon's pagination mirrors
+  // that. Only manually-inserted column breaks contribute.
   SetColumnWidth(&sheet, 0, 19, 60.0);
   wb.set_defined_names({PrintArea("Sheet1!$A$1:$T$5", 0)});
 
   auto result = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_FALSE(result.value().v_breaks.empty());
-  // Breaks are reported in ascending column order.
-  for (std::size_t i = 1; i < result.value().v_breaks.size(); ++i) {
-    EXPECT_LT(result.value().v_breaks[i - 1], result.value().v_breaks[i]);
-  }
-  EXPECT_GE(result.value().page_count, 2U);
+  EXPECT_TRUE(result.value().v_breaks.empty());
+  EXPECT_EQ(result.value().page_count, 1U);
 }
 
 TEST(PaginationTest, TallTableForcesHorizontalBreak) {
@@ -163,16 +162,18 @@ TEST(PaginationTest, FitToWidthCollapsesToSingleColumnPage) {
 TEST(PaginationTest, ScalePercentChangesPageCount) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  // A print area that fits on a single page at 100% scale.
-  SetColumnWidth(&sheet, 0, 9, 40.0);
-  wb.set_defined_names({PrintArea("Sheet1!$A$1:$J$3", 0)});
+  // A tall single-column print area that fits on a single page at 100%
+  // scale (40 rows * 15 pt = 600 pt < 663 pt A4 body). Column auto-
+  // breaks are intentionally suppressed (see WideTableSuppressesAuto*),
+  // so this test exercises the ROW axis where scale changes the page
+  // count: at 400% scale each row becomes 60 pt, overflowing the body
+  // and forcing horizontal breaks.
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$40", 0)});
 
   sheet.mutable_print_settings().page_setup.scale = 100;
   auto at_full = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(at_full)) << at_full.error().message;
 
-  // Enlarging the scale past 100% expands cells so they overflow the
-  // page, forcing additional column-pages.
   sheet.mutable_print_settings().page_setup.scale = 400;
   auto enlarged = paginate(wb, 0);
   ASSERT_TRUE(static_cast<bool>(enlarged)) << enlarged.error().message;

@@ -227,6 +227,16 @@ TEST_P(WorkbookOracleTest, Matches) {
     return;
   }
 
+  // Divergence-skipped cases land here with a non-empty reason; the
+  // golden carries a `"skipped"` field in place of `"expect"`. Mirror
+  // the formula track's pattern (tests/oracle/oracle_test.cpp): surface
+  // as gtest-skipped so the pass-rate math still reflects them and the
+  // intentional gap is visible.
+  if (!param.skipped_reason.empty()) {
+    GTEST_SKIP() << "divergence.yaml skip-oracle: " << param.skipped_reason;
+    return;
+  }
+
   const bool has_pivot = param.spec.find("pivot") != nullptr;
   const bool has_print = param.spec.find("print") != nullptr;
 
