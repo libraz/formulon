@@ -72,6 +72,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/let_test.cpp
   unit/parser/ref_transforms_test.cpp
   unit/eval/bytecode_test.cpp
+  unit/eval/opcode_meta_test.cpp
   unit/eval/jp_kana_table_test.cpp
   unit/eval/compiler_test.cpp
   unit/eval/optimizer_test.cpp

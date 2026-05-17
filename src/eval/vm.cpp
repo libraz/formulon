@@ -43,6 +43,7 @@
 
 #include "eval/bytecode.h"
 #include "eval/coerce.h"
+#include "eval/compiler_emit.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
@@ -279,27 +280,9 @@ void pop_values(VmState& s, std::size_t n) noexcept {
   }
 }
 
-// Fetches the const pool entry; out-of-range surfaces invalid bytecode.
-Expected<const Value*, Error> const_at(const ByteCode& bc, std::uint32_t idx) {
-  if (idx >= bc.constants.size()) {
-    return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "constants index out of range");
-  }
-  return &bc.constants[idx];
-}
-
-Expected<const std::string*, Error> name_at(const ByteCode& bc, std::uint32_t idx) {
-  if (idx >= bc.names.size()) {
-    return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "names index out of range");
-  }
-  return &bc.names[idx];
-}
-
-Expected<const parser::Reference*, Error> ref_at(const ByteCode& bc, std::uint32_t idx) {
-  if (idx >= bc.refs.size()) {
-    return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "refs index out of range");
-  }
-  return &bc.refs[idx];
-}
+// Pool accessors (`const_at` / `name_at` / `ref_at`) live in
+// `compiler_emit.h` so VM and tooling share a single bounds-check
+// implementation.
 
 // Drives the dispatch loop starting at `start_pc`. Returns when a
 // `Return` / `Halt` is hit at depth 0 (i.e. with no active lambda frame).

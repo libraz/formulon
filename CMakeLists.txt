@@ -248,7 +248,9 @@ set(FORMULON_CORE_SOURCES
   src/eval/text_format/render_date.cpp
   src/eval/text_format/render_fraction.cpp
   src/eval/stats/special_functions.cpp
-  src/eval/tree_walker.cpp
+  src/eval/tree_walker/broadcast.cpp
+  src/eval/tree_walker/dispatch.cpp
+  src/eval/tree_walker/walker.cpp
   src/eval/tree_walker_lazy_table.cpp
   src/eval/eval_context.cpp
   src/eval/eval_state.cpp
