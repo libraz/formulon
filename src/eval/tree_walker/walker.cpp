@@ -17,8 +17,6 @@
 //
 // See `tree_walker.h` for the public contract.
 
-#include "eval/tree_walker.h"
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -35,6 +33,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "eval/structured_ref.h"
+#include "eval/tree_walker.h"
 #include "eval/tree_walker/broadcast.h"
 #include "eval/tree_walker/depth_guard.h"
 #include "eval/tree_walker/dispatch.h"

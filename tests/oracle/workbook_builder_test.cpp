@@ -271,8 +271,7 @@ TEST(WorkbookBuilderPrint, TallTableForcesHorizontalBreak) {
     heights[std::to_string(r)] = jnum(kTallRowHeightPt);
   }
   JsonValue spec = jobj({
-      {"sheets",
-       jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"A30", text_cell("x")}})}})},
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"A30", text_cell("x")}})}})},
       {"row_heights", jobj(std::move(heights))},
       {"print", jobj({
                     {"sheet", jstr("Sheet1")},
@@ -311,8 +310,7 @@ TEST(WorkbookBuilderPrint, ManualRowBreakIsHonored) {
   // full print area; without it the area would collapse to A1:A1 and
   // the walk would skip row 5.
   JsonValue spec = jobj({
-      {"sheets",
-       jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"A10", text_cell("x")}})}})},
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"A10", text_cell("x")}})}})},
       {"print", jobj({
                     {"sheet", jstr("Sheet1")},
                     {"print_area", jstr("A1:A10")},

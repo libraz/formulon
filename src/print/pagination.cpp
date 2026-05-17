@@ -321,8 +321,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     // 5-default-row floor reproduces the observed h=[39] for all three.
     constexpr double kMinTitleReserveRows = 5.0;
     const SheetFormatDefaults& defaults = sheet.format_defaults();
-    const double default_row_h =
-        defaults.has_default_row_height ? defaults.default_row_height : kStandardRowHeightPt;
+    const double default_row_h = defaults.has_default_row_height ? defaults.default_row_height : kStandardRowHeightPt;
     title_height = std::max(title_height, kMinTitleReserveRows * default_row_h);
     body.height_pt = std::max(0.0, body.height_pt - title_height);
   }
