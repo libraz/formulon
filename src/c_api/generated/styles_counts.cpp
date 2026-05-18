@@ -8,7 +8,6 @@
 // tools/codegen/binding_manifest.yaml. DO NOT EDIT BY HAND.
 // To change behaviour, edit the manifest and re-run the generator.
 
-
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -62,4 +61,3 @@ extern "C" fm_status_t fm_styles_get_font_count(fm_workbook_t* wb, uint32_t* out
   *out_count = static_cast<uint32_t>(wb->workbook().styles().fonts.size());
   return 0;
 }
-

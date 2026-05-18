@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -431,6 +433,34 @@ def _emit_node_entry(e: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _clang_format(content: str, path: Path) -> str:
+    """Pipe `content` through clang-format using `path`'s filename for style detection.
+
+    Ensures generated files agree with the project-wide format-check (which
+    runs `clang-format --dry-run --Werror` over `src/`). Falls back to the
+    raw content if clang-format is unavailable, so a stripped CI image can
+    still run the generator's --check mode against a previously-formatted
+    snapshot.
+    """
+    cf = shutil.which("clang-format")
+    if cf is None:
+        return content
+    proc = subprocess.run(
+        [cf, f"--assume-filename={path.name}"],
+        input=content,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        sys.stderr.write(
+            f"clang-format failed on {path.name}: {proc.stderr}\n"
+            "falling back to raw codegen output\n"
+        )
+        return content
+    return proc.stdout
+
+
 def _write_if_changed(path: Path, content: str) -> bool:
     """Write `content` to `path` only if it differs. Returns True on write."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -465,6 +495,7 @@ def main(argv: List[str] | None = None) -> int:
     drift = False
     for name, content in sorted(capi_files.items()):
         target = args.out_c_api / name
+        content = _clang_format(content, target)
         if args.check:
             if not target.exists() or target.read_text() != content:
                 sys.stderr.write(f"drift: {target}\n")
@@ -475,6 +506,7 @@ def main(argv: List[str] | None = None) -> int:
                 sys.stdout.write(f"wrote {target}\n")
     for name, content in sorted(embind_files.items()):
         target = args.out_embind / name
+        content = _clang_format(content, target)
         if args.check:
             if not target.exists() or target.read_text() != content:
                 sys.stderr.write(f"drift: {target}\n")
@@ -485,6 +517,7 @@ def main(argv: List[str] | None = None) -> int:
                 sys.stdout.write(f"wrote {target}\n")
     for name, content in sorted(node_files.items()):
         target = args.out_node / name
+        content = _clang_format(content, target)
         if args.check:
             if not target.exists() or target.read_text() != content:
                 sys.stderr.write(f"drift: {target}\n")
