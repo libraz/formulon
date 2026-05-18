@@ -7,20 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `PERCENTILE.EXC` at the upper boundary (`pos == n`) now consistently
-  returns `#NUM!`, matching Mac Excel. Previously one of two internal
-  code paths returned the largest sample value.
-
-### Changed
-
-- Internal refactors deduplicate aggregate kernels shared by
-  `SUBTOTAL` and `AGGREGATE`, numeric-argument helpers, RGB-hex
-  parsing, sheet-index validation, and OOXML/XLSB relative-path
-  resolution; split `ooxml_writer.cpp`, `number_format_tokenizer.cpp`,
-  and `stats.cpp` into per-area files. No user-visible API change.
-
 ## [0.9.2] - 2026-05-18
 
 ### Added
@@ -47,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OOXML round-trip preserves unknown workbook rels and shifts
   shared-formula refs correctly across cell moves (close residual cases
   from v0.9.1).
+- `PERCENTILE.EXC` at the upper boundary (`pos == n`) now consistently
+  returns `#NUM!`, matching Mac Excel. Previously one of two internal
+  code paths returned the largest sample value.
 
 ### Changed
 
@@ -54,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files, extracted opcode metadata, introduced a binding-codegen
   pipeline for simple passthroughs, and added a shared `tests/util`
   library used by 60 test files. No user-visible API change.
+- Further consolidation deduplicates aggregate kernels shared by
+  `SUBTOTAL` and `AGGREGATE`, numeric-argument helpers, RGB-hex
+  parsing, sheet-index validation, and OOXML/XLSB relative-path
+  resolution; splits `ooxml_writer.cpp`, `number_format_tokenizer.cpp`,
+  and `stats.cpp` into per-area files. No user-visible API change.
 
 See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.2)
