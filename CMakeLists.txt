@@ -122,6 +122,7 @@ set(FORMULON_CORE_SOURCES
   src/io/comments_reader.cpp
   src/io/comments_writer.cpp
   src/io/defined_names.cpp
+  src/io/iso_date.cpp
   src/io/ooxml_reader.cpp
   src/io/ooxml/external_link_reader.cpp
   src/io/ooxml/package_validator.cpp
@@ -140,6 +141,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_cache_writer.cpp
   src/io/pivot_table_reader.cpp
   src/io/pivot_table_writer.cpp
+  src/io/format_detect.cpp
   src/io/sax_xml_reader.cpp
   src/io/sheet_reader.cpp
   src/io/sst_reader.cpp
@@ -152,6 +154,8 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/cell_writer.cpp
   src/io/xlsb/func_id_table.cpp
   src/io/xlsb/ptg.cpp
+  src/io/xlsb/ptg_reader.cpp
+  src/io/xlsb/ptg_writer.cpp
   src/io/xlsb/reader.cpp
   src/io/xlsb/record.cpp
   src/io/xlsb/record_writer.cpp
@@ -313,7 +317,6 @@ src/eval/aggregate_lazy.cpp
   src/eval/phonetic_lazy.cpp
   src/eval/lookups/classic.cpp
   src/eval/lookups/xlookup.cpp
-  src/c_api/internal/value_marshal.cpp
   src/c_api/parts/cells.cpp
   src/c_api/parts/cf_eval.cpp
   src/c_api/parts/cf_mutate.cpp

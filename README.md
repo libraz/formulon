@@ -49,7 +49,7 @@ These are **permanent** non-goals, not "not yet." The scope is finite on purpose
 
 | Surface | Name | Notes |
 |---------|------|-------|
-| npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 18+, browsers, workers. |
+| npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 22+, browsers, workers. |
 | PyPI | `formulon` | Python 3.9+ `py3-none-any` wheel that bundles `formulon_capi.wasm` plus a pure-Python wrapper. `pip` resolves the platform-specific `wasmtime` runtime. |
 | GitHub Releases | `formulon-cli-<platform-arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
 

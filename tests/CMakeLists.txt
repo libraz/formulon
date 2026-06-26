@@ -55,8 +55,10 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/workbook_kind_test.cpp
   unit/io/xml_utils_test.cpp
   unit/io/zip_reader_test.cpp
+  unit/io/format_detect_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp
+  unit/io/xlsb/ptg_codec_test.cpp
   unit/io/xlsb/reader_test.cpp
   unit/io/xlsb/record_test.cpp
   unit/io/xlsb/record_writer_test.cpp

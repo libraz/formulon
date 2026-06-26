@@ -58,7 +58,7 @@ Formulon は以下を **意図的にサポートしません**。
 
 | 配布元 | パッケージ名 | 内容 |
 |--------|-------------|------|
-| npm | [`@libraz/formulon`](https://www.npmjs.com/package/@libraz/formulon) | WASM ESM モジュール。型定義同梱。Node 18+ / ブラウザ / Worker 対応。 |
+| npm | [`@libraz/formulon`](https://www.npmjs.com/package/@libraz/formulon) | WASM ESM モジュール。型定義同梱。Node 22+ / ブラウザ / Worker 対応。 |
 | PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、`wasmtime` は `pip` が解決します。 |
 | GitHub Releases | `formulon-cli-<platform-arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
 

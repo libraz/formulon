@@ -26,7 +26,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 
 .PHONY: all build release test test-slow test-all format format-check lint clean \
         wasm wasm-debug wasm-capi test-wasm test-python size-check \
-        npm-package npm-test npm-pack \
+        npm-package npm-test npm-pack npm-check-dts \
         node-native node-package node-test \
         python-package python-test python-wheel \
         parity-test \
@@ -161,7 +161,17 @@ npm-package: wasm
 	  --build-dir $(WASM_BUILD_DIR) \
 	  --out-dir $(NPM_PKG_DIR)/dist
 
-npm-test: npm-package
+# `make npm-check-dts` -> fail if the staged dist/formulon.d.ts has
+#                         drifted from the canonical src/wasm/formulon.d.ts.
+# Needs no WASM build, so it is cheap to run in CI and locally.
+npm-check-dts:
+	@if ! command -v $(NODE) >/dev/null 2>&1; then \
+	  echo "npm-check-dts: '$(NODE)' not found"; \
+	  exit 1; \
+	fi
+	$(NODE) $(NPM_PKG_DIR)/scripts/check-dts.mjs
+
+npm-test: npm-package npm-check-dts
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
 	  echo "npm-test: '$(NODE)' not found"; \
 	  exit 1; \

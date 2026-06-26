@@ -140,6 +140,12 @@ jobs:
         with:
           node-version: 22
 
+      - name: Check d.ts drift (dist vs src)
+        # Fails if packages/npm/dist/formulon.d.ts has drifted from the
+        # canonical src/wasm/formulon.d.ts. Needs no WASM build, so it runs
+        # before the expensive Emscripten step for a fast signal.
+        run: make npm-check-dts
+
       - name: Diagnose cmake before WASM build
         # mymindstorm/setup-emsdk@v14 prepends emsdk paths to PATH and
         # historically leaks a non-executable bundled `cmake` into PATH
