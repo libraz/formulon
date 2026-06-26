@@ -230,39 +230,6 @@ Value run_median(std::vector<double> xs) {
   return Value::number(m);
 }
 
-// MODE.SNGL: smallest value tied for the highest frequency. Excel uses
-// exact double equality for tie-breaking, so we mirror that. Returns #N/A
-// when no value repeats. On ties the *smallest* value wins (matches Excel
-// 2013+; the legacy MODE matched the *first-encountered* mode, which is
-// not what MODE.SNGL specifies).
-Value run_mode_sngl(std::vector<double> xs) {
-  if (xs.empty()) {
-    return Value::error(ErrorCode::NA);
-  }
-  std::sort(xs.begin(), xs.end());
-  std::size_t best_run = 1;
-  double best_value = 0.0;
-  bool found = false;
-  std::size_t i = 0;
-  while (i < xs.size()) {
-    std::size_t j = i + 1;
-    while (j < xs.size() && xs[j] == xs[i]) {
-      ++j;
-    }
-    const std::size_t run = j - i;
-    if (run >= 2 && (!found || run > best_run || (run == best_run && xs[i] < best_value))) {
-      best_run = run;
-      best_value = xs[i];
-      found = true;
-    }
-    i = j;
-  }
-  if (!found) {
-    return Value::error(ErrorCode::NA);
-  }
-  return Value::number(best_value);
-}
-
 // LARGE / SMALL — k must be a positive integer in [1, n]. k is truncated.
 Value run_large_small(std::vector<double> xs, double k_raw, bool want_large) {
   if (xs.empty()) {
@@ -432,7 +399,9 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     case kCodeMedian:
       return run_median(to_numbers(cells));
     case kCodeModeSngl:
-      return run_mode_sngl(to_numbers(cells));
+      // First-occurrence tie-break (Excel MODE.SNGL): the shared kernel
+      // consumes the cells in input order, so do NOT sort first.
+      return lift_kernel_result(aggregate_kernels::mode_first_occurrence(to_numbers(cells)));
     default:
       // Unreachable: code is constrained to [1, 13] in this branch.
       return Value::error(ErrorCode::Value);

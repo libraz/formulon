@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -806,11 +807,41 @@ class Sheet {
   void delete_cols(std::uint32_t col, std::uint32_t count);
 
  private:
+  // ---------------------------------------------------------------------------
+  // Non-locking spill/cell helpers (caller must already hold `spill_mutex_`).
+  // ---------------------------------------------------------------------------
+  //
+  // The public `cell_at` / `clear_spill` / `spill_region_covering` methods each
+  // acquire `spill_mutex_` and then delegate to the matching `_locked` body.
+  // Because `spill_mutex_` is a non-recursive `std::mutex`, any caller that
+  // already holds it (e.g. `commit_spill` scanning its footprint) must reach
+  // the `_locked` variant directly to avoid self-deadlock.
+
+  /// `cell_at` body; assumes `spill_mutex_` is held.
+  const Cell* cell_at_locked(std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// `clear_spill` body; assumes `spill_mutex_` is held.
+  void clear_spill_locked(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept;
+
+  /// `spill_region_covering` body; assumes `spill_mutex_` is held.
+  const SpillRegion* spill_region_covering_locked(std::uint32_t row, std::uint32_t col) const noexcept;
+
   std::string name_;
   std::unordered_map<std::uint32_t, std::vector<Cell>> rows_;
   // Lazily allocated: most sheets do not host any spill regions, so the
   // table is only materialised on the first `commit_spill` call.
   std::unique_ptr<SpillTable> spill_table_;
+  // Guards every access to `spill_table_` and `rows_` so that parallel
+  // recalc workers committing dynamic-array spills on the same sheet (each
+  // running outside the scheduler's write lock) cannot tear the underlying
+  // maps. Lock ordering is always outer-to-inner: the scheduler's
+  // `write_mutex` (when held) is acquired before `spill_mutex_`, never the
+  // reverse. The spill-commit path runs without `write_mutex`; the only
+  // path that effectively nests the two is `set_cell_cached_value`, which
+  // the scheduler calls under its `write_mutex` and which then takes
+  // `spill_mutex_` internally. `mutable` because const observers
+  // (`resolve_cell_value`, `cell_at`, `spill_region_*`) must lock it too.
+  mutable std::mutex spill_mutex_;
   // Pivot tables anchored on this sheet. Empty by default; populated by
   // the OOXML reader at workbook-load time. Heap-owned so addresses stay
   // stable across vector reallocations.

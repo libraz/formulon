@@ -275,15 +275,56 @@ TEST(BuiltinsIndirect, UnknownSheetIsRefError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(BuiltinsIndirect, RangeTextIsRefError) {
-  // Range text returns a range result in Excel; we defer until Value::Array
-  // lands and surface #REF! in scalar context.
+TEST(BuiltinsIndirect, RangeTextSpillsArray) {
+  // Multi-cell range text resolves to the full rectangle as a Value::Array
+  // so the result spills (and is consumable by range-aware callers).
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
   const Value v = EvalSourceIn("=INDIRECT(\"A1:A2\")", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 2.0);
+}
+
+TEST(BuiltinsIndirect, RangeTextInSumAggregates) {
+  // SUM(INDIRECT("A1:A3")) aggregates the multi-cell range.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  const Value v = EvalSourceIn("=SUM(INDIRECT(\"A1:A3\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 60.0);
+}
+
+TEST(BuiltinsIndirect, MultiColTableInVlookup) {
+  // VLOOKUP with an INDIRECT multi-column table argument resolves the
+  // table rectangle and returns the column-2 cell of the matched row.
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Data");
+  wb.sheet(1).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(1).set_cell_value(0, 1, Value::text("one"));
+  wb.sheet(1).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(1).set_cell_value(1, 1, Value::text("two"));
+  wb.sheet(1).set_cell_value(2, 0, Value::number(3.0));
+  wb.sheet(1).set_cell_value(2, 1, Value::text("three"));
+  const Value v = EvalSourceIn("=VLOOKUP(2, INDIRECT(\"Data!A1:B3\"), 2, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "two");
+}
+
+TEST(BuiltinsIndirect, RangeTextCollapsingToSingleCellIsScalar) {
+  // Range syntax whose rectangle collapses to one cell (A1:A1) returns
+  // the scalar cell, not a 1x1 array.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(42.0));
+  const Value v = EvalSourceIn("=INDIRECT(\"A1:A1\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
 }
 
 TEST(BuiltinsIndirect, R1C1StyleNotSupportedMvp) {

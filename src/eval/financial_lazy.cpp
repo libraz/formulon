@@ -152,6 +152,10 @@ double irr_dnpv(const std::vector<double>& flows, double rate) noexcept {
 double irr_newton(const std::vector<double>& flows, double guess) noexcept {
   constexpr int kMaxIter = 100;
   constexpr double kTolerance = 1.0e-10;
+  // Residual gate on the accepted root. Looser than the step tolerance
+  // because irr_npv's magnitude scales with the cashflow magnitudes; a
+  // legitimate root still leaves a small absolute residual.
+  constexpr double kResidualTolerance = 1.0e-6;
   double rate = guess;
   for (int iter = 0; iter < kMaxIter; ++iter) {
     if (rate <= -1.0) {
@@ -167,7 +171,15 @@ double irr_newton(const std::vector<double>& flows, double guess) noexcept {
       return std::numeric_limits<double>::quiet_NaN();
     }
     if (std::fabs(new_rate - rate) < kTolerance) {
-      return new_rate;
+      // Step convergence alone is not sufficient: on pathological
+      // cashflows the iterate can stall at a point where NPV is far from
+      // zero. Accept only when the residual is also near zero (mirrors
+      // `xirr_newton`); otherwise report non-convergence so the bracketed
+      // fallback / #NUM! path takes over.
+      if (std::fabs(irr_npv(flows, new_rate)) < kResidualTolerance) {
+        return new_rate;
+      }
+      return std::numeric_limits<double>::quiet_NaN();
     }
     rate = new_rate;
   }

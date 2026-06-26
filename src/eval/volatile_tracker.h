@@ -11,9 +11,9 @@
 // looks each call up via `is_volatile_function`, and calls
 // `register_cell` if any call site matches. Re-parsing a cell first
 // `unregister_cell`s the old entry then re-registers if the new AST is
-// still volatile. `is_volatile_function` is a pure ASCII-uppercase string
-// match (matching how the function registry is keyed); callers that have
-// a mixed-case name must canonicalize it first.
+// still volatile. `is_volatile_function` matches names case-insensitively
+// over ASCII letters, so a hand-typed `=now()` is recognised without the
+// caller having to canonicalize the lexeme first.
 
 #ifndef FORMULON_EVAL_VOLATILE_TRACKER_H_
 #define FORMULON_EVAL_VOLATILE_TRACKER_H_

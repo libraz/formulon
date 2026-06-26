@@ -110,13 +110,18 @@ TEST(VolatileTracker, IsVolatileFunctionRejectsNonVolatiles) {
   EXPECT_FALSE(VolatileTracker::is_volatile_function("VLOOKUP"));
 }
 
-TEST(VolatileTracker, IsVolatileFunctionIsCaseSensitive) {
-  // Names are expected to already be canonicalised to ASCII uppercase by
-  // the caller — lowercase / mixed-case must not match.
-  EXPECT_FALSE(VolatileTracker::is_volatile_function("now"));
-  EXPECT_FALSE(VolatileTracker::is_volatile_function("Now"));
-  EXPECT_FALSE(VolatileTracker::is_volatile_function("rand"));
-  EXPECT_FALSE(VolatileTracker::is_volatile_function("Today"));
+TEST(VolatileTracker, IsVolatileFunctionIsCaseInsensitive) {
+  // A hand-typed `=now()` keeps its lowercase lexeme; the classifier must
+  // still recognise it so the cell re-fires on recalc.
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("now"));
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("Now"));
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("rand"));
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("Today"));
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("Offset"));
+  EXPECT_TRUE(VolatileTracker::is_volatile_function("indirect"));
+  // Mixed-case non-volatiles still reject.
+  EXPECT_FALSE(VolatileTracker::is_volatile_function("sum"));
+  EXPECT_FALSE(VolatileTracker::is_volatile_function("nowx"));
 }
 
 TEST(VolatileTracker, IsVolatileFunctionRejectsEmptyAndJunk) {

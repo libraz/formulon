@@ -408,6 +408,8 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
 
   out->sheet = parsed.sheet.empty() ? std::string_view{} : arena.intern(parsed.sheet);
   out->range_syntax = parsed.is_range;
+  out->is_full_col = parsed.is_full_col;
+  out->is_full_row = parsed.is_full_row;
   if (parsed.is_range) {
     out->top_row = std::min(parsed.row, parsed.row2);
     out->left_col = std::min(parsed.col, parsed.col2);

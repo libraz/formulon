@@ -465,5 +465,39 @@ TEST(SchedulerSlow, StressRandomDag) {
   }
 }
 
+// Two independent dynamic-array formulas on the same sheet in the same
+// parallel layer, with disjoint spill footprints, evaluated repeatedly
+// under a 4-thread pool. Each formula spills through `Sheet::commit_spill`
+// / `Sheet::resolve_cell_value`, which mutate and read the sheet's spill
+// table and row store. Run under ThreadSanitizer this is the race-detection
+// fixture for concurrent spill commits on a shared sheet; the value
+// assertions also catch a lost / torn spill (a phantom reading back as
+// #SPILL! or blank).
+TEST(SchedulerSlow, ParallelSpillNoDataRace) {
+  constexpr int kIterations = 40;
+  for (int iter = 0; iter < kIterations; ++iter) {
+    Workbook wb = Workbook::create();
+    // A1 spills A1:A4 = {1, 2, 3, 4}.
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(4,1)"))) << "iter " << iter;
+    // C1 spills C1:C4 = {2, 4, 6, 8}. Disjoint footprint from column A.
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SEQUENCE(4,1)*2"))) << "iter " << iter;
+
+    SchedulerConfig cfg;
+    cfg.num_threads = 4U;
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, nullptr))) << "iter " << iter;
+
+    const Sheet& s = wb.sheet(0);
+    for (std::uint32_t r = 0; r < 4U; ++r) {
+      const Value a = s.resolve_cell_value(r, 0U);
+      ASSERT_TRUE(a.is_number()) << "iter " << iter << " A row " << r << " kind=" << static_cast<int>(a.kind());
+      EXPECT_DOUBLE_EQ(a.as_number(), static_cast<double>(r + 1U)) << "iter " << iter << " A row " << r;
+
+      const Value c = s.resolve_cell_value(r, 2U);
+      ASSERT_TRUE(c.is_number()) << "iter " << iter << " C row " << r << " kind=" << static_cast<int>(c.kind());
+      EXPECT_DOUBLE_EQ(c.as_number(), static_cast<double>((r + 1U) * 2U)) << "iter " << iter << " C row " << r;
+    }
+  }
+}
+
 }  // namespace
 }  // namespace formulon::eval

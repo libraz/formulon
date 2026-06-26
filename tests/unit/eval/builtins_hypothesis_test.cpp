@@ -408,6 +408,16 @@ TEST(HypothesisProb, NegativeProbIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+// Probabilities that only sum to 1 within ordinary rounding must be
+// accepted: three cells of 0.333333 sum to 0.999999 (|diff| ~1e-6).
+// Excel returns a number here; a too-strict 1e-12 tolerance rejected it.
+TEST(HypothesisProb, ProbsSumWithRoundoffIsAccepted) {
+  const Value v = EvalSource("=PROB({0,1,2}, {0.333333,0.333333,0.333333}, 0, 1)");
+  ASSERT_TRUE(v.is_number());
+  // P(0 <= x <= 1) = 0.333333 + 0.333333 = 0.666666.
+  EXPECT_NEAR(v.as_number(), 0.666666, 1e-6);
+}
+
 TEST(HypothesisProb, ProbAboveOneIsNum) {
   const Value v = EvalSource("=PROB({1,2,3,4}, {0.1,0.2,0.3,1.4}, 2)");
   ASSERT_TRUE(v.is_error());

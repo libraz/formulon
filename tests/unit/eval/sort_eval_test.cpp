@@ -116,6 +116,40 @@ TEST(BuiltinsSort, TextCaseInsensitiveLex) {
   EXPECT_EQ(v.as_array_cells()[3].as_text(), "cherry");
 }
 
+TEST(BuiltinsSort, MixedKindExcelOrder) {
+  // A column mixing Number, Text, and Bool must sort in Excel's ascending
+  // value order: numbers, then text, then logical (FALSE before TRUE). The
+  // GROUPBY / SORT comparator and the pivot comparator now share one kind
+  // rank, so this ordering is identical in both subsystems.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::boolean(true));
+  sheet.set_cell_value(1, 0, Value::text("apple"));
+  sheet.set_cell_value(2, 0, Value::number(5));
+  sheet.set_cell_value(3, 0, Value::boolean(false));
+
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=SORT(A1:A4)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 4U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  // Number first.
+  EXPECT_TRUE(cells[0].is_number());
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 5.0);
+  // Then Text.
+  EXPECT_TRUE(cells[1].is_text());
+  EXPECT_EQ(cells[1].as_text(), "apple");
+  // Then Bool, FALSE before TRUE.
+  EXPECT_TRUE(cells[2].is_boolean());
+  EXPECT_FALSE(cells[2].as_boolean());
+  EXPECT_TRUE(cells[3].is_boolean());
+  EXPECT_TRUE(cells[3].as_boolean());
+}
+
 // ---------------------------------------------------------------------------
 // Multi-column with sort_index
 // ---------------------------------------------------------------------------

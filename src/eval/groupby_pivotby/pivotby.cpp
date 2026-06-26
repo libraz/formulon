@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "eval/eval_context.h"
@@ -15,6 +16,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/structured_log.h"
 #include "value.h"
 
 namespace formulon {
@@ -139,8 +141,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 5: row_total_depth ∈ {-2,-1,0,1,2}, default +1 ------------------
   // The grand-total row (showing column totals) defaults to the BOTTOM of
-  // the result. ±2 (subtotal rows) is deferred and silently degrades to ±1
-  // in the single-column row_fields scope of this commit.
+  // the result. ±2 (per-region subtotal rows) is not yet implemented and
+  // falls back to the ±1 grand-total-only layout; the fallback is recorded
+  // in tests/divergence.yaml and a diagnostic is emitted below.
   static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
   int row_total_depth = 1;
   if (!read_optional_int_in_set(call, 5, arity, 1, arena, registry, ctx, kTotalDepths,
@@ -159,8 +162,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 7: col_total_depth ∈ {-2,-1,0,1,2}, default 1 -------------------
   // The grand-total column (showing row totals) defaults to the RIGHT of
-  // the result. ±2 silently degrades to ±1 in the single-column col_fields
-  // scope of this commit.
+  // the result. ±2 (per-region subtotal columns) is not yet implemented
+  // and falls back to the ±1 grand-total-only layout, as for
+  // row_total_depth above.
   int col_total_depth = 1;
   if (!read_optional_int_in_set(call, 7, arity, 1, arena, registry, ctx, kTotalDepths,
                                 sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &col_total_depth, &err)) {
@@ -171,6 +175,20 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   int col_sort_order = 0;
   if (!read_optional_int(call, 8, arity, 0, arena, registry, ctx, &col_sort_order, &err)) {
     return err;
+  }
+
+  // Per-region subtotals (|row_total_depth| == 2 or |col_total_depth| == 2)
+  // require an outer/inner grouping hierarchy and subtotal row/column
+  // placement that is not yet implemented; a ±2 request falls back to the
+  // ±1 grand-total-only layout. The fallback is recorded in
+  // tests/divergence.yaml; emit a diagnostic so it is observable.
+  if (row_total_depth == 2 || row_total_depth == -2 || col_total_depth == 2 || col_total_depth == -2) {
+    StructuredLog("eval.pivotby.subtotals_unsupported")
+        .field("function", std::string_view("PIVOTBY"))
+        .field("row_total_depth", static_cast<int64_t>(row_total_depth))
+        .field("col_total_depth", static_cast<int64_t>(col_total_depth))
+        .field("fallback", std::string_view("grand_total_only"))
+        .warn();
   }
 
   // Determine header row layout. Same as GROUPBY but the header / output
@@ -511,7 +529,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         row[base + v] = body[rg][cg][v];
       }
     }
-    // Grand-total block: row totals per value column.
+    // Grand-total block: row totals per value column. Mac Excel ja-JP only
+    // populates this strip for the single-value-column layout; with
+    // val_cols > 1 the grand-total columns carry headers but blank values.
     if (emit_row_totals_col && val_cols == 1U) {
       for (std::uint32_t v = 0; v < val_cols; ++v) {
         row[grand_total_block_start + v] = row_totals[rg][v];
@@ -532,6 +552,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         row[base + v] = col_totals[cg][v];
       }
     }
+    // Grand-total block: the bottom-right grand total, populated only for
+    // the single-value-column layout (see render_body_row note).
     if (emit_row_totals_col && val_cols == 1U) {
       for (std::uint32_t v = 0; v < val_cols; ++v) {
         row[grand_total_block_start + v] = grand_totals[v];

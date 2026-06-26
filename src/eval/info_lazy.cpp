@@ -26,6 +26,8 @@
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
+#include "eval/name_env.h"
+#include "eval/name_env_resolve.h"
 #include "eval/text_ops.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -59,13 +61,20 @@ bool is_reference_call_name(std::string_view name) noexcept {
 // Returns true when `node` is a static reference-shaped AST. Does NOT
 // include reference-returning calls (INDIRECT/OFFSET/INDEX/CHOOSE);
 // those need evaluation to confirm they produce a ref at runtime.
+//
+// A bare `NameRef` is intentionally NOT treated as ref-shaped here: a LET
+// binding such as `=LET(x, 5, ISREF(x))` carries a scalar value, not a
+// reference. Callers must first resolve a `NameRef` through
+// `resolve_name_ast` so a range-bound name (`=LET(r, A1, ISREF(r))`)
+// surfaces its underlying `Ref` / `RangeOp` AST, which this function then
+// recognises. An unresolved (scalar-bound) name stays a `NameRef` and
+// falls through to FALSE.
 bool is_static_reference_shape(const parser::AstNode& node) noexcept {
   switch (node.kind()) {
     case parser::NodeKind::Ref:
     case parser::NodeKind::RangeOp:
     case parser::NodeKind::ExternalRef:
     case parser::NodeKind::StructuredRef:
-    case parser::NodeKind::NameRef:
       return true;
     default:
       return false;
@@ -110,7 +119,12 @@ Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  const parser::AstNode& arg = call.as_call_arg(0);
+  // Look through a LET / LAMBDA `NameRef` to its bound source AST so a
+  // reference-bound name (`=LET(c, A1, ISFORMULA(c))`) inspects the cell it
+  // resolves to. A scalar-bound name (`=LET(x, 5, ISFORMULA(x))`) carries no
+  // AST: `resolve_name_ast` returns the `NameRef` unchanged and the
+  // non-reference `#VALUE!` tail handles it.
+  const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
 
   // Static reference path: `ISFORMULA(A1)` / `ISFORMULA(Sheet2!A1)`.
   if (arg.kind() == parser::NodeKind::Ref) {
@@ -258,7 +272,13 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  const parser::AstNode& arg = call.as_call_arg(0);
+  // Look through a LET / LAMBDA `NameRef` to its bound source AST. A
+  // range-shaped binding (`=LET(r, A1, ISREF(r))`) resolves to the
+  // underlying `Ref` / `RangeOp` and counts as a reference; a scalar-bound
+  // name (`=LET(x, 5, ISREF(x))`) carries no AST, so `resolve_name_ast`
+  // returns the `NameRef` unchanged and every branch below evaluates to
+  // FALSE.
+  const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
   if (is_static_reference_shape(arg)) {
     return Value::boolean(true);
   }

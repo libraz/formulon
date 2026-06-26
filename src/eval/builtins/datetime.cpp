@@ -10,9 +10,9 @@
 // recalc semantics are the scheduler's responsibility, not this file's.
 // DATEVALUE / TIMEVALUE parse a common subset of Excel's ja-JP-locale
 // date/time strings (ISO, slash, and kanji forms — see the parser helpers
-// below); wareki (Reiwa/Heisei/Showa/...) and current-year-defaulting
-// partials are intentionally out of scope and documented as divergences in
-// tests/divergence.yaml. Shared calendar helpers (serial <-> y/m/d, weekday
+// below). Wareki (Reiwa/Heisei/Showa/...) era dates are parsed by
+// `parse_era_text` in `eval/date_text_parse.cpp`. Shared calendar helpers
+// (serial <-> y/m/d, weekday
 // arithmetic, time-of-day decomposition) live in `eval/date_time.h`; this
 // file only layers Excel's argument-shape and error-handling rules on top.
 

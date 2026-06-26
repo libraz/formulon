@@ -16,6 +16,7 @@
 
 #include "eval/coerce.h"
 #include "eval/criteria.h"
+#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
@@ -30,6 +31,39 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+// Materialises the whole `col`-th column (0-based) of a row-major `cells`
+// rectangle (`rows` x `cols`) as a vertical `rows` x 1 `Value::Array`. Used
+// by `INDEX(array, 0, col)` which Excel 365 spills as a column. Returns
+// `#NUM!` on arena exhaustion.
+Value index_whole_column(const std::vector<Value>& cells, std::uint32_t rows, std::uint32_t cols, std::uint32_t col,
+                         Arena& arena) {
+  Value* buffer = nullptr;
+  ArrayValue* out = dynamic_array::allocate_array_value(rows, 1U, arena, buffer);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    buffer[r] = cells[(static_cast<std::size_t>(r) * cols) + col];
+  }
+  return Value::array(out);
+}
+
+// Materialises the whole `row`-th row (0-based) of a row-major `cells`
+// rectangle (`rows` x `cols`) as a horizontal 1 x `cols` `Value::Array`.
+// Used by `INDEX(array, row, 0)` which Excel 365 spills as a row. Returns
+// `#NUM!` on arena exhaustion.
+Value index_whole_row(const std::vector<Value>& cells, std::uint32_t cols, std::uint32_t row, Arena& arena) {
+  Value* buffer = nullptr;
+  ArrayValue* out = dynamic_array::allocate_array_value(1U, cols, arena, buffer);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t c = 0; c < cols; ++c) {
+    buffer[c] = cells[(static_cast<std::size_t>(row) * cols) + c];
+  }
+  return Value::array(out);
+}
 
 // ---------------------------------------------------------------------------
 // CHOOSE / INDEX / MATCH / VLOOKUP / HLOOKUP (lookup & reference)
@@ -345,26 +379,24 @@ Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const Function
 
 // INDEX(array, row_num, [column_num])
 //
-// Returns a single cell from `array` by 1-based (row_num, column_num). The
-// source array must be a `RangeOp(Ref, Ref)` or a single `Ref`; anything
-// else is `#VALUE!`. Out-of-bounds indices are `#REF!`. Negative or
-// non-coercible indices are `#VALUE!`.
+// Returns a cell — or a whole row / column — from `array` by 1-based
+// (row_num, column_num). The source array must be a `RangeOp(Ref, Ref)` or
+// a single `Ref`; anything else is `#VALUE!`. Out-of-bounds indices are
+// `#REF!`. Negative or non-coercible indices are `#VALUE!`.
 //
 // Shape disambiguation for the 2-arg form: if the array is 1-D (rows == 1
 // or cols == 1), the sole index selects along the non-singleton dimension.
 // For a 2-D array with only two args provided, `row_num` selects the row
-// and the "entire row" result would be needed for the column — unsupported
-// today, so we return `#VALUE!` (documented divergence from Excel 365
-// which spills in that case).
+// and Excel 365 spills the entire selected row — we materialise that row as
+// a horizontal `Value::Array` so the spill committer places it on the sheet.
 //
-// Zero indices on a 1-D source: row_num == 0 with a 1-D vertical or
-// horizontal source means "return the whole vector" in Excel 365 via
-// dynamic arrays. We don't have scalar spill results, but the placement
-// anchor matches the first cell of that vector — return cells[0].
-// Similarly, a 3-arg INDEX with col_num == 0 (or row_num == 0) on a 1-D
-// source returns the first cell along the spanned axis.
-// 2-D row==0 with explicit column is intentionally still `#VALUE!`
-// (entire-column spill is unsupported and documented as divergence).
+// Zero indices spill the whole spanned dimension, matching Excel 365:
+//   * `INDEX(array, 0, col)` / `INDEX(col_vector, 0)` -> the whole column
+//     `col` as a vertical array.
+//   * `INDEX(array, row, 0)` / `INDEX(array, row)` (2-D, 2-arg) /
+//     `INDEX(row_vector, 0)` -> the whole row `row` as a horizontal array.
+//   * `INDEX(array, 0, 0)` -> the whole array.
+// A 1x1 source collapses any zero index to its sole cell.
 Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -449,11 +481,10 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = 0;
       c = 0;
     } else if (rows == 1U) {
-      // Row vector: sole index selects the column. Excel 365 spills the
-      // whole vector for index 0; we return the placement anchor (the
-      // first cell), matching xlwings's read-back of a non-spilling cell.
+      // Row vector: sole index selects the column. Index 0 spills the
+      // whole vector (a 1xN horizontal array).
       if (row_idx == 0U) {
-        return cells[0];
+        return index_whole_row(cells, cols, 0U, arena);
       }
       if (row_idx > cols) {
         return Value::error(ErrorCode::Ref);
@@ -461,11 +492,10 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = 0;
       c = row_idx - 1U;
     } else if (cols == 1U) {
-      // Column vector: sole index selects the row. Same Excel-365 spill
-      // rule as the row-vector branch above; the spill anchor is the first
-      // cell.
+      // Column vector: sole index selects the row. Index 0 spills the
+      // whole vector (an Nx1 vertical array).
       if (row_idx == 0U) {
-        return cells[0];
+        return index_whole_column(cells, rows, cols, 0U, arena);
       }
       if (row_idx > rows) {
         return Value::error(ErrorCode::Ref);
@@ -473,21 +503,26 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = row_idx - 1U;
       c = 0;
     } else {
-      // 2-D array with only row selector: Excel would spill the whole row;
-      // we don't support scalar spill results yet.
-      return Value::error(ErrorCode::Value);
+      // 2-D array with only a row selector: Excel 365 spills the whole
+      // selected row. Index 0 spills the whole row 1 (the first row),
+      // matching Excel's `INDEX(A1:C3, 0)` behaviour.
+      const std::uint32_t spill_row = row_idx == 0U ? 0U : row_idx - 1U;
+      if (spill_row >= rows) {
+        return Value::error(ErrorCode::Ref);
+      }
+      return index_whole_row(cells, cols, spill_row, arena);
     }
   } else {
     // Three-arg form.
     if (rows == 1U) {
-      // Row vector: row_num must be 1 (or 0 "whole", collapsing to the
-      // first cell along the column dimension).
+      // Row vector: row_num must be 1 (or 0 "whole row", which spans the
+      // single row anyway).
       if (row_idx != 1U && row_idx != 0U) {
         return Value::error(ErrorCode::Ref);
       }
       if (col_idx == 0U) {
-        // Whole-row spill anchor.
-        return cells[0];
+        // Whole row of a 1-row source -> spill the entire vector.
+        return index_whole_row(cells, cols, 0U, arena);
       }
       if (col_idx > cols) {
         return Value::error(ErrorCode::Ref);
@@ -495,14 +530,14 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = 0;
       c = col_idx - 1U;
     } else if (cols == 1U) {
-      // Column vector: col_num must be 1 (or 0 "whole", collapsing to the
-      // first cell along the row dimension).
+      // Column vector: col_num must be 1 (or 0 "whole column", which spans
+      // the single column anyway).
       if (col_idx != 1U && col_idx != 0U) {
         return Value::error(ErrorCode::Ref);
       }
       if (row_idx == 0U) {
-        // Whole-column spill anchor.
-        return cells[0];
+        // Whole column of a 1-column source -> spill the entire vector.
+        return index_whole_column(cells, rows, cols, 0U, arena);
       }
       if (row_idx > rows) {
         return Value::error(ErrorCode::Ref);
@@ -510,33 +545,39 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = row_idx - 1U;
       c = 0;
     } else {
-      // 2-D array.
+      // 2-D array. Zero indices spill the spanned dimension.
       if (row_idx == 0U && col_idx == 0U) {
-        // Whole-array spill anchor.
-        return cells[0];
+        // Whole array: spill every cell row-major.
+        Value* buffer = nullptr;
+        ArrayValue* out = dynamic_array::allocate_array_value(rows, cols, arena, buffer);
+        if (out == nullptr) {
+          return Value::error(ErrorCode::Num);
+        }
+        const std::size_t total = static_cast<std::size_t>(rows) * cols;
+        for (std::size_t i = 0; i < total; ++i) {
+          buffer[i] = cells[i];
+        }
+        return Value::array(out);
       }
       if (row_idx == 0U) {
-        // Whole-column spill anchor at col_idx: not yet supported (the
-        // existing unit-test contract returns #VALUE! for this shape).
-        return Value::error(ErrorCode::Value);
+        // Whole column at col_idx -> spill the column as a vertical array.
+        if (col_idx > cols) {
+          return Value::error(ErrorCode::Ref);
+        }
+        return index_whole_column(cells, rows, cols, col_idx - 1U, arena);
       }
       if (col_idx == 0U) {
-        // Whole-row spill: collapse to the first cell of the selected
-        // row, matching Excel's non-spilling placement anchor (the
-        // oracle case `index_zero_col` reads this back as the first
-        // element).
+        // Whole row at row_idx -> spill the row as a horizontal array.
         if (row_idx > rows) {
           return Value::error(ErrorCode::Ref);
         }
-        r = row_idx - 1U;
-        c = 0;
-      } else {
-        if (row_idx > rows || col_idx > cols) {
-          return Value::error(ErrorCode::Ref);
-        }
-        r = row_idx - 1U;
-        c = col_idx - 1U;
+        return index_whole_row(cells, cols, row_idx - 1U, arena);
       }
+      if (row_idx > rows || col_idx > cols) {
+        return Value::error(ErrorCode::Ref);
+      }
+      r = row_idx - 1U;
+      c = col_idx - 1U;
     }
   }
 

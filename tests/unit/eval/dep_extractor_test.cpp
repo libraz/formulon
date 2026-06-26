@@ -105,6 +105,27 @@ TEST(DepExtractor, NowIsVolatile) {
   EXPECT_TRUE(deps.cell_deps.empty());
 }
 
+TEST(DepExtractor, LowerCaseNowIsVolatile) {
+  // A hand-typed `=now()` keeps its lowercase lexeme; volatile detection
+  // is case-insensitive, so the cell must still be flagged volatile (and
+  // thus re-fire on every recalc).
+  Workbook wb = Workbook::create();
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("now()", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_TRUE(deps.is_volatile);
+}
+
+TEST(DepExtractor, MixedCaseOffsetIsVolatile) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Offset(A1,1,1)", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_TRUE(deps.is_volatile);
+}
+
 TEST(DepExtractor, RandIsVolatile) {
   Workbook wb = Workbook::create();
   Arena arena;

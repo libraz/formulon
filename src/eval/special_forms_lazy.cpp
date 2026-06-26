@@ -155,21 +155,17 @@ Value eval_ifna_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
-  // Excel's IFNA coerces a Blank result to number 0 on both the pass-through
-  // and the fallback path, matching the implicit Blank->0 promotion that
-  // applies when a formula cell's ultimate value is returned to the grid.
+  // Blank handling is kept consistent with IF / IFERROR above: a Blank
+  // result is returned as Blank rather than promoted to number 0. The
+  // implicit Blank->0 promotion happens later, when a formula cell's
+  // ultimate value is returned to the grid, so it must not be applied
+  // here or `ISBLANK(IFNA(<blank>, x))` would diverge from the IFERROR
+  // analog (which preserves Blank).
   const Value primary = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (!(primary.is_error() && primary.as_error() == ErrorCode::NA)) {
-    if (primary.is_blank()) {
-      return Value::number(0.0);
-    }
     return primary;
   }
-  const Value fallback = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (fallback.is_blank()) {
-    return Value::number(0.0);
-  }
-  return fallback;
+  return eval_node(call.as_call_arg(1), arena, registry, ctx);
 }
 
 Value eval_and_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

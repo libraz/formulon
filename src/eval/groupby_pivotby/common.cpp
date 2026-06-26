@@ -24,6 +24,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
+#include "value_sort_order.h"
 
 namespace formulon {
 namespace eval {
@@ -466,25 +467,11 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
 }
 
 int cmp_value_asc(const Value& a, const Value& b) {
-  // Map kinds to ordering buckets: Number(0) < Text(1) < Bool(2) < Error(3) < Blank(4).
-  auto bucket = [](const Value& v) -> int {
-    switch (v.kind()) {
-      case ValueKind::Number:
-        return 0;
-      case ValueKind::Text:
-        return 1;
-      case ValueKind::Bool:
-        return 2;
-      case ValueKind::Error:
-        return 3;
-      case ValueKind::Blank:
-        return 4;
-      default:
-        return 5;
-    }
-  };
-  const int ba = bucket(a);
-  const int bb = bucket(b);
+  // Cross-kind ordering buckets come from the shared Excel rank
+  // (Number < Text < Bool < Error < Blank), so GROUPBY / SORT and the pivot
+  // comparator cannot diverge on the relative position of Bool vs Text.
+  const int ba = excel_kind_rank(a.kind());
+  const int bb = excel_kind_rank(b.kind());
   if (ba != bb) {
     return ba < bb ? -1 : 1;
   }

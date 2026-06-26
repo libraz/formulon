@@ -186,11 +186,12 @@ TEST(BuiltinsHstack, ZeroArgsRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsHstack, ScalarErrorArgPropagates) {
-  // NA() is a scalar function call yielding scalar Value::error. Per the
-  // FILTER / SORT / SORTBY precedent, scalar errors at argument level
-  // propagate as call-level errors (they do NOT become a 1x1 error cell
-  // stacked into the output).
+TEST(BuiltinsHstack, ScalarErrorArgBecomesOneByOneCell) {
+  // NA() is a scalar function call yielding scalar Value::error. In Excel a
+  // scalar error passed to HSTACK is a normal 1x1 cell, not a propagating
+  // error: =HSTACK({1;2}, NA()) spills 2x2 {1,#N/A; 2,#N/A}, where the 1x1
+  // #N/A block is NA-padded down to match the taller {1;2} column. This
+  // mirrors the scalar-number broadcast (ScalarTreatedAsOneByOne).
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -198,8 +199,16 @@ TEST(BuiltinsHstack, ScalarErrorArgPropagates) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=HSTACK({1;2}, NA())", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  ASSERT_TRUE(cells[1].is_error());
+  EXPECT_EQ(cells[1].as_error(), ErrorCode::NA);  // the NA() cell itself
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 2.0);
+  ASSERT_TRUE(cells[3].is_error());
+  EXPECT_EQ(cells[3].as_error(), ErrorCode::NA);  // NA-padding below the 1x1
 }
 
 TEST(BuiltinsHstack, ErrorCellInArrayArgPreserved) {
@@ -408,6 +417,62 @@ TEST(BuiltinsVstack, ErrorCellInArrayLiteralArgPreserved) {
   EXPECT_EQ(cells[3].as_error(), ErrorCode::Value);
   EXPECT_DOUBLE_EQ(cells[4].as_number(), 5.0);
   EXPECT_DOUBLE_EQ(cells[5].as_number(), 6.0);
+}
+
+TEST(BuiltinsVstack, ScalarErrorArgBecomesOneByOneCell) {
+  // VSTACK analog of the HSTACK case: a scalar error is a 1x1 cell, not a
+  // propagating error. =VSTACK({1,2}, NA()) spills 2x2 {1,2; #N/A,#N/A},
+  // where the 1x1 #N/A block is NA-padded right to match the wider {1,2}
+  // row.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=VSTACK({1,2}, NA())", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 2.0);
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::NA);  // the NA() cell itself
+  ASSERT_TRUE(cells[3].is_error());
+  EXPECT_EQ(cells[3].as_error(), ErrorCode::NA);  // NA-padding beside the 1x1
+}
+
+TEST(BuiltinsHstack, PureErrorScalarBetweenArraysPads) {
+  // A scalar error sandwiched between two array args stacks as a 1x1 cell
+  // and NA-pads to the tallest block. =HSTACK({1;2;3}, NA(), {7;8;9})
+  // spills 3x3 with the error cell in (0,1) and NA-padding below it.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=HSTACK({1;2;3}, NA(), {7;8;9})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  const Value* cells = v.as_array_cells();
+  // Row 0: 1, #N/A (the NA() cell), 7
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  ASSERT_TRUE(cells[1].is_error());
+  EXPECT_EQ(cells[1].as_error(), ErrorCode::NA);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 7.0);
+  // Row 1: 2, #N/A (padding), 8
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 2.0);
+  ASSERT_TRUE(cells[4].is_error());
+  EXPECT_EQ(cells[4].as_error(), ErrorCode::NA);
+  EXPECT_DOUBLE_EQ(cells[5].as_number(), 8.0);
+  // Row 2: 3, #N/A (padding), 9
+  EXPECT_DOUBLE_EQ(cells[6].as_number(), 3.0);
+  ASSERT_TRUE(cells[7].is_error());
+  EXPECT_EQ(cells[7].as_error(), ErrorCode::NA);
+  EXPECT_DOUBLE_EQ(cells[8].as_number(), 9.0);
 }
 
 }  // namespace

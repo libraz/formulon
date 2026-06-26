@@ -298,6 +298,51 @@ TEST(FinancialNPV, ErrorInScalarPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
+// A direct logical argument contributes at its period: TRUE coerces to 1.0
+// discounted by (1+rate)^1. Previously the value was silently dropped.
+TEST(FinancialNPV, DirectBoolContributesAtPeriod) {
+  const Value v = EvalSource("=NPV(0.1, TRUE)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.0 / 1.1, 1e-12);
+}
+
+// A direct logical between two numbers advances the period counter so the
+// following number lands one period later.
+TEST(FinancialNPV, DirectBoolAdvancesSubsequentPeriods) {
+  const Value v = EvalSource("=NPV(0.1, 100, TRUE, 300)");
+  const double expected = 100.0 / 1.1 + 1.0 / std::pow(1.1, 2) + 300.0 / std::pow(1.1, 3);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), expected, 1e-10);
+}
+
+// A direct numeric-text argument is coerced and counted, matching Excel's
+// treatment of directly-passed text numbers.
+TEST(FinancialNPV, DirectNumericTextContributes) {
+  const Value v = EvalSource("=NPV(0.1, \"5\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 5.0 / 1.1, 1e-12);
+}
+
+// A direct non-numeric text argument is ignored and does not advance the
+// period, so a following number stays at its original period.
+TEST(FinancialNPV, DirectNonNumericTextIsIgnored) {
+  const Value v = EvalSource("=NPV(0.1, \"x\", 100)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 100.0 / 1.1, 1e-12);
+}
+
+// A range-sourced bool/text cell is still dropped (range filtering rules
+// are preserved): only the numeric cell participates.
+TEST(FinancialNPV, RangeBoolStillDropped) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(100.0));
+  const Value v = EvalSourceIn("=NPV(0.1, A1:A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  // The TRUE cell is filtered out; only 100 remains at period 1.
+  EXPECT_NEAR(v.as_number(), 100.0 / 1.1, 1e-12);
+}
+
 // ---------------------------------------------------------------------------
 // IRR
 // ---------------------------------------------------------------------------

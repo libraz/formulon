@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "utils/expected.h"
 #include "value.h"
@@ -179,6 +180,50 @@ Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_
     return ErrorCode::Num;
   }
   return interpolated;
+}
+
+Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs) {
+  if (xs.empty()) {
+    return ErrorCode::NA;
+  }
+  // First-occurrence-ordered frequency table. O(n^2) duplicate detection
+  // keeps the insertion order so ties resolve to the value that appears
+  // earliest in the input (Excel's MODE.SNGL rule). The input slices are
+  // bounded by Excel's 255-arg / ~1M-cell limits.
+  std::vector<double> values;
+  std::vector<std::size_t> counts;
+  values.reserve(xs.size());
+  counts.reserve(xs.size());
+  std::size_t best_count = 0;
+  for (double v : xs) {
+    bool found = false;
+    for (std::size_t i = 0; i < values.size(); ++i) {
+      if (values[i] == v) {
+        ++counts[i];
+        if (counts[i] > best_count) {
+          best_count = counts[i];
+        }
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      values.push_back(v);
+      counts.push_back(1U);
+      if (best_count == 0) {
+        best_count = 1U;
+      }
+    }
+  }
+  if (best_count < 2U) {
+    return ErrorCode::NA;
+  }
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    if (counts[i] == best_count) {
+      return values[i];
+    }
+  }
+  return ErrorCode::NA;
 }
 
 }  // namespace aggregate_kernels

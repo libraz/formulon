@@ -899,6 +899,32 @@ TEST(PivotBy, AggregatorReturningArrayYieldsCalcInThatCell) {
   EXPECT_EQ(Cell(v, 1, 1).as_error(), ErrorCode::Calc);
 }
 
+// ---------------------------------------------------------------------------
+// Nested-subtotal fallback (|row_total_depth| / |col_total_depth| == 2)
+// ---------------------------------------------------------------------------
+
+TEST(PivotBy, RowTotalDepthTwoEmitsNonSilentDiagnostic) {
+  // Per-region subtotals are not yet implemented; a ±2 depth falls back to
+  // the grand-total-only layout but must emit an observable warning.
+  testing::internal::CaptureStderr();
+  const Value v =
+      EvalSrc("=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)");
+  const std::string captured = testing::internal::GetCapturedStderr();
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_NE(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos)
+      << "expected ±2 fallback diagnostic; stderr was: " << captured;
+}
+
+TEST(PivotBy, DefaultDepthEmitsNoSubtotalDiagnostic) {
+  // The ordinary ±1 grand-total path must NOT emit the fallback warning.
+  testing::internal::CaptureStderr();
+  const Value v = EvalSrc("=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0)");
+  const std::string captured = testing::internal::GetCapturedStderr();
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos)
+      << "unexpected fallback diagnostic on ±1 path; stderr was: " << captured;
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

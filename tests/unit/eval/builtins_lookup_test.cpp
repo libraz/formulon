@@ -288,18 +288,104 @@ TEST(BuiltinsIndex, NegativeIndexIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsIndex, ZeroRowOn2DRangeIsValueError) {
-  // Accepted divergence: Excel 365 would spill the whole column; we don't
-  // have scalar spill results yet and document that in the impl.
+TEST(BuiltinsIndex, ZeroRowOn2DRangeSpillsColumn) {
+  // INDEX(A1:C3, 0, 2) spills the whole column 2 as a vertical array.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    for (std::uint32_t c = 0; c < 3; ++c) {
+      wb.sheet(0).set_cell_value(r, c, Value::number(static_cast<double>(r * 3 + c + 1)));
+    }
+  }
+  const Value v = EvalSourceIn("=INDEX(A1:C3, 0, 2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 2.0);  // (0,1)
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 5.0);  // (1,1)
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 8.0);  // (2,1)
+}
+
+TEST(BuiltinsIndex, ZeroColOn2DRangeSpillsRow) {
+  // INDEX(A1:C3, 2, 0) spills the whole row 2 as a horizontal array. The
+  // silent-divergence form INDEX(A1:C3, 2, 0) used to return only the
+  // row's first cell.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    for (std::uint32_t c = 0; c < 3; ++c) {
+      wb.sheet(0).set_cell_value(r, c, Value::number(static_cast<double>(r * 3 + c + 1)));
+    }
+  }
+  const Value v = EvalSourceIn("=INDEX(A1:C3, 2, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 4.0);  // (1,0)
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 5.0);  // (1,1)
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 6.0);  // (1,2)
+}
+
+TEST(BuiltinsIndex, TwoArg2DRowOnlySpillsRow) {
+  // 2-arg INDEX on a 2-D source spills the whole selected row.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    for (std::uint32_t c = 0; c < 3; ++c) {
+      wb.sheet(0).set_cell_value(r, c, Value::number(static_cast<double>(r * 3 + c + 1)));
+    }
+  }
+  const Value v = EvalSourceIn("=INDEX(A1:C3, 3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 7.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 8.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 9.0);
+}
+
+TEST(BuiltinsIndex, ZeroBothOn2DRangeSpillsWholeArray) {
   Workbook wb = Workbook::create();
   for (std::uint32_t r = 0; r < 2; ++r) {
     for (std::uint32_t c = 0; c < 2; ++c) {
+      wb.sheet(0).set_cell_value(r, c, Value::number(static_cast<double>(r * 2 + c + 1)));
+    }
+  }
+  const Value v = EvalSourceIn("=INDEX(A1:B2, 0, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 4.0);
+}
+
+TEST(BuiltinsIndex, ZeroColOutOfRangeColumnIsRefError) {
+  // INDEX(A1:C3, 0, 5): whole column requested but col index out of range.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    for (std::uint32_t c = 0; c < 3; ++c) {
       wb.sheet(0).set_cell_value(r, c, Value::number(1.0));
     }
   }
-  const Value v = EvalSourceIn("=INDEX(A1:B2, 0, 1)", wb, wb.sheet(0));
+  const Value v = EvalSourceIn("=INDEX(A1:C3, 0, 5)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsIndex, ColumnVectorZeroSpillsVector) {
+  // 2-arg INDEX(A1:A3, 0) on a column vector spills the whole column.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  const Value v = EvalSourceIn("=INDEX(A1:A3, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 30.0);
 }
 
 TEST(BuiltinsIndex, SingleCellRefAsArray) {

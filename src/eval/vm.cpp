@@ -72,6 +72,15 @@ namespace {
 // formulas peak in the low hundreds).
 constexpr std::size_t kMaxStackDepth = 65536;
 
+// Hard cap on lambda-call recursion depth. A runaway self-recursive LAMBDA
+// (e.g. `LET(f, LAMBDA(n, f(n)), f(0))`) re-enters `dispatch` once per
+// CallLambda; without a cap the native call stack overflows and the process
+// crashes. On overflow we surface `#CALC!` and stop recursing, matching the
+// tree-walker's runaway-lambda contract. The value mirrors the tree-walker's
+// `kMaxLambdaDepth` (see eval/tree_walker/depth_guard.h) so both evaluators
+// reject the same recursion depth.
+constexpr std::uint32_t kMaxLambdaDepth = 256;
+
 // VM-internal closure record. Lives in the eval arena. Pointed to by a
 // `LambdaValue` whose `body` slot is repurposed (see file header). The VM
 // never crosses with the tree-walker's AST-bound lambdas.
@@ -113,23 +122,20 @@ std::string_view intern_arena_string(Arena& arena, std::string_view s) {
   return std::string_view(buf, s.size());
 }
 
-// Coerces a Value to Excel-truthy boolean for `JumpIfFalse`. Errors fall
-// through as TRUE (i.e. the jump is NOT taken) so the error continues to
-// flow through whatever the taken branch returns. Mirrors the tree-walker's
-// IF-on-error contract: `=IF(1/0, "a", "b")` returns `#DIV/0!`, not "b".
-//
-// Returns nullopt-equivalent via the `out_err` channel when coercion itself
-// fails (e.g. `Text("hello")` to bool); the VM then treats that as TRUE so
-// the surrounding error flow stays unchanged.
-bool coerce_to_truthy_for_jump(const Value& v, bool* out_is_error) {
-  *out_is_error = false;
-  if (v.is_error()) {
-    *out_is_error = true;
-    return true;  // arbitrary; caller short-circuits on error before consulting
-  }
+// Coerces a Value to an Excel-truthy boolean for `JumpIfFalse` using the
+// same `coerce_to_bool` helper the tree-walker's `eval_if_lazy` runs, so the
+// two evaluators agree on every IF-condition edge case. On a coercion failure
+// (e.g. a non-numeric text condition like "hello"), `*out_err` is set to the
+// surfaced error code and the boolean return is unspecified; the caller must
+// short-circuit the IF with that error rather than picking a branch. Matches
+// `=IF("hello", 1, 2)` -> `#VALUE!`.
+bool coerce_to_truthy_for_jump(const Value& v, ErrorCode* out_err, bool* out_has_err) {
+  *out_has_err = false;
   auto b = coerce_to_bool(v);
   if (!b) {
-    return true;  // unparseable text -> propagate via JumpIfFalse-not-taken
+    *out_has_err = true;
+    *out_err = b.error();
+    return true;  // unspecified; caller consults *out_has_err first
   }
   return b.value();
 }
@@ -614,6 +620,16 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         while (args.size() < lv->param_count) {
           args.push_back(Value::blank());
         }
+        // Recursion-depth guard: each CallLambda re-enters `dispatch`, and
+        // `s.frames` carries one entry per active lambda body. A runaway
+        // self-recursive LAMBDA would otherwise overflow the native stack and
+        // crash. Surface `#CALC!` and stop recursing once the depth would
+        // exceed the cap, matching the tree-walker's runaway-lambda contract.
+        if (s.frames.size() >= kMaxLambdaDepth) {
+          RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Calc)));
+          ++pc;
+          break;
+        }
         // Recurse into the body. We reuse the parent's `let_slots` (the
         // compiler-issued slot numbering is global within a single
         // compile() output, so reuse is safe). The body's `Return` exits
@@ -894,8 +910,27 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           pc = merge_jump.a;
           break;
         }
-        bool dummy = false;
-        const bool truthy = coerce_to_truthy_for_jump(cond, &dummy);
+        // Coerce the condition through the shared `coerce_to_bool` helper.
+        // A non-coercible condition (e.g. the text "hello") surfaces
+        // `#VALUE!` exactly like the tree-walker's `eval_if_lazy`; we route
+        // that error through the false-branch suppression path so the IF
+        // result is the error, not a branch value.
+        ErrorCode cond_err = ErrorCode::Value;
+        bool cond_has_err = false;
+        const bool truthy = coerce_to_truthy_for_jump(cond, &cond_err, &cond_has_err);
+        if (cond_has_err) {
+          if (ins.a == 0u) {
+            return make_vm_error(FormulonErrorCode::kVmInvalidJumpTarget, "IF false-branch target at pc 0");
+          }
+          const Instruction& merge_jump = bc.code[ins.a - 1U];
+          if (merge_jump.op != OpCode::Jump || merge_jump.a >= code_size) {
+            return make_vm_error(FormulonErrorCode::kVmInvalidJumpTarget,
+                                 "IF false-branch is not preceded by a Jump-to-merge");
+          }
+          RETURN_IF_ERROR(push_value(s, Value::error(cond_err)));
+          pc = merge_jump.a;
+          break;
+        }
         if (!truthy) {
           pc = ins.a;
         } else {

@@ -387,21 +387,37 @@ TEST(BuiltinsIfna, OneArgIsArityViolation) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsIfna, BlankPrimaryPromotedToZero) {
-  // Excel treats the final value of a formula cell by coercing Blank to 0
-  // in numeric contexts. IFNA passes a non-#N/A primary through, so when
-  // the primary is Blank the result promotes to number 0.
-  const Value v = EvalSource("=IFNA(,\"fallback\")");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 0.0);
+TEST(BuiltinsIfna, BlankPrimaryStaysBlank) {
+  // IFNA passes a non-#N/A primary through unchanged, preserving Blank as
+  // Blank exactly like IF / IFERROR do. ISBLANK observes the value before
+  // the grid-level Blank->0 promotion, so it reports TRUE.
+  const Value v = EvalSource("=ISBLANK(IFNA(,\"text\"))");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
 }
 
-TEST(BuiltinsIfna, BlankFallbackPromotedToZero) {
-  // When #N/A triggers the fallback path and the fallback itself evaluates
-  // to Blank, the same Blank->0 promotion applies.
-  const Value v = EvalSource("=IFNA(#N/A,)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 0.0);
+TEST(BuiltinsIfna, BlankFallbackStaysBlank) {
+  // When #N/A triggers the fallback and the fallback evaluates to Blank,
+  // the Blank is returned as Blank (consistent with IFERROR's fallback).
+  const Value v = EvalSource("=ISBLANK(IFNA(#N/A,))");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+// Blank handling must be identical across IF / IFERROR / IFNA: a blank
+// result is returned as Blank, so ISBLANK(...) is TRUE for all three.
+TEST(BuiltinsBlankSymmetry, IfIferrorIfnaAllPreserveBlank) {
+  const Value if_blank = EvalSource("=ISBLANK(IF(TRUE,))");
+  ASSERT_TRUE(if_blank.is_boolean());
+  EXPECT_TRUE(if_blank.as_boolean());
+
+  const Value iferror_blank = EvalSource("=ISBLANK(IFERROR(#N/A,))");
+  ASSERT_TRUE(iferror_blank.is_boolean());
+  EXPECT_TRUE(iferror_blank.as_boolean());
+
+  const Value ifna_blank = EvalSource("=ISBLANK(IFNA(#N/A,))");
+  ASSERT_TRUE(ifna_blank.is_boolean());
+  EXPECT_TRUE(ifna_blank.as_boolean());
 }
 
 TEST(BuiltinsIfna, ThreeArgsIsArityViolation) {

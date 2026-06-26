@@ -14,6 +14,7 @@
 
 #include "eval/coerce.h"
 #include "eval/criteria.h"
+#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
@@ -370,10 +371,11 @@ bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, 
 /// `#DIV/0!` on a hit. Invalid `match_mode` / `search_mode` codes yield
 /// `#VALUE!`.
 ///
-/// Accepted divergence: a 2-D `return_array` (e.g. `XLOOKUP(x, A1:A5,
-/// B1:D5)` which Excel spills as a row) is not supported yet — scalar
-/// evaluation only. We surface `#VALUE!` for that shape; full spill support
-/// lands with dynamic arrays.
+/// A multi-column `return_array` (vertical lookup, e.g. `XLOOKUP(x, A1:A5,
+/// B1:D5)`) spills the matched row across all return columns; a multi-row
+/// `return_array` (horizontal lookup) spills the matched column. The
+/// return_array's match axis must equal the lookup axis length, else
+/// `#VALUE!`.
 Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -403,8 +405,12 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return Value::error(ErrorCode::NA);
   }
 
-  // 3) return_array — shape must be compatible with the match axis. Any
-  //    mismatch or 2-D return (which would require spill) yields #VALUE!.
+  // 3) return_array — its match axis must equal the lookup axis length.
+  //    The lookup_array is 1-D; a vertical lookup (l_cols == 1) matches
+  //    rows of return_array and may carry multiple columns (the matched
+  //    row spills horizontally), a horizontal lookup (l_rows == 1) matches
+  //    columns and may carry multiple rows (the matched column spills
+  //    vertically). A 1x1 lookup defaults to the vertical convention.
   auto return_resolved = resolve_range_arg(call.as_call_arg(2), arena, registry, ctx);
   if (!return_resolved) {
     return Value::error(return_resolved.error());
@@ -412,11 +418,13 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const std::uint32_t r_rows = return_resolved.value().rows;
   const std::uint32_t r_cols = return_resolved.value().cols;
   std::vector<Value> return_cells = std::move(return_resolved.value().cells);
-  if (r_rows != 1U && r_cols != 1U) {
-    // 2-D return_array implies a spill result; scalar context only.
-    return Value::error(ErrorCode::Value);
-  }
-  if (return_cells.size() != lookup_cells.size()) {
+  const bool horizontal_lookup = l_rows == 1U && l_cols != 1U;
+  // The number of result lanes parallel to the lookup axis, and the width
+  // of the slice returned per match.
+  const std::uint32_t lookup_len = static_cast<std::uint32_t>(lookup_cells.size());
+  const std::uint32_t match_extent = horizontal_lookup ? r_cols : r_rows;
+  const std::uint32_t slice_extent = horizontal_lookup ? r_rows : r_cols;
+  if (match_extent != lookup_len) {
     return Value::error(ErrorCode::Value);
   }
 
@@ -476,10 +484,39 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return Value::error(ErrorCode::NA);
   }
 
-  // 8) Translate offset -> return cell. With both arrays constrained to
-  //    1-D of equal length, flat indexing works for row-into-column,
-  //    column-into-row, or same-orientation cases alike.
-  return return_cells[off];
+  // 8) Translate offset -> return slice. For a single return lane the
+  //    result is one cell; for a multi-lane return_array the matched
+  //    row (vertical lookup) or column (horizontal lookup) spills as an
+  //    array. `return_cells` is row-major (r_rows x r_cols).
+  if (slice_extent == 1U) {
+    // Single-cell result. `off` indexes the match axis; with a 1-lane
+    // return_array the flat index is `off` regardless of orientation.
+    return return_cells[off];
+  }
+  if (horizontal_lookup) {
+    // Matched column `off`: gather every row at that column into an
+    // r_rows x 1 vertical array.
+    Value* buffer = nullptr;
+    ArrayValue* out = dynamic_array::allocate_array_value(r_rows, 1U, arena, buffer);
+    if (out == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    for (std::uint32_t row = 0; row < r_rows; ++row) {
+      buffer[row] = return_cells[(static_cast<std::size_t>(row) * r_cols) + off];
+    }
+    return Value::array(out);
+  }
+  // Vertical lookup, matched row `off`: gather every column at that row
+  // into a 1 x r_cols horizontal array.
+  Value* buffer = nullptr;
+  ArrayValue* out = dynamic_array::allocate_array_value(1U, r_cols, arena, buffer);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t col = 0; col < r_cols; ++col) {
+    buffer[col] = return_cells[(static_cast<std::size_t>(off) * r_cols) + col];
+  }
+  return Value::array(out);
 }
 
 /// XMATCH(lookup_value, lookup_array, [match_mode], [search_mode])

@@ -228,6 +228,34 @@ TEST(VmParity, NoOpWhenDisabled) {
 
 #endif  // FORMULON_VM_PARITY_CHECK
 
+// Lazy-only families (IRR / XIRR / TEXTSPLIT / NETWORKDAYS / MAP / ...) are
+// registered ONLY in the lazy-dispatch table, not the eager registry, so the
+// bytecode VM cannot execute them. When FORMULON_VM_PARITY_CHECK is ON the
+// in-flight parity hook inside `evaluate()` must SKIP these formulas instead
+// of reporting a false `#NAME?` mismatch. This test drives the public
+// `evaluate()` entry point over a few such formulas and asserts it returns a
+// value without aborting — exercising the skip path when the flag is on, and
+// a plain tree-walk when it is off. Either way the harness must not crash.
+TEST(VmParity, LazyOnlyFamiliesDoNotAbortUnderParity) {
+  constexpr const char* kLazyOnly[] = {
+      "=IRR({-100,40,40,40})",
+      "=TEXTSPLIT(\"a,b,c\", \",\")",
+      "=NETWORKDAYS(1, 30)",
+      "=MAP({1,2,3}, LAMBDA(x, x*2))",
+  };
+  for (const char* src : kLazyOnly) {
+    Arena arena;
+    parser::Parser p(src, arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << "parse failed for: " << src;
+    // The parity hook (when compiled in) runs inside evaluate(); a successful
+    // return means the skip path fired rather than asserting on a mismatch.
+    const Value v = evaluate(*root, arena);
+    (void)v;
+    SUCCEED() << "evaluated without abort: " << src;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

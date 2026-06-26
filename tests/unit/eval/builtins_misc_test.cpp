@@ -89,6 +89,41 @@ TEST(BuiltinsMiscRegistry, AllNamesRegistered) {
   EXPECT_EQ(areas.as_number(), 1.0);
 }
 
+// AREAS recurses into the branch that CHOOSE / IF selects, so a branch that
+// is itself a union reports its real area count rather than collapsing to 1.
+TEST(BuiltinsAreas, ChooseSelectsUnionBranch) {
+  const Value v = EvalSource("=AREAS(CHOOSE(2,A1:B2,(C1,D1)))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsAreas, ChooseSelectsSingleReferenceBranch) {
+  const Value v = EvalSource("=AREAS(CHOOSE(1,A1:B2,(C1,D1)))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsAreas, IfTrueSelectsUnionBranch) {
+  const Value v = EvalSource("=AREAS(IF(TRUE,(A1,B2),C3:D4))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsAreas, IfFalseSelectsElseUnionBranch) {
+  const Value v = EvalSource("=AREAS(IF(FALSE,A1:B2,(C1,D1,E1)))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+// INDIRECT of a union string is the documented deferred case: Excel returns
+// 2, Formulon counts the opaque INDIRECT call as a single reference (1).
+// See tests/divergence.yaml (arg_indirect_union).
+TEST(BuiltinsAreas, IndirectOfUnionCountsAsSingleAreaDeferred) {
+  const Value v = EvalSource("=AREAS(INDIRECT(\"A1,B2\"))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
 // ---------------------------------------------------------------------------
 // XOR
 // ---------------------------------------------------------------------------

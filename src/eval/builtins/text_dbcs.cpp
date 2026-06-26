@@ -145,9 +145,9 @@ namespace {
 // --- Byte-oriented text family (LENB / LEFTB / RIGHTB / MIDB / CHAR / CODE)
 //
 // Excel ja-JP measures "byte" length against the Shift-JIS (CP932) single-
-// byte region: ASCII and half-width katakana are 1 byte, every other BMP
-// character is 2 bytes, and supplementary-plane characters are 4 bytes
-// (two UTF-16 surrogate halves, each classified as 2-byte DBCS). See
+// byte region: ASCII and half-width katakana are 1 byte, and every other
+// character -- including supplementary-plane codepoints such as emoji --
+// counts as 2 bytes (matching observed Mac Excel ja-JP behaviour). See
 // `src/eval/utf8_length.h::byte_count_jajp` for the classifier.
 //
 // When a byte-budgeted slice (LEFTB/RIGHTB/MIDB) would land in the middle

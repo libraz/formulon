@@ -439,10 +439,9 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
 
     case parser::NodeKind::Call: {
-      // Volatile detection: function names are stored UPPERCASE by the
-      // parser-side intern table, matching the registry key convention.
-      // `is_volatile_function` is case-sensitive on uppercase input, so we
-      // can pass the lexeme through verbatim.
+      // Volatile detection: `is_volatile_function` matches names
+      // case-insensitively, so the call lexeme is passed through verbatim
+      // (a hand-typed `=now()` is recognised as well as `=NOW()`).
       if (VolatileTracker::is_volatile_function(node.as_call_name())) {
         state.out->is_volatile = true;
       }

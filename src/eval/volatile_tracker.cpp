@@ -7,27 +7,34 @@
 
 #include <string_view>
 
+#include "utils/strings.h"
+
 namespace formulon::eval {
 
 bool VolatileTracker::is_volatile_function(std::string_view name) {
-  // Switch on the first character to keep the linear comparison list
-  // small. Names are already ASCII-uppercase per the precondition.
+  // Function names may reach this classifier in any case (a hand-typed
+  // `=now()` keeps its lexeme as written), so comparisons are
+  // case-insensitive over ASCII letters. Switch on the upper-cased first
+  // character to keep the linear comparison list small.
   if (name.empty()) {
     return false;
   }
-  switch (name.front()) {
+  using strings::ascii_to_upper;
+  using strings::case_insensitive_eq;
+  switch (ascii_to_upper(name.front())) {
     case 'C':
-      return name == "CELL";
+      return case_insensitive_eq(name, "CELL");
     case 'I':
-      return name == "INDIRECT" || name == "INFO";
+      return case_insensitive_eq(name, "INDIRECT") || case_insensitive_eq(name, "INFO");
     case 'N':
-      return name == "NOW";
+      return case_insensitive_eq(name, "NOW");
     case 'O':
-      return name == "OFFSET";
+      return case_insensitive_eq(name, "OFFSET");
     case 'R':
-      return name == "RAND" || name == "RANDBETWEEN" || name == "RANDARRAY";
+      return case_insensitive_eq(name, "RAND") || case_insensitive_eq(name, "RANDBETWEEN") ||
+             case_insensitive_eq(name, "RANDARRAY");
     case 'T':
-      return name == "TODAY";
+      return case_insensitive_eq(name, "TODAY");
     default:
       return false;
   }

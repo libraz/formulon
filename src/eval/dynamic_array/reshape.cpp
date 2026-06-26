@@ -10,6 +10,7 @@
 #include "eval/dynamic_array/common.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
+#include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -20,20 +21,39 @@ namespace eval {
 
 namespace {
 
-/// Resolve every call argument as a Value::Array, propagating the first
-/// error verbatim. Returns true on success and populates `out`. The
-/// returned ArrayValue pointers borrow from the caller arena, which must
-/// outlive their use.
+/// Resolve every call argument into an `ArrayValue` for stacking. Unlike
+/// the generic `resolve_array_value`, a scalar argument is treated as a
+/// 1x1 block regardless of its kind: a scalar Number, Text, Bool, Blank,
+/// or Error all become a single cell that participates in the stack and is
+/// NA-padded against taller / wider neighbours. In Excel an error value
+/// passed to HSTACK / VSTACK (e.g. `=HSTACK({1;2}, NA())`) is a normal
+/// cell, not a propagating error, so it must not short-circuit the result.
+///
+/// Returns true on success and populates `out`. The returned `ArrayValue`
+/// pointers borrow from the caller arena, which must outlive their use.
+/// The only failure path is arena exhaustion while wrapping a scalar.
 bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena& arena,
                         const FunctionRegistry& registry, const EvalContext& ctx, std::vector<const ArrayValue*>& out,
                         Value& error_out) {
   out.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const ArrayValue* array = nullptr;
-    if (!resolve_array_value(call.as_call_arg(i), arena, registry, ctx, &array, &error_out)) {
+    // `eval_node_as_array` already wraps non-error scalars into 1x1 arrays
+    // and expands ranges / array literals; it only returns a scalar when
+    // the argument evaluated to an error. Wrap that error into a 1x1 block
+    // so it stacks like any other cell.
+    const Value v = eval_node_as_array(call.as_call_arg(i), arena, registry, ctx);
+    if (v.is_array()) {
+      out.push_back(v.as_array());
+      continue;
+    }
+    Value* buffer = nullptr;
+    ArrayValue* cell = dynamic_array::allocate_array_value(1U, 1U, arena, buffer);
+    if (cell == nullptr) {
+      error_out = Value::error(ErrorCode::Num);
       return false;
     }
-    out.push_back(array);
+    buffer[0] = v;
+    out.push_back(cell);
   }
   return true;
 }

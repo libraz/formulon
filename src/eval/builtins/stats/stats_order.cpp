@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/aggregate_kernels.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -49,22 +50,16 @@ Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // MODE / MODE.SNGL(value, ...) - most-frequent numeric value. Ties resolve
 // to the first occurrence in the input order; if every value is unique the
-// result is `#N/A`. Empty numeric slice also yields `#N/A`.
+// result is `#N/A`. Empty numeric slice also yields `#N/A`. Shares the
+// first-occurrence tie-break kernel with AGGREGATE function 13 so the two
+// surfaces cannot diverge.
 Value Mode(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  std::vector<double> xs = collect_numerics(args, arity);
-  if (xs.empty()) {
-    return Value::error(ErrorCode::NA);
+  const std::vector<double> xs = collect_numerics(args, arity);
+  auto r = aggregate_kernels::mode_first_occurrence(xs);
+  if (!r) {
+    return Value::error(r.error());
   }
-  const ModeFrequencies freq = build_mode_frequencies(xs);
-  if (freq.best_count < 2u) {
-    return Value::error(ErrorCode::NA);
-  }
-  for (std::size_t i = 0; i < freq.values.size(); ++i) {
-    if (freq.counts[i] == freq.best_count) {
-      return Value::number(freq.values[i]);
-    }
-  }
-  return Value::error(ErrorCode::NA);
+  return Value::number(r.value());
 }
 
 // MODE.MULT(value, ...) - vertical (column) array of every value tied for

@@ -24,11 +24,13 @@ namespace eval {
 class EvalContext;
 class FunctionRegistry;
 
-/// `INDIRECT(ref_text, [a1])` — evaluates `ref_text`, parses it as a
-/// single-cell A1 reference, and resolves that target through the bound
-/// context. Range text (`"A1:B2"`) returns `#REF!` in this MVP because
-/// `Value::Array` is not yet implemented; R1C1 style (`a1=FALSE`) is also
-/// deferred and surfaces as `#REF!`. Empty / malformed text -> `#REF!`.
+/// `INDIRECT(ref_text, [a1])` — evaluates `ref_text`, parses it as an A1
+/// reference, and resolves that target through the bound context. A
+/// single-cell reference returns the scalar cell; a multi-cell range
+/// (`"A1:B2"`) resolves to the full rectangle as a `Value::Array`, which
+/// spills when used directly and is navigable by range-aware consumers
+/// (`SUM` / `VLOOKUP` / ...). R1C1 style (`a1=FALSE`) is deferred and
+/// surfaces as `#REF!`. Empty / malformed text -> `#REF!`.
 Value eval_indirect_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
 

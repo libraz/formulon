@@ -77,6 +77,16 @@ Expected<double, ErrorCode> percentile_sorted_inc(const std::vector<double>& xs_
 /// elements.
 Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_sorted, double k);
 
+/// MODE.SNGL kernel: the value tied for the highest frequency that
+/// appears *first* in the input order. Excel exact-double equality is
+/// used for tie-breaking. Returns `#N/A` when the slice is empty or no
+/// value repeats. `xs` is consumed in its original (unsorted) order so
+/// the first-occurrence rule is observable; callers must NOT pre-sort.
+/// Shared between MODE / MODE.SNGL (`stats/stats_order.cpp`) and
+/// AGGREGATE function 13 (`aggregate_lazy.cpp`) so the two cannot
+/// diverge on the tie-break rule.
+Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs);
+
 }  // namespace aggregate_kernels
 }  // namespace eval
 }  // namespace formulon

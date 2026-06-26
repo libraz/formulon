@@ -279,6 +279,63 @@ TEST(BuiltinsXLookup, TwoDimensionalLookupArrayIsValueError) {
   EXPECT_EQ(EvalSourceIn("=XLOOKUP(1, A1:B2, C1:C2)", wb, wb.sheet(0)).as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsXLookup, MultiColumnReturnSpillsMatchedRow) {
+  // Vertical lookup on A1:A3, multi-column return B1:D3 -> matched row
+  // spills across all three return columns.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    wb.sheet(0).set_cell_value(r, 1, Value::number(static_cast<double>(r * 10 + 1)));  // B
+    wb.sheet(0).set_cell_value(r, 2, Value::number(static_cast<double>(r * 10 + 2)));  // C
+    wb.sheet(0).set_cell_value(r, 3, Value::number(static_cast<double>(r * 10 + 3)));  // D
+  }
+  const Value v = EvalSourceIn("=XLOOKUP(20, A1:A3, B1:D3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 11.0);  // B2
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 12.0);  // C2
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 13.0);  // D2
+}
+
+TEST(BuiltinsXLookup, MultiRowReturnSpillsMatchedColumn) {
+  // Horizontal lookup on A1:C1, multi-row return A2:C4 -> matched column
+  // spills across all three return rows.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(20.0));
+  wb.sheet(0).set_cell_value(0, 2, Value::number(30.0));
+  for (std::uint32_t r = 1; r < 4; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r * 100 + 1)));
+    wb.sheet(0).set_cell_value(r, 1, Value::number(static_cast<double>(r * 100 + 2)));
+    wb.sheet(0).set_cell_value(r, 2, Value::number(static_cast<double>(r * 100 + 3)));
+  }
+  const Value v = EvalSourceIn("=XLOOKUP(20, A1:C1, A2:C4)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 102.0);  // row2 col B (match col=1)
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 202.0);  // row3 col B
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 302.0);  // row4 col B
+}
+
+TEST(BuiltinsXLookup, MultiColumnReturnAxisMismatchIsValueError) {
+  // Vertical lookup length 3 but return_array has 2 rows -> #VALUE!.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 2, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(3.0));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(4.0));
+  EXPECT_EQ(EvalSourceIn("=XLOOKUP(20, A1:A3, B1:C2)", wb, wb.sheet(0)).as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsXLookup, RowLookupWithRowReturn) {
   // Both arrays are rows of length 3; lookup column orientation is flipped
   // but flat-index translation still picks the right cell.

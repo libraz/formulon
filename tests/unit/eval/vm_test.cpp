@@ -332,6 +332,48 @@ TEST(Vm, IfNestedShortCircuit) {
   EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
 }
 
+TEST(Vm, IfTextConditionIsValueError) {
+  // A non-numeric text IF condition is not boolean-coercible; Excel (and the
+  // tree-walker) surface #VALUE! instead of taking the THEN branch. The VM
+  // routes the condition through the same `coerce_to_bool` helper, so the two
+  // paths must agree.
+  Arena a;
+  const Value vm = RunVmOrDie("=IF(\"hello\", 10, 20)", a);
+  ASSERT_TRUE(vm.is_error());
+  EXPECT_EQ(vm.as_error(), ErrorCode::Value);
+  Arena a2;
+  const Value tree = RunTreeOrDie("=IF(\"hello\", 10, 20)", a2);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+TEST(Vm, IfTextTrueConditionTakesThenBranch) {
+  // The literal "TRUE" is the one text form `coerce_to_bool` accepts; both
+  // evaluators take the THEN branch.
+  Arena a;
+  const Value vm = RunVmOrDie("=IF(\"TRUE\", 10, 20)", a);
+  ASSERT_TRUE(vm.is_number());
+  EXPECT_DOUBLE_EQ(vm.as_number(), 10.0);
+  Arena a2;
+  const Value tree = RunTreeOrDie("=IF(\"TRUE\", 10, 20)", a2);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+TEST(Vm, RunawayRecursiveLambdaReturnsCalcNotCrash) {
+  // A self-recursive LAMBDA (Y-combinator style: the lambda takes itself as a
+  // parameter and applies itself unconditionally) would overflow the native
+  // stack without a depth guard. The VM caps lambda-call recursion at the
+  // same depth as the tree-walker and surfaces #CALC! rather than crashing.
+  constexpr const char* kSrc = "=LET(g, LAMBDA(self, n, self(self, n+1)), g(g, 0))";
+  Arena a;
+  const Value vm = RunVmOrDie(kSrc, a);
+  ASSERT_TRUE(vm.is_error());
+  EXPECT_EQ(vm.as_error(), ErrorCode::Calc);
+  Arena a2;
+  const Value tree = RunTreeOrDie(kSrc, a2);
+  ASSERT_TRUE(tree.is_error());
+  EXPECT_EQ(tree.as_error(), ErrorCode::Calc);
+}
+
 // ---------------------------------------------------------------------------
 // Array literals + LET + LAMBDA
 // ---------------------------------------------------------------------------

@@ -71,6 +71,12 @@ struct IndirectReference {
   std::uint32_t right_col = 0;
   bool is_range = false;
   bool range_syntax = false;
+  // Whole-column (`D:D`) / whole-row (`5:5`) shapes. The rectangle fields
+  // are still populated (spanning `0..kMax-1` along the unbounded axis),
+  // but callers that materialise the rectangle into a `Value::Array`
+  // should reject these because the spill would be unbounded.
+  bool is_full_col = false;
+  bool is_full_row = false;
 };
 
 // Converts a signed offset plus a non-negative base (both measured in

@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -48,8 +49,53 @@ struct SpillTable {
 // ---------------------------------------------------------------------------
 
 Sheet::Sheet(std::string name) : name_(std::move(name)) {}
-Sheet::Sheet(Sheet&&) noexcept = default;
-Sheet& Sheet::operator=(Sheet&&) noexcept = default;
+
+// `spill_mutex_` is not movable, so the move special members are written
+// out by hand. Every data member is moved EXCEPT `spill_mutex_`: the
+// moved-to object keeps its own freshly default-constructed mutex (and the
+// moved-from object keeps its own). Moves only happen at construction /
+// OOXML-load time, before any parallel recalc touches the sheet, so a fresh
+// mutex on the destination is correct — no concurrent worker can be holding
+// the source's lock at that point.
+Sheet::Sheet(Sheet&& other) noexcept
+    : name_(std::move(other.name_)),
+      rows_(std::move(other.rows_)),
+      spill_table_(std::move(other.spill_table_)),
+      // spill_mutex_ intentionally not moved: keep this object's own mutex.
+      pivot_tables_(std::move(other.pivot_tables_)),
+      conditional_formats_(std::move(other.conditional_formats_)),
+      merges_(std::move(other.merges_)),
+      hyperlinks_(std::move(other.hyperlinks_)),
+      comments_(std::move(other.comments_)),
+      validations_(std::move(other.validations_)),
+      protection_(std::move(other.protection_)),
+      view_(other.view_),
+      layout_(std::move(other.layout_)),
+      format_defaults_(other.format_defaults_),
+      print_settings_(std::move(other.print_settings_)) {}
+
+Sheet& Sheet::operator=(Sheet&& other) noexcept {
+  if (this == &other) {
+    return *this;
+  }
+  name_ = std::move(other.name_);
+  rows_ = std::move(other.rows_);
+  spill_table_ = std::move(other.spill_table_);
+  // spill_mutex_ intentionally not moved/assigned: keep this object's own mutex.
+  pivot_tables_ = std::move(other.pivot_tables_);
+  conditional_formats_ = std::move(other.conditional_formats_);
+  merges_ = std::move(other.merges_);
+  hyperlinks_ = std::move(other.hyperlinks_);
+  comments_ = std::move(other.comments_);
+  validations_ = std::move(other.validations_);
+  protection_ = std::move(other.protection_);
+  view_ = other.view_;
+  layout_ = std::move(other.layout_);
+  format_defaults_ = other.format_defaults_;
+  print_settings_ = std::move(other.print_settings_);
+  return *this;
+}
+
 Sheet::~Sheet() = default;
 
 void Sheet::add_pivot_table(std::unique_ptr<pivot::PivotTable> table) {
@@ -71,12 +117,13 @@ Cell& EnsureSlot(std::vector<Cell>& row_cells, std::uint32_t col) {
   return row_cells[col];
 }
 
-// Returns true when `(row, col)` is "occupied" for the purposes of a spill
-// collision check: a non-default cell (literal value or formula) lives there.
-// The anchor cell of the would-be spill is excluded from this check by the
-// caller.
-bool IsCellOccupied(const Sheet& sheet, std::uint32_t row, std::uint32_t col) noexcept {
-  const Cell* c = sheet.cell_at(row, col);
+// Returns true when `c` is "occupied" for the purposes of a spill collision
+// check: a non-default cell (literal value or formula) lives there. The
+// anchor cell of the would-be spill is excluded from this check by the
+// caller. The caller resolves the cell pointer via `cell_at_locked` (while
+// holding `spill_mutex_`) and passes it in, so this helper does not reach
+// back into `Sheet` and cannot self-deadlock.
+bool IsCellOccupied(const Cell* c) noexcept {
   if (c == nullptr) {
     return false;
   }
@@ -128,12 +175,14 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   // errors without imposing a release-mode branch.
   assert(row < kMaxRows && col < kMaxCols);
 
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+
   // Eager invalidation: writing to a phantom mutates the spilled area, so
   // the spill must be dropped. The anchor's stored `cached_value` is left
-  // untouched by `clear_spill`; the next evaluation pass will recompute it
-  // (and either re-spill or surface `#SPILL!`).
-  if (const SpillRegion* covering = spill_region_covering(row, col); covering != nullptr) {
-    clear_spill(covering->anchor_row, covering->anchor_col);
+  // untouched by `clear_spill_locked`; the next evaluation pass will
+  // recompute it (and either re-spill or surface `#SPILL!`).
+  if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
+    clear_spill_locked(covering->anchor_row, covering->anchor_col);
   }
 
   std::vector<Cell>& row_cells = rows_[row];
@@ -145,9 +194,11 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
 void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string formula) {
   assert(row < kMaxRows && col < kMaxCols);
 
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+
   // Same eager invalidation rationale as `set_cell_value`.
-  if (const SpillRegion* covering = spill_region_covering(row, col); covering != nullptr) {
-    clear_spill(covering->anchor_row, covering->anchor_col);
+  if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
+    clear_spill_locked(covering->anchor_row, covering->anchor_col);
   }
 
   std::vector<Cell>& row_cells = rows_[row];
@@ -169,6 +220,12 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
   // handle invalidation separately. Letting cached-value updates bypass
   // the spill table also keeps the spill anchor's `cached_value`
   // synchronised with `commit_spill` (which sets it to `cells[0]`).
+  //
+  // Locks `spill_mutex_` because it writes `rows_`, which the spill path
+  // and concurrent observers also touch. The scheduler calls this under its
+  // own `write_mutex`; the outer-to-inner lock ordering (`write_mutex` then
+  // `spill_mutex_`) is preserved and never inverted.
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
   std::vector<Cell>& row_cells = rows_[row];
   Cell& slot = EnsureSlot(row_cells, col);
 
@@ -232,6 +289,11 @@ void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_
 }
 
 const Cell* Sheet::cell_at(std::uint32_t row, std::uint32_t col) const noexcept {
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+  return cell_at_locked(row, col);
+}
+
+const Cell* Sheet::cell_at_locked(std::uint32_t row, std::uint32_t col) const noexcept {
   const auto it = rows_.find(row);
   if (it == rows_.end()) {
     return nullptr;
@@ -260,6 +322,9 @@ std::size_t Sheet::cell_count() const noexcept {
 // ---------------------------------------------------------------------------
 
 const SpillRegion* Sheet::spill_region_at_anchor(std::uint32_t row, std::uint32_t col) const noexcept {
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+  // Not called from within any other locked Sheet method, so the body stays
+  // inline rather than delegating to a `_locked` variant.
   if (spill_table_ == nullptr) {
     return nullptr;
   }
@@ -271,6 +336,11 @@ const SpillRegion* Sheet::spill_region_at_anchor(std::uint32_t row, std::uint32_
 }
 
 const SpillRegion* Sheet::spill_region_covering(std::uint32_t row, std::uint32_t col) const noexcept {
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+  return spill_region_covering_locked(row, col);
+}
+
+const SpillRegion* Sheet::spill_region_covering_locked(std::uint32_t row, std::uint32_t col) const noexcept {
   if (spill_table_ == nullptr) {
     return nullptr;
   }
@@ -287,14 +357,15 @@ const SpillRegion* Sheet::spill_region_covering(std::uint32_t row, std::uint32_t
 }
 
 Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noexcept {
-  if (const SpillRegion* covering = spill_region_covering(row, col); covering != nullptr) {
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+  if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
     const std::uint32_t r_off = row - covering->anchor_row;
     const std::uint32_t c_off = col - covering->anchor_col;
     const std::size_t index =
         static_cast<std::size_t>(r_off) * static_cast<std::size_t>(covering->cols) + static_cast<std::size_t>(c_off);
     return covering->cells[index];
   }
-  if (const Cell* c = cell_at(row, col); c != nullptr) {
+  if (const Cell* c = cell_at_locked(row, col); c != nullptr) {
     return c->cached_value;
   }
   return Value::blank();
@@ -324,10 +395,17 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
     return false;
   }
 
+  // Hold `spill_mutex_` for the whole commit: the collision scan reads and
+  // the registration writes `spill_table_` + `rows_` as one atomic unit so
+  // two parallel-recalc workers spilling on the same sheet cannot interleave.
+  // `std::mutex` is non-recursive, so every internal call below routes
+  // through the `_locked` helpers rather than the public, self-locking ones.
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+
   // Drop any region currently anchored at this cell first, regardless of
   // whether the new commit ends up succeeding. The "register over an
   // existing region" case is intentionally idempotent.
-  clear_spill(anchor_row, anchor_col);
+  clear_spill_locked(anchor_row, anchor_col);
 
   // Collision check: scan the footprint excluding the anchor itself.
   for (std::uint32_t r = 0; r < rows; ++r) {
@@ -337,7 +415,7 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
       if (row == anchor_row && col == anchor_col) {
         continue;
       }
-      if (IsCellOccupied(*this, row, col)) {
+      if (IsCellOccupied(cell_at_locked(row, col))) {
         // Surface #SPILL! at the anchor; preserve the existing literal at
         // the colliding cell.
         std::vector<Cell>& row_cells = rows_[anchor_row];
@@ -345,7 +423,7 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
         anchor_slot.cached_value = Value::error(ErrorCode::Spill);
         return false;
       }
-      if (spill_region_covering(row, col) != nullptr) {
+      if (spill_region_covering_locked(row, col) != nullptr) {
         std::vector<Cell>& row_cells = rows_[anchor_row];
         Cell& anchor_slot = EnsureSlot(row_cells, anchor_col);
         anchor_slot.cached_value = Value::error(ErrorCode::Spill);
@@ -709,6 +787,11 @@ void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
 }
 
 void Sheet::clear_spill(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept {
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+  clear_spill_locked(anchor_row, anchor_col);
+}
+
+void Sheet::clear_spill_locked(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept {
   if (spill_table_ == nullptr) {
     return;
   }

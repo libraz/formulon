@@ -383,25 +383,37 @@ Value Npv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const double rate = rate_e.value();
   double total = 0.0;
   double discount = 1.0 + rate;
-  // Walk value1..valueN. NPV skips every non-numeric value regardless of
-  // how it arrived: range-sourced bool/text/blank cells were already dropped
-  // by the dispatcher's numeric-only filter, and the same rule applies to
-  // direct scalar arguments (TRUE, FALSE, blanks, and text literals do not
-  // contribute a cash flow and do not advance the period). `period_discount`
-  // only steps forward when a numeric cash flow is actually consumed.
+  // Walk value1..valueN. Range-sourced bool/text/blank cells were already
+  // dropped by the dispatcher's numeric-only filter; a direct scalar
+  // logical / numeric-text argument is coerced and contributes at its
+  // period (see the per-iteration comment). `period_discount` only steps
+  // forward when a cash flow is actually consumed.
   double period_discount = discount;
   for (std::uint32_t i = 1; i < arity; ++i) {
     const Value& v = args[i];
     if (v.is_error()) {
       return v;
     }
-    if (!v.is_number()) {
-      continue;
+    // The dispatcher already dropped range-sourced Bool / Text / Blank
+    // cells (range_filter_numeric_only), so any non-Number reaching this
+    // impl is a DIRECT scalar argument. Excel counts a directly-passed
+    // logical / numeric-text argument (TRUE -> 1, "5" -> 5) at its period;
+    // only non-numeric text is ignored. Coerce here so the period counter
+    // advances for those, matching Excel.
+    double cash = 0.0;
+    if (v.is_number()) {
+      cash = v.as_number();
+    } else {
+      auto coerced = coerce_to_number(v);
+      if (!coerced) {
+        continue;  // non-numeric text: ignored, period unchanged.
+      }
+      cash = coerced.value();
     }
     if (period_discount == 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    total += v.as_number() / period_discount;
+    total += cash / period_discount;
     period_discount *= discount;
   }
   return finalize(total);
@@ -454,6 +466,11 @@ Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   constexpr int kMaxIter = 100;
   constexpr double kTolerance = 1.0e-10;
   constexpr double kRateFloor = 1.0e-15;
+  // Residual gate on the accepted root, mirroring IRR/XIRR: step
+  // convergence alone can settle the iterate at a point where the TVM
+  // residual is still large, so a converged rate is verified against the
+  // equation before it is published.
+  constexpr double kResidualTolerance = 1.0e-6;
   for (int iter = 0; iter < kMaxIter; ++iter) {
     if (rate <= -1.0) {
       return Value::error(ErrorCode::Num);
@@ -480,9 +497,14 @@ Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       return Value::error(ErrorCode::Num);
     }
     double step = f / df;
-    // Damp large steps — cheap safeguard against overshoot on poor
-    // initial guesses. Empirically stabilises the oracle cases without
-    // hurting convergence speed on well-conditioned inputs.
+    // Damped Newton step: halve the update when |f/df| exceeds 1.0. A raw
+    // Newton step can overshoot badly from a poor initial guess (the TVM
+    // function is steep near rate = -1 and near a high-nper root), letting
+    // the iterate jump the wrong side of a singularity and either diverge
+    // or settle on a different root than Excel reports. Halving the large
+    // first steps keeps the iterate in the basin of the principal root
+    // without slowing convergence on well-conditioned inputs. The damping
+    // factor is heuristic; it is monitored against the oracle corpus.
     if (std::fabs(step) > 1.0) {
       step *= 0.5;
     }
@@ -498,6 +520,19 @@ Value Rate(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
       // "converged" on `RATE(10, -1200, 2000, 0, 1)` where the iterate
       // slides toward -1 and never crosses out.
       if (new_rate <= -1.0 + kTolerance) {
+        return Value::error(ErrorCode::Num);
+      }
+      // Residual gate: a converged step must also zero the TVM equation.
+      // The damping above can stall the iterate at a non-root on
+      // pathological inputs; reject those as non-convergent rather than
+      // publishing a spurious rate. The equation's terms scale with
+      // pv * (1+r)^nper, so the residual is compared relative to that
+      // magnitude (an absolute bound would be unreachable for large pv).
+      const double pow_check = std::pow(1.0 + new_rate, nper);
+      const double annuity = pmt * (1.0 + new_rate * type) * (pow_check - 1.0) / new_rate;
+      const double residual = pv * pow_check + annuity + fv;
+      const double scale = std::fabs(pv * pow_check) + std::fabs(annuity) + std::fabs(fv) + 1.0;
+      if (!std::isfinite(residual) || std::fabs(residual) > kResidualTolerance * scale) {
         return Value::error(ErrorCode::Num);
       }
       return finalize(new_rate);

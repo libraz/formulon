@@ -188,6 +188,30 @@ TEST(BuiltinsAggregateFn, Code13ModeSnglNoDuplicateIsNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
+TEST(BuiltinsAggregateFn, Code13ModeSnglTieResolvesToFirstOccurrence) {
+  // Two values tied for the highest frequency: {3, 3, 2, 2}. Excel's
+  // MODE.SNGL returns the one that appears first in the data, i.e. 3 (not
+  // the smallest, which would be 2). AGGREGATE(13) must agree with
+  // MODE.SNGL on this tie; both now route through the same first-occurrence
+  // kernel.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(3, 0, Value::number(2.0));
+
+  const Value aggregate = EvalSourceIn("=AGGREGATE(13,0,A1:A4)", wb, wb.sheet(0));
+  ASSERT_TRUE(aggregate.is_number());
+  EXPECT_DOUBLE_EQ(aggregate.as_number(), 3.0);
+
+  const Value mode = EvalSourceIn("=MODE.SNGL(3,3,2,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(mode.is_number());
+  EXPECT_DOUBLE_EQ(mode.as_number(), 3.0);
+
+  // The two surfaces must agree on the tie.
+  EXPECT_DOUBLE_EQ(aggregate.as_number(), mode.as_number());
+}
+
 // ---------------------------------------------------------------------------
 // Codes 14..19 (k-arg modes)
 // ---------------------------------------------------------------------------

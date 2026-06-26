@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -16,6 +17,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/structured_log.h"
 #include "value.h"
 
 namespace formulon {
@@ -227,12 +229,20 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       grand_total_row[key_cols + vc] = totals[vc];
     }
   }
-  // Subtotals (total_depth == ±2) require multi-column row_fields; with
-  // single-column keys they silently degrade to the ±1 behaviour. For the
-  // multi-column case in this implementation we currently emit only the
-  // grand total — proper subtotal rows require an outer/inner split that
-  // is deferred until the oracle confirms exact placement against Mac
-  // Excel's actual surface.
+  // Subtotals (|total_depth| == 2) request per-outer-group subtotal rows
+  // in addition to the grand total. Implementing them requires replacing
+  // the flat composite-key grouping with an outer/inner hierarchy plus the
+  // corresponding subtotal-row placement, which is not yet built. Until
+  // then a ±2 request falls back to the ±1 (grand-total-only) layout. The
+  // fallback is recorded in tests/divergence.yaml; emit a diagnostic so it
+  // is observable rather than silent.
+  if (total_depth == 2 || total_depth == -2) {
+    StructuredLog("eval.groupby.subtotals_unsupported")
+        .field("function", std::string_view("GROUPBY"))
+        .field("total_depth", static_cast<int64_t>(total_depth))
+        .field("fallback", std::string_view("grand_total_only"))
+        .warn();
+  }
 
   // -- Assemble output ----------------------------------------------------
   std::vector<std::vector<Value>> out_rows;

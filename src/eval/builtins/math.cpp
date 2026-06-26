@@ -536,7 +536,11 @@ Value CeilingMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const double abs_s = std::fabs(significance);
-  const double scaled = n / abs_s;
+  // `snap_to_integer` absorbs the IEEE-754 noise that would otherwise make
+  // e.g. `CEILING.MATH(7.1, 0.1)` return `7` instead of `7.1` (7.1 / 0.1 is
+  // 70.999... rather than exactly 71). Mirrors the legacy CEILING / FLOOR
+  // path so the modern variants snap exact multiples the same way.
+  const double scaled = snap_to_integer(n / abs_s);
   // Positive inputs: always ceil. Negative inputs: ceil (toward +inf) for
   // default mode, floor (away from zero) when mode != 0.
   const double rounded = (n > 0.0 || !away_from_zero) ? std::ceil(scaled) : std::floor(scaled);
@@ -576,7 +580,11 @@ Value FloorMath(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::number(0.0);
   }
   const double abs_s = std::fabs(significance);
-  const double scaled = n / abs_s;
+  // `snap_to_integer` absorbs the IEEE-754 noise that would otherwise make
+  // e.g. `FLOOR.MATH(7.1, 0.1)` return `7` instead of `7.1`. Mirrors the
+  // legacy CEILING / FLOOR path so the modern variants snap exact multiples
+  // the same way.
+  const double scaled = snap_to_integer(n / abs_s);
   // Positive inputs: always floor. Negative inputs: floor (toward -inf)
   // for default mode, ceil (toward zero) when mode != 0.
   const double rounded = (n > 0.0 || !toward_zero) ? std::floor(scaled) : std::ceil(scaled);

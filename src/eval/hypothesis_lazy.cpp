@@ -494,10 +494,14 @@ Value eval_prob_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     }
     prob_sum += p;
   }
-  // Excel accepts a tiny amount of floating-point slop in the sum; an
-  // absolute tolerance of 1e-12 is well inside the round-off noise for
-  // any realistic probability vector.
-  if (std::fabs(prob_sum - 1.0) > 1e-12) {
+  // Excel accepts probability vectors that only sum to 1 within ordinary
+  // rounding — e.g. three cells of 0.333333 sum to 0.999999, whose distance
+  // from 1.0 is a hair over 1e-6 in IEEE-754 — yet Excel returns a number.
+  // A 1e-12 absolute tolerance rejected those; the bound is loosened to
+  // 1e-5 so a few decimal-rounded cells comfortably qualify while coarse
+  // errors (the 1.1 / 0.9 range) still surface #NUM!.
+  // NOTE: Excel's exact threshold is unverified; confirm on a live oracle.
+  if (std::fabs(prob_sum - 1.0) > 1e-5) {
     return Value::error(ErrorCode::Num);
   }
 

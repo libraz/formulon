@@ -238,12 +238,44 @@ TEST(GroupBy, TotalDepthNegativeOneGrandTotalAtTop) {
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 30.0);
 }
 
-TEST(GroupBy, TotalDepthTwoMultiColumnRowFieldsAcceptsValue) {
-  // ±2 with multi-column row_fields is grammatically valid; the impl
-  // currently emits the same surface as ±1 (subtotal placement is
-  // pending an oracle pass).
+TEST(GroupBy, TotalDepthTwoFallsBackToGrandTotalOnlyLayout) {
+  // Nested per-outer-group subtotals (|total_depth| == 2) are not yet
+  // implemented; the impl falls back to the ±1 grand-total-only layout.
+  // With all-distinct composite keys this yields three group rows plus a
+  // single grand-total row at the bottom (no intermediate subtotal rows).
   const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 4U);  // 3 group rows + 1 grand total (no subtotals)
+  ASSERT_EQ(v.as_array_cols(), 3U);  // 2 key cols + 1 value col
+  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "A");
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 2).as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 30.0);
+  // Grand total at the bottom; "合計" is the ja-JP grand-total label.
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 60.0);
+}
+
+TEST(GroupBy, TotalDepthTwoEmitsNonSilentDiagnostic) {
+  // The ±2 fallback must be observable, not silent: a structured-log
+  // warning is emitted so callers can detect the degraded layout.
+  testing::internal::CaptureStderr();
+  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2, 0)");
+  const std::string captured = testing::internal::GetCapturedStderr();
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_NE(captured.find("eval.groupby.subtotals_unsupported"), std::string::npos)
+      << "expected ±2 fallback diagnostic; stderr was: " << captured;
+}
+
+TEST(GroupBy, TotalDepthOneEmitsNoSubtotalDiagnostic) {
+  // The ordinary ±1 grand-total path must NOT emit the fallback warning.
+  testing::internal::CaptureStderr();
+  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 1, 0)");
+  const std::string captured = testing::internal::GetCapturedStderr();
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(captured.find("eval.groupby.subtotals_unsupported"), std::string::npos)
+      << "unexpected fallback diagnostic on ±1 path; stderr was: " << captured;
 }
 
 TEST(GroupBy, TotalDepthOutOfRangeYieldsValueError) {

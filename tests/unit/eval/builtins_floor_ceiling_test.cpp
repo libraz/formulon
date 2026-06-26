@@ -105,6 +105,46 @@ TEST(CeilingNegNumPosSig, ReturnsNumeric) {
 }
 
 // ---------------------------------------------------------------------------
+// FLOOR.MATH / CEILING.MATH exact-multiple snapping. IEEE-754 makes
+// `7.1 / 0.1 == 70.999...`, so without a snap the `.MATH` variants would
+// round an exact multiple down (FLOOR.MATH(7.1, 0.1) -> 7.0). The snap
+// helper recognises the near-integer quotient and returns the exact
+// multiple, matching the legacy FLOOR / CEILING forms and Excel 365.
+// ---------------------------------------------------------------------------
+
+TEST(FloorMathExactMultiple, SnapsToInput) {
+  const Value v = EvalSource("=FLOOR.MATH(7.1, 0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.1);
+}
+
+TEST(CeilingMathExactMultiple, SnapsToInput) {
+  const Value v = EvalSource("=CEILING.MATH(7.1, 0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.1);
+}
+
+TEST(FloorMathExactMultiple, NonMultipleStillRoundsDown) {
+  // 7.15 is not an exact multiple of 0.1; FLOOR.MATH rounds toward -inf.
+  const Value v = EvalSource("=FLOOR.MATH(7.15, 0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.1);
+}
+
+TEST(CeilingMathExactMultiple, NonMultipleStillRoundsUp) {
+  // 7.15 is not an exact multiple of 0.1; CEILING.MATH rounds toward +inf.
+  const Value v = EvalSource("=CEILING.MATH(7.15, 0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.2);
+}
+
+TEST(FloorMathExactMultiple, IntegerMultipleUnaffected) {
+  const Value v = EvalSource("=FLOOR.MATH(63, 0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 63.0);
+}
+
+// ---------------------------------------------------------------------------
 // MROUND blank-scalar policy
 // ---------------------------------------------------------------------------
 //

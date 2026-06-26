@@ -121,6 +121,40 @@ TEST(BuiltinsIsFormula, RangeArgIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsIsFormula, LetBoundRefReportsTargetFormulaCell) {
+  // `=LET(c, A1, ISFORMULA(c))` must look through the LET binding to A1 and
+  // report whether A1 holds a formula. A1 is a formula cell -> TRUE.
+  Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_formula(0, 0, "=1+2");
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(c, A1, ISFORMULA(c))", ctx);
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsFormula, LetBoundRefToLiteralCellIsFalse) {
+  // A1 holds a literal, so the resolved binding reports FALSE.
+  Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(42.0));
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(c, A1, ISFORMULA(c))", ctx);
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsIsFormula, LetScalarBindingIsValue) {
+  // `=LET(x, 5, ISFORMULA(x))` binds a scalar; the name carries no AST, so
+  // ISFORMULA sees a non-reference argument and surfaces #VALUE!.
+  Workbook wb = MakeThreeSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(x, 5, ISFORMULA(x))", ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 // ---------------------------------------------------------------------------
 // ISREF
 // ---------------------------------------------------------------------------
@@ -150,6 +184,39 @@ TEST(BuiltinsIsRef, ArithmeticIsFalse) {
   const Value v = EvalWith("=ISREF(1+2)", ctx);
   ASSERT_TRUE(v.is_boolean());
   EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsIsRef, LetScalarBindingIsFalse) {
+  // `=LET(x, 5, ISREF(x))` binds a scalar value; x is not a reference, so
+  // ISREF returns FALSE. Before the fix, the NameRef AST shape made this
+  // wrongly report TRUE.
+  Workbook wb = MakeThreeSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(x, 5, ISREF(x))", ctx);
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsIsRef, LetReferenceBindingIsTrue) {
+  // `=LET(r, A1, ISREF(r))` binds a single-cell reference; resolving the
+  // name surfaces the underlying Ref shape, so ISREF returns TRUE.
+  Workbook wb = MakeThreeSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(r, A1, ISREF(r))", ctx);
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsRef, LetRangeBindingIsTrue) {
+  // A range binding resolves to a RangeOp shape, which is also a reference.
+  Workbook wb = MakeThreeSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(r, A1:A3, ISREF(r))", ctx);
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
 }
 
 // ---------------------------------------------------------------------------
