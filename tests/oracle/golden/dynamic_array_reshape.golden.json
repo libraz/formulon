@@ -1,12 +1,12 @@
 {
   "suite": "dynamic_array_reshape",
-  "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS. 11 members × 7 perspectives = 77 cases. Spill outputs flow through skip-oracle (committed oracle golden predates array-spill comparison); live cases focus on scalar errors and 1×1 spills. TRIMRANGE deferred.",
+  "description": "dynamic_array_reshape family — TAKE, DROP, EXPAND, TOCOL, TOROW, WRAPCOLS, WRAPROWS, HSTACK, VSTACK, CHOOSECOLS, CHOOSEROWS, TRIMRANGE. Spill outputs and scalar errors are captured live by the array-aware oracle harness.",
   "environment": {
-    "excel_version": "16.109",
+    "excel_version": "16.110.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-15T01:00:19Z"
+    "generated_at": "2026-06-26T07:15:51Z"
   },
   "tolerance": {
     "abs": 1e-12,

@@ -1,16 +1,16 @@
 {
   "suite": "regression_advanced",
-  "description": "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (committed oracle golden predates array-spill comparison). Live cases cover scalar error returns — LINEST/TREND/LOGEST/GROWTH share three error perspectives each (shape mismatch, singular system or y<=0, non-numeric cell); FREQUENCY surfaces error-cell propagation from data_array and bins_array. Tolerance widened to 1e-10 for stats-block fit metrics.",
+  "description": "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Array-aware oracle capture makes most spill outputs live; remaining skip-oracle entries are limited to numerically unstable perfect-fit F-statistic slots and an empty bins-array literal read-back quirk. Tolerance widened to 1e-10 for stats-block fit metrics.",
   "environment": {
-    "excel_version": "16.109",
+    "excel_version": "16.110.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-15T01:49:33Z"
+    "generated_at": "2026-06-26T07:15:51Z"
   },
   "tolerance": {
-    "abs": 1E-10,
-    "rel": 1E-10
+    "abs": 1e-10,
+    "rel": 1e-10
   },
   "cases": [
     {
@@ -21,7 +21,7 @@
         "kind": "array",
         "value": [
           0.9999999999999999,
-          4.440892098500626E-16
+          4.440892098500626e-16
         ],
         "shape": [
           1,
@@ -33,7 +33,7 @@
       "id": "linest_univariate_stats_true",
       "formula": "=LINEST({1;2;3;4;5}, {1;2;3;4;5}, TRUE, TRUE)",
       "setup": {},
-      "skipped": "Perfect-fit LINEST stats=TRUE has an unstable F-statistic slot: Mac Excel 16.109 reports a huge finite value while Formulon currently returns #N/A. Other stats cells are covered by unit tests."
+      "skipped": "Perfect-fit LINEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 reports a huge finite F statistic while Formulon currently surfaces #N/A for the unstable F slot. Other stats cells are covered by unit tests."
     },
     {
       "id": "linest_multivariate_basic",
@@ -227,7 +227,7 @@
       "id": "logest_univariate_stats_true",
       "formula": "=LOGEST({2;4;8;16}, {1;2;3;4}, TRUE, TRUE)",
       "setup": {},
-      "skipped": "Perfect-fit LOGEST stats=TRUE has an unstable F-statistic slot: Mac Excel 16.109 and Formulon both return huge finite values but differ by an unstable factor. Other stats cells are covered by unit tests."
+      "skipped": "Perfect-fit LOGEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 and Formulon both return huge finite F statistics but differ by a numerically unstable factor. Other stats cells are covered by unit tests."
     },
     {
       "id": "logest_multivariate_basic",
@@ -408,7 +408,7 @@
       "id": "frequency_empty_bins",
       "formula": "=FREQUENCY({1;2;3}, {})",
       "setup": {},
-      "skipped": "Mac Excel 16.109/xlwings captures FREQUENCY({1;2;3}, {}) as blank for the empty array-literal bins argument; Formulon preserves the documented zero-numeric-bin count behavior for non-empty bins."
+      "skipped": "Mac Excel 16.109/xlwings captures FREQUENCY({1;2;3}, {}) as blank for the empty array-literal bins argument, while Formulon treats the degenerate zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests."
     },
     {
       "id": "frequency_text_in_data_skipped",

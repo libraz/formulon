@@ -2,11 +2,11 @@
   "suite": "encodeurl",
   "description": "ENCODEURL -- RFC 3986 percent-encoding with uppercase hex (Excel 365 Mac ja-JP)",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.110.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T04:02:38Z"
+    "generated_at": "2026-06-26T07:15:51Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -17,7 +17,7 @@
       "id": "encodeurl_space",
       "formula": "=ENCODEURL(\"hello world\")",
       "setup": {},
-      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Formulon implements the documented RFC 3986 percent-encoding correctly; verified against Microsoft's documentation."
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Windows Excel 365 variant goldens provide live coverage for available-host behavior."
     },
     {
       "id": "encodeurl_query_string_chars",
@@ -29,7 +29,7 @@
       "id": "encodeurl_unreserved_passthrough",
       "formula": "=ENCODEURL(\"ABCabc012-_.~\")",
       "setup": {},
-      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon: RFC 3986 unreserved set passes through verbatim."
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Windows Excel 365 pins Excel's tilde encoding as %7E."
     },
     {
       "id": "encodeurl_japanese_utf8",

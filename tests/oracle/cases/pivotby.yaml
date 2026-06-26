@@ -62,3 +62,15 @@ cases:
   - id: pivotby_multi_with_input_header
     description: 'Multi-col rows + input/output header (K=2, fh=3). 6x5 spill including col_fields header, row_fields header, and values header tiled.'
     formula: '=PIVOTBY({"R1","R2";"A","P";"B","Q";"A","P"}, {"C";"X";"Y";"X"}, {"V";1;2;3}, SUM, 3)'
+
+  # =========================================================================
+  # |row_total_depth| / |col_total_depth| == 2 requests per-region subtotal
+  # rows / columns for a multi-column grouping. Formulon does not yet
+  # implement nested subtotals and falls back to the grand-total-only
+  # layout; this case is skipped via tests/divergence.yaml until the layout
+  # is built. Needs macOS golden regeneration once implemented.
+  # =========================================================================
+
+  - id: pivotby_row_subtotal_depth_two
+    description: 'PIVOTBY with row_total_depth=2 over multi-column row_fields -> per-region row subtotals (not yet implemented; falls back to grand total)'
+    formula: '=PIVOTBY({"A","x";"A","y";"B","x"}, {"X";"Y";"X"}, {10;20;30}, SUM, 0, 2)'

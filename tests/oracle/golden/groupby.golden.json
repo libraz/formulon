@@ -2,11 +2,11 @@
   "suite": "groupby",
   "description": "GROUPBY dynamic-array group-and-aggregate (Excel 365). Six perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
-    "excel_version": "16.109",
+    "excel_version": "16.110.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-15T01:15:06Z"
+    "generated_at": "2026-06-26T07:15:51Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -17,13 +17,13 @@
       "id": "groupby_bare_sum",
       "formula": "=GROUPBY({\"A\";\"B\";\"A\"}, {10;20;30}, SUM, 0, 0, 0)",
       "setup": {},
-      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array GROUPBY/SUM formula; Formulon returns the documented grouped spill covered by unit tests."
+      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array GROUPBY/SUM formula; Formulon returns the documented grouped spill. Unit test GroupBy.BareSumName covers bare-name aggregator dispatch and grouping order."
     },
     {
       "id": "groupby_lambda_sum",
       "formula": "=GROUPBY({\"A\";\"B\";\"A\";\"C\"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0)",
       "setup": {},
-      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array GROUPBY/LAMBDA formula; Formulon returns the documented grouped spill covered by unit tests."
+      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array GROUPBY/LAMBDA formula; Formulon returns the documented grouped spill. Unit test GroupBy.SingleKeyLambdaAggregatorSum covers inline-LAMBDA dispatch."
     },
     {
       "id": "groupby_unknown_name_error",
@@ -60,6 +60,12 @@
         "kind": "error",
         "code": "#VALUE!"
       }
+    },
+    {
+      "id": "groupby_subtotal_depth_two",
+      "formula": "=GROUPBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {10;20;30}, SUM, 0, 2)",
+      "setup": {},
+      "skipped": "Nested subtotals for |total_depth|==2 not yet implemented; GROUPBY falls back to flat grouping (grand total only). Fallback is non-silent (structured-log warning)."
     }
   ]
 }

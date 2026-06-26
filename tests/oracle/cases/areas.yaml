@@ -125,6 +125,34 @@ cases:
     formula: "=AREAS(IF(TRUE,A1:B2,C3:D4))"
     expect: { kind: number, value: 1 }
 
+  # -- CHOOSE / IF recursing into a multi-area branch ----------------------
+  # AREAS now recurses into the branch CHOOSE/IF selects, so a branch that
+  # is itself a union reports its real area count.
+  - id: arg_choose_returns_union
+    description: "CHOOSE selects a union branch; AREAS recurses and counts 2 areas."
+    formula: "=AREAS(CHOOSE(2,A1:B2,(C1,D1)))"
+    expect: { kind: number, value: 2 }
+
+  - id: arg_if_true_returns_union
+    description: "IF(TRUE) selects a union branch; AREAS recurses and counts 2 areas."
+    formula: "=AREAS(IF(TRUE,(A1,B2),C3:D4))"
+    expect: { kind: number, value: 2 }
+
+  - id: arg_if_false_returns_union
+    description: "IF(FALSE) selects the else union branch; AREAS counts 3 areas."
+    formula: "=AREAS(IF(FALSE,A1:B2,(C1,D1,E1)))"
+    expect: { kind: number, value: 3 }
+
+  # -- INDIRECT of a union string (deferred) -------------------------------
+  - id: arg_indirect_union
+    description: |
+      Excel resolves the INDIRECT string into a 2-area reference union → 2.
+      Formulon counts the INDIRECT call as a single opaque reference (1)
+      because it has no runtime reference-union value to parse the string
+      into. Tracked as a divergence; see tests/divergence.yaml.
+    formula: "=AREAS(INDIRECT(\"A1,B2\"))"
+    expect: { kind: number, value: 2 }
+
   # -- Intersection operator (space) --------------------------------------
   - id: arg_intersection_operator
     description: |

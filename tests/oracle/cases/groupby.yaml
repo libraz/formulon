@@ -36,3 +36,15 @@ cases:
   - id: groupby_filter_array_excludes_all
     description: 'GROUPBY({"A";"B"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE}) -> #VALUE! (filter eliminates every row)'
     formula: '=GROUPBY({"A";"B"}, {1;2}, SUM, 0, 0, 0, {FALSE;FALSE})'
+
+  # =========================================================================
+  # |total_depth| == 2 requests per-outer-group subtotal rows for a
+  # multi-column grouping. Formulon does not yet implement nested subtotals
+  # and falls back to the grand-total-only layout; this case is skipped via
+  # tests/divergence.yaml until the layout is built. Needs macOS golden
+  # regeneration once implemented.
+  # =========================================================================
+
+  - id: groupby_subtotal_depth_two
+    description: 'GROUPBY({"A","x";"A","y";"B","x"}, {10;20;30}, SUM, 0, 2) -> per-outer-group subtotals (not yet implemented; falls back to grand total)'
+    formula: '=GROUPBY({"A","x";"A","y";"B","x"}, {10;20;30}, SUM, 0, 2)'

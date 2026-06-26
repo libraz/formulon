@@ -2,11 +2,11 @@
   "suite": "lookup",
   "description": "MATCH / INDEX / CHOOSE / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.110.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T04:32:50Z"
+    "generated_at": "2026-06-26T07:15:51Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -933,8 +933,16 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -959,8 +967,15 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
       }
     },
     {

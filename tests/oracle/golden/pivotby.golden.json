@@ -2,11 +2,11 @@
   "suite": "pivotby",
   "description": "PIVOTBY dynamic-array pivot (Excel 365). Six perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
-    "excel_version": "16.109",
+    "excel_version": "16.110.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-15T01:15:13Z"
+    "generated_at": "2026-06-26T07:15:51Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -17,13 +17,13 @@
       "id": "pivotby_bare_sum",
       "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0)",
       "setup": {},
-      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array PIVOTBY/SUM formula; Formulon returns the documented pivot spill covered by unit tests."
+      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array PIVOTBY/SUM formula; Formulon returns the documented pivot spill. Unit test PivotBy.BareSumName covers bare-name aggregator dispatch."
     },
     {
       "id": "pivotby_lambda_sum",
       "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0)",
       "setup": {},
-      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array PIVOTBY/LAMBDA formula; Formulon returns the documented pivot spill covered by unit tests."
+      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array PIVOTBY/LAMBDA formula; Formulon returns the documented pivot spill. Unit test PivotBy.BasicTwoByTwoLambdaAggregatorSum covers inline-LAMBDA dispatch."
     },
     {
       "id": "pivotby_unknown_name_error",
@@ -268,6 +268,12 @@
           5
         ]
       }
+    },
+    {
+      "id": "pivotby_row_subtotal_depth_two",
+      "formula": "=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)",
+      "setup": {},
+      "skipped": "Nested subtotals for |row_total_depth|/|col_total_depth|==2 not yet implemented; PIVOTBY falls back to flat grouping (grand total only). Fallback is non-silent (structured-log warning)."
     }
   ]
 }

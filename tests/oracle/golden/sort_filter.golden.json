@@ -1,12 +1,12 @@
 {
   "suite": "sort_filter",
-  "description": "Dynamic-array filter / dedupe / sort family — FILTER, UNIQUE, SORT, SORTBY (Excel 365). 24 perspectives (6 per function); spill outputs flow through the same skip-oracle path as MUNIT and TEXTSPLIT (committed oracle golden predates array-spill comparison). Live cases cover scalar fallback and error returns — FILTER if_empty scalar, FILTER no-match #CALC!, FILTER mask shape #VALUE!, FILTER include error propagation, UNIQUE exactly_once-empty #CALC!, SORT sort_index out-of-range #VALUE!, SORT invalid sort_order #VALUE!, SORTBY shape mismatch #VALUE!, SORTBY invalid order #VALUE!.",
+  "description": "Dynamic-array filter / dedupe / sort family — FILTER, UNIQUE, SORT, SORTBY (Excel 365). 24 perspectives (6 per function); spill outputs, scalar fallback, and scalar errors are captured live by the array-aware oracle harness.",
   "environment": {
-    "excel_version": "16.109",
+    "excel_version": "16.110.1",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-15T01:13:43Z"
+    "generated_at": "2026-06-26T07:15:51Z"
   },
   "tolerance": {
     "abs": 1e-12,
