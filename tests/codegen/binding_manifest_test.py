@@ -19,6 +19,7 @@ Run directly:
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import unittest
@@ -29,6 +30,10 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GEN_SCRIPT = REPO_ROOT / "tools" / "codegen" / "gen_bindings.py"
 MANIFEST = REPO_ROOT / "tools" / "codegen" / "binding_manifest.yaml"
+C_HEADER = REPO_ROOT / "src" / "c_api" / "formulon_c.h"
+
+# Mirrors gen_bindings.py::_C_HEADER_DECL_RE.
+_C_HEADER_DECL_RE = re.compile(r"\bFM_API\b[^;{]*?\b(fm_[A-Za-z0-9_]+)\s*\(")
 
 # Body kinds the generator understands. Kept in sync with
 # `tools/codegen/gen_bindings.py::VALID_BODY_KINDS`.
@@ -104,6 +109,30 @@ class BindingManifestTest(unittest.TestCase):
             f"manifest carries only {len(self.entries)} entries; "
             "below the 6-entry threshold the codegen infra is not worth it.",
         )
+
+    # ---- Header coverage -------------------------------------------------
+
+    def test_every_manifest_entry_is_declared_in_header(self) -> None:
+        # The codegen emits only function bodies; the public `fm_*`
+        # declarations are hand-written in `formulon_c.h`. A manifest entry
+        # with no matching declaration there would build neither binding,
+        # yet the generated-vs-checked-in snapshot check cannot see it. Pin
+        # the coverage so a manifest/header divergence fails loudly.
+        declared = set(_C_HEADER_DECL_RE.findall(C_HEADER.read_text()))
+        for e in self.entries:
+            with self.subTest(name=e["name"]):
+                self.assertIn(
+                    e["name"],
+                    declared,
+                    f"manifest entry `{e['name']}` has no FM_API declaration in {C_HEADER}",
+                )
+
+    def test_header_regex_matches_a_known_symbol(self) -> None:
+        # Guard against the regex silently matching nothing (which would
+        # make the coverage test vacuously pass): the header must expose at
+        # least the entries the manifest references.
+        declared = set(_C_HEADER_DECL_RE.findall(C_HEADER.read_text()))
+        self.assertIn("fm_workbook_sheet_count", declared)
 
     # ---- Snapshot (generator vs checked-in output) -----------------------
 

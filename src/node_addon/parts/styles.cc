@@ -1,15 +1,16 @@
 // Copyright 2026 libraz. Licensed under the MIT License.
 //
 // Style-table bindings: read / write entries in the xf / font / fill /
-// border / numFmt pools plus the per-cell xf-index getters, and the
-// `evaluateCfRange` conditional-formatting evaluator. The cf
-// translator lives here because it shares the styles compilation
-// dependency on `fm_styles_*` typedefs declared in the same C ABI
-// header block.
+// border / numFmt pools plus the per-cell xf-index getters, the named
+// cell-style accessors, the conditional-formatting read / mutate
+// surface, and the `evaluateCfRange` evaluator. The cf translator
+// lives here because it shares the styles compilation dependency on
+// `fm_styles_*` typedefs declared in the same C ABI header block.
 
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "node_addon/parts/workbook_class.h"
 
@@ -350,6 +351,255 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   out.Set("status", MakeOkStatus(env));
   out.Set("cells", cells);
   return out;
+}
+
+// ---- Named cell styles ----------------------------------------------
+
+Napi::Value Workbook::CellStyleCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  uint32_t n = 0;
+  if (fm_styles_get_cell_style_count(handle_, &n) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, n);
+}
+
+Napi::Value Workbook::CellStyleXfCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  uint32_t n = 0;
+  if (fm_styles_get_cell_style_xf_count(handle_, &n) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, n);
+}
+
+Napi::Value Workbook::GetCellStyle(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t index = ArgU32(info, 0);
+  fm_cell_style_record_t cs{};
+  fm_status_t rc = fm_styles_get_cell_style(handle_, index, &cs);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("name", Napi::String::New(env, cs.name != nullptr ? cs.name : ""));
+  out.Set("xfId", Napi::Number::New(env, cs.xf_id));
+  out.Set("builtinId", Napi::Number::New(env, cs.builtin_id));
+  out.Set("iLevel", Napi::Number::New(env, cs.i_level));
+  out.Set("hidden", Napi::Boolean::New(env, cs.hidden != 0));
+  out.Set("customBuiltin", Napi::Boolean::New(env, cs.custom_builtin != 0));
+  return out;
+}
+
+Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t index = ArgU32(info, 0);
+  fm_cell_xf xf{};
+  fm_status_t rc = fm_styles_get_cell_style_xf(handle_, index, &xf);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
+  out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
+  out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
+  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
+  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.horizontal_align)));
+  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.vertical_align)));
+  out.Set("wrapText", Napi::Boolean::New(env, xf.wrap_text != 0));
+  return out;
+}
+
+// ---- Conditional formatting (read / mutate) -------------------------
+
+Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle_ == nullptr) {
+    return arr;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  std::size_t count = 0;
+  if (fm_sheet_cf_count(handle_, sheet, &count) != 0) {
+    return arr;
+  }
+  std::size_t emitted = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_cf_rule_t rule{};
+    if (fm_sheet_cf_get_at(handle_, sheet, i, &rule) != 0) {
+      continue;
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("id", Napi::String::New(env, rule.id != nullptr ? rule.id : ""));
+    item.Set("type", Napi::Number::New(env, static_cast<uint32_t>(rule.type)));
+    item.Set("priority", Napi::Number::New(env, rule.priority));
+    item.Set("stopIfTrue", Napi::Boolean::New(env, rule.stop_if_true != 0));
+    Napi::Array sqref = Napi::Array::New(env, rule.sqref_count);
+    for (uint32_t r = 0; r < rule.sqref_count; ++r) {
+      Napi::Object rng = Napi::Object::New(env);
+      rng.Set("firstRow", Napi::Number::New(env, rule.sqref[r].first_row));
+      rng.Set("firstCol", Napi::Number::New(env, rule.sqref[r].first_col));
+      rng.Set("lastRow", Napi::Number::New(env, rule.sqref[r].last_row));
+      rng.Set("lastCol", Napi::Number::New(env, rule.sqref[r].last_col));
+      sqref.Set(r, rng);
+    }
+    item.Set("sqref", sqref);
+    if (rule.dxf_id_engaged != 0) {
+      item.Set("dxfId", Napi::Number::New(env, rule.dxf_id));
+    }
+    if (rule.formula1 != nullptr) {
+      item.Set("formula1", Napi::String::New(env, rule.formula1));
+    }
+    if (rule.formula2 != nullptr) {
+      item.Set("formula2", Napi::String::New(env, rule.formula2));
+    }
+    if (rule.op_engaged != 0) {
+      item.Set("op", Napi::Number::New(env, static_cast<uint32_t>(rule.op)));
+    }
+    if (rule.rank_engaged != 0) {
+      item.Set("rank", Napi::Number::New(env, rule.rank));
+      item.Set("percent", Napi::Boolean::New(env, rule.percent != 0));
+      item.Set("bottom", Napi::Boolean::New(env, rule.bottom != 0));
+    }
+    // aboveAverage flags are always engineered but only meaningful for
+    // the AboveAverage rule type; surface them only there to mirror the
+    // embind shape.
+    if (rule.type == 6 /* AboveAverage */) {
+      item.Set("aboveAverage", Napi::Boolean::New(env, rule.above_average != 0));
+      item.Set("equalAverage", Napi::Boolean::New(env, rule.equal_average != 0));
+      if (rule.std_dev_engaged != 0) {
+        item.Set("stdDev", Napi::Number::New(env, rule.std_dev));
+      }
+    }
+    if (rule.text != nullptr) {
+      item.Set("text", Napi::String::New(env, rule.text));
+    }
+    if (rule.time_period_engaged != 0) {
+      item.Set("timePeriod", Napi::Number::New(env, static_cast<uint32_t>(rule.time_period)));
+    }
+    arr.Set(static_cast<uint32_t>(emitted), item);
+    ++emitted;
+  }
+  return arr;
+}
+
+Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsObject()) {
+    Napi::TypeError::New(env, "addConditionalFormat expects (sheet:number, rule:object)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  Napi::Object v = info[1].As<Napi::Object>();
+
+  // Pull every JS field into local storage first; the C ABI receives
+  // borrowed `const char*` views that must stay valid until
+  // `fm_sheet_cf_add_rule` returns.
+  std::vector<fm_cf_cell_range_t> ranges_buf;
+  if (v.Has("sqref")) {
+    Napi::Value sqref_js = v.Get("sqref");
+    if (sqref_js.IsArray()) {
+      Napi::Array sqref_arr = sqref_js.As<Napi::Array>();
+      const uint32_t n = sqref_arr.Length();
+      ranges_buf.reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        Napi::Value rng_v = sqref_arr.Get(i);
+        if (!rng_v.IsObject()) {
+          continue;
+        }
+        Napi::Object rng = rng_v.As<Napi::Object>();
+        fm_cf_cell_range_t r{};
+        r.first_row = rng.Get("firstRow").ToNumber().Uint32Value();
+        r.first_col = rng.Get("firstCol").ToNumber().Uint32Value();
+        r.last_row = rng.Get("lastRow").ToNumber().Uint32Value();
+        r.last_col = rng.Get("lastCol").ToNumber().Uint32Value();
+        ranges_buf.push_back(r);
+      }
+    }
+  }
+  const std::string id = SpecHas(v, "id") ? v.Get("id").ToString().Utf8Value() : std::string();
+  const std::string formula1 = SpecHas(v, "formula1") ? v.Get("formula1").ToString().Utf8Value() : std::string();
+  const std::string formula2 = SpecHas(v, "formula2") ? v.Get("formula2").ToString().Utf8Value() : std::string();
+  const std::string text = SpecHas(v, "text") ? v.Get("text").ToString().Utf8Value() : std::string();
+
+  fm_cf_rule_t rule{};
+  rule.id = id.empty() ? nullptr : id.c_str();
+  rule.type = static_cast<uint8_t>(SpecPullU32(v, "type", 0U) & 0xFFU);
+  rule.priority = SpecPullInt32(v, "priority", 0);
+  rule.stop_if_true = SpecPullBool(v, "stopIfTrue", false) ? 1 : 0;
+  if (SpecHas(v, "dxfId")) {
+    rule.dxf_id_engaged = 1;
+    rule.dxf_id = SpecPullU32(v, "dxfId", 0U);
+  }
+  rule.sqref = ranges_buf.empty() ? nullptr : ranges_buf.data();
+  rule.sqref_count = static_cast<uint32_t>(ranges_buf.size());
+  rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
+  rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
+  if (SpecHas(v, "op")) {
+    rule.op_engaged = 1;
+    rule.op = static_cast<uint8_t>(SpecPullU32(v, "op", 0U) & 0xFFU);
+  }
+  if (SpecHas(v, "rank")) {
+    rule.rank_engaged = 1;
+    rule.rank = SpecPullInt32(v, "rank", 0);
+  }
+  rule.percent = SpecPullBool(v, "percent", false) ? 1 : 0;
+  rule.bottom = SpecPullBool(v, "bottom", false) ? 1 : 0;
+  rule.above_average = SpecPullBool(v, "aboveAverage", true) ? 1 : 0;
+  rule.equal_average = SpecPullBool(v, "equalAverage", false) ? 1 : 0;
+  if (SpecHas(v, "stdDev")) {
+    rule.std_dev_engaged = 1;
+    rule.std_dev = SpecPullDouble(v, "stdDev", 0.0);
+  }
+  rule.text = text.empty() ? nullptr : text.c_str();
+  if (SpecHas(v, "timePeriod")) {
+    rule.time_period_engaged = 1;
+    rule.time_period = static_cast<uint8_t>(SpecPullU32(v, "timePeriod", 0U) & 0xFFU);
+  }
+  fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t index = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_status_t rc = fm_sheet_cf_remove_at(handle_, sheet, index);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::ClearConditionalFormats(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  fm_status_t rc = fm_sheet_cf_clear(handle_, sheet);
+  return MakeStatus(env, rc);
 }
 
 }  // namespace formulon_node

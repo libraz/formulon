@@ -12,6 +12,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_named_styles_test.cpp
   formulon_c_pivot_test.cpp
   formulon_c_protection_test.cpp
+  formulon_c_read_scratch_test.cpp
   formulon_c_sheet_features_test.cpp
   formulon_c_sheet_layout_test.cpp
   formulon_c_spill_test.cpp
@@ -19,7 +20,6 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_test.cpp
   formulon_c_trace_test.cpp
   partial_recalc_test.cpp
-  value_marshal_test.cpp
   workbook_sheet_ops_test.cpp
 )
 

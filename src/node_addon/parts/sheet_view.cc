@@ -51,6 +51,101 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   return out;
 }
 
+Napi::Value Workbook::GetSheetProtection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  fm_sheet_protection_t p{};
+  fm_status_t rc = fm_sheet_get_protection(handle_, sheet, &p);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  Napi::Object pr = Napi::Object::New(env);
+  pr.Set("enabled", Napi::Number::New(env, p.enabled));
+  pr.Set("algorithmName", Napi::String::New(env, p.algorithm_name != nullptr ? p.algorithm_name : ""));
+  pr.Set("hashValue", Napi::String::New(env, p.hash_value != nullptr ? p.hash_value : ""));
+  pr.Set("saltValue", Napi::String::New(env, p.salt_value != nullptr ? p.salt_value : ""));
+  pr.Set("spinCount", Napi::Number::New(env, p.spin_count));
+  pr.Set("legacyPassword", Napi::String::New(env, p.legacy_password != nullptr ? p.legacy_password : ""));
+  pr.Set("sheet", Napi::Number::New(env, p.sheet));
+  pr.Set("objects", Napi::Number::New(env, p.objects));
+  pr.Set("scenarios", Napi::Number::New(env, p.scenarios));
+  pr.Set("formatCells", Napi::Number::New(env, p.format_cells));
+  pr.Set("formatColumns", Napi::Number::New(env, p.format_columns));
+  pr.Set("formatRows", Napi::Number::New(env, p.format_rows));
+  pr.Set("insertColumns", Napi::Number::New(env, p.insert_columns));
+  pr.Set("insertRows", Napi::Number::New(env, p.insert_rows));
+  pr.Set("insertHyperlinks", Napi::Number::New(env, p.insert_hyperlinks));
+  pr.Set("deleteColumns", Napi::Number::New(env, p.delete_columns));
+  pr.Set("deleteRows", Napi::Number::New(env, p.delete_rows));
+  pr.Set("selectLockedCells", Napi::Number::New(env, p.select_locked_cells));
+  pr.Set("selectUnlockedCells", Napi::Number::New(env, p.select_unlocked_cells));
+  pr.Set("sort", Napi::Number::New(env, p.sort));
+  pr.Set("autoFilter", Napi::Number::New(env, p.auto_filter));
+  pr.Set("pivotTables", Napi::Number::New(env, p.pivot_tables));
+  out.Set("status", MakeOkStatus(env));
+  out.Set("protection", pr);
+  return out;
+}
+
+Napi::Value Workbook::SetSheetProtection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsObject()) {
+    Napi::TypeError::New(env, "setSheetProtection expects (sheet:number, protection:object)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  Napi::Object in = info[1].As<Napi::Object>();
+
+  // Keep the std::string buffers alive until after the C ABI call so the
+  // borrowed `const char*` fields stay valid.
+  auto pull_string = [&](const char* key) -> std::string {
+    if (!SpecHas(in, key)) {
+      return std::string();
+    }
+    return in.Get(key).ToString().Utf8Value();
+  };
+  const std::string algorithm_name = pull_string("algorithmName");
+  const std::string hash_value = pull_string("hashValue");
+  const std::string salt_value = pull_string("saltValue");
+  const std::string legacy_password = pull_string("legacyPassword");
+
+  fm_sheet_protection_t p{};
+  p.enabled = SpecPullInt32(in, "enabled", 0);
+  p.algorithm_name = algorithm_name.c_str();
+  p.hash_value = hash_value.c_str();
+  p.salt_value = salt_value.c_str();
+  p.spin_count = SpecPullU32(in, "spinCount", 0U);
+  p.legacy_password = legacy_password.c_str();
+  p.sheet = SpecPullInt32(in, "sheet", 0);
+  p.objects = SpecPullInt32(in, "objects", 0);
+  p.scenarios = SpecPullInt32(in, "scenarios", 0);
+  p.format_cells = SpecPullInt32(in, "formatCells", 0);
+  p.format_columns = SpecPullInt32(in, "formatColumns", 0);
+  p.format_rows = SpecPullInt32(in, "formatRows", 0);
+  p.insert_columns = SpecPullInt32(in, "insertColumns", 0);
+  p.insert_rows = SpecPullInt32(in, "insertRows", 0);
+  p.insert_hyperlinks = SpecPullInt32(in, "insertHyperlinks", 0);
+  p.delete_columns = SpecPullInt32(in, "deleteColumns", 0);
+  p.delete_rows = SpecPullInt32(in, "deleteRows", 0);
+  p.select_locked_cells = SpecPullInt32(in, "selectLockedCells", 0);
+  p.select_unlocked_cells = SpecPullInt32(in, "selectUnlockedCells", 0);
+  p.sort = SpecPullInt32(in, "sort", 0);
+  p.auto_filter = SpecPullInt32(in, "autoFilter", 0);
+  p.pivot_tables = SpecPullInt32(in, "pivotTables", 0);
+  fm_status_t rc = fm_sheet_set_protection(handle_, sheet, &p);
+  return MakeStatus(env, rc);
+}
+
 Napi::Value Workbook::SetSheetZoom(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

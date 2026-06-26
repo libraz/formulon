@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 #include "c_api/formulon_c.h"
@@ -14,6 +15,28 @@
 namespace formulon {
 namespace c_api {
 namespace parts {
+
+// ABI identity: the `FM_VAL_*` discriminators are numerically equal to the
+// `formulon::ValueKind` ordinals. `value_to_fm` below maps each ValueKind
+// to its `FM_VAL_*` by name; these static_asserts pin the parity so a
+// reorder of either enum is a build break rather than a silent wire-format
+// drift across the C ABI.
+static_assert(FM_VAL_BLANK == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Blank),
+              "FM_VAL_BLANK must match ValueKind::Blank");
+static_assert(FM_VAL_NUMBER == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Number),
+              "FM_VAL_NUMBER must match ValueKind::Number");
+static_assert(FM_VAL_BOOL == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Bool),
+              "FM_VAL_BOOL must match ValueKind::Bool");
+static_assert(FM_VAL_TEXT == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Text),
+              "FM_VAL_TEXT must match ValueKind::Text");
+static_assert(FM_VAL_ERROR == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Error),
+              "FM_VAL_ERROR must match ValueKind::Error");
+static_assert(FM_VAL_ARRAY == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Array),
+              "FM_VAL_ARRAY must match ValueKind::Array");
+static_assert(FM_VAL_REF == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Ref),
+              "FM_VAL_REF must match ValueKind::Ref");
+static_assert(FM_VAL_LAMBDA == static_cast<std::underlying_type_t<ValueKind>>(ValueKind::Lambda),
+              "FM_VAL_LAMBDA must match ValueKind::Lambda");
 
 namespace {
 
@@ -92,6 +115,10 @@ void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {
     }
     case formulon::ValueKind::Error:
       out->kind = FM_VAL_ERROR;
+      // The C-ABI wire format for errors is the raw `ErrorCode` ordinal
+      // (Null=0, Div0=1, Value=2, ...), NOT the OOXML wire code. This is
+      // the single source of truth for the boundary; see the
+      // `fm_value_t::u.error_code` contract in `formulon_c.h`.
       out->u.error_code = static_cast<int32_t>(v.as_error());
       return;
     case formulon::ValueKind::Array:

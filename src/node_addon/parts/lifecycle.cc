@@ -99,6 +99,64 @@ Napi::Value Workbook::GetValue(const Napi::CallbackInfo& info) {
   return MakeValueResult(env, MakeOkStatus(env), v);
 }
 
+Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeStringFieldResult(env, NullHandleError(env), "text", "");
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const char* text = nullptr;
+  fm_status_t rc = fm_workbook_lambda_text_at(handle_, sheet, row, col, &text);
+  if (rc != 0) {
+    return MakeStringFieldResult(env, MakeErrorStatus(env, rc), "text", "");
+  }
+  return MakeStringFieldResult(env, MakeOkStatus(env), "text", text);
+}
+
+// ---- Calc policy / behaviour profile --------------------------------
+
+Napi::Value Workbook::CalcMode(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, static_cast<int32_t>(FM_CALC_MODE_AUTO));
+  }
+  fm_calc_mode_t mode = FM_CALC_MODE_AUTO;
+  fm_workbook_calc_mode(handle_, &mode);
+  return Napi::Number::New(env, static_cast<int32_t>(mode));
+}
+
+Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t mode = ArgU32(info, 0);
+  fm_status_t rc = fm_workbook_set_calc_mode(handle_, static_cast<fm_calc_mode_t>(mode));
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::ExcelProfileId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::String::New(env, "win-365-ja_JP");
+  }
+  const char* id = nullptr;
+  fm_workbook_excel_profile_id(handle_, &id);
+  return Napi::String::New(env, id != nullptr ? id : "win-365-ja_JP");
+}
+
+Napi::Value Workbook::SetExcelProfileId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::string profile_id = ArgString(info, 0);
+  fm_status_t rc = fm_workbook_set_excel_profile_id(handle_, profile_id.c_str());
+  return MakeStatus(env, rc);
+}
+
 // ---- Recalc + save --------------------------------------------------
 
 Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {

@@ -29,8 +29,18 @@ ERROR_NULL = 0
 
 
 class VersionTests(unittest.TestCase):
-    def test_package_version_constant(self) -> None:
-        self.assertEqual(formulon.__version__, "0.9.0")
+    def test_package_version_is_non_empty(self) -> None:
+        # __version__ is derived from the single source of truth (the
+        # pyproject [project].version, via dist metadata or a source-tree
+        # fallback) -- never hardcoded -- so we only assert its shape here.
+        self.assertIsInstance(formulon.__version__, str)
+        self.assertRegex(formulon.__version__, r"^\d+\.\d+\.\d+")
+
+    def test_package_version_matches_library_version(self) -> None:
+        # __version__ and the C-ABI library_version() both descend from the
+        # same MAJOR.MINOR.PATCH source (pyproject.toml / src/version.h are
+        # bumped together by the release skill); they must agree.
+        self.assertEqual(formulon.__version__, formulon.library_version())
 
     def test_library_version_non_empty(self) -> None:
         v = formulon.library_version()

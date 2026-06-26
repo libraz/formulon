@@ -1,8 +1,13 @@
 # formulon
 
 Excel 365 calculation engine, exposed as a pure-Python binding driven by
-WebAssembly. Evaluates formulas, loads and saves `.xlsx` workbooks, and
-aims for 1-bit compatibility with Mac Excel 365 (ja-JP locale).
+WebAssembly. Evaluates formulas; loads and saves `.xlsx` workbooks; and
+edits cells, the row/column matrix, styles, merges, comments,
+hyperlinks, data validations, conditional formats, defined names, and
+PivotTables. It also exposes recalc (full and partial), dependency-graph
+tracing (precedents / dependents), dynamic-array spill info, the function
+catalog, and per-sheet view / protection settings. The goal is 1-bit
+compatibility with Excel 365 (ja-JP locale).
 
 ## Install
 
@@ -64,26 +69,118 @@ with Workbook.load(blob) as wb:
         print(cell)
 ```
 
-## API reference
+## API surface
 
-The public surface is documented via Python docstrings and the
-hand-rolled type stubs in `formulon/__init__.pyi`. Highlights:
+`Workbook` mirrors the full C ABI surface that the npm bindings expose.
+Every method is documented via Python docstrings and the hand-rolled type
+stubs in `formulon/__init__.pyi`. The groups, with one example each:
 
-- `formulon.eval_formula(formula: str) -> Value` -- one-shot evaluation.
-- `formulon.library_version() -> str` -- version of the engine compiled
-  into the bundled `formulon_capi.wasm`.
-- `formulon.Workbook.create_default() / create_empty() / load(bytes)` --
-  factory methods; always use them as context managers (`with ... as wb:`).
-- `Workbook.set_number / set_bool / set_text / set_blank / set_formula` --
-  cell mutators.
-- `Workbook.recalc()` -- triggers a full dependency-ordered recalculation.
-  Always serial under WASM (the parallel scheduler requires a pthread
-  runtime that wasmtime does not provide; the native CLI uses up to 8
-  worker threads).
-- `Workbook.get_value(sheet, row, col) -> Value` -- read a cached value.
-- `Workbook.save() -> bytes` -- serialise to `.xlsx`.
-- `Workbook.iter_cells(sheet)`, `iter_defined_names()`, `iter_tables()`,
-  `iter_passthrough()` -- iteration helpers.
+**Core** -- `create_default()` / `create_empty()` / `load(bytes)` factories,
+`set_number/set_bool/set_text/set_blank/set_formula`, `get_value`,
+`recalc()`, `save()`, and the `iter_cells/iter_defined_names/iter_tables/
+iter_passthrough` iterators.
+
+**Sheets & matrix edits**
+
+```python
+wb.add_sheet("Data"); wb.rename_sheet(1, "Numbers"); wb.move_sheet(1, 0)
+wb.set_number(0, 0, 0, 11.0)        # A1 = 11
+wb.insert_rows(0, 0, 1)             # A1 shifts down to A2
+wb.delete_cols(0, 5, 1)            # delete column F
+```
+
+**Defined names**
+
+```python
+wb.set_defined_name("TaxRate", "Sheet1!$A$1")   # set / replace
+wb.set_defined_name("TaxRate", "")               # empty formula removes it
+```
+
+**Partial recalc** -- recompute only the closure feeding a viewport:
+
+```python
+recomputed = wb.partial_recalc(sheet=0, first_row=0, last_row=0,
+                               first_col=0, last_col=1)
+```
+
+**Merges / comments / hyperlinks / validations**
+
+```python
+from formulon import MergeRange, DataValidationInput
+wb.add_merge(0, MergeRange(0, 0, 1, 1))
+wb.set_comment(0, 0, 0, author="alice", text="see note")
+wb.add_hyperlink(0, 0, 0, "https://example.com", "Example", "tooltip")
+wb.add_validation(0, DataValidationInput(type=3, ranges=[MergeRange(0, 0, 4, 0)],
+                                         formula1='"a,b,c"'))
+```
+
+**Styles & number formats**
+
+```python
+from formulon import FontRecord, FillRecord, CellXf
+fi = wb.add_font(FontRecord(name="Calibri", size=12.0, bold=True))
+fill = wb.add_fill(FillRecord(pattern=1, fg_argb=0xFFFFFF00))
+border = wb.add_border({"left": {"style": 1, "color_argb": 0xFF000000}})
+nf = wb.add_num_fmt("0.00")
+xf = wb.add_cell_xf(CellXf(font_index=fi, fill_index=fill, border_index=border,
+                          num_fmt_id=nf, horizontal_align=0, vertical_align=0,
+                          wrap_text=False))
+wb.set_cell_xf_index(0, 0, 0, xf)
+```
+
+**Conditional formatting**
+
+```python
+from formulon import ConditionalFormatInput, MergeRange
+wb.add_conditional_format(0, ConditionalFormatInput(
+    sqref=[MergeRange(0, 0, 9, 0)], type=1,   # cellIs
+    op_engaged=True, op=4, formula1="100"))   # greaterThan 100
+matches = wb.evaluate_cf_range(0, 0, 0, 9, 0)  # per-cell resolved matches
+```
+
+**PivotTables** -- build a cache, project a layout:
+
+```python
+from formulon import PivotFieldSpec, PivotDataFieldSpec, PivotAxis, PivotAggregation
+cache = wb.pivot_cache_create()
+wb.pivot_cache_field_add(cache, "Region")
+wb.pivot_cache_field_add(cache, "Amount")
+rec = wb.pivot_cache_record_add(cache)
+wb.pivot_cache_record_set_text(cache, rec, 0, "East")
+wb.pivot_cache_record_set_number(cache, rec, 1, 10.0)
+pivot = wb.pivot_create(0, "Pivot1", cache, anchor_row=0, anchor_col=4)
+region = wb.pivot_field_add(0, pivot, PivotFieldSpec("Region", axis=PivotAxis.ROW))
+amount = wb.pivot_field_add(0, pivot, PivotFieldSpec("Amount", axis=PivotAxis.VALUE))
+wb.pivot_data_field_add(0, pivot, PivotDataFieldSpec("Sum of Amount", amount,
+                                                     aggregation=PivotAggregation.SUM))
+layout = wb.pivot_layout(0, pivot)   # -> PivotLayout(top, left, rows, cols, cells)
+```
+
+**Dependency trace & spill**
+
+```python
+wb.set_number(0, 0, 0, 1.0); wb.set_formula(0, 0, 1, "=A1"); wb.recalc()
+wb.precedents(0, 0, 1)   # -> [CellNode(sheet=0, row=0, col=0)]
+wb.dependents(0, 0, 0)   # -> [CellNode(sheet=0, row=0, col=1)]
+wb.set_formula(0, 5, 0, "=SEQUENCE(3)"); wb.recalc()
+wb.spill_info(0, 5, 0)   # -> SpillInfo(engaged=True, rows=3, cols=1, ...)
+```
+
+**Function catalog** (static; needs no workbook handle)
+
+```python
+Workbook.function_count()                 # number of registered functions
+Workbook.function_metadata("SUM", 0)      # FunctionMetadata or None
+```
+
+**Sheet view / protection / calc policy** -- `get_sheet_view` /
+`set_sheet_zoom` / `set_sheet_freeze` / `set_sheet_tab_hidden`,
+`get_sheet_columns` / `set_column_width` / `set_row_height` (and the
+hidden / outline variants), `get_sheet_protection` /
+`set_sheet_protection`, `calc_mode` / `set_calc_mode`, `excel_profile_id`
+/ `set_excel_profile_id`, plus `get_external_links()`.
+
+### Values and errors
 
 `Value` exposes `kind`, `number`, `boolean`, `text`, `error_code`, plus
 `to_python()` which converts to the natural Python type
@@ -91,8 +188,23 @@ hand-rolled type stubs in `formulon/__init__.pyi`. Highlights:
 errors and reserved kinds.
 
 `FormulonError` is raised only for host-side problems (NULL handle,
-parser crash inside `Workbook.load`, OOM). Excel cell errors travel
-inside `Value(kind=ValueKind.ERROR)`.
+parser crash inside `Workbook.load`, out-of-range index, OOM). Excel cell
+errors travel inside `Value(kind=ValueKind.ERROR)`. The one absent
+lookup is `get_comment`, which returns `None` (not an error) when no
+comment is anchored at the requested cell.
+
+### Not exposed
+
+`recalc()` is always serial under WASM: the parallel scheduler requires a
+pthread runtime that wasmtime does not provide (the native CLI uses up to
+8 worker threads). Result fidelity is identical.
+
+The iterative-solver progress callback (`fm_workbook_set_iterative_progress`
+in the C ABI) is intentionally **not** bound -- it takes a C function
+pointer that the host cannot synthesise into the WebAssembly module's
+function table through `wasmtime`. Configure iterative calculation via
+`set_iterative(enabled, max_iterations, max_change)` instead; only the
+per-sweep callback is unavailable.
 
 ## Building from source
 

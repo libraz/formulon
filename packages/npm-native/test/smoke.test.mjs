@@ -532,3 +532,200 @@ test('addValidation / getValidations / removeValidationAt / clearValidations rou
   assert.equal(wb.getValidations(0).length, 0);
   assert.ok(wb.clearValidations(0).ok);
 });
+
+// -- Newly wired surface (audit parity with the WASM binding) ----------
+// These tests exercise the methods that were previously only reachable
+// from the WASM package. They assert sensible return shapes rather than
+// deep semantics; the point is "the addon wires them and does not throw".
+
+test('addConditionalFormat + getConditionalFormats + clearConditionalFormats round-trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.getConditionalFormats(0).length, 0);
+  // cellIs rule (type 1) comparing the cell to a literal.
+  const add = wb.addConditionalFormat(0, {
+    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
+    type: 1,
+    op: 5,
+    formula1: '10',
+    dxfId: 0,
+    stopIfTrue: false,
+  });
+  assert.ok(add.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
+  const list = wb.getConditionalFormats(0);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].type, 1);
+  assert.equal(typeof list[0].id, 'string');
+  assert.equal(list[0].sqref.length, 1);
+  assert.equal(list[0].sqref[0].lastRow, 4);
+  assert.equal(list[0].formula1, '10');
+  // removeConditionalFormatAt drops the only rule.
+  assert.ok(wb.removeConditionalFormatAt(0, 0).ok);
+  assert.equal(wb.getConditionalFormats(0).length, 0);
+  // clearConditionalFormats is a safe no-op on an empty sheet.
+  assert.ok(wb.clearConditionalFormats(0).ok);
+  // Sheet-out-of-range is rejected.
+  assert.ok(!wb.clearConditionalFormats(999).ok);
+});
+
+test('named cell styles: cellStyleCount / getCellStyle / cellStyleXfCount', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // A fresh workbook may carry zero named styles; the accessors must
+  // still return well-formed values rather than throwing.
+  const count = wb.cellStyleCount();
+  assert.equal(typeof count, 'number');
+  assert.ok(count >= 0);
+  assert.equal(typeof wb.cellStyleXfCount(), 'number');
+  if (count > 0) {
+    const cs = wb.getCellStyle(0);
+    assert.ok(cs.status.ok, `getCellStyle: ${JSON.stringify(cs.status)}`);
+    assert.equal(typeof cs.name, 'string');
+    assert.equal(typeof cs.xfId, 'number');
+  } else {
+    // Out-of-range index surfaces an error status, not a throw.
+    const cs = wb.getCellStyle(0);
+    assert.equal(cs.status.ok, false);
+  }
+});
+
+test('setCalcMode / calcMode round-trip the calc policy', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // Default is automatic (0).
+  assert.equal(wb.calcMode(), 0);
+  assert.ok(wb.setCalcMode(1).ok);
+  assert.equal(wb.calcMode(), 1);
+  assert.ok(wb.setCalcMode(2).ok);
+  assert.equal(wb.calcMode(), 2);
+});
+
+test('excelProfileId / setExcelProfileId round-trip the profile id', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const def = wb.excelProfileId();
+  assert.equal(typeof def, 'string');
+  assert.ok(def.length > 0);
+  assert.ok(wb.setExcelProfileId('mac-365-ja_JP').ok);
+  assert.equal(wb.excelProfileId(), 'mac-365-ja_JP');
+});
+
+test('functionNames + functionMetadata expose the catalog', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const names = wb.functionNames();
+  assert.ok(Array.isArray(names));
+  assert.ok(names.length > 0, 'expected a non-empty function catalog');
+  assert.ok(names.includes('SUM'), 'expected SUM in the catalog');
+  const md = wb.functionMetadata('SUM', 0);
+  assert.equal(md.ok, true);
+  assert.equal(md.name, 'SUM');
+  assert.equal(typeof md.minArity, 'number');
+  // Unknown function returns { ok: false }.
+  const miss = wb.functionMetadata('NOT_A_REAL_FUNCTION_XYZ', 0);
+  assert.equal(miss.ok, false);
+});
+
+test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // en-US locale (0): the localized name is the canonical name itself.
+  assert.equal(wb.localizeFunctionName('SUM', 0), 'SUM');
+  assert.equal(wb.canonicalizeFunctionName('SUM', 0), 'SUM');
+  // An unknown name returns the empty string.
+  assert.equal(wb.canonicalizeFunctionName('NOPE_XYZ', 0), '');
+});
+
+test('precedents / dependents return arrays for a small formula graph', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setNumber(0, 0, 0, 1).ok); // A1
+  assert.ok(wb.setNumber(0, 0, 1, 2).ok); // B1
+  assert.ok(wb.setFormula(0, 1, 0, '=A1+B1').ok); // A2 = A1 + B1
+  assert.ok(wb.recalc().ok);
+  // A2 reads A1 and B1.
+  const prec = wb.precedents(0, 1, 0, 1);
+  assert.ok(Array.isArray(prec));
+  assert.equal(prec.length, 2);
+  for (const node of prec) {
+    assert.equal(typeof node.sheet, 'number');
+    assert.equal(typeof node.row, 'number');
+    assert.equal(typeof node.col, 'number');
+  }
+  // A1 is read by A2.
+  const dep = wb.dependents(0, 0, 0, 1);
+  assert.ok(Array.isArray(dep));
+  assert.equal(dep.length, 1);
+  assert.equal(dep[0].row, 1);
+  assert.equal(dep[0].col, 0);
+});
+
+test('spillInfo reports a dynamic-array region', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // Non-spill cell: engaged is false, fields zeroed.
+  const none = wb.spillInfo(0, 0, 0);
+  assert.equal(typeof none.engaged, 'boolean');
+  assert.equal(none.engaged, false);
+  // A spilling dynamic array anchored at A1.
+  assert.ok(wb.setFormula(0, 0, 0, '=SEQUENCE(3,1)').ok);
+  assert.ok(wb.recalc().ok);
+  const info = wb.spillInfo(0, 0, 0);
+  assert.equal(info.engaged, true);
+  assert.equal(info.anchorRow, 0);
+  assert.equal(info.anchorCol, 0);
+  assert.equal(info.rows, 3);
+  assert.equal(info.cols, 1);
+});
+
+test('getLambdaText is wired and reports the documented contract', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // A bare top-level LAMBDA renders as #CALC! in Excel 365 and does not
+  // retain a renderable closure; the engine mirrors that, so the lambda
+  // text surface returns an error status (not a throw). A plain number
+  // cell is likewise not a lambda. Both prove the method marshals
+  // arguments and propagates the Expected failure as a JS error status.
+  assert.ok(wb.setFormula(0, 0, 0, '=LAMBDA(x,x+1)').ok);
+  assert.ok(wb.recalc().ok);
+  const bare = wb.getLambdaText(0, 0, 0);
+  assert.equal(bare.status.ok, false);
+  assert.equal(typeof bare.text, 'string');
+  assert.equal(bare.text, '');
+
+  assert.ok(wb.setNumber(0, 1, 0, 5).ok);
+  const num = wb.getLambdaText(0, 1, 0);
+  assert.equal(num.status.ok, false);
+});
+
+test('getExternalLinks returns an array (empty for a fresh workbook)', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const links = wb.getExternalLinks();
+  assert.ok(Array.isArray(links));
+  assert.equal(links.length, 0);
+});
+
+test('getSheetProtection / setSheetProtection round-trip the protection flags', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const before = wb.getSheetProtection(0);
+  assert.ok(before.status.ok, `getSheetProtection: ${JSON.stringify(before.status)}`);
+  assert.equal(before.protection.enabled, 0);
+  // Enable protection and lock cell selection.
+  const next = {
+    ...before.protection,
+    enabled: 1,
+    selectLockedCells: 1,
+    sort: 1,
+  };
+  assert.ok(wb.setSheetProtection(0, next).ok);
+  const after = wb.getSheetProtection(0);
+  assert.ok(after.status.ok);
+  assert.equal(after.protection.enabled, 1);
+  assert.equal(after.protection.selectLockedCells, 1);
+  assert.equal(after.protection.sort, 1);
+  // Sheet-out-of-range is rejected.
+  assert.ok(!wb.getSheetProtection(999).status.ok);
+  assert.ok(!wb.setSheetProtection(999, next).ok);
+});

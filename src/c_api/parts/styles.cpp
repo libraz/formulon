@@ -111,22 +111,22 @@ extern "C" fm_status_t fm_styles_get_num_fmt_string(fm_workbook_t* wb, uint16_t 
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_get_num_fmt_string: NULL argument");
   }
+  // A file may define a custom `<numFmt>` whose `numFmtId` overrides a
+  // built-in slot; Excel honours the file's definition over the built-in.
+  // Search the custom table first so an override wins, then fall back to
+  // the built-in `.rodata` table only when no override is present.
+  const formulon::io::StylesTable& styles = wb->workbook().styles();
+  for (const formulon::io::NumFmtRecord& n : styles.num_fmts) {
+    if (n.id == num_fmt_id && n.format_string_index < styles.num_fmt_strings.size()) {
+      *out = styles.num_fmt_strings[n.format_string_index].c_str();
+      return 0;
+    }
+  }
   // Built-in ids (0..163) resolve through the writer's `.rodata` table.
   if (num_fmt_id < 164U) {
     const char* s = formulon::io::builtin_num_fmt(num_fmt_id);
     if (s != nullptr && s[0] != '\0') {
       *out = s;
-      return 0;
-    }
-    // Reserved-but-undocumented built-in slot. Fall through to the
-    // custom search to honour any caller-defined override; if neither
-    // is present, surface kInvalidArgument so callers know the id is
-    // not resolvable.
-  }
-  const formulon::io::StylesTable& styles = wb->workbook().styles();
-  for (const formulon::io::NumFmtRecord& n : styles.num_fmts) {
-    if (n.id == num_fmt_id && n.format_string_index < styles.num_fmt_strings.size()) {
-      *out = styles.num_fmt_strings[n.format_string_index].c_str();
       return 0;
     }
   }

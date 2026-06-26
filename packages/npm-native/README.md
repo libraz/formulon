@@ -18,30 +18,77 @@ Why prefer the native build:
   expensive operations on large workbooks).
 - **Larger workbook capacity**: not bound by the WASM 4 GiB ceiling.
 
-## Status: MVP scaffold
+## Surface parity
 
-This package currently exposes a deliberate subset of the engine's
-JS surface — enough to build, load, edit, recalc, and save a workbook
-end-to-end. The full ~50-method parity with `@libraz/formulon`,
-prebuilt binaries for the supported OS/arch matrix, and the parity-test
-channel are forthcoming bundles. Expect the API to grow, not to break.
+This package exposes the full `Workbook` surface of the WASM-backed
+`@libraz/formulon` package — the same 154 instance methods plus the
+three static factories, all marshalling to the identical C-ABI
+functions. JS callers can swap between the two packages without code
+changes; the `{ status, value }` envelopes and result shapes are
+byte-identical. The native-only differences are operational (native
+threads, no V8 ↔ WASM heap copies, no 4 GiB ceiling), not API-shaped.
 
-Methods exposed today:
+The TypeScript declarations in `dist/index.d.ts` are the authoritative
+method list; the categories below summarise what is registered on the
+`Workbook` class (see `DefineClass` in
+`src/node_addon/parts/workbook_class.cc`):
 
 ```
-Workbook.createDefault()
-Workbook.createEmpty()
-Workbook.loadBytes(bytes)
+Static factories
+  Workbook.createDefault(), createEmpty(), loadBytes(bytes)
+
+Cells & recalc
   setNumber, setBool, setText, setBlank, setFormula
-  getValue
-  recalc, save
-  addSheet, removeSheet, renameSheet
-  sheetCount, sheetName
+  getValue, getLambdaText
+  recalc, partialRecalc, setIterative, setIterativeProgress, save
+
+Workbook policy / catalog
+  calcMode, setCalcMode, excelProfileId, setExcelProfileId
+  functionMetadata, functionNames,
+  localizeFunctionName, canonicalizeFunctionName
+  precedents, dependents, spillInfo, getExternalLinks
+
+Sheets & structure
+  addSheet, removeSheet, renameSheet, moveSheet, sheetCount, sheetName
+  insertRows, deleteRows, insertCols, deleteCols
+  cellCount, cellAt, definedNameCount, definedNameAt,
+  tableCount, tableAt, passthroughCount, passthroughAt
   setDefinedName
+
+Sheet view / layout / protection
+  getSheetView, setSheetZoom, setSheetFreeze, setSheetTabHidden
+  getSheetProtection, setSheetProtection
+  getSheetColumns, setColumnWidth, setColumnHidden, setColumnOutline
+  getSheetRowOverrides, setRowHeight, setRowHidden, setRowOutline
+
+Styles
+  getCellXfIndex, setCellXfIndex, getCellXf,
+  getFont, getFill, getBorder, getNumFmt
+  addFont, addFill, addBorder, addNumFmt, addXf
+  fontCount, fillCount, borderCount, xfCount
+  cellStyleCount, cellStyleXfCount, getCellStyle, getCellStyleXf
+
+Merges / comments / hyperlinks / validations
+  addMerge, removeMerge, removeMergeAt, clearMerges, getMerges
+  getComment, setComment
+  addHyperlink, getHyperlinks, removeHyperlink,
+  removeHyperlinkAt, clearHyperlinks
+  getValidations, addValidation, removeValidationAt, clearValidations
+
+Conditional formatting
+  getConditionalFormats, addConditionalFormat,
+  removeConditionalFormatAt, clearConditionalFormats, evaluateCfRange
+
+PivotTables & pivot caches
+  pivotCount, pivotCreate, pivotRemove, pivotLayout, ... (full pivot
+  cache + table mutation surface; see dist/index.d.ts)
 
 Top-level: evalFormula, version, lastErrorMessage,
            lastErrorContext, statusString
 ```
+
+Prebuilt binaries are shipped per supported OS/arch slot under
+`dist/prebuilds/`; from a source checkout, build with the steps below.
 
 ## Building from source
 

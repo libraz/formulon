@@ -125,12 +125,13 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
   // dynamic-array spill surface their array cell rather than the raw
   // (blank) cached value.
   const formulon::Value v = wb->workbook().sheet(sheet_index).resolve_cell_value(row, col);
-  // `text_store` is a `std::deque`, so prior pointers handed out by this
-  // accessor remain valid even when this call appends a new entry.
-  // Cast away const to write into the per-handle text store; the store
-  // is logically internal scratch space whose mutation does not affect
-  // the workbook's observable state.
-  TextStore& store = const_cast<TextStore&>(wb->text_store);
+  // Read-path strings go to `read_scratch`, which is cleared on each read
+  // so it holds only this call's output. Cast away const because the
+  // scratch store is logically internal: mutating it does not affect the
+  // workbook's observable state. The returned text pointer is valid until
+  // the next read on this handle (see `formulon_c.h`).
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
   value_to_fm(v, store, out);
   return 0;
 }
@@ -157,7 +158,11 @@ extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t shee
                              "fm_workbook_lambda_text_at: lambda payload is NULL");
   }
   std::string formatted = formulon::eval::format_lambda_value(*lv);
-  TextStore& store = const_cast<TextStore&>(wb->text_store);
+  // Read-path scratch: cleared per call so the lambda text does not
+  // accumulate across repeated reads. The returned pointer is valid until
+  // the next read on this handle (see `formulon_c.h`).
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
   store.emplace_back(std::move(formatted));
   *out_text = store.back().c_str();
   return 0;
@@ -236,7 +241,11 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
   // implicit default cells; users that want only stored formulae filter
   // by `out_formula != NULL`.
   const formulon::Value v = sheet.resolve_cell_value(row, col);
-  TextStore& store = const_cast<TextStore&>(wb->text_store);
+  // `out_value`'s text payload goes to `read_scratch` (cleared per call,
+  // valid until the next read). `out_formula` above points into the
+  // cell's own `formula_text`, not scratch, so clearing here is safe.
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
   value_to_fm(v, store, out_value);
   return 0;
 }

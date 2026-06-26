@@ -10,7 +10,7 @@ Mac Excel 365 (ja-JP locale).
 npm install @libraz/formulon
 ```
 
-Requires Node.js 18 or newer (the package is shipped as ES modules).
+Requires Node.js 22 or newer (the package is shipped as ES modules).
 
 ## Quick start
 

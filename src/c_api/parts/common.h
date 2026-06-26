@@ -5,10 +5,9 @@
 // because the per-part TUs are linked into `formulon_core` only.
 //
 // Surface intentionally narrow: opaque-handle definition, thread-local
-// diagnostic storage, the per-handle text-store + interning helper, and
-// the validation helpers that every part needs. Anything Value- or
-// error-mapping flavoured lives in `src/c_api/internal/value_marshal.h`
-// (the W6-4 leaf set shared by the three bindings).
+// diagnostic storage, the per-handle text-store + interning helper, the
+// `value_to_fm` marshaller, and the validation helpers that every part
+// needs.
 
 #ifndef FORMULON_C_API_PARTS_COMMON_H_
 #define FORMULON_C_API_PARTS_COMMON_H_
@@ -78,8 +77,10 @@ bool check_range_count(std::uint32_t n, const char* api);
 std::string_view intern_text(TextStore& store, std::string_view text);
 
 // Translates a `Value` into a C-side `fm_value_t`. For text variants the
-// payload is interned in `store` so the returned pointer is NUL-terminated
-// and stable across other reads on the same handle.
+// payload is appended to `store` and the returned pointer is a stable,
+// NUL-terminated `c_str()` into it. Read-path callers pass the per-handle
+// `read_scratch` (cleared each call) so returned pointers stay valid only
+// until the next read; intern-path callers pass long-lived storage.
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out);
 
 // Validates a `(handle, sheet_index)` pair and returns the in-bounds
@@ -112,11 +113,23 @@ fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const 
 struct fm_workbook {
   std::optional<formulon::Workbook> wb;
 
-  // Storage for UTF-8 strings owned by this handle: cell text inputs
-  // (`fm_workbook_set_text`) and read-side NUL-terminated copies
-  // (`fm_workbook_get_value` / `fm_workbook_sheet_name` for sheets that
-  // would otherwise alias inline storage).
+  // Intern storage for UTF-8 strings that must live for the lifetime of
+  // the handle: cell text inputs (`fm_workbook_set_text`) and any other
+  // string whose bytes back a non-owning `Value::text` view stored inside
+  // the workbook. Entries are never removed while the handle is alive, so
+  // every view interned here stays valid until the handle is destroyed.
   formulon::c_api::parts::TextStore text_store;
+
+  // Scratch storage for strings handed back to the caller on the read
+  // path (`fm_workbook_get_value` / `fm_workbook_cell_at` /
+  // `fm_workbook_lambda_text_at`). Each fallible read entry point clears
+  // this at its start, so it only ever holds the strings produced by the
+  // single most recent read call. This bounds memory: a long-lived handle
+  // that loops over reads no longer accumulates one entry per call. The
+  // returned `const char*` is therefore valid only until the next read
+  // call on the same handle (or any mutation, or handle destruction) —
+  // the standard C-ABI scratch contract documented in `formulon_c.h`.
+  formulon::c_api::parts::TextStore read_scratch;
 
   formulon::Workbook& workbook() { return *wb; }
   const formulon::Workbook& workbook() const { return *wb; }

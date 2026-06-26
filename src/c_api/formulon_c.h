@@ -436,9 +436,12 @@ FM_API fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index
  * mutated cells should invoke `fm_workbook_recalc` first.
  *
  * For `FM_VAL_TEXT`, `out->u.text` borrows a NUL-terminated UTF-8
- * pointer owned by the workbook. The pointer is valid until the next
- * mutation of the handle or until the handle is destroyed. Callers
- * that need to retain the string across mutations must copy it.
+ * pointer into the workbook handle's read scratch. The pointer is valid
+ * only until the next read on this handle (`fm_workbook_get_value`,
+ * `fm_workbook_cell_at`, or `fm_workbook_lambda_text_at`), the next
+ * mutation, or until the handle is destroyed: the read scratch is reset
+ * on each read so a long-lived read loop does not accumulate memory.
+ * Callers that need to retain the string must copy it.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -458,11 +461,13 @@ FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_i
  * is the full surface form `LAMBDA(p1,p2,body)` (no leading `=`),
  * suitable for re-parsing through `fm_workbook_set_formula`.
  *
- * On success `*out_text` borrows a NUL-terminated UTF-8 pointer owned
- * by the workbook handle's text store. The pointer is valid until the
- * handle is destroyed; subsequent calls that intern strings (cell text
- * writes, value reads) do not invalidate it because the underlying
- * `std::deque<std::string>` preserves references on growth.
+ * On success `*out_text` borrows a NUL-terminated UTF-8 pointer into the
+ * workbook handle's read scratch. The pointer is valid only until the
+ * next read on this handle (`fm_workbook_get_value`,
+ * `fm_workbook_cell_at`, or another `fm_workbook_lambda_text_at`), the
+ * next mutation, or until the handle is destroyed: the read scratch is
+ * reset on each read so a long-lived handle does not accumulate memory.
+ * Callers that need to retain the string must copy it.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -504,9 +509,14 @@ FM_API fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_
  * On success the call writes `*out_row`, `*out_col`, `*out_value`, and
  * — if `out_formula != NULL` — points `*out_formula` at the cell's raw
  * formula text (or `NULL` when the cell is a pure literal). The
- * formula pointer borrows from the workbook handle and is valid until
- * the next mutation that touches the sheet's cell store or until the
- * handle is destroyed.
+ * formula pointer borrows from the cell's own storage and is valid
+ * until the next mutation that touches the sheet's cell store or until
+ * the handle is destroyed.
+ *
+ * A `FM_VAL_TEXT` payload in `*out_value`, by contrast, borrows from the
+ * handle's read scratch and is valid only until the next read on this
+ * handle (see `fm_workbook_get_value`); the scratch is reset on each
+ * read so iterating `cell_at` does not accumulate memory.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `out_row`, `out_col`, or

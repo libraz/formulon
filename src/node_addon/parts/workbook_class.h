@@ -49,12 +49,35 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Lifecycle.
   Napi::Value IsValid(const Napi::CallbackInfo& info);
 
+  // Lambda text read.
+  Napi::Value GetLambdaText(const Napi::CallbackInfo& info);
+
   // Recalc + save.
   Napi::Value Recalc(const Napi::CallbackInfo& info);
   Napi::Value PartialRecalc(const Napi::CallbackInfo& info);
   Napi::Value SetIterative(const Napi::CallbackInfo& info);
   Napi::Value SetIterativeProgress(const Napi::CallbackInfo& info);
   Napi::Value Save(const Napi::CallbackInfo& info);
+
+  // Workbook-level calc policy / behaviour profile.
+  Napi::Value CalcMode(const Napi::CallbackInfo& info);
+  Napi::Value SetCalcMode(const Napi::CallbackInfo& info);
+  Napi::Value ExcelProfileId(const Napi::CallbackInfo& info);
+  Napi::Value SetExcelProfileId(const Napi::CallbackInfo& info);
+
+  // Dependency-graph trace and dynamic-array spill.
+  Napi::Value Precedents(const Napi::CallbackInfo& info);
+  Napi::Value Dependents(const Napi::CallbackInfo& info);
+  Napi::Value SpillInfo(const Napi::CallbackInfo& info);
+
+  // External links.
+  Napi::Value GetExternalLinks(const Napi::CallbackInfo& info);
+
+  // Function catalog.
+  Napi::Value FunctionMetadata(const Napi::CallbackInfo& info);
+  Napi::Value FunctionNames(const Napi::CallbackInfo& info);
+  Napi::Value LocalizeFunctionName(const Napi::CallbackInfo& info);
+  Napi::Value CanonicalizeFunctionName(const Napi::CallbackInfo& info);
 
   // Sheet operations.
   Napi::Value AddSheet(const Napi::CallbackInfo& info);
@@ -144,9 +167,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Conditional formatting.
   Napi::Value EvaluateCfRange(const Napi::CallbackInfo& info);
+  Napi::Value GetConditionalFormats(const Napi::CallbackInfo& info);
+  Napi::Value AddConditionalFormat(const Napi::CallbackInfo& info);
+  Napi::Value RemoveConditionalFormatAt(const Napi::CallbackInfo& info);
+  Napi::Value ClearConditionalFormats(const Napi::CallbackInfo& info);
 
   // Sheet view / layout.
   Napi::Value GetSheetView(const Napi::CallbackInfo& info);
+  Napi::Value GetSheetProtection(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetZoom(const Napi::CallbackInfo& info);
   Napi::Value SetSheetFreeze(const Napi::CallbackInfo& info);
   Napi::Value SetSheetTabHidden(const Napi::CallbackInfo& info);
@@ -176,6 +205,12 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value FillCount(const Napi::CallbackInfo& info);
   Napi::Value BorderCount(const Napi::CallbackInfo& info);
   Napi::Value XfCount(const Napi::CallbackInfo& info);
+
+  // Named cell styles.
+  Napi::Value CellStyleCount(const Napi::CallbackInfo& info);
+  Napi::Value CellStyleXfCount(const Napi::CallbackInfo& info);
+  Napi::Value GetCellStyle(const Napi::CallbackInfo& info);
+  Napi::Value GetCellStyleXf(const Napi::CallbackInfo& info);
 
   // Sheet UI features (merges, comments, hyperlinks, validations).
   Napi::Value AddMerge(const Napi::CallbackInfo& info);

@@ -14,7 +14,10 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "c_api/parts/common.h"
 #include "gtest/gtest.h"
+#include "io/styles_reader.h"
+#include "workbook.h"
 
 namespace {
 
@@ -79,6 +82,26 @@ TEST(FormulonCApiStyles, BuiltinNumFmtResolves) {
   EXPECT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14, &s), 0);
   ASSERT_NE(s, nullptr);
   EXPECT_STREQ(s, "mm-dd-yy");
+}
+
+TEST(FormulonCApiStyles, CustomNumFmtOverridingBuiltinIdWins) {
+  // A file may define a custom <numFmt> whose numFmtId collides with a
+  // built-in slot; Excel honours the file's definition. Inject such an
+  // override and confirm the getter returns the custom string, not the
+  // built-in.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  formulon::io::StylesTable& styles = wb.handle->workbook().mutable_styles();
+  formulon::io::NumFmtRecord rec;
+  rec.id = 14;  // Built-in id whose default is "mm-dd-yy".
+  rec.format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
+  styles.num_fmt_strings.emplace_back("yyyy\"年\"m\"月\"d\"日\"");
+  styles.num_fmts.push_back(rec);
+
+  const char* s = nullptr;
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14, &s), 0);
+  ASSERT_NE(s, nullptr);
+  EXPECT_STREQ(s, "yyyy\"年\"m\"月\"d\"日\"");
 }
 
 TEST(FormulonCApiStyles, UnknownNumFmtIdRejected) {

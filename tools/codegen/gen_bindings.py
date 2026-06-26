@@ -26,11 +26,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 try:
     import yaml  # type: ignore
@@ -47,6 +48,12 @@ DEFAULT_MANIFEST = REPO_ROOT / "tools" / "codegen" / "binding_manifest.yaml"
 DEFAULT_OUT_CAPI = REPO_ROOT / "src" / "c_api" / "generated"
 DEFAULT_OUT_EMBIND = REPO_ROOT / "src" / "wasm" / "generated"
 DEFAULT_OUT_NODE = REPO_ROOT / "src" / "node_addon" / "generated"
+
+# Hand-written stable C ABI header. Every manifest entry must have a
+# matching `fm_*` declaration here; the codegen only emits the bodies, so
+# a manifest/header divergence would otherwise pass the generated-vs-
+# checked-in drift check while leaving the public surface inconsistent.
+DEFAULT_C_HEADER = REPO_ROOT / "src" / "c_api" / "formulon_c.h"
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +97,37 @@ def _load_manifest(path: Path) -> Tuple[int, List[dict]]:
                 f"{path}: functions[{i}].body={entry['body']!r} not in {sorted(VALID_BODY_KINDS)}"
             )
     return int(version), funcs
+
+
+# Matches a declared C-ABI entry point in the hand-written header, e.g.
+# `FM_API fm_status_t fm_workbook_cell_count(...)`. We only need the
+# function-name token, so the pattern is intentionally permissive about the
+# return type and ignores the argument list.
+_C_HEADER_DECL_RE = re.compile(r"\bFM_API\b[^;{]*?\b(fm_[A-Za-z0-9_]+)\s*\(")
+
+
+def _header_declared_names(path: Path) -> Set[str]:
+    """Returns every `fm_*` symbol declared with `FM_API` in `path`."""
+    text = path.read_text()
+    return set(_C_HEADER_DECL_RE.findall(text))
+
+
+def _check_header_coverage(entries: List[dict], header: Path) -> bool:
+    """Verifies every manifest entry has a matching `fm_*` header decl.
+
+    The generated-vs-checked-in drift check only compares the codegen's
+    bodies against the snapshot; it never looks at the hand-written
+    `formulon_c.h`. Without this gate a manifest entry whose declaration
+    was never added to (or was removed from) the header would still pass.
+    Returns True when a mismatch was found (so the caller can flag drift).
+    """
+    declared = _header_declared_names(header)
+    missing = sorted(e["name"] for e in entries if e["name"] not in declared)
+    if not missing:
+        return False
+    for name in missing:
+        sys.stderr.write(f"drift: manifest entry {name!r} has no FM_API declaration in {header}\n")
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -476,6 +514,7 @@ def main(argv: List[str] | None = None) -> int:
     p.add_argument("--out-c-api", type=Path, default=DEFAULT_OUT_CAPI)
     p.add_argument("--out-embind", type=Path, default=DEFAULT_OUT_EMBIND)
     p.add_argument("--out-node", type=Path, default=DEFAULT_OUT_NODE)
+    p.add_argument("--c-header", type=Path, default=DEFAULT_C_HEADER)
     p.add_argument(
         "--check",
         action="store_true",
@@ -488,11 +527,17 @@ def main(argv: List[str] | None = None) -> int:
         sys.stderr.write(f"manifest schema version {version} is not supported (expected 1)\n")
         return 2
 
+    # Header coverage is a hard invariant in both generate and check modes:
+    # the codegen only emits bodies, so a manifest entry with no `FM_API`
+    # declaration in the hand-written header would surface an unbuildable
+    # public surface that the generated-file drift check cannot catch.
+    header_drift = _check_header_coverage(entries, args.c_header)
+    drift = False
+
     capi_files = _emit_capi(entries)
     embind_files = _emit_embind(entries)
     node_files = _emit_node(entries)
 
-    drift = False
     for name, content in sorted(capi_files.items()):
         target = args.out_c_api / name
         content = _clang_format(content, target)
@@ -527,7 +572,9 @@ def main(argv: List[str] | None = None) -> int:
             if wrote:
                 sys.stdout.write(f"wrote {target}\n")
 
-    if args.check and drift:
+    # A manifest/header mismatch fails in either mode; generated-file drift
+    # is only an error under --check (generate mode writes the fix instead).
+    if header_drift or (args.check and drift):
         return 1
     return 0
 

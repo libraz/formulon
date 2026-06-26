@@ -19,7 +19,9 @@
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "io/format_detect.h"
 #include "io/ooxml_reader.h"
+#include "io/xlsb/reader.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
@@ -62,16 +64,30 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
   formulon::io::ByteSpan span;
   span.data = bytes;
   span.size = len;
-  auto result = formulon::io::read_ooxml(span);
-  if (!result) {
-    return set_last_error(result.error());
-  }
+  // Detect the container format from the package bytes (the C ABI takes
+  // bytes, not a path, so extension-based routing is impossible). An
+  // `.xlsb` package declares the binary `xl/workbook.bin` workbook part;
+  // `.xlsx` declares `xl/workbook.xml`. `Unknown` falls through to the
+  // OOXML reader, which owns the authoritative "not a workbook" /
+  // encryption / corruption diagnostics.
   auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
-  // The workbook now owns the text-storage deque that backs every
-  // Text-cell `string_view`, so we move only the workbook out of the
-  // result; the rest of `OoxmlReadResult` (passthrough parts mirror,
-  // audit counter) is discarded.
-  handle->wb.emplace(std::move(result.value().workbook));
+  if (formulon::io::detect_workbook_format(span) == formulon::io::WorkbookFormat::Xlsb) {
+    auto result = formulon::io::xlsb::read_xlsb(span);
+    if (!result) {
+      return set_last_error(result.error());
+    }
+    handle->wb.emplace(std::move(result.value().workbook));
+  } else {
+    auto result = formulon::io::read_ooxml(span);
+    if (!result) {
+      return set_last_error(result.error());
+    }
+    // The workbook now owns the text-storage deque that backs every
+    // Text-cell `string_view`, so we move only the workbook out of the
+    // result; the rest of `OoxmlReadResult` (passthrough parts mirror,
+    // audit counter) is discarded.
+    handle->wb.emplace(std::move(result.value().workbook));
+  }
   *out = handle.release();
   return 0;
 }

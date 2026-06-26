@@ -16,28 +16,144 @@ instances with ``kind == ValueKind.ERROR``; only host-side failures
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _dist_version
+from pathlib import Path
+
 from ._c import LIB, ValueKind, decode_cstr
 from .workbook import (
+    CalcMode,
     Cell,
+    CellNode,
+    CellStyle,
+    CellXf,
+    CfCellResult,
+    CfMatch,
+    ColumnLayout,
+    Comment,
+    ConditionalFormat,
+    ConditionalFormatInput,
+    DataValidation,
+    DataValidationInput,
     DefinedName,
+    ExternalLink,
+    FillRecord,
+    FontRecord,
     FormulonError,
+    FunctionMetadata,
+    Hyperlink,
+    MergeRange,
     PassthroughPart,
+    PivotAggregation,
+    PivotAxis,
+    PivotCalendar,
+    PivotCell,
+    PivotCellKind,
+    PivotDataFieldSpec,
+    PivotDateGrouping,
+    PivotFieldSpec,
+    PivotFilterSpec,
+    PivotFilterType,
+    PivotFilterValueKind,
+    PivotLayout,
+    PivotShowValuesAs,
+    RowLayout,
+    SheetProtection,
+    SheetView,
+    SpillInfo,
     Table,
     Value,
     Workbook,
 )
 
-# IMPORTANT: keep this in sync with the [project] version in
-# packages/python/pyproject.toml. There is no portable way to read the
-# wheel metadata at runtime without `importlib.metadata`, which is fine
-# for installed packages but breaks for source-tree imports.
-__version__ = "0.9.0"
+def _resolve_version() -> str:
+    """Resolve the package version from its single source of truth.
+
+    The canonical version lives in ``[project].version`` of
+    ``packages/python/pyproject.toml`` (the same value a release bumps).
+    For an installed wheel that value is copied into the dist metadata, so
+    :func:`importlib.metadata.version` returns it without re-reading the
+    project file. When running from an uninstalled source tree there is no
+    dist metadata; fall back to parsing ``pyproject.toml`` directly, then
+    to the C-ABI build version as a last resort. The number is never
+    hardcoded here, so a release bumps exactly one place.
+    """
+    try:
+        return _dist_version("formulon")
+    except PackageNotFoundError:
+        pass
+
+    # Source-tree fallback: read [project].version from the sibling
+    # pyproject.toml. `tomllib` is stdlib from 3.11; older interpreters
+    # fall back to a minimal line scan to avoid a hard `tomli` dependency.
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    try:
+        raw = pyproject.read_bytes()
+    except OSError:
+        raw = b""
+    if raw:
+        try:
+            import tomllib
+
+            parsed = tomllib.loads(raw.decode("utf-8"))
+            project_version = parsed.get("project", {}).get("version")
+            if isinstance(project_version, str) and project_version:
+                return project_version
+        except ModuleNotFoundError:
+            for line in raw.decode("utf-8").splitlines():
+                stripped = line.strip()
+                if stripped.startswith("version") and "=" in stripped:
+                    candidate = stripped.split("=", 1)[1].strip().strip("\"'")
+                    if candidate:
+                        return candidate
+                    break
+
+    # Last resort: the version baked into the loaded WASM module.
+    return decode_cstr(LIB.fm_version_string())
+
+
+__version__ = _resolve_version()
 
 __all__ = [
+    "CalcMode",
     "Cell",
+    "CellNode",
+    "CellStyle",
+    "CellXf",
+    "CfCellResult",
+    "CfMatch",
+    "ColumnLayout",
+    "Comment",
+    "ConditionalFormat",
+    "ConditionalFormatInput",
+    "DataValidation",
+    "DataValidationInput",
     "DefinedName",
+    "ExternalLink",
+    "FillRecord",
+    "FontRecord",
     "FormulonError",
+    "FunctionMetadata",
+    "Hyperlink",
+    "MergeRange",
     "PassthroughPart",
+    "PivotAggregation",
+    "PivotAxis",
+    "PivotCalendar",
+    "PivotCell",
+    "PivotCellKind",
+    "PivotDataFieldSpec",
+    "PivotDateGrouping",
+    "PivotFieldSpec",
+    "PivotFilterSpec",
+    "PivotFilterType",
+    "PivotFilterValueKind",
+    "PivotLayout",
+    "PivotShowValuesAs",
+    "RowLayout",
+    "SheetProtection",
+    "SheetView",
+    "SpillInfo",
     "Table",
     "Value",
     "ValueKind",

@@ -18,7 +18,11 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/xlsb/writer.h"
+#include "sheet.h"
 #include "utils/error.h"
+#include "value.h"
+#include "workbook.h"
 
 namespace {
 
@@ -231,6 +235,28 @@ TEST(FormulonCApi, SaveLoadRoundTrip) {
   ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 0, &a1), 0);
   EXPECT_EQ(a1.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(a1.u.number, 7.0);
+}
+
+TEST(FormulonCApi, LoadRoutesXlsbBytesToXlsbReader) {
+  // Build a minimal `.xlsb` byte stream via the engine writer, then load
+  // it through the byte-only C ABI. The load boundary must detect the
+  // xlsb container and route to `read_xlsb` rather than failing in the
+  // OOXML reader with a "missing xl/workbook.xml" diagnostic.
+  formulon::Workbook src = formulon::Workbook::create_empty();
+  formulon::Sheet& s = src.add_sheet("S");
+  s.set_cell_value(0U, 0U, formulon::Value::number(123.5));
+  auto xlsb_or = formulon::io::xlsb::write_xlsb(src);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
+  const std::vector<std::uint8_t>& xlsb = xlsb_or.value();
+
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(xlsb.data(), xlsb.size(), &loaded.handle), 0);
+  EXPECT_EQ(fm_workbook_sheet_count(loaded.handle), 1U);
+
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 0, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 123.5);
 }
 
 TEST(FormulonCApi, SaveLoadFormulaTextResult) {
