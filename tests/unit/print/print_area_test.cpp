@@ -10,6 +10,7 @@
 
 #include "gtest/gtest.h"
 #include "io/defined_names.h"
+#include "sheet.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -78,6 +79,44 @@ TEST(PrintAreaTest, WorkbookScopedNameIsIgnored) {
   auto result = resolve_print_area(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_TRUE(result.value().empty());
+}
+
+TEST(PrintAreaTest, WholeColumnSpanResolvesToFullRowExtent) {
+  // A whole-column print area ($A:$C) is valid: it covers every column in
+  // [A, C] across the entire row extent. It must not be rejected as
+  // malformed.
+  Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Area", "Sheet1!$A:$C", 0)});
+  auto result = resolve_print_area(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_EQ(result.value().size(), 1U);
+  const CellRange& r = result.value().front();
+  EXPECT_EQ(r.first_col, 0U);
+  EXPECT_EQ(r.last_col, 2U);
+  EXPECT_EQ(r.first_row, 0U);
+  EXPECT_EQ(r.last_row, Sheet::kMaxRows - 1U);
+}
+
+TEST(PrintAreaTest, WholeRowSpanResolvesToFullColumnExtent) {
+  Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Area", "Sheet1!$1:$50", 0)});
+  auto result = resolve_print_area(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_EQ(result.value().size(), 1U);
+  const CellRange& r = result.value().front();
+  EXPECT_EQ(r.first_row, 0U);
+  EXPECT_EQ(r.last_row, 49U);
+  EXPECT_EQ(r.first_col, 0U);
+  EXPECT_EQ(r.last_col, Sheet::kMaxCols - 1U);
+}
+
+TEST(PrintAreaTest, OverLargeRowIsClampedToGridCeiling) {
+  // A row endpoint past Excel's grid ceiling must be clamped, not honored
+  // verbatim (an unclamped value would let pagination reserve a runaway
+  // track vector).
+  Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Area", "Sheet1!$1:$99999999", 0)});
+  auto result = resolve_print_area(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_EQ(result.value().size(), 1U);
+  EXPECT_EQ(result.value().front().last_row, Sheet::kMaxRows - 1U);
 }
 
 TEST(PrintAreaTest, MalformedFormulaReturnsInvalidArea) {

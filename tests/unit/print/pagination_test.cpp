@@ -196,6 +196,73 @@ TEST(PaginationTest, UsedRangeIsPaginatedWhenPrintAreaAbsent) {
   EXPECT_EQ(result.value().page_count, 1U);
 }
 
+TEST(PaginationTest, AutomaticColumnBreakDoesNotForceAnExtraPage) {
+  // Excel persists automatic breaks (man="0") once a sheet is previewed.
+  // An auto column break must not be treated as a forced page boundary.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$F$3", 0)});
+  ManualBreak brk;
+  brk.id = 3;
+  brk.manual = false;  // Automatic break.
+  sheet.mutable_print_settings().manual_col_breaks.push_back(brk);
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_TRUE(result.value().v_breaks.empty());
+  EXPECT_EQ(result.value().page_count, 1U);
+}
+
+TEST(PaginationTest, AutomaticRowBreakDoesNotForceAnExtraPage) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$B$10", 0)});
+  ManualBreak brk;
+  brk.id = 4;
+  brk.manual = false;  // Automatic break.
+  sheet.mutable_print_settings().manual_row_breaks.push_back(brk);
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_TRUE(result.value().h_breaks.empty());
+  EXPECT_EQ(result.value().page_count, 1U);
+}
+
+TEST(PaginationTest, OverlappingMultiAreaColumnBreakCountedOnce) {
+  // Two horizontally-overlapping print rectangles share a manual column
+  // break at column index 3. The break is a single page boundary, not one
+  // per rectangle: it must add exactly one page-column overall.
+  //
+  // NOTE: Excel's exact pagination across overlapping multi-area print
+  // regions is not yet oracle-confirmed; the dedup applied here is the
+  // clearly-correct half (a break at a given column boundary counts once).
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$F$3,Sheet1!$A$5:$F$7", 0)});
+  // Populate both rectangles so the used-range intersection keeps them.
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(0, 5, Value::number(1.0));
+  sheet.set_cell_value(2, 5, Value::number(1.0));
+  sheet.set_cell_value(4, 0, Value::number(1.0));
+  sheet.set_cell_value(6, 5, Value::number(1.0));
+  ManualBreak brk;
+  brk.id = 3;  // Column D, inside both rectangles' column span.
+  brk.manual = true;
+  sheet.mutable_print_settings().manual_col_breaks.push_back(brk);
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  // The shared column break adds its extra page-column exactly once across
+  // the two rectangles: first rectangle splits into 2 column-pages (break
+  // counted), second rectangle stays at 1 (break already counted). Each
+  // rectangle is a single row-band, so page_count = 2 + 1 = 3. Without the
+  // dedup the second rectangle would also report 2, yielding 4.
+  EXPECT_EQ(result.value().page_count, 3U);
+  // The break appears once in the de-duplicated v_breaks collection.
+  ASSERT_EQ(result.value().v_breaks.size(), 1U);
+  EXPECT_EQ(result.value().v_breaks.front(), 3U);
+}
+
 }  // namespace
 }  // namespace print
 }  // namespace formulon

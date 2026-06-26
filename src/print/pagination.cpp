@@ -160,9 +160,15 @@ std::optional<CellRange> Intersect(const CellRange& a, const CellRange& b) {
   return out;
 }
 
-/// True when `index` is the target of a manual break in `breaks`.
+/// True when `index` is the target of a *manual* break in `breaks`.
+///
+/// Excel persists automatic page breaks (`man="0"`) alongside user-placed
+/// ones once a sheet has been previewed or printed. Only breaks with
+/// `manual == true` force a page boundary; automatic breaks are
+/// recomputed by the pagination walk and must not be treated as forced.
 bool HasManualBreakAt(const std::vector<ManualBreak>& breaks, std::uint32_t index) {
-  return std::any_of(breaks.begin(), breaks.end(), [index](const ManualBreak& brk) { return brk.id == index; });
+  return std::any_of(breaks.begin(), breaks.end(),
+                     [index](const ManualBreak& brk) { return brk.manual && brk.id == index; });
 }
 
 /// One axis of the break walk.
@@ -354,6 +360,11 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   std::vector<std::uint32_t> all_h;
   std::vector<std::uint32_t> all_v;
   std::uint32_t total_pages = 0;
+  // A manual column break that falls inside more than one (horizontally
+  // overlapping) print rectangle is a single page boundary, not one per
+  // rectangle. Track the column ids already counted so an overlapping
+  // break contributes its extra page-column exactly once.
+  std::vector<std::uint32_t> counted_col_breaks;
   for (const CellRange& rect : effective_areas) {
     std::vector<double> row_points;
     row_points.reserve(rect.last_row - rect.first_row + 1);
@@ -371,9 +382,18 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     // breaks / landscape_wide_table / tall_and_wide_table (all pages=1).
     std::uint32_t col_pages = 1;
     for (const ManualBreak& brk : settings.manual_col_breaks) {
+      // Auto breaks (man="0") never force a column boundary.
+      if (!brk.manual) {
+        continue;
+      }
       if (brk.id > rect.first_col && brk.id <= rect.last_col) {
+        const bool already_counted =
+            std::find(counted_col_breaks.begin(), counted_col_breaks.end(), brk.id) != counted_col_breaks.end();
         all_v.push_back(brk.id);
-        ++col_pages;
+        if (!already_counted) {
+          counted_col_breaks.push_back(brk.id);
+          ++col_pages;
+        }
       }
     }
 

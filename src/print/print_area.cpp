@@ -80,11 +80,56 @@ bool ParseCellRef(std::string_view text, std::uint32_t* out_row, std::uint32_t* 
   return io::parse_a1_ref(text, out_row, out_col);
 }
 
+/// Largest valid 0-based row / column index (Excel's grid ceiling). Used
+/// to clamp synthesized whole-axis spans and to cap over-large endpoints
+/// so a malformed area cannot reserve a runaway track vector.
+constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
+constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
+
+/// Recognises a whole-column (`A:D`) or whole-row (`1:50`) print-area
+/// span and synthesizes the clamped rectangle: a column span covers every
+/// row up to the sheet ceiling, a row span every column. Mirrors how
+/// `ParseTitleToken` accepts the same two shapes for `Print_Titles`.
+/// Returns false when the token is neither shape.
+bool ParseWholeAxisToken(std::string_view lhs, std::string_view rhs, CellRange* out_range) {
+  // Whole-column span: both endpoints are pure column letters.
+  std::size_t pi = 0;
+  std::size_t pj = 0;
+  std::uint32_t c1 = 0;
+  std::uint32_t c2 = 0;
+  if (io::parse_column_letters(lhs, &pi, &c1) && pi == lhs.size() && io::parse_column_letters(rhs, &pj, &c2) &&
+      pj == rhs.size()) {
+    out_range->first_col = std::min(std::min(c1, c2) - 1U, kMaxColIndex);
+    out_range->last_col = std::min(std::max(c1, c2) - 1U, kMaxColIndex);
+    out_range->first_row = 0U;
+    out_range->last_row = kMaxRowIndex;
+    return true;
+  }
+
+  // Whole-row span: both endpoints are pure decimal row indices.
+  pi = 0;
+  pj = 0;
+  std::uint32_t r1 = 0;
+  std::uint32_t r2 = 0;
+  if (io::parse_uint(lhs, &pi, &r1) && pi == lhs.size() && r1 != 0U && io::parse_uint(rhs, &pj, &r2) &&
+      pj == rhs.size() && r2 != 0U) {
+    out_range->first_row = std::min(std::min(r1, r2) - 1U, kMaxRowIndex);
+    out_range->last_row = std::min(std::max(r1, r2) - 1U, kMaxRowIndex);
+    out_range->first_col = 0U;
+    out_range->last_col = kMaxColIndex;
+    return true;
+  }
+  return false;
+}
+
 /// Parses one anchor-free A1 range token into a normalised `CellRange`.
 ///
-/// Accepts a full `A1:H80` range or a degenerate single-cell `A1`. The
-/// token must already have its sheet qualifier and `$` anchors removed.
-/// Returns false when either endpoint is malformed.
+/// Accepts a full `A1:H80` range, a degenerate single-cell `A1`, or a
+/// whole-column (`A:D`) / whole-row (`1:50`) span. The token must already
+/// have its sheet qualifier and `$` anchors removed. Endpoints are
+/// clamped to Excel's grid ceiling so an over-large reference does not
+/// reserve a runaway track vector downstream. Returns false when neither
+/// endpoint parses.
 bool ParseRangeToken(std::string_view token, CellRange* out_range) {
   const std::size_t colon = token.find(kRangeSeparator);
   if (colon == std::string_view::npos) {
@@ -93,12 +138,23 @@ bool ParseRangeToken(std::string_view token, CellRange* out_range) {
     if (!ParseCellRef(token, &row, &col)) {
       return false;
     }
-    *out_range = CellRange{row, col, row, col};
+    *out_range = CellRange{std::min(row, kMaxRowIndex), std::min(col, kMaxColIndex), std::min(row, kMaxRowIndex),
+                           std::min(col, kMaxColIndex)};
     return true;
   }
 
   const std::string_view lhs = token.substr(0, colon);
   const std::string_view rhs = token.substr(colon + 1);
+  if (lhs.empty() || rhs.empty()) {
+    return false;
+  }
+
+  // Whole-column / whole-row forms (`A:D`, `1:50`) before the A1 path:
+  // `parse_a1_ref` rejects them for lacking a row/column component.
+  if (ParseWholeAxisToken(lhs, rhs, out_range)) {
+    return true;
+  }
+
   std::uint32_t r1 = 0;
   std::uint32_t c1 = 0;
   std::uint32_t r2 = 0;
@@ -106,10 +162,10 @@ bool ParseRangeToken(std::string_view token, CellRange* out_range) {
   if (!ParseCellRef(lhs, &r1, &c1) || !ParseCellRef(rhs, &r2, &c2)) {
     return false;
   }
-  out_range->first_row = std::min(r1, r2);
-  out_range->first_col = std::min(c1, c2);
-  out_range->last_row = std::max(r1, r2);
-  out_range->last_col = std::max(c1, c2);
+  out_range->first_row = std::min(std::min(r1, r2), kMaxRowIndex);
+  out_range->first_col = std::min(std::min(c1, c2), kMaxColIndex);
+  out_range->last_row = std::min(std::max(r1, r2), kMaxRowIndex);
+  out_range->last_col = std::min(std::max(c1, c2), kMaxColIndex);
   return true;
 }
 
