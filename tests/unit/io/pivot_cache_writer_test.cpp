@@ -16,6 +16,7 @@
 #include "gtest/gtest.h"
 #include "io/pivot_cache_reader.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/record_access.h"
 #include "value.h"
 
 namespace formulon::io {
@@ -131,16 +132,97 @@ TEST(PivotCacheWriter, RecordsRoundTripThroughReader) {
 
   ASSERT_EQ(parsed.records().size(), 3U);
   ASSERT_EQ(parsed.records()[0].cells.size(), 2U);
-  EXPECT_TRUE(parsed.records()[0].cells[0].is_text());
-  EXPECT_EQ(parsed.records()[0].cells[0].as_text(), "North");
+
+  // The shared field (0) stores the raw shared_items index as a Number; the
+  // resolved value comes from the `cell_value` accessor. The range-typed
+  // field (1) stores its value inline.
+  EXPECT_TRUE(parsed.records()[0].cells[0].is_number());
+  EXPECT_DOUBLE_EQ(parsed.records()[0].cells[0].as_number(), 0.0);
+  EXPECT_EQ(pivot::cell_value(parsed, parsed.records()[0], 0).as_text(), "North");
   EXPECT_TRUE(parsed.records()[0].cells[1].is_number());
   EXPECT_DOUBLE_EQ(parsed.records()[0].cells[1].as_number(), 100.0);
 
-  EXPECT_EQ(parsed.records()[1].cells[0].as_text(), "South");
+  EXPECT_TRUE(parsed.records()[1].cells[0].is_number());
+  EXPECT_DOUBLE_EQ(parsed.records()[1].cells[0].as_number(), 1.0);
+  EXPECT_EQ(pivot::cell_value(parsed, parsed.records()[1], 0).as_text(), "South");
   EXPECT_DOUBLE_EQ(parsed.records()[1].cells[1].as_number(), 200.0);
 
-  EXPECT_EQ(parsed.records()[2].cells[0].as_text(), "North");
+  EXPECT_TRUE(parsed.records()[2].cells[0].is_number());
+  EXPECT_DOUBLE_EQ(parsed.records()[2].cells[0].as_number(), 0.0);
+  EXPECT_EQ(pivot::cell_value(parsed, parsed.records()[2], 0).as_text(), "North");
   EXPECT_DOUBLE_EQ(parsed.records()[2].cells[1].as_number(), 300.0);
+}
+
+// ---------------------------------------------------------------------------
+// Discrete numeric shared field: read -> resolve -> write -> re-read identity
+// ---------------------------------------------------------------------------
+
+TEST(PivotCacheWriter, DiscreteNumericFieldReadWriteRereadIdentity) {
+  // A discrete numeric field is a shared field whose shared_items are
+  // numbers. The record cells carry `<x>` indices into those items, so the
+  // resolved value must come through the `cell_value` accessor on both the
+  // initial read and after a write/re-read round-trip.
+  constexpr std::string_view kDefXml =
+      "<?xml version=\"1.0\"?>"
+      "<pivotCacheDefinition>"
+      "<cacheFields count=\"2\">"
+      "<cacheField name=\"Score\">"
+      "<sharedItems><n v=\"1.5\"/><n v=\"-2\"/><n v=\"0\"/></sharedItems>"
+      "</cacheField>"
+      "<cacheField name=\"Amount\">"
+      "<sharedItems containsNumber=\"1\"/>"
+      "</cacheField>"
+      "</cacheFields>"
+      "</pivotCacheDefinition>";
+  // Field 0 indices: 2 -> 0.0, 0 -> 1.5, 1 -> -2.0. Field 1 inline numbers.
+  constexpr std::string_view kRecXml =
+      "<?xml version=\"1.0\"?>"
+      "<pivotCacheRecords count=\"3\">"
+      "<r><x v=\"2\"/><n v=\"10\"/></r>"
+      "<r><x v=\"0\"/><n v=\"20\"/></r>"
+      "<r><x v=\"1\"/><n v=\"30\"/></r>"
+      "</pivotCacheRecords>";
+
+  auto def_or = read_pivot_cache_definition(Bytes(kDefXml));
+  ASSERT_TRUE(static_cast<bool>(def_or)) << "definition read failed: " << def_or.error().message;
+  pivot::PivotCache cache1 = std::move(def_or.value());
+  auto rec_status = read_pivot_cache_records(Bytes(kRecXml), cache1);
+  ASSERT_TRUE(static_cast<bool>(rec_status)) << "records read failed: " << rec_status.error().message;
+
+  ASSERT_EQ(cache1.records().size(), 3U);
+
+  // Initial read: shared field cells hold raw indices; resolution via the
+  // accessor must yield the discrete numeric values.
+  EXPECT_TRUE(cache1.records()[0].cells[0].is_number());
+  EXPECT_DOUBLE_EQ(cache1.records()[0].cells[0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(pivot::cell_value(cache1, cache1.records()[0], 0).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(pivot::cell_value(cache1, cache1.records()[1], 0).as_number(), 1.5);
+  EXPECT_DOUBLE_EQ(pivot::cell_value(cache1, cache1.records()[2], 0).as_number(), -2.0);
+
+  // Inline range-typed field 1 carries the values directly.
+  EXPECT_DOUBLE_EQ(cache1.records()[0].cells[1].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(cache1.records()[1].cells[1].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(cache1.records()[2].cells[1].as_number(), 30.0);
+
+  // Write back out and re-read: the resolved discrete values must survive
+  // unchanged (index-vs-value confusion would corrupt them here).
+  const std::string def_xml2 = write_pivot_cache_definition(cache1);
+  const std::string rec_xml2 = write_pivot_cache_records(cache1);
+
+  auto def2_or = read_pivot_cache_definition(Bytes(def_xml2));
+  ASSERT_TRUE(static_cast<bool>(def2_or)) << "re-read definition failed: " << def2_or.error().message;
+  pivot::PivotCache cache2 = std::move(def2_or.value());
+  auto rec2_status = read_pivot_cache_records(Bytes(rec_xml2), cache2);
+  ASSERT_TRUE(static_cast<bool>(rec2_status)) << "re-read records failed: " << rec2_status.error().message;
+
+  ASSERT_EQ(cache2.records().size(), 3U);
+  EXPECT_DOUBLE_EQ(pivot::cell_value(cache2, cache2.records()[0], 0).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(pivot::cell_value(cache2, cache2.records()[1], 0).as_number(), 1.5);
+  EXPECT_DOUBLE_EQ(pivot::cell_value(cache2, cache2.records()[2], 0).as_number(), -2.0);
+
+  EXPECT_DOUBLE_EQ(cache2.records()[0].cells[1].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(cache2.records()[1].cells[1].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(cache2.records()[2].cells[1].as_number(), 30.0);
 }
 
 // ---------------------------------------------------------------------------

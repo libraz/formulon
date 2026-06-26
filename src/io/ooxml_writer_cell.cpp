@@ -170,14 +170,14 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
     return;
   }
   if (value.is_text()) {
-    out.append("\" t=\"inlineStr\"><is><t>");
+    out.append("\" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
     AppendXmlEscaped(out, value.as_text());
     out.append("</t>");
     if (!phonetic.empty()) {
       const std::uint32_t eb = formulon::eval::utf16_units_in(value.as_text());
       out.append("<rPh sb=\"0\" eb=\"");
       out.append(std::to_string(eb));
-      out.append("\"><t>");
+      out.append("\"><t xml:space=\"preserve\">");
       AppendXmlEscaped(out, phonetic);
       out.append("</t></rPh>");
     }
@@ -353,14 +353,14 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       out.push_back(cell.cached_value.as_boolean() ? '1' : '0');
       out.append("</v></c>");
     } else if (cell.cached_value.is_text()) {
-      out.append(" t=\"inlineStr\"><is><t>");
+      out.append(" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
       AppendXmlEscaped(out, cell.cached_value.as_text());
       out.append("</t>");
       if (!cell.phonetic_text.empty()) {
         const std::uint32_t eb = formulon::eval::utf16_units_in(cell.cached_value.as_text());
         out.append("<rPh sb=\"0\" eb=\"");
         out.append(std::to_string(eb));
-        out.append("\"><t>");
+        out.append("\"><t xml:space=\"preserve\">");
         AppendXmlEscaped(out, cell.phonetic_text);
         out.append("</t></rPh>");
       }
@@ -390,7 +390,9 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
   if (layout.height > 0.0) {
     out.append(" ht=\"");
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%.6g", layout.height);
+    // %.17g is round-trip safe under IEEE 754, so a recalc-save does not
+    // drift the row metric. Matches the column-width writer.
+    std::snprintf(buf, sizeof(buf), "%.17g", layout.height);
     out.append(buf);
     out.append("\" customHeight=\"1\"");
   }

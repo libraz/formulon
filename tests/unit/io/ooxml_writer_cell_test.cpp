@@ -95,7 +95,26 @@ TEST(BuildSheetDataXml, TextCell) {
   Sheet s("Sheet1");
   s.set_cell_value(2U, 2U, Value::text("hello"));
   const std::string xml = BuildSheetDataXml(s);
-  EXPECT_NE(xml.find("<c r=\"C3\" t=\"inlineStr\"><is><t>hello</t></is></c>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<c r=\"C3\" t=\"inlineStr\"><is><t xml:space=\"preserve\">hello</t></is></c>"), std::string::npos)
+      << xml;
+}
+
+// Text <t> elements must carry xml:space="preserve" so Excel does not strip
+// significant leading/trailing/whitespace-only content on load. The reader is
+// whitespace-lenient, so a missing attribute would only ever surface in real
+// Excel; this pins the writer-side byte shape directly.
+TEST(BuildSheetDataXml, TextCellPreservesWhitespace) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::text(" 100"));
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("<t xml:space=\"preserve\"> 100</t>"), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, WhitespaceOnlyTextCellPreservesBody) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::text("   "));
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("<t xml:space=\"preserve\">   </t>"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, EscapedText) {

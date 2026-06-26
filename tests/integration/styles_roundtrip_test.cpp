@@ -141,6 +141,33 @@ TEST(StylesRoundTrip, PreservesFontFillBorderAndCellXfs) {
   EXPECT_EQ(b2->xf_index, 2U);
 }
 
+TEST(StylesRoundTrip, FontSizePreservesFullPrecision) {
+  // The font-size writer must use a round-trip-safe format. A size needing
+  // more than six significant digits (the old %g default) would otherwise
+  // drift across a save/load cycle.
+  constexpr double kPreciseSize = 12.345678;
+
+  Workbook src = Workbook::create();
+  io::StylesTable styles;
+  styles.fonts.emplace_back();  // default
+  io::FontRecord precise;
+  precise.name = "Calibri";
+  precise.size = kPreciseSize;
+  styles.fonts.push_back(precise);
+  styles.fills.emplace_back();
+  styles.borders.emplace_back();
+  styles.cell_xfs.emplace_back();
+  src.set_styles(std::move(styles));
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+  const io::StylesTable& rt = load_or.value().workbook.styles();
+  ASSERT_GE(rt.fonts.size(), 2U);
+  EXPECT_DOUBLE_EQ(rt.fonts[1].size, kPreciseSize);
+}
+
 TEST(StylesRoundTrip, PreservesNamedCellStyles) {
   Workbook src = Workbook::create();
   io::StylesTable styles;

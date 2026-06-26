@@ -202,12 +202,16 @@ std::vector<std::uint8_t> BuildWorkbookBin(const Workbook& wb) {
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginBundleShs), ByteSpan{});
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     // BrtBundleSh ([MS-XLSB] §2.4.304):
-    //   hsState    : u32 (0 = visible)
+    //   hsState    : u32 (0 = visible, 1 = hidden)
     //   iTabID     : u32 (sheet id; 1-based)
     //   strRelID   : XLNullableWideString
     //   strName    : XLWideString
     std::vector<std::uint8_t> p;
-    emit_u32(p, 0U);                                  // hsState (visible)
+    // The Sheet model tracks a single `tab_hidden` bit (mirroring the
+    // OOXML `state="hidden"` path), so a hidden sheet emits hsState=1.
+    // Very-hidden (hsState=2) is not separately modelled and folds to 1.
+    const std::uint32_t hs_state = wb.sheet(i).view().tab_hidden ? 1U : 0U;
+    emit_u32(p, hs_state);                            // hsState
     emit_u32(p, static_cast<std::uint32_t>(i + 1U));  // iTabID
     const std::string rid = std::string("rId") + std::to_string(i + 1U);
     emit_xlnullablewidestring(p, std::optional<std::string_view>{rid});
@@ -308,11 +312,19 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
   // envelope so the order of `mz_zip_writer_add_mem` calls matches
   // what the reader expects (it does not, but we keep symmetry with
   // `write_ooxml`).
+  // Ordered sheet-name list: the Ptg encoder maps a qualified
+  // reference's sheet to its 0-based `ixti` through this list.
+  std::vector<std::string> sheet_names;
+  sheet_names.reserve(sheet_count);
+  for (std::size_t i = 0; i < sheet_count; ++i) {
+    sheet_names.push_back(workbook.sheet(i).name());
+  }
+
   SstBuilder sst;
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst);
+    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names);
     if (!sheet_body_or) {
       return sheet_body_or.error();
     }

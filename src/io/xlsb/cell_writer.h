@@ -6,14 +6,14 @@
 // formula text) to produce the appropriate `BrtCell*` /
 // `BrtFmla*` record bytes.
 //
-// The Bundle 4.2 dispatcher covers literal cells (number, boolean,
-// text, error, blank) and the round-trip path for formula cells whose
-// `formula_text` is one of Bundle 4.1's reader stubs
-// (`__FORMULON_XLSB_PTG__(...)`). Cells whose formula was authored
-// fresh in-engine (no captured Ptg bytes) currently emit the cached
-// value as a literal record and surface a `xlsb.writer.formula_lost`
-// structured-log warning — the full AST→Ptg encoder lands in a later
-// bundle.
+// The dispatcher covers literal cells (number, boolean, text, error,
+// blank) and formula cells. A formula cell's `formula_text` is parsed to
+// the engine AST and lowered to a Ptg (`rgce`) byte stream via
+// `io::xlsb::encode_ptgs`, spliced into a `BrtFmla*` record matching the
+// cached value's kind. A formula that cannot be parsed or lowered (a
+// token outside the supported Ptg set, e.g. a defined-name or external
+// reference) is NOT silently dropped to a literal: `emit_cell` returns
+// the encode error so `write_xlsb` can propagate it to the caller.
 //
 // Design references:
 //   * [MS-XLSB] §2.4.x (per-cell record types)
@@ -22,10 +22,13 @@
 #define FORMULON_IO_XLSB_CELL_WRITER_H_
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "cell.h"
 #include "io/xlsb/sst_writer.h"
+#include "utils/error.h"
+#include "utils/expected.h"
 
 namespace formulon {
 namespace io {
@@ -47,20 +50,18 @@ namespace xlsb {
 ///   * `Error`   → `BrtCellError` with the OOXML wire code (or `0x09`
 ///     for `ErrorCode::Unknown`).
 ///   * `Blank`   → `BrtCellBlank` (cell-header only).
-///   * Formula cells are recognised by `cell.formula_text` being non-
-///     empty. When `formula_text` matches the Bundle 4.1 reader stub
-///     (`__FORMULON_XLSB_PTG__(<hex>...)`) the captured Ptg bytes are
-///     spliced back into a `BrtFmla*` record matching the cached
-///     value's kind; otherwise the writer falls back to emitting the
-///     cached value as a literal and logs a `xlsb.writer.formula_lost`
-///     warning. `Array` and `Lambda` cells are not yet supported and
-///     fall through to the literal-blank path with a deferred-log
-///     warning.
+///   * Formula cells (`cell.formula_text` non-empty) → `BrtFmla*` with
+///     the parsed-and-encoded Ptg stream. `sheet_names` resolves a
+///     qualified reference's sheet to its 0-based `ixti`.
 ///
-/// `row` is currently used only for diagnostic logs; it does not
-/// appear in the cell payload (the enclosing `BrtRowHdr` carries the
-/// row index).
-void emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col, SstBuilder& sst);
+/// Returns `kIoXlsbUnsupportedPtg` when the formula cannot be parsed or
+/// lowered to the supported Ptg token set; the caller (`write_xlsb`)
+/// propagates the failure rather than losing the formula.
+///
+/// `row` is used only for diagnostic logs; it does not appear in the
+/// cell payload (the enclosing `BrtRowHdr` carries the row index).
+Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
+                                SstBuilder& sst, const std::vector<std::string>& sheet_names);
 
 }  // namespace xlsb
 }  // namespace io

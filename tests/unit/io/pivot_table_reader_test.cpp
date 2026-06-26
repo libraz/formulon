@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/pivot_table_writer.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "utils/error.h"
@@ -360,6 +361,151 @@ TEST(PivotTableReader, EmptyPassthroughWhenNoExtensionsPresent) {
   auto table_or = read_pivot_table_definition(Bytes(xml));
   ASSERT_TRUE(static_cast<bool>(table_or));
   EXPECT_TRUE(table_or.value().raw_passthrough_xml().empty());
+}
+
+TEST(PivotTableReader, GrandTotalsDefaultTrueWhenAbsent) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("</pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  EXPECT_TRUE(table_or.value().grand_totals_rows());
+  EXPECT_TRUE(table_or.value().grand_totals_cols());
+}
+
+TEST(PivotTableReader, GrandTotalsOffIsRead) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs);
+  xml.append(" name=\"P\" cacheId=\"0\" rowGrandTotals=\"0\" colGrandTotals=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("</pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  EXPECT_FALSE(table_or.value().grand_totals_rows());
+  EXPECT_FALSE(table_or.value().grand_totals_cols());
+}
+
+TEST(PivotTableReader, LocationRequiredAttributesAreRead) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append(
+      "<location ref=\"A3:D10\" firstHeaderRow=\"1\" firstDataRow=\"2\" firstDataCol=\"3\" "
+      "rowPageCount=\"4\" colPageCount=\"5\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("</pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  ASSERT_TRUE(table.location_first_header_row().has_value());
+  EXPECT_EQ(*table.location_first_header_row(), 1U);
+  ASSERT_TRUE(table.location_first_data_row().has_value());
+  EXPECT_EQ(*table.location_first_data_row(), 2U);
+  ASSERT_TRUE(table.location_first_data_col().has_value());
+  EXPECT_EQ(*table.location_first_data_col(), 3U);
+  ASSERT_TRUE(table.location_row_page_count().has_value());
+  EXPECT_EQ(*table.location_row_page_count(), 4U);
+  ASSERT_TRUE(table.location_col_page_count().has_value());
+  EXPECT_EQ(*table.location_col_page_count(), 5U);
+}
+
+TEST(PivotTableReader, LocationOptionalAttributesAbsentStayEmpty) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  // Only `ref` present; all offset attributes absent.
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("</pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  EXPECT_FALSE(table.location_first_header_row().has_value());
+  EXPECT_FALSE(table.location_first_data_row().has_value());
+  EXPECT_FALSE(table.location_first_data_col().has_value());
+  EXPECT_FALSE(table.location_row_page_count().has_value());
+  EXPECT_FALSE(table.location_col_page_count().has_value());
+}
+
+// ---------------------------------------------------------------------------
+// Per-field subtotal selection / defaultSubtotal round trip.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableReader, CustomSubtotalsAndDefaultSubtotalSurviveRoundTrip) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"1\">");
+  // defaultSubtotal turned OFF, with explicit Average + Max custom
+  // subtotals selected.
+  xml.append("  <pivotField axis=\"axisRow\" name=\"R\" defaultSubtotal=\"0\" avgSubtotal=\"1\" maxSubtotal=\"1\"/>");
+  xml.append("</pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  ASSERT_EQ(table.fields().size(), 1U);
+  const pivot::PivotField& f = table.fields()[0];
+  EXPECT_FALSE(f.default_subtotal);
+  ASSERT_EQ(f.subtotal_fns.size(), 2U);
+  EXPECT_EQ(f.subtotal_fns[0], pivot::SubtotalFn::Average);
+  EXPECT_EQ(f.subtotal_fns[1], pivot::SubtotalFn::Max);
+
+  // Write -> read again: the custom selection must not revert to default.
+  const std::string round = write_pivot_table_definition(table);
+  auto reparsed_or = read_pivot_table_definition(Bytes(round));
+  ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
+  const pivot::PivotField& f2 = reparsed_or.value().fields()[0];
+  EXPECT_FALSE(f2.default_subtotal);
+  ASSERT_EQ(f2.subtotal_fns.size(), 2U);
+  EXPECT_EQ(f2.subtotal_fns[0], pivot::SubtotalFn::Average);
+  EXPECT_EQ(f2.subtotal_fns[1], pivot::SubtotalFn::Max);
+}
+
+TEST(PivotTableReader, DefaultSubtotalDefaultsTrueWhenAbsent) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"1\"><pivotField axis=\"axisRow\" name=\"R\"/></pivotFields>");
+  xml.append("</pivotTableDefinition>");
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const pivot::PivotField& f = table_or.value().fields()[0];
+  EXPECT_TRUE(f.default_subtotal);
+  EXPECT_TRUE(f.subtotal_fns.empty());
+}
+
+// ---------------------------------------------------------------------------
+// <rowItems> / <colItems> survive verbatim through the passthrough buffer.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableReader, RowItemsAndColItemsSurviveRoundTrip) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("<rowItems count=\"2\"><i><x/></i><i t=\"grand\"><x/></i></rowItems>");
+  xml.append("<colItems count=\"1\"><i><x/></i></colItems>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const std::string& passthrough = table_or.value().raw_passthrough_xml();
+  EXPECT_NE(passthrough.find("<rowItems"), std::string::npos);
+  EXPECT_NE(passthrough.find("<colItems"), std::string::npos);
+  EXPECT_NE(passthrough.find("t=\"grand\""), std::string::npos);
+
+  // Write -> read again: the layout-item cache must still be present.
+  const std::string round = write_pivot_table_definition(table_or.value());
+  EXPECT_NE(round.find("<rowItems"), std::string::npos);
+  EXPECT_NE(round.find("<colItems"), std::string::npos);
+  auto reparsed_or = read_pivot_table_definition(Bytes(round));
+  ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
+  const std::string& passthrough2 = reparsed_or.value().raw_passthrough_xml();
+  EXPECT_NE(passthrough2.find("<rowItems"), std::string::npos);
+  EXPECT_NE(passthrough2.find("<colItems"), std::string::npos);
 }
 
 }  // namespace

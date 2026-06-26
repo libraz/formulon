@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -28,6 +30,35 @@ std::vector<std::uint8_t> SaveOrDie(const Workbook& wb) {
   auto save_or = wb.save();
   EXPECT_TRUE(static_cast<bool>(save_or)) << "save() failed: " << save_or.error().message;
   return save_or.value();
+}
+
+/// Extracts `xl/worksheets/sheet1.xml` from a saved package as a string.
+std::string ReadSheet1Xml(const std::vector<std::uint8_t>& bytes) {
+  io::ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  auto entry_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  EXPECT_TRUE(static_cast<bool>(entry_or)) << "read_entry: " << entry_or.error().message;
+  const std::vector<std::uint8_t>& body = entry_or.value();
+  return std::string(reinterpret_cast<const char*>(body.data()), body.size());
+}
+
+TEST(SheetLayoutRoundTrip, DimensionReflectsPopulatedBoundingBox) {
+  // Cells span B2:D5; the writer must emit <dimension ref="B2:D5"/> so a
+  // reader / the Name Box seeds the correct used range.
+  Workbook src = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0, 1U, 1U, Value::number(1.0))));  // B2
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0, 4U, 3U, Value::number(2.0))));  // D5
+
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+  const std::string xml = ReadSheet1Xml(bytes);
+  EXPECT_NE(xml.find("<dimension ref=\"B2:D5\"/>"), std::string::npos) << xml;
+}
+
+TEST(SheetLayoutRoundTrip, DimensionOnEmptySheetIsA1) {
+  Workbook src = Workbook::create();
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+  const std::string xml = ReadSheet1Xml(bytes);
+  EXPECT_NE(xml.find("<dimension ref=\"A1\"/>"), std::string::npos) << xml;
 }
 
 TEST(SheetLayoutRoundTrip, ViewStateZoomFreezeAndTabHidden) {
@@ -129,6 +160,37 @@ TEST(SheetLayoutRoundTrip, RowHeightsHiddenAndOutline) {
   EXPECT_EQ(sorted[2].row, 12U);
   EXPECT_DOUBLE_EQ(sorted[2].height, 30.5);
   EXPECT_EQ(sorted[2].outline_level, 1U);
+}
+
+TEST(SheetLayoutRoundTrip, ColumnWidthAndRowHeightPreserveFullPrecision) {
+  // A recalc-save must not drift the dimension metrics. These values need
+  // more than the six significant digits the previous %.6g writer kept;
+  // 8.7109375 is a width Excel actually stores. The writer now uses a
+  // round-trip-safe format so they survive byte-stable.
+  constexpr double kPreciseWidth = 8.7109375;
+  constexpr double kPreciseHeight = 12.733329999999999;
+
+  Workbook src = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0, 3U, 0U, Value::number(1.0))));
+  SheetLayout& layout = src.sheet(0).mutable_layout();
+  ColumnLayout col;
+  col.first = 0U;
+  col.last = 0U;
+  col.width = kPreciseWidth;
+  layout.columns.push_back(col);
+  RowLayout row;
+  row.row = 3U;
+  row.height = kPreciseHeight;
+  layout.row_overrides.push_back(row);
+
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+  auto result_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
+  const Sheet& loaded = result_or.value().workbook.sheet(0);
+  ASSERT_EQ(loaded.layout().columns.size(), 1U);
+  EXPECT_DOUBLE_EQ(loaded.layout().columns[0].width, kPreciseWidth);
+  ASSERT_EQ(loaded.layout().row_overrides.size(), 1U);
+  EXPECT_DOUBLE_EQ(loaded.layout().row_overrides[0].height, kPreciseHeight);
 }
 
 TEST(SheetLayoutRoundTrip, ZoomDefaultsAreOmittedFromOutput) {

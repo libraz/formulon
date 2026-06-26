@@ -168,6 +168,83 @@ TEST(OoxmlCF, PackageWithConditionalFormattingLoads) {
   EXPECT_EQ(b1.rules[0].color_scale->colors[2], cf::Color({0, 255, 0, 255}));
 }
 
+TEST(OoxmlCF, AbsoluteSqrefAndMalformedBlockDoNotAbortLoad) {
+  // A CF sqref with absolute markers (`$A$1:$A$10`, valid OOXML) plus a
+  // sibling block with an unparseable sqref must not reject the whole
+  // workbook: the absolute block loads, the malformed one is skipped.
+  const std::string_view content_types =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n"
+      "  <Default Extension=\"rels\" "
+      "ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n"
+      "  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n"
+      "  <Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n"
+      "  <Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n"
+      "</Types>\n";
+  const std::string_view package_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/>\n"
+      "</Relationships>\n";
+  const std::string_view workbook_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
+      "  <sheets>\n"
+      "    <sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/>\n"
+      "  </sheets>\n"
+      "</workbook>\n";
+  const std::string_view workbook_rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
+      "  <Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>\n"
+      "</Relationships>\n";
+  const std::string_view sheet1_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
+      "  <sheetData/>\n"
+      "  <conditionalFormatting sqref=\"$A$1:$A$10\">\n"
+      "    <cfRule type=\"cellIs\" priority=\"1\" operator=\"greaterThan\" dxfId=\"0\">\n"
+      "      <formula>50</formula>\n"
+      "    </cfRule>\n"
+      "  </conditionalFormatting>\n"
+      "  <conditionalFormatting sqref=\"not_a_range\">\n"
+      "    <cfRule type=\"cellIs\" priority=\"2\"/>\n"
+      "  </conditionalFormatting>\n"
+      "</worksheet>\n";
+
+  const std::vector<std::uint8_t> bytes = BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet1_xml},
+  });
+
+  auto result_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
+  const Workbook& wb = result_or.value().workbook;
+  ASSERT_GT(wb.sheet_count(), 0U);
+  const auto& cfs = wb.sheet(0).conditional_formats();
+  // Only the valid (absolute-marker) block survives; the malformed one
+  // is skipped, but the load succeeds.
+  ASSERT_EQ(cfs.size(), 1U);
+  ASSERT_EQ(cfs[0].sqref.size(), 1U);
+  EXPECT_EQ(cfs[0].sqref[0].first.row, 0U);
+  EXPECT_EQ(cfs[0].sqref[0].first.col, 0U);
+  EXPECT_EQ(cfs[0].sqref[0].last.row, 9U);
+  EXPECT_EQ(cfs[0].sqref[0].last.col, 0U);
+  ASSERT_EQ(cfs[0].rules.size(), 1U);
+  EXPECT_EQ(cfs[0].rules[0].type, cf::RuleType::CellIs);
+  EXPECT_EQ(cfs[0].rules[0].priority, 1);
+}
+
 TEST(OoxmlCF, RoundTripThroughWriterPreservesConditionalFormats) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");

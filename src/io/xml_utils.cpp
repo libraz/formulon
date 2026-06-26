@@ -127,7 +127,16 @@ bool parse_xml_bool_attr(const pugi::xml_attribute& attr) {
 
 Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector<std::uint8_t>& bytes,
                                       std::string_view reader_module, std::string_view part_name) {
-  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  // `parse_ws_pcdata_single` retains whitespace-only text inside leaf
+  // elements (those with no element children). This is required so a
+  // whitespace-only string body — e.g. `<t> </t>` in a shared-string,
+  // inline-string, or comment part — reads back as the literal
+  // whitespace rather than being silently dropped to "". Because it only
+  // affects childless elements, it is safe for every reader that shares
+  // this loader: structural parts read their data from attributes and
+  // child elements, never from whitespace-only PCDATA in a leaf.
+  constexpr unsigned int kParseFlags = pugi::parse_default | pugi::parse_ws_pcdata_single;
+  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), kParseFlags, pugi::encoding_utf8);
   if (!parse) {
     std::string ctx("context=");
     ctx.append(reader_module);

@@ -14,7 +14,9 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/pivot_cache_writer.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/record_access.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -231,12 +233,17 @@ TEST(PivotCacheReader, RecordsIndexedLookupResolvesSharedItems) {
 
   ASSERT_EQ(cache.records().size(), 3U);
   ASSERT_EQ(cache.records()[0].cells.size(), 2U);
-  EXPECT_EQ(cache.records()[0].cells[0].as_text(), "East");
-  EXPECT_EQ(cache.records()[0].cells[1].as_text(), "Closed");
-  EXPECT_EQ(cache.records()[1].cells[0].as_text(), "West");
-  EXPECT_EQ(cache.records()[1].cells[1].as_text(), "Open");
-  EXPECT_EQ(cache.records()[2].cells[0].as_text(), "East");
-  EXPECT_EQ(cache.records()[2].cells[1].as_text(), "Open");
+
+  // Shared-field cells store the raw shared_items index; the resolved value
+  // comes from `pivot::cell_value`.
+  EXPECT_TRUE(cache.records()[0].cells[0].is_number());
+  EXPECT_DOUBLE_EQ(cache.records()[0].cells[0].as_number(), 0.0);
+  EXPECT_EQ(pivot::cell_value(cache, cache.records()[0], 0).as_text(), "East");
+  EXPECT_EQ(pivot::cell_value(cache, cache.records()[0], 1).as_text(), "Closed");
+  EXPECT_EQ(pivot::cell_value(cache, cache.records()[1], 0).as_text(), "West");
+  EXPECT_EQ(pivot::cell_value(cache, cache.records()[1], 1).as_text(), "Open");
+  EXPECT_EQ(pivot::cell_value(cache, cache.records()[2], 0).as_text(), "East");
+  EXPECT_EQ(pivot::cell_value(cache, cache.records()[2], 1).as_text(), "Open");
 }
 
 TEST(PivotCacheReader, RecordsInlineNumericValues) {
@@ -324,7 +331,10 @@ TEST(PivotCacheReader, RecordsMissingTrailingValuesPadWithBlank) {
 
   ASSERT_EQ(cache.records().size(), 1U);
   ASSERT_EQ(cache.records()[0].cells.size(), 2U);
-  EXPECT_EQ(cache.records()[0].cells[0].as_text(), "x");
+  // Field 0 is shared: cell holds index 0, resolving to "x".
+  EXPECT_TRUE(cache.records()[0].cells[0].is_number());
+  EXPECT_EQ(pivot::cell_value(cache, cache.records()[0], 0).as_text(), "x");
+  // Field 1 was elided and padded with a blank.
   EXPECT_TRUE(cache.records()[0].cells[1].is_blank());
 }
 
@@ -336,6 +346,120 @@ TEST(PivotCacheReader, RecordsMalformedRootIsContentTypeInvalid) {
   auto status = read_pivot_cache_records(Bytes(xml), cache);
   ASSERT_FALSE(static_cast<bool>(status));
   EXPECT_EQ(status.error().code, FormulonErrorCode::kIoContentTypeInvalid);
+}
+
+// ---------------------------------------------------------------------------
+// Typed `<d>` (ISO date) items: must consume a field slot and resolve to a
+// serial so they do not desync every subsequent column by one.
+// ---------------------------------------------------------------------------
+
+TEST(PivotCacheReader, DefinitionDateSharedItemResolvesToSerial) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotCacheDefinition").append(kPivotNs).append(">");
+  xml.append("  <cacheFields count=\"1\">");
+  xml.append("    <cacheField name=\"OrderDate\">");
+  xml.append("      <sharedItems containsDate=\"1\" count=\"1\">");
+  xml.append("        <d v=\"1976-11-22T00:00:00\"/>");
+  xml.append("      </sharedItems>");
+  xml.append("    </cacheField>");
+  xml.append("  </cacheFields>");
+  xml.append("</pivotCacheDefinition>");
+
+  auto cache_or = read_pivot_cache_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCache& cache = cache_or.value();
+  ASSERT_EQ(cache.fields().size(), 1U);
+  ASSERT_EQ(cache.fields()[0].shared_items.size(), 1U);
+  ASSERT_TRUE(cache.fields()[0].shared_items[0].is_number());
+  EXPECT_DOUBLE_EQ(cache.fields()[0].shared_items[0].as_number(), 28086.0);
+}
+
+TEST(PivotCacheReader, RecordsDateItemConsumesFieldSlotKeepingAlignment) {
+  // Three inline-typed fields: a date, a number, and a string. If the
+  // `<d>` cell failed to advance the field index, the number and string
+  // would land in the wrong columns (the desync bug). Assert each value
+  // lands in its declared field.
+  std::string def_xml(kXmlDecl);
+  def_xml.append("<pivotCacheDefinition").append(kPivotNs).append(">");
+  def_xml.append("  <cacheFields count=\"3\">");
+  def_xml.append("    <cacheField name=\"Date\"><sharedItems containsDate=\"1\"/></cacheField>");
+  def_xml.append("    <cacheField name=\"Amount\"><sharedItems containsNumber=\"1\"/></cacheField>");
+  def_xml.append("    <cacheField name=\"Region\"><sharedItems containsString=\"1\"/></cacheField>");
+  def_xml.append("  </cacheFields>");
+  def_xml.append("</pivotCacheDefinition>");
+  auto cache_or = read_pivot_cache_definition(Bytes(def_xml));
+  ASSERT_TRUE(static_cast<bool>(cache_or));
+  pivot::PivotCache cache = std::move(cache_or.value());
+
+  std::string rec_xml(kXmlDecl);
+  rec_xml.append("<pivotCacheRecords").append(kPivotNs).append(" count=\"1\">");
+  rec_xml.append("  <r><d v=\"2024-03-15T00:00:00\"/><n v=\"250.5\"/><s v=\"East\"/></r>");
+  rec_xml.append("</pivotCacheRecords>");
+  auto status = read_pivot_cache_records(Bytes(rec_xml), cache);
+  ASSERT_TRUE(static_cast<bool>(status)) << status.error().message;
+
+  ASSERT_EQ(cache.records().size(), 1U);
+  const pivot::PivotCacheRecord& r = cache.records()[0];
+  ASSERT_EQ(r.cells.size(), 3U);
+  ASSERT_TRUE(r.cells[0].is_number());
+  EXPECT_DOUBLE_EQ(r.cells[0].as_number(), 45366.0);  // date column
+  ASSERT_TRUE(r.cells[1].is_number());
+  EXPECT_DOUBLE_EQ(r.cells[1].as_number(), 250.5);  // amount column
+  ASSERT_TRUE(r.cells[2].is_text());
+  EXPECT_EQ(r.cells[2].as_text(), "East");  // region column
+}
+
+// ---------------------------------------------------------------------------
+// cacheSource <worksheetSource> + <sharedItems> range hints round trip.
+// ---------------------------------------------------------------------------
+
+TEST(PivotCacheReader, WorksheetSourceAndSharedItemsHintsSurviveRoundTrip) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotCacheDefinition").append(kPivotNs).append(">");
+  xml.append("  <cacheSource type=\"worksheet\">");
+  xml.append("    <worksheetSource ref=\"$A$1:$C$9\" sheet=\"Data\"/>");
+  xml.append("  </cacheSource>");
+  xml.append("  <cacheFields count=\"1\">");
+  xml.append("    <cacheField name=\"Amount\">");
+  xml.append("      <sharedItems containsNumber=\"1\" containsInteger=\"1\" minValue=\"10\" maxValue=\"500\"/>");
+  xml.append("    </cacheField>");
+  xml.append("  </cacheFields>");
+  xml.append("</pivotCacheDefinition>");
+
+  auto cache_or = read_pivot_cache_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
+  const pivot::PivotCache& cache = cache_or.value();
+
+  // Read-side assertions.
+  ASSERT_TRUE(cache.worksheet_source().present);
+  EXPECT_EQ(cache.worksheet_source().ref, "$A$1:$C$9");
+  EXPECT_EQ(cache.worksheet_source().sheet, "Data");
+  ASSERT_EQ(cache.fields().size(), 1U);
+  const pivot::SharedItemsHints& h = cache.fields()[0].shared_items_hints;
+  EXPECT_TRUE(h.present);
+  EXPECT_TRUE(h.contains_number);
+  EXPECT_TRUE(h.contains_integer);
+  ASSERT_TRUE(h.has_min_value);
+  ASSERT_TRUE(h.has_max_value);
+  EXPECT_EQ(h.min_value, "10");
+  EXPECT_EQ(h.max_value, "500");
+
+  // Write -> read again: the attributes must survive verbatim.
+  const std::string def_xml = write_pivot_cache_definition(cache);
+  auto reparsed_or = read_pivot_cache_definition(Bytes(def_xml));
+  ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
+  const pivot::PivotCache& reparsed = reparsed_or.value();
+  ASSERT_TRUE(reparsed.worksheet_source().present);
+  EXPECT_EQ(reparsed.worksheet_source().ref, "$A$1:$C$9");
+  EXPECT_EQ(reparsed.worksheet_source().sheet, "Data");
+  ASSERT_EQ(reparsed.fields().size(), 1U);
+  const pivot::SharedItemsHints& h2 = reparsed.fields()[0].shared_items_hints;
+  EXPECT_TRUE(h2.contains_number);
+  EXPECT_TRUE(h2.contains_integer);
+  ASSERT_TRUE(h2.has_min_value);
+  ASSERT_TRUE(h2.has_max_value);
+  EXPECT_EQ(h2.min_value, "10");
+  EXPECT_EQ(h2.max_value, "500");
 }
 
 }  // namespace

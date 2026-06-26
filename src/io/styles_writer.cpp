@@ -204,10 +204,10 @@ void AppendUint(std::string& out, std::uint64_t v) {
 
 void AppendDouble(std::string& out, double v) {
   char buf[32];
-  // Excel-style: trim trailing zeros for compactness while keeping
-  // round-trip safety. %.6g is good enough for font sizes (which are
-  // typically integer or single-decimal).
-  std::snprintf(buf, sizeof(buf), "%g", v);
+  // %.17g is round-trip safe under IEEE 754, so a font size such as 10.5
+  // survives a recalc-save unchanged. Matches the row-height / column-
+  // width writers in the worksheet builder.
+  std::snprintf(buf, sizeof(buf), "%.17g", v);
   out.append(buf);
 }
 

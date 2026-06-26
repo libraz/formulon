@@ -324,7 +324,35 @@ TEST(CFReader, ExtLstChildIsIgnored) {
   EXPECT_EQ(r.formula1.value(), "0");
 }
 
-TEST(CFReader, MissingSqrefAttributeFails) {
+TEST(CFReader, AbsoluteMarkersInSqrefAreAccepted) {
+  // `$A$1:$A$10` is valid OOXML; the absolute markers must be stripped,
+  // not rejected. Previously a single `$` token failed the whole load.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="$A$1:$A$10 $C$5">
+        <cfRule type="cellIs" priority="1" operator="greaterThan" dxfId="0">
+          <formula>10</formula>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 1u);
+  const auto& cf = cfs.value()[0];
+  ASSERT_EQ(cf.sqref.size(), 2u);
+  EXPECT_EQ(cf.sqref[0].first.row, 0u);
+  EXPECT_EQ(cf.sqref[0].first.col, 0u);
+  EXPECT_EQ(cf.sqref[0].last.row, 9u);
+  EXPECT_EQ(cf.sqref[0].last.col, 0u);
+  EXPECT_EQ(cf.sqref[1].first.row, 4u);
+  EXPECT_EQ(cf.sqref[1].first.col, 2u);
+  EXPECT_EQ(cf.sqref[1].first, cf.sqref[1].last);  // Single-cell.
+  ASSERT_EQ(cf.rules.size(), 1u);
+}
+
+TEST(CFReader, MissingSqrefAttributeSkipsBlock) {
+  // A CF block is a presentation overlay; a missing sqref skips just that
+  // block, leaving the load successful rather than aborting the workbook.
   pugi::xml_document doc = Load(R"(
     <worksheet>
       <conditionalFormatting>
@@ -334,11 +362,11 @@ TEST(CFReader, MissingSqrefAttributeFails) {
       </conditionalFormatting>
     </worksheet>)");
   auto cfs = read_conditional_formats(doc.child("worksheet"));
-  ASSERT_FALSE(cfs);
-  EXPECT_EQ(cfs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  ASSERT_TRUE(cfs);
+  EXPECT_TRUE(cfs.value().empty());
 }
 
-TEST(CFReader, EmptySqrefAttributeFails) {
+TEST(CFReader, EmptySqrefAttributeSkipsBlock) {
   pugi::xml_document doc = Load(R"(
     <worksheet>
       <conditionalFormatting sqref="">
@@ -346,11 +374,11 @@ TEST(CFReader, EmptySqrefAttributeFails) {
       </conditionalFormatting>
     </worksheet>)");
   auto cfs = read_conditional_formats(doc.child("worksheet"));
-  ASSERT_FALSE(cfs);
-  EXPECT_EQ(cfs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  ASSERT_TRUE(cfs);
+  EXPECT_TRUE(cfs.value().empty());
 }
 
-TEST(CFReader, UnparseableSqrefTokenFails) {
+TEST(CFReader, UnparseableSqrefTokenSkipsBlock) {
   pugi::xml_document doc = Load(R"(
     <worksheet>
       <conditionalFormatting sqref="not_a_range">
@@ -358,8 +386,34 @@ TEST(CFReader, UnparseableSqrefTokenFails) {
       </conditionalFormatting>
     </worksheet>)");
   auto cfs = read_conditional_formats(doc.child("worksheet"));
-  ASSERT_FALSE(cfs);
-  EXPECT_EQ(cfs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  ASSERT_TRUE(cfs);
+  EXPECT_TRUE(cfs.value().empty());
+}
+
+TEST(CFReader, MalformedBlockSkippedButValidBlockKept) {
+  // One malformed block must not take down the sibling valid block; the
+  // load continues and only the good block survives.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="not_a_range">
+        <cfRule type="cellIs" priority="1"/>
+      </conditionalFormatting>
+      <conditionalFormatting sqref="$B$2:$B$5">
+        <cfRule type="cellIs" priority="2" operator="lessThan" dxfId="0">
+          <formula>3</formula>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 1u);
+  const auto& cf = cfs.value()[0];
+  ASSERT_EQ(cf.sqref.size(), 1u);
+  EXPECT_EQ(cf.sqref[0].first.row, 1u);
+  EXPECT_EQ(cf.sqref[0].first.col, 1u);
+  EXPECT_EQ(cf.sqref[0].last.row, 4u);
+  ASSERT_EQ(cf.rules.size(), 1u);
+  EXPECT_EQ(cf.rules[0].priority, 2);
 }
 
 TEST(CFReader, UnknownRuleTypeFoldsToExpression) {

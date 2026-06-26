@@ -77,8 +77,10 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
 ///   * Each `<r>` becomes one `pivot::PivotCacheRecord`. Inside `<r>`,
 ///     children appear in field order (one child per `cacheField`).
 ///     Recognised children:
-///       - `<x v="N">` -> `cache.fields()[i].shared_items[N]`
-///         (out-of-bounds N -> `kIoSheetCorrupt`).
+///       - `<x v="N">` -> `Value::number(N)`, the raw index into
+///         `cache.fields()[i].shared_items` (out-of-bounds N ->
+///         `kIoSheetCorrupt`). The index is stored as-is; callers resolve
+///         it through `pivot::cell_value`.
 ///       - `<n v="...">` -> `Value::number(strtod)`; non-numeric is
 ///         `kIoSheetCorrupt`.
 ///       - `<s v="...">` -> `Value::text(...)`

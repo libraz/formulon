@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "cell.h"
@@ -59,7 +60,8 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row) {
 
 }  // namespace
 
-Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst) {
+Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst,
+                                                      const std::vector<std::string>& sheet_names) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -93,7 +95,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
         // count for no observable gain.
         continue;
       }
-      emit_cell(body, cell, row, col, sst);
+      if (auto r = emit_cell(body, cell, row, col, sst, sheet_names); !r) {
+        return r.error();
+      }
     }
   }
 

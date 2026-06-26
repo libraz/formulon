@@ -17,6 +17,7 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/structured_log.h"
 
 namespace formulon::io {
 namespace {
@@ -164,14 +165,35 @@ cf::TimePeriod ParseTimePeriod(std::string_view text) {
   return cf::TimePeriod::Today;
 }
 
+/// Strips `$` absolute markers from an A1 token. CF `sqref` legitimately
+/// carries absolute references (`$A$1:$A$10`), which `parse_a1` rejects;
+/// the column/row position is identical with or without the markers, so
+/// dropping them is a lossless normalisation. The result is copied into
+/// `buf` (kept alive by the caller) and returned as a view over it.
+std::string_view StripAbsoluteMarkers(std::string_view ref, std::string& buf) {
+  if (ref.find('$') == std::string_view::npos) {
+    return ref;
+  }
+  buf.clear();
+  buf.reserve(ref.size());
+  for (const char ch : ref) {
+    if (ch != '$') {
+      buf.push_back(ch);
+    }
+  }
+  return buf;
+}
+
 /// Decodes one A1 cell-range token (`A1`, `A1:B5`, `$A$1:$B$5`) into a
-/// `CFCellRange`. Single-cell tokens land as `first == last`. Returns
-/// `nullopt` for unparseable input — the caller folds the surrounding
-/// sqref into `kIoSheetCorrupt`.
+/// `CFCellRange`. Single-cell tokens land as `first == last`. Absolute
+/// markers (`$`) are stripped first since CF sqref legitimately contains
+/// them. Returns `kIoSheetCorrupt` for unparseable input — the caller
+/// either folds it into the surrounding sqref error or skips the block.
 Expected<cf::CFCellRange, Error> ParseA1Range(std::string_view ref) {
   const std::size_t colon = ref.find(':');
   if (colon == std::string_view::npos) {
-    auto rc = parse_a1(ref);
+    std::string norm_buf;
+    auto rc = parse_a1(StripAbsoluteMarkers(ref, norm_buf));
     if (!rc) {
       std::string ctx("context=cf_reader ref=");
       ctx.append(ref);
@@ -183,8 +205,10 @@ Expected<cf::CFCellRange, Error> ParseA1Range(std::string_view ref) {
     out.last = out.first;
     return out;
   }
-  const std::string_view a = ref.substr(0, colon);
-  const std::string_view b = ref.substr(colon + 1);
+  std::string a_buf;
+  std::string b_buf;
+  const std::string_view a = StripAbsoluteMarkers(ref.substr(0, colon), a_buf);
+  const std::string_view b = StripAbsoluteMarkers(ref.substr(colon + 1), b_buf);
   auto a_rc = parse_a1(a);
   auto b_rc = parse_a1(b);
   if (!a_rc || !b_rc) {
@@ -415,14 +439,28 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
   std::vector<cf::ConditionalFormat> out;
   for (pugi::xml_node block = worksheet.child("conditionalFormatting"); block;
        block = block.next_sibling("conditionalFormatting")) {
+    // A conditional-formatting block is a presentation-only overlay; a
+    // single malformed block (missing or unparseable `sqref`) must not
+    // reject the whole workbook. Skip the offending block with a WARN
+    // diagnostic and continue, mirroring how other optional parts
+    // degrade. Genuine sheet data is read by a separate reader and is
+    // unaffected by this scope.
     const pugi::xml_attribute sqref_attr = block.attribute("sqref");
     if (!sqref_attr) {
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "conditionalFormatting: required sqref attribute missing",
-                        "context=cf_reader");
+      StructuredLog("io.cf.skip")
+          .field("reason", std::string_view("sqref attribute missing"))
+          .error_code(FormulonErrorCode::kIoSheetCorrupt)
+          .warn();
+      continue;
     }
     auto ranges_or = ParseSqref(sqref_attr.value());
     if (!ranges_or) {
-      return ranges_or.error();
+      StructuredLog("io.cf.skip")
+          .field("reason", std::string_view("sqref unparseable"))
+          .field("sqref", std::string_view(sqref_attr.value()))
+          .error_code(FormulonErrorCode::kIoSheetCorrupt)
+          .warn();
+      continue;
     }
     cf::ConditionalFormat cfmt;
     cfmt.sqref = std::move(ranges_or.value());

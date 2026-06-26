@@ -38,9 +38,10 @@ bool parse_uint(std::string_view text, std::size_t* pos, std::uint32_t* out_val)
 
 /// Parses an A1-shaped cell reference (e.g. "AB12") into 0-based row and
 /// 0-based column. Returns false on empty input, malformed letters, missing
-/// row digits, trailing characters, or any overflow. Does not validate
-/// against Excel's `kMaxRows` / `kMaxCols` ceilings; callers that need
-/// engine-bound validation should layer that on top.
+/// row digits, trailing characters, or any overflow. Also rejects
+/// references beyond Excel's `Sheet::kMaxCols` / `Sheet::kMaxRows` ceilings
+/// (e.g. a 3-letter column past XFD, or a row past 1,048,576), matching the
+/// DOM cell-ref path in `cell_parser.cpp` so both OOXML readers converge.
 bool parse_a1_ref(std::string_view text, std::uint32_t* out_row, std::uint32_t* out_col) noexcept;
 
 }  // namespace io

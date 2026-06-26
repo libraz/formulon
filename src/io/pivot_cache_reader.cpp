@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/iso_date.h"
 #include "io/xml_utils.h"
 #include "pivot/pivot_cache.h"
 #include "pugixml.hpp"
@@ -153,6 +154,22 @@ Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<s
     }
     return Value::boolean(flag);
   }
+  if (name == "d") {
+    // `<d v="YYYY-MM-DDThh:mm:ss">` is a typed date item. Resolve the
+    // ISO 8601 body to an Excel serial so the value participates in date
+    // arithmetic like any other number. A non-conforming body that does
+    // not parse degrades to text rather than failing the whole cache;
+    // the important invariant is that a `<d>` always consumes a field
+    // slot (see `IsTypedValueElement`) so record/field columns stay
+    // aligned.
+    std::string_view raw = node.attribute("v").as_string();
+    double serial = 0.0;
+    if (parse_iso_date_serial(raw, &serial)) {
+      return Value::number(serial);
+    }
+    text_storage.emplace_back(raw);
+    return Value::text(text_storage.back());
+  }
   if (name == "m") {
     return Value::blank();
   }
@@ -165,11 +182,50 @@ Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<s
 }
 
 /// True if `name` is one of the inline-typed value elements that
-/// `DecodeTypedValue` understands. Used to ignore unknown children
-/// (e.g. `<d/>` date placeholders that Excel does not always emit) and
-/// to gate the strtod path.
+/// `DecodeTypedValue` understands (`<s>`, `<n>`, `<b>`, `<d>`, `<m>`,
+/// `<e>`). Used to gate decoding and, critically, to decide which
+/// children consume a field slot in the records part: a typed `<d>`
+/// date item must advance the field index exactly like `<n>`, otherwise
+/// every subsequent column shifts by one.
 bool IsTypedValueElement(std::string_view name) {
-  return name == "s" || name == "n" || name == "b" || name == "m" || name == "e";
+  return name == "s" || name == "n" || name == "b" || name == "d" || name == "m" || name == "e";
+}
+
+/// Reads the numeric / date range + content hint attributes from a
+/// `<sharedItems>` element into `out`. Boolean hints default to false
+/// (absent); the bound attributes (`minValue`/`maxValue`/`minDate`/
+/// `maxDate`) record both presence and the raw string body so the writer
+/// re-emits exactly what was read. `out->present` is set when any hint
+/// attribute was found, gating the writer's legacy placeholder fallback.
+void ReadSharedItemsHints(const pugi::xml_node& items, pivot::SharedItemsHints* out) {
+  bool any = false;
+  const auto read_flag = [&](const char* attr, bool* dst) {
+    if (pugi::xml_attribute a = items.attribute(attr); a) {
+      bool ok = false;
+      *dst = ParseBoolFlag(a.as_string(), &ok);
+      any = true;
+    }
+  };
+  read_flag("containsNumber", &out->contains_number);
+  read_flag("containsInteger", &out->contains_integer);
+  read_flag("containsDate", &out->contains_date);
+  read_flag("containsString", &out->contains_string);
+  read_flag("containsBlank", &out->contains_blank);
+  read_flag("containsSemiMixedTypes", &out->contains_semi_mixed);
+  read_flag("containsNonDate", &out->contains_non_date);
+  read_flag("containsMixedTypes", &out->contains_mixed_types);
+  const auto read_str = [&](const char* attr, bool* present, std::string* dst) {
+    if (pugi::xml_attribute a = items.attribute(attr); a) {
+      *present = true;
+      dst->assign(a.as_string());
+      any = true;
+    }
+  };
+  read_str("minValue", &out->has_min_value, &out->min_value);
+  read_str("maxValue", &out->has_max_value, &out->max_value);
+  read_str("minDate", &out->has_min_date, &out->min_date);
+  read_str("maxDate", &out->has_max_date, &out->max_date);
+  out->present = any;
 }
 
 }  // namespace
@@ -183,6 +239,8 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
                       "pivotCacheDefinition*.xml: missing <pivotCacheDefinition> root", "context=pivot_cache_reader");
   }
 
+  pivot::PivotCache cache;
+
   // External cache sources require live data-connection plumbing we do
   // not implement; fail explicitly so the workbook reader can surface
   // a useful message rather than silently producing an empty cache.
@@ -195,10 +253,24 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
     }
     // type defaults to "worksheet"; any other value (e.g. "consolidation",
     // "scenario") is accepted but treated as worksheet-equivalent here.
-    // The bytes-preserve path will round-trip the original attribute.
+    // Capture the `<worksheetSource>` child so Excel's Refresh can locate
+    // the source range / defined name after a round trip; dropping it
+    // makes Refresh fail or repoint to the wrong range.
+    if (pugi::xml_node ws = src.child("worksheetSource"); ws) {
+      pivot::WorksheetSource& wsrc = cache.mutable_worksheet_source();
+      wsrc.present = true;
+      if (pugi::xml_attribute a = ws.attribute("ref"); a) {
+        wsrc.ref = a.value();
+      }
+      if (pugi::xml_attribute a = ws.attribute("sheet"); a) {
+        wsrc.sheet = a.value();
+      }
+      if (pugi::xml_attribute a = ws.attribute("name"); a) {
+        wsrc.name = a.value();
+      }
+    }
   }
 
-  pivot::PivotCache cache;
   pugi::xml_node fields = root.child("cacheFields");
   if (fields) {
     for (pugi::xml_node f = fields.child("cacheField"); f; f = f.next_sibling("cacheField")) {
@@ -215,6 +287,10 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       // semantics; for now group fields land with empty shared_items
       // and their records carry the raw `<x>` indices unchanged.
       if (pugi::xml_node items = f.child("sharedItems"); items) {
+        // Capture the numeric / date range + grouping hint attributes so
+        // Excel's Refresh keeps its grouping boundaries; dropping them
+        // loses grouping hints and can mis-bucket grouped fields.
+        ReadSharedItemsHints(items, &field.shared_items_hints);
         for (pugi::xml_node child = items.first_child(); child; child = child.next_sibling()) {
           const std::string_view child_name = child.name();
           if (!IsTypedValueElement(child_name)) {
@@ -261,7 +337,9 @@ Expected<void, Error> read_pivot_cache_records(const std::vector<std::uint8_t>& 
       const std::string_view child_name = child.name();
       if (child_name == "x") {
         // `<x v="N">` indexes the matching field's shared_items. Missing
-        // `v` defaults to 0 (matches OOXML schema default).
+        // `v` defaults to 0 (matches OOXML schema default). The cell stores
+        // the raw index (as a Number), not the resolved shared value;
+        // `pivot::cell_value` performs the shared_items lookup on read.
         const int raw = child.attribute("v").as_int(0);
         if (raw < 0 || static_cast<std::size_t>(raw) >= cache.fields()[field_idx].shared_items.size()) {
           std::string ctx("context=pivot_cache_reader field=");
@@ -269,7 +347,7 @@ Expected<void, Error> read_pivot_cache_records(const std::vector<std::uint8_t>& 
           return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivot cache: <x v=...> index out of range",
                             std::move(ctx));
         }
-        record.cells.push_back(cache.fields()[field_idx].shared_items[static_cast<std::size_t>(raw)]);
+        record.cells.push_back(Value::number(static_cast<double>(raw)));
         ++field_idx;
         continue;
       }

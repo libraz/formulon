@@ -30,6 +30,7 @@
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
+#include "pivot/record_access.h"
 #include "sheet.h"
 #include "workbook.h"
 
@@ -267,13 +268,14 @@ TEST(OoxmlPivot, PackageWithPivotCacheAndPivotTableLoads) {
   EXPECT_EQ(cache->fields()[1].name, "Amount");
   EXPECT_TRUE(cache->fields()[1].shared_items.empty());
   ASSERT_EQ(cache->records().size(), 3U);
-  // Records: Region carries text resolved from shared_items, Amount carries
-  // an inline number.
-  EXPECT_EQ(cache->records()[0].cells[0].as_text(), "North");
+  // Records: Region is a shared field, so its cell stores the shared_items
+  // index and resolves to text via `cell_value`; Amount carries an inline
+  // number.
+  EXPECT_EQ(pivot::cell_value(*cache, cache->records()[0], 0).as_text(), "North");
   EXPECT_DOUBLE_EQ(cache->records()[0].cells[1].as_number(), 100.0);
-  EXPECT_EQ(cache->records()[1].cells[0].as_text(), "South");
+  EXPECT_EQ(pivot::cell_value(*cache, cache->records()[1], 0).as_text(), "South");
   EXPECT_DOUBLE_EQ(cache->records()[1].cells[1].as_number(), 200.0);
-  EXPECT_EQ(cache->records()[2].cells[0].as_text(), "North");
+  EXPECT_EQ(pivot::cell_value(*cache, cache->records()[2], 0).as_text(), "North");
   EXPECT_DOUBLE_EQ(cache->records()[2].cells[1].as_number(), 300.0);
 
   // ---------- Sheet-level: pivot table landed on Sheet2 -------------------

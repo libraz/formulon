@@ -14,12 +14,22 @@
 #include <cstdint>
 #include <deque>
 #include <string>
+#include <string_view>
 #include <utility>
 
+#include "eval/eval_state.h"
+#include "eval/function_registry.h"
+#include "eval/tree_walker.h"
 #include "gtest/gtest.h"
+#include "parser/ast.h"
+#include "parser/parser.h"
 #include "pugixml.hpp"
+#include "sheet.h"
+#include "test_eval_helpers.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace io {
@@ -321,6 +331,81 @@ TEST(CellParser, LegacyStrTypeIsTextFromValue) {
   EXPECT_EQ(parsed.formula, "UPPER(\"hi\")");
   ASSERT_TRUE(parsed.value.is_text());
   EXPECT_EQ(parsed.value.as_text(), "HI");
+}
+
+// ---------------------------------------------------------------------------
+// t="d" (ISO 8601 date, strict OOXML) -> Excel serial number
+// ---------------------------------------------------------------------------
+
+TEST(CellParser, IsoDateTypeBecomesSerialNumber) {
+  // A strict OOXML date cell must surface as a number serial so date
+  // arithmetic (A1+1, YEAR(A1)) matches Excel rather than a text body.
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed, "<c r=\"A1\" t=\"d\"><v>1976-11-22</v></c>", doc, storage);
+  ASSERT_TRUE(parsed.value.is_number());
+  EXPECT_DOUBLE_EQ(parsed.value.as_number(), 28086.0);
+}
+
+TEST(CellParser, IsoDateTimeTypeIncludesTimeFraction) {
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed, "<c r=\"A1\" t=\"d\"><v>2024-03-15T12:30:00</v></c>", doc, storage);
+  ASSERT_TRUE(parsed.value.is_number());
+  EXPECT_NEAR(parsed.value.as_number(), 45366.520833, 1e-6);
+}
+
+TEST(CellParser, IsoDateTimeWithZuluOffsetParses) {
+  // A trailing Z (or numeric offset) is accepted and ignored: Excel
+  // stores a wall-clock serial.
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed, "<c r=\"A1\" t=\"d\"><v>2024-03-15T12:30:00Z</v></c>", doc, storage);
+  ASSERT_TRUE(parsed.value.is_number());
+  EXPECT_NEAR(parsed.value.as_number(), 45366.520833, 1e-6);
+}
+
+TEST(CellParser, IsoDateMalformedBodyFallsBackToText) {
+  // A non-conforming body must not fail the cell; it degrades to text.
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed, "<c r=\"A1\" t=\"d\"><v>not-a-date</v></c>", doc, storage);
+  ASSERT_TRUE(parsed.value.is_text());
+  EXPECT_EQ(parsed.value.as_text(), "not-a-date");
+}
+
+// Evaluates `src` against the default registry under the Mac profile.
+Value EvalSource(std::string_view src) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return eval::evaluate(*root, eval_arena, eval::default_registry(), eval::test::mac_context());
+}
+
+TEST(CellParser, IsoDateSerialFeedsDateArithmetic) {
+  // End-to-end: a `t="d"` cell parsed to a serial must behave like a date
+  // in the evaluator (YEAR / arithmetic), not like an opaque text body.
+  pugi::xml_document doc;
+  std::deque<std::string> storage;
+  ASSERT_PARSE_OK(parsed, "<c r=\"A1\" t=\"d\"><v>1976-11-22</v></c>", doc, storage);
+  ASSERT_TRUE(parsed.value.is_number());
+  const double serial = parsed.value.as_number();
+  EXPECT_DOUBLE_EQ(serial, 28086.0);
+
+  const Value year = EvalSource("=YEAR(" + std::to_string(static_cast<long long>(serial)) + ")");
+  ASSERT_TRUE(year.is_number());
+  EXPECT_EQ(year.as_number(), 1976.0);
+
+  const Value next_day = EvalSource("=DAY(" + std::to_string(static_cast<long long>(serial)) + "+1)");
+  ASSERT_TRUE(next_day.is_number());
+  EXPECT_EQ(next_day.as_number(), 23.0);
 }
 
 }  // namespace

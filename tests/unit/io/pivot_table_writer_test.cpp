@@ -24,6 +24,9 @@ std::vector<std::uint8_t> Bytes(std::string_view xml) {
   return std::vector<std::uint8_t>(xml.begin(), xml.end());
 }
 
+constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+constexpr std::string_view kPivotNs = " xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"";
+
 // ---------------------------------------------------------------------------
 // Empty table
 // ---------------------------------------------------------------------------
@@ -334,6 +337,96 @@ TEST(PivotTableWriter, ShowDataAsRoundTrips) {
   EXPECT_EQ(*got.show_as_base_field, 2U);
   ASSERT_TRUE(got.show_as_base_item.has_value());
   EXPECT_EQ(*got.show_as_base_item, pivot::kShowAsBasePrev);
+}
+
+// ---------------------------------------------------------------------------
+// Grand-total flags and <location> required attributes survive a
+// read -> write -> read round trip driven from a real <pivotTableDefinition>
+// fixture (the production load path), instead of silently flipping defaults
+// or dropping schema-required attributes.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, GrandTotalsAndLocationAttrsSurviveRoundTrip) {
+  // Fixture: grand totals explicitly OFF, full <location> attribute set.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs);
+  xml.append(" name=\"P\" cacheId=\"0\" rowGrandTotals=\"0\" colGrandTotals=\"0\">");
+  xml.append(
+      "<location ref=\"A3:D10\" firstHeaderRow=\"1\" firstDataRow=\"2\" firstDataCol=\"1\" "
+      "rowPageCount=\"1\" colPageCount=\"2\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("</pivotTableDefinition>");
+
+  // First load through the production reader.
+  auto first_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(first_or)) << "read failed: " << first_or.error().message;
+  const pivot::PivotTable& first = first_or.value();
+  // (a) Grand totals stay OFF (default is true; must not flip back).
+  EXPECT_FALSE(first.grand_totals_rows());
+  EXPECT_FALSE(first.grand_totals_cols());
+  // (b) <location> required + optional attributes captured.
+  ASSERT_TRUE(first.location_first_header_row().has_value());
+  EXPECT_EQ(*first.location_first_header_row(), 1U);
+  ASSERT_TRUE(first.location_first_data_row().has_value());
+  EXPECT_EQ(*first.location_first_data_row(), 2U);
+  ASSERT_TRUE(first.location_first_data_col().has_value());
+  EXPECT_EQ(*first.location_first_data_col(), 1U);
+  ASSERT_TRUE(first.location_row_page_count().has_value());
+  EXPECT_EQ(*first.location_row_page_count(), 1U);
+  ASSERT_TRUE(first.location_col_page_count().has_value());
+  EXPECT_EQ(*first.location_col_page_count(), 2U);
+
+  // Write back out: the grand-total flags and location attributes must be
+  // re-emitted (the flags only when OFF; the location offsets verbatim).
+  const std::string written = write_pivot_table_definition(first);
+  EXPECT_NE(written.find("rowGrandTotals=\"0\""), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("colGrandTotals=\"0\""), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("firstHeaderRow=\"1\""), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("firstDataRow=\"2\""), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("firstDataCol=\"1\""), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("rowPageCount=\"1\""), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("colPageCount=\"2\""), std::string::npos) << "xml=" << written;
+
+  // Second load: same observable state survives the full round trip.
+  auto second_or = read_pivot_table_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(second_or)) << "read failed: " << second_or.error().message;
+  const pivot::PivotTable& second = second_or.value();
+  EXPECT_FALSE(second.grand_totals_rows());
+  EXPECT_FALSE(second.grand_totals_cols());
+  ASSERT_TRUE(second.location_first_header_row().has_value());
+  EXPECT_EQ(*second.location_first_header_row(), 1U);
+  ASSERT_TRUE(second.location_first_data_row().has_value());
+  EXPECT_EQ(*second.location_first_data_row(), 2U);
+  ASSERT_TRUE(second.location_first_data_col().has_value());
+  EXPECT_EQ(*second.location_first_data_col(), 1U);
+  ASSERT_TRUE(second.location_row_page_count().has_value());
+  EXPECT_EQ(*second.location_row_page_count(), 1U);
+  ASSERT_TRUE(second.location_col_page_count().has_value());
+  EXPECT_EQ(*second.location_col_page_count(), 2U);
+}
+
+TEST(PivotTableWriter, GrandTotalsDefaultTrueOmitsAttributes) {
+  // When grand totals are ON (the default), the attributes stay absent so
+  // the output matches what Excel emits for the default state.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\" firstHeaderRow=\"0\" firstDataRow=\"1\" firstDataCol=\"0\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("</pivotTableDefinition>");
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  EXPECT_TRUE(parsed_or.value().grand_totals_rows());
+  EXPECT_TRUE(parsed_or.value().grand_totals_cols());
+
+  const std::string written = write_pivot_table_definition(parsed_or.value());
+  EXPECT_EQ(written.find("rowGrandTotals"), std::string::npos) << "xml=" << written;
+  EXPECT_EQ(written.find("colGrandTotals"), std::string::npos) << "xml=" << written;
+  // The required <location> attributes (including the value 0) are still
+  // emitted, since they were present in the source.
+  EXPECT_NE(written.find("firstHeaderRow=\"0\""), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("firstDataRow=\"1\""), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("firstDataCol=\"0\""), std::string::npos) << "xml=" << written;
 }
 
 }  // namespace

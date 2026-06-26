@@ -190,35 +190,35 @@ TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
   EXPECT_TRUE(found_theme);
 }
 
-TEST(XlsbWriter, FormulaStubRoundTripsAsFormulaCell) {
-  // Synthesize a Bundle 4.1 stub formula. The Ptg payload bytes here
-  // mimic what the reader would emit for a `BrtFmlaNum` whose rgce
-  // was the single `PtgInt 5` instruction (`0x1E 0x05 0x00`). The
-  // exact bytes don't matter for the round-trip: the writer recognises
-  // the stub prefix, splices the captured bytes back into the
-  // BrtFmla* payload, and the reader re-stubs them on the next read.
+TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
+  // An engine-authored formula encodes to a Ptg stream, survives the
+  // write, and decodes back to the same formula text on read.
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.add_sheet("F");
-  // Pre-set the cached value first so set_cell_formula's blank-reset
-  // does not erase anything observable for the stub. (The reader's
-  // set_cell_formula path always blanks cached_value, so the assertion
-  // below only checks formula_text.)
-  s.set_cell_formula(2U, 3U, "=__FORMULON_XLSB_PTG__(1E.05.00)");
+  s.set_cell_formula(2U, 3U, "=A1+B2*3");
 
   auto bytes_or = write_xlsb(wb);
-  ASSERT_TRUE(static_cast<bool>(bytes_or));
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
 
   auto read_or = read_xlsb(SpanOf(bytes_or.value()));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
 
   const Cell* c = read_or.value().workbook.sheet(0).cell_at(2U, 3U);
   ASSERT_NE(c, nullptr);
-  EXPECT_FALSE(c->formula_text.empty());
-  // The reader re-stubs the formula on read-back. We don't assert
-  // byte-exact equality of the stub body (the reader prepends extra
-  // CellParsedFormula framing bytes when it slices the rgce as opaque
-  // bytes), but we do confirm the stub prefix survives.
-  EXPECT_EQ(c->formula_text.substr(0, std::string_view("=__FORMULON_XLSB_PTG__(").size()), "=__FORMULON_XLSB_PTG__(");
+  EXPECT_EQ(c->formula_text, "=A1+B2*3");
+}
+
+TEST(XlsbWriter, UnencodableFormulaReturnsErrorNotSilentLiteral) {
+  // A formula that references a defined name has no Ptg lowering in the
+  // common-token codec. The writer must surface that as an Expected
+  // failure rather than silently dropping it to a literal cell.
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("F");
+  s.set_cell_formula(0U, 0U, "=MyDefinedName");
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_FALSE(static_cast<bool>(bytes_or));
+  EXPECT_EQ(bytes_or.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
 }
 
 TEST(XlsbWriter, GeneratedPartsBeatPassthroughOnCollision) {
@@ -245,6 +245,26 @@ TEST(XlsbWriter, GeneratedPartsBeatPassthroughOnCollision) {
   // Workbook is intact: we got our sheet back.
   ASSERT_EQ(read_or.value().workbook.sheet_count(), 1U);
   EXPECT_EQ(read_or.value().workbook.sheet(0).name(), "S1");
+}
+
+TEST(XlsbWriter, SheetVisibilitySurvivesRoundTrip) {
+  // A hidden sheet must stay hidden across write -> read. The Sheet model
+  // tracks visibility via `view().tab_hidden`, which the writer maps to
+  // BrtBundleSh hsState and the reader maps back.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Visible");
+  wb.add_sheet("Hidden");
+  wb.sheet(1).mutable_view().tab_hidden = true;
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Workbook& rt = read_or.value().workbook;
+  ASSERT_EQ(rt.sheet_count(), 2U);
+  EXPECT_FALSE(rt.sheet(0).view().tab_hidden);
+  EXPECT_TRUE(rt.sheet(1).view().tab_hidden);
 }
 
 }  // namespace

@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -190,6 +191,29 @@ void ParseItems(const pugi::xml_node& items_node, pivot::PivotField* field) {
   }
 }
 
+/// Pairs an OOXML `<pivotField>` `*Subtotal` boolean attribute name with
+/// the `SubtotalFn` it selects. `defaultSubtotal` is handled separately
+/// (it gates the implicit default rather than a custom function) and is
+/// not part of this table. The ordering is the canonical ECMA-376
+/// attribute order so the writer can re-emit deterministically.
+struct SubtotalAttrEntry {
+  std::string_view attr;
+  pivot::SubtotalFn fn;
+};
+constexpr SubtotalAttrEntry kSubtotalAttrs[] = {
+    {"sumSubtotal", pivot::SubtotalFn::Sum},
+    {"countASubtotal", pivot::SubtotalFn::Count},
+    {"avgSubtotal", pivot::SubtotalFn::Average},
+    {"maxSubtotal", pivot::SubtotalFn::Max},
+    {"minSubtotal", pivot::SubtotalFn::Min},
+    {"productSubtotal", pivot::SubtotalFn::Product},
+    {"countSubtotal", pivot::SubtotalFn::CountNumbers},
+    {"stdDevSubtotal", pivot::SubtotalFn::StdDev},
+    {"stdDevPSubtotal", pivot::SubtotalFn::StdDevP},
+    {"varSubtotal", pivot::SubtotalFn::Var},
+    {"varPSubtotal", pivot::SubtotalFn::VarP},
+};
+
 /// Walks `<pivotFields>` in document order, materialising each
 /// `<pivotField>` into the table.
 void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out) {
@@ -200,6 +224,19 @@ void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out)
       field.custom_name = name_attr.value();
     }
     field.subtotal_top = parse_xml_bool_attr(f.attribute("subtotalTop"));
+    // `defaultSubtotal` defaults to true in OOXML; only an explicit "0"
+    // turns the implicit default subtotal off. The `*Subtotal` boolean
+    // family selects custom subtotal functions; capture each present /
+    // true attribute so a custom selection survives the round trip
+    // instead of silently reverting to the default after save.
+    if (pugi::xml_attribute ds = f.attribute("defaultSubtotal"); ds) {
+      field.default_subtotal = parse_xml_bool_attr(ds);
+    }
+    for (const SubtotalAttrEntry& e : kSubtotalAttrs) {
+      if (parse_xml_bool_attr(f.attribute(e.attr.data()))) {
+        field.subtotal_fns.push_back(e.fn);
+      }
+    }
     if (pugi::xml_node items_node = f.child("items"); items_node) {
       ParseItems(items_node, &field);
     }
@@ -264,6 +301,17 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   }
   table.set_pivot_cache_id(parse_xml_u32_attr(root.attribute("cacheId"), 0U));
 
+  // Grand-total layout flags. OOXML defaults both to true when absent, so a
+  // file that turned grand totals OFF carries `rowGrandTotals="0"` /
+  // `colGrandTotals="0"` explicitly. The model also defaults to true; we
+  // read whatever is present so an OFF state survives the round trip
+  // instead of silently flipping back to ON.
+  {
+    const bool row_grand = attr_bool(root, "rowGrandTotals", true);
+    const bool col_grand = attr_bool(root, "colGrandTotals", true);
+    table.set_grand_totals(row_grand, col_grand);
+  }
+
   pugi::xml_node loc = root.child("location");
   if (!loc) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivotTable*.xml: missing <location> element",
@@ -277,6 +325,24 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   if (auto status = DecodeLocationRef(ref_attr.value(), &table); !status) {
     return status.error();
   }
+
+  // Capture the `<location>` offset attributes. ECMA-376 requires
+  // `firstHeaderRow`, `firstDataRow`, and `firstDataCol`; `rowPageCount`
+  // and `colPageCount` are optional but commonly present. We preserve each
+  // exactly as present (absent stays absent) so the writer re-emits a
+  // schema-valid `<location>` on round trip. Dropping the required ones
+  // makes Excel flag the file for repair and rebuild the pivot, losing
+  // layout.
+  auto opt_u32_attr = [](const pugi::xml_node& node, const char* name) -> std::optional<std::uint32_t> {
+    const pugi::xml_attribute a = node.attribute(name);
+    if (!a) {
+      return std::nullopt;
+    }
+    return parse_xml_u32_attr(a, 0U);
+  };
+  table.set_location_attributes(opt_u32_attr(loc, "firstHeaderRow"), opt_u32_attr(loc, "firstDataRow"),
+                                opt_u32_attr(loc, "firstDataCol"), opt_u32_attr(loc, "rowPageCount"),
+                                opt_u32_attr(loc, "colPageCount"));
 
   if (pugi::xml_node fields = root.child("pivotFields"); fields) {
     ParsePivotFields(fields, &table);
@@ -300,8 +366,12 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // between the structured tail and `</pivotTableDefinition>`, so
   // unmodelled features survive a read -> write round trip even when
   // v1.0 cannot evaluate them.
-  static const std::string_view kRecognized[] = {"location",   "pivotFields", "rowFields", "colFields",
-                                                 "dataFields", "rowItems",    "colItems"};
+  // `<rowItems>` / `<colItems>` are intentionally NOT listed here: v1.0
+  // does not model the materialised layout-item cache, so they must fall
+  // through to the raw-passthrough buffer and be re-emitted verbatim.
+  // Listing them would suppress passthrough and silently drop the cache
+  // for consumers that read the saved layout without refreshing.
+  static const std::string_view kRecognized[] = {"location", "pivotFields", "rowFields", "colFields", "dataFields"};
   struct StringXmlWriter : pugi::xml_writer {
     std::string* dst;
     void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }

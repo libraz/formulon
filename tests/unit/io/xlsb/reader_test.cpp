@@ -238,6 +238,43 @@ std::vector<std::uint8_t> SheetBinIsst(std::uint32_t sst_index) {
   return body;
 }
 
+/// Builds a sheet with a single BrtFmlaNum at row 0, col 0: cached
+/// numeric result `cached`, and a `CellParsedFormula` whose rgce is
+/// `rgce`.
+std::vector<std::uint8_t> SheetBinFmlaNum(double cached, const std::vector<std::uint8_t>& rgce) {
+  std::vector<std::uint8_t> body;
+  AppendRecord(body, 129, {});  // BrtBeginSheet
+  AppendRecord(body, 145, {});  // BrtBeginSheetData
+
+  {
+    std::vector<std::uint8_t> p;
+    AppendU32(p, 0);
+    AppendRecord(body, 0, p);  // BrtRowHdr
+  }
+
+  // BrtFmlaNum (9): cell-header (8) + double (8) + grbitFlags (u16) +
+  // cce (u32) + rgce + cb (u32).
+  {
+    std::vector<std::uint8_t> p;
+    AppendU32(p, 0);  // column
+    AppendU8(p, 0);   // style[0]
+    AppendU8(p, 0);   // style[1]
+    AppendU8(p, 0);   // style[2]
+    AppendU8(p, 0);   // fPhShow
+    AppendDouble(p, cached);
+    p.push_back(0);  // grbitFlags lo
+    p.push_back(0);  // grbitFlags hi
+    AppendU32(p, static_cast<std::uint32_t>(rgce.size()));
+    p.insert(p.end(), rgce.begin(), rgce.end());
+    AppendU32(p, 0);  // cb
+    AppendRecord(body, 9, p);
+  }
+
+  AppendRecord(body, 146, {});  // BrtEndSheetData
+  AppendRecord(body, 130, {});  // BrtEndSheet
+  return body;
+}
+
 /// Builds `xl/sharedStrings.bin` with one BrtSSTItem entry (the
 /// payload is a single BrtSSTItem record carrying a 1-byte flags
 /// prefix + XLWideString).
@@ -324,6 +361,57 @@ TEST(XlsbReader, ReadsTwoSheetsWithRealAndIsstCells) {
 
   // Audit counter: two literal cells decoded.
   EXPECT_EQ(result.value().cells_read, 2U);
+}
+
+TEST(XlsbReader, DecodesFormulaAndPreservesCachedValue) {
+  // rgce = `PtgInt 5` (`=5`): 0x1E 0x05 0x00.
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinFmlaNum(5.0, rgce)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  const Cell* c = result.value().workbook.sheet(0).cell_at(0, 0);
+  ASSERT_NE(c, nullptr);
+  // The real formula text is decoded from the Ptg stream.
+  EXPECT_EQ(c->formula_text, "=5");
+  // The cached value is preserved.
+  ASSERT_TRUE(c->cached_value.is_number());
+  EXPECT_EQ(c->cached_value.as_number(), 5.0);
+}
+
+TEST(XlsbReader, UndecodableFormulaPreservesCachedValueWithoutFakeFormula) {
+  // rgce = `PtgName` (0x23) + a 4-byte name index. PtgName is not in the
+  // supported common-token set, so the decode fails and the reader must
+  // preserve the cached value and store NO formula (never a fake one
+  // that would recalc to #NAME?).
+  const std::vector<std::uint8_t> rgce = {0x23, 0x01, 0x00, 0x00, 0x00};
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinFmlaNum(42.0, rgce)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  const Cell* c = result.value().workbook.sheet(0).cell_at(0, 0);
+  ASSERT_NE(c, nullptr);
+  // No fabricated formula.
+  EXPECT_TRUE(c->formula_text.empty());
+  // Cached value preserved so the cell still shows the right number.
+  ASSERT_TRUE(c->cached_value.is_number());
+  EXPECT_EQ(c->cached_value.as_number(), 42.0);
 }
 
 TEST(XlsbReader, MissingContentTypesIsContentTypeInvalid) {

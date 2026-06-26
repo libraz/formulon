@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -39,6 +40,20 @@ std::string EncodeA1Range(std::uint32_t row, std::uint32_t col, std::uint32_t sp
   out.push_back(':');
   out.append(EncodeA1(bot, right));
   return out;
+}
+
+/// Appends ` name="value"` for a present optional `<location>` offset
+/// attribute, or nothing when the optional is empty. The values are
+/// non-negative integers, so no XML escaping is required.
+void AppendOptionalLocationAttr(std::string& out, std::string_view name, std::optional<std::uint32_t> value) {
+  if (!value.has_value()) {
+    return;
+  }
+  out.push_back(' ');
+  out.append(name);
+  out.append("=\"");
+  out.append(std::to_string(*value));
+  out.push_back('"');
 }
 
 /// Maps a `PivotAxis` to the OOXML `axis="..."` attribute body for the
@@ -127,6 +142,38 @@ std::string_view AggregationAttrName(pivot::Aggregation a) {
   return "sum";
 }
 
+/// Maps a `SubtotalFn` to the OOXML `<pivotField>` `*Subtotal` boolean
+/// attribute name. Mirrors the reader's `kSubtotalAttrs` table so a
+/// custom subtotal selection round-trips bit-stably. `countA` /
+/// `countNums` use the spec's distinct attribute names.
+std::string_view SubtotalAttrName(pivot::SubtotalFn fn) {
+  switch (fn) {
+    case pivot::SubtotalFn::Sum:
+      return "sumSubtotal";
+    case pivot::SubtotalFn::Count:
+      return "countASubtotal";
+    case pivot::SubtotalFn::Average:
+      return "avgSubtotal";
+    case pivot::SubtotalFn::Max:
+      return "maxSubtotal";
+    case pivot::SubtotalFn::Min:
+      return "minSubtotal";
+    case pivot::SubtotalFn::Product:
+      return "productSubtotal";
+    case pivot::SubtotalFn::CountNumbers:
+      return "countSubtotal";
+    case pivot::SubtotalFn::StdDev:
+      return "stdDevSubtotal";
+    case pivot::SubtotalFn::StdDevP:
+      return "stdDevPSubtotal";
+    case pivot::SubtotalFn::Var:
+      return "varSubtotal";
+    case pivot::SubtotalFn::VarP:
+      return "varPSubtotal";
+  }
+  return {};
+}
+
 /// Emits one `<pivotField>` element. Self-closing when there are no
 /// items; open/close pair otherwise.
 void AppendPivotField(std::string& out, const pivot::PivotField& field) {
@@ -150,6 +197,22 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     // Default in OOXML is "0"; only emit when true to keep the output
     // compact. The reader treats missing `subtotalTop` as false.
     out.append(" subtotalTop=\"1\"");
+  }
+  // `defaultSubtotal` defaults to true; only emit it when turned OFF so
+  // an explicit suppression survives the round trip. The custom
+  // `*Subtotal` attributes are emitted only for the functions actually
+  // selected, matching the writer's "preserve only non-default" rule.
+  if (!field.default_subtotal) {
+    out.append(" defaultSubtotal=\"0\"");
+  }
+  for (const pivot::SubtotalFn fn : field.subtotal_fns) {
+    const std::string_view attr = SubtotalAttrName(fn);
+    if (attr.empty()) {
+      continue;
+    }
+    out.push_back(' ');
+    out.append(attr);
+    out.append("=\"1\"");
   }
   if (field.items.empty()) {
     out.append("/>");
@@ -260,14 +323,35 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table) {
   AppendXmlEscaped(out, table.name());
   out.append("\" cacheId=\"");
   out.append(std::to_string(table.pivot_cache_id()));
-  out.append("\">");
+  out.append("\"");
+  // Grand-total flags default to true in OOXML and in the model. Emit them
+  // only when turned OFF so an explicit OFF state survives the round trip
+  // (omitting them would let the reader's default flip the pivot back ON).
+  if (!table.grand_totals_rows()) {
+    out.append(" rowGrandTotals=\"0\"");
+  }
+  if (!table.grand_totals_cols()) {
+    out.append(" colGrandTotals=\"0\"");
+  }
+  out.append(">");
 
   out.append("<location ref=\"");
   // Anchor is unconditionally emitted as a range; an empty table
   // (span_rows == span_cols == 0) round-trips through the single-cell
   // form via EncodeA1Range's zero-span guard.
   AppendXmlEscaped(out, EncodeA1Range(table.anchor_row(), table.anchor_col(), table.span_rows(), table.span_cols()));
-  out.append("\"/>");
+  out.append("\"");
+  // Re-emit the `<location>` offset attributes captured at read time.
+  // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol;
+  // rowPageCount / colPageCount are optional. Each is emitted only when it
+  // was present in the source so a schema-valid `<location>` round-trips
+  // without inventing values for absent optionals.
+  AppendOptionalLocationAttr(out, "firstHeaderRow", table.location_first_header_row());
+  AppendOptionalLocationAttr(out, "firstDataRow", table.location_first_data_row());
+  AppendOptionalLocationAttr(out, "firstDataCol", table.location_first_data_col());
+  AppendOptionalLocationAttr(out, "rowPageCount", table.location_row_page_count());
+  AppendOptionalLocationAttr(out, "colPageCount", table.location_col_page_count());
+  out.append("/>");
 
   // `<pivotFields>` is always emitted (even for an empty count) so the
   // structure stays self-describing and round-trips through the reader's

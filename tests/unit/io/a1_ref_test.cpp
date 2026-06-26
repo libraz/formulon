@@ -115,9 +115,29 @@ TEST(A1RefParseA1, ExcelMaxAndJustBeyond) {
   EXPECT_EQ(row, 1048575u);
   EXPECT_EQ(col, 16383u);
   // Beyond the column ceiling: 4-letter columns are rejected by
-  // `parse_column_letters`. (Sheet-level XFE / row 1048577 bound checks
-  // are layered above this helper.)
+  // `parse_column_letters`.
   EXPECT_FALSE(parse_a1_ref("XFEA1", &row, &col));
+}
+
+TEST(A1RefParseA1, RejectsOutOfRangeColumn) {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  // "XFE" is a structurally valid 3-letter column whose numeric value is
+  // one past XFD (16385 > Sheet::kMaxCols). It must be rejected, not
+  // silently stored as a phantom column.
+  EXPECT_FALSE(parse_a1_ref("XFE1", &row, &col));
+  // "ZZZ" = 18278 columns, well past XFD.
+  EXPECT_FALSE(parse_a1_ref("ZZZ1", &row, &col));
+}
+
+TEST(A1RefParseA1, RejectsOutOfRangeRow) {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  // Row 1,048,577 is one past Excel's last row; it parses as a uint32_t
+  // but exceeds Sheet::kMaxRows and must be rejected.
+  EXPECT_FALSE(parse_a1_ref("A1048577", &row, &col));
+  // A far-out-of-range but still uint32_t-valid row.
+  EXPECT_FALSE(parse_a1_ref("A2000000", &row, &col));
 }
 
 TEST(A1RefParseA1, RejectsZeroRow) {

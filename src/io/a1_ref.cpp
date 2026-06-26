@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <string_view>
 
+#include "sheet.h"
+
 namespace formulon {
 namespace io {
 
@@ -76,6 +78,14 @@ bool parse_a1_ref(std::string_view text, std::uint32_t* out_row, std::uint32_t* 
     return false;
   }
   if (row_1based == 0U) {
+    return false;
+  }
+  // Excel 365 range bounds. `parse_column_letters` already rejects 4+
+  // letters (past XFD), but a 3-letter column past XFD (e.g. "ZZZ") and a
+  // row past 1,048,576 both slip through the structural checks above, so
+  // bound-check explicitly. This mirrors the DOM cell-ref path in
+  // `cell_parser.cpp`, keeping the SAX and DOM readers convergent.
+  if (col_1based > Sheet::kMaxCols || row_1based > Sheet::kMaxRows) {
     return false;
   }
   *out_row = row_1based - 1U;

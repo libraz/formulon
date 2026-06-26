@@ -36,6 +36,7 @@ namespace {
 std::string BuildSheetViewXml(const SheetView& view);
 std::string BuildColsXml(const SheetLayout& layout);
 std::string BuildSheetProtectionXml(const SheetProtection& p);
+std::string BuildDimensionXml(const Sheet& sheet);
 
 std::string BuildMergeCellsBlock(const Sheet& sheet) {
   if (sheet.merges().empty()) {
@@ -447,7 +448,9 @@ std::string BuildColsXml(const SheetLayout& layout) {
     if (col.width > 0.0) {
       out.append(" width=\"");
       char buf[32];
-      std::snprintf(buf, sizeof(buf), "%.6g", col.width);
+      // %.17g is round-trip safe under IEEE 754, so a recalc-save does
+      // not drift the column metric. Matches the row-height writer.
+      std::snprintf(buf, sizeof(buf), "%.17g", col.width);
       out.append(buf);
       // Excel emits `customWidth="1"` whenever an explicit `width` is
       // present so a reload preserves the column metric.
@@ -464,6 +467,55 @@ std::string BuildColsXml(const SheetLayout& layout) {
     out.append("/>");
   }
   out.append("</cols>");
+  return out;
+}
+
+/// Emits `<dimension ref="A1:..."/>` for the sheet's populated bounding
+/// box. ECMA-376 places `<dimension>` between `<sheetPr>` and
+/// `<sheetViews>`; some readers (and Excel's Name Box) use it to seed the
+/// used range, so an accurate box avoids a divergent used-range guess.
+///
+/// A cell counts as populated when it carries a formula or a non-blank
+/// cached value, mirroring the pagination engine's used-range walk. An
+/// empty sheet emits `<dimension ref="A1"/>` (Excel's convention for a
+/// sheet with no content).
+std::string BuildDimensionXml(const Sheet& sheet) {
+  bool any = false;
+  std::uint32_t min_row = 0;
+  std::uint32_t min_col = 0;
+  std::uint32_t max_row = 0;
+  std::uint32_t max_col = 0;
+  for (const auto& [row_index, cells] : sheet.rows()) {
+    for (std::size_t c = 0; c < cells.size(); ++c) {
+      const Cell& cell = cells[c];
+      if (cell.formula_text.empty() && cell.cached_value.is_blank()) {
+        continue;
+      }
+      const auto col_index = static_cast<std::uint32_t>(c);
+      if (!any) {
+        min_row = max_row = row_index;
+        min_col = max_col = col_index;
+        any = true;
+        continue;
+      }
+      min_row = std::min(min_row, row_index);
+      max_row = std::max(max_row, row_index);
+      min_col = std::min(min_col, col_index);
+      max_col = std::max(max_col, col_index);
+    }
+  }
+  std::string out;
+  out.append("<dimension ref=\"");
+  if (!any) {
+    out.append("A1");
+  } else {
+    AppendCellRefForRef(out, min_row, min_col);
+    if (min_row != max_row || min_col != max_col) {
+      out.push_back(':');
+      AppendCellRefForRef(out, max_row, max_col);
+    }
+  }
+  out.append("\"/>");
   return out;
 }
 
@@ -502,6 +554,9 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     out.append(print.sheet_pr_xml);
     out.push_back('\n');
   }
+  out.append("  ");
+  out.append(BuildDimensionXml(sheet));
+  out.push_back('\n');
   if (!sheet_view_xml.empty()) {
     out.append("  ");
     out.append(sheet_view_xml);

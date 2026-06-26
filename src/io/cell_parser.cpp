@@ -14,10 +14,11 @@
 //   * `t="str"` is the legacy formula-result-as-string shape; we treat it
 //     identically to `t="inlineStr"` because the cached value is the only
 //     thing we need.
-//   * `t="d"` (ISO date string) is accepted but routed through a placeholder:
-//     we surface `Text` rather than parsing into a serial number, because
-//     date conversion is the styles-aware path (Bundle 2.3+). Keeps the
-//     parser usable on date-bearing fixtures without lying about semantics.
+//   * `t="d"` (ISO 8601 date string, strict OOXML) is parsed into an Excel
+//     serial number so date arithmetic (`A1+1`, `YEAR(A1)`) matches Excel.
+//     A body that does not parse as a strict ISO date falls back to `Text`
+//     rather than failing the cell, keeping the parser tolerant of
+//     non-conforming producers.
 
 #include "io/cell_parser.h"
 
@@ -30,6 +31,7 @@
 #include <utility>
 
 #include "io/a1_ref.h"
+#include "io/iso_date.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -327,11 +329,17 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
     return out;
   }
   if (t == "d") {
-    if (value_present) {
+    if (!value_present) {
+      out.value = Value::text(std::string_view{});
+      return out;
+    }
+    double serial = 0.0;
+    if (parse_iso_date_serial(v_text, &serial)) {
+      out.value = Value::number(serial);
+    } else {
+      // Non-conforming producer: keep the raw text rather than failing.
       text_storage.emplace_back(std::string(v_text));
       out.value = Value::text(text_storage.back());
-    } else {
-      out.value = Value::text(std::string_view{});
     }
     return out;
   }

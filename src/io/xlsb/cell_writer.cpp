@@ -7,13 +7,18 @@
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "cell.h"
+#include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sst_writer.h"
+#include "parser/ast.h"
+#include "parser/parser.h"
+#include "utils/arena.h"
 #include "utils/structured_log.h"
 #include "value.h"
 
@@ -21,13 +26,6 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
-
-/// Stub prefix emitted by Bundle 4.1's reader for every formula cell
-/// whose Ptg payload could not yet be decoded into Excel-formula
-/// text. The writer recognises the same prefix to splice the captured
-/// Ptg bytes back into a `BrtFmla*` record.
-constexpr std::string_view kFormulaStubPrefix = "=__FORMULON_XLSB_PTG__(";
-constexpr char kFormulaStubSuffix = ')';
 
 /// Emits the standard XLSB cell-header (column, iStyleRef, fPhShow):
 ///   * column    : u32
@@ -54,98 +52,40 @@ std::uint8_t ErrorWireCode(ErrorCode e) {
   return static_cast<std::uint8_t>(code);
 }
 
-/// Decodes one nibble of a hex digit. Returns -1 on invalid input.
-int HexNibble(char c) {
-  if (c >= '0' && c <= '9') {
-    return c - '0';
+/// Parses `cell.formula_text` into an AST and encodes it as a Ptg
+/// (`rgce`) byte stream. The formula text starts with `=`; the parser
+/// consumes the body after it. Returns the encoded bytes, or an Error
+/// when the formula cannot be parsed or lowered to the supported Ptg
+/// token set. The caller surfaces that error through `write_xlsb` rather
+/// than silently dropping the formula.
+Expected<std::vector<std::uint8_t>, Error> EncodeCellFormula(const Cell& cell,
+                                                             const std::vector<std::string>& sheet_names) {
+  std::string_view body(cell.formula_text);
+  if (!body.empty() && body.front() == '=') {
+    body.remove_prefix(1);
   }
-  if (c >= 'A' && c <= 'F') {
-    return 10 + (c - 'A');
+  Arena arena;
+  parser::Parser parser(body, arena);
+  parser::AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb writer: formula failed to parse for Ptg encoding",
+                      std::string("context=xlsb_cell_writer formula=") + cell.formula_text);
   }
-  if (c >= 'a' && c <= 'f') {
-    return 10 + (c - 'a');
-  }
-  return -1;
+  return encode_ptgs(*root, sheet_names);
 }
 
-/// Tries to parse the dot-separated hex byte sequence inside the
-/// Bundle 4.1 stub. Returns the captured Ptg bytes on success, or an
-/// empty optional when the body is not a clean dotted-hex sequence
-/// (the writer then falls back to the literal path).
-struct StubParseResult {
-  bool ok = false;
-  std::vector<std::uint8_t> ptg_bytes;
-};
-
-StubParseResult ParseStubBody(std::string_view body) {
-  StubParseResult out;
-  if (body.empty()) {
-    out.ok = true;
-    return out;
-  }
-  // Body is `HH.HH.HH...`: pairs of hex digits separated by dots.
-  std::size_t i = 0;
-  while (i < body.size()) {
-    if (i + 2 > body.size()) {
-      return {};  // dangling single nibble
-    }
-    const int hi = HexNibble(body[i]);
-    const int lo = HexNibble(body[i + 1]);
-    if (hi < 0 || lo < 0) {
-      return {};
-    }
-    out.ptg_bytes.push_back(static_cast<std::uint8_t>((hi << 4) | lo));
-    i += 2;
-    if (i == body.size()) {
-      break;
-    }
-    if (body[i] != '.') {
-      return {};
-    }
-    ++i;  // consume separator
-  }
-  out.ok = true;
-  return out;
-}
-
-/// Identifies a stub formula and extracts the captured Ptg bytes.
-/// Returns `{true, bytes}` for clean stubs and `{false, {}}` when the
-/// formula text is not a Bundle 4.1 stub (or is malformed).
-StubParseResult MatchFormulaStub(std::string_view formula_text) {
-  if (formula_text.size() < kFormulaStubPrefix.size() + 1U) {
-    return {};
-  }
-  if (formula_text.substr(0, kFormulaStubPrefix.size()) != kFormulaStubPrefix) {
-    return {};
-  }
-  if (formula_text.back() != kFormulaStubSuffix) {
-    return {};
-  }
-  const std::string_view body =
-      formula_text.substr(kFormulaStubPrefix.size(), formula_text.size() - kFormulaStubPrefix.size() - 1);
-  return ParseStubBody(body);
-}
-
-/// Emits a `BrtFmla*` record matching `cached`'s kind. The captured
-/// `ptg_bytes` go into the `CellParsedFormula` (rgce) suffix; the
-/// reader treats anything past the grbitFlags as opaque, so we just
-/// concatenate the bytes as-is. Layout per [MS-XLSB] §2.4.x:
+/// Emits a `BrtFmla*` record matching `cached`'s kind, with the encoded
+/// `rgce` bytes spliced into the `CellParsedFormula` payload. Layout per
+/// [MS-XLSB] §2.4.x:
 ///
 ///   cell-header (8 bytes)
 ///   value       (kind-specific)
 ///   grbitFlags  (u16, written as zero)
-///   cce         (u32 byte length of rgce)        — part of CellParsedFormula
-///   rgce        (cce bytes)                       — Ptg byte-stream
-///   cb          (u32 byte length of rgcb)        — extra-data byte length
-///   rgcb        (cb bytes, written as zero bytes) — extras
-///
-/// The reader's Bundle 4.1 path does not parse rgce / rgcb separately;
-/// it slices everything past grbitFlags as opaque bytes and re-stubs
-/// the entire suffix on the next read. So as long as we put the
-/// captured `ptg_bytes` back at the same offset, the round-trip is
-/// stable.
+///   cce         (u32 byte length of rgce)
+///   rgce        (cce bytes)         — the Ptg stream
+///   cb          (u32 byte length of rgcb, written as zero)
 void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, const Value& cached,
-                           const std::vector<std::uint8_t>& ptg_bytes) {
+                           const std::vector<std::uint8_t>& rgce) {
   std::vector<std::uint8_t> p;
   EmitCellHeader(p, col);
 
@@ -171,7 +111,7 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, co
       // Blank / Array / Lambda / Ref: Excel always materialises a
       // formula cell's cached value as one of the four scalar kinds
       // above. For round-trip we default to BrtFmlaNum with a 0.0
-      // payload — the read-back path discards it anyway, and this
+      // payload — the read-back path uses the decoded formula, and this
       // keeps the wire format well-formed.
       type = XlsbRecordType::BrtFmlaNum;
       emit_double(p, 0.0);
@@ -179,19 +119,15 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, co
   }
   emit_u16(p, 0);  // grbitFlags
 
-  // rgce + rgcb. The reader stubs everything past grbitFlags as
-  // opaque bytes, so we put the original Ptg bytes verbatim. The
-  // captured bytes already include any `cce`/`cb` length prefixes
-  // that were present in the source archive.
-  if (!ptg_bytes.empty()) {
-    p.insert(p.end(), ptg_bytes.begin(), ptg_bytes.end());
-  }
+  // CellParsedFormula: cce + rgce + cb (+ rgcb, empty).
+  emit_u32(p, static_cast<std::uint32_t>(rgce.size()));
+  p.insert(p.end(), rgce.begin(), rgce.end());
+  emit_u32(p, 0);  // cb (rgcb length)
 
   emit_record(dst, static_cast<std::uint16_t>(type), p);
 }
 
-/// Emits a literal record for `cached`. Used for plain literal cells
-/// and for the formula-lost fallback path.
+/// Emits a literal record for `cached`. Used for plain literal cells.
 void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, const Value& cached, SstBuilder& sst) {
   switch (cached.kind()) {
     case ValueKind::Blank: {
@@ -256,33 +192,29 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, co
 
 }  // namespace
 
-void emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
-               SstBuilder& sst) {
-  // Formula cells take precedence: even if the cached_value is blank,
-  // we still want to emit a BrtFmla* record so the formula text round-
-  // trips. (The reader resets cached_value to blank when it sees a
-  // formula cell, which would otherwise turn into an empty literal
-  // here.)
+Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
+                                SstBuilder& sst, const std::vector<std::string>& sheet_names) {
+  // Formula cells take precedence: even if the cached_value is blank, we
+  // still emit a BrtFmla* record so the formula round-trips.
   if (!cell.formula_text.empty()) {
-    const StubParseResult parsed = MatchFormulaStub(cell.formula_text);
-    if (parsed.ok) {
-      EmitFormulaCellRecord(dst, col, cell.cached_value, parsed.ptg_bytes);
-      return;
+    auto rgce_or = EncodeCellFormula(cell, sheet_names);
+    if (!rgce_or) {
+      // A formula we cannot encode must NOT be silently dropped to a
+      // literal: that would lose the formula. Surface the failure so
+      // `write_xlsb` returns it to the caller.
+      StructuredLog("xlsb.writer.formula_encode_failed")
+          .field("row", static_cast<std::int64_t>(row))
+          .field("col", static_cast<std::int64_t>(col))
+          .field("reason", rgce_or.error().message)
+          .warn();
+      return rgce_or.error();
     }
-    // Authored-in-engine formula or malformed stub: we have no Ptg
-    // bytes to round-trip. Surface the loss explicitly so callers can
-    // see it, then drop to the literal path. This is the v1 contract;
-    // a later bundle replaces it with AST→Ptg encoding.
-    StructuredLog("xlsb.writer.formula_lost")
-        .field("row", static_cast<std::int64_t>(row))
-        .field("col", static_cast<std::int64_t>(col))
-        .field("formula_size", static_cast<std::int64_t>(cell.formula_text.size()))
-        .warn();
-    EmitLiteralCellRecord(dst, col, cell.cached_value, sst);
-    return;
+    EmitFormulaCellRecord(dst, col, cell.cached_value, rgce_or.value());
+    return Expected<void, Error>::Ok();
   }
 
   EmitLiteralCellRecord(dst, col, cell.cached_value, sst);
+  return Expected<void, Error>::Ok();
 }
 
 }  // namespace xlsb

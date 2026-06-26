@@ -187,6 +187,48 @@ TEST(OoxmlRoundTrip, InlineStringCellRoundTrips) {
   EXPECT_EQ(a1->cached_value.as_text(), "Hello, world!");
 }
 
+// Significant leading/trailing/whitespace-only cell text must survive the
+// round-trip. Excel (and the OOXML spec) strips insignificant whitespace
+// from <t> unless the element carries xml:space="preserve", so the writer
+// must emit that attribute on every text <t> and the reader must keep
+// whitespace-only <t> bodies instead of collapsing them to "". Without the
+// fix these strings silently change on load, which also alters
+// EXACT/LEN/lookup results downstream.
+TEST(OoxmlRoundTrip, WhitespaceInTextCellsPreserved) {
+  Workbook src = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0U, 0U, 0U, Value::text(" 100"))));          // A1: leading space
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0U, 1U, 0U, Value::text("Yes "))));          // A2: trailing space
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0U, 2U, 0U, Value::text("   "))));           // A3: whitespace-only
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0U, 3U, 0U, Value::text("    Indented"))));  // A4: indented label
+
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+  auto result_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml failed: " << result_or.error().message;
+
+  const Workbook& dst = result_or.value().workbook;
+  const Sheet& sheet = dst.sheet(0);
+
+  const Cell* a1 = sheet.cell_at(0U, 0U);
+  ASSERT_NE(a1, nullptr);
+  ASSERT_TRUE(a1->cached_value.is_text());
+  EXPECT_EQ(a1->cached_value.as_text(), " 100");
+
+  const Cell* a2 = sheet.cell_at(1U, 0U);
+  ASSERT_NE(a2, nullptr);
+  ASSERT_TRUE(a2->cached_value.is_text());
+  EXPECT_EQ(a2->cached_value.as_text(), "Yes ");
+
+  const Cell* a3 = sheet.cell_at(2U, 0U);
+  ASSERT_NE(a3, nullptr);
+  ASSERT_TRUE(a3->cached_value.is_text());
+  EXPECT_EQ(a3->cached_value.as_text(), "   ");
+
+  const Cell* a4 = sheet.cell_at(3U, 0U);
+  ASSERT_NE(a4, nullptr);
+  ASSERT_TRUE(a4->cached_value.is_text());
+  EXPECT_EQ(a4->cached_value.as_text(), "    Indented");
+}
+
 // Builds a minimal but valid in-memory `.xlsx` package containing an
 // explicit shared-strings part. The package has one sheet with three
 // cells: A1, A2, A3 — each carrying `t="s"` and pointing to indices

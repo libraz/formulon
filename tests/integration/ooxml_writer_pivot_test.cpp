@@ -26,6 +26,7 @@
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/record_access.h"
 #include "sheet.h"
 #include "value.h"
 #include "workbook.h"
@@ -165,11 +166,13 @@ TEST(OoxmlWriterPivot, SinglePivotCacheRoundTrips) {
   EXPECT_TRUE(cache->fields()[1].shared_items.empty());
 
   ASSERT_EQ(cache->records().size(), 3U);
-  EXPECT_EQ(cache->records()[0].cells[0].as_text(), "North");
+  // Region is a shared field: cells store shared_items indices resolved via
+  // `cell_value`. Amount carries inline numbers.
+  EXPECT_EQ(pivot::cell_value(*cache, cache->records()[0], 0).as_text(), "North");
   EXPECT_DOUBLE_EQ(cache->records()[0].cells[1].as_number(), 100.0);
-  EXPECT_EQ(cache->records()[1].cells[0].as_text(), "South");
+  EXPECT_EQ(pivot::cell_value(*cache, cache->records()[1], 0).as_text(), "South");
   EXPECT_DOUBLE_EQ(cache->records()[1].cells[1].as_number(), 200.0);
-  EXPECT_EQ(cache->records()[2].cells[0].as_text(), "North");
+  EXPECT_EQ(pivot::cell_value(*cache, cache->records()[2], 0).as_text(), "North");
   EXPECT_DOUBLE_EQ(cache->records()[2].cells[1].as_number(), 300.0);
 
   EXPECT_TRUE(reloaded.sheet(0).pivot_tables().empty());
@@ -394,7 +397,9 @@ TEST(OoxmlWriterPivot, MultiCacheRoundTrips) {
   EXPECT_EQ(b->fields()[0].shared_items[2].as_text(), "Cherry");
   EXPECT_EQ(b->fields()[1].name, "Qty");
   ASSERT_EQ(b->records().size(), 1U);
-  EXPECT_EQ(b->records()[0].cells[0].as_text(), "Cherry");
+  // Product is a shared field: the cell stores index 2, resolving to
+  // "Cherry" through `cell_value`.
+  EXPECT_EQ(pivot::cell_value(*b, b->records()[0], 0).as_text(), "Cherry");
   EXPECT_DOUBLE_EQ(b->records()[0].cells[1].as_number(), 42.0);
 }
 

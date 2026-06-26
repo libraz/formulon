@@ -29,8 +29,11 @@ namespace formulon::io {
 /// Behaviour:
 ///   * `<conditionalFormatting sqref="A1:A10 D5:D15" pivot="0">` —
 ///     `sqref` is split on whitespace and each token decoded into a
-///     `CFCellRange`. `pivot="1"` sets `pivot_scope`.
-///   * Unparseable / empty `sqref` is `kIoSheetCorrupt`.
+///     `CFCellRange`. Absolute markers (`$A$1:$A$10`) are accepted.
+///     `pivot="1"` sets `pivot_scope`.
+///   * A block with a missing / empty / unparseable `sqref` is skipped
+///     with a WARN diagnostic and load continues — CF is a presentation
+///     overlay and one bad block must not reject the workbook.
 ///   * `<cfRule type="..." priority="N" stopIfTrue="..." dxfId="...">`
 ///     attributes feed the corresponding `CFRule` fields. Unknown
 ///     `type` attributes fold the rule to `Expression` and continue
@@ -44,8 +47,8 @@ namespace formulon::io {
 ///   * Visual rule subtree errors fold to defaults (no hard fail) so a
 ///     malformed colour scale does not reject the entire sheet.
 ///
-/// Errors:
-///   * `kIoSheetCorrupt` — sqref missing/empty/unparseable.
+/// This reader does not return `kIoSheetCorrupt` for CF-local problems:
+/// malformed blocks are skipped, never fatal.
 Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet);
 
 }  // namespace formulon::io

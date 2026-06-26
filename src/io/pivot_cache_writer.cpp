@@ -98,6 +98,62 @@ void AppendSharedIndex(std::string& out, double raw) {
   out.append("\"/>");
 }
 
+/// Appends ` name="value"` when `value` is non-empty, escaping the body.
+/// Used for the `<worksheetSource>` ref / sheet / name attributes.
+void AppendOptionalAttr(std::string& out, std::string_view name, std::string_view value) {
+  if (value.empty()) {
+    return;
+  }
+  out.push_back(' ');
+  out.append(name);
+  out.append("=\"");
+  AppendXmlEscaped(out, value);
+  out.push_back('"');
+}
+
+/// Appends ` name="1"` when `flag` is set. The OOXML `<sharedItems>`
+/// content hints are boolean attributes that default to false; only
+/// emit the set ones to keep the output lean.
+void AppendBoolHint(std::string& out, std::string_view name, bool flag) {
+  if (!flag) {
+    return;
+  }
+  out.push_back(' ');
+  out.append(name);
+  out.append("=\"1\"");
+}
+
+/// Emits the `<sharedItems>` opening attributes for a range-typed field
+/// from the captured hints. When no hints were captured, falls back to
+/// the legacy minimal `containsNumber="1"` placeholder so freshly built
+/// caches still produce schema-valid output.
+void AppendSharedItemsHints(std::string& out, const pivot::SharedItemsHints& h) {
+  if (!h.present) {
+    out.append(" containsNumber=\"1\"");
+    return;
+  }
+  AppendBoolHint(out, "containsSemiMixedTypes", h.contains_semi_mixed);
+  AppendBoolHint(out, "containsNonDate", h.contains_non_date);
+  AppendBoolHint(out, "containsDate", h.contains_date);
+  AppendBoolHint(out, "containsString", h.contains_string);
+  AppendBoolHint(out, "containsBlank", h.contains_blank);
+  AppendBoolHint(out, "containsMixedTypes", h.contains_mixed_types);
+  AppendBoolHint(out, "containsNumber", h.contains_number);
+  AppendBoolHint(out, "containsInteger", h.contains_integer);
+  if (h.has_min_value) {
+    AppendOptionalAttr(out, "minValue", h.min_value);
+  }
+  if (h.has_max_value) {
+    AppendOptionalAttr(out, "maxValue", h.max_value);
+  }
+  if (h.has_min_date) {
+    AppendOptionalAttr(out, "minDate", h.min_date);
+  }
+  if (h.has_max_date) {
+    AppendOptionalAttr(out, "maxDate", h.max_date);
+  }
+}
+
 }  // namespace
 
 std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
@@ -121,7 +177,20 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
   out.append(std::to_string(cache.records().size()));
   out.append("\">");
 
-  out.append("<cacheSource type=\"worksheet\"/>");
+  // Re-emit the `<cacheSource>` with its `<worksheetSource>` child when
+  // the reader captured one, so Excel's Refresh can locate the source
+  // range / defined name. Falls back to the minimal self-closing form
+  // for caches built from scratch (no source captured).
+  const pivot::WorksheetSource& wsrc = cache.worksheet_source();
+  if (wsrc.present) {
+    out.append("<cacheSource type=\"worksheet\"><worksheetSource");
+    AppendOptionalAttr(out, "ref", wsrc.ref);
+    AppendOptionalAttr(out, "sheet", wsrc.sheet);
+    AppendOptionalAttr(out, "name", wsrc.name);
+    out.append("/></cacheSource>");
+  } else {
+    out.append("<cacheSource type=\"worksheet\"/>");
+  }
 
   out.append("<cacheFields count=\"");
   out.append(std::to_string(cache.fields().size()));
@@ -133,10 +202,13 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
     out.append("\">");
 
     if (field.shared_items.empty()) {
-      // Range-typed placeholder: matches the reader's "no children ->
-      // empty shared_items" branch on round-trip. A richer attribute set
-      // (containsInteger / minValue / maxValue) is a follow-up.
-      out.append("<sharedItems containsNumber=\"1\"/>");
+      // Range-typed field: re-emit the captured numeric / date range +
+      // grouping hints so Excel's Refresh keeps its grouping boundaries.
+      // Falls back to a minimal `containsNumber="1"` placeholder when the
+      // field was built from scratch (no hints captured).
+      out.append("<sharedItems");
+      AppendSharedItemsHints(out, field.shared_items_hints);
+      out.append("/>");
     } else {
       out.append("<sharedItems count=\"");
       out.append(std::to_string(field.shared_items.size()));

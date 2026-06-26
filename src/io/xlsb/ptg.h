@@ -12,8 +12,8 @@
 // to duplicate the bit-twiddling per call site.
 //
 // This file ships only the dispatch table — no Ptg → AST conversion is
-// performed here. A follow-up will add `ptg_reader.cpp` that consumes
-// this table to build AST nodes.
+// performed here. `ptg_reader.{h,cpp}` consumes this table to build AST
+// nodes (decode) and `ptg_writer.{h,cpp}` performs the inverse (encode).
 
 #ifndef FORMULON_IO_XLSB_PTG_H_
 #define FORMULON_IO_XLSB_PTG_H_
