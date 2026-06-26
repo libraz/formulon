@@ -11,11 +11,44 @@
 #include <cstdint>
 #include <deque>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "value.h"
 
 namespace formulon::pivot {
+
+/// Numeric / date range and grouping hints carried on a `<sharedItems>`
+/// element. Excel writes these so it can group and refresh without
+/// re-scanning every record. Each attribute is stored as the raw OOXML
+/// string body when present (and `has_*` records presence) so the writer
+/// re-emits exactly what was read; absent attributes stay absent. The
+/// `min_value` / `max_value` are kept as strings rather than doubles so a
+/// date-typed range (`minDate`/`maxDate` ISO bodies) and a numeric range
+/// share one carrier without lossy reformatting.
+struct SharedItemsHints {
+  bool contains_number = false;
+  bool contains_integer = false;
+  bool contains_date = false;
+  bool contains_string = false;
+  bool contains_blank = false;
+  bool contains_semi_mixed = false;
+  bool contains_non_date = false;
+  bool contains_mixed_types = false;
+  // Presence flags + raw bodies for the bound attributes.
+  bool has_min_value = false;
+  bool has_max_value = false;
+  bool has_min_date = false;
+  bool has_max_date = false;
+  std::string min_value;
+  std::string max_value;
+  std::string min_date;
+  std::string max_date;
+  /// True when the source `<sharedItems>` carried any of the above hint
+  /// attributes. When false the writer falls back to its legacy minimal
+  /// placeholder for an empty (range-typed) field.
+  bool present = false;
+};
 
 /// One column of the pivot cache.
 ///
@@ -23,8 +56,30 @@ namespace formulon::pivot {
 /// boolean) column. Range-typed (numeric / date) columns leave it empty
 /// and store inline values on each `PivotCacheRecord`.
 struct PivotCacheField {
+  PivotCacheField() = default;
+  /// Convenience constructor used by hand-built caches (tests, the cache
+  /// reader): the `<sharedItems>` hints default to absent. Keeping this
+  /// lets call sites write `PivotCacheField{"Region", {...}}` without
+  /// spelling the hint set every time.
+  PivotCacheField(std::string field_name, std::vector<Value> items)
+      : name(std::move(field_name)), shared_items(std::move(items)) {}
+
   std::string name;
   std::vector<Value> shared_items;
+  /// Numeric / date range + grouping hints from `<sharedItems>`. Preserved
+  /// verbatim so Excel's Refresh keeps its grouping boundaries.
+  SharedItemsHints shared_items_hints;
+};
+
+/// The `<cacheSource>/<worksheetSource>` reference that tells Excel where
+/// to re-read the cache from on Refresh. Any of the attributes may be
+/// absent; presence is tracked so the writer re-emits only what was read.
+/// Dropping these makes Excel's Refresh fail or repoint incorrectly.
+struct WorksheetSource {
+  bool present = false;
+  std::string ref;    ///< A1 range, e.g. "Sheet1!$A$1:$C$9" or "$A$1:$C$9".
+  std::string sheet;  ///< Sheet name when `ref` is unqualified.
+  std::string name;   ///< Defined-name source (alternative to ref).
 };
 
 /// One row of the pivot cache.
@@ -70,11 +125,17 @@ class PivotCache {
   std::deque<std::string>& mutable_text_storage() { return text_storage_; }
   const std::deque<std::string>& text_storage() const { return text_storage_; }
 
+  /// The `<worksheetSource>` reference under `<cacheSource>`. Preserved so
+  /// Excel's Refresh can locate the source range / defined name.
+  const WorksheetSource& worksheet_source() const { return worksheet_source_; }
+  WorksheetSource& mutable_worksheet_source() { return worksheet_source_; }
+
  private:
   std::uint32_t cache_id_ = 0;
   std::vector<PivotCacheField> fields_;
   std::vector<PivotCacheRecord> records_;
   std::deque<std::string> text_storage_;
+  WorksheetSource worksheet_source_;
 };
 
 }  // namespace formulon::pivot

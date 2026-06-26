@@ -18,10 +18,12 @@
 //     wire; the locale-aware compare will arrive with date grouping);
 //   * is total across kinds so `std::map` stays well-formed.
 //
-// Kind ordering: Number < Bool < Text < Error < everything else. The
-// cache only ever produces the first four for discrete fields, but the
-// fall-through keeps the comparator total in case a future cache field
-// surfaces an Array or similar.
+// Kind ordering: Number < Text < Bool < Error < everything else, sourced
+// from the shared `excel_kind_rank` so the pivot comparator and the
+// GROUPBY / SORT comparator (`eval/groupby_pivotby/common.cpp`) cannot drift
+// on the relative position of Bool vs Text. The cache only ever produces the
+// first four kinds for discrete fields, but the fall-through keeps the
+// comparator total in case a future cache field surfaces an Array or similar.
 
 #ifndef FORMULON_PIVOT_VALUE_ORDER_H_
 #define FORMULON_PIVOT_VALUE_ORDER_H_
@@ -31,34 +33,13 @@
 
 #include "utils/error.h"
 #include "value.h"
+#include "value_sort_order.h"
 
 namespace formulon::pivot {
 
-inline int kind_rank(ValueKind k) noexcept {
-  switch (k) {
-    case ValueKind::Number:
-      return 0;
-    case ValueKind::Bool:
-      return 1;
-    case ValueKind::Text:
-      return 2;
-    case ValueKind::Error:
-      return 3;
-    case ValueKind::Blank:
-      return 4;
-    case ValueKind::Array:
-      return 5;
-    case ValueKind::Ref:
-      return 6;
-    case ValueKind::Lambda:
-      return 7;
-  }
-  return 8;
-}
-
 inline bool value_less(const Value& a, const Value& b) noexcept {
-  const int ra = kind_rank(a.kind());
-  const int rb = kind_rank(b.kind());
+  const int ra = excel_kind_rank(a.kind());
+  const int rb = excel_kind_rank(b.kind());
   if (ra != rb) {
     return ra < rb;
   }

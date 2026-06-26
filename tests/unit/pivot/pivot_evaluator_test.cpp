@@ -18,16 +18,51 @@
 #include <vector>
 
 #include "eval/date_time.h"
+#include "eval/groupby_pivotby/common.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/value_order.h"
 #include "utils/error.h"
 #include "value.h"
 
 namespace formulon::pivot {
 namespace {
+
+// ---------------------------------------------------------------------------
+// Cross-subsystem comparator agreement: the pivot comparator
+// (`pivot::value_less`) and the GROUPBY / SORT comparator
+// (`eval::cmp_value_asc`) share one Excel kind rank, so a key column mixing
+// Bool and Text must order identically in both. Excel's ascending order puts
+// Text before Bool.
+// ---------------------------------------------------------------------------
+
+TEST(PivotComparatorParity, BoolVsTextMatchesGroupByOrder) {
+  const Value text_val = Value::text("zebra");
+  const Value bool_val = Value::boolean(false);
+
+  // Pivot: Text sorts before Bool.
+  EXPECT_TRUE(value_less(text_val, bool_val));
+  EXPECT_FALSE(value_less(bool_val, text_val));
+
+  // GROUPBY / SORT: same ordering (negative => first argument sorts first).
+  EXPECT_LT(eval::cmp_value_asc(text_val, bool_val), 0);
+  EXPECT_GT(eval::cmp_value_asc(bool_val, text_val), 0);
+}
+
+TEST(PivotComparatorParity, NumberBeforeTextBeforeBool) {
+  const Value num = Value::number(1.0);
+  const Value text_val = Value::text("a");
+  const Value bool_val = Value::boolean(true);
+
+  EXPECT_TRUE(value_less(num, text_val));
+  EXPECT_TRUE(value_less(text_val, bool_val));
+
+  EXPECT_LT(eval::cmp_value_asc(num, text_val), 0);
+  EXPECT_LT(eval::cmp_value_asc(text_val, bool_val), 0);
+}
 
 // ---------------------------------------------------------------------------
 // Fixture helpers

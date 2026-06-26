@@ -81,6 +81,35 @@ class PivotTable {
     span_cols_ = cols;
   }
 
+  // `<location>` required / commonly-present attributes ----------------------
+  //
+  // ECMA-376 marks `firstHeaderRow`, `firstDataRow`, and `firstDataCol` as
+  // required on `<location>`; `rowPageCount` / `colPageCount` are optional
+  // but commonly present. The `ref` attribute is modelled separately as the
+  // anchor/spans above. These offsets are relative to the top-left of the
+  // pivot's `ref` range. They are captured verbatim from the source so a
+  // read -> write round trip re-emits a schema-valid `<location>` (dropping
+  // the required attributes makes Excel flag the file for repair). Stored as
+  // `optional` so the writer can emit only what was present and the reader
+  // can default the required ones when a non-conforming producer omits them.
+
+  std::optional<std::uint32_t> location_first_header_row() const { return location_first_header_row_; }
+  std::optional<std::uint32_t> location_first_data_row() const { return location_first_data_row_; }
+  std::optional<std::uint32_t> location_first_data_col() const { return location_first_data_col_; }
+  std::optional<std::uint32_t> location_row_page_count() const { return location_row_page_count_; }
+  std::optional<std::uint32_t> location_col_page_count() const { return location_col_page_count_; }
+
+  void set_location_attributes(std::optional<std::uint32_t> first_header_row,
+                               std::optional<std::uint32_t> first_data_row, std::optional<std::uint32_t> first_data_col,
+                               std::optional<std::uint32_t> row_page_count,
+                               std::optional<std::uint32_t> col_page_count) {
+    location_first_header_row_ = first_header_row;
+    location_first_data_row_ = first_data_row;
+    location_first_data_col_ = first_data_col;
+    location_row_page_count_ = row_page_count;
+    location_col_page_count_ = col_page_count;
+  }
+
   /// True iff `(row, col)` is inside the pivot's bounds.
   bool contains(std::uint32_t row, std::uint32_t col) const noexcept {
     return row >= anchor_row_ && row < anchor_row_ + span_rows_ && col >= anchor_col_ && col < anchor_col_ + span_cols_;
@@ -146,6 +175,11 @@ class PivotTable {
   std::uint32_t anchor_col_ = 0;
   std::uint32_t span_rows_ = 0;
   std::uint32_t span_cols_ = 0;
+  std::optional<std::uint32_t> location_first_header_row_;
+  std::optional<std::uint32_t> location_first_data_row_;
+  std::optional<std::uint32_t> location_first_data_col_;
+  std::optional<std::uint32_t> location_row_page_count_;
+  std::optional<std::uint32_t> location_col_page_count_;
   bool grand_totals_rows_ = true;
   bool grand_totals_cols_ = true;
   std::vector<PivotFilter> active_filters_;

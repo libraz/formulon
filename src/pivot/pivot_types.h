@@ -235,7 +235,18 @@ struct PivotField {
   SortSpec sort;
   std::vector<PivotItem> items;
   bool subtotal_top = false;
+
+  /// Custom subtotal functions selected on this field, mirroring the
+  /// OOXML `<pivotField>` `*Subtotal` boolean attribute family
+  /// (`sumSubtotal`, `avgSubtotal`, ...). Empty when only the implicit
+  /// default subtotal applies.
   std::vector<SubtotalFn> subtotal_fns;
+
+  /// Mirrors the OOXML `defaultSubtotal` attribute (default `true`).
+  /// When `false` the field suppresses its automatic default subtotal;
+  /// any entries in `subtotal_fns` then describe the explicit custom set.
+  bool default_subtotal = true;
+
   std::string number_format;
   std::optional<PivotDateGroup> date_group;
 };
