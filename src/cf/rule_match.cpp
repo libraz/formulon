@@ -15,6 +15,7 @@
 #include "cf/cf_helpers.h"
 #include "cf/cf_types.h"
 #include "cf/scale_evaluator.h"
+#include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "value.h"
 
@@ -82,16 +83,31 @@ bool match_cell_is(const CFRule& rule, const Value& cell_value) {
 // Text family — containsText / notContainsText / beginsWith / endsWith.
 // ---------------------------------------------------------------------------
 
-// Conservative cross-kind stance: if the cell isn't text, no rule in the
-// family matches (including the negative `NotContainsText`). Excel
-// implicitly coerces non-text cells via the generated SEARCH-based
-// formula, but folding that in needs oracle data; the closure harness
-// will refine when it lands.
+// Excel's text-family rules are built on the displayed text of the cell,
+// not its raw kind. A number or blank cell is coerced to its General
+// rendering (`512`, ``) before the substring test, matching Excel's
+// generated SEARCH-based formula.
+//
+// The negative form (`NotContainsText`) is the predicate complement: a
+// cell that does not contain the needle matches. A non-text cell never
+// contains a non-empty needle, so the negation fires on numeric / blank
+// cells — Excel highlights them. Error cells have no displayed text the
+// rule can search, so the whole family is inert on them.
 bool match_text_rule(const CFRule& rule, const Value& cell_value) {
-  if (!rule.text.has_value() || !cell_value.is_text()) {
+  if (!rule.text.has_value()) {
     return false;
   }
-  const std::string_view cell_text = cell_value.as_text();
+  // Errors carry no searchable display text; neither the positive nor the
+  // negative forms apply to them (Excel leaves error cells unhighlighted).
+  if (cell_value.is_error()) {
+    return false;
+  }
+  const auto coerced = eval::coerce_to_text(cell_value);
+  if (!coerced.has_value()) {
+    // Arrays / refs / lambdas have no scalar rendering; treat as inert.
+    return false;
+  }
+  const std::string_view cell_text = coerced.value();
   const std::string_view needle = *rule.text;
   switch (rule.type) {
     case RuleType::ContainsText:

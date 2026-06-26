@@ -9,11 +9,14 @@
 //   * `ContainsErrors` / `NotContainsErrors`
 //   * `ContainsText` / `NotContainsText` / `BeginsWith` / `EndsWith` —
 //     ASCII case-insensitive substring / prefix / suffix matching of
-//     `rule.text` against the cell's text. Non-text cells (numbers,
-//     booleans, errors, blanks) do not match either the positive or
-//     negative variants; the conservative cross-kind stance mirrors
-//     `cellIs`. Empty `rule.text` matches every text cell for the
-//     positive variants and never matches for `NotContainsText`.
+//     `rule.text` against the cell's displayed text. Non-text cells
+//     (numbers, booleans, blanks) are coerced to their General rendering
+//     first, so the positive variants match when that rendering carries
+//     the needle and `NotContainsText` fires when it does not (a blank
+//     or numeric cell "does not contain" a needle absent from its text).
+//     Error cells have no searchable display text and match neither
+//     variant. Empty `rule.text` matches every cell for the positive
+//     variants and never matches for `NotContainsText`.
 //   * `CellIs` against a literal `formula1` / `formula2` (the value-
 //     only `match_rule(rule, cell_value)` overload), and against an
 //     evaluated formula expression (the context-aware
@@ -134,8 +137,11 @@ struct ColorScalePopulation;
 ///   * `ContainsText` / `NotContainsText` / `BeginsWith` / `EndsWith`
 ///                          — ASCII case-insensitive substring /
 ///                            prefix / suffix match of `rule.text`
-///                            against the cell's text. Non-text cells
-///                            never match.
+///                            against the cell's displayed text.
+///                            Non-text cells are coerced to their General
+///                            rendering first, so `NotContainsText` fires
+///                            on a numeric / blank cell whose rendering
+///                            lacks the needle. Error cells never match.
 ///
 /// All other rule types currently return `false` (their evaluation
 /// logic lands in subsequent staging steps). Callers that want to opt

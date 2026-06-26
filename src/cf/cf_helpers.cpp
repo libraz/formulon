@@ -9,7 +9,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -17,8 +16,10 @@
 
 #include "cf/cf_evaluator.h"
 #include "cf/cf_types.h"
+#include "eval/coerce.h"
 #include "eval/date_time.h"
 #include "eval/eval_context.h"
+#include "eval/scalar_ops.h"
 #include "eval/tree_walker.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
@@ -52,30 +53,6 @@ bool icase_equal(std::string_view lhs, std::string_view rhs) {
     }
   }
   return true;
-}
-
-// Three-way ASCII case-insensitive compare. Sufficient for cellIs text
-// equality / ordering on the literals Excel emits; full Unicode-aware
-// case-folding belongs with the broader text-comparison story.
-int icase_compare(std::string_view lhs, std::string_view rhs) {
-  const std::size_t shorter = std::min(lhs.size(), rhs.size());
-  for (std::size_t i = 0; i < shorter; ++i) {
-    char left_ch = lhs[i];
-    char right_ch = rhs[i];
-    if (left_ch >= 'A' && left_ch <= 'Z') {
-      left_ch = static_cast<char>(left_ch - 'A' + 'a');
-    }
-    if (right_ch >= 'A' && right_ch <= 'Z') {
-      right_ch = static_cast<char>(right_ch - 'A' + 'a');
-    }
-    if (left_ch != right_ch) {
-      return left_ch < right_ch ? -1 : 1;
-    }
-  }
-  if (lhs.size() == rhs.size()) {
-    return 0;
-  }
-  return lhs.size() < rhs.size() ? -1 : 1;
 }
 
 std::optional<LiteralOperand> parse_literal(const std::string& source) {
@@ -114,10 +91,11 @@ std::optional<LiteralOperand> parse_literal(const std::string& source) {
     return operand;
   }
 
-  // Numeric literal — consumed in full or rejected.
-  char* end = nullptr;
-  const double parsed = std::strtod(source.c_str(), &end);
-  if (end != source.c_str() && *end == '\0') {
+  // Numeric literal — consumed in full or rejected. Route through the
+  // evaluator's shared `strtod_full` scanner so the cellIs literal parser
+  // and the engine's text-to-number coercion accept exactly the same syntax.
+  double parsed = 0.0;
+  if (eval::strtod_full(source, &parsed)) {
     LiteralOperand operand;
     operand.kind = LiteralOperand::Kind::Number;
     operand.number_value = parsed;
@@ -143,30 +121,45 @@ std::optional<int> compare_cell_to_literal(const Value& cell, const LiteralOpera
     return std::nullopt;
   }
 
-  if (operand.kind == LiteralOperand::Kind::Text) {
-    if (!cell.is_text()) {
-      return std::nullopt;
+  // Build a `Value` view of the operand and route the comparison through the
+  // evaluator's shared `compare_values` so the cellIs rule sees exactly the
+  // ordering / case-folding the engine applies to the `=` / `<` / `>`
+  // operators. `LiteralOperand` owns its text payload, so the non-owning
+  // `Value::text` view is valid for the duration of this call.
+  switch (operand.kind) {
+    case LiteralOperand::Kind::Text: {
+      // A text operand only meaningfully orders against a text cell; a
+      // numeric / boolean cell leaves the rule inactive (Excel does not
+      // cross-coerce here).
+      if (!cell.is_text()) {
+        return std::nullopt;
+      }
+      bool unordered = false;
+      return eval::compare_values(cell, Value::text(operand.text_value), &unordered);
     }
-    return icase_compare(cell.as_text(), operand.text_value);
+    case LiteralOperand::Kind::Number:
+    case LiteralOperand::Kind::Bool: {
+      // A numeric / boolean operand orders against numeric or boolean cells;
+      // a text cell leaves the rule inactive. Both sides are lifted onto the
+      // numeric line (Bool -> 1/0) so a Bool cell and a Number operand (or
+      // vice versa) order by value — Excel compares cellIs numeric operands
+      // by magnitude, not by `compare_values`'s cross-kind Number < Bool
+      // ranking.
+      if (!cell.is_number() && !cell.is_boolean()) {
+        return std::nullopt;
+      }
+      const double cell_num = cell.is_number() ? cell.as_number() : (cell.as_boolean() ? 1.0 : 0.0);
+      const double lit_num = literal_as_number(operand);
+      if (cell_num < lit_num) {
+        return -1;
+      }
+      if (cell_num > lit_num) {
+        return 1;
+      }
+      return 0;
+    }
   }
-
-  // Numeric / bool comparison: lift bool to 0/1.
-  double cell_num = 0.0;
-  if (cell.is_number()) {
-    cell_num = cell.as_number();
-  } else if (cell.is_boolean()) {
-    cell_num = cell.as_boolean() ? 1.0 : 0.0;
-  } else {
-    return std::nullopt;
-  }
-  const double lit_num = literal_as_number(operand);
-  if (cell_num < lit_num) {
-    return -1;
-  }
-  if (cell_num > lit_num) {
-    return 1;
-  }
-  return 0;
+  return std::nullopt;
 }
 
 std::optional<LiteralOperand> value_to_operand(const Value& evaluated) {
@@ -386,10 +379,10 @@ std::optional<double> parse_double(std::string_view source) {
   if (source.empty()) {
     return std::nullopt;
   }
-  const std::string copy(source);
-  char* end = nullptr;
-  const double parsed = std::strtod(copy.c_str(), &end);
-  if (end != copy.c_str() && *end == '\0') {
+  // Shared scanner with the engine's text-to-number coercion so CFVO
+  // thresholds parse identically to `=`/`<`/`>` numeric operands.
+  double parsed = 0.0;
+  if (eval::strtod_full(source, &parsed)) {
     return parsed;
   }
   return std::nullopt;

@@ -94,12 +94,12 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx);
 std::optional<LiteralOperand> cell_is_operand(const std::string& source, const CFEvalContext& ctx);
 
 // ---------------------------------------------------------------------------
-// ASCII case-insensitive string ops used by `cellIs` / text-rule
-// families.
+// ASCII case-insensitive string ops used by the text-rule family
+// (containsText / beginsWith / endsWith) and the boolean-keyword parser.
+// cellIs value ordering instead routes through `eval::compare_values`.
 // ---------------------------------------------------------------------------
 
 bool icase_equal(std::string_view lhs, std::string_view rhs);
-int icase_compare(std::string_view lhs, std::string_view rhs);
 bool icase_contains(std::string_view haystack, std::string_view needle);
 bool icase_starts_with(std::string_view text, std::string_view prefix);
 bool icase_ends_with(std::string_view text, std::string_view suffix);

@@ -182,6 +182,23 @@ TEST(CFEvaluator, CellIsEqualTextIsCaseInsensitive) {
   EXPECT_FALSE(match_rule(r, Value::text("world")));
 }
 
+TEST(CFEvaluator, CellIsEqualNonAsciiTextRoutesThroughEngineCompare) {
+  // A cellIs equality rule with a non-ASCII (multi-byte UTF-8) operand must
+  // evaluate active/inactive exactly like the engine's `=` operator. The
+  // comparison now routes through `eval::compare_values` instead of a
+  // CF-local ASCII-only path, so an exact byte match fires and a mismatch
+  // stays inactive. The ASCII case-fold leaves non-ASCII bytes untouched, so
+  // the comparison is byte-exact for them.
+  CFRule r = MakeRule(RuleType::CellIs);
+  r.op = CellIsOperator::Equal;
+  r.formula1 = "\"\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E\"";  // "日本語"
+  EXPECT_TRUE(match_rule(r, Value::text("\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E")));
+  EXPECT_FALSE(match_rule(r, Value::text("\xE6\x97\xA5\xE6\x9C\xAC")));  // "日本"
+  // ASCII letters embedded with the non-ASCII run still fold case-insensitively.
+  r.formula1 = "\"caf\xC3\xA9 A\"";                          // "café A"
+  EXPECT_TRUE(match_rule(r, Value::text("caf\xC3\xA9 a")));  // "café a"
+}
+
 TEST(CFEvaluator, CellIsTextLiteralUnescapesDoubledQuotes) {
   // OOXML escapes embedded `"` as `""` inside the formula text. Verify
   // the parser unescapes it before comparison.
@@ -311,15 +328,26 @@ TEST(CFEvaluator, ContainsTextMissingTextFieldReturnsFalse) {
   EXPECT_FALSE(match_rule(r, Value::text("foobar")));
 }
 
-TEST(CFEvaluator, ContainsTextNonTextCellDoesNotMatch) {
-  // Conservative cross-kind stance, mirroring cellIs. Documented in
-  // cf_evaluator.h.
+TEST(CFEvaluator, ContainsTextCoercesNonTextCellToDisplayedText) {
+  // Excel's text rules search the cell's displayed text. A number is
+  // coerced to its General rendering before the substring test, so a
+  // needle present in that rendering matches; one absent from it does
+  // not. Error cells have no searchable display text and never match.
   CFRule r = MakeRule(RuleType::ContainsText);
   r.text = "foo";
-  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(42.0)));  // "42" lacks "foo"
   EXPECT_FALSE(match_rule(r, Value::boolean(true)));
   EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA)));
   EXPECT_FALSE(match_rule(r, Value::blank()));
+
+  CFRule digit = MakeRule(RuleType::ContainsText);
+  digit.text = "2";
+  EXPECT_TRUE(match_rule(digit, Value::number(42.0)));   // "42" contains "2"
+  EXPECT_FALSE(match_rule(digit, Value::number(99.0)));  // "99" lacks "2"
+
+  CFRule rue = MakeRule(RuleType::ContainsText);
+  rue.text = "RUE";
+  EXPECT_TRUE(match_rule(rue, Value::boolean(true)));  // "TRUE" contains "RUE"
 }
 
 TEST(CFEvaluator, NotContainsTextIsComplementOnTextCells) {
@@ -340,13 +368,22 @@ TEST(CFEvaluator, NotContainsTextEmptyNeedleNeverMatchesTextCell) {
   EXPECT_FALSE(match_rule(r, Value::text("")));
 }
 
-TEST(CFEvaluator, NotContainsTextNonTextCellDoesNotMatch) {
-  // Symmetric with the positive form: non-text cells never match
-  // either variant. Documented in cf_evaluator.h.
+TEST(CFEvaluator, NotContainsTextMatchesNonTextCellLackingNeedle) {
+  // The negation is the predicate complement over the coerced displayed
+  // text. A numeric or blank cell whose rendering does not contain the
+  // needle "does not contain" it, so the rule fires and Excel highlights
+  // it. A number whose rendering does contain the needle does not match.
   CFRule r = MakeRule(RuleType::NotContainsText);
   r.text = "foo";
-  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
-  EXPECT_FALSE(match_rule(r, Value::blank()));
+  EXPECT_TRUE(match_rule(r, Value::number(42.0)));  // "42" lacks "foo" -> match
+  EXPECT_TRUE(match_rule(r, Value::blank()));       // "" lacks "foo" -> match
+
+  CFRule digit = MakeRule(RuleType::NotContainsText);
+  digit.text = "2";
+  EXPECT_FALSE(match_rule(digit, Value::number(42.0)));  // "42" contains "2"
+  EXPECT_TRUE(match_rule(digit, Value::number(99.0)));   // "99" lacks "2"
+
+  // Error cells carry no searchable display text; neither form applies.
   EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA)));
 }
 
@@ -372,11 +409,15 @@ TEST(CFEvaluator, BeginsWithLongerPrefixDoesNotMatch) {
   EXPECT_FALSE(match_rule(r, Value::text("short")));
 }
 
-TEST(CFEvaluator, BeginsWithNonTextCellDoesNotMatch) {
+TEST(CFEvaluator, BeginsWithCoercesNonTextCellToDisplayedText) {
   CFRule r = MakeRule(RuleType::BeginsWith);
   r.text = "foo";
-  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(42.0)));  // "42" lacks the prefix
   EXPECT_FALSE(match_rule(r, Value::blank()));
+
+  CFRule prefix = MakeRule(RuleType::BeginsWith);
+  prefix.text = "4";
+  EXPECT_TRUE(match_rule(prefix, Value::number(42.0)));  // "42" begins with "4"
 }
 
 TEST(CFEvaluator, EndsWithMatchesSuffix) {
@@ -401,11 +442,15 @@ TEST(CFEvaluator, EndsWithLongerSuffixDoesNotMatch) {
   EXPECT_FALSE(match_rule(r, Value::text("short")));
 }
 
-TEST(CFEvaluator, EndsWithNonTextCellDoesNotMatch) {
+TEST(CFEvaluator, EndsWithCoercesNonTextCellToDisplayedText) {
   CFRule r = MakeRule(RuleType::EndsWith);
   r.text = "foo";
-  EXPECT_FALSE(match_rule(r, Value::number(42.0)));
+  EXPECT_FALSE(match_rule(r, Value::number(42.0)));  // "42" lacks the suffix
   EXPECT_FALSE(match_rule(r, Value::error(ErrorCode::NA)));
+
+  CFRule suffix = MakeRule(RuleType::EndsWith);
+  suffix.text = "2";
+  EXPECT_TRUE(match_rule(suffix, Value::number(42.0)));  // "42" ends with "2"
 }
 
 TEST(CFEvaluator, MakeMatchPopulatesIdentityFields) {
