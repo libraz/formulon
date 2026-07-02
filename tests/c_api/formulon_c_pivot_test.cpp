@@ -458,6 +458,42 @@ TEST(FormulonCApiPivot, CreatePivotFromScratch) {
   EXPECT_TRUE(saw_grand);
 }
 
+TEST(FormulonCApiPivot, PivotCacheSharedItemsAcceptErrorValues) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  std::size_t count = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_error(wb.handle, cache_id, 0,
+                                                                1),  // ErrorCode::Div0
+            0)
+      << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &count), 0);
+  EXPECT_EQ(count, 3U);
+}
+
+TEST(FormulonCApiPivot, PivotCacheErrorSettersRejectInvalidErrorCodes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_error(wb.handle, cache_id, 0, -1),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_pivot_cache_field_add_shared_item_error(wb.handle, cache_id, 0, 999),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_error(wb.handle, cache_id, 0, 1, -1),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_error(wb.handle, cache_id, 0, 1, 999),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
 TEST(FormulonCApiPivot, MutateExistingPivotFilter) {
   // Build a scratch pivot — the OOXML reader populates only `custom_name`
   // from `<pivotField name="...">`, while the filter resolver matches on

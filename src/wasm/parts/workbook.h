@@ -211,6 +211,7 @@ class JsWorkbook {
   JsStatus pivotCacheFieldAddSharedItemText(uint32_t cacheId, uint32_t fieldIdx, const std::string& utf8);
   JsStatus pivotCacheFieldAddSharedItemBool(uint32_t cacheId, uint32_t fieldIdx, bool value);
   JsStatus pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_t fieldIdx);
+  JsStatus pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIdx, int32_t errorCode);
   JsStatus pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIdx);
 
   uint32_t pivotCacheRecordCount(uint32_t cacheId) const;

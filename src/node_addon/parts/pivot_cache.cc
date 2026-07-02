@@ -188,6 +188,18 @@ Napi::Value Workbook::PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::PivotCacheFieldAddSharedItemError(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const fm_error_code_t error = static_cast<fm_error_code_t>(info[2].As<Napi::Number>().Int32Value());
+  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_error(handle_, cache_id, field_idx, error);
+  return MakeStatus(env, rc);
+}
+
 Napi::Value Workbook::PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

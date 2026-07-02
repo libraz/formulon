@@ -1001,6 +1001,8 @@ export interface Workbook {
   pivotCacheFieldAddSharedItemBool(cacheId: number, fieldIdx: number, value: boolean): Status;
   /** Appends a blank shared item to cache field `fieldIdx`. */
   pivotCacheFieldAddSharedItemBlank(cacheId: number, fieldIdx: number): Status;
+  /** Appends an Excel error shared item to cache field `fieldIdx`. */
+  pivotCacheFieldAddSharedItemError(cacheId: number, fieldIdx: number, errorCode: number): Status;
   /** Drops every shared item from cache field `fieldIdx`. */
   pivotCacheFieldClearSharedItems(cacheId: number, fieldIdx: number): Status;
 

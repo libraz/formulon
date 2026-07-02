@@ -175,6 +175,15 @@ JsStatus JsWorkbook::pivotCacheFieldAddSharedItemBlank(uint32_t cacheId, uint32_
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::pivotCacheFieldAddSharedItemError(uint32_t cacheId, uint32_t fieldIdx, int32_t errorCode) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_workbook_pivot_cache_field_add_shared_item_error(handle_, cacheId, fieldIdx,
+                                                                       static_cast<fm_error_code_t>(errorCode));
+  return status_from_rc(rc);
+}
+
 JsStatus JsWorkbook::pivotCacheFieldClearSharedItems(uint32_t cacheId, uint32_t fieldIdx) {
   if (handle_ == nullptr) {
     return error_status(7000);

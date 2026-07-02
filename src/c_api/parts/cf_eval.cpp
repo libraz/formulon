@@ -24,6 +24,7 @@
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
 #include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -121,7 +122,8 @@ extern "C" fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, si
   // synchronous and the engine consumes both before returning. Binding
   // them here keeps the C ABI free of long-lived per-handle CF state.
   formulon::Arena arena;
-  formulon::eval::EvalContext eval_ctx(wb->workbook().sheet(sheet_index));
+  formulon::eval::EvalState eval_state;
+  formulon::eval::EvalContext eval_ctx(wb->workbook(), wb->workbook().sheet(sheet_index), eval_state);
   formulon::cf::CFHost host;
   host.arena = &arena;
   host.registry = &formulon::eval::default_registry();

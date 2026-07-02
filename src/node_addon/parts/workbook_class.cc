@@ -202,6 +202,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::PivotCacheFieldAdd>("pivotCacheFieldAdd"),
           InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemBlank>("pivotCacheFieldAddSharedItemBlank"),
           InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemBool>("pivotCacheFieldAddSharedItemBool"),
+          InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemError>("pivotCacheFieldAddSharedItemError"),
           InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemNumber>("pivotCacheFieldAddSharedItemNumber"),
           InstanceMethod<&Workbook::PivotCacheFieldAddSharedItemText>("pivotCacheFieldAddSharedItemText"),
           InstanceMethod<&Workbook::PivotCacheFieldClear>("pivotCacheFieldClear"),

@@ -1897,6 +1897,10 @@ FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_bool(fm_workboo
 FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_blank(fm_workbook_t* wb, uint32_t cache_id,
                                                                        size_t field_idx);
 
+/** @brief Appends an Excel error shared item to cache field `field_idx`. */
+FM_API fm_status_t fm_workbook_pivot_cache_field_add_shared_item_error(fm_workbook_t* wb, uint32_t cache_id,
+                                                                       size_t field_idx, fm_error_code_t error);
+
 /** @brief Drops every shared item from cache field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_clear_shared_items(fm_workbook_t* wb, uint32_t cache_id,
                                                                     size_t field_idx);

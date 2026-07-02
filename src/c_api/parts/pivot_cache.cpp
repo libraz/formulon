@@ -30,6 +30,19 @@ using formulon::c_api::parts::intern_cache_text;
 using formulon::c_api::parts::mutable_pivot_caches;
 using formulon::c_api::parts::set_binding_error;
 
+namespace {
+
+bool is_valid_error_code(fm_error_code_t error) {
+  return error >= 0 && error <= static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown);
+}
+
+fm_status_t set_invalid_error_code(const char* fn, fm_error_code_t error) {
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                           (std::string(fn) + ": error code out of range").c_str(), "error=" + std::to_string(error));
+}
+
+}  // namespace
+
 // ---------------------------------------------------------------------------
 // PivotCache lifecycle / enumeration
 // ---------------------------------------------------------------------------
@@ -314,6 +327,21 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_blank(fm_wo
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_error(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                           std::size_t field_idx,
+                                                                           fm_error_code_t error) {
+  clear_last_error();
+  if (!is_valid_error_code(error)) {
+    return set_invalid_error_code("fm_workbook_pivot_cache_field_add_shared_item_error", error);
+  }
+  auto* field = lookup_cache_field_mut(wb, cache_id, field_idx, "fm_workbook_pivot_cache_field_add_shared_item_error");
+  if (field == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  field->shared_items.push_back(formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_pivot_cache_field_clear_shared_items(fm_workbook_t* wb, std::uint32_t cache_id,
                                                                         std::size_t field_idx) {
   clear_last_error();
@@ -473,6 +501,9 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_set_error(fm_workbook_t* w
                                                                 std::size_t record_idx, std::size_t field_idx,
                                                                 fm_error_code_t error) {
   clear_last_error();
+  if (!is_valid_error_code(error)) {
+    return set_invalid_error_code("fm_workbook_pivot_cache_record_set_error", error);
+  }
   auto* rec =
       lookup_record_mut(wb, cache_id, record_idx, field_idx, "fm_workbook_pivot_cache_record_set_error", nullptr);
   if (rec == nullptr) {

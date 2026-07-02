@@ -235,6 +235,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotCacheFieldAdd", &JsWorkbook::pivotCacheFieldAdd)
       .function("pivotCacheFieldAddSharedItemBlank", &JsWorkbook::pivotCacheFieldAddSharedItemBlank)
       .function("pivotCacheFieldAddSharedItemBool", &JsWorkbook::pivotCacheFieldAddSharedItemBool)
+      .function("pivotCacheFieldAddSharedItemError", &JsWorkbook::pivotCacheFieldAddSharedItemError)
       .function("pivotCacheFieldAddSharedItemNumber", &JsWorkbook::pivotCacheFieldAddSharedItemNumber)
       .function("pivotCacheFieldAddSharedItemText", &JsWorkbook::pivotCacheFieldAddSharedItemText)
       .function("pivotCacheFieldClear", &JsWorkbook::pivotCacheFieldClear)

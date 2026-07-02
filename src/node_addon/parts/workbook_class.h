@@ -120,6 +120,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotCacheFieldAddSharedItemText(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldAddSharedItemBool(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldAddSharedItemBlank(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheFieldAddSharedItemError(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldClearSharedItems(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRecordCount(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRecordAdd(const Napi::CallbackInfo& info);

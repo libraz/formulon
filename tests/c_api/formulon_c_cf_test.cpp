@@ -242,6 +242,66 @@ TEST(FormulonCApiCf, OutOfRangeSheetIndexReturnsInvalidArgument) {
   EXPECT_EQ(out, nullptr);
 }
 
+TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 11.0), 0);  // Sheet1!A1
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 0, 0, 5.0), 0);   // Sheet2!A1
+
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 0;  // Expression
+  rule.formula1 = "AND(A1>10,Sheet2!A1=5)";
+  rule.dxf_id_engaged = 1;
+  rule.dxf_id = 3;
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0) << fm_last_error_message();
+
+  CfResultsGuard results;
+  ASSERT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 0, 0, 0, std::nan(""), &results.handle), 0)
+      << fm_last_error_message();
+  ASSERT_EQ(fm_cf_results_cell_count(results.handle), 1U);
+
+  fm_cf_match_t match{};
+  ASSERT_EQ(fm_cf_results_match_at(results.handle, 0, 0, &match), 0);
+  EXPECT_EQ(match.kind, FM_CF_DIFFERENTIAL_FORMAT);
+  EXPECT_EQ(match.dxf_id_engaged, 1);
+  EXPECT_EQ(match.dxf_id, 3U);
+}
+
+TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 0, 0, 7.0), 0);                   // Sheet2!A1
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SUM(Sheet2!A1,5)"), 0);  // Sheet1!A1
+
+  fm_cf_cell_range_t sqref{0, 0, 0, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 0;  // Expression
+  rule.formula1 = "A1>10";
+  rule.dxf_id_engaged = 1;
+  rule.dxf_id = 4;
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0) << fm_last_error_message();
+
+  // No explicit recalc: CF evaluation should use a recursive EvalState
+  // instead of reading the formula cell's stale blank cached value.
+  CfResultsGuard results;
+  ASSERT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 0, 0, 0, std::nan(""), &results.handle), 0)
+      << fm_last_error_message();
+  ASSERT_EQ(fm_cf_results_cell_count(results.handle), 1U);
+
+  fm_cf_match_t match{};
+  ASSERT_EQ(fm_cf_results_match_at(results.handle, 0, 0, &match), 0);
+  EXPECT_EQ(match.kind, FM_CF_DIFFERENTIAL_FORMAT);
+  EXPECT_EQ(match.dxf_id_engaged, 1);
+  EXPECT_EQ(match.dxf_id, 4U);
+}
+
 // ---------------------------------------------------------------------------
 // CF mutation API (fm_sheet_cf_count / get_at / add_rule / remove_at / clear)
 // ---------------------------------------------------------------------------
