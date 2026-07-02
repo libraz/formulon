@@ -39,30 +39,47 @@ Value eval_indirect_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // rectangle. A 1x1 rectangle (range syntax that collapses to a single
   // cell, e.g. `INDIRECT("A1:A1")`) returns the scalar cell directly.
   if (indirect.is_range) {
-    // Whole-column (`D:D`) / whole-row (`5:5`) text does not reduce to a
-    // bounded rectangle; Mac Excel 365 surfaces `#REF!` for a direct
-    // `=INDIRECT("D:D")` in scalar context rather than spilling an
-    // unbounded array. The ROW / COLUMN / ROWS / COLUMNS family reaches
-    // these shapes through `resolve_reference_call`, which keeps the
-    // rectangle; only the materialising path here rejects them.
-    if (indirect.is_full_col || indirect.is_full_row) {
-      return Value::error(ErrorCode::Ref);
-    }
+    // Whole-column (`A:A` / `A:C`) and whole-row (`1:1` / `1:3`) text expands
+    // against the target sheet's used range: `expand_range` clamps the
+    // unbounded axis and reports the concrete shape, so `SUM(INDIRECT("A:A"))`
+    // aggregates the populated cells. A sheet with no content in range yields
+    // a blank scalar (an empty spill has no cells to place).
     parser::Reference top_left{};
-    top_left.sheet = indirect.sheet;
-    top_left.row = indirect.top_row;
-    top_left.col = indirect.left_col;
     parser::Reference bottom_right{};
+    top_left.sheet = indirect.sheet;
     bottom_right.sheet = indirect.sheet;
-    bottom_right.row = indirect.bottom_row;
-    bottom_right.col = indirect.right_col;
-    auto expanded = ctx.expand_range(top_left, bottom_right, arena, registry);
+    if (indirect.is_full_col) {
+      top_left.is_full_col = true;
+      top_left.col = indirect.left_col;
+      bottom_right.is_full_col = true;
+      bottom_right.col = indirect.right_col;
+    } else if (indirect.is_full_row) {
+      top_left.is_full_row = true;
+      top_left.row = indirect.top_row;
+      bottom_right.is_full_row = true;
+      bottom_right.row = indirect.bottom_row;
+    } else {
+      top_left.row = indirect.top_row;
+      top_left.col = indirect.left_col;
+      bottom_right.row = indirect.bottom_row;
+      bottom_right.col = indirect.right_col;
+    }
+    std::uint32_t rows = 0;
+    std::uint32_t cols = 0;
+    auto expanded = ctx.expand_range(top_left, bottom_right, arena, registry, &rows, &cols);
     if (!expanded) {
       return Value::error(expanded.error());
     }
     std::vector<Value> cells = std::move(expanded.value());
-    const std::uint32_t rows = indirect.bottom_row - indirect.top_row + 1U;
-    const std::uint32_t cols = indirect.right_col - indirect.left_col + 1U;
+    if (!indirect.is_full_col && !indirect.is_full_row) {
+      rows = indirect.bottom_row - indirect.top_row + 1U;
+      cols = indirect.right_col - indirect.left_col + 1U;
+    }
+    if (rows == 0U || cols == 0U) {
+      // Empty whole-reference expansion (no content in range): nothing to
+      // spill, so collapse to a blank scalar. `SUM`/`COUNT` of this is 0.
+      return Value::blank();
+    }
     Value* buffer = nullptr;
     ArrayValue* out = dynamic_array::allocate_array_value(rows, cols, arena, buffer);
     if (out == nullptr) {

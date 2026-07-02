@@ -27,6 +27,7 @@
 #define FORMULON_PARSER_AST_FORMAT_H_
 
 #include <string>
+#include <string_view>
 
 #include "parser/ast.h"
 
@@ -41,6 +42,30 @@ namespace parser {
 /// equivalence (parse → format → parse → equal AST) is the contract, not
 /// byte-exact stability.
 std::string format_formula(const AstNode& node);
+
+/// Storage prefix a function name carries in the OOXML `<f>` element.
+enum class StoragePrefixKind {
+  None,      ///< Classic (pre-2007) function: no prefix.
+  Xlfn,      ///< Post-2007 function: `_xlfn.` prefix.
+  XlfnXlws,  ///< Worksheet-only dynamic-array function: `_xlfn._xlws.` prefix.
+};
+
+/// Classifies a canonical (unprefixed, upper-case) function name into the
+/// storage prefix Excel writes for it. Supplied by the writer so this
+/// header stays free of the function catalog.
+using StoragePrefixClassifier = StoragePrefixKind (*)(std::string_view canonical_name);
+
+/// Like `format_formula`, but re-applies Excel's hidden storage prefixes so
+/// the result is what a real Excel worksheet stores in `<f>`:
+///   * each function call whose name `classify` maps to `Xlfn` / `XlfnXlws`
+///     is emitted with the corresponding `_xlfn.` / `_xlfn._xlws.` prefix;
+///   * LET / LAMBDA are themselves future functions (classified the same
+///     way), and every LET binding name / LAMBDA parameter name — plus each
+///     in-scope reference to one — is emitted with the `_xlpm.` prefix.
+///
+/// This is the inverse of `io::strip_storage_prefixes` for the shapes the
+/// writer produces, so a save → load cycle round-trips the canonical text.
+std::string format_formula_storage(const AstNode& node, StoragePrefixClassifier classify);
 
 }  // namespace parser
 }  // namespace formulon

@@ -29,6 +29,13 @@ namespace {
 constexpr std::int64_t kExcelBaseBeforeGhost = 25568;
 constexpr std::int64_t kExcelBaseAfterGhost = 25569;
 
+// 1904 date system (Excel "Use 1904 date system"): serial 0 is
+// 1904-01-01 and there is no fictitious 1900-02-29, so a single linear
+// base suffices with no ghost handling. 1904-01-01 is serial 1462 in the
+// 1900 system, hence this base is exactly `kExcelBaseAfterGhost - 1462`;
+// every 1904 serial is 1462 less than the 1900 serial for the same day.
+constexpr std::int64_t kExcel1904Base = kExcelBaseAfterGhost - 1462;
+
 // days_from_civil(1900, 2, 28) in the 1970 epoch. Any serial mapped through
 // `kExcelBaseBeforeGhost` must produce a civil day <= this value; anything
 // past it has crossed the ghost 1900-02-29 and must use the post-ghost
@@ -66,8 +73,12 @@ YMD civil_from_days(std::int64_t z) noexcept {
   return YMD{y + static_cast<int>(m <= 2u), m, d};
 }
 
-YMD ymd_from_serial(double serial_floor) noexcept {
+YMD ymd_from_serial(double serial_floor, bool date1904) noexcept {
   const std::int64_t s = static_cast<std::int64_t>(std::floor(serial_floor));
+  if (date1904) {
+    // 1904 system: no ghost day, single linear base.
+    return civil_from_days(s - kExcel1904Base);
+  }
   if (s == 60) {
     // Preserve Excel's ghost day.
     return YMD{1900, 2u, 29u};
@@ -76,7 +87,11 @@ YMD ymd_from_serial(double serial_floor) noexcept {
   return civil_from_days(s - base);
 }
 
-double serial_from_ymd(int y, unsigned m, unsigned d) noexcept {
+double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904) noexcept {
+  if (date1904) {
+    // 1904 system: no ghost day; single linear base off 1904-01-01.
+    return static_cast<double>(days_from_civil(y, m, d) + kExcel1904Base);
+  }
   // Excel reserves serial 60 for the fictitious 1900-02-29 that the 1900
   // leap-year bug retains. `days_from_civil` would normalise (1900, 2, 29)
   // to the real civil day 1900-03-01, which maps through
@@ -154,14 +169,34 @@ double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned
   // matter. (Observed behaviour: YEARFRAC("2008-03-01","2008-08-31",1) = 0.5
   // even though Feb 29 2008 sits before the start of the range.)
   //
-  // Cross-year span: denominator is the average calendar-year length over
-  // the inclusive year range [y1, y2], where a leap year contributes 366
-  // ONLY if its Feb 29 falls in the closed interval [start, end]. A span
-  // that straddles a leap-year boundary without crossing Feb 29 averages
-  // as if that leap year were a normal 365-day year.
+  // Span of at most one year that crosses a single year boundary
+  // (`y2 == y1 + 1` and end falls on or before start's anniversary): Excel
+  // uses a SINGLE-year denominator, not the multi-year average. It is 366 iff
+  // a Feb 29 falls in the closed interval [start, end], else 365. This is why
+  // YEARFRAC("2020-01-01","2021-01-01",1) is exactly 1.0 (366/366) rather
+  // than 366/365.5.
+  //
+  // Longer cross-year spans: denominator is the average calendar-year length
+  // over the inclusive year range [y1, y2], where a leap year contributes 366
+  // ONLY if its Feb 29 falls in the closed interval [start, end]. A span that
+  // straddles a leap-year boundary without crossing Feb 29 averages as if
+  // that leap year were a normal 365-day year.
   double denom = 0.0;
   if (y1 == y2) {
     denom = is_leap_year(y1) ? 366.0 : 365.0;
+  } else if (y2 == y1 + 1 && (m1 > m2 || (m1 == m2 && d1 >= d2))) {
+    bool has_feb29 = false;
+    for (int y = y1; y <= y2; ++y) {
+      if (!is_leap_year(y)) {
+        continue;
+      }
+      const std::int64_t feb29 = days_from_civil(y, 2, 29);
+      if (feb29 >= days1 && feb29 <= days2) {
+        has_feb29 = true;
+        break;
+      }
+    }
+    denom = has_feb29 ? 366.0 : 365.0;
   } else {
     const int total_years = y2 - y1 + 1;
     int leap_years_in_span = 0;

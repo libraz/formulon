@@ -45,7 +45,7 @@ Value Not(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::boolean(!coerced.value());
 }
 
-// AND(value, ...) / OR(value, ...) / XOR(value, ...) ---------------------
+// XOR(value, ...) --------------------------------------------------------
 // Excel's stricter logical coercion (see `logical_coerce` above):
 //
 //   * The literal strings "TRUE" / "FALSE" (case-insensitive, trimmed)
@@ -58,55 +58,12 @@ Value Not(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //     scalar errors arrive as `Error` values handled by `logical_coerce`).
 //
 // When every argument is skipped (all blanks / "") the result is `#VALUE!`
-// rather than the neutral default, matching `AND("")` -> #VALUE!.
-Value And_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  bool result = true;
-  bool any_value = false;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    bool v = false;
-    ErrorCode err = ErrorCode::Value;
-    const LogicalCoerce lc = logical_coerce(args[i], &v, &err);
-    if (lc == LogicalCoerce::Error) {
-      return Value::error(err);
-    }
-    if (lc == LogicalCoerce::Skip) {
-      continue;
-    }
-    any_value = true;
-    if (!v) {
-      result = false;
-    }
-  }
-  if (!any_value) {
-    return Value::error(ErrorCode::Value);
-  }
-  return Value::boolean(result);
-}
-
-Value Or_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  bool result = false;
-  bool any_value = false;
-  for (std::uint32_t i = 0; i < arity; ++i) {
-    bool v = false;
-    ErrorCode err = ErrorCode::Value;
-    const LogicalCoerce lc = logical_coerce(args[i], &v, &err);
-    if (lc == LogicalCoerce::Error) {
-      return Value::error(err);
-    }
-    if (lc == LogicalCoerce::Skip) {
-      continue;
-    }
-    any_value = true;
-    if (v) {
-      result = true;
-    }
-  }
-  if (!any_value) {
-    return Value::error(ErrorCode::Value);
-  }
-  return Value::boolean(result);
-}
-
+// rather than the neutral default, matching `XOR("")` -> #VALUE!.
+//
+// AND / OR are NOT registered here: they ride the lazy dispatch table
+// (`eval_and_lazy` / `eval_or_lazy` in `special_forms_lazy.cpp`), which the
+// call dispatcher consults before the eager registry, so any eager AND / OR
+// body would be unreachable. XOR has no lazy entry and remains eager.
 Value Xor_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   bool result = false;
   bool any_value = false;
@@ -132,19 +89,15 @@ Value Xor_(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 }  // namespace
 
 void register_logical_builtins(FunctionRegistry& registry) {
-  // AND / OR are range-aware so `=AND(A1:A3)` expands the rectangle. The
-  // `range_filter_bool_coercible` flag silently drops Text / Blank cells
-  // inside a range (Excel skips them rather than surfacing #VALUE!), while
-  // direct scalar arguments still flow through `coerce_to_bool` and surface
-  // #VALUE! for non-coercible text literals.
+  // AND / OR are intentionally absent: they are served by the lazy dispatch
+  // table (see `special_forms_lazy.cpp`), which unifies the range / array /
+  // spill argument gate that the eager path could not express. XOR stays
+  // eager and range-aware: Text and Blank cells inside a range are silently
+  // skipped rather than surfacing #VALUE!.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"TRUE", 0u, 0u, &True_},
       {"FALSE", 0u, 0u, &False_},
       {"NOT", 1u, 1u, &Not},
-      {"AND", 1u, kVariadic, &And_, true, true, false, true},
-      {"OR", 1u, kVariadic, &Or_, true, true, false, true},
-      // XOR shares AND / OR's range-aware surface: Text and Blank cells
-      // inside a range are silently skipped rather than surfacing #VALUE!.
       {"XOR", 1u, kVariadic, &Xor_, true, true, false, true},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));

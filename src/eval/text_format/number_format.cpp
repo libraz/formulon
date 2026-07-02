@@ -25,7 +25,8 @@
 namespace formulon {
 namespace text_format {
 
-FormatStatus apply_format(double value, std::string_view format, std::string_view original_text, std::string& out) {
+FormatStatus apply_format(double value, std::string_view format, std::string_view original_text, std::string& out,
+                          bool date1904) {
   using number_format_detail::CondOp;
   using number_format_detail::Section;
   if (format.empty()) {
@@ -179,7 +180,7 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
     if (render_value < 0.0 || render_value > 2958465.0) {
       return FormatStatus::kValueError;
     }
-    number_format_detail::render_date(section, raw_fmt, render_value, out);
+    number_format_detail::render_date(section, raw_fmt, render_value, out, date1904);
     return FormatStatus::kOk;
   }
   number_format_detail::render_numeric(section, raw_fmt, render_value, out);

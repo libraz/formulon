@@ -23,6 +23,7 @@
 
 #include "eval/a1_parse.h"
 #include "eval/coerce.h"
+#include "eval/datetime_lazy.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
@@ -576,11 +577,14 @@ Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const Functio
       }
     }
   }
-  const FunctionDef* def = registry.lookup("WEEKNUM");
-  if (def == nullptr) {
+  // WEEKNUM is date1904-sensitive and no longer in the eager registry; reach
+  // its shared calendar impl through `find_date_entry` and thread the
+  // workbook epoch. The Win365 return-type leniency above is preserved.
+  const DateEntry* entry = find_date_entry("WEEKNUM");
+  if (entry == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return def->impl(args, arity, arena);
+  return entry->impl(args, arity, arena, ctx.date1904());
 }
 
 Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -616,11 +620,14 @@ Value eval_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       args[1] = Value::text(arena.intern(rewritten));
     }
   }
-  const FunctionDef* def = registry.lookup("TEXT");
-  if (def == nullptr) {
+  // TEXT is date1904-sensitive (date format codes read the workbook epoch),
+  // so it is served through the shared ctx-date1904 lookup rather than the
+  // eager registry; thread the workbook epoch into the impl.
+  const DateEntry* entry = find_date_entry("TEXT");
+  if (entry == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return def->impl(args, 2U, arena);
+  return entry->impl(args, 2U, arena, ctx.date1904());
 }
 
 }  // namespace eval

@@ -891,6 +891,43 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-06-26
 
+  # -- Circular reference with iterative calculation OFF ------------------
+  # A formula cycle (e.g. A1 = =A2, A2 = =A1) with the workbook's iterative
+  # calculation option disabled is detected as a strongly-connected
+  # component by the recalc engine, and every member cell resolves to
+  # #REF!: on a re-entrant reference the resolver returns ErrorCode::Ref
+  # unless workbook.iterative_options().enabled (src/eval/eval_context.cpp),
+  # and RecalcEngine reports the members via its cycle_cells stat (see
+  # tests/unit/eval/recalc_engine_test.cpp DirectCycleProducesRefError).
+  # Excel, with iterative calc OFF, refuses to compute the cycle: it leaves
+  # 0 in the member cells and raises a "circular reference" warning banner
+  # — a UI-only surface with no computed value, which the oracle harness
+  # cannot capture (xlwings reads the cells back as 0). Formulon's #REF! is
+  # the more useful signal for a headless engine; with iterative calc ON
+  # both engines converge to the fixed point instead.
+  - id: circular_reference_iterative_off_returns_ref
+    mode: skip-oracle
+    reason: "A formula cycle with iterative calc OFF resolves to #REF! for every cycle-member cell in Formulon (recalc-engine SCC detection; eval_context returns ErrorCode::Ref on a re-entrant reference). Excel leaves 0 in the cells and shows a circular-reference warning banner — a UI-only surface with no computed value that the oracle harness cannot capture."
+    prefer: formulon
+    first_noted: 2026-07-02
+    last_verified_excel_version: "Excel 365 (Mac, ja-JP, 2026-07)"
+
+  # -- XLSB-sourced pivot tables: GETPIVOTDATA unsupported ----------------
+  # Pivot tables in a .xlsb workbook are not decoded into Formulon's
+  # evaluated pivot model: the XLSB reader wires no pivot caches / pivot
+  # tables onto the workbook (unlike the OOXML reader), so an .xlsb pivot
+  # survives only as opaque passthrough state. GETPIVOTDATA against such a
+  # pivot has no evaluated anchor to resolve and returns #REF!, whereas
+  # Excel returns the aggregated pivot value. Removing this divergence
+  # requires decoding the XLSB binary pivot records (tracked under the
+  # XLSB completion work).
+  - id: xlsb_pivot_getpivotdata_ref
+    mode: skip-oracle
+    reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Deferred pending XLSB pivot record decoding."
+    prefer: mac-excel-365
+    first_noted: 2026-07-02
+    last_verified_excel_version: "Excel 365 (Mac, ja-JP, 2026-07)"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

@@ -60,16 +60,18 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text);
 /// * `Array`, `Ref`, and `Lambda` yield `#VALUE!`.
 Expected<std::string, ErrorCode> coerce_to_text(const Value& v);
 
-/// Coerces `v` to a boolean following Excel's truthiness rules.
+/// Coerces `v` to a boolean following Mac Excel 365 (ja-JP) truthiness rules.
 ///
 /// * `Bool` is returned as-is.
 /// * `Number` is `false` iff exactly zero (NaN / Inf yield `#NUM!`).
 /// * `Blank` is `false`.
-/// * `Text` is coerced to a number first; on success the numeric rule
-///   applies (`"0"` -> false, `"1"` -> true). Empty / whitespace-only text
-///   parses to 0 -> false. Non-numeric text (including the literal strings
-///   `"TRUE"` / `"FALSE"`) yields `#VALUE!`, matching Excel's actual
-///   behaviour for `AND` / `OR` / `NOT` / `IF` argument coercion.
+/// * `Text` accepts ONLY the literal strings `"TRUE"` / `"FALSE"` (ASCII
+///   case-insensitive, no whitespace tolerance). Every other text —
+///   including numeric strings (`"0"`, `"1"`, `"0.5"`), whitespace-padded
+///   forms (`"  TRUE  "`), and localised truth-words — yields `#VALUE!`.
+///   This matches the `text_to_bool_probes` oracle suite and keeps
+///   `coerce_to_bool` in sync with the stricter `logical_coerce` helper
+///   (`eval/logical_coerce.h`) used by AND / OR / XOR / IFS.
 /// * `Error` propagates its code unchanged.
 /// * `Array`, `Ref`, and `Lambda` yield `#VALUE!`.
 Expected<bool, ErrorCode> coerce_to_bool(const Value& v);
@@ -89,7 +91,8 @@ bool strtod_full(std::string_view s, double* out) noexcept;
 /// is reported as `#NUM!`. This is shared between the `^` operator and the
 /// `POWER()` builtin so the two paths cannot diverge.
 ///
-/// * `POWER(0, 0)` yields `1` (matches IEEE-754 `std::pow`).
+/// * `POWER(0, 0)` yields `#NUM!` — Excel treats it as indeterminate,
+///   diverging from IEEE-754 `std::pow` (which returns 1).
 /// * Negative base with a non-integer exponent yields `#NUM!` (NaN from pow).
 /// * Overflow / underflow to Inf yields `#NUM!`.
 Expected<double, ErrorCode> apply_pow(double base, double exp);

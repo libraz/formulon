@@ -5,21 +5,23 @@
 // recursive walker compile unit small; see `tree_walker/broadcast.h`
 // for the public contract.
 //
-// `eval_binop_array_ctx` in `shape_ops_lazy.cpp` re-walks the AST under
-// SUMPRODUCT and other array-context callers; the helpers below take
-// *already evaluated* `Value`s so the top-level dispatch can broadcast
-// over arrays produced by SpillRef / TRANSPOSE / SEQUENCE without a
-// second AST walk. Shape rules mirror `eval_binop_array_ctx` exactly:
+// `broadcast_binop` is the single implementation of Excel 365 array
+// broadcasting for the tree-walk evaluator. It takes *already evaluated*
+// `Value`s so both the top-level BinaryOp dispatch and `shape_ops_lazy.cpp`'s
+// array-context path (`eval_binop_array_ctx`, which delegates here) share one
+// rule set. Shape rules follow Excel 365 dynamic arrays:
 //
-//   * Both operands 1x1                 -> 1x1 result
-//   * Either operand 1x1, other R x C   -> R x C result, scalar broadcasts
-//   * Otherwise dimensions must match   -> mismatch surfaces scalar #VALUE!
-//     (matches Mac Excel's whole-expression short-circuit; it does NOT
-//     spill a sea of #VALUE! cells)
+//   * The result is `max(r1, r2) x max(c1, c2)`.
+//   * A dimension of size 1 broadcasts to the other operand's size (this is
+//     what makes the outer product `{1;2;3}*{10,20}` -> 3x2 and the mixed
+//     forms `RxC op Rx1` / `RxC op 1xC` work).
+//   * A dimension where both operands are > 1 but unequal does NOT error:
+//     Excel extends to the larger size and fills the cells an operand cannot
+//     supply with `#N/A` (`{1,2,3}+{1,2}` -> `{2,4,#N/A}`).
 //
-// Per-cell error short-circuit: if either operand cell is an Error, that
-// error is written verbatim into the result cell (left-most wins on ties
-// via the lhs-first check in the loop).
+// Per-cell error short-circuit: if either contributing operand cell is an
+// Error, that error is written verbatim into the result cell (left-most wins
+// via the lhs-first check).
 
 #include "eval/tree_walker/broadcast.h"
 
@@ -53,6 +55,20 @@ ArrayView as_array_view(const Value& v, Value* scalar_slot) {
   }
   *scalar_slot = v;
   return {1U, 1U, scalar_slot};
+}
+
+// Fetches the operand cell contributing to output position `(r, c)` under
+// Excel broadcasting, or `nullptr` when the operand cannot supply that
+// position (the axis is larger than this operand's non-1 extent -> `#N/A`).
+// A size-1 axis always reads index 0 (broadcast); a size-N axis reads its own
+// index when in range.
+const Value* broadcast_cell(const ArrayView& v, std::uint32_t r, std::uint32_t c) {
+  const std::uint32_t ri = v.rows == 1U ? 0U : r;
+  const std::uint32_t ci = v.cols == 1U ? 0U : c;
+  if (ri >= v.rows || ci >= v.cols) {
+    return nullptr;
+  }
+  return &v.cells[static_cast<std::size_t>(ri) * v.cols + ci];
 }
 
 }  // namespace
@@ -99,29 +115,29 @@ Value broadcast_binop(parser::BinOp op, const Value& lhs, const Value& rhs, Aren
   const ArrayView la = as_array_view(lhs, &l_slot);
   const ArrayView ra = as_array_view(rhs, &r_slot);
 
-  std::uint32_t out_rows = la.rows;
-  std::uint32_t out_cols = la.cols;
-  bool l_broadcast = false;
-  bool r_broadcast = false;
-  if (la.rows == 1U && la.cols == 1U) {
-    out_rows = ra.rows;
-    out_cols = ra.cols;
-    l_broadcast = true;
-  } else if (ra.rows == 1U && ra.cols == 1U) {
-    r_broadcast = true;
-  } else if (la.rows != ra.rows || la.cols != ra.cols) {
-    return Value::error(ErrorCode::Value);
-  }
+  // Excel 365 broadcast shape: each axis extends to the larger operand's
+  // size. A size-1 axis broadcasts; a size-mismatch on a non-1 axis pads the
+  // shortfall with #N/A (handled per-cell via `broadcast_cell`).
+  const std::uint32_t out_rows = la.rows > ra.rows ? la.rows : ra.rows;
+  const std::uint32_t out_cols = la.cols > ra.cols ? la.cols : ra.cols;
 
   const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
   Value* buf = arena.create_array<Value>(n);
   if (buf == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& lv = l_broadcast ? la.cells[0] : la.cells[i];
-    const Value& rv = r_broadcast ? ra.cells[0] : ra.cells[i];
-    buf[i] = apply_binop_per_cell(op, lv, rv, arena);
+  std::size_t i = 0;
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c, ++i) {
+      const Value* lv = broadcast_cell(la, r, c);
+      const Value* rv = broadcast_cell(ra, r, c);
+      if (lv == nullptr || rv == nullptr) {
+        // One operand cannot supply this position: Excel fills #N/A.
+        buf[i] = Value::error(ErrorCode::NA);
+        continue;
+      }
+      buf[i] = apply_binop_per_cell(op, *lv, *rv, arena);
+    }
   }
   ArrayValue* out = arena.create<ArrayValue>();
   if (out == nullptr) {

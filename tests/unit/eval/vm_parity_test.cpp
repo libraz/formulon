@@ -166,6 +166,10 @@ constexpr Case kCorpus[] = {
     {"=LAMBDA(x, y, x*y)(3, 4)"},
     {"=LET(f, LAMBDA(x, x*x), f(7))"},
     {"=LET(f, LAMBDA(x, x+1), f(f(f(0))))"},
+    // Self-passing recursive LAMBDA with an inner LET whose slot is reused
+    // per depth and read after the recursive call (factorial / summation).
+    {"=LET(f, LAMBDA(self, n, IF(n<=1, 1, LET(t, n, self(self, n-1) * t))), f(f, 5))"},
+    {"=LET(f, LAMBDA(self, n, IF(n<=0, 0, LET(t, n, self(self, n-1) + t))), f(f, 6))"},
     // Information-style scalar.
     {"=ISNUMBER(1)"},
     {"=ISNUMBER(\"x\")"},

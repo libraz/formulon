@@ -426,21 +426,104 @@ TEST(EvalContextExpandRange, CrossSheetRhs_ReturnsRef) {
   EXPECT_EQ(result.error(), ErrorCode::Ref);
 }
 
-TEST(EvalContextExpandRange, FullColumn_ReturnsValue) {
+TEST(EvalContextExpandRange, FullColumnEmptySheet_ReturnsEmpty) {
+  // A whole-column reference on a sheet with no content clamps to an empty
+  // expansion (no per-row work) rather than an error.
   Sheet sheet("Sheet1");
   parser::Reference lhs = MakeLocalRef(0, 0);
   lhs.is_full_col = true;
   parser::Reference rhs = MakeLocalRef(0, 0);
   rhs.is_full_col = true;
-  auto result = ExpandRange(sheet, lhs, rhs);
-  ASSERT_FALSE(result);
-  EXPECT_EQ(result.error(), ErrorCode::Value);
+  std::uint32_t rows = 99;
+  std::uint32_t cols = 99;
+  static thread_local Arena arena;
+  arena.reset();
+  const eval::EvalContext ctx(sheet);
+  auto result = ctx.expand_range(lhs, rhs, arena, eval::default_registry(), &rows, &cols);
+  ASSERT_TRUE(result);
+  EXPECT_TRUE(result.value().empty());
+  EXPECT_EQ(rows, 0u);
+  EXPECT_EQ(cols, 0u);
 }
 
-TEST(EvalContextExpandRange, FullRow_ReturnsValue) {
+TEST(EvalContextExpandRange, FullColumnClampsToUsedRange) {
+  // Column A holds values at rows 1..3; the whole-column reference expands
+  // from row 0 (preserving positional origin) to the column's populated
+  // extent (row 2, 0-based), yielding three cells.
   Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(2.0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  parser::Reference lhs = MakeLocalRef(0, 0);
+  lhs.is_full_col = true;
+  parser::Reference rhs = MakeLocalRef(0, 0);
+  rhs.is_full_col = true;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  static thread_local Arena arena;
+  arena.reset();
+  const eval::EvalContext ctx(sheet);
+  auto result = ctx.expand_range(lhs, rhs, arena, eval::default_registry(), &rows, &cols);
+  ASSERT_TRUE(result);
+  ASSERT_EQ(result.value().size(), 3u);
+  EXPECT_EQ(result.value()[0].as_number(), 1.0);
+  EXPECT_EQ(result.value()[2].as_number(), 3.0);
+  EXPECT_EQ(rows, 3u);
+  EXPECT_EQ(cols, 1u);
+}
+
+TEST(EvalContextExpandRange, MultiColumnFullRangeClampsRows) {
+  // `A:C` spans columns A..C over the sheet's populated row extent. B2 is
+  // the deepest cell (0-based row 1), so the expansion is 2 rows * 3 cols.
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));   // A1
+  sheet.set_cell_value(1, 1, Value::number(10.0));  // B2
+  parser::Reference lhs = MakeLocalRef(0, 0);
+  lhs.is_full_col = true;
+  parser::Reference rhs = MakeLocalRef(0, 2);
+  rhs.is_full_col = true;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  static thread_local Arena arena;
+  arena.reset();
+  const eval::EvalContext ctx(sheet);
+  auto result = ctx.expand_range(lhs, rhs, arena, eval::default_registry(), &rows, &cols);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(rows, 2u);
+  EXPECT_EQ(cols, 3u);
+  ASSERT_EQ(result.value().size(), 6u);
+}
+
+TEST(EvalContextExpandRange, FullRowClampsToUsedRange) {
+  // Row 1 (0-based 0) holds A1 and C1; the whole-row reference expands from
+  // column 0 to the row's populated column extent (C, 0-based 2).
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));    // A1
+  sheet.set_cell_value(0, 2, Value::number(100.0));  // C1
   parser::Reference lhs = MakeLocalRef(0, 0);
   lhs.is_full_row = true;
+  parser::Reference rhs = MakeLocalRef(0, 0);
+  rhs.is_full_row = true;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  static thread_local Arena arena;
+  arena.reset();
+  const eval::EvalContext ctx(sheet);
+  auto result = ctx.expand_range(lhs, rhs, arena, eval::default_registry(), &rows, &cols);
+  ASSERT_TRUE(result);
+  EXPECT_EQ(rows, 1u);
+  EXPECT_EQ(cols, 3u);
+  ASSERT_EQ(result.value().size(), 3u);
+  EXPECT_EQ(result.value()[0].as_number(), 1.0);
+  EXPECT_EQ(result.value()[2].as_number(), 100.0);
+}
+
+TEST(EvalContextExpandRange, MixedFullColRow_ReturnsValue) {
+  // A whole-column endpoint paired with a whole-row endpoint has no bounded
+  // rectangle and degrades to #VALUE!.
+  Sheet sheet("Sheet1");
+  parser::Reference lhs = MakeLocalRef(0, 0);
+  lhs.is_full_col = true;
   parser::Reference rhs = MakeLocalRef(0, 0);
   rhs.is_full_row = true;
   auto result = ExpandRange(sheet, lhs, rhs);

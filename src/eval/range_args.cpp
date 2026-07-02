@@ -149,6 +149,35 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
     const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
+    // Multi-column (`A:C`) / multi-row (`1:3`) whole references parse as a
+    // RangeOp over two whole-column / whole-row Refs. `resolve_range_endpoint`
+    // deliberately rejects whole references (they have no bounded rectangle
+    // on their own), so route the pair straight to `expand_range`, which
+    // clamps the unbounded axis to the sheet's used range and reports the
+    // concrete shape.
+    if (lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref) {
+      const parser::Reference& lhs_ref = lhs_ast.as_ref();
+      const parser::Reference& rhs_ref = rhs_ast.as_ref();
+      const bool lhs_full = lhs_ref.is_full_col || lhs_ref.is_full_row;
+      const bool rhs_full = rhs_ref.is_full_col || rhs_ref.is_full_row;
+      if (lhs_full || rhs_full) {
+        std::uint32_t rows = 0;
+        std::uint32_t cols = 0;
+        auto expanded = ctx.expand_range(lhs_ref, rhs_ref, arena, registry, &rows, &cols);
+        if (!expanded) {
+          *out_err_code = expanded.error();
+          return false;
+        }
+        *out_cells = std::move(expanded.value());
+        if (out_rows != nullptr) {
+          *out_rows = rows;
+        }
+        if (out_cols != nullptr) {
+          *out_cols = cols;
+        }
+        return true;
+      }
+    }
     // Endpoints may be plain Refs or reference-producing calls
     // (`OFFSET(...)` / `INDIRECT(...)`). `resolve_range_endpoint`
     // normalises both shapes to a rectangle so we can union them and
@@ -207,11 +236,33 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     return true;
   }
   if (arg_node.kind() == parser::NodeKind::Ref) {
+    const parser::Reference& ref = arg_node.as_ref();
+    if (ref.is_full_col || ref.is_full_row) {
+      // Whole-column (`A:A`) / whole-row (`1:1`) reference: expand against
+      // the sheet's used range so range-aware consumers (SUM / COUNTIF /
+      // lookup / dynamic-array) see the populated cells. `expand_range`
+      // clamps the unbounded axis and reports the concrete shape.
+      std::uint32_t rows = 0;
+      std::uint32_t cols = 0;
+      auto expanded = ctx.expand_range(ref, ref, arena, registry, &rows, &cols);
+      if (!expanded) {
+        *out_err_code = expanded.error();
+        return false;
+      }
+      *out_cells = std::move(expanded.value());
+      if (out_rows != nullptr) {
+        *out_rows = rows;
+      }
+      if (out_cols != nullptr) {
+        *out_cols = cols;
+      }
+      return true;
+    }
     // Single-cell Ref: treat as a 1-element range so COUNTIF(A1, ">0") is
     // well-defined. Error / blank surface via `resolve_ref` as a Value and
     // are forwarded unchanged; the matcher handles them correctly.
     out_cells->clear();
-    out_cells->push_back(ctx.resolve_ref(arg_node.as_ref(), arena, registry));
+    out_cells->push_back(ctx.resolve_ref(ref, arena, registry));
     if (out_rows != nullptr) {
       *out_rows = 1U;
     }

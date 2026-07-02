@@ -227,7 +227,20 @@ Value Round(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!digits) {
     return Value::error(digits.error());
   }
-  const double factor = std::pow(10.0, digits.value());
+  // Clamp extreme `digits` the same way TRUNC does: beyond ~308 decimal
+  // places a double has no meaningful digits left, so rounding to (or
+  // away from) zero at that scale is indistinguishable from a no-op;
+  // below ~-308 every finite double rounds to the nearest multiple of
+  // 10^|digits|, which is always 0. Without this clamp, `10^digits`
+  // overflows to +-Inf and the function surfaces a spurious `#NUM!`.
+  const int d = digits.value();
+  if (d >= 308) {
+    return Value::number(value.value());
+  }
+  if (d <= -308) {
+    return Value::number(0.0);
+  }
+  const double factor = std::pow(10.0, d);
   if (std::isnan(factor) || std::isinf(factor)) {
     return Value::error(ErrorCode::Num);
   }
@@ -251,7 +264,16 @@ Value RoundDown(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!digits) {
     return Value::error(digits.error());
   }
-  const double factor = std::pow(10.0, digits.value());
+  // Same clamp as TRUNC (see Round() above for the rationale); ROUNDDOWN
+  // is TRUNC's "toward zero" rounding mode under a different name.
+  const int d = digits.value();
+  if (d >= 308) {
+    return Value::number(value.value());
+  }
+  if (d <= -308) {
+    return Value::number(0.0);
+  }
+  const double factor = std::pow(10.0, d);
   if (std::isnan(factor) || std::isinf(factor)) {
     return Value::error(ErrorCode::Num);
   }
@@ -274,7 +296,17 @@ Value RoundUp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!digits) {
     return Value::error(digits.error());
   }
-  const double factor = std::pow(10.0, digits.value());
+  // Same clamp as TRUNC (see Round() above for the rationale). At these
+  // extremes a double carries no meaningful digits past the clamp
+  // boundary, so "away from zero" and "no-op" / "zero" coincide.
+  const int d = digits.value();
+  if (d >= 308) {
+    return Value::number(value.value());
+  }
+  if (d <= -308) {
+    return Value::number(0.0);
+  }
+  const double factor = std::pow(10.0, d);
   if (std::isnan(factor) || std::isinf(factor)) {
     return Value::error(ErrorCode::Num);
   }

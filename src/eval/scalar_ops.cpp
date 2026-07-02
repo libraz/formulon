@@ -75,6 +75,17 @@ int compare_values(const Value& lhs, const Value& rhs, bool* out_unordered) {
     return 1;
   }
 
+  // Blank also chameleons to the boolean FALSE when compared against a Bool,
+  // so `A1=FALSE` is TRUE and `A1<TRUE` is TRUE for an unset A1. Without this
+  // arm the type-rank fallback below would place Blank (numeric tier) and
+  // Bool in different tiers and report every blank-vs-bool pair as unequal.
+  if (lk == ValueKind::Blank && rk == ValueKind::Bool) {
+    return rhs.as_boolean() ? -1 : 0;  // blank == FALSE; blank (FALSE) < TRUE.
+  }
+  if (rk == ValueKind::Blank && lk == ValueKind::Bool) {
+    return lhs.as_boolean() ? 1 : 0;
+  }
+
   const int lr = rank(lk);
   const int rr = rank(rk);
   if (lr != rr) {

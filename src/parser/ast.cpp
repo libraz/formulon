@@ -135,6 +135,32 @@ AstNode* make_ref3d(Arena& arena, std::string_view sheet_begin, std::string_view
   // always sheet-less.
   payload->cell.sheet = {};
   payload->cell.sheet_quoted = false;
+  payload->cell_end = payload->cell;
+  payload->is_range = false;
+  AstNode* n = arena.create<AstNode>();
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->kind_ = NodeKind::Ref3D;
+  n->data_.ref3d = payload;
+  return n;
+}
+
+AstNode* make_ref3d_range(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell,
+                          const Reference& cell_end) {
+  auto* payload = arena.create<AstNode::Ref3DPayload>();
+  if (payload == nullptr) {
+    return nullptr;
+  }
+  payload->sheet_begin = arena.intern(sheet_begin);
+  payload->sheet_end = arena.intern(sheet_end);
+  payload->cell = cell;
+  payload->cell.sheet = {};
+  payload->cell.sheet_quoted = false;
+  payload->cell_end = cell_end;
+  payload->cell_end.sheet = {};
+  payload->cell_end.sheet_quoted = false;
+  payload->is_range = true;
   AstNode* n = arena.create<AstNode>();
   if (n == nullptr) {
     return nullptr;
@@ -427,6 +453,16 @@ std::string_view AstNode::as_ref3d_sheet_end() const {
 const Reference& AstNode::as_ref3d_cell() const {
   FM_CHECK(kind_ == NodeKind::Ref3D, "AstNode::as_ref3d_cell on non-Ref3D");
   return data_.ref3d->cell;
+}
+
+const Reference& AstNode::as_ref3d_cell_end() const {
+  FM_CHECK(kind_ == NodeKind::Ref3D, "AstNode::as_ref3d_cell_end on non-Ref3D");
+  return data_.ref3d->cell_end;
+}
+
+bool AstNode::as_ref3d_is_range() const {
+  FM_CHECK(kind_ == NodeKind::Ref3D, "AstNode::as_ref3d_is_range on non-Ref3D");
+  return data_.ref3d->is_range;
 }
 
 std::string_view AstNode::as_structured_ref_table() const {

@@ -177,18 +177,49 @@ TEST(ImplicitIntersection, SingleRowAlignedColumn) {
   EXPECT_EQ(v.as_number(), 30.0);
 }
 
-TEST(ImplicitIntersection, TwoDReturnsValue) {
-  // 2D range with implicit intersection -- conservative #VALUE!.
+TEST(ImplicitIntersection, TwoDColumnOutsideReturnsValue) {
+  // 2D range: the formula column falls outside the range's column span, so
+  // the row/column intersection is empty -> #VALUE!.
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(11.0));
   wb.sheet(0).set_cell_value(0, 1, Value::number(12.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(21.0));
   wb.sheet(0).set_cell_value(1, 1, Value::number(22.0));
-  // Z3 -> row=2, col=25; range spans rows 0..4 cols 0..1, neither axis
-  // aligns under our conservative 2D rule.
+  // Z3 -> row=2, col=25; range spans rows 0..4 cols 0..1: column 25 is
+  // outside the column span.
   const Value v = EvalSourceAt("=@A1:B5", wb, wb.sheet(0), 2U, 25U);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(ImplicitIntersection, TwoDAlignedReturnsIntersectionCell) {
+  // 2D range where the formula cell falls inside both the row and column
+  // spans: the result is the single cell at (formula_row, formula_col).
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(22.0));  // B2 (row=1, col=1)
+  // Formula at B2 -> row=1, col=1; inside rows 0..4 and cols 0..1 -> B2.
+  const Value v = EvalSourceAt("=@A1:B5", wb, wb.sheet(0), 1U, 1U);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 22.0);
+}
+
+TEST(ImplicitIntersection, AtBindsTighterThanMultiply) {
+  // `=@D3:D5*2` binds `@` to the range first, then multiplies the
+  // intersected scalar. Formula at D4 (row 3) -> D4=20 -> 40.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(2, 3, Value::number(10.0));  // D3
+  wb.sheet(0).set_cell_value(3, 3, Value::number(20.0));  // D4
+  wb.sheet(0).set_cell_value(4, 3, Value::number(30.0));  // D5
+  const Value in_row = EvalSourceAt("=@D3:D5*2", wb, wb.sheet(0), 3U, 3U);
+  ASSERT_TRUE(in_row.is_number());
+  EXPECT_EQ(in_row.as_number(), 40.0);
+  // Formula outside the range's rows -> #VALUE! (propagates through `*`).
+  const Value out_row = EvalSourceAt("=@D3:D5*2", wb, wb.sheet(0), 0U, 3U);
+  ASSERT_TRUE(out_row.is_error());
+  EXPECT_EQ(out_row.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------

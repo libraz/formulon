@@ -476,6 +476,99 @@ TEST(BuiltinsCountIfDispatch, AllThreeGoThroughLazyPath) {
   EXPECT_EQ(default_registry().lookup("AVERAGEIF"), nullptr);
 }
 
+// ---------------------------------------------------------------------------
+// Text ordering criteria: type separation. A text criterion with an ordering
+// operator compares only Text cells; Number and Bool cells never match.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsCountIf, TextOrderingGreaterMatchesTextCellsOnly) {
+  // Over {6 (number), "5y" (text), TRUE (bool)}, ">5x" matches only the text
+  // cell "5y": the number 6 and the bool TRUE are different Excel types and
+  // do not participate in the text ordering comparison.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(6.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("5y"));
+  wb.sheet(0).set_cell_value(2, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=COUNTIF(A1:A3, \">5x\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsCountIf, TextOrderingLessMatchesNoNumberCells) {
+  // "<5x" over the same range matches nothing: the number 6 does NOT count
+  // as "less than" a text criterion (type separation, not a number<text
+  // ordering), and the text "5y" is not < "5x".
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(6.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("5y"));
+  wb.sheet(0).set_cell_value(2, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=COUNTIF(A1:A3, \"<5x\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsCountIf, NumericOrderingMatchesNumberCellsOnly) {
+  // A numeric ordering criterion still compares only number cells: ">5" over
+  // {6, "5y", TRUE} matches the single number 6.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(6.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("5y"));
+  wb.sheet(0).set_cell_value(2, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=COUNTIF(A1:A3, \">5\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+// ---------------------------------------------------------------------------
+// Numeric Eq / NotEq are intentionally NOT complements: a text cell whose
+// string coerces to the criterion number satisfies both "=N" and "<>N".
+// These lock the Mac Excel 365 behaviour so it cannot silently drift.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsCountIf, NumericEqMatchesNumberAndCoercibleText) {
+  // Over {23 (number), "23" (text), "abc" (text), TRUE (bool)}, "=23" matches
+  // the number 23 and the coercible text "23".
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(23.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("23"));
+  wb.sheet(0).set_cell_value(2, 0, Value::text("abc"));
+  wb.sheet(0).set_cell_value(3, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=COUNTIF(A1:A4, \"=23\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountIf, NumericNotEqMatchesEveryNonMatchingNumberAndAllNonNumbers) {
+  // "<>23" over the same range matches all non-number cells (text "23",
+  // text "abc", bool TRUE) and excludes only the number 23 itself. Note the
+  // text "23" satisfies BOTH "=23" and "<>23" — Excel is asymmetric here.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(23.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("23"));
+  wb.sheet(0).set_cell_value(2, 0, Value::text("abc"));
+  wb.sheet(0).set_cell_value(3, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=COUNTIF(A1:A4, \"<>23\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+// ---------------------------------------------------------------------------
+// Locale-aware numeric criteria (thousands grouping) shared with VALUE().
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsCountIf, ThousandsGroupedNumericCriterion) {
+  // ">1,000" parses as the number 1000, so 999 does not match and 1001 does.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(999.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(1001.0));
+  const Value count = EvalSourceIn("=COUNTIF(A1:A2, \">1,000\")", wb, wb.sheet(0));
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 1.0);
+  const Value sum = EvalSourceIn("=SUMIF(A1:A2, \">1,000\")", wb, wb.sheet(0));
+  ASSERT_TRUE(sum.is_number());
+  EXPECT_DOUBLE_EQ(sum.as_number(), 1001.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

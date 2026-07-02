@@ -183,7 +183,10 @@ TEST(ArrayProducer, RangePlusRangeMatchingShapes) {
   EXPECT_EQ(Value::number(33.0), v.as_array_cells()[2]);
 }
 
-TEST(ArrayProducer, RangePlusRangeMismatchedShapesIsScalarValueError) {
+TEST(ArrayProducer, RangePlusRangeMismatchedShapesPadsWithNA) {
+  // 3x1 + 5x1: the row axis mismatches (both > 1), so Excel 365 broadcasting
+  // extends to 5 rows and fills the two shortfall cells with #N/A. Rows 0-2
+  // are the element sums (1+10, 2+11, 3+12); rows 3-4 are #N/A.
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
@@ -193,8 +196,17 @@ TEST(ArrayProducer, RangePlusRangeMismatchedShapesIsScalarValueError) {
   }
   EvalHarness h;
   const Value v = RunArrayCtx(&h, "=A1:A3+B1:B5", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(ErrorCode::Value, v.as_error());
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(5U, v.as_array_rows());
+  EXPECT_EQ(1U, v.as_array_cols());
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(11.0, cells[0].as_number());
+  EXPECT_DOUBLE_EQ(13.0, cells[1].as_number());
+  EXPECT_DOUBLE_EQ(15.0, cells[2].as_number());
+  ASSERT_TRUE(cells[3].is_error());
+  EXPECT_EQ(ErrorCode::NA, cells[3].as_error());
+  ASSERT_TRUE(cells[4].is_error());
+  EXPECT_EQ(ErrorCode::NA, cells[4].as_error());
 }
 
 TEST(ArrayProducer, UnaryNegationCellwise) {

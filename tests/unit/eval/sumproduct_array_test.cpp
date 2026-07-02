@@ -169,12 +169,14 @@ TEST(SumproductArray, CellwiseErrorPropagation) {
 }
 
 // ---------------------------------------------------------------------------
-// Shape mismatch inside a BinaryOp surfaces #VALUE! verbatim (scalar).
+// Shape mismatch inside a BinaryOp pads with #N/A, which SUMPRODUCT propagates.
 // ---------------------------------------------------------------------------
 
 TEST(SumproductArray, ShapeMismatchInsideBinaryOp) {
-  // (A1:A3>2) is 3x1; (B1:B5<10) is 5x1; the broadcaster cannot reconcile
-  // them and short-circuits to #VALUE! before SUMPRODUCT itself runs.
+  // (A1:A3>2) is 3x1; (B1:B5<10) is 5x1. Excel 365 broadcasting extends the
+  // mismatched (non-1) row axis to 5 and fills the two shortfall cells with
+  // #N/A; SUMPRODUCT then propagates the #N/A. (Prior to the general-broadcast
+  // fix the engine short-circuited the whole product to #VALUE!.)
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
   for (std::uint32_t r = 0; r < 3; ++r) {
@@ -185,7 +187,7 @@ TEST(SumproductArray, ShapeMismatchInsideBinaryOp) {
   }
   const Value v = EvalSourceIn("=SUMPRODUCT((A1:A3>2)*(B1:B5<10))", wb, s);
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
 // ---------------------------------------------------------------------------

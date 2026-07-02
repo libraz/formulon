@@ -59,12 +59,17 @@ enum class FormatStatus : int {
 /// non-owning `std::string_view` for `original_text`. The format string is
 /// interpreted as UTF-8 bytes; quoted literal text and non-token bytes are
 /// copied verbatim.
-FormatStatus apply_format(double value, std::string_view format, std::string_view original_text, std::string& out);
+/// `date1904` selects the workbook date epoch for date/time tokens (the
+/// serial->calendar conversion shifts by 1462 days under the 1904 system).
+/// Callers that render a value from a date1904 workbook (the TEXT builtin)
+/// must pass the workbook flag; the pure-numeric callers leave it false.
+FormatStatus apply_format(double value, std::string_view format, std::string_view original_text, std::string& out,
+                          bool date1904 = false);
 
 /// Convenience overload for the pure-numeric path. Equivalent to
-/// `apply_format(value, format, {}, out)`.
-inline FormatStatus apply_format(double value, std::string_view format, std::string& out) {
-  return apply_format(value, format, std::string_view{}, out);
+/// `apply_format(value, format, {}, out, date1904)`.
+inline FormatStatus apply_format(double value, std::string_view format, std::string& out, bool date1904 = false) {
+  return apply_format(value, format, std::string_view{}, out, date1904);
 }
 
 }  // namespace text_format

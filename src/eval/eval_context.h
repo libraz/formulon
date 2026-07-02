@@ -42,6 +42,7 @@ namespace eval {
 class EvalState;
 class FunctionRegistry;
 class NameEnv;
+struct DefinedNameFrame;
 
 /// Evaluator-side view of the data a formula needs to resolve cell
 /// references.
@@ -181,6 +182,20 @@ class EvalContext {
   ///   * Qualified but no workbook bound → `#REF!`.
   ///   * Qualified but sheet not found in workbook → `#REF!`.
   ///
+  /// Whole-column / whole-row endpoints (`A:A`, `A:C`, `1:1`, `1:3`) are
+  /// expanded against the target sheet's used range: the unbounded axis is
+  /// clamped to the sheet's populated extent, and the bounded axis keeps
+  /// its natural origin (row 0 for a column, column 0 for a row) so
+  /// positional consumers (INDEX / VLOOKUP offsets) see the reference's
+  /// true top-left. A sheet with no content in range yields an empty
+  /// vector. Only same-axis whole references compose; a mixed
+  /// whole-column / whole-row pair degrades to `#VALUE!`.
+  ///
+  /// When non-null, `out_rows` / `out_cols` receive the concrete expanded
+  /// shape (both `0` for an empty whole-reference expansion). They are the
+  /// only reliable source of shape for whole-reference inputs, whose
+  /// clamped dimensions cannot be recovered from the endpoint `Reference`s.
+  ///
   /// Short-circuit error mapping (first match wins):
   ///
   /// | Condition                                                 | Result   |
@@ -189,11 +204,13 @@ class EvalContext {
   /// | Mismatched cross-sheet endpoints                          | `#REF!`  |
   /// | Qualified ref with no workbook bound                      | `#REF!`  |
   /// | Qualified ref whose target sheet is missing               | `#REF!`  |
-  /// | Either endpoint has `is_full_col` or `is_full_row`        | `#VALUE!`|
+  /// | Mixed whole-column / whole-row endpoints                  | `#VALUE!`|
   /// | Either endpoint has row/col >= `Sheet::kMax*`             | `#REF!`  |
   /// | Otherwise                                                 | vector   |
   Expected<std::vector<Value>, ErrorCode> expand_range(const parser::Reference& lhs, const parser::Reference& rhs,
-                                                       Arena& arena, const FunctionRegistry& registry) const;
+                                                       Arena& arena, const FunctionRegistry& registry,
+                                                       std::uint32_t* out_rows = nullptr,
+                                                       std::uint32_t* out_cols = nullptr) const;
 
   /// Returns the sheet this context is bound to, or `nullptr` when the
   /// context was default-constructed.
@@ -223,6 +240,22 @@ class EvalContext {
   EvalContext with_excel_profile(ExcelProfile profile) const noexcept {
     EvalContext copy = *this;
     copy.excel_profile_ = profile;
+    return copy;
+  }
+
+  /// True when the bound workbook uses the 1904 date system. Date-aware
+  /// evaluators that decompose or compose serials (see
+  /// `eval::date_time::serial_from_ymd` / `ymd_from_serial`) must thread
+  /// this through so 1904-system workbooks do not shift every date by the
+  /// 1462-day epoch gap. Defaults to false (1900 system) for the unbound
+  /// and sheet-only context shapes. Sourced from `Workbook::date1904()`
+  /// via `with_date1904` at the cell-evaluator boundary.
+  bool date1904() const noexcept { return date1904_; }
+
+  /// Returns a copy of `*this` carrying the 1904-date-system flag.
+  EvalContext with_date1904(bool value) const noexcept {
+    EvalContext copy = *this;
+    copy.date1904_ = value;
     return copy;
   }
 
@@ -261,6 +294,22 @@ class EvalContext {
   EvalContext with_name_env(const NameEnv* env) const noexcept {
     EvalContext copy = *this;
     copy.name_env_ = env;
+    return copy;
+  }
+
+  /// Returns the head of the defined-name expansion chain, or `nullptr` when
+  /// no defined name is currently being resolved. The chain is walked by
+  /// `resolve_defined_name` (see `defined_name_resolve.h`) to break circular
+  /// definitions (`Loop = Loop + 1`) without overflowing the native stack.
+  const DefinedNameFrame* defined_name_stack() const noexcept { return defined_name_stack_; }
+
+  /// Returns a copy of `*this` whose `defined_name_stack()` head is `frame`.
+  /// `resolve_defined_name` layers one frame per active name expansion; the
+  /// frame lives on the resolver's call stack and must outlive every
+  /// evaluator call that observes the returned context.
+  EvalContext with_defined_name_frame(const DefinedNameFrame* frame) const noexcept {
+    EvalContext copy = *this;
+    copy.defined_name_stack_ = frame;
     return copy;
   }
 
@@ -378,7 +427,16 @@ class EvalContext {
   EvalState* state_ = nullptr;
   const Workbook* workbook_ = nullptr;
   const NameEnv* name_env_ = nullptr;
+  // Head of the intrusive defined-name expansion chain (see
+  // `defined_name_resolve.h`). Null at top level; each active name resolution
+  // links one frame on so circular definitions are detected instead of
+  // recursing without bound.
+  const DefinedNameFrame* defined_name_stack_ = nullptr;
   ExcelProfile excel_profile_ = default_excel_profile();
+  // 1904 date-system flag, sourced from `Workbook::date1904()`. Threaded
+  // to date-aware evaluators so serial <-> calendar conversions pick the
+  // correct epoch. Defaults to the 1900 system.
+  bool date1904_ = false;
   // Spill-write authority for the current `evaluate()` call. Decoupled from
   // `current_sheet_` so that ad-hoc / read-only contexts (CLI eval, tests
   // that only resolve refs) cannot accidentally mutate the sheet.

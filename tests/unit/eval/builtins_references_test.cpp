@@ -359,22 +359,36 @@ TEST(BuiltinsIndirect, ErrorTextPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
-// Full-column / full-row INDIRECT shapes. In scalar context these still
-// surface as #REF! (matching Mac Excel 365 observed behaviour; the
-// rectangle does not reduce to a scalar). The ROW / COLUMN family below
-// exercises the rectangle-aware path.
-TEST(BuiltinsIndirect, FullColumnTextIsRefError) {
+// Full-column / full-row INDIRECT shapes expand against the sheet's used
+// range: aggregating one via SUM sees the populated cells, and an empty
+// column collapses to a blank scalar (no cells to spill). The ROW / COLUMN
+// family below exercises the rectangle-aware metadata path.
+TEST(BuiltinsIndirect, FullColumnTextExpandsInSum) {
   Workbook wb = Workbook::create();
-  const Value v = EvalSourceIn("=INDIRECT(\"D:D\")", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  wb.sheet(0).set_cell_value(0, 3, Value::number(4.0));  // D1
+  wb.sheet(0).set_cell_value(1, 3, Value::number(5.0));  // D2
+  const Value v = EvalSourceIn("=SUM(INDIRECT(\"D:D\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 9.0);
 }
 
-TEST(BuiltinsIndirect, FullRowTextIsRefError) {
+TEST(BuiltinsIndirect, FullColumnTextEmptyResolvesToZero) {
+  // An empty column has no cells to spill; the expansion collapses to a
+  // blank scalar, which the top-level resolves to 0 exactly like a bare
+  // reference to an empty cell (`=Z1`).
   Workbook wb = Workbook::create();
-  const Value v = EvalSourceIn("=INDIRECT(\"5:5\")", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+  const Value v = EvalSourceIn("=INDIRECT(\"D:D\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsIndirect, FullRowTextExpandsInSum) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(4, 0, Value::number(1.0));  // A5
+  wb.sheet(0).set_cell_value(4, 2, Value::number(2.0));  // C5
+  const Value v = EvalSourceIn("=SUM(INDIRECT(\"5:5\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
 TEST(BuiltinsIndirectFullColRow, RowOfFullColumn) {

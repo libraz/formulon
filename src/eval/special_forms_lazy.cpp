@@ -9,6 +9,7 @@
 #include "eval/special_forms_lazy.h"
 
 #include <cstdint>
+#include <iterator>
 #include <string_view>
 #include <vector>
 
@@ -50,6 +51,105 @@ LogicalCoerce logical_coerce_for_host(const Value& v, const EvalContext& ctx, bo
   return LogicalCoerce::Error;
 }
 
+// Provenance bucket for a lazy-aggregate argument (COUNT / AND / OR).
+// Excel's rules are provenance-sensitive: values arriving from a range,
+// spill, array constant, or dynamic-array producer are treated differently
+// from a direct scalar argument.
+enum class LazyArgShape : std::uint8_t { Range, Scalar };
+
+// Classification of a single COUNT / AND / OR argument. `cells` is populated
+// for `Range` shape (row-major); `scalar` for `Scalar` shape (which may hold
+// an error Value the caller decides to skip or propagate). `range_failed`
+// flags a range resolution that surfaced an Excel error (`#REF!`, ...).
+struct LazyAggArg {
+  LazyArgShape shape = LazyArgShape::Scalar;
+  std::vector<Value> cells;
+  Value scalar = Value::blank();
+  bool range_failed = false;
+  ErrorCode range_error = ErrorCode::Value;
+};
+
+// Resolves a COUNT / AND / OR argument to its provenance bucket, unifying
+// the range-argument gate across the family. LET `NameRef` bindings are
+// looked through to their range-shaped source AST; `RangeOp` / single-cell
+// `Ref` / `SpillRef` route through the shared `resolve_range_arg`; an array
+// constant `{...}` is expanded element-wise (`eval_node` alone surfaces
+// `#VALUE!` for a bare ArrayLiteral); and any other subtree is evaluated
+// once so a dynamic-array producer (`SEQUENCE`, `FILTER`, `MUNIT`, a lambda
+// helper, ...) carries range provenance while a plain scalar keeps
+// direct-argument provenance.
+LazyAggArg resolve_lazy_agg_arg(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx) {
+  LazyAggArg out;
+  const parser::AstNode* effective = &raw_arg;
+  if (raw_arg.kind() == parser::NodeKind::NameRef) {
+    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
+    if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
+      effective = &resolved;
+    }
+  }
+  const parser::NodeKind kind = effective->kind();
+  if (kind == parser::NodeKind::RangeOp || kind == parser::NodeKind::Ref || kind == parser::NodeKind::SpillRef) {
+    out.shape = LazyArgShape::Range;
+    auto resolved = resolve_range_arg(*effective, arena, registry, ctx);
+    if (!resolved) {
+      out.range_failed = true;
+      out.range_error = resolved.error();
+      return out;
+    }
+    out.cells = std::move(resolved.value().cells);
+    return out;
+  }
+  if (kind == parser::NodeKind::ArrayLiteral) {
+    out.shape = LazyArgShape::Range;
+    const std::uint32_t rows = effective->as_array_rows();
+    const std::uint32_t cols = effective->as_array_cols();
+    out.cells.reserve(static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols));
+    for (std::uint32_t r = 0; r < rows; ++r) {
+      for (std::uint32_t c = 0; c < cols; ++c) {
+        out.cells.push_back(eval_node(effective->as_array_element(r, c), arena, registry, ctx));
+      }
+    }
+    return out;
+  }
+  if (kind == parser::NodeKind::UnionOp) {
+    // A reference union `(A1:A2, B1:B2)` concatenates each area in order
+    // WITHOUT de-duplication, so an overlapping area is counted twice
+    // (`COUNT((A1:A2, A1:A2))` doubles). Mirrors the eager dispatcher's union
+    // handling: a failed area contributes a single error cell, which COUNT
+    // skips (`propagate_errors = false`) and AND / OR propagate.
+    out.shape = LazyArgShape::Range;
+    const std::uint32_t area_count = effective->as_union_arity();
+    for (std::uint32_t area = 0; area < area_count; ++area) {
+      auto resolved = resolve_range_arg(effective->as_union_child(area), arena, registry, ctx);
+      if (!resolved) {
+        out.cells.push_back(Value::error(resolved.error()));
+        continue;
+      }
+      std::vector<Value>& area_cells = resolved.value().cells;
+      out.cells.insert(out.cells.end(), std::make_move_iterator(area_cells.begin()),
+                       std::make_move_iterator(area_cells.end()));
+    }
+    return out;
+  }
+  const Value v = eval_node(*effective, arena, registry, ctx);
+  if (v.is_array()) {
+    out.shape = LazyArgShape::Range;
+    const std::uint32_t rows = v.as_array_rows();
+    const std::uint32_t cols = v.as_array_cols();
+    const Value* src = v.as_array_cells();
+    const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+    out.cells.reserve(total);
+    for (std::size_t i = 0; i < total; ++i) {
+      out.cells.push_back(src[i]);
+    }
+    return out;
+  }
+  out.shape = LazyArgShape::Scalar;
+  out.scalar = v;
+  return out;
+}
+
 Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx, bool is_and) {
   const std::uint32_t arity = call.as_call_arity();
@@ -59,42 +159,51 @@ Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const Function
   bool result = is_and;
   bool any_value = false;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode& arg = call.as_call_arg(i);
-    std::vector<Value> range_cells;
-    const bool range_arg = arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::RangeOp;
-    if (range_arg) {
-      auto resolved = resolve_range_arg(arg, arena, registry, ctx);
-      if (!resolved) {
-        return Value::error(resolved.error());
+    LazyAggArg resolved = resolve_lazy_agg_arg(call.as_call_arg(i), arena, registry, ctx);
+    if (resolved.shape == LazyArgShape::Range) {
+      if (resolved.range_failed) {
+        return Value::error(resolved.range_error);
       }
-      range_cells = std::move(resolved.value().cells);
+      for (const Value& v : resolved.cells) {
+        if (v.is_error()) {
+          return v;
+        }
+        // Text / Blank cells arriving from a range or array are skipped
+        // rather than coerced (Excel's range-provenance rule).
+        if (v.is_text() || v.is_blank()) {
+          continue;
+        }
+        bool coerced = false;
+        ErrorCode err = ErrorCode::Value;
+        const LogicalCoerce lc = logical_coerce_for_host(v, ctx, &coerced, &err);
+        if (lc == LogicalCoerce::Error) {
+          return Value::error(err);
+        }
+        if (lc == LogicalCoerce::Skip) {
+          continue;
+        }
+        any_value = true;
+        result = is_and ? (result && coerced) : (result || coerced);
+      }
+      continue;
     }
-
-    const std::size_t n = range_arg ? range_cells.size() : 1U;
-    for (std::size_t j = 0; j < n; ++j) {
-      const Value v = range_arg ? range_cells[j] : eval_node(arg, arena, registry, ctx);
-      if (v.is_error()) {
-        return v;
-      }
-      if (range_arg && (v.is_text() || v.is_blank())) {
-        continue;
-      }
-      bool coerced = false;
-      ErrorCode err = ErrorCode::Value;
-      const LogicalCoerce lc = logical_coerce_for_host(v, ctx, &coerced, &err);
-      if (lc == LogicalCoerce::Error) {
-        return Value::error(err);
-      }
-      if (lc == LogicalCoerce::Skip) {
-        continue;
-      }
-      any_value = true;
-      if (is_and) {
-        result = result && coerced;
-      } else {
-        result = result || coerced;
-      }
+    // Direct scalar argument: coerce with the host-aware strict rule so
+    // "TRUE" / "FALSE" text carries a bool and other text surfaces #VALUE!.
+    const Value& v = resolved.scalar;
+    if (v.is_error()) {
+      return v;
     }
+    bool coerced = false;
+    ErrorCode err = ErrorCode::Value;
+    const LogicalCoerce lc = logical_coerce_for_host(v, ctx, &coerced, &err);
+    if (lc == LogicalCoerce::Error) {
+      return Value::error(err);
+    }
+    if (lc == LogicalCoerce::Skip) {
+      continue;
+    }
+    any_value = true;
+    result = is_and ? (result && coerced) : (result || coerced);
   }
   if (!any_value) {
     return Value::error(ErrorCode::Value);
@@ -202,60 +311,31 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   double total = 0.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode& raw_arg = call.as_call_arg(i);
-    // LET-binding passthrough: a `=LET(r, A1:A3, COUNT(r))` binding hands
-    // us a NameRef whose resolved AST is the original RangeOp, and Excel
-    // counts it with range-provenance semantics (Bool / Text / Blank
-    // skipped). Without this lookup the NameRef would fall through to the
-    // scalar path and collapse to the spill anchor.
-    const parser::AstNode* effective = &raw_arg;
-    if (raw_arg.kind() == parser::NodeKind::NameRef) {
-      const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-      if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
-        effective = &resolved;
-      }
-    }
-    const parser::AstNode& arg_node = *effective;
-    if (arg_node.kind() == parser::NodeKind::RangeOp) {
-      // Range argument: count only Number cells; Bool / Text / Blank /
-      // Error are skipped. Only literal A1:B2 rectangles are expanded, to
-      // mirror the eager dispatcher; anything else degrades to #REF! here.
-      const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
-      const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
-      if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+    LazyAggArg resolved = resolve_lazy_agg_arg(call.as_call_arg(i), arena, registry, ctx);
+    if (resolved.shape == LazyArgShape::Range) {
+      // Range / array / spill provenance: only Number cells count. Bool /
+      // Text / Blank / Error are skipped, and a resolution failure (#REF!)
+      // is silently ignored (COUNT is registered `propagate_errors=false`).
+      if (resolved.range_failed) {
         continue;
       }
-      auto expanded = ctx.expand_range(lhs_ast.as_ref(), rhs_ast.as_ref(), arena, registry);
-      if (!expanded) {
-        continue;
-      }
-      for (const Value& v : expanded.value()) {
+      for (const Value& v : resolved.cells) {
         if (v.is_number()) {
           total += 1.0;
         }
       }
       continue;
     }
-    if (arg_node.kind() == parser::NodeKind::Ref) {
-      // Single-cell Ref: match range semantics -- only a Number in the
-      // referenced cell counts. Bool / Text / Blank / Error skip.
-      const Value v = eval_node(arg_node, arena, registry, ctx);
-      if (v.is_number()) {
-        total += 1.0;
-      }
-      continue;
-    }
     // Direct (literal / expression) argument: Number and Bool count, and
-    // Text counts when it parses as a finite number. Blank / Error /
-    // Array / Lambda are skipped.
-    const Value v = eval_node(arg_node, arena, registry, ctx);
+    // Text counts when it parses as a finite number. Blank / Error / Lambda
+    // are skipped.
+    const Value& v = resolved.scalar;
     if (v.is_number() || v.is_boolean()) {
       total += 1.0;
       continue;
     }
     if (v.is_text()) {
-      auto as_num = coerce_to_number(v);
-      if (as_num) {
+      if (coerce_to_number(v)) {
         total += 1.0;
       }
     }
@@ -279,9 +359,13 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
 //     Excel 365 rule that distinguishes IFS from IF.
 //   * Blank is treated as FALSE (IFS walks past blank conditions rather
 //     than rejecting them).
-//   * Empty / whitespace-only text is also treated as FALSE, matching the
-//     AND-family "Skip" path (IFS collapses Skip to the false branch so
-//     `IFS("", 1, TRUE, 2)` hits the catchall instead of erroring).
+//   * Empty text is also treated as FALSE, matching the AND-family "Skip"
+//     path (IFS collapses Skip to the false branch so `IFS("", 1, TRUE, 2)`
+//     hits the catchall instead of erroring).
+//
+// The coercion uses the host-aware `logical_coerce_for_host`, the same seam
+// AND / OR route through, so a text condition is judged consistently with
+// the rest of the logical family under the active Excel profile.
 Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -298,7 +382,7 @@ Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     }
     bool truth = false;
     ErrorCode err = ErrorCode::Value;
-    const LogicalCoerce lc = logical_coerce(cond, &truth, &err);
+    const LogicalCoerce lc = logical_coerce_for_host(cond, ctx, &truth, &err);
     if (lc == LogicalCoerce::Error) {
       return Value::error(err);
     }
@@ -319,11 +403,22 @@ Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   return Value::error(ErrorCode::NA);
 }
 
-// Equality test for SWITCH: matches the `=` operator's semantics for the
-// scalar types SWITCH actually consumes. Text comparison is ASCII
-// case-insensitive (Excel-canonical). Cross-type pairs never match -- this
-// is NOT an error, just "not equal", so the caller keeps walking cases.
+// Equality test for SWITCH. This is type-strict and deliberately NOT the
+// `=` operator: text comparison is ASCII case-insensitive, cross-type pairs
+// never match, and there is no numeric<->text coercion (SWITCH(23, "23")
+// and SWITCH("23", 23) both miss). The one Excel special case is that a
+// blank subject matches a numeric 0 case -- but NOT "" and NOT FALSE, which
+// is where SWITCH diverges from the `=` operator (where blank="" is TRUE).
 bool switch_equal(const Value& lhs, const Value& rhs) {
+  // Blank subject / case: matches a numeric 0 only. `switch_equal` is called
+  // as switch_equal(subject, case), but the rule is symmetric here so both
+  // orders are handled for safety.
+  if (lhs.kind() == ValueKind::Blank && rhs.kind() == ValueKind::Number) {
+    return rhs.as_number() == 0.0;
+  }
+  if (rhs.kind() == ValueKind::Blank && lhs.kind() == ValueKind::Number) {
+    return lhs.as_number() == 0.0;
+  }
   if (lhs.kind() != rhs.kind()) {
     return false;
   }

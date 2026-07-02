@@ -351,6 +351,92 @@ TEST(EvalContextCrossSheetRange, CrossSheetSumWorks) {
   EXPECT_EQ(v.as_number(), 6.0);
 }
 
+TEST(EvalContextCrossSheetRange, ThreeDRangeTailAggregatesAcrossSheets) {
+  // `=SUM(Sheet1:Sheet3!A1:B2)` sums the A1:B2 rectangle on every sheet in
+  // the Sheet1..Sheet3 span. Sheet1: A1="k1" (text), B1=10, B2=20; Sheet3:
+  // A1=7. SUM ignores the text -> 30 + 7 = 37. COUNTA counts the 4 non-blank
+  // cells (k1, 10, 20 on Sheet1; 7 on Sheet3).
+  Workbook wb = MakeTwoSheetWorkbook();  // Sheet1, Sheet2
+  wb.add_sheet("Sheet3");
+  wb.sheet(0).set_cell_value(0, 0, Value::text("k1"));    // Sheet1!A1
+  wb.sheet(0).set_cell_value(0, 1, Value::number(10.0));  // Sheet1!B1
+  wb.sheet(0).set_cell_value(1, 1, Value::number(20.0));  // Sheet1!B2
+  wb.sheet(2).set_cell_value(0, 0, Value::number(7.0));   // Sheet3!A1
+
+  EvalState state;
+  Arena arena;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+
+  parser::Parser sum_parser("=SUM(Sheet1:Sheet3!A1:B2)", arena);
+  parser::AstNode* sum_root = sum_parser.parse();
+  ASSERT_NE(sum_root, nullptr);
+  const Value sum_v = evaluate(*sum_root, arena, default_registry(), ctx);
+  ASSERT_TRUE(sum_v.is_number());
+  EXPECT_EQ(sum_v.as_number(), 37.0);
+
+  parser::Parser cnt_parser("=COUNTA(Sheet1:Sheet3!A1:B2)", arena);
+  parser::AstNode* cnt_root = cnt_parser.parse();
+  ASSERT_NE(cnt_root, nullptr);
+  const Value cnt_v = evaluate(*cnt_root, arena, default_registry(), ctx);
+  ASSERT_TRUE(cnt_v.is_number());
+  EXPECT_EQ(cnt_v.as_number(), 4.0);
+}
+
+TEST(EvalContextCrossSheetRange, ThreeDRangeTailSpanIncludesIntermediateSheets) {
+  // The sheet span is by workbook order, so a sheet sitting between the
+  // named endpoints contributes. Sheet1!A1=1, Sheet2!A1=100 (intermediate),
+  // Sheet3!A1=3 → SUM(Sheet1:Sheet3!A1) = 104. Recomputing after clearing
+  // the intermediate's value drops it back to 4, proving the middle sheet
+  // participates in the span.
+  Workbook wb = MakeTwoSheetWorkbook();  // Sheet1, Sheet2
+  wb.add_sheet("Sheet3");
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));    // Sheet1!A1
+  wb.sheet(1).set_cell_value(0, 0, Value::number(100.0));  // Sheet2!A1 (middle)
+  wb.sheet(2).set_cell_value(0, 0, Value::number(3.0));    // Sheet3!A1
+
+  {
+    EvalState state;
+    Arena arena;
+    parser::Parser p("=SUM(Sheet1:Sheet3!A1)", arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    const EvalContext ctx(wb, wb.sheet(0), state);
+    const Value v = evaluate(*root, arena, default_registry(), ctx);
+    ASSERT_TRUE(v.is_number());
+    EXPECT_EQ(v.as_number(), 104.0);
+  }
+
+  wb.sheet(1).set_cell_value(0, 0, Value::blank());  // clear the intermediate
+  {
+    EvalState state;
+    Arena arena;
+    parser::Parser p("=SUM(Sheet1:Sheet3!A1)", arena);
+    parser::AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr);
+    const EvalContext ctx(wb, wb.sheet(0), state);
+    const Value v = evaluate(*root, arena, default_registry(), ctx);
+    ASSERT_TRUE(v.is_number());
+    EXPECT_EQ(v.as_number(), 4.0);
+  }
+}
+
+TEST(EvalContextCrossSheetRange, ThreeDRangeTailUnaryIsValueError) {
+  // A 3-D range used as a bare (non-aggregated) scalar surfaces #VALUE! —
+  // Excel does not spill it.
+  Workbook wb = MakeTwoSheetWorkbook();
+  wb.add_sheet("Sheet3");
+  wb.sheet(0).set_cell_value(0, 0, Value::number(5.0));
+  EvalState state;
+  Arena arena;
+  parser::Parser p("=Sheet1:Sheet3!A1:B2", arena);
+  parser::AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = evaluate(*root, arena, default_registry(), ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(EvalContextCrossSheetRange, CrossSheetCycleViaRangeReturnsRef) {
   // Sheet1!A1 = =SUM(Sheet2!A1); Sheet2!A1 = =Sheet1!A1. Resolving
   // Sheet1!A1 must surface #REF! via the cross-sheet cycle detection in

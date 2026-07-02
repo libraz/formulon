@@ -23,6 +23,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -334,11 +335,15 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
           target.row = r1;
           target.col = fc;
         } else {
-          // 2D range: implicit intersection requires both axes to align,
-          // and Excel returns #VALUE! when the formula cell isn't covered
-          // by both spans. Verified Mac behavior pending; conservative
-          // default for now.
-          return Value::error(ErrorCode::Value);
+          // 2D range: Excel intersects the range with the formula cell's row
+          // AND column. When the formula cell falls inside both spans the
+          // result is the single cell at (formula_row, formula_col); any
+          // other position yields #VALUE!.
+          if (fr < r1 || fr > r2 || fc < c1 || fc > c2) {
+            return Value::error(ErrorCode::Value);
+          }
+          target.row = fr;
+          target.col = fc;
         }
         return ctx.resolve_ref(target, arena, registry);
       }
@@ -442,17 +447,18 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
     }
 
     case parser::NodeKind::NameRef: {
-      // Lexical-scope lookup for LET (and, eventually, LAMBDA) bindings.
-      // When the name is not in scope we surface `#NAME?`; defined-name
-      // resolution at workbook scope is a separate infrastructure pass and
-      // intentionally not handled here.
+      // Resolution order: lexical scope (LET / LAMBDA bindings) wins over a
+      // workbook / sheet-scoped defined name, so `=LET(Rate, 2, Rate)` reads
+      // the binding, not a `Rate` defined name. When no binding matches, fall
+      // through to defined-name resolution, which returns `#NAME?` itself when
+      // the name is undefined in scope.
       const NameEnv* env = ctx.name_env();
       if (env != nullptr) {
         if (const Value* bound = env->lookup(node.as_name()); bound != nullptr) {
           return *bound;
         }
       }
-      return Value::error(ErrorCode::Name);
+      return resolve_defined_name(node.as_name(), arena, registry, ctx);
     }
 
     case parser::NodeKind::LetBinding: {

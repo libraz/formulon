@@ -24,6 +24,7 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/scalar_ops.h"
+#include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "utils/arena.h"
@@ -568,75 +569,11 @@ Value eval_binop_array_ctx(const parser::AstNode& node, Arena& arena, const Func
     return rhs;
   }
   // Both operands are guaranteed Array post the array-context contract.
-  const ArrayValue* la = lhs.as_array();
-  const ArrayValue* ra = rhs.as_array();
-
-  // Shape resolution. A 1x1 operand broadcasts against any shape; otherwise
-  // the rectangles must match exactly. Mismatch yields a scalar `#VALUE!`,
-  // matching Mac Excel's whole-expression short-circuit (it does NOT spill
-  // an array of `#VALUE!` cells).
-  std::uint32_t out_rows = la->rows;
-  std::uint32_t out_cols = la->cols;
-  if (la->rows == 1U && la->cols == 1U) {
-    out_rows = ra->rows;
-    out_cols = ra->cols;
-  } else if (ra->rows == 1U && ra->cols == 1U) {
-    // out_rows / out_cols already taken from `la`.
-  } else if (la->rows != ra->rows || la->cols != ra->cols) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  const parser::BinOp op = node.as_binary_op();
-  std::vector<Value> out;
-  out.reserve(static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols));
-  for (std::uint32_t r = 0; r < out_rows; ++r) {
-    for (std::uint32_t c = 0; c < out_cols; ++c) {
-      // Broadcast-aware indexing: a 1x1 operand always reads cell 0, while
-      // any non-1x1 operand indexes its own row-major position. The pattern
-      // is subtle because the conditional collapses both axes to a single
-      // index when (and only when) the operand is the broadcast scalar.
-      const std::size_t li = (la->rows == 1U && la->cols == 1U) ? 0U : static_cast<std::size_t>(r) * la->cols + c;
-      const std::size_t ri = (ra->rows == 1U && ra->cols == 1U) ? 0U : static_cast<std::size_t>(r) * ra->cols + c;
-      const Value& lv = la->cells[li];
-      const Value& rv = ra->cells[ri];
-
-      // Per-cell error propagation: an error cell yields an error cell in
-      // the output, with the leftmost operand winning.
-      if (lv.is_error()) {
-        out.push_back(lv);
-        continue;
-      }
-      if (rv.is_error()) {
-        out.push_back(rv);
-        continue;
-      }
-
-      if (op == parser::BinOp::Concat) {
-        out.push_back(apply_concat(lv, rv, arena));
-        continue;
-      }
-      if (op == parser::BinOp::Eq || op == parser::BinOp::NotEq || op == parser::BinOp::Lt ||
-          op == parser::BinOp::LtEq || op == parser::BinOp::Gt || op == parser::BinOp::GtEq) {
-        out.push_back(apply_comparison(op, lv, rv));
-        continue;
-      }
-      // Arithmetic. Coerce each cell to a number; cell-level coercion
-      // failures become per-cell errors so the surrounding rectangle
-      // still surfaces (e.g. `={1,"x"} + 1` -> `{2, #VALUE!}`).
-      auto ln = coerce_to_number(lv);
-      if (!ln) {
-        out.push_back(Value::error(ln.error()));
-        continue;
-      }
-      auto rn = coerce_to_number(rv);
-      if (!rn) {
-        out.push_back(Value::error(rn.error()));
-        continue;
-      }
-      out.push_back(apply_arithmetic(op, ln.value(), rn.value()));
-    }
-  }
-  return Value::array(make_array_value(arena, out_rows, out_cols, out));
+  // Delegate to the single Excel-broadcasting implementation shared with the
+  // top-level BinaryOp dispatch (`tree_walker/broadcast.cpp`), which handles
+  // size-1 broadcast, the outer product, RxC/Rx1/1xC combinations, and #N/A
+  // padding for mismatched non-1 axes.
+  return broadcast_binop(node.as_binary_op(), lhs, rhs, arena);
 }
 
 Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

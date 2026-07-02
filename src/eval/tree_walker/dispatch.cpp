@@ -37,6 +37,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
+#include "eval/range_args.h"
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/tree_walker/depth_guard.h"
@@ -343,6 +344,8 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref3D) {
       const Workbook* wb = ctx.workbook();
       const parser::Reference& cell = arg_node.as_ref3d_cell();
+      const bool is_range = arg_node.as_ref3d_is_range();
+      const parser::Reference& cell_end = arg_node.as_ref3d_cell_end();
       ErrorCode ref3d_err = ErrorCode::Ref;
       std::size_t begin_idx = static_cast<std::size_t>(-1);
       std::size_t end_idx = static_cast<std::size_t>(-1);
@@ -350,8 +353,12 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         begin_idx = wb->sheet_index_by_name(arg_node.as_ref3d_sheet_begin());
         end_idx = wb->sheet_index_by_name(arg_node.as_ref3d_sheet_end());
       }
+      const bool corners_out_of_bounds =
+          cell.is_full_col || cell.is_full_row || cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
+          (is_range && (cell_end.is_full_col || cell_end.is_full_row || cell_end.row >= Sheet::kMaxRows ||
+                        cell_end.col >= Sheet::kMaxCols));
       if (wb == nullptr || begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
-          cell.is_full_col || cell.is_full_row || cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols) {
+          corners_out_of_bounds) {
         const Value err = Value::error(ref3d_err);
         if (def->propagate_errors) {
           return err;
@@ -362,12 +369,27 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       had_range_shaped_arg = true;
       const std::size_t lo = std::min(begin_idx, end_idx);
       const std::size_t hi = std::max(begin_idx, end_idx);
+      // Tail rectangle: a single cell, or the normalised `cell:cell_end`
+      // area. Excel aggregates the same rectangle from every sheet in the
+      // span, so the cross-product (sheets * area cells) flows into the
+      // range-aware function.
+      const std::uint32_t r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
+      const std::uint32_t r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
+      const std::uint32_t c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
+      const std::uint32_t c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
       std::vector<Value> ref3d_cells;
-      ref3d_cells.reserve(hi - lo + 1);
+      ref3d_cells.reserve((hi - lo + 1) * static_cast<std::size_t>(r_hi - r_lo + 1) * (c_hi - c_lo + 1));
       for (std::size_t s = lo; s <= hi; ++s) {
-        parser::Reference per_sheet = cell;
-        per_sheet.sheet = wb->sheet(s).name();
-        ref3d_cells.push_back(ctx.resolve_ref(per_sheet, arena, registry));
+        const std::string_view sheet_name = wb->sheet(s).name();
+        for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
+          for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
+            parser::Reference per_sheet{};
+            per_sheet.sheet = sheet_name;
+            per_sheet.row = r;
+            per_sheet.col = c;
+            ref3d_cells.push_back(ctx.resolve_ref(per_sheet, arena, registry));
+          }
+        }
       }
       Value range_err = Value::blank();
       if (!append_range_sourced_values(*def, ref3d_cells.data(), ref3d_cells.size(), &values, &range_err)) {
@@ -379,6 +401,30 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       had_range_shaped_arg = true;
       const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
       const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
+      // Multi-column (`A:C`) / multi-row (`1:3`) whole references parse as a
+      // RangeOp over two whole-column / whole-row Refs. `resolve_range_endpoint`
+      // rejects whole references (no bounded rectangle on their own), so route
+      // the pair straight to `expand_range`, which clamps the unbounded axis to
+      // the sheet's used range.
+      if (lhs_ast.kind() == parser::NodeKind::Ref && rhs_ast.kind() == parser::NodeKind::Ref &&
+          (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row || rhs_ast.as_ref().is_full_col ||
+           rhs_ast.as_ref().is_full_row)) {
+        auto expanded = ctx.expand_range(lhs_ast.as_ref(), rhs_ast.as_ref(), arena, registry);
+        if (!expanded) {
+          const Value err = Value::error(expanded.error());
+          if (def->propagate_errors) {
+            return err;
+          }
+          values.push_back(err);
+          continue;
+        }
+        Value range_err = Value::blank();
+        const std::vector<Value>& expanded_values = expanded.value();
+        if (!append_range_sourced_values(*def, expanded_values.data(), expanded_values.size(), &values, &range_err)) {
+          return range_err;
+        }
+        continue;
+      }
       // Endpoints may be plain Refs (the simple `A1:B2` form) or
       // reference-producing calls (`OFFSET(...)` / `INDIRECT(...)`);
       // `resolve_range_endpoint` normalises both to a rectangle so we
@@ -491,6 +537,39 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
+    // Union operator (`(A1:A2,B1:B2)`) as a range-aware function argument:
+    // Excel's comma operator concatenates the areas, and an aggregator must
+    // see every cell of every area. Resolve each area through
+    // `resolve_range_arg` (which handles Ref / RangeOp / range-shaped calls)
+    // and flatten them in order. Overlapping areas are intentionally counted
+    // more than once — Excel's union does NOT de-duplicate, so
+    // `SUM((A1:A2,A1:A2))` doubles the A1:A2 total.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::UnionOp) {
+      had_range_shaped_arg = true;
+      const std::uint32_t area_count = arg_node.as_union_arity();
+      Value range_err = Value::blank();
+      bool short_circuit = false;
+      for (std::uint32_t area = 0; area < area_count; ++area) {
+        auto resolved = resolve_range_arg(arg_node.as_union_child(area), arena, registry, ctx);
+        if (!resolved) {
+          const Value err = Value::error(resolved.error());
+          if (def->propagate_errors) {
+            return err;
+          }
+          values.push_back(err);
+          continue;
+        }
+        const RangeResult& rr = resolved.value();
+        if (!append_range_sourced_values(*def, rr.cells.data(), rr.cells.size(), &values, &range_err)) {
+          short_circuit = true;
+          break;
+        }
+      }
+      if (short_circuit) {
+        return range_err;
+      }
+      continue;
+    }
     // Range-aware functions that receive `OFFSET(...)` as an argument see
     // the rectangle OFFSET would synthesize, not the `#VALUE!` OFFSET
     // itself returns in scalar context. We share the expansion helper
@@ -592,6 +671,31 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     }
     if (expanded_call_handled) {
       had_range_shaped_arg = true;
+      continue;
+    }
+    // Whole-column (`A:A`) / whole-row (`1:1`) single reference: expand
+    // against the sheet's used range so range-aware aggregators see the
+    // populated cells instead of the `#VALUE!` a scalar `resolve_ref`
+    // returns for an unbounded reference. Multi-span (`A:C` / `1:3`) is
+    // handled by the RangeOp branch above.
+    if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::Ref &&
+        (arg_node.as_ref().is_full_col || arg_node.as_ref().is_full_row)) {
+      had_range_shaped_arg = true;
+      const parser::Reference& ref = arg_node.as_ref();
+      auto expanded = ctx.expand_range(ref, ref, arena, registry);
+      if (!expanded) {
+        const Value err = Value::error(expanded.error());
+        if (def->propagate_errors) {
+          return err;
+        }
+        values.push_back(err);
+        continue;
+      }
+      Value range_err = Value::blank();
+      const std::vector<Value>& expanded_values = expanded.value();
+      if (!append_range_sourced_values(*def, expanded_values.data(), expanded_values.size(), &values, &range_err)) {
+        return range_err;
+      }
       continue;
     }
     Value v = eval_node(arg_node, arena, registry, ctx);

@@ -18,6 +18,8 @@
 #include <string>
 #include <string_view>
 
+#include "cell.h"
+#include "eval/cell_evaluator.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -228,6 +230,65 @@ TEST(BuiltinsCount, RangeWithErrorCellSkipsError) {
   wb.sheet(0).set_cell_formula(1, 0, "=1/0");
   wb.sheet(0).set_cell_value(2, 0, Value::number(2.0));
   const Value v = EvalSourceIn("=COUNT(A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+// ---------------------------------------------------------------------------
+// COUNT - array / spill / dynamic-array provenance. These arrive through the
+// unified lazy range-argument gate; an array constant and a dynamic-array
+// producer are counted with range provenance (only Number cells contribute),
+// while a spilled range resolves its committed region.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsCount, ArrayConstantCountsNumbers) {
+  // `{1,2,3}` is expanded element-wise; all three numbers count.
+  const Value v = EvalSource("=COUNT({1,2,3})");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsCount, ArrayConstantTextNotCounted) {
+  // Text inside an array constant carries range provenance, so unlike a
+  // direct `COUNT("2")` it does NOT count even when numeric-looking.
+  const Value v = EvalSource("=COUNT({1,\"2\",3})");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsCount, DynamicArrayProducerCounted) {
+  // SEQUENCE(3) yields the array {1;2;3}; range provenance counts all three.
+  const Value v = EvalSource("=COUNT(SEQUENCE(3))");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsCount, SpilledRangeReference) {
+  // Commit a spill by recalculating `=SEQUENCE(3)` at A1, then count the
+  // spilled range via the `A1#` operator. Previously the SpillRef fell
+  // through to the scalar path and COUNT silently returned 0.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Cell cell;
+  cell.formula_text = "=SEQUENCE(3)";
+  Arena arena;
+  const Value anchor = evaluate_cell_for_recalc(wb, sheet, cell, 0U, 0U, default_registry(), arena);
+  ASSERT_TRUE(anchor.is_number());
+  ASSERT_NE(sheet.spill_region_at_anchor(0U, 0U), nullptr);
+
+  const Value v = EvalSourceIn("=COUNT(A1#)", wb, sheet);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsCount, LetBoundRangeCounted) {
+  // A LET binding to a range must keep range provenance when consumed by
+  // COUNT: `A1:A3` = [1, text, 2] counts 2 numbers.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("skip"));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=LET(r, A1:A3, COUNT(r))", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
@@ -465,6 +526,43 @@ TEST(BuiltinsCountCombined, OneRangeThreeCalls) {
   const Value cb = EvalSourceIn("=COUNTBLANK(A1:A10)", wb, wb.sheet(0));
   ASSERT_TRUE(cb.is_number());
   EXPECT_DOUBLE_EQ(cb.as_number(), 4.0);
+}
+
+// ---------------------------------------------------------------------------
+// Reference union `(area1, area2)` — each area is counted in order, with NO
+// de-duplication, so an overlapping area is counted twice.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsCount, UnionOfTwoAreasCountsBoth) {
+  // COUNT((A1:A2, B1:B2)) over four numeric cells = 4.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(3.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(4.0));
+  const Value v = EvalSourceIn("=COUNT((A1:A2,B1:B2))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsCount, UnionWithOverlapDoubleCounts) {
+  // COUNT((A1:A2, A1:A2)) counts the overlapping area twice = 4.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=COUNT((A1:A2,A1:A2))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+TEST(BuiltinsCount, CountaUnionWithOverlapDoubleCounts) {
+  // COUNTA (eager, range-aware) also double-counts an overlapping union area.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("a"));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=COUNTA((A1:A2,A1:A2))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
 }
 
 }  // namespace

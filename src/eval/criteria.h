@@ -18,11 +18,12 @@
 //     the RHS is compared as text (case-insensitive ASCII).
 //   * Blank Value: treated as `Op::Eq` against text "".
 //
-// Wildcard matching uses byte-level semantics: `?` matches one byte, `*`
-// matches any run of bytes, and `~` escapes the next metacharacter. For
-// ASCII-only text this is Excel-exact; multibyte UTF-8 is an accepted
-// divergence (see comment in `matches_criterion` below). This matches the
-// range-vs-direct divergence already documented in `eval_context.cpp`.
+// Wildcard matching: `?` matches exactly one Unicode codepoint, `*` matches
+// any run of codepoints, and `~` escapes the next metacharacter. The matcher
+// walks the text codepoint-by-codepoint (including `*` backtracking), so
+// multibyte UTF-8 (CJK, emoji) behaves as Excel users expect. A separate
+// byte-oriented variant (`wildcard_find_dbcs`) backs SEARCHB's ja-JP DBCS
+// rule; see its declaration below.
 
 #ifndef FORMULON_EVAL_CRITERIA_H_
 #define FORMULON_EVAL_CRITERIA_H_
@@ -173,23 +174,29 @@ ParsedCriterion parse_criterion_dfunc(const Value& criterion);
 ///       - All other ops against blank -> false
 ///   * Error cell: always false. Excel silently skips errors in a
 ///     criteria range; `COUNTIF`/`SUMIF`/`AVERAGEIF` do not propagate them.
-///   * Numeric criterion (`rhs_is_number == true`): the cell is coerced
-///     to a number via `coerce_to_number`; on failure the cell does not
-///     match (numeric-text that fails to parse is simply rejected, not an
-///     error).
+///   * Numeric criterion (`rhs_is_number == true`) — Eq and NotEq are
+///     intentionally NOT exact complements, matching Mac Excel 365:
+///       - `Op::Eq`: a same-kind cell compares numerically; a Text cell
+///         whose contents coerce to the criterion number also matches
+///         (e.g. text "23" satisfies `=23`), and for a bool criterion a
+///         Text cell equal to "TRUE"/"FALSE" (case-insensitive) matches.
+///       - `Op::NotEq`: a same-kind cell compares numerically; EVERY
+///         different-kind cell matches unconditionally ("different type is
+///         not equal"). So a coercible text ("23") satisfies BOTH `=23` and
+///         `<>23` — the overlap is Excel-correct, not a bug.
+///       - Ordering ops require the same kind; cross-kind never matches.
 ///   * Text criterion without wildcards: case-insensitive ASCII equality
-///     against the cell's `coerce_to_text` rendering for `Op::Eq`/`NotEq`;
-///     ordering ops use `case_insensitive_compare`.
-///   * Text criterion with wildcards (`Op::Eq`/`NotEq` only): byte-level
-///     two-pointer match where `*` matches any byte run, `?` matches
-///     exactly one byte, and `~` escapes the next metacharacter. Ordering
-///     ops with wildcard RHS fall back to literal-text compare — Excel
-///     treats `*`/`?` as literals for non-equality comparators.
-///
-/// Accepted divergence (documented here and in the range-expansion code):
-/// wildcard matching operates on bytes, not Unicode code points, so `?`
-/// only matches one byte of a multibyte UTF-8 character. ASCII-only text
-/// behaves exactly like Excel.
+///     (ja-JP folded) against the cell's `coerce_to_text` rendering for
+///     `Op::Eq`/`Op::NotEq`.
+///   * Text criterion with an ordering op (`<` / `<=` / `>` / `>=`): TYPE
+///     SEPARATION — only Text cells are compared (`case_insensitive_compare`);
+///     Number and Bool cells are a different Excel type and never match, so
+///     `COUNTIF(range, ">5x")` and `COUNTIF(range, "<5x")` both skip a
+///     numeric cell entirely.
+///   * Text criterion with wildcards (`Op::Eq`/`Op::NotEq` only): two-pointer
+///     match where `*` matches any run, `?` matches exactly one codepoint,
+///     and `~` escapes the next metacharacter. Ordering ops treat `*`/`?` as
+///     literals.
 bool matches_criterion(const Value& cell, const ParsedCriterion& criterion);
 
 /// Profile-aware variant of `matches_criterion`. Windows Excel 365 ja-JP and

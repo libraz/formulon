@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/number_parse.h"
 #include "eval/text_format/number_format_types.h"
 
 namespace formulon {
@@ -138,7 +139,7 @@ int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_valu
     return -1;
   }
   char* endp = nullptr;
-  const double v = std::strtod(buf.c_str(), &endp);
+  const double v = eval::parse_double_c_locale(buf.c_str(), &endp);
   if (endp == nullptr || endp == buf.c_str() || static_cast<std::size_t>(endp - buf.c_str()) != buf.size()) {
     return -1;
   }

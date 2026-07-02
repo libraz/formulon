@@ -202,24 +202,36 @@ TEST(SpillRefBroadcast, ScalarOnLeftBroadcastsAcrossArray) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 60.0);
 }
 
-TEST(SpillRefBroadcast, ShapeMismatchYieldsValue) {
-  // 3x1 + 2x1: incompatible shapes (no 1x1 broadcast slot) collapse to
-  // scalar `#VALUE!`. Mac Excel does NOT spill an array of `#VALUE!` cells
-  // in this case — the whole expression short-circuits.
-  Workbook wb = Workbook::create();
-  Sheet& sheet = wb.sheet(0);
-  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
-                                 std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
-  ASSERT_TRUE(sheet.commit_spill(0U, 1U, 2U, 1U, std::vector<Value>{Value::number(1.0), Value::number(2.0)}));
+TEST(SpillRefBroadcast, ShapeMismatchPadsWithNA) {
+  // 3x1 + 2x1: the row axis mismatches (both > 1), so Excel 365 broadcasting
+  // extends to 3 rows and fills the shortfall cell with #N/A. Rows 0-1 are the
+  // element sums (10+1, 20+2); row 2 is #N/A (B1# has no third row).
+  //
+  // This is a profile-common contract: array broadcasting is profile-independent
+  // and Mac Excel 365 pads with #N/A exactly as Windows does (verified against
+  // the oracle: `INDEX({1,2,3}+{1,2},1,3)` is #N/A on Mac too). The result is
+  // asserted under both the Windows and Mac profiles.
+  for (const bool mac : {false, true}) {
+    Workbook wb = Workbook::create();
+    Sheet& sheet = wb.sheet(0);
+    ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 1U,
+                                   std::vector<Value>{Value::number(10.0), Value::number(20.0), Value::number(30.0)}));
+    ASSERT_TRUE(sheet.commit_spill(0U, 1U, 2U, 1U, std::vector<Value>{Value::number(1.0), Value::number(2.0)}));
 
-  EvalState state;
-  const EvalContext ctx = test::mac_context(wb, sheet, state);
+    EvalState state;
+    const EvalContext ctx = mac ? test::mac_context(wb, sheet, state) : test::win_context(wb, sheet, state);
 
-  Arena parse_arena;
-  Arena eval_arena;
-  const Value v = EvalUnder("=A1#+B1#", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+    Arena parse_arena;
+    Arena eval_arena;
+    const Value v = EvalUnder("=A1#+B1#", &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_array()) << "profile mac=" << mac;
+    ASSERT_EQ(v.as_array_rows(), 3U);
+    ASSERT_EQ(v.as_array_cols(), 1U);
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 22.0);
+    ASSERT_TRUE(v.as_array_cells()[2].is_error());
+    EXPECT_EQ(v.as_array_cells()[2].as_error(), ErrorCode::NA);
+  }
 }
 
 TEST(SpillRefBroadcast, UnaryMinusBroadcastsAcrossArray) {

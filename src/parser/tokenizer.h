@@ -14,11 +14,24 @@
 //     whether a space is the intersection operator or ignorable indent.
 //   * Offsets are in UTF-16 code units so diagnostics are drop-in for
 //     Monaco Editor / CodeMirror 6.
-//   * External book refs (`[Book1.xlsx]Sheet1!A1`, `[1]Sheet1!A1`) and
-//     structured refs (`Table[@col]`) are *not* promoted to dedicated token
-//     kinds here; the lexer emits the component punctuation tokens and the
-//     parser reinterprets them. This keeps the lexer small and lets the
-//     parser handle context-sensitive rules.
+//   * Table-qualified structured refs (`Table[@col]`, `Table[Col1]`) are
+//     *not* promoted to a dedicated token kind here; the lexer emits the
+//     component punctuation tokens (`Ident LBracket ... RBracket`) and the
+//     parser reinterprets them into a `StructuredRef` AST node
+//     (`Parser::parse_ident_or_call_or_full_col`). This keeps the lexer
+//     small and lets the parser handle the context-sensitive grammar.
+//     Bare structured refs with no table name (`[@col]` on its own) are
+//     rejected by the parser as `UnsupportedConstruct`.
+//   * External book refs (`[Book1.xlsx]Sheet1!A1`, `[1]Sheet1!A1`) are
+//     tokenized as the same component punctuation, but — unlike
+//     structured refs — the parser does not reinterpret them into an
+//     `ExternalRef` AST node: no parser code path currently constructs
+//     one from source text (the `NodeKind::ExternalRef` consumers —
+//     `ast_dump`, `ast_format`, `ast_shift` — exist for nodes built
+//     programmatically, e.g. via the C API, but not for this syntax).
+//     An external book ref in formula text falls through to the same
+//     bare-bracket handling as an unqualified structured ref and is
+//     rejected as `UnsupportedConstruct`.
 //   * Column-only (`A:A`) and row-only (`1:1`) references: the lexer emits
 //     them as `Ident COLON Ident` and `Number COLON Number` respectively;
 //     the parser promotes the adjacent tokens to full range references.
@@ -115,8 +128,12 @@ class Tokenizer {
   // Checks whether `word` (ASCII) is `TRUE` or `FALSE` case-insensitively.
   static bool is_bool_word(std::string_view word, bool* out) noexcept;
 
-  // Classifies `run` against the 17-strong error-literal catalog.
-  static bool match_error_literal(std::string_view run, ErrorCode* out) noexcept;
+  // Longest-prefix match of `run` against the error-literal catalog. On a
+  // hit, writes the catalog code to `*out` and the matched byte length to
+  // `*match_len` so the caller consumes only the literal and leaves any
+  // trailing operator / reference (e.g. the `/2` in `#REF!/2`) for the main
+  // dispatch loop.
+  static bool match_error_literal(std::string_view run, ErrorCode* out, std::size_t* match_len) noexcept;
 
   // Classifies an identifier run as an A1 cell reference. Returns true iff
   // `run` has the shape `\$?[A-Za-z]{1,3}\$?[0-9]{1,7}` and the column /

@@ -15,6 +15,7 @@
 namespace formulon {
 namespace parser {
 
+using detail::DecodeDigitRunClamped;
 using detail::IsAsciiDigit;
 using detail::IsAsciiLetter;
 using detail::kMaxColumn;
@@ -518,6 +519,52 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
   }
   advance();  // Bang
 
+  // Quoted 3-D sheet range (`'Data:S2'!B1`): a `:` inside the sheet
+  // qualifier is the sheet-range separator, because a worksheet name can
+  // never itself contain a colon. The tokenizer delivers the whole
+  // `Data:S2` span as one (quoted) SheetName, so split it here into the
+  // begin / end sheet names and build a `Ref3D`. A single-cell tail
+  // (`'Data:S2'!B1`) builds a single-cell Ref3D; a range tail
+  // (`'Data:S2'!A1:B2`) builds a range Ref3D. (The unquoted
+  // `Sheet1:Sheet2!A1` shape arrives as separate tokens and is handled by
+  // `parse_3d_ref`.)
+  if (const std::size_t colon = sheet.find(':'); colon != std::string_view::npos) {
+    const std::string_view sheet_begin = sheet.substr(0, colon);
+    const std::string_view sheet_end = sheet.substr(colon + 1);
+    if (sheet_begin.empty() || sheet_end.empty() || peek_kind() != TokenKind::CellRef) {
+      record_error_with_token(ParseErrorCode::InvalidReference, peek().range, peek().lexeme);
+      return nullptr;
+    }
+    const Token& cell = advance();
+    Reference r;
+    if (!decode_cellref_lexeme(cell.lexeme, &r)) {
+      record_error_with_token(ParseErrorCode::InvalidReference, cell.range, cell.lexeme);
+      return nullptr;
+    }
+    // Range tail (`'Data:S2'!A1:B2`): a 3-D range over the sheet span.
+    if (peek_kind() == TokenKind::Colon && peek_kind_at(1) == TokenKind::CellRef) {
+      advance();  // Colon
+      const Token& tail = advance();
+      Reference r2;
+      if (!decode_cellref_lexeme(tail.lexeme, &r2)) {
+        record_error_with_token(ParseErrorCode::InvalidReference, tail.range, tail.lexeme);
+        return nullptr;
+      }
+      AstNode* range_node = make_ref3d_range(arena_, sheet_begin, sheet_end, r, r2);
+      if (range_node == nullptr) {
+        return nullptr;
+      }
+      range_node->set_range(SpanRange(sheet_range, tail.range));
+      return range_node;
+    }
+    AstNode* n = make_ref3d(arena_, sheet_begin, sheet_end, r);
+    if (n == nullptr) {
+      return nullptr;
+    }
+    n->set_range(SpanRange(sheet_range, cell.range));
+    return n;
+  }
+
   // Three possibilities:
   //   1. CellRef: `Sheet1!A1`.
   //   2. Ident Colon Ident with matching column letters: `Sheet1!A:A`.
@@ -547,18 +594,41 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
     bool rhs_abs = false;
     const std::uint32_t lhs_col = decode_column_letters(lhs_tok.lexeme, &lhs_abs);
     const std::uint32_t rhs_col = decode_column_letters(rhs_tok.lexeme, &rhs_abs);
-    if (lhs_col != 0 && lhs_col == rhs_col) {
+    if (lhs_col != 0 && rhs_col != 0) {
       const TextRange end_range = rhs_tok.range;
       advance();
       advance();
       advance();
-      Reference r;
-      r.col = lhs_col - 1;
-      r.col_abs = lhs_abs;
-      r.is_full_col = true;
-      r.sheet = sheet;
-      r.sheet_quoted = quoted;
-      AstNode* n = make_ref(arena_, r);
+      Reference lhs_ref;
+      lhs_ref.col = lhs_col - 1;
+      lhs_ref.col_abs = lhs_abs;
+      lhs_ref.is_full_col = true;
+      lhs_ref.sheet = sheet;
+      lhs_ref.sheet_quoted = quoted;
+      if (lhs_col == rhs_col) {
+        // `Sheet1!A:A`: a single whole-column Ref.
+        AstNode* n = make_ref(arena_, lhs_ref);
+        if (n == nullptr) {
+          return nullptr;
+        }
+        n->set_range(SpanRange(sheet_range, end_range));
+        return n;
+      }
+      // `Sheet1!A:C`: a range spanning two whole-column Refs. The sheet
+      // qualifier stays on the left endpoint, matching how `Sheet1!A1:B2`
+      // parses; `expand_range` inherits it for the whole rectangle.
+      Reference rhs_ref;
+      rhs_ref.col = rhs_col - 1;
+      rhs_ref.col_abs = rhs_abs;
+      rhs_ref.is_full_col = true;
+      AstNode* lhs_node = make_ref(arena_, lhs_ref);
+      AstNode* rhs_node = make_ref(arena_, rhs_ref);
+      if (lhs_node == nullptr || rhs_node == nullptr) {
+        return nullptr;
+      }
+      lhs_node->set_range(SpanRange(sheet_range, lhs_tok.range));
+      rhs_node->set_range(rhs_tok.range);
+      AstNode* n = make_range_op(arena_, lhs_node, rhs_node);
       if (n == nullptr) {
         return nullptr;
       }
@@ -569,7 +639,17 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
   if (k == TokenKind::Number && peek_kind_at(1) == TokenKind::Colon && peek_kind_at(2) == TokenKind::Number) {
     const Token& lhs_tok = peek();
     const Token& rhs_tok = peek_at(2);
-    auto is_pure_digit_run = [](std::string_view lex) {
+    // Each endpoint may carry a leading `$` (absolute row anchor); the
+    // tokenizer keeps the `$` in the Number lexeme, so strip it here and
+    // record the row_abs flag. `DecodeDigitRunClamped` stops accumulating
+    // once past `kMaxRow`, so a pathological 20-digit row literal cannot
+    // wrap a `std::uint64_t` back into the valid range.
+    auto decode_row = [](std::string_view lex, bool* row_abs, std::uint64_t* out_row) -> bool {
+      *row_abs = false;
+      if (!lex.empty() && lex.front() == '$') {
+        *row_abs = true;
+        lex.remove_prefix(1);
+      }
       if (lex.empty()) {
         return false;
       }
@@ -578,29 +658,50 @@ AstNode* Parser::parse_sheet_qualified_ref(std::string_view sheet, bool quoted, 
           return false;
         }
       }
+      *out_row = DecodeDigitRunClamped(lex, kMaxRow);
       return true;
     };
-    if (lhs_tok.is_integer && rhs_tok.is_integer && is_pure_digit_run(lhs_tok.lexeme) &&
-        is_pure_digit_run(rhs_tok.lexeme)) {
-      std::uint64_t lhs_row = 0;
-      for (char c : lhs_tok.lexeme) {
-        lhs_row = lhs_row * 10u + static_cast<std::uint32_t>(c - '0');
-      }
-      std::uint64_t rhs_row = 0;
-      for (char c : rhs_tok.lexeme) {
-        rhs_row = rhs_row * 10u + static_cast<std::uint32_t>(c - '0');
-      }
-      if (lhs_row != 0 && lhs_row == rhs_row && lhs_row <= kMaxRow) {
+    bool lhs_abs = false;
+    bool rhs_abs = false;
+    std::uint64_t lhs_row = 0;
+    std::uint64_t rhs_row = 0;
+    if (lhs_tok.is_integer && rhs_tok.is_integer && decode_row(lhs_tok.lexeme, &lhs_abs, &lhs_row) &&
+        decode_row(rhs_tok.lexeme, &rhs_abs, &rhs_row) && lhs_row != 0 && rhs_row != 0 && lhs_row <= kMaxRow &&
+        rhs_row <= kMaxRow) {
+      {
         const TextRange end_range = rhs_tok.range;
         advance();
         advance();
         advance();
-        Reference r;
-        r.row = static_cast<std::uint32_t>(lhs_row - 1);
-        r.is_full_row = true;
-        r.sheet = sheet;
-        r.sheet_quoted = quoted;
-        AstNode* n = make_ref(arena_, r);
+        Reference lhs_ref;
+        lhs_ref.row = static_cast<std::uint32_t>(lhs_row - 1);
+        lhs_ref.row_abs = lhs_abs;
+        lhs_ref.is_full_row = true;
+        lhs_ref.sheet = sheet;
+        lhs_ref.sheet_quoted = quoted;
+        if (lhs_row == rhs_row) {
+          // `Sheet1!1:1`: a single whole-row Ref.
+          AstNode* n = make_ref(arena_, lhs_ref);
+          if (n == nullptr) {
+            return nullptr;
+          }
+          n->set_range(SpanRange(sheet_range, end_range));
+          return n;
+        }
+        // `Sheet1!1:3`: a range spanning two whole-row Refs. The sheet
+        // qualifier stays on the left endpoint; `expand_range` inherits it.
+        Reference rhs_ref;
+        rhs_ref.row = static_cast<std::uint32_t>(rhs_row - 1);
+        rhs_ref.row_abs = rhs_abs;
+        rhs_ref.is_full_row = true;
+        AstNode* lhs_node = make_ref(arena_, lhs_ref);
+        AstNode* rhs_node = make_ref(arena_, rhs_ref);
+        if (lhs_node == nullptr || rhs_node == nullptr) {
+          return nullptr;
+        }
+        lhs_node->set_range(SpanRange(sheet_range, lhs_tok.range));
+        rhs_node->set_range(rhs_tok.range);
+        AstNode* n = make_range_op(arena_, lhs_node, rhs_node);
         if (n == nullptr) {
           return nullptr;
         }
@@ -642,6 +743,24 @@ AstNode* Parser::parse_3d_ref(std::string_view sheet1, TextRange sheet1_range) {
   if (!decode_cellref_lexeme(cell.lexeme, &r)) {
     record_error_with_token(ParseErrorCode::InvalidReference, cell.range, cell.lexeme);
     return nullptr;
+  }
+  // Range tail (`Sheet1:Sheet2!A1:B2`): a 3-D range over the sheet span,
+  // built as a range `Ref3D`. Without this the outer Pratt `:` rule would
+  // otherwise mis-assemble `RangeOp(Ref3D(A1), Ref(B2))`.
+  if (peek_kind() == TokenKind::Colon && peek_kind_at(1) == TokenKind::CellRef) {
+    advance();  // Colon
+    const Token& tail = advance();
+    Reference r2;
+    if (!decode_cellref_lexeme(tail.lexeme, &r2)) {
+      record_error_with_token(ParseErrorCode::InvalidReference, tail.range, tail.lexeme);
+      return nullptr;
+    }
+    AstNode* range_node = make_ref3d_range(arena_, sheet1, sheet2, r, r2);
+    if (range_node == nullptr) {
+      return nullptr;
+    }
+    range_node->set_range(SpanRange(sheet1_range, tail.range));
+    return range_node;
   }
   AstNode* n = make_ref3d(arena_, sheet1, sheet2, r);
   if (n == nullptr) {

@@ -42,6 +42,7 @@
 #define FORMULON_EVAL_BYTECODE_H_
 
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -72,9 +73,16 @@ enum class OpCode : std::uint8_t {
   /// range endpoint) at run time.
   LoadRef = 1,
 
-  /// `LoadRange R` -- push a `Ref` value covering the range whose two
-  /// endpoints are stored adjacent at `refs[R]` and `refs[R+1]`. Lowering
-  /// for `NodeKind::RangeOp`.
+  /// `LoadRange` -- range marker emitted after the two endpoint
+  /// subexpressions of a `NodeKind::RangeOp`. The `a` operand is the
+  /// sentinel `0xFF` (not a pool index); the endpoints are carried by the
+  /// two preceding instructions. For the common `Ref:Ref` shape those are
+  /// two `LoadRef`s, and both the VM and the optimizer's
+  /// range-canonicalisation pass read the refs-pool indices back from those
+  /// `LoadRef` operands to reconstruct the rectangle. The VM expands it and
+  /// pushes an `Array` value covering every cell in row-major order; when
+  /// the endpoints are not both `LoadRef` (a complex range expression) the
+  /// VM surfaces `#VALUE!`.
   LoadRange = 2,
 
   /// `LoadName N` -- resolve `names[N]` against the active name
@@ -302,11 +310,13 @@ struct ByteCode {
   std::vector<parser::Reference> refs;
 
   /// Backing storage for borrow-only string views inside `constants`
-  /// (Text values) and `refs` (sheet names). The `std::string` instances
-  /// here are pointer-stable enough for the borrow contract because the
-  /// vector is `reserve()`-ed up-front (see compiler.cpp), but callers
-  /// must treat this vector as opaque and never mutate it.
-  std::vector<std::string> string_storage;
+  /// (Text values) and `refs` (sheet names). A `std::deque` is used
+  /// deliberately: unlike `std::vector`, appending never relocates
+  /// existing elements, so the `string_view`s that `constants` and `refs`
+  /// hold into these strings stay valid for the full lifetime of the
+  /// `ByteCode` no matter how many entries are interned. Callers must
+  /// treat this pool as opaque and never mutate it.
+  std::deque<std::string> string_storage;
 
   /// One entry per `code[i]` recording an opaque AST node identity used
   /// by the diagnostic emitter to map run-time errors back to a source

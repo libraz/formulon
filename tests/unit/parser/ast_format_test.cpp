@@ -122,6 +122,36 @@ TEST(AstFormat, RefFullColumn) {
 TEST(AstFormat, RefFullRow) {
   ExpectRoundTripsToSame("=1:1");
 }
+TEST(AstFormat, RefMultiColumnFullRange) {
+  ExpectRoundTripsToSame("=A:C");
+}
+TEST(AstFormat, RefMultiRowFullRange) {
+  ExpectRoundTripsToSame("=1:3");
+}
+TEST(AstFormat, RefAbsoluteFullColumn) {
+  ExpectRoundTripsToSame("=$A:$A");
+}
+TEST(AstFormat, RefAbsoluteFullRow) {
+  ExpectRoundTripsToSame("=$1:$1");
+}
+TEST(AstFormat, RefAbsoluteMultiColumnFullRange) {
+  ExpectRoundTripsToSame("=$A:$C");
+}
+TEST(AstFormat, RefAbsoluteMultiRowFullRange) {
+  ExpectRoundTripsToSame("=$1:$3");
+}
+TEST(AstFormat, ThreeDSingleCell) {
+  ExpectRoundTripsToSame("=SUM(Sheet1:Sheet3!A1)");
+}
+TEST(AstFormat, ThreeDRangeTail) {
+  ExpectRoundTripsToSame("=SUM(Sheet1:Sheet3!A1:B2)");
+}
+TEST(AstFormat, ThreeDRangeTailQuotedSpan) {
+  ExpectRoundTripsToSame("=SUM('Data:S2'!A1:B2)");
+}
+TEST(AstFormat, ThreeDRangeTailAbsolute) {
+  ExpectRoundTripsToSame("=SUM(Sheet1:Sheet3!$A$1:$B$2)");
+}
 
 TEST(AstFormat, NameRef) {
   ExpectRoundTripsToSame("=foo");

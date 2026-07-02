@@ -273,20 +273,13 @@ void Parser::record_error_with_token(ParseErrorCode code, TextRange range, std::
   if (bailed_) {
     return;
   }
-  // Append the original error first so the caller still sees the actual code
-  // even when the cap is reached on this entry.
-  ParseError e;
-  e.code = code;
-  e.range = range;
-  e.message = std::string_view(default_message(code));
-  e.offending_token = offending;
-  e.severity = Severity::Error;
-  e.suggestion = std::string_view{};
-  errors_.push_back(e);
-
-  // Cap check: once we are at or above the budget, append the sentinel and
-  // latch `bailed_`. The budget counts the sentinel against the limit so
-  // `errors_.size() <= max_error_count` is preserved.
+  // Cap check happens *before* appending the real error: the budget
+  // reserves one slot for the `TooManyErrors` sentinel, so at most
+  // `max_error_count - 1` real diagnostics are ever recorded. Checking
+  // first (rather than appending unconditionally and capping after) is
+  // what keeps `errors_.size() <= max_error_count` true even at the
+  // `max_error_count == 1` edge, where zero real diagnostics are
+  // recorded and the sentinel alone occupies the single slot.
   if (opts_.max_error_count > 0 && errors_.size() + 1 >= opts_.max_error_count) {
     ParseError sentinel;
     sentinel.code = ParseErrorCode::TooManyErrors;
@@ -295,7 +288,17 @@ void Parser::record_error_with_token(ParseErrorCode code, TextRange range, std::
     sentinel.severity = Severity::Error;
     errors_.push_back(sentinel);
     bailed_ = true;
+    return;
   }
+
+  ParseError e;
+  e.code = code;
+  e.range = range;
+  e.message = std::string_view(default_message(code));
+  e.offending_token = offending;
+  e.severity = Severity::Error;
+  e.suggestion = std::string_view{};
+  errors_.push_back(e);
 }
 
 void Parser::promote_lexer_errors(const std::vector<LexerError>& lex_errors) {
@@ -899,9 +902,20 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       return make_recovery_placeholder(sheet.range);
     }
     case TokenKind::LBracket: {
-      // Structured-ref grammar is not implemented yet; pick the right code
-      // depending on whether the bracket is balanced (UnsupportedConstruct
-      // for `=Table[col]`, UnbalancedBrackets for `=Table[col`).
+      // This arm only fires when `[` opens an atom with no preceding
+      // identifier — i.e. a *bare* structured reference (`=[@col]`,
+      // `=[col]`) or an external-book reference (`=[Book1.xlsx]Sheet1!A1`,
+      // `=[1]Sheet1!A1`). Neither shape is supported: bare structured
+      // refs have no table to qualify against, and no parser path builds
+      // an `ExternalRef` AST node from source text at all (see
+      // `tokenizer.h`'s design-notes comment). Both surface
+      // `UnsupportedConstruct` (or `UnbalancedBrackets` if the bracket
+      // never closes).
+      //
+      // Table-qualified structured refs (`=Table[col]`, `=Table[@col]`)
+      // never reach this arm: they dispatch through `TokenKind::Ident`
+      // to `parse_ident_or_call_or_full_col`, which builds a real
+      // `StructuredRef` node.
       const Token& lbracket = peek();
       bool found_close = false;
       std::uint32_t depth = 1;

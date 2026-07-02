@@ -32,6 +32,30 @@ namespace formulon {
 namespace eval {
 namespace {
 
+// Lowercased, lookup-normalised form of `s` for exact / wildcard text
+// matching. On the Mac ja-JP path this folds kana / full-width variants
+// (`fold_and_lower`); on every other profile it still composes a half-width
+// voicing mark onto its base (`ｶﾞ` -> `ガ`) before ASCII-lowercasing, matching
+// XLOOKUP's `xlookup_exact_eq` so VLOOKUP / HLOOKUP / MATCH agree with it.
+std::string lookup_text_key(std::string_view s, ExcelProfile profile) {
+  if (uses_mac_jp_text_folding(profile)) {
+    return fold_and_lower(s, /*fold_fullwidth_digits=*/false);
+  }
+  return strings::to_ascii_lower(compose_jp_halfwidth_voicing(s));
+}
+
+// Normalised form of `s` for the case-insensitive ordering compare used by
+// approximate matching. Case folding is left to `case_insensitive_compare`,
+// so this returns the composed / folded (not lowercased) form: the Mac path
+// folds broadly (`fold_jp_text`); other profiles compose the half-width
+// voicing mark, mirroring `lookup_text_key`.
+std::string lookup_text_cmp_key(std::string_view s, ExcelProfile profile) {
+  if (uses_mac_jp_text_folding(profile)) {
+    return fold_jp_text(s, /*fold_fullwidth_digits=*/false);
+  }
+  return compose_jp_halfwidth_voicing(s);
+}
+
 // Materialises the whole `col`-th column (0-based) of a row-major `cells`
 // rectangle (`rows` x `cols`) as a vertical `rows` x 1 `Value::Array`. Used
 // by `INDEX(array, 0, col)` which Excel 365 spills as a column. Returns
@@ -172,16 +196,13 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
       // on both sides BEFORE ASCII-lowercasing so e.g. `ｶﾞ` -> `ガ`,
       // `Ａ` -> `a`. Full-width digits are deliberately NOT folded for
       // lookups (Mac asymmetry — see jp_fold.h).
-      const bool jp_fold = uses_mac_jp_text_folding(profile);
-      const std::string pat_lower = jp_fold ? fold_and_lower(lookup_value.as_text(), /*fold_fullwidth_digits=*/false)
-                                            : strings::to_ascii_lower(lookup_value.as_text());
+      const std::string pat_lower = lookup_text_key(lookup_value.as_text(), profile);
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cell_at(i);
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false)
-                                               : strings::to_ascii_lower(cell.as_text());
+        const std::string cell_lower = lookup_text_key(cell.as_text(), profile);
         if (wildcard_match(pat_lower, cell_lower)) {
           return i;
         }
@@ -237,14 +258,11 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
     int cmp = 0;  // sign of (cell - lookup_value)
     bool comparable = false;
     if (lookup_value.is_text() && cell.is_text()) {
-      // ja-JP fold (see exact-mode branch above) before the ASCII
-      // case-insensitive compare so kana variants order together.
-      if (uses_mac_jp_text_folding(profile)) {
-        cmp = strings::case_insensitive_compare(fold_jp_text(cell.as_text(), /*fold_fullwidth_digits=*/false),
-                                                fold_jp_text(lookup_value.as_text(), /*fold_fullwidth_digits=*/false));
-      } else {
-        cmp = strings::case_insensitive_compare(cell.as_text(), lookup_value.as_text());
-      }
+      // Normalise (see exact-mode branch above) before the ASCII
+      // case-insensitive compare so kana / half-width voicing variants order
+      // together.
+      cmp = strings::case_insensitive_compare(lookup_text_cmp_key(cell.as_text(), profile),
+                                              lookup_text_cmp_key(lookup_value.as_text(), profile));
       comparable = true;
     } else if ((lookup_value.is_number() || lookup_value.is_blank()) && cell.is_number()) {
       // Blank cells in the scanned axis are NOT treated as numeric 0 in
@@ -673,18 +691,16 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // wildcards is still correct — `~*` becomes a literal `*` compare,
       // `foo` becomes a byte-exact compare. Lowering both sides gives
       // Excel's case-insensitive ASCII equality.
-      // ja-JP fold (see classic.cpp::lookup_scan) before lower-casing so
-      // MATCH agrees with Mac Excel on kana / full-width variants.
-      const bool jp_fold = uses_mac_jp_text_folding(ctx.excel_profile());
-      const std::string pat_lower = jp_fold ? fold_and_lower(lookup.as_text(), /*fold_fullwidth_digits=*/false)
-                                            : strings::to_ascii_lower(lookup.as_text());
+      // Normalise (see classic.cpp::lookup_scan / lookup_text_key) before
+      // lower-casing so MATCH agrees with Mac Excel on kana / full-width
+      // variants and with XLOOKUP on half-width voicing composition.
+      const std::string pat_lower = lookup_text_key(lookup.as_text(), ctx.excel_profile());
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cells[i];
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower = jp_fold ? fold_and_lower(cell.as_text(), /*fold_fullwidth_digits=*/false)
-                                               : strings::to_ascii_lower(cell.as_text());
+        const std::string cell_lower = lookup_text_key(cell.as_text(), ctx.excel_profile());
         if (wildcard_match(pat_lower, cell_lower)) {
           return Value::number(static_cast<double>(i + 1));
         }
@@ -733,13 +749,10 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return 0;
   };
   auto cmp_text = [&](std::string_view a, std::string_view b) -> int {
-    // ja-JP fold (see classic.cpp::lookup_scan) so kana variants order
-    // together in MATCH approximate mode.
-    if (uses_mac_jp_text_folding(ctx.excel_profile())) {
-      return strings::case_insensitive_compare(fold_jp_text(a, /*fold_fullwidth_digits=*/false),
-                                               fold_jp_text(b, /*fold_fullwidth_digits=*/false));
-    }
-    return strings::case_insensitive_compare(a, b);
+    // Normalise (see classic.cpp::lookup_scan / lookup_text_cmp_key) so kana /
+    // half-width voicing variants order together in MATCH approximate mode.
+    const ExcelProfile profile = ctx.excel_profile();
+    return strings::case_insensitive_compare(lookup_text_cmp_key(a, profile), lookup_text_cmp_key(b, profile));
   };
 
   // `last_valid_pos` is the running best position under the ordering rule.
@@ -753,9 +766,14 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     if (lookup.is_text() && cell.is_text()) {
       cmp = cmp_text(cell.as_text(), lookup.as_text());
       comparable = true;
-    } else if ((lookup.is_number() || lookup.is_blank()) && (cell.is_number() || cell.is_blank())) {
+    } else if ((lookup.is_number() || lookup.is_blank()) && cell.is_number()) {
+      // Blank cells in the scanned axis are NOT treated as numeric 0 in MATCH
+      // approximate mode: only real numeric cells participate in the ordering,
+      // mirroring VLOOKUP/HLOOKUP's `lookup_scan` (see classic.cpp). A blank
+      // cell is skipped (non-comparable) so a blank slot inside an ascending
+      // range does not become a spurious 0 match.
       const double lv = lookup.is_blank() ? 0.0 : lookup.as_number();
-      const double cv = cell.is_blank() ? 0.0 : cell.as_number();
+      const double cv = cell.as_number();
       cmp = cmp_numeric(cv, lv);
       comparable = true;
     } else if (lookup.is_boolean() && cell.is_boolean()) {

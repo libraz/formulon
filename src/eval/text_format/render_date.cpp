@@ -104,12 +104,12 @@ const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept {
 
 }  // namespace
 
-void render_date(const Section& section, std::string_view fmt, double serial, std::string& out) {
+void render_date(const Section& section, std::string_view fmt, double serial, std::string& out, bool date1904) {
   if (serial < 0.0 || serial > 2958465.0) {
     // Excel rejects out-of-range serials from TEXT.
     return;
   }
-  const ::formulon::eval::date_time::YMD ymd = ::formulon::eval::date_time::ymd_from_serial(serial);
+  const ::formulon::eval::date_time::YMD ymd = ::formulon::eval::date_time::ymd_from_serial(serial, date1904);
   // Weekday Sunday=0..Saturday=6 computed from the civil day count.
   const std::int64_t days = ::formulon::eval::date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
   const int sun0 = static_cast<int>(((days + 4) % 7 + 7) % 7);

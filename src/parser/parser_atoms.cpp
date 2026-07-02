@@ -17,6 +17,7 @@
 namespace formulon {
 namespace parser {
 
+using detail::DecodeDigitRunClamped;
 using detail::IsAsciiDigit;
 using detail::kBpAtPrefix;
 using detail::kBpUnaryPrefix;
@@ -25,9 +26,20 @@ using detail::SpanRange;
 
 AstNode* Parser::parse_number_atom() {
   const Token& tok = peek();
-  // Full-row promotion: `Number Colon Number` -> ref like `1:1`.
+  // Full-row promotion: `Number Colon Number` -> ref like `1:1` / `$1:$1`.
   if (peek_kind_at(1) == TokenKind::Colon && peek_kind_at(2) == TokenKind::Number) {
     return parse_full_row_or_number(tok);
+  }
+  // A `$`-anchored row index (`$1`) is emitted by the tokenizer as a Number
+  // whose lexeme retains the `$`. It is only meaningful as a whole-row
+  // reference endpoint (`$1:$1`), handled above; standalone it is neither a
+  // valid literal nor a valid reference, so surface a diagnostic rather than
+  // silently decoding it as the bare number after the `$` (which would make
+  // `=$1` evaluate to 1).
+  if (!tok.lexeme.empty() && tok.lexeme.front() == '$') {
+    record_error_with_token(ParseErrorCode::InvalidReference, tok.range, tok.lexeme);
+    advance();
+    return make_recovery_placeholder(tok.range);
   }
   advance();
   AstNode* n = make_literal(arena_, Value::number(tok.number));
@@ -40,9 +52,17 @@ AstNode* Parser::parse_number_atom() {
 
 AstNode* Parser::parse_full_row_or_number(const Token& first) {
   // first is the leading Number, currently at pos_. Validate that both ends
-  // are pure digit lexemes (no decimal / exponent) and decode the row index.
+  // are (optionally `$`-anchored) pure digit lexemes and decode the row
+  // index. An absolute anchor (`$1`) is emitted by the tokenizer as a Number
+  // whose lexeme retains the `$`; strip it here and carry the row_abs flag so
+  // `$1:$1` / `$1:$3` round-trip.
   const Token& second = peek_at(2);
-  auto is_pure_digit_run = [](std::string_view lex) {
+  auto decode_row = [](std::string_view lex, bool* row_abs, std::uint64_t* out_row) -> bool {
+    *row_abs = false;
+    if (!lex.empty() && lex.front() == '$') {
+      *row_abs = true;
+      lex.remove_prefix(1);
+    }
     if (lex.empty()) {
       return false;
     }
@@ -51,31 +71,30 @@ AstNode* Parser::parse_full_row_or_number(const Token& first) {
         return false;
       }
     }
+    // `DecodeDigitRunClamped` stops accumulating once the value is already
+    // past `kMaxRow`, so a pathological 20-digit row literal cannot wrap a
+    // `std::uint64_t` back into the valid range.
+    *out_row = DecodeDigitRunClamped(lex, kMaxRow);
     return true;
   };
-  if (!first.is_integer || !second.is_integer || !is_pure_digit_run(first.lexeme) ||
-      !is_pure_digit_run(second.lexeme)) {
-    // Not a clean full-row form; fall back to a plain number literal and let
-    // the binary `:` rule glue it to whatever follows.
-    advance();
-    AstNode* n = make_literal(arena_, Value::number(first.number));
-    if (n == nullptr) {
-      return nullptr;
-    }
-    n->set_range(first.range);
-    return n;
-  }
+  bool lhs_abs = false;
+  bool rhs_abs = false;
   std::uint64_t lhs_row = 0;
-  for (char c : first.lexeme) {
-    lhs_row = lhs_row * 10u + static_cast<std::uint32_t>(c - '0');
-  }
   std::uint64_t rhs_row = 0;
-  for (char c : second.lexeme) {
-    rhs_row = rhs_row * 10u + static_cast<std::uint32_t>(c - '0');
-  }
-  if (lhs_row == 0 || rhs_row == 0 || lhs_row > kMaxRow || rhs_row > kMaxRow || lhs_row != rhs_row) {
-    // Not a uniform full-row form (`1:2` would be a range of single-cell
-    // refs); fall back so the binary `:` rule handles it later.
+  const bool decoded = first.is_integer && second.is_integer && decode_row(first.lexeme, &lhs_abs, &lhs_row) &&
+                       decode_row(second.lexeme, &rhs_abs, &rhs_row) && lhs_row != 0 && rhs_row != 0 &&
+                       lhs_row <= kMaxRow && rhs_row <= kMaxRow;
+  if (!decoded) {
+    // A `$`-anchored endpoint that failed the whole-row decode (e.g.
+    // `$1:$99999999`) is not a valid literal either; surface a diagnostic
+    // rather than silently decoding `$1` as the bare number 1.
+    if (!first.lexeme.empty() && first.lexeme.front() == '$') {
+      record_error_with_token(ParseErrorCode::InvalidReference, first.range, first.lexeme);
+      advance();
+      return make_recovery_placeholder(first.range);
+    }
+    // Not a valid full-row form; fall back to a plain number literal and let
+    // the binary `:` rule glue it to whatever follows.
     advance();
     AstNode* n = make_literal(arena_, Value::number(first.number));
     if (n == nullptr) {
@@ -88,10 +107,34 @@ AstNode* Parser::parse_full_row_or_number(const Token& first) {
   advance();
   advance();
   advance();
-  Reference r;
-  r.row = static_cast<std::uint32_t>(lhs_row - 1);
-  r.is_full_row = true;
-  AstNode* n = make_ref(arena_, r);
+  Reference lhs_ref;
+  lhs_ref.row = static_cast<std::uint32_t>(lhs_row - 1);
+  lhs_ref.row_abs = lhs_abs;
+  lhs_ref.is_full_row = true;
+  if (lhs_row == rhs_row) {
+    // Same row on both sides (`1:1`): a single whole-row Ref.
+    AstNode* n = make_ref(arena_, lhs_ref);
+    if (n == nullptr) {
+      return nullptr;
+    }
+    n->set_range(SpanRange(first.range, second.range));
+    return n;
+  }
+  // Distinct rows (`1:3`): a range spanning two whole-row Refs. The
+  // evaluator's `expand_range` clamps the unbounded column axis to the
+  // sheet's used range.
+  Reference rhs_ref;
+  rhs_ref.row = static_cast<std::uint32_t>(rhs_row - 1);
+  rhs_ref.row_abs = rhs_abs;
+  rhs_ref.is_full_row = true;
+  AstNode* lhs_node = make_ref(arena_, lhs_ref);
+  AstNode* rhs_node = make_ref(arena_, rhs_ref);
+  if (lhs_node == nullptr || rhs_node == nullptr) {
+    return nullptr;
+  }
+  lhs_node->set_range(first.range);
+  rhs_node->set_range(second.range);
+  AstNode* n = make_range_op(arena_, lhs_node, rhs_node);
   if (n == nullptr) {
     return nullptr;
   }
@@ -593,17 +636,40 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     bool rhs_abs = false;
     const std::uint32_t lhs_col = decode_column_letters(ident.lexeme, &lhs_abs);
     const std::uint32_t rhs_col = decode_column_letters(peek_at(2).lexeme, &rhs_abs);
-    if (lhs_col != 0 && rhs_col != 0 && lhs_col == rhs_col) {
+    if (lhs_col != 0 && rhs_col != 0) {
       const TextRange start_range = ident.range;
       const TextRange end_range = peek_at(2).range;
       advance();  // Ident
       advance();  // Colon
       advance();  // Ident
-      Reference r;
-      r.col = lhs_col - 1;
-      r.col_abs = lhs_abs;
-      r.is_full_col = true;
-      AstNode* n = make_ref(arena_, r);
+      Reference lhs_ref;
+      lhs_ref.col = lhs_col - 1;
+      lhs_ref.col_abs = lhs_abs;
+      lhs_ref.is_full_col = true;
+      if (lhs_col == rhs_col) {
+        // Same column on both sides (`A:A`): a single whole-column Ref.
+        AstNode* n = make_ref(arena_, lhs_ref);
+        if (n == nullptr) {
+          return nullptr;
+        }
+        n->set_range(SpanRange(start_range, end_range));
+        return n;
+      }
+      // Distinct columns (`A:C`): a range spanning two whole-column Refs.
+      // The evaluator's `expand_range` clamps the unbounded row axis to the
+      // sheet's used range.
+      Reference rhs_ref;
+      rhs_ref.col = rhs_col - 1;
+      rhs_ref.col_abs = rhs_abs;
+      rhs_ref.is_full_col = true;
+      AstNode* lhs_node = make_ref(arena_, lhs_ref);
+      AstNode* rhs_node = make_ref(arena_, rhs_ref);
+      if (lhs_node == nullptr || rhs_node == nullptr) {
+        return nullptr;
+      }
+      lhs_node->set_range(start_range);
+      rhs_node->set_range(end_range);
+      AstNode* n = make_range_op(arena_, lhs_node, rhs_node);
       if (n == nullptr) {
         return nullptr;
       }

@@ -20,6 +20,7 @@
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
 #include "eval/function_registry.h"
+#include "eval/number_parse.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/text_format/number_format.h"
 #include "parser/ast.h"
@@ -29,312 +30,14 @@
 
 namespace formulon {
 namespace eval {
-namespace {
 
 // ---------------------------------------------------------------------------
-// Numeric parsing used by VALUE and NUMBERVALUE.
+// TEXT(value, format_text). Exposed (not in the anonymous namespace) because
+// it is date1904-sensitive and served through the shared calendar lookup
+// (`find_date_entry`) + the lazy TEXT wrapper, not the eager registry.
 // ---------------------------------------------------------------------------
 
-bool is_ascii_ws(unsigned char c) noexcept {
-  return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
-}
-
-std::string_view trim_ascii(std::string_view s) noexcept {
-  while (!s.empty() && is_ascii_ws(static_cast<unsigned char>(s.front()))) {
-    s.remove_prefix(1);
-  }
-  while (!s.empty() && is_ascii_ws(static_cast<unsigned char>(s.back()))) {
-    s.remove_suffix(1);
-  }
-  return s;
-}
-
-// Strips a leading currency prefix recognised by Excel's VALUE. Returns
-// the remaining view. Supported prefixes: ASCII '$', UTF-8 '¥' (0xC2 0xA5),
-// UTF-8 '￥' (0xEF 0xBF 0xA5), UTF-8 '€' (0xE2 0x82 0xAC). The prefix is
-// optional and the caller must still handle a missing one.
-std::string_view strip_currency(std::string_view s) noexcept {
-  if (s.empty()) {
-    return s;
-  }
-  if (s.front() == '$') {
-    return s.substr(1);
-  }
-  if (s.size() >= 2 && static_cast<unsigned char>(s[0]) == 0xC2u && static_cast<unsigned char>(s[1]) == 0xA5u) {
-    return s.substr(2);
-  }
-  if (s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xEFu && static_cast<unsigned char>(s[1]) == 0xBFu &&
-      static_cast<unsigned char>(s[2]) == 0xA5u) {
-    return s.substr(3);
-  }
-  if (s.size() >= 3 && static_cast<unsigned char>(s[0]) == 0xE2u && static_cast<unsigned char>(s[1]) == 0x82u &&
-      static_cast<unsigned char>(s[2]) == 0xACu) {
-    return s.substr(3);
-  }
-  return s;
-}
-
-// Strips a trailing Euro suffix (`23€` -> `23`). Mac Excel 365 accepts
-// Euro both as prefix and suffix when coercing text to a number; the
-// dollar sign and the yen kanji (`円`) are NOT accepted as suffix, so
-// this helper is deliberately Euro-only. Returns the input unchanged
-// when no Euro suffix is present.
-std::string_view strip_trailing_euro(std::string_view s) noexcept {
-  if (s.size() >= 3 && static_cast<unsigned char>(s[s.size() - 3]) == 0xE2u &&
-      static_cast<unsigned char>(s[s.size() - 2]) == 0x82u && static_cast<unsigned char>(s[s.size() - 1]) == 0xACu) {
-    return s.substr(0, s.size() - 3);
-  }
-  return s;
-}
-
-// Parses a numeric string using `decimal_sep` and `group_sep`. `group_sep`
-// is ignored during parsing (it may appear any number of times to the left
-// of the decimal point). A leading sign (`+` / `-`), an optional currency
-// prefix, and a trailing `%` (applied AFTER the numeric parse) are all
-// accepted. Returns true on success and writes the parsed value into
-// `*out`.
-bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, double* out) noexcept {
-  // Trim ASCII whitespace first.
-  s = trim_ascii(s);
-  if (s.empty()) {
-    return false;
-  }
-  // Sign.
-  bool negative = false;
-  if (s.front() == '+' || s.front() == '-') {
-    negative = s.front() == '-';
-    s.remove_prefix(1);
-    if (s.empty()) {
-      return false;
-    }
-  }
-  // Optional currency symbol.
-  s = strip_currency(s);
-  if (s.empty()) {
-    return false;
-  }
-  // Optional trailing Euro suffix. Mac Excel 365 specifically accepts
-  // `€` as a suffix (e.g. `"23€"`); `$` and `円` are not accepted.
-  s = strip_trailing_euro(s);
-  if (s.empty()) {
-    return false;
-  }
-  // Trailing percent signs. Each `%` multiplies the parsed value by 0.01,
-  // so `"50%%"` yields `0.005` (matches Mac Excel ja-JP NUMBERVALUE).
-  int percent_count = 0;
-  while (!s.empty() && s.back() == '%') {
-    ++percent_count;
-    s.remove_suffix(1);
-  }
-  if (s.empty()) {
-    return false;
-  }
-  // Scan and assemble a canonical C-locale numeric string (digits, one
-  // optional `.`, optional exponent `e[+/-]digits`). Reject on any
-  // unexpected byte.
-  std::string canonical;
-  canonical.reserve(s.size());
-  bool seen_digit = false;
-  bool seen_point = false;
-  bool seen_exp = false;
-  // Thousands-grouping validation state. Mac Excel rejects malformed
-  // groupings such as `"12,34"` (2 digits before, 2 after) or `"1,2345"`
-  // (final group not exactly 3 digits). The first group (before the
-  // first separator) must be 1-3 digits; every subsequent group must be
-  // exactly 3 digits.
-  bool seen_group_sep = false;
-  int digits_in_current_group = 0;
-  for (std::size_t i = 0; i < s.size(); ++i) {
-    const char c = s[i];
-    if (c >= '0' && c <= '9') {
-      canonical.push_back(c);
-      seen_digit = true;
-      if (!seen_point && !seen_exp) {
-        ++digits_in_current_group;
-      }
-      continue;
-    }
-    if (c == decimal_sep && !seen_point && !seen_exp) {
-      // Transitioning out of integer part: validate the final integer
-      // group if any group separators were seen.
-      if (seen_group_sep && digits_in_current_group != 3) {
-        return false;
-      }
-      canonical.push_back('.');
-      seen_point = true;
-      continue;
-    }
-    if (group_sep != '\0' && c == group_sep && !seen_point && !seen_exp) {
-      // Group separator inside the integer part. Validate the just-
-      // finished group: 1-3 digits for the first one, exactly 3 for
-      // any subsequent group. `group_sep == '\0'` means the caller
-      // opted out of group separators entirely.
-      if (!seen_group_sep) {
-        if (digits_in_current_group < 1 || digits_in_current_group > 3) {
-          return false;
-        }
-      } else {
-        if (digits_in_current_group != 3) {
-          return false;
-        }
-      }
-      seen_group_sep = true;
-      digits_in_current_group = 0;
-      continue;
-    }
-    if ((c == 'e' || c == 'E') && seen_digit && !seen_exp) {
-      // Transitioning out of integer part (no decimal seen): validate
-      // the final integer group if any group separators were seen.
-      if (!seen_point && seen_group_sep && digits_in_current_group != 3) {
-        return false;
-      }
-      canonical.push_back('e');
-      seen_exp = true;
-      if (i + 1 < s.size() && (s[i + 1] == '+' || s[i + 1] == '-')) {
-        canonical.push_back(s[i + 1]);
-        ++i;
-      }
-      continue;
-    }
-    return false;
-  }
-  if (!seen_digit) {
-    return false;
-  }
-  // End-of-input: if grouping was used and we never left the integer
-  // part, the final group must also be exactly 3 digits.
-  if (seen_group_sep && !seen_point && !seen_exp && digits_in_current_group != 3) {
-    return false;
-  }
-  // Parse via std::strtod over a NUL-terminated buffer.
-  char stack_buf[64];
-  char* heap_buf = nullptr;
-  const std::size_t n = canonical.size();
-  char* buf = stack_buf;
-  if (n + 1 > sizeof(stack_buf)) {
-    heap_buf = static_cast<char*>(std::malloc(n + 1));
-    if (heap_buf == nullptr) {
-      return false;
-    }
-    buf = heap_buf;
-  }
-  std::memcpy(buf, canonical.data(), n);
-  buf[n] = '\0';
-  char* end_ptr = nullptr;
-  double parsed = std::strtod(buf, &end_ptr);
-  const bool ok = end_ptr == buf + n;
-  if (heap_buf != nullptr) {
-    std::free(heap_buf);
-  }
-  if (!ok) {
-    return false;
-  }
-  if (std::isnan(parsed) || std::isinf(parsed)) {
-    return false;
-  }
-  // Apply percent scaling with division (not multiplication by 0.01) so the
-  // result is bit-identical to Mac Excel for clean cases such as
-  // `VALUE("23.5%")`. `23.5 * 0.01` is `0x3fce147ae147ae15` — one ulp above
-  // the canonical `0.235` (`0x3fce147ae147ae14`) that Excel returns; dividing
-  // by 100 directly lands on the canonical bit pattern.
-  for (int k = 0; k < percent_count; ++k) {
-    parsed /= 100.0;
-  }
-  if (negative) {
-    parsed = -parsed;
-  }
-  *out = parsed;
-  return true;
-}
-
-// Locale-input pre-pass shared by VALUE and NUMBERVALUE. Performs two
-// orthogonal normalisations:
-//
-//   1. Full-width ASCII forms (U+FF01..U+FF5E) and the ideographic space
-//      (U+3000) are folded to their ASCII equivalents. Mac Excel ja-JP
-//      coerces strings such as `"２０２４"` and `"２５％"` transparently;
-//      this fold reproduces that behaviour without complicating the
-//      `parse_numeric` grammar.
-//   2. Accounting-style outer parentheses (`"(1234)"` -> `-1234`,
-//      `"(¥1234)"` -> `-1234`) are detected and stripped, with the
-//      enclosed digits flagged for negation by the caller. The inner
-//      string must be non-empty and must not begin with an explicit
-//      sign (`+` / `-`); a missing or unbalanced closing paren is left
-//      untouched so `parse_numeric` can reject it.
-//
-// `*paren_negated` is set to `true` when accounting parens were
-// stripped. Currency-symbol stripping is intentionally left to
-// `parse_numeric`, which already handles `'$'` / `'¥'` / `'€'` for
-// both VALUE and NUMBERVALUE.
-std::string normalize_locale_numeric(std::string_view raw, bool* paren_negated) {
-  *paren_negated = false;
-  std::string out;
-  out.reserve(raw.size());
-  std::size_t i = 0;
-  while (i < raw.size()) {
-    const unsigned char b0 = static_cast<unsigned char>(raw[i]);
-    // 3-byte UTF-8 sequences cover the U+3000 / U+FF00 / U+FFE5 ranges
-    // we care about; everything else passes through verbatim so that
-    // multi-byte tails (e.g. `¥` 0xC2 0xA5, the kanji `円`, etc.) reach
-    // `parse_numeric` unchanged.
-    if (b0 >= 0xE0u && b0 < 0xF0u && i + 2 < raw.size()) {
-      const unsigned char b1 = static_cast<unsigned char>(raw[i + 1]);
-      const unsigned char b2 = static_cast<unsigned char>(raw[i + 2]);
-      const std::uint32_t cp = (static_cast<std::uint32_t>(b0 & 0x0Fu) << 12) |
-                               (static_cast<std::uint32_t>(b1 & 0x3Fu) << 6) | static_cast<std::uint32_t>(b2 & 0x3Fu);
-      char ascii = '\0';
-      if (cp >= 0xFF10u && cp <= 0xFF19u) {
-        ascii = static_cast<char>('0' + (cp - 0xFF10u));
-      } else if (cp >= 0xFF21u && cp <= 0xFF3Au) {
-        ascii = static_cast<char>('A' + (cp - 0xFF21u));
-      } else if (cp >= 0xFF41u && cp <= 0xFF5Au) {
-        ascii = static_cast<char>('a' + (cp - 0xFF41u));
-      } else if (cp == 0xFF0Eu) {
-        ascii = '.';
-      } else if (cp == 0xFF0Cu) {
-        ascii = ',';
-      } else if (cp == 0xFF05u) {
-        ascii = '%';
-      } else if (cp == 0xFF0Bu) {
-        ascii = '+';
-      } else if (cp == 0xFF0Du) {
-        ascii = '-';
-      } else if (cp == 0xFF08u) {
-        ascii = '(';
-      } else if (cp == 0xFF09u) {
-        ascii = ')';
-      } else if (cp == 0x3000u) {
-        ascii = ' ';
-      }
-      if (ascii != '\0') {
-        out.push_back(ascii);
-        i += 3;
-        continue;
-      }
-    }
-    out.push_back(raw[i]);
-    ++i;
-  }
-  // Accounting-style outer parens. Trim only ASCII whitespace because
-  // `parse_numeric` does the same; full-width spaces have already been
-  // folded to ASCII above.
-  std::string_view trimmed = trim_ascii(out);
-  if (trimmed.size() >= 3 && trimmed.front() == '(' && trimmed.back() == ')') {
-    std::string_view inner = trimmed.substr(1, trimmed.size() - 2);
-    inner = trim_ascii(inner);
-    if (!inner.empty() && inner.front() != '+' && inner.front() != '-') {
-      *paren_negated = true;
-      return std::string(inner);
-    }
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// TEXT(value, format_text)
-// ---------------------------------------------------------------------------
-
-Value Text_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
+Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena, bool date1904) {
   const Value& v = args[0];
 
   // Error and non-scalar inputs short-circuit before we even look at the
@@ -387,12 +90,14 @@ Value Text_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 
   std::string out;
   out.reserve(32);
-  const auto status = ::formulon::text_format::apply_format(number, format_text, out);
+  const auto status = ::formulon::text_format::apply_format(number, format_text, out, date1904);
   if (status != ::formulon::text_format::FormatStatus::kOk) {
     return Value::error(ErrorCode::Value);
   }
   return Value::text(arena.intern(out));
 }
+
+namespace {
 
 // ---------------------------------------------------------------------------
 // FIXED(number, [decimals=2], [no_commas=FALSE])
@@ -942,8 +647,11 @@ Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const Fun
 }
 
 void register_text_format_builtins(FunctionRegistry& registry) {
+  // TEXT is NOT registered here: it is date1904-sensitive (date format codes
+  // read the workbook epoch), so it routes through the lazy TEXT wrapper
+  // (`eval_text_lazy`) and the shared `find_date_entry` hook (VM), which pass
+  // `EvalContext::date1904()` into `text_builtin_impl`.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"TEXT", 2u, 2u, &Text_},
       {"VALUE", 1u, 1u, &Value_},
       {"VALUETOTEXT", 1u, 2u, &ValueToText_},
       {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_},

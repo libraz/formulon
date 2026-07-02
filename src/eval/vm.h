@@ -17,12 +17,14 @@
 //     remains the single source of truth, and the VM is exercised in
 //     parallel under `FORMULON_VM_PARITY_CHECK` to surface any drift.
 //     Bundle 5.3 will swap the entry point.
-//   * No `accepts_ranges` AST inspection. The bytecode IR represents only
-//     scalar arguments to function calls; range-aware aggregators that
-//     receive a literal `A1:B2` argument lose their AST shape during
-//     compile and the VM evaluates them through whatever `Value` the
-//     compiler-side LoadRange path produced. This is the documented IR
-//     limitation that future bundles will revisit.
+//   * Range arguments via LoadRange. A bare `Ref:Ref` range (`A1:B2`) is
+//     lowered to two `LoadRef`s plus a `LoadRange` marker; the VM expands
+//     the rectangle into an `Array` value, which range-aware aggregators
+//     (`accepts_ranges`) then flatten during `Call`. Complex range
+//     endpoints (`OFFSET(...):B5`) are not reconstructable from the IR and
+//     surface `#VALUE!`, matching the tree-walker's non-Ref-endpoint
+//     fallback. This residual gap is the documented IR limitation that
+//     future bundles will revisit.
 
 #ifndef FORMULON_EVAL_VM_H_
 #define FORMULON_EVAL_VM_H_

@@ -67,9 +67,15 @@ YMD civil_from_days(std::int64_t days) noexcept;
 /// * `serial_floor > 60` maps against base 1899-12-30 (the off-by-one
 ///   correction that absorbs the ghost day).
 ///
+/// When `date1904` is true the serial is interpreted under the 1904 date
+/// system (serial 0 = 1904-01-01). That system carries no 1900 leap-year
+/// bug, so the ghost-day handling is skipped entirely: every serial maps
+/// linearly off the 1904 epoch. A 1904 serial is exactly 1462 less than
+/// the 1900 serial for the same calendar day.
+///
 /// Callers must ensure `serial_floor >= 0`; negative serials are invalid
 /// and should be rejected at the builtin boundary.
-YMD ymd_from_serial(double serial_floor) noexcept;
+YMD ymd_from_serial(double serial_floor, bool date1904 = false) noexcept;
 
 /// Inverse of `ymd_from_serial`. The input triple need not be a valid
 /// calendar date: out-of-range months/days are normalised first (via
@@ -79,7 +85,12 @@ YMD ymd_from_serial(double serial_floor) noexcept;
 /// The 1900 leap-year bug is reinserted for any result strictly after
 /// 1900-02-28 (i.e. the Excel serial is one greater than the proleptic
 /// offset for all dates from 1900-03-01 onward).
-double serial_from_ymd(int y, unsigned m, unsigned d) noexcept;
+///
+/// When `date1904` is true the result is a 1904-date-system serial
+/// (serial 0 = 1904-01-01); the 1900 leap-year bug does not apply, so the
+/// ghost-day interception is skipped. The 1904 serial is exactly 1462
+/// less than the 1900 serial for the same calendar day.
+double serial_from_ymd(int y, unsigned m, unsigned d, bool date1904 = false) noexcept;
 
 /// Extracts hour/minute/second from the fractional part of a serial. The
 /// total seconds in the day are rounded to the nearest integer; this

@@ -691,11 +691,66 @@ TEST(TreeWalkerRanges, CrossSheetRangeReturnsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(TreeWalkerRanges, WholeColumnRangeReturnsValue) {
+TEST(TreeWalkerRanges, WholeColumnEmptySheetSumsToZero) {
+  // A whole-column aggregate over an empty sheet clamps to no cells and
+  // sums to 0 without walking the full column.
   Sheet sheet("Sheet1");
   const Value v = EvalInSheet(sheet, "=SUM(A:A)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(TreeWalkerRanges, WholeColumnSumsPopulatedCells) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(2.0));
+  sheet.set_cell_value(2, 0, Value::number(3.0));
+  const Value v = EvalInSheet(sheet, "=SUM(A:A)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 6.0);
+}
+
+TEST(TreeWalkerRanges, MultiColumnWholeRangeSums) {
+  // `A:C` spans columns A..C; SUM aggregates every populated cell.
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));    // A1
+  sheet.set_cell_value(1, 1, Value::number(10.0));   // B2
+  sheet.set_cell_value(0, 2, Value::number(100.0));  // C1
+  const Value v = EvalInSheet(sheet, "=SUM(A:C)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 111.0);
+}
+
+TEST(TreeWalkerRanges, WholeRowCountsPopulatedCells) {
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));    // A1
+  sheet.set_cell_value(0, 2, Value::number(100.0));  // C1
+  const Value v = EvalInSheet(sheet, "=COUNTA(1:1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(TreeWalkerRanges, MixedWholeColumnAndRowSum) {
+  // `SUM(A:A, 1:1)` mixes a whole-column and a whole-row reference.
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(1.0));    // A1 (in both)
+  sheet.set_cell_value(1, 0, Value::number(2.0));    // A2 (column only)
+  sheet.set_cell_value(0, 2, Value::number(100.0));  // C1 (row only)
+  const Value v = EvalInSheet(sheet, "=SUM(A:A,1:1)");
+  ASSERT_TRUE(v.is_number());
+  // Column A: 1 + 2 = 3; Row 1: 1 + 100 = 101; total 104.
+  EXPECT_EQ(v.as_number(), 104.0);
+}
+
+TEST(TreeWalkerRanges, WholeColumnIndexPreservesPosition) {
+  // INDEX over a whole column must keep positional origin at row 1, so
+  // INDEX(A:A, 2) is A2 even though row 1 is the first populated row.
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(11.0));  // A1
+  sheet.set_cell_value(1, 0, Value::number(22.0));  // A2
+  const Value v = EvalInSheet(sheet, "=INDEX(A:A,2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 22.0);
 }
 
 TEST(TreeWalkerRanges, ReversedRangeSameResult) {

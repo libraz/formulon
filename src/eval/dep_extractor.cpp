@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "eval/defined_name_resolve.h"
 #include "eval/dep_graph.h"
 #include "eval/formula_text_utils.h"
 #include "eval/structured_ref.h"
@@ -137,31 +138,6 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
 
 // Forward decl for the recursive walker.
 void walk(const parser::AstNode& node, WalkState& state);
-
-// Resolves `name` against the workbook's defined-name list. Sheet-scoped
-// definitions matching `state.current_sheet_id` take priority over
-// workbook-scoped definitions; comparison is case-insensitive (matching
-// Excel's name resolution semantics). Returns `nullptr` when no match
-// exists — callers treat that as a silent skip.
-const io::DefinedName* find_defined_name(std::string_view name, const WalkState& state) noexcept {
-  const auto& names = state.workbook->defined_names();
-  const io::DefinedName* workbook_match = nullptr;
-  for (const auto& entry : names) {
-    if (!strings::case_insensitive_eq(entry.name, name)) {
-      continue;
-    }
-    if (entry.local_sheet_id >= 0 && static_cast<std::uint16_t>(entry.local_sheet_id) == state.current_sheet_id) {
-      // Sheet-scoped match wins immediately.
-      return &entry;
-    }
-    if (entry.local_sheet_id < 0 && workbook_match == nullptr) {
-      // Latch the first workbook-scoped match but keep scanning for a
-      // sheet-scoped one that should take priority.
-      workbook_match = &entry;
-    }
-  }
-  return workbook_match;
-}
 
 // Expands a defined-name reference: parses its formula text in the
 // extractor-local arena and recurses into the resulting AST through the
@@ -366,11 +342,16 @@ void walk(const parser::AstNode& node, WalkState& state) {
     }
 
     case parser::NodeKind::Ref3D: {
-      // A 3-D reference reads the same cell on every sheet in the inclusive
-      // workbook-order span. Register one cell dep per sheet in the span so
-      // an edit to any of them invalidates this formula.
+      // A 3-D reference reads the same cell (or cell rectangle) on every
+      // sheet in the inclusive workbook-order span. Register a cell dep per
+      // (sheet, area cell) so an edit to any of them invalidates this
+      // formula.
       const parser::Reference& cell = node.as_ref3d_cell();
-      if (cell.is_full_col || cell.is_full_row || cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols) {
+      const bool is_range = node.as_ref3d_is_range();
+      const parser::Reference& cell_end = node.as_ref3d_cell_end();
+      if (cell.is_full_col || cell.is_full_row || cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
+          (is_range && (cell_end.is_full_col || cell_end.is_full_row || cell_end.row >= Sheet::kMaxRows ||
+                        cell_end.col >= Sheet::kMaxCols))) {
         return;
       }
       if (state.workbook == nullptr) {
@@ -383,8 +364,16 @@ void walk(const parser::AstNode& node, WalkState& state) {
       }
       const std::size_t lo = std::min(begin_idx, end_idx);
       const std::size_t hi = std::max(begin_idx, end_idx);
+      const std::uint32_t r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
+      const std::uint32_t r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
+      const std::uint32_t c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
+      const std::uint32_t c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
       for (std::size_t s = lo; s <= hi; ++s) {
-        add_cell_dep(state, CellNodeId{static_cast<std::uint16_t>(s), cell.row, cell.col});
+        for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
+          for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
+            add_cell_dep(state, CellNodeId{static_cast<std::uint16_t>(s), r, c});
+          }
+        }
       }
       return;
     }
@@ -400,7 +389,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // unknown sheet qualifiers and out-of-bounds coordinates. On a hit we
       // re-enter `walk()` with the parsed body so cells, ranges, volatility,
       // and nested NameRefs all surface naturally.
-      const io::DefinedName* def = find_defined_name(node.as_name(), state);
+      const io::DefinedName* def = find_defined_name(*state.workbook, state.current_sheet_id, node.as_name());
       if (def == nullptr) {
         return;
       }

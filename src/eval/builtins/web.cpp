@@ -30,6 +30,7 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/number_parse.h"
 #include "pugixml.hpp"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -163,7 +164,7 @@ bool parse_excel_readback_number(std::string_view s, double* out) noexcept {
   std::string tmp(s);
   char* end = nullptr;
   errno = 0;
-  const double parsed = std::strtod(tmp.c_str(), &end);
+  const double parsed = parse_double_c_locale(tmp.c_str(), &end);
   if (errno != 0 || end == tmp.c_str() || *end != '\0') {
     return false;
   }

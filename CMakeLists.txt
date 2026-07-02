@@ -195,6 +195,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/rng.cpp
   src/eval/dep_graph.cpp
   src/eval/dep_extractor.cpp
+  src/eval/defined_name_resolve.cpp
   src/eval/dirty_set.cpp
   src/eval/iterative_solver.cpp
   src/eval/recalc_engine.cpp
@@ -272,7 +273,9 @@ set(FORMULON_CORE_SOURCES
   src/eval/coupon_schedule.cpp
   src/eval/date_time.cpp
   src/eval/date_text_parse.cpp
+  src/eval/datetime_lazy.cpp
   src/eval/japanese_era.cpp
+  src/eval/number_parse.cpp
   src/eval/range_args.cpp
   src/eval/scalar_ops.cpp
   src/eval/spill_committer.cpp

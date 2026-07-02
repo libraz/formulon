@@ -11,15 +11,18 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // ---------------------------------------------------------------------------
 // TRUE
@@ -208,6 +211,69 @@ TEST(BuiltinsAnd, ZeroArgsIsArityViolation) {
   const Value v = EvalSource("=AND()");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// AND / OR — array / spill / dynamic-array / LET provenance. These arrive
+// through the unified lazy range-argument gate. An array constant and a
+// dynamic-array producer contribute their Bool / Number cells (Text / Blank
+// cells are skipped, not coerced), and a LET-bound range keeps range shape.
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsAnd, ArrayConstantAllTrue) {
+  const Value v = EvalSource("=AND({TRUE,TRUE})");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsAnd, ArrayConstantWithFalse) {
+  // Previously `AND({TRUE,FALSE})` surfaced #VALUE! because the array
+  // literal never reached the range gate; it now evaluates to FALSE.
+  const Value v = EvalSource("=AND({TRUE,FALSE})");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsAnd, ArrayConstantSkipsText) {
+  // Text inside an array is skipped (range provenance), so only the bool
+  // contributes: TRUE.
+  const Value v = EvalSource("=AND({TRUE,\"x\"})");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsAnd, LetBoundRangeEvaluatesEveryCell) {
+  // A LET binding to a range must evaluate every cell, not just the anchor:
+  // A1:A3 = [TRUE, FALSE, TRUE] -> AND is FALSE.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(true));
+  wb.sheet(0).set_cell_value(1, 0, Value::boolean(false));
+  wb.sheet(0).set_cell_value(2, 0, Value::boolean(true));
+  const Value v = EvalSourceIn("=LET(r, A1:A3, AND(r))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(BuiltinsOr, DynamicArrayFromFilter) {
+  // OR over a FILTER result (a dynamic array) must expand the array. A1:A3
+  // are values, B1:B3 the include flags; FILTER keeps rows where B is TRUE,
+  // yielding {FALSE;TRUE} -> OR is TRUE.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::boolean(false));
+  wb.sheet(0).set_cell_value(1, 0, Value::boolean(true));
+  wb.sheet(0).set_cell_value(2, 0, Value::boolean(false));
+  wb.sheet(0).set_cell_value(0, 1, Value::boolean(true));
+  wb.sheet(0).set_cell_value(1, 1, Value::boolean(true));
+  wb.sheet(0).set_cell_value(2, 1, Value::boolean(false));
+  const Value v = EvalSourceIn("=OR(FILTER(A1:A3, B1:B3))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsOr, ArrayConstantAllFalse) {
+  const Value v = EvalSource("=OR({FALSE,FALSE})");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
 }
 
 // ---------------------------------------------------------------------------
@@ -518,6 +584,99 @@ TEST(BuiltinsIfs, LiteralFalseTextConditionSkipped) {
   const Value v = EvalSource("=IFS(\"false\", 1, TRUE, \"catchall\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "catchall");
+}
+
+TEST(BuiltinsIfs, WhitespaceWrappedTrueTextAccepted) {
+  // IFS now shares AND / OR's host-aware coercion, which trims surrounding
+  // ASCII whitespace before matching "TRUE" / "FALSE": `IFS("  TRUE  ", 7)`
+  // takes the first branch, mirroring `AND("  TRUE  ", TRUE)`.
+  const Value v = EvalSource("=IFS(\"  TRUE  \", 7)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.0);
+}
+
+// ---------------------------------------------------------------------------
+// Blank-vs-Bool comparison: a blank cell chameleons to the boolean FALSE, so
+// it equals FALSE (and 0 and "") but not TRUE, and orders as FALSE.
+// ---------------------------------------------------------------------------
+
+TEST(OperatorBlankBool, BlankEqualsFalse) {
+  Workbook wb = Workbook::create();  // A1 left blank.
+  const Value v = EvalSourceIn("=(A1=FALSE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(OperatorBlankBool, BlankNotEqualToTrue) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=(A1=TRUE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(OperatorBlankBool, BlankLessThanTrue) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=(A1<TRUE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(OperatorBlankBool, BlankNotLessThanFalse) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=(A1<FALSE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
+}
+
+TEST(OperatorBlankBool, BlankGreaterOrEqualFalse) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=(A1>=FALSE)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+// ---------------------------------------------------------------------------
+// SWITCH equality: type-strict + case-insensitive text, with the single
+// special case that a blank subject matches numeric 0 (but not "" or FALSE).
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsSwitch, BlankSubjectMatchesZero) {
+  Workbook wb = Workbook::create();  // A1 blank.
+  const Value v = EvalSourceIn("=SWITCH(A1, 0, \"zero\", \"other\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "zero");
+}
+
+TEST(BuiltinsSwitch, BlankSubjectDoesNotMatchEmptyText) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=SWITCH(A1, \"\", \"empty\", \"other\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "other");
+}
+
+TEST(BuiltinsSwitch, BlankSubjectDoesNotMatchFalse) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=SWITCH(A1, FALSE, \"f\", \"other\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "other");
+}
+
+TEST(BuiltinsSwitch, NoCrossTypeCoercionNumberVsText) {
+  const Value v = EvalSource("=SWITCH(23, \"23\", \"x\", \"other\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "other");
+}
+
+TEST(BuiltinsSwitch, NoCrossTypeCoercionTextVsNumber) {
+  const Value v = EvalSource("=SWITCH(\"23\", 23, \"x\", \"other\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "other");
+}
+
+TEST(BuiltinsSwitch, TextMatchIsCaseInsensitive) {
+  const Value v = EvalSource("=SWITCH(\"a\", \"A\", \"casehit\", \"other\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "casehit");
 }
 
 }  // namespace

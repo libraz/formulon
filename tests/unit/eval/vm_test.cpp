@@ -92,6 +92,16 @@ Value RunTreeOrDie(std::string_view src, Arena& arena) {
   return evaluate(*root, arena, default_registry(), test::mac_context());
 }
 
+Value RunTreeWithCtx(std::string_view src, Arena& arena, const EvalContext& ctx) {
+  parser::Parser p(src, arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, arena, default_registry(), ctx);
+}
+
 bool ValuesAgreeBitExact(const Value& a, const Value& b) {
   if (a.kind() != b.kind()) {
     return false;
@@ -447,6 +457,185 @@ TEST(Vm, RefArithmetic) {
   const Value v = RunVmWithCtx("=A1*A2+1", a, ctx);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 11.0);
+}
+
+// ---------------------------------------------------------------------------
+// Many string constants: stable `string_storage` borrow contract
+// ---------------------------------------------------------------------------
+
+TEST(Vm, ManyStringConstantsDoNotDangle) {
+  // `ByteCode::string_storage` backs the `string_view`s that Text constants
+  // borrow. It must keep every element address stable no matter how many
+  // literals are interned; concatenating far more than any small-reserve
+  // heuristic would forces the pool to grow well past its initial size. A
+  // dangling borrow here would surface as a corrupted / crashing result.
+  const std::string src =
+      "=CONCAT(\"s0\",\"s1\",\"s2\",\"s3\",\"s4\",\"s5\",\"s6\",\"s7\",\"s8\",\"s9\","
+      "\"s10\",\"s11\",\"s12\",\"s13\",\"s14\",\"s15\",\"s16\",\"s17\",\"s18\",\"s19\")";
+  Arena a;
+  const Value v = RunVmOrDie(src, a);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "s0s1s2s3s4s5s6s7s8s9s10s11s12s13s14s15s16s17s18s19");
+}
+
+TEST(Vm, ManyStringConstantsConcatAgreesWithTreeWalker) {
+  // A second high-cardinality constant-pool path cross-checked against the
+  // tree-walker: the two evaluators must agree on the concatenation.
+  const std::string src =
+      "=CONCAT(\"s0\",\"s1\",\"s2\",\"s3\",\"s4\",\"s5\",\"s6\",\"s7\",\"s8\",\"s9\","
+      "\"s10\",\"s11\",\"s12\",\"s13\",\"s14\",\"s15\",\"s16\",\"s17\",\"s18\",\"s19\")";
+  Arena a;
+  const Value vm = RunVmOrDie(src, a);
+  Arena a2;
+  const Value tree = RunTreeOrDie(src, a2);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm)) << "vm=" << vm.debug_to_string();
+}
+
+// ---------------------------------------------------------------------------
+// Range arguments: SUM(A1:B2) must aggregate every cell, not collapse
+// ---------------------------------------------------------------------------
+
+TEST(Vm, SumOverRectangularRange) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(1.0));  // A1 = 1
+  s.set_cell_value(0U, 1U, Value::number(2.0));  // B1 = 2
+  s.set_cell_value(1U, 0U, Value::number(3.0));  // A2 = 3
+  s.set_cell_value(1U, 1U, Value::number(4.0));  // B2 = 4
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value vm = RunVmWithCtx("=SUM(A1:B2)", a, ctx);
+  ASSERT_TRUE(vm.is_number());
+  EXPECT_DOUBLE_EQ(vm.as_number(), 10.0);
+  Arena a2;
+  const Value tree = RunTreeWithCtx("=SUM(A1:B2)", a2, ctx);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+TEST(Vm, SumOverColumnRange) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(10.0));  // A1
+  s.set_cell_value(1U, 0U, Value::number(20.0));  // A2
+  s.set_cell_value(2U, 0U, Value::number(30.0));  // A3
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value vm = RunVmWithCtx("=SUM(A1:A3)", a, ctx);
+  ASSERT_TRUE(vm.is_number());
+  EXPECT_DOUBLE_EQ(vm.as_number(), 60.0);
+}
+
+TEST(Vm, RangeAverageAgreesWithTreeWalker) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(2.0));   // A1
+  s.set_cell_value(0U, 1U, Value::number(4.0));   // B1
+  s.set_cell_value(1U, 0U, Value::number(6.0));   // A2
+  s.set_cell_value(1U, 1U, Value::number(12.0));  // B2
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value vm = RunVmWithCtx("=AVERAGE(A1:B2)", a, ctx);
+  Arena a2;
+  const Value tree = RunTreeWithCtx("=AVERAGE(A1:B2)", a2, ctx);
+  ASSERT_TRUE(vm.is_number());
+  EXPECT_DOUBLE_EQ(vm.as_number(), 6.0);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+// ---------------------------------------------------------------------------
+// Recursive LAMBDA + inner LET: per-invocation slot isolation
+// ---------------------------------------------------------------------------
+
+TEST(Vm, RecursiveLambdaWithInnerLetDoesNotClobberSlots) {
+  // Self-passing recursion (Excel's LAMBDA recursion idiom). The inner
+  // `LET(t, n, ...)` reuses the same LET slot on every recursion depth, and
+  // `t` is read AFTER the recursive `self(self, n-1)` call. Without
+  // per-invocation slot isolation the deeper call would clobber `t`, yielding
+  // a wrong product; the correct factorial of 5 is 120.
+  constexpr const char* kSrc = "=LET(f, LAMBDA(self, n, IF(n<=1, 1, LET(t, n, self(self, n-1) * t))), f(f, 5))";
+  Arena a;
+  const Value vm = RunVmOrDie(kSrc, a);
+  ASSERT_TRUE(vm.is_number()) << "vm=" << vm.debug_to_string();
+  EXPECT_DOUBLE_EQ(vm.as_number(), 120.0);
+  Arena a2;
+  const Value tree = RunTreeOrDie(kSrc, a2);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+TEST(Vm, RecursiveLambdaSumWithInnerLetAgreesWithTreeWalker) {
+  // Recursive summation 5+4+3+2+1 = 15 with an inner LET binding read after
+  // the recursive self-call. Cross-checks the slot-isolation fix against the
+  // tree-walker.
+  constexpr const char* kSrc = "=LET(f, LAMBDA(self, n, IF(n<=0, 0, LET(t, n, self(self, n-1) + t))), f(f, 5))";
+  Arena a;
+  const Value vm = RunVmOrDie(kSrc, a);
+  ASSERT_TRUE(vm.is_number()) << "vm=" << vm.debug_to_string();
+  EXPECT_DOUBLE_EQ(vm.as_number(), 15.0);
+  Arena a2;
+  const Value tree = RunTreeOrDie(kSrc, a2);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+// ---------------------------------------------------------------------------
+// Implicit intersection (@ operator) parity with the tree-walker
+// ---------------------------------------------------------------------------
+
+TEST(Vm, ImplicitIntersectionColumnProjectsFormulaRow) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(10.0));  // A1
+  s.set_cell_value(1U, 0U, Value::number(20.0));  // A2
+  s.set_cell_value(2U, 0U, Value::number(30.0));  // A3
+  EvalState state;
+  // Formula cell anchored on the A2 row: a single-column range projects it.
+  const EvalContext ctx = EvalContext(wb, s, state).with_formula_cell(1U, 5U);
+  Arena a;
+  const Value vm = RunVmWithCtx("=@A1:A3", a, ctx);
+  ASSERT_TRUE(vm.is_number()) << vm.debug_to_string();
+  EXPECT_DOUBLE_EQ(vm.as_number(), 20.0);
+  Arena a2;
+  const Value tree = RunTreeWithCtx("=@A1:A3", a2, ctx);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+TEST(Vm, ImplicitIntersectionOutsideRangeIsValueError) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(10.0));
+  s.set_cell_value(1U, 0U, Value::number(20.0));
+  s.set_cell_value(2U, 0U, Value::number(30.0));
+  EvalState state;
+  // Formula row 5 is outside A1:A3 -> #VALUE!.
+  const EvalContext ctx = EvalContext(wb, s, state).with_formula_cell(5U, 5U);
+  Arena a;
+  const Value vm = RunVmWithCtx("=@A1:A3", a, ctx);
+  ASSERT_TRUE(vm.is_error());
+  EXPECT_EQ(vm.as_error(), ErrorCode::Value);
+  Arena a2;
+  const Value tree = RunTreeWithCtx("=@A1:A3", a2, ctx);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+TEST(Vm, ImplicitIntersection2DProjectsIntersectionCell) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(1.0));  // A1
+  s.set_cell_value(0U, 1U, Value::number(2.0));  // B1
+  s.set_cell_value(1U, 0U, Value::number(3.0));  // A2
+  s.set_cell_value(1U, 1U, Value::number(4.0));  // B2
+  EvalState state;
+  // Formula cell at (row 1, col 1) = B2: the 2D range intersects to that cell.
+  const EvalContext ctx = EvalContext(wb, s, state).with_formula_cell(1U, 1U);
+  Arena a;
+  const Value vm = RunVmWithCtx("=@A1:B2", a, ctx);
+  ASSERT_TRUE(vm.is_number()) << vm.debug_to_string();
+  EXPECT_DOUBLE_EQ(vm.as_number(), 4.0);
+  Arena a2;
+  const Value tree = RunTreeWithCtx("=@A1:B2", a2, ctx);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
 }
 
 // ---------------------------------------------------------------------------

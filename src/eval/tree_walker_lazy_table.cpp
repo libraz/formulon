@@ -19,6 +19,7 @@
 #include "eval/cell_lazy.h"
 #include "eval/conditional_aggregates.h"
 #include "eval/database_lazy.h"
+#include "eval/datetime_lazy.h"
 #include "eval/dynamic_array/anchor.h"
 #include "eval/dynamic_array/filtering.h"
 #include "eval/dynamic_array/indexing.h"
@@ -95,6 +96,15 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"COVAR", &eval_covariance_p_lazy},
     {"COVARIANCE.P", &eval_covariance_p_lazy},
     {"COVARIANCE.S", &eval_covariance_s_lazy},
+    // Calendar family: date1904-sensitive functions share one lazy impl
+    // (`eval_datetime_lazy`) so the workbook epoch reaches the calendar math.
+    // WEEKNUM is served by `eval_weeknum_lazy` (it layers a Win365 quirk) and
+    // is registered separately below.
+    {"DATE", &eval_datetime_lazy},
+    {"DATEDIF", &eval_datetime_lazy},
+    {"DATEVALUE", &eval_datetime_lazy},
+    {"DAY", &eval_datetime_lazy},
+    {"DAYS360", &eval_datetime_lazy},
     {"DAVERAGE", &eval_daverage_lazy},
     {"DCOUNT", &eval_dcount_lazy},
     {"DCOUNTA", &eval_dcounta_lazy},
@@ -108,6 +118,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DSUM", &eval_dsum_lazy},
     {"DVAR", &eval_dvar_lazy},
     {"DVARP", &eval_dvarp_lazy},
+    {"EDATE", &eval_datetime_lazy},
+    {"EOMONTH", &eval_datetime_lazy},
     {"EXPAND", &eval_expand_lazy},
     {"F.TEST", &eval_f_test_lazy},
     {"FILTER", &eval_filter_lazy},
@@ -152,6 +164,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // `Value` before the impl runs.
     {"ISFORMULA", &eval_isformula_lazy},
     {"ISOMITTED", &eval_isomitted_lazy},
+    {"ISOWEEKNUM", &eval_datetime_lazy},
     {"ISREF", &eval_isref_lazy},
     {"IRR", &eval_irr_lazy},
     {"LENB", &eval_lenb_lazy},
@@ -167,8 +180,10 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"MINVERSE", &eval_minverse_lazy},
     {"MIRR", &eval_mirr_lazy},
     {"MMULT", &eval_mmult_lazy},
+    {"MONTH", &eval_datetime_lazy},
     {"NETWORKDAYS", &eval_networkdays_lazy},
     {"NETWORKDAYS.INTL", &eval_networkdays_intl_lazy},
+    {"NOW", &eval_datetime_lazy},
     {"OFFSET", &eval_offset_lazy},
     {"OR", &eval_or_lazy},
     // PEARSON is mathematically identical to CORREL (Pearson product-moment
@@ -224,6 +239,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"TEXT", &eval_text_lazy},
     {"TEXTSPLIT", &eval_textsplit_lazy},
     {"TOCOL", &eval_tocol_lazy},
+    {"TODAY", &eval_datetime_lazy},
     {"TOROW", &eval_torow_lazy},
     {"TRANSPOSE", &eval_transpose_lazy},
     {"TREND", &eval_trend_lazy},
@@ -233,6 +249,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"UNIQUE", &eval_unique_lazy},
     {"VLOOKUP", &eval_vlookup_lazy},
     {"VSTACK", &eval_vstack_lazy},
+    {"WEEKDAY", &eval_datetime_lazy},
     {"WEEKNUM", &eval_weeknum_lazy},
     {"WORKDAY", &eval_workday_lazy},
     {"WORKDAY.INTL", &eval_workday_intl_lazy},
@@ -242,6 +259,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"XLOOKUP", &eval_xlookup_lazy},
     {"XMATCH", &eval_xmatch_lazy},
     {"XNPV", &eval_xnpv_lazy},
+    {"YEAR", &eval_datetime_lazy},
+    {"YEARFRAC", &eval_datetime_lazy},
     {"Z.TEST", &eval_z_test_lazy},
     // ZTEST is the pre-2010 legacy spelling of Z.TEST; same impl.
     {"ZTEST", &eval_z_test_lazy},

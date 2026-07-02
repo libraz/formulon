@@ -12,9 +12,11 @@
 //     do not lift it into the arena because the WASM toolchain emits
 //     smaller code for the standard vector path.
 //   * LET slots live in a single `std::vector<Value>` keyed by the
-//     compiler-assigned 24-bit slot index. The compiler never re-uses
-//     slots, so the vector grows monotonically and the VM never has to
-//     reset / scope it across nested LET / LAMBDA bodies.
+//     compiler-assigned 24-bit slot index. Slot numbering is unique per
+//     compile() output but is reused across recursion depths, so each
+//     `CallLambda` snapshots the slot vector before recursing into a lambda
+//     body and restores it afterwards. This isolates a self-recursive
+//     LAMBDA's inner LET bindings from the caller's still-live ones.
 //   * Lambda invocation drives a sub-loop on the same `code` stream. The
 //     compiler splices lambda bodies inline (after a Jump that the parent
 //     stream takes); a `CallLambda` jumps into the body, the body's
@@ -44,6 +46,8 @@
 #include "eval/bytecode.h"
 #include "eval/coerce.h"
 #include "eval/compiler_emit.h"
+#include "eval/datetime_lazy.h"
+#include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
@@ -109,14 +113,16 @@ LazyCallKind classify_lazy_call(std::string_view name) noexcept {
 
 // Builds a string_view-backed copy of `s` that lives in `arena`. Used when
 // we must intern a temporary string (e.g. concat result) so the `Value::Text`
-// payload remains valid after the underlying buffer goes out of scope.
-std::string_view intern_arena_string(Arena& arena, std::string_view s) {
+// payload remains valid after the underlying buffer goes out of scope. Arena
+// exhaustion surfaces as a `kOutOfMemory` VM fault rather than a silent empty
+// string, so a truncated Text payload can never masquerade as a valid one.
+Expected<std::string_view, Error> intern_arena_string(Arena& arena, std::string_view s) {
   if (s.empty()) {
     return std::string_view{};
   }
   char* buf = arena.create_array<char>(s.size());
   if (buf == nullptr) {
-    return std::string_view{};
+    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted interning a string payload");
   }
   std::memcpy(buf, s.data(), s.size());
   return std::string_view(buf, s.size());
@@ -144,8 +150,8 @@ bool coerce_to_truthy_for_jump(const Value& v, ErrorCode* out_err, bool* out_has
 // tree_walker.cpp's `NodeKind::StructuredRef` branch and funnels the
 // resolved rectangle through `EvalContext::expand_range` so cross-sheet
 // resolution + cycle detection stays in one place.
-Value resolve_struct_ref_op(std::string_view table_name, std::string_view column_payload, Arena& arena,
-                            const FunctionRegistry& registry, const EvalContext& ctx) {
+Expected<Value, Error> resolve_struct_ref_op(std::string_view table_name, std::string_view column_payload, Arena& arena,
+                                             const FunctionRegistry& registry, const EvalContext& ctx) {
   const Workbook* wb = ctx.workbook();
   const Sheet* current = ctx.current_sheet();
   if (wb == nullptr || current == nullptr) {
@@ -190,14 +196,14 @@ Value resolve_struct_ref_op(std::string_view table_name, std::string_view column
   const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   Value* buffer = arena.create_array<Value>(total);
   if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
+    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a structured reference");
   }
   for (std::size_t i = 0; i < total && i < cells.value().size(); ++i) {
     buffer[i] = cells.value()[i];
   }
   ArrayValue* arr = arena.create<ArrayValue>();
   if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
+    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a structured reference");
   }
   arr->rows = rows;
   arr->cols = cols;
@@ -207,7 +213,7 @@ Value resolve_struct_ref_op(std::string_view table_name, std::string_view column
 
 // Mirror of tree_walker.cpp's SpillRef branch: resolve the spill region at
 // the anchor and project it as a `Value::Array`.
-Value resolve_spill_ref_op(const parser::Reference& r, Arena& arena, const EvalContext& ctx) {
+Expected<Value, Error> resolve_spill_ref_op(const parser::Reference& r, Arena& arena, const EvalContext& ctx) {
   const Sheet* current = ctx.current_sheet();
   if (current == nullptr) {
     return Value::error(ErrorCode::Name);
@@ -233,17 +239,53 @@ Value resolve_spill_ref_op(const parser::Reference& r, Arena& arena, const EvalC
   const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
   Value* buffer = arena.create_array<Value>(n);
   if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
+    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a spilled reference");
   }
   for (std::size_t i = 0; i < n; ++i) {
     buffer[i] = region->cells[i];
   }
   ArrayValue* arr = arena.create<ArrayValue>();
   if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
+    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a spilled reference");
   }
   arr->rows = region->rows;
   arr->cols = region->cols;
+  arr->cells = buffer;
+  return Value::array(arr);
+}
+
+// Expands a bare `Ref:Ref` rectangle into a `Value::Array` in row-major
+// order. Mirrors the tree-walker dispatcher's RangeOp argument expansion so
+// range-aware aggregators (`SUM(A1:B2)`) see the same cells. Endpoint
+// ordering is normalised by `expand_range`; Excel-visible faults (`#REF!`
+// for out-of-range / whole-column endpoints) flow back as an error `Value`
+// while arena exhaustion surfaces as a `kOutOfMemory` VM fault.
+Expected<Value, Error> resolve_range_op(const parser::Reference& lhs, const parser::Reference& rhs, Arena& arena,
+                                        const FunctionRegistry& registry, const EvalContext& ctx) {
+  auto cells = ctx.expand_range(lhs, rhs, arena, registry);
+  if (!cells) {
+    return Value::error(cells.error());
+  }
+  const std::uint32_t r1 = lhs.row < rhs.row ? lhs.row : rhs.row;
+  const std::uint32_t r2 = lhs.row < rhs.row ? rhs.row : lhs.row;
+  const std::uint32_t c1 = lhs.col < rhs.col ? lhs.col : rhs.col;
+  const std::uint32_t c2 = lhs.col < rhs.col ? rhs.col : lhs.col;
+  const std::uint32_t rows = r2 - r1 + 1U;
+  const std::uint32_t cols = c2 - c1 + 1U;
+  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  Value* buffer = arena.create_array<Value>(total);
+  if (buffer == nullptr) {
+    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted expanding a range");
+  }
+  for (std::size_t i = 0; i < total && i < cells.value().size(); ++i) {
+    buffer[i] = cells.value()[i];
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted expanding a range");
+  }
+  arr->rows = rows;
+  arr->cols = cols;
   arr->cells = buffer;
   return Value::array(arr);
 }
@@ -318,7 +360,8 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // literal handling, which also borrows from the parser arena).
         Value pushed = *v.value();
         if (pushed.kind() == ValueKind::Text) {
-          pushed = Value::text(intern_arena_string(arena, pushed.as_text()));
+          ASSIGN_OR_RETURN(auto interned, intern_arena_string(arena, pushed.as_text()));
+          pushed = Value::text(interned);
         }
         RETURN_IF_ERROR(push_value(s, pushed));
         ++pc;
@@ -336,18 +379,37 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
       }
 
       case OpCode::LoadRange: {
-        // The compiler emits the two endpoint subexpressions before this
-        // opcode, so the stack already carries the endpoint values. The IR
-        // does not preserve the Ref payloads at this point, so the VM
-        // collapses to the lhs (top-left analog) — matching the tree-walker
-        // RangeOp scalar fallback when no formula cell is bound. Range-aware
-        // aggregator parity is a documented limitation tracked for Bundle
-        // 5.3+ optimisation.
+        // `LoadRange` is a marker emitted after the two endpoint
+        // subexpressions (see compile_range). For a bare `Ref:Ref` range the
+        // two preceding instructions are `LoadRef`s whose `a` operands index
+        // the refs pool; recover the endpoints from there and expand the
+        // rectangle into a `Value::Array` so range-aware aggregators
+        // (`SUM(A1:B2)`) receive every cell, matching the tree-walker's
+        // RangeOp argument expansion. The endpoint values the two `LoadRef`s
+        // already pushed are scalar and get discarded here.
         RETURN_IF_ERROR(require_stack_depth(s, 2));
-        const Value rhs = s.stack.back();
+        if (pc < 2U || bc.code[pc - 1U].op != OpCode::LoadRef || bc.code[pc - 2U].op != OpCode::LoadRef) {
+          // Complex range endpoints (e.g. `OFFSET(...):B5`) are not
+          // reconstructable from the IR; mirror the tree-walker's #VALUE!
+          // fallback for non-Ref range endpoints.
+          s.stack.pop_back();
+          s.stack.pop_back();
+          RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+          ++pc;
+          break;
+        }
+        auto lo = ref_at(bc, bc.code[pc - 2U].a);
+        if (!lo) {
+          return lo.error();
+        }
+        auto hi = ref_at(bc, bc.code[pc - 1U].a);
+        if (!hi) {
+          return hi.error();
+        }
         s.stack.pop_back();
-        (void)rhs;
-        // Top of stack is now the lhs — we keep it as-is.
+        s.stack.pop_back();
+        ASSIGN_OR_RETURN(auto range_val, resolve_range_op(*lo.value(), *hi.value(), arena, registry, ctx));
+        RETURN_IF_ERROR(push_value(s, range_val));
         ++pc;
         break;
       }
@@ -357,14 +419,20 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         if (!n) {
           return n.error();
         }
-        // Tree-walker mirror: defined-name lookup is not yet wired, so an
-        // unbound identifier surfaces #NAME?. A runtime NameEnv (from a
-        // captured lambda environment) takes precedence.
+        // Tree-walker mirror: a runtime NameEnv (LET / captured lambda env)
+        // takes precedence; otherwise resolve a workbook / sheet-scoped
+        // defined name through the shared helper so the VM and tree-walker
+        // agree. An unbound identifier surfaces #NAME? from the resolver.
         Value v = Value::error(ErrorCode::Name);
+        bool bound_in_env = false;
         if (const NameEnv* env = ctx.name_env(); env != nullptr) {
           if (const Value* bound = env->lookup(*n.value()); bound != nullptr) {
             v = *bound;
+            bound_in_env = true;
           }
+        }
+        if (!bound_in_env) {
+          v = resolve_defined_name(*n.value(), arena, registry, ctx);
         }
         RETURN_IF_ERROR(push_value(s, v));
         ++pc;
@@ -381,7 +449,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         if (!col_n) {
           return col_n.error();
         }
-        const Value v = resolve_struct_ref_op(*table_n.value(), *col_n.value(), arena, registry, ctx);
+        ASSIGN_OR_RETURN(auto v, resolve_struct_ref_op(*table_n.value(), *col_n.value(), arena, registry, ctx));
         RETURN_IF_ERROR(push_value(s, v));
         ++pc;
         break;
@@ -392,7 +460,8 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         if (!r) {
           return r.error();
         }
-        RETURN_IF_ERROR(push_value(s, resolve_spill_ref_op(*r.value(), arena, ctx)));
+        ASSIGN_OR_RETURN(auto spill_val, resolve_spill_ref_op(*r.value(), arena, ctx));
+        RETURN_IF_ERROR(push_value(s, spill_val));
         ++pc;
         break;
       }
@@ -477,6 +546,46 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
               out = Value::number(0.0);
             }
           }
+          RETURN_IF_ERROR(push_value(s, out));
+          ++pc;
+          break;
+        }
+        // Date1904-sensitive calendar family (DATE / YEAR / EDATE / TODAY /
+        // ...). These are NOT in the eager registry — they route through the
+        // tree-walker's lazy table so the workbook date epoch reaches them.
+        // The VM has no call AST, so it reuses the shared date1904-aware impl
+        // directly with `ctx.date1904()`. They are scalar-only, so the args
+        // are the top `arity` stack slots verbatim with the left-most error
+        // short-circuiting (calendar functions never opt out of that rule).
+        if (const DateEntry* date = find_date_entry(name)) {
+          if (arity < date->min_arity || arity > date->max_arity) {
+            pop_values(s, arity);
+            RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+            ++pc;
+            break;
+          }
+          std::vector<Value> date_argv;
+          date_argv.reserve(arity);
+          for (std::uint32_t i = 0; i < arity; ++i) {
+            date_argv.push_back(s.stack[s.stack.size() - arity + i]);
+          }
+          pop_values(s, arity);
+          bool date_short_circuit = false;
+          Value date_err = Value::blank();
+          for (const Value& a : date_argv) {
+            if (a.is_error()) {
+              date_err = a;
+              date_short_circuit = true;
+              break;
+            }
+          }
+          if (date_short_circuit) {
+            RETURN_IF_ERROR(push_value(s, date_err));
+            ++pc;
+            break;
+          }
+          const Value out = date->impl(date_argv.empty() ? nullptr : date_argv.data(),
+                                       static_cast<std::uint32_t>(date_argv.size()), arena, ctx.date1904());
           RETURN_IF_ERROR(push_value(s, out));
           ++pc;
           break;
@@ -630,12 +739,17 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           ++pc;
           break;
         }
-        // Recurse into the body. We reuse the parent's `let_slots` (the
-        // compiler-issued slot numbering is global within a single
-        // compile() output, so reuse is safe). The body's `Return` exits
-        // the recursive dispatch and leaves its result on top of stack
-        // here.
+        // Recurse into the body. LET slot numbering is unique per compile()
+        // output but is *reused across recursion depths*: a self-recursive
+        // LAMBDA whose body contains a LET re-runs the same StoreLet slots on
+        // every level, so without isolation an inner call would clobber the
+        // caller's still-live bindings (e.g. a binding read after the
+        // recursive call would see the deepest write). Snapshot the LET
+        // slots before recursing and restore them afterwards so each
+        // invocation gets its own scope. The body's result is returned on the
+        // operand stack, not via let_slots, so restoring here is safe.
         const auto* closure = reinterpret_cast<const VmClosure*>(lv->body);
+        std::vector<Value> saved_let_slots = s.let_slots;
         VmState::Frame frame;
         frame.return_pc = pc + 1U;
         frame.args = std::move(args);
@@ -645,8 +759,10 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           return sub.error();
         }
         // The body's Return left its result already pushed on the stack
-        // (Return semantics below); pop our frame and continue.
+        // (Return semantics below); pop our frame, restore the caller's LET
+        // bindings, and continue.
         s.frames.pop_back();
+        s.let_slots = std::move(saved_let_slots);
         ++pc;
         break;
       }
@@ -749,7 +865,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         RETURN_IF_ERROR(require_stack_depth(s, n));
         Value* buf = arena.create_array<Value>(n);
         if (buf == nullptr) {
-          return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "arena exhausted in MakeArray");
+          return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted in MakeArray");
         }
         // Row-major: oldest stack slot is (0,0); top of stack is the last
         // cell.
@@ -759,7 +875,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         pop_values(s, n);
         ArrayValue* arr = arena.create<ArrayValue>();
         if (arr == nullptr) {
-          return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "arena exhausted in MakeArray");
+          return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted in MakeArray");
         }
         arr->rows = rows;
         arr->cols = cols;
@@ -785,20 +901,20 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
 
         auto* lv = arena.create<LambdaValue>();
         if (lv == nullptr) {
-          return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "arena exhausted in MakeLambda");
+          return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted in MakeLambda");
         }
         std::string_view* params = nullptr;
         if (param_count > 0) {
           params = arena.create_array<std::string_view>(param_count);
           if (params == nullptr) {
-            return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "arena exhausted in MakeLambda");
+            return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted in MakeLambda");
           }
           for (std::uint32_t i = 0; i < param_count; ++i) {
             const std::uint32_t idx = name_start + i;
             if (idx >= bc.names.size()) {
               return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "MakeLambda param name index out of range");
             }
-            params[i] = intern_arena_string(arena, bc.names[idx]);
+            ASSIGN_OR_RETURN(params[i], intern_arena_string(arena, bc.names[idx]));
           }
         }
         lv->params = params;
@@ -808,7 +924,7 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // `body` slot. Same arena, so lifetime is unified.
         auto* closure = arena.create<VmClosure>();
         if (closure == nullptr) {
-          return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "arena exhausted in MakeLambda");
+          return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted in MakeLambda");
         }
         closure->body_pc = pc + 2U;
         // NOTE: storing a non-AST pointer in `LambdaValue::body`. The VM
@@ -846,9 +962,72 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
       }
 
       case OpCode::ImplicitIntersection: {
-        // Identity for non-RangeOp operands matches the tree-walker's
-        // pass-through; range collapse already happened during LoadRange.
         RETURN_IF_ERROR(require_stack_depth(s, 1));
+        // Mirror the tree-walker's implicit-intersection projection for a bare
+        // `Ref:Ref` range operand (`@A1:A3`). That operand lowers to
+        // `LoadRef; LoadRef; LoadRange`, so when the three preceding
+        // instructions match that shape we recover the endpoints from the refs
+        // pool and project onto the formula cell:
+        //   * single-column range -> the formula row (or #VALUE! when outside);
+        //   * single-row range    -> the formula column (or #VALUE!);
+        //   * 2D range            -> the (row, col) intersection cell, or
+        //                            #VALUE! when the formula cell is outside;
+        //   * no formula-cell anchor -> degrade to the top-left cell.
+        // Any other operand (single Ref, call, scalar) is identity
+        // pass-through, matching the tree-walker's non-RangeOp branch.
+        if (pc >= 3U && bc.code[pc - 1U].op == OpCode::LoadRange && bc.code[pc - 2U].op == OpCode::LoadRef &&
+            bc.code[pc - 3U].op == OpCode::LoadRef) {
+          auto lo = ref_at(bc, bc.code[pc - 3U].a);
+          if (!lo) {
+            return lo.error();
+          }
+          auto hi = ref_at(bc, bc.code[pc - 2U].a);
+          if (!hi) {
+            return hi.error();
+          }
+          const parser::Reference& ra = *lo.value();
+          const parser::Reference& rb = *hi.value();
+          const std::uint32_t r1 = ra.row < rb.row ? ra.row : rb.row;
+          const std::uint32_t r2 = ra.row < rb.row ? rb.row : ra.row;
+          const std::uint32_t c1 = ra.col < rb.col ? ra.col : rb.col;
+          const std::uint32_t c2 = ra.col < rb.col ? rb.col : ra.col;
+          s.stack.pop_back();  // discard the range Array pushed by LoadRange
+          parser::Reference target{};
+          target.sheet = ra.sheet;
+          if (!ctx.has_formula_cell()) {
+            // No anchor (top-level eval): degrade to the top-left cell, the
+            // same fallback the tree-walker's RangeOp branch takes.
+            target.row = r1;
+            target.col = c1;
+            RETURN_IF_ERROR(push_value(s, ctx.resolve_ref(target, arena, registry)));
+            ++pc;
+            break;
+          }
+          const std::uint32_t fr = ctx.formula_row();
+          const std::uint32_t fc = ctx.formula_col();
+          bool outside = false;
+          if (c1 == c2) {
+            outside = fr < r1 || fr > r2;
+            target.row = fr;
+            target.col = c1;
+          } else if (r1 == r2) {
+            outside = fc < c1 || fc > c2;
+            target.row = r1;
+            target.col = fc;
+          } else {
+            outside = fr < r1 || fr > r2 || fc < c1 || fc > c2;
+            target.row = fr;
+            target.col = fc;
+          }
+          if (outside) {
+            RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Value)));
+          } else {
+            RETURN_IF_ERROR(push_value(s, ctx.resolve_ref(target, arena, registry)));
+          }
+          ++pc;
+          break;
+        }
+        // Non-range operand: identity pass-through (leave the operand as-is).
         ++pc;
         break;
       }

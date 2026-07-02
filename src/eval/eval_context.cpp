@@ -60,6 +60,81 @@ const Sheet* resolve_target_sheet(std::string_view sheet_name, const Sheet* curr
   return target;
 }
 
+// True when a stored cell carries no observable content (neither a formula
+// nor a non-blank cached value). Mirrors the used-range predicate the
+// print-layout pagination pass applies so both agree on a sheet's extent.
+bool cell_is_blank(const Cell& cell) {
+  return cell.formula_text.empty() && cell.cached_value.is_blank();
+}
+
+// Largest 0-based row index holding a non-blank cell within columns
+// [col_lo, col_hi] (inclusive). Returns false when no such cell exists, in
+// which case `*out_max_row` is left untouched. Used to bound whole-column
+// expansion so `SUM(A:A)` walks only up to the column's populated extent
+// instead of all `Sheet::kMaxRows` rows.
+bool max_row_in_cols(const Sheet& sheet, std::uint32_t col_lo, std::uint32_t col_hi, std::uint32_t* out_max_row) {
+  bool any = false;
+  std::uint32_t max_row = 0;
+  for (const auto& [row_index, cells] : sheet.rows()) {
+    const std::size_t upper = std::min<std::size_t>(cells.size(), static_cast<std::size_t>(col_hi) + 1U);
+    for (std::size_t c = col_lo; c < upper; ++c) {
+      if (cell_is_blank(cells[c])) {
+        continue;
+      }
+      if (!any || row_index > max_row) {
+        max_row = row_index;
+        any = true;
+      }
+      break;
+    }
+  }
+  if (!any) {
+    return false;
+  }
+  *out_max_row = max_row;
+  return true;
+}
+
+// Largest 0-based column index holding a non-blank cell within rows
+// [row_lo, row_hi] (inclusive). Returns false when no such cell exists.
+// Bounds whole-row expansion so `COUNTA(1:1)` walks only up to the row's
+// populated extent instead of all `Sheet::kMaxCols` columns.
+bool max_col_in_rows(const Sheet& sheet, std::uint32_t row_lo, std::uint32_t row_hi, std::uint32_t* out_max_col) {
+  bool any = false;
+  std::uint32_t max_col = 0;
+  for (const auto& [row_index, cells] : sheet.rows()) {
+    if (row_index < row_lo || row_index > row_hi) {
+      continue;
+    }
+    for (std::size_t c = cells.size(); c-- > 0;) {
+      if (cell_is_blank(cells[c])) {
+        continue;
+      }
+      const auto col_index = static_cast<std::uint32_t>(c);
+      if (!any || col_index > max_col) {
+        max_col = col_index;
+        any = true;
+      }
+      break;
+    }
+  }
+  if (!any) {
+    return false;
+  }
+  *out_max_col = max_col;
+  return true;
+}
+
+// Writes the computed shape into the optional out-params, tolerating null.
+void set_shape(std::uint32_t* out_rows, std::uint32_t* out_cols, std::uint32_t rows, std::uint32_t cols) {
+  if (out_rows != nullptr) {
+    *out_rows = rows;
+  }
+  if (out_cols != nullptr) {
+    *out_cols = cols;
+  }
+}
+
 // Result of the shared preamble executed by both `resolve_ref` overloads.
 // The `value` field carries either the short-circuit Value (literal cell,
 // absent cell, or Excel error sentinel) or a valid pointer to the formula
@@ -225,7 +300,9 @@ Value EvalContext::dispatch_array_result(Value v) const {
 
 Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::Reference& lhs,
                                                                   const parser::Reference& rhs, Arena& arena,
-                                                                  const FunctionRegistry& registry) const {
+                                                                  const FunctionRegistry& registry,
+                                                                  std::uint32_t* out_rows,
+                                                                  std::uint32_t* out_cols) const {
   if (current_sheet_ == nullptr) {
     return ErrorCode::Name;
   }
@@ -254,22 +331,68 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
     return sheet_err;
   }
 
+  std::uint32_t r_min = 0;
+  std::uint32_t r_max = 0;
+  std::uint32_t c_min = 0;
+  std::uint32_t c_max = 0;
   if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
-    // Whole-column / whole-row ranges are deferred until array evaluation
-    // lands; in scalar context they degrade to #VALUE!.
-    return ErrorCode::Value;
+    // Whole-column (`A:A` / `A:C`) and whole-row (`1:1` / `1:3`) references
+    // are expanded against the target sheet's used range: the unbounded
+    // axis is clamped to the sheet's populated extent so the expansion
+    // never physically walks all `kMaxRows` / `kMaxCols` cells, while the
+    // bounded axis keeps its natural origin (row 0 for a column, column 0
+    // for a row) so positional consumers (INDEX / VLOOKUP column offsets)
+    // see the reference's true top-left. A sheet with no content in range
+    // yields an empty expansion, so `SUM(A:A)` on an empty sheet is 0
+    // without any per-row work.
+    //
+    // Only same-axis whole references compose (`A:C`, `1:3`); a mixed
+    // whole-column / whole-row pair has no bounded rectangle and degrades
+    // to #VALUE!, matching the pre-existing scalar degradation.
+    const bool col_range = lhs.is_full_col && rhs.is_full_col;
+    const bool row_range = lhs.is_full_row && rhs.is_full_row;
+    if (!col_range && !row_range) {
+      return ErrorCode::Value;
+    }
+    if (col_range) {
+      c_min = std::min(lhs.col, rhs.col);
+      c_max = std::max(lhs.col, rhs.col);
+      if (c_max >= Sheet::kMaxCols) {
+        return ErrorCode::Ref;
+      }
+      std::uint32_t max_row = 0;
+      if (!max_row_in_cols(*target_sheet, c_min, c_max, &max_row)) {
+        set_shape(out_rows, out_cols, 0, 0);
+        return std::vector<Value>{};
+      }
+      r_min = 0;
+      r_max = max_row;
+    } else {
+      r_min = std::min(lhs.row, rhs.row);
+      r_max = std::max(lhs.row, rhs.row);
+      if (r_max >= Sheet::kMaxRows) {
+        return ErrorCode::Ref;
+      }
+      std::uint32_t max_col = 0;
+      if (!max_col_in_rows(*target_sheet, r_min, r_max, &max_col)) {
+        set_shape(out_rows, out_cols, 0, 0);
+        return std::vector<Value>{};
+      }
+      c_min = 0;
+      c_max = max_col;
+    }
+  } else {
+    if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols || rhs.row >= Sheet::kMaxRows ||
+        rhs.col >= Sheet::kMaxCols) {
+      return ErrorCode::Ref;
+    }
+    // Normalise endpoint ordering: A3:A1 describes the same rectangle as
+    // A1:A3.
+    r_min = std::min(lhs.row, rhs.row);
+    r_max = std::max(lhs.row, rhs.row);
+    c_min = std::min(lhs.col, rhs.col);
+    c_max = std::max(lhs.col, rhs.col);
   }
-  if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols || rhs.row >= Sheet::kMaxRows ||
-      rhs.col >= Sheet::kMaxCols) {
-    return ErrorCode::Ref;
-  }
-
-  // Normalise endpoint ordering: A3:A1 describes the same rectangle as
-  // A1:A3.
-  const std::uint32_t r_min = std::min(lhs.row, rhs.row);
-  const std::uint32_t r_max = std::max(lhs.row, rhs.row);
-  const std::uint32_t c_min = std::min(lhs.col, rhs.col);
-  const std::uint32_t c_max = std::max(lhs.col, rhs.col);
 
   // Accepted divergence: callers such as SUM / AVERAGE coerce every
   // expanded Value via `coerce_to_number`, so a range cell holding TRUE
@@ -307,6 +430,7 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
       out.push_back(resolve_ref(cell_ref, arena, registry));
     }
   }
+  set_shape(out_rows, out_cols, r_max - r_min + 1U, c_max - c_min + 1U);
   return out;
 }
 

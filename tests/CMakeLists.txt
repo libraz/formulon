@@ -84,6 +84,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/vm_test.cpp
   unit/eval/vm_parity_test.cpp
   unit/eval/tree_walker_test.cpp
+  unit/eval/defined_name_resolve_test.cpp
+  unit/eval/eval_sweep_batch_test.cpp
   unit/eval/scalar_ops_test.cpp
   unit/eval/eval_context_test.cpp
   unit/eval/formula_profile_test.cpp
@@ -159,6 +161,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_xlookup_test.cpp
   unit/eval/builtins_datetime_test.cpp
   unit/eval/builtins_datevalue_timevalue_test.cpp
+  unit/eval/date_time_1904_test.cpp
   unit/eval/builtins_financial_test.cpp
   unit/eval/builtins_financial2_test.cpp
   unit/eval/builtins_financial_rates_test.cpp

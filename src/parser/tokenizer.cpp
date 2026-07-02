@@ -227,10 +227,17 @@ bool Tokenizer::is_bool_word(std::string_view word, bool* out) noexcept {
   return false;
 }
 
-bool Tokenizer::match_error_literal(std::string_view run, ErrorCode* out) noexcept {
+bool Tokenizer::match_error_literal(std::string_view run, ErrorCode* out, std::size_t* match_len) noexcept {
+  // Longest-match against the catalog (declared longest-first) so an error
+  // literal immediately followed by an operator or reference — `#REF!/2`,
+  // `#N/A/B1`, `#DIV/0!/A1` — commits on the literal alone and leaves the
+  // trailing bytes to the main dispatch loop. `#DIV/0!` itself contains a
+  // `/`, so an exact-length scan would over-consume the run; longest-prefix
+  // matching against the sorted catalog resolves both cases in one pass.
   for (const auto& e : kErrorLiterals) {
-    if (run.size() == e.text.size() && ieq_prefix(run, e.text)) {
+    if (ieq_prefix(run, e.text)) {
       *out = e.code;
+      *match_len = e.text.size();
       return true;
     }
   }
@@ -439,12 +446,32 @@ const std::vector<Token>& Tokenizer::tokens() {
       continue;
     }
 
-    // `$` only makes sense as the leading anchor of a CellRef. Route it
-    // into the ident/cellref scanner if it's followed by a letter; otherwise
-    // flag it as InvalidCharacter.
+    // `$` only makes sense as the leading anchor of a reference. Route `$`
+    // followed by a letter into the ident/cellref scanner (`$A1`, `$A:$A`);
+    // `$` followed by a digit is an absolute row anchor (`$1:$1`), scanned
+    // here as a Number token whose lexeme retains the `$` so the parser's
+    // whole-row path can carry the row_abs flag. Anything else is invalid.
     if (c == '$') {
       if (byte_pos_ + 1 < source_.size() && is_ascii_letter(static_cast<char>(source_[byte_pos_ + 1]))) {
         scan_ident_or_cellref_or_bool();
+        continue;
+      }
+      if (byte_pos_ + 1 < source_.size() && is_ascii_digit(source_[byte_pos_ + 1])) {
+        const std::size_t num_start = byte_pos_;
+        mark_start();
+        advance_one();  // consume '$'
+        double value = 0.0;
+        while (byte_pos_ < source_.size() && is_ascii_digit(source_[byte_pos_])) {
+          value = value * 10.0 + static_cast<double>(source_[byte_pos_] - '0');
+          advance_one();
+        }
+        Token t;
+        t.kind = TokenKind::Number;
+        t.range = make_range();
+        t.lexeme = std::string_view(source_.data() + num_start, byte_pos_ - num_start);
+        t.number = value;
+        t.is_integer = true;
+        tokens_.push_back(t);
         continue;
       }
       const std::size_t err_start = byte_pos_;
@@ -866,8 +893,14 @@ void Tokenizer::scan_error_literal() {
   }
   std::string_view run(source_.data() + byte_pos_, probe - byte_pos_);
   ErrorCode code;
-  if (match_error_literal(run, &code)) {
-    while (byte_pos_ < probe) {
+  std::size_t match_len = 0;
+  if (match_error_literal(run, &code, &match_len)) {
+    // Consume only the matched literal; catalog entries are pure ASCII so
+    // the byte length equals the codepoint count advanced here. Any trailing
+    // run bytes (an operator or reference glued to the literal) stay for the
+    // main loop.
+    const std::size_t match_end = byte_pos_ + match_len;
+    while (byte_pos_ < match_end) {
       advance_one();
     }
     Token t;
@@ -948,9 +981,35 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
     return;
   }
 
-  // Degenerate forms: `$A` or `A$` without a row are not refs and not
-  // identifiers; flag as InvalidReference and emit Invalid so the parser
-  // doesn't try to treat them as names.
+  // Absolute whole-column anchor: `$A` (a single leading `$` followed by a
+  // valid column-letters run and nothing else) is the endpoint of an
+  // absolute whole-column reference such as `$A:$A` / `$A:$C`. Emit it as an
+  // Ident so the parser's whole-column path (which decodes the `$` via
+  // `decode_column_letters`) can pair it across the `:`. A standalone `$A`
+  // then parses as a NameRef and resolves to #NAME?, which is acceptable for
+  // that malformed lone form. `A$`, `$A$`, and multi-`$` runs stay Invalid.
+  if (run.size() >= 2 && run.front() == '$' && run.back() != '$') {
+    const std::string_view letters = run.substr(1);
+    bool letters_all_alpha = true;
+    for (char ch : letters) {
+      if (!is_ascii_letter(ch)) {
+        letters_all_alpha = false;
+        break;
+      }
+    }
+    if (letters_all_alpha && column_letters_to_index(letters) != 0) {
+      Token t;
+      t.kind = TokenKind::Ident;
+      t.range = make_range();
+      t.lexeme = run;
+      tokens_.push_back(t);
+      return;
+    }
+  }
+
+  // Degenerate forms: `A$` / `$A$` / other `$`-bearing runs without a row are
+  // not refs and not identifiers; flag as InvalidReference and emit Invalid
+  // so the parser doesn't try to treat them as names.
   if (run.size() >= 2 && (run.front() == '$' || run.back() == '$')) {
     // Allow `_xlfn.` and similar which don't contain `$`; we only reach
     // this path if `$` is present.

@@ -8,6 +8,7 @@
 #define FORMULON_PARSER_PARSER_DETAIL_H_
 
 #include <cstdint>
+#include <string_view>
 
 #include "parser/token.h"
 
@@ -44,7 +45,14 @@ inline constexpr int kBpMulDiv = 40;
 inline constexpr int kBpAddSub = 30;
 inline constexpr int kBpConcat = 20;
 inline constexpr int kBpComparison = 10;
-inline constexpr int kBpAtPrefix = 1;
+// `@` (implicit-intersection prefix) binds tighter than every arithmetic /
+// comparison operator but looser than the reference operators (`:` range,
+// space intersect, `#` spill). So `=@D3:D5*2` parses as `(@D3:D5)*2` — the
+// `@` first binds the whole reference `D3:D5`, then the intersected scalar
+// is multiplied — matching Mac Excel 365. Sitting above `kBpPostfixPercent`
+// keeps `@A1%` / `@A1^2` as `(@A1)%` / `(@A1)^2`, and below `kBpIntersect`
+// lets the operand absorb `:` / space so `@A1:B2` is `@(A1:B2)`.
+inline constexpr int kBpAtPrefix = 65;
 
 inline constexpr std::uint32_t kMaxColumn = 16384;  // XFD
 inline constexpr std::uint32_t kMaxRow = 1048576;   // 2^20
@@ -57,6 +65,27 @@ inline bool IsAsciiLetter(char c) noexcept {
 
 inline bool IsAsciiDigit(char c) noexcept {
   return c >= '0' && c <= '9';
+}
+
+// Decodes a run of ASCII decimal digits into an unsigned magnitude,
+// stopping accumulation the moment the running value exceeds `limit`.
+// This guards `std::uint64_t` accumulation against wraparound on
+// pathological inputs (e.g. a 20-digit row literal): once the value is
+// already past any valid row/column limit, further digits cannot change
+// that outcome, so there is no need to keep multiplying toward overflow.
+// The caller only needs to know whether the result exceeds `limit`, which
+// stays true for the returned value even though it is not the exact
+// decoded magnitude of arbitrarily long digit runs. `digits` must contain
+// only ASCII '0'-'9' characters; the caller validates that beforehand.
+inline std::uint64_t DecodeDigitRunClamped(std::string_view digits, std::uint64_t limit) noexcept {
+  std::uint64_t value = 0;
+  for (char c : digits) {
+    if (value > limit) {
+      break;
+    }
+    value = value * 10u + static_cast<std::uint32_t>(c - '0');
+  }
+  return value;
 }
 
 // Builds a TextRange that spans from `a.start` (using a's line/column) to

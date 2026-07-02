@@ -322,6 +322,22 @@ TEST(MathRound, OneAndAHalfRoundsUp) {
   EXPECT_EQ(v.as_number(), 2.0);
 }
 
+TEST(MathRound, ExtremePositiveDigitsIsNoOp) {
+  // `10^400` overflows to +Inf; without a clamp this used to surface a
+  // spurious #NUM! instead of the mathematically correct no-op (a double
+  // has no meaningful digits past ~17 decimal places).
+  const Value v = EvalSource("=ROUND(1.5, 400)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.5);
+}
+
+TEST(MathRound, ExtremeNegativeDigitsIsZero) {
+  // Rounding to the nearest 10^400 always lands on 0 for any finite double.
+  const Value v = EvalSource("=ROUND(1.5, -400)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
 // ---------------------------------------------------------------------------
 // ROUNDDOWN (always toward zero)
 // ---------------------------------------------------------------------------
@@ -351,6 +367,18 @@ TEST(MathRoundDown, NegativeDigits) {
   EXPECT_EQ(v.as_number(), 1200.0);
 }
 
+TEST(MathRoundDown, ExtremePositiveDigitsIsNoOp) {
+  const Value v = EvalSource("=ROUNDDOWN(1.5, 400)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.5);
+}
+
+TEST(MathRoundDown, ExtremeNegativeDigitsIsZero) {
+  const Value v = EvalSource("=ROUNDDOWN(1.5, -400)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
 // ---------------------------------------------------------------------------
 // ROUNDUP (always away from zero)
 // ---------------------------------------------------------------------------
@@ -378,6 +406,18 @@ TEST(MathRoundUp, NegativeDigits) {
   const Value v = EvalSource("=ROUNDUP(1201, -2)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 1300.0);
+}
+
+TEST(MathRoundUp, ExtremePositiveDigitsIsNoOp) {
+  const Value v = EvalSource("=ROUNDUP(1.5, 400)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.5);
+}
+
+TEST(MathRoundUp, ExtremeNegativeDigitsIsZero) {
+  const Value v = EvalSource("=ROUNDUP(1.5, -400)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 // ---------------------------------------------------------------------------

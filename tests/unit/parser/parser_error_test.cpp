@@ -50,6 +50,33 @@ TEST(ParserErrors, BareEqualsIsUnexpectedEof) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnexpectedEof));
 }
 
+TEST(ParserErrors, LoneAbsoluteRowIsInvalidReference) {
+  // `=$1` is neither a valid literal nor a valid reference; it must surface
+  // a diagnostic rather than silently decoding to the number 1.
+  Arena a;
+  Parser p("=$1", a);
+  p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::InvalidReference));
+}
+
+TEST(ParserErrors, AbsoluteRowInArithmeticIsInvalidReference) {
+  Arena a;
+  Parser p("=$1+1", a);
+  p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::InvalidReference));
+}
+
+TEST(ParserErrors, ThreeDRangeTailParsesToRef3DRange) {
+  // `Sheet1:Sheet2!A1:B2` is a valid Excel 3-D range and now parses to a
+  // range-tail Ref3D (not a diagnostic, not a misparse into RangeOp).
+  Arena a;
+  Parser p("=Sheet1:Sheet2!A1:B2", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(p.errors().empty());
+  EXPECT_EQ(dump_sexpr(*root), "(ref3d Sheet1:Sheet2 A1:B2)");
+}
+
 TEST(ParserErrors, TrailingPlusReportsEof) {
   Arena a;
   Parser p("=1+", a);
@@ -225,6 +252,21 @@ TEST(ParserErrors, TooManyErrorsAppendsSentinel) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::TooManyErrors));
   EXPECT_LE(p.errors().size(), 3u);
   EXPECT_EQ(p.errors().back().code, ParseErrorCode::TooManyErrors);
+}
+
+TEST(ParserErrors, MaxErrorCountOneYieldsExactlyOneDiagnostic) {
+  // Regression: with a budget of 1, the cap check used to run *after*
+  // unconditionally appending the real error, so the list ended up with
+  // 2 entries (the real error plus the sentinel) -- breaking the
+  // documented `errors_.size() <= max_error_count` invariant. The
+  // sentinel alone must occupy the single available slot.
+  Arena a;
+  ParserOptions opts;
+  opts.max_error_count = 1;
+  Parser p("=SUM(?,?,?,?,?)", a, opts);
+  (void)p.parse();
+  ASSERT_EQ(p.errors().size(), 1u);
+  EXPECT_EQ(p.errors().front().code, ParseErrorCode::TooManyErrors);
 }
 
 // ---------------------------------------------------------------------------

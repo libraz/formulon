@@ -181,8 +181,9 @@ Expected<void, Error> emit_load_binding(BodyState& bs, const parser::AstNode& no
 Expected<std::uint32_t, Error> intern_text_for_constant(BodyState& bs, std::string_view text) {
   ByteCode& bc = *bs.out;
   bc.string_storage.emplace_back(text);
-  // Index of the freshly inserted string; storage is reserved up-front so the
-  // backing data() pointer remains stable for the lifetime of `bc`.
+  // Index of the freshly inserted string. `string_storage` is a std::deque,
+  // so appending never relocates prior elements and the backing data()
+  // pointer stays stable for the lifetime of `bc`.
   return static_cast<std::uint32_t>(bc.string_storage.size() - 1);
 }
 
@@ -344,24 +345,20 @@ Expected<void, Error> compile_binary(BodyState& bs, const parser::AstNode& node)
 }
 
 Expected<void, Error> compile_range(BodyState& bs, const parser::AstNode& node) {
-  // Range endpoints may be arbitrary subexpressions (e.g. `OFFSET(...):B5`),
-  // but in the common case they are bare cell refs. We compile each endpoint
-  // recursively; the VM (Bundle 5.2) is responsible for promoting two
-  // single-cell refs on the stack into a rectangular range value via the
-  // `LoadRange` opcode reading both stack slots.
+  // A range `A1:B2` lowers to the two endpoint subexpressions followed by a
+  // `LoadRange` marker. For the common `Ref:Ref` shape the endpoints are two
+  // `LoadRef`s, so the run-time refs each endpoint pushed carry the pool
+  // indices the VM and the optimizer's range-canonicalisation pass read back
+  // from the two preceding `LoadRef` operands. The marker operand is `0xFF`
+  // (a sentinel that never collides with a real refs index used elsewhere);
+  // the optimizer keys its canonicalisation on it.
   //
-  // For the simple case `Ref:Ref` we emit a single `LoadRange` with two
-  // adjacent refs-pool entries; the more general case falls back to
-  // emitting a `BinaryOp` style op which the VM handles via its range
-  // operator. Because the VM is not yet implemented we keep the IR shape
-  // simple: always go through the two-subexpression path and let the VM
-  // see two independent operands followed by a reserved BinaryOp slot.
+  // General range expressions (e.g. `OFFSET(...):B5`) compile their
+  // endpoints to non-`LoadRef` opcodes; the VM detects that the two
+  // preceding instructions are not both `LoadRef` and surfaces `#VALUE!`,
+  // matching the tree-walker's complex-range-endpoint fallback.
   RETURN_IF_ERROR(compile_node(bs, node.as_range_lhs()));
   RETURN_IF_ERROR(compile_node(bs, node.as_range_rhs()));
-  // Range is encoded as a special BinaryOp variant. The placeholder uses
-  // `0xFF` as the op code so the VM can dispatch on it without colliding
-  // with `parser::BinOp` values. A future revision may switch to a
-  // dedicated `LoadRange` form once the VM lands.
   RETURN_IF_ERROR(emit(bs, node, OpCode::LoadRange, 0xFFu));
   return {};
 }
@@ -647,14 +644,14 @@ Expected<void, Error> compile_node(BodyState& bs, const parser::AstNode& node) {
 Expected<ByteCode, Error> compile(const parser::AstNode& root, Arena& arena) {
   CompilerContext ctx;
   ctx.arena = &arena;
-  // Reserve generously so the borrow contract on `string_storage` (stable
-  // pointers across the lifetime of the ByteCode) holds even for large
-  // formulas; this is a heuristic upper bound, not a hard limit.
+  // Reserve generously for the common case; these are heuristic hints, not
+  // hard limits. `string_storage` is a std::deque and needs no reservation:
+  // its element addresses are stable across growth, which is what the
+  // borrow contract on `constants` / `refs` relies on.
   ctx.bc.code.reserve(16);
   ctx.bc.constants.reserve(8);
   ctx.bc.names.reserve(8);
   ctx.bc.refs.reserve(4);
-  ctx.bc.string_storage.reserve(16);
   ctx.bc.source_pos.reserve(16);
 
   BodyState bs;

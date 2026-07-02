@@ -9,8 +9,9 @@
 //     various AST shapes (single Ref, RangeOp, omitted reference using
 //     the formula cell anchor).
 //   * MVP fixed-stub keys (filename, format, color, parentheses,
-//     prefix, protect, width) - these will become live once the style
-//     subsystem lands.
+//     prefix, width) - these will become live once the style subsystem
+//     lands.
+//   * `protect` - live: reads the referenced cell's xf `locked` flag.
 //   * Case-insensitivity of the info_type key.
 //   * Error-propagation rules: error info_type, error reference,
 //     unknown info_type, arity violations.
@@ -24,6 +25,7 @@
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
+#include "io/styles_reader.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -186,7 +188,7 @@ TEST(BuiltinsCellType, EmptyStringFormulaIsB) {
 
 // ---------------------------------------------------------------------------
 // MVP fixed-stub keys: filename / format / color / parentheses / prefix /
-// protect / width
+// width. (`protect` is live below, driven by the xf locked flag.)
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsCellFilename, AlwaysEmpty) {
@@ -232,9 +234,51 @@ TEST(BuiltinsCellPrefix, AlwaysEmpty) {
   EXPECT_EQ(std::string(v.as_text()), "");
 }
 
-TEST(BuiltinsCellProtect, AlwaysOne) {
+TEST(BuiltinsCellProtect, DefaultCellIsLocked) {
+  // A default cell (xf 0, no <protection>) is locked -> 1.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"protect\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsCellProtect, UnlockedCellReturnsZero) {
+  // A cell whose xf carries `<protection locked="0"/>` -> 0.
+  Workbook wb = Workbook::create();
+  io::StylesTable styles;
+  styles.cell_xfs.push_back(io::CellXf{});  // xf 0: default (locked).
+  io::CellXf unlocked{};
+  unlocked.has_protection = true;
+  unlocked.locked = false;
+  styles.cell_xfs.push_back(unlocked);  // xf 1: unlocked.
+  wb.set_styles(std::move(styles));
+  wb.sheet(0).set_cell_value(0, 0, Value::number(5.0));
+  wb.sheet(0).set_cell_xf_index(0, 0, 1U);  // A1 -> unlocked xf.
+  const Value v = EvalSourceIn("=CELL(\"protect\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsCellProtect, ProtectionElementAbsentIsLocked) {
+  // An xf whose `<protection>` element is absent defaults to locked -> 1,
+  // even when the cell references that xf explicitly.
+  Workbook wb = Workbook::create();
+  io::StylesTable styles;
+  styles.cell_xfs.push_back(io::CellXf{});  // xf 0.
+  io::CellXf no_protection{};               // has_protection=false, locked=true.
+  styles.cell_xfs.push_back(no_protection);
+  wb.set_styles(std::move(styles));
+  wb.sheet(0).set_cell_value(0, 0, Value::number(5.0));
+  wb.sheet(0).set_cell_xf_index(0, 0, 1U);
+  const Value v = EvalSourceIn("=CELL(\"protect\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsCellProtect, AbsentCellIsLocked) {
+  // A never-populated cell uses xf 0 -> locked -> 1.
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=CELL(\"protect\", Z9)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }

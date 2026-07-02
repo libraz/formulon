@@ -154,6 +154,12 @@ class AstNode final {
   std::string_view as_ref3d_sheet_begin() const;
   std::string_view as_ref3d_sheet_end() const;
   const Reference& as_ref3d_cell() const;
+  /// Bottom-right corner of a range tail; equals `as_ref3d_cell()` for a
+  /// single-cell tail (`is_range() == false`).
+  const Reference& as_ref3d_cell_end() const;
+  /// True when the tail is a cell range (`Sheet1:Sheet3!A1:B2`) rather than
+  /// a single cell (`Sheet1:Sheet3!A1`).
+  bool as_ref3d_is_range() const;
 
   // --- StructuredRef -------------------------------------------------------
   std::string_view as_structured_ref_table() const;
@@ -231,6 +237,7 @@ class AstNode final {
   friend AstNode* make_spill_ref(Arena&, const Reference&);
   friend AstNode* make_external_ref(Arena&, std::uint32_t, std::string_view, const Reference&);
   friend AstNode* make_ref3d(Arena&, std::string_view, std::string_view, const Reference&);
+  friend AstNode* make_ref3d_range(Arena&, std::string_view, std::string_view, const Reference&, const Reference&);
   friend AstNode* make_structured_ref(Arena&, std::string_view, std::string_view, StructuredRefModifier);
   friend AstNode* make_name_ref(Arena&, std::string_view);
   friend AstNode* make_unary_op(Arena&, UnaryOp, AstNode*);
@@ -265,6 +272,11 @@ class AstNode final {
     std::string_view sheet_begin;
     std::string_view sheet_end;
     Reference cell;
+    // Bottom-right corner when the tail is a range (`Sheet1:Sheet3!A1:B2`).
+    // Equal to `cell` and ignored when `is_range` is false (single-cell
+    // tail, `Sheet1:Sheet3!A1`).
+    Reference cell_end;
+    bool is_range = false;
   };
   struct StructuredRefPayload {
     std::string_view table;
@@ -392,6 +404,13 @@ AstNode* make_external_ref(Arena& arena, std::uint32_t book_id, std::string_view
 /// own `sheet` qualifier is ignored (the endpoints carry the span). The
 /// sheet-name views are re-interned into `arena`.
 AstNode* make_ref3d(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell);
+
+/// Builds a range-tail `Ref3D` node referencing `sheet_begin:sheet_end!
+/// cell:cell_end` (e.g. `Sheet1:Sheet3!A1:B2`). Both corners' own `sheet`
+/// qualifiers are ignored (the endpoints carry the span). The sheet-name
+/// views are re-interned into `arena`.
+AstNode* make_ref3d_range(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell,
+                          const Reference& cell_end);
 
 /// Builds a `StructuredRef` node.  `column` may be empty when the reference
 /// targets the whole table.  `modifier` is `None` for plain `Table[col]`.

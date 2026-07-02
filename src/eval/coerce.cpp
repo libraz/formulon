@@ -11,6 +11,7 @@
 #include <string_view>
 
 #include "eval/date_text_parse.h"
+#include "eval/number_parse.h"
 #include "utils/double_format.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
@@ -42,7 +43,7 @@ bool strtod_full(std::string_view s, double* out) noexcept {
   std::memcpy(buf, s.data(), n);
   buf[n] = '\0';
   char* end_ptr = nullptr;
-  const double parsed = std::strtod(buf, &end_ptr);
+  const double parsed = parse_double_c_locale(buf, &end_ptr);
   const bool ok = end_ptr == buf + n;
   if (heap_buf != nullptr) {
     std::free(heap_buf);
@@ -53,45 +54,6 @@ bool strtod_full(std::string_view s, double* out) noexcept {
   *out = parsed;
   return true;
 }
-
-namespace {
-
-// Currency symbols accepted by Mac Excel 365 for implicit numeric coercion.
-// Allowlist of single-codepoint UTF-8 byte sequences; no locale lookup.
-struct CurrencyToken {
-  const char* bytes;
-  std::size_t len;
-};
-constexpr CurrencyToken kCurrencyTokens[] = {
-    {"\x24", 1},          // $  U+0024
-    {"\xC2\xA2", 2},      // cent  U+00A2
-    {"\xC2\xA3", 2},      // pound  U+00A3
-    {"\xC2\xA5", 2},      // yen  U+00A5
-    {"\xE2\x82\xAC", 3},  // euro  U+20AC
-    {"\xE2\x82\xA9", 3},  // won  U+20A9
-};
-
-bool try_strip_leading_currency(std::string_view s, std::string_view* out) {
-  for (const auto& tok : kCurrencyTokens) {
-    if (s.size() > tok.len && std::memcmp(s.data(), tok.bytes, tok.len) == 0) {
-      *out = s.substr(tok.len);
-      return true;
-    }
-  }
-  return false;
-}
-
-bool try_strip_trailing_currency(std::string_view s, std::string_view* out) {
-  for (const auto& tok : kCurrencyTokens) {
-    if (s.size() > tok.len && std::memcmp(s.data() + s.size() - tok.len, tok.bytes, tok.len) == 0) {
-      *out = s.substr(0, s.size() - tok.len);
-      return true;
-    }
-  }
-  return false;
-}
-
-}  // namespace
 
 Expected<double, ErrorCode> coerce_text_to_number(std::string_view text) {
   // Implementation factored out of the Value-shaped overload's `Text`
@@ -111,14 +73,17 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text) {
   // Layered numeric-coercion fallback, in order:
   //   1. strtod(trimmed)                    - plain numeric fast path
   //   2. trailing '%' stripped, strtod, /100 - percent literals
-  //   3. leading currency stripped, strtod   - "$100", "€100", ...
-  //   4. trailing currency stripped, strtod  - "100$", "100€", ...
-  //   5. date / datetime fallback (raw text) - DATEVALUE-style shapes
-  //   6. #VALUE!
-  // Percent + currency combinations and currency-only markers remain
-  // rejected; the date fallback still runs against the raw, untrimmed
-  // text so padded date strings stay #VALUE! (see WhitespacePaddedDate
-  // rejection test).
+  //   3. VALUE()-style locale parse          - grouping, parens, full-width,
+  //                                            currency ({$, ¥, ￥, €} on one
+  //                                            side only), currency + percent
+  //   4. date / datetime fallback (raw text) - DATEVALUE-style shapes
+  //   5. #VALUE!
+  // Currency handling lives entirely in step 3 (`parse_excel_number`) so
+  // implicit coercion and the VALUE() builtin share one code path and agree
+  // exactly (Mac Excel 365 ja-JP accepts a currency marker on the leading OR
+  // trailing side but not both, and only {$, ¥, ￥, €}). The date fallback
+  // runs against the raw, untrimmed text so padded date strings stay #VALUE!
+  // (see WhitespacePaddedDate rejection test).
   double parsed = 0.0;
   if (strtod_full(trimmed, &parsed)) {
     if (std::isnan(parsed) || std::isinf(parsed)) {
@@ -136,18 +101,17 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text) {
       return scaled;
     }
   }
-  std::string_view stripped;
-  if (try_strip_leading_currency(trimmed, &stripped) && strtod_full(stripped, &parsed)) {
-    if (std::isnan(parsed) || std::isinf(parsed)) {
-      return ErrorCode::Num;
-    }
-    return parsed;
-  }
-  if (try_strip_trailing_currency(trimmed, &stripped) && strtod_full(stripped, &parsed)) {
-    if (std::isnan(parsed) || std::isinf(parsed)) {
-      return ErrorCode::Num;
-    }
-    return parsed;
+  // Locale-aware numeric forms that the fast paths above reject: thousands
+  // grouping ("1,000"), accounting parentheses ("(100)" -> -100), full-width
+  // digits/punctuation, and currency (with the one-side rule above). Excel
+  // applies VALUE's normalisation to implicit coercion too, so `="1,000"+1`
+  // is 1001 and `COUNTIF(range, ">1,000")` parses the criterion numerically.
+  // `parse_excel_number` rejects NaN/Inf internally, so a success is always
+  // finite. Runs on the raw (untrimmed) text because the normaliser does its
+  // own ASCII/full-width trimming.
+  double locale_parsed = 0.0;
+  if (parse_excel_number(text, &locale_parsed)) {
+    return locale_parsed;
   }
   // Mac Excel 365 accepts date / datetime text wherever a number is
   // expected: e.g. `=FLOOR(10, "2024-01-10")` coerces the second

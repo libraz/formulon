@@ -55,11 +55,13 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
     // their cached values, which is what the solver iterates against.
     ctx = EvalContext::workbook_only(workbook, sheet)
               .with_excel_profile(workbook.excel_profile())
+              .with_date1904(workbook.date1904())
               .with_mutable_sheet(sheet)
               .with_formula_cell(row, col);
   } else {
     ctx = EvalContext(workbook, sheet, state)
               .with_excel_profile(workbook.excel_profile())
+              .with_date1904(workbook.date1904())
               .with_mutable_sheet(sheet)
               .with_formula_cell(row, col);
   }

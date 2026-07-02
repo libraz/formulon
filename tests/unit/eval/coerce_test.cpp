@@ -10,11 +10,14 @@
 
 #include "eval/coerce.h"
 
+#include <locale.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <string>
 
+#include "eval/number_parse.h"
 #include "gtest/gtest.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -195,8 +198,10 @@ TEST(CoerceToNumberTextPercent, LeadingPercentRejected) {
   EXPECT_EQ(r.error(), ErrorCode::Value);
 }
 
-// Currency-prefixed/suffixed text: Mac Excel 365 accepts the common symbols
-// `$ ¢ £ ¥ € ₩` on either side of a numeric body.
+// Currency-prefixed/suffixed text: Mac Excel 365 (ja-JP) accepts ONLY the
+// symbols {$, ¥, ￥, €}, on the leading OR trailing side but not both. `£`,
+// `¢`, `₩`, and the kanji `円` are rejected. The suffix position accepts only
+// `€`; a trailing `$` / `¥` is #VALUE!. VALUE() and implicit coercion agree.
 
 TEST(CoerceToNumberTextCurrency, LeadingDollar) {
   auto r = coerce_to_number(Value::text("$100"));
@@ -220,12 +225,13 @@ TEST(CoerceToNumberTextCurrency, LeadingYen) {
   EXPECT_DOUBLE_EQ(r.value(), 1000.0);
 }
 
-TEST(CoerceToNumberTextCurrency, LeadingPoundWithFraction) {
+TEST(CoerceToNumberTextCurrency, LeadingPoundRejected) {
+  // `£` (U+00A3) is not in the ja-JP currency set, so "£42.5" is #VALUE!.
   auto r =
       coerce_to_number(Value::text("\xC2\xA3"
                                    "42.5"));
-  ASSERT_TRUE(r.has_value());
-  EXPECT_DOUBLE_EQ(r.value(), 42.5);
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
 }
 
 TEST(CoerceToNumberTextCurrency, LeadingDollarNegativeBody) {
@@ -234,10 +240,12 @@ TEST(CoerceToNumberTextCurrency, LeadingDollarNegativeBody) {
   EXPECT_DOUBLE_EQ(r.value(), -100.0);
 }
 
-TEST(CoerceToNumberTextCurrency, TrailingDollar) {
+TEST(CoerceToNumberTextCurrency, TrailingDollarRejected) {
+  // Only `€` is accepted as a trailing currency marker; a trailing `$` is
+  // #VALUE! (matches VALUE("100$")).
   auto r = coerce_to_number(Value::text("100$"));
-  ASSERT_TRUE(r.has_value());
-  EXPECT_DOUBLE_EQ(r.value(), 100.0);
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
 }
 
 TEST(CoerceToNumberTextCurrency, TrailingEuro) {
@@ -246,10 +254,11 @@ TEST(CoerceToNumberTextCurrency, TrailingEuro) {
   EXPECT_DOUBLE_EQ(r.value(), 100.0);
 }
 
-TEST(CoerceToNumberTextCurrency, TrailingYen) {
+TEST(CoerceToNumberTextCurrency, TrailingYenRejected) {
+  // A trailing half-width `¥` is likewise not an accepted suffix -> #VALUE!.
   auto r = coerce_to_number(Value::text("1000\xC2\xA5"));
-  ASSERT_TRUE(r.has_value());
-  EXPECT_DOUBLE_EQ(r.value(), 1000.0);
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
 }
 
 TEST(CoerceToNumberTextCurrency, LeadingEuroPadded) {
@@ -274,11 +283,76 @@ TEST(CoerceToNumberTextCurrency, LeadingDollarPadded) {
 }
 
 TEST(CoerceToNumberTextCurrency, BothEndsRejected) {
-  // Mismatched markers: strtod fails on either trim, so the whole input is
-  // #VALUE!. IronCalc behaviour is undefined here and Mac is conservative.
+  // A currency symbol on BOTH ends ("$100" + trailing euro) is rejected —
+  // Mac Excel 365 accepts a currency marker on the leading OR trailing side,
+  // never both. VALUE("$100€") and "$100€"+0 both surface #VALUE!.
   auto r = coerce_to_number(Value::text("$100\xE2\x82\xAC"));
   ASSERT_FALSE(r.has_value());
   EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+TEST(CoerceToNumberTextCurrency, EuroPrefixOrSuffixEachAccepted) {
+  // A single-sided euro is accepted whether leading or trailing.
+  auto pre =
+      coerce_to_number(Value::text("\xE2\x82\xAC"
+                                   "100"));
+  ASSERT_TRUE(pre.has_value());
+  EXPECT_DOUBLE_EQ(pre.value(), 100.0);
+  auto post = coerce_to_number(Value::text("100\xE2\x82\xAC"));
+  ASSERT_TRUE(post.has_value());
+  EXPECT_DOUBLE_EQ(post.value(), 100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, SpaceBetweenSymbolAndNumber) {
+  // "$ 100" -> 100 (whitespace between the currency symbol and the number).
+  auto r = coerce_to_number(Value::text("$ 100"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, SignBeforeOrAfterSymbol) {
+  // The sign may sit on either side of the currency symbol.
+  auto before = coerce_to_number(Value::text("-$100"));
+  ASSERT_TRUE(before.has_value());
+  EXPECT_DOUBLE_EQ(before.value(), -100.0);
+  auto after = coerce_to_number(Value::text("$-100"));
+  ASSERT_TRUE(after.has_value());
+  EXPECT_DOUBLE_EQ(after.value(), -100.0);
+}
+
+TEST(CoerceToNumberTextCurrency, YenKanjiSuffixRejected) {
+  // The kanji "円" (U+5186) is NOT accepted as a currency marker even under
+  // ja-JP: "100円" surfaces #VALUE!.
+  auto r = coerce_to_number(Value::text("100\xE5\x86\x86"));
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+TEST(CoerceToNumberTextCurrency, CentRejected) {
+  // `¢` (U+00A2) is outside the ja-JP currency set.
+  auto r =
+      coerce_to_number(Value::text("\xC2\xA2"
+                                   "100"));
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+TEST(CoerceToNumberTextCurrency, WonRejected) {
+  // `₩` (U+20A9) is outside the ja-JP currency set.
+  auto r =
+      coerce_to_number(Value::text("\xE2\x82\xA9"
+                                   "100"));
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+TEST(CoerceToNumberTextCurrency, FullWidthYenAccepted) {
+  // The full-width yen sign `￥` (U+FFE5) is accepted: "￥100" -> 100.
+  auto r =
+      coerce_to_number(Value::text("\xEF\xBF\xA5"
+                                   "100"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 100.0);
 }
 
 TEST(CoerceToNumberTextCurrency, CurrencyOnlyRejected) {
@@ -291,6 +365,90 @@ TEST(CoerceToNumberTextCurrency, NonNumericBodyRejected) {
   auto r = coerce_to_number(Value::text("$abc"));
   ASSERT_FALSE(r.has_value());
   EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// Locale-aware numeric coercion shared with VALUE(): thousands grouping,
+// accounting parentheses, full-width digits, currency + grouping, and
+// surrounding whitespace all coerce successfully wherever a number is
+// expected (arithmetic operators, criteria).
+// ---------------------------------------------------------------------------
+
+TEST(CoerceToNumberTextLocale, ThousandsGrouped) {
+  auto r = coerce_to_number(Value::text("1,000"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 1000.0);
+}
+
+TEST(CoerceToNumberTextLocale, AccountingParensNegate) {
+  auto r = coerce_to_number(Value::text("(100)"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), -100.0);
+}
+
+TEST(CoerceToNumberTextLocale, FullWidthDigits) {
+  // "１２３" (U+FF11 U+FF12 U+FF13) folds to 123.
+  auto r = coerce_to_number(Value::text("\xEF\xBC\x91\xEF\xBC\x92\xEF\xBC\x93"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 123.0);
+}
+
+TEST(CoerceToNumberTextLocale, YenWithGrouping) {
+  // "¥1,000" (U+00A5 prefix + grouped digits) coerces to 1000.
+  auto r =
+      coerce_to_number(Value::text("\xC2\xA5"
+                                   "1,000"));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 1000.0);
+}
+
+TEST(CoerceToNumberTextLocale, SurroundingWhitespace) {
+  auto r = coerce_to_number(Value::text(" 12 "));
+  ASSERT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 12.0);
+}
+
+TEST(CoerceToNumberTextLocale, MalformedGroupingRejected) {
+  // "12,34" is not a valid 3-digit grouping and stays #VALUE!.
+  auto r = coerce_to_number(Value::text("12,34"));
+  ASSERT_FALSE(r.has_value());
+  EXPECT_EQ(r.error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// Locale-independent numeric parsing: the evaluator always uses '.' as the
+// decimal separator regardless of the host process's LC_NUMERIC.
+// ---------------------------------------------------------------------------
+
+TEST(ParseDoubleCLocale, DecimalIsAlwaysDotUnderCLocale) {
+  // Under the C locale a comma never acts as a decimal separator: "1.5"
+  // parses fully, and "1,5" stops at the comma. This holds no matter what
+  // the host LC_NUMERIC is set to, because the parser swaps to a C locale.
+  char* end = nullptr;
+  EXPECT_DOUBLE_EQ(parse_double_c_locale("1.5", &end), 1.5);
+  EXPECT_EQ(*end, '\0');
+  EXPECT_DOUBLE_EQ(parse_double_c_locale("1,5", &end), 1.0);
+  EXPECT_EQ(*end, ',');
+}
+
+TEST(ParseDoubleCLocale, UnaffectedByCommaDecimalHostLocale) {
+  // Install a comma-decimal locale on THIS thread only (uselocale is
+  // thread-local, so parallel ctest workers are unaffected). "1.5" must
+  // still parse to 1.5 — proving numeric parsing ignores the host locale.
+  // If the locale is not installed on the host, the assertion below still
+  // holds via the default C locale.
+  const locale_t comma_locale = newlocale(LC_NUMERIC_MASK, "de_DE.UTF-8", static_cast<locale_t>(0));
+  const locale_t previous =
+      (comma_locale != static_cast<locale_t>(0)) ? uselocale(comma_locale) : static_cast<locale_t>(0);
+
+  auto r = coerce_to_number(Value::text("1.5"));
+  EXPECT_TRUE(r.has_value());
+  EXPECT_DOUBLE_EQ(r.value(), 1.5);
+
+  if (comma_locale != static_cast<locale_t>(0)) {
+    uselocale(previous);
+    freelocale(comma_locale);
+  }
 }
 
 // ---------------------------------------------------------------------------

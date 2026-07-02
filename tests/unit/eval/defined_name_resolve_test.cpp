@@ -1,0 +1,218 @@
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
+//
+// Tests for workbook / sheet-scoped defined-name resolution in the
+// tree-walk evaluator. Each case builds a workbook with `set_defined_names`,
+// parses a formula, and evaluates it against a sheet-bound `EvalContext`.
+// The resolution rules mirror `dep_extractor.cpp` (sheet scope wins over
+// workbook scope; sheet-scoped names are invisible from other sheets).
+
+#include "eval/defined_name_resolve.h"
+
+#include <string_view>
+#include <vector>
+
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
+#include "eval/function_registry.h"
+#include "eval/tree_walker.h"
+#include "gtest/gtest.h"
+#include "io/defined_names.h"
+#include "parser/ast.h"
+#include "parser/parser.h"
+#include "sheet.h"
+#include "utils/arena.h"
+#include "value.h"
+#include "workbook.h"
+
+namespace formulon {
+namespace eval {
+namespace {
+
+// Parses `src` and evaluates it against `ctx`. Aborts the test on parse
+// failure so callers can assert on the result shape directly.
+Value EvalOrDie(std::string_view src, Arena& arena, const EvalContext& ctx) {
+  parser::Parser p(src, arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, arena, default_registry(), ctx);
+}
+
+// (a) Workbook-scoped constant name: =A1*Rate with Rate=0.1.
+TEST(DefinedNameResolve, WorkbookScopeConstant) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(200.0));  // A1
+  wb.set_defined_names({io::DefinedName{"Rate", "0.1", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=A1*Rate", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 20.0);
+}
+
+// (b) Sheet scope wins over workbook scope for the same name.
+TEST(DefinedNameResolve, SheetScopeOverridesWorkbookScope) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");  // sheet index 0
+  wb.set_defined_names({
+      io::DefinedName{"Rate", "0.1", -1, false, ""},  // workbook scope
+      io::DefinedName{"Rate", "0.2", 0, false, ""},   // Sheet1 scope
+  });
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Rate", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.2);
+}
+
+// (c) A sheet-scoped name is invisible from a different sheet (matching the
+// dep_extractor rule); resolution falls through to #NAME?.
+TEST(DefinedNameResolve, SheetScopedNameInvisibleFromOtherSheet) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");                                                // index 0
+  Sheet& s2 = wb.add_sheet("Sheet2");                                    // index 1
+  wb.set_defined_names({io::DefinedName{"Local", "42", 0, false, ""}});  // Sheet1 scope
+  EvalState state;
+  EvalContext ctx(wb, s2, state);
+  Arena a;
+  const Value v = EvalOrDie("=Local", a, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+// (c') The same sheet-scoped name resolves on its owning sheet.
+TEST(DefinedNameResolve, SheetScopedNameVisibleOnOwningSheet) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");  // index 0
+  wb.add_sheet("Sheet2");
+  // Fetch the sheet reference only after every add_sheet: add_sheet may
+  // reallocate the internal sheets vector and invalidate earlier references.
+  const Sheet& s1 = wb.sheet(0);
+  wb.set_defined_names({io::DefinedName{"Local", "42", 0, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s1, state);
+  Arena a;
+  const Value v = EvalOrDie("=Local", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
+}
+
+// (d) Reference-type definition (=Sheet1!$A$1) evaluates through the cell and
+// follows the cell's value on re-evaluation.
+TEST(DefinedNameResolve, ReferenceDefinitionFollowsCellValue) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(5.0));  // A1
+  wb.set_defined_names({io::DefinedName{"Ref", "Sheet1!$A$1", -1, false, ""}});
+  {
+    EvalState state;
+    EvalContext ctx(wb, s, state);
+    Arena a;
+    const Value v = EvalOrDie("=Ref*2", a, ctx);
+    ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), 10.0);
+  }
+  // Change the underlying cell and re-evaluate: the name tracks it.
+  s.set_cell_value(0U, 0U, Value::number(7.0));
+  {
+    EvalState state;
+    EvalContext ctx(wb, s, state);
+    Arena a;
+    const Value v = EvalOrDie("=Ref*2", a, ctx);
+    ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), 14.0);
+  }
+}
+
+// (e) Formula-type definition (=A1*2) evaluates against the current sheet.
+TEST(DefinedNameResolve, FormulaDefinitionEvaluates) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(6.0));  // A1
+  wb.set_defined_names({io::DefinedName{"Doubled", "A1*2", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Doubled+1", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 13.0);
+}
+
+// (f) An undefined name is #NAME?.
+TEST(DefinedNameResolve, UndefinedNameIsNameError) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Nonexistent", a, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+// (g) A directly circular definition surfaces #REF! without hanging.
+TEST(DefinedNameResolve, CircularDefinitionDoesNotHang) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({io::DefinedName{"Loop", "Loop+1", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Loop", a, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// (g') A mutually recursive pair (A=B, B=A) also terminates with #REF!.
+TEST(DefinedNameResolve, MutualCycleDoesNotHang) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({
+      io::DefinedName{"AName", "BName", -1, false, ""},
+      io::DefinedName{"BName", "AName", -1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=AName", a, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+// (h) A LET binding shadows a defined name of the same identifier.
+TEST(DefinedNameResolve, LetBindingShadowsDefinedName) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({io::DefinedName{"Rate", "0.1", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=LET(Rate, 2, Rate)", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+// A nested defined name (name references another name) resolves transitively.
+TEST(DefinedNameResolve, NestedNameResolvesTransitively) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({
+      io::DefinedName{"Base", "10", -1, false, ""},
+      io::DefinedName{"Derived", "Base*3", -1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Derived", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+}
+
+}  // namespace
+}  // namespace eval
+}  // namespace formulon

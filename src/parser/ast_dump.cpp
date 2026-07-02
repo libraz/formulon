@@ -172,6 +172,10 @@ void DumpInto(const AstNode& node, std::string& out) {
       out.append(node.as_ref3d_sheet_end());
       out.push_back(' ');
       out.append(format_a1(node.as_ref3d_cell()));
+      if (node.as_ref3d_is_range()) {
+        out.push_back(':');
+        out.append(format_a1(node.as_ref3d_cell_end()));
+      }
       out.push_back(')');
       return;
     }

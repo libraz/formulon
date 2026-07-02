@@ -73,17 +73,17 @@ LocalNowExpect ExpectedLocalNow() {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsMiscRegistry, AllNamesRegistered) {
-  // A mix of eager registry entries and lazy-dispatch entries: NOW /
-  // TODAY / DAYS360 / XOR live in the FunctionRegistry; AREAS /
-  // NETWORKDAYS.INTL / WORKDAY.INTL live in the lazy dispatch table.
+  // XOR lives in the eager FunctionRegistry. The date1904-sensitive calendar
+  // functions (NOW / TODAY / DAYS360) moved to the lazy dispatch table so the
+  // workbook date epoch (`EvalContext::date1904()`) can reach them, and AREAS
+  // / NETWORKDAYS.INTL / WORKDAY.INTL are lazy too. Lazy forms resolve via
+  // evaluation rather than a direct registry lookup.
   const FunctionRegistry& reg = default_registry();
   EXPECT_NE(reg.lookup("XOR"), nullptr);
-  EXPECT_NE(reg.lookup("DAYS360"), nullptr);
-  EXPECT_NE(reg.lookup("NOW"), nullptr);
-  EXPECT_NE(reg.lookup("TODAY"), nullptr);
-  // Lazy forms: resolve via evaluation rather than a direct registry lookup.
-  // The names must at least parse and produce a non-#NAME? result on valid
-  // input; a plain `AREAS(A1)` should evaluate to 1.
+  // NOW / TODAY return a positive serial; DAYS360 a day count; AREAS(A1) is 1.
+  EXPECT_TRUE(EvalSource("=TODAY()").is_number());
+  EXPECT_TRUE(EvalSource("=NOW()").is_number());
+  EXPECT_TRUE(EvalSource("=DAYS360(DATE(2020,1,1),DATE(2020,2,1))").is_number());
   const Value areas = EvalSource("=AREAS(A1)");
   ASSERT_TRUE(areas.is_number());
   EXPECT_EQ(areas.as_number(), 1.0);

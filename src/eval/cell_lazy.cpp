@@ -15,12 +15,15 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
+#include "cell.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_resolvers.h"
 #include "io/ooxml_writer_cell.h"
+#include "io/styles_reader.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -192,6 +195,45 @@ Value resolve_topleft_value(std::string_view sheet, std::uint32_t row, std::uint
   return ctx.resolve_ref(r, arena, registry);
 }
 
+// Resolves CELL("protect") for the cell at `(sheet, row, col)`: reads the
+// cell's cell-format (`xf`) protection `locked` flag from the workbook's
+// StylesTable. Excel returns 1 for a locked cell and 0 for an unlocked one.
+//
+// Defaults follow the OOXML schema: the effective `locked` flag defaults to
+// true, so an absent cell (xf 0), an xf without a `<protection>` element, or
+// a context with no styles table all resolve to locked (1). A qualified
+// reference whose target sheet is missing surfaces `#REF!`.
+Value resolve_cell_locked(std::string_view sheet, std::uint32_t row, std::uint32_t col, const EvalContext& ctx) {
+  const Workbook* workbook = ctx.workbook();
+  const Sheet* target = ctx.current_sheet();
+  if (!sheet.empty()) {
+    if (workbook == nullptr) {
+      // Qualified reference but no workbook bound to resolve it: default to
+      // locked rather than fabricating a #REF!.
+      return Value::number(1.0);
+    }
+    target = workbook->sheet_by_name(sheet);
+    if (target == nullptr) {
+      return Value::error(ErrorCode::Ref);
+    }
+  }
+  // The cell's xf index (0 = default xf when the cell is absent).
+  std::uint32_t xf_index = 0;
+  if (target != nullptr) {
+    if (const Cell* cell = target->cell_at(row, col); cell != nullptr) {
+      xf_index = cell->xf_index;
+    }
+  }
+  bool locked = true;
+  if (workbook != nullptr) {
+    const std::vector<io::CellXf>& cell_xfs = workbook->styles().cell_xfs;
+    if (xf_index < cell_xfs.size()) {
+      locked = cell_xfs[xf_index].locked;
+    }
+  }
+  return Value::number(locked ? 1.0 : 0.0);
+}
+
 // Builds the `"width"` MVP stub: a 1x2 array containing the default
 // column width (8) and the auto-fit flag (TRUE). No column-width
 // metadata yet; the result is fixed for every cell.
@@ -298,6 +340,26 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
   const std::string key = ascii_tolower(info_text.value());
 
+  // Reference-dependent protection query: reads the referenced cell's xf
+  // `locked` flag. Resolves the top-left (or the formula cell for the
+  // one-argument form) like the address / row / col keys below.
+  if (key == "protect") {
+    std::uint32_t row = 0;
+    std::uint32_t col = 0;
+    std::string_view sheet;
+    Value early_result = Value::blank();
+    if (!resolve_topleft_or_formula_cell(call, arena, registry, ctx, &row, &col, &sheet, &early_result)) {
+      // The one-argument form with no bound formula cell (ad-hoc CLI eval)
+      // has no cell to inspect; default to locked (the schema default).
+      // The two-argument form propagates a reference-side error.
+      if (call.as_call_arity() == 1U) {
+        return Value::number(1.0);
+      }
+      return early_result;
+    }
+    return resolve_cell_locked(sheet, row, col, ctx);
+  }
+
   // Reference-dependent keys: address / col / row / contents / type.
   // Resolve the top-left first so any reference-side error propagates
   // before we branch on the key.
@@ -373,11 +435,6 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     // does not collapse the result to 0. Oracle verification accepts the
     // xlwings "" read-back artifact via empty_string_readback.
     return arena_text(arena, "");
-  }
-  if (key == "protect") {
-    // Default-locked until the style subsystem lands. Excel's CELL
-    // returns 1 for locked cells.
-    return Value::number(1.0);
   }
   if (key == "width") {
     // No column-width metadata yet; return the {default_width, autofit}

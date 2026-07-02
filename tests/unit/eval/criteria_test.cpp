@@ -365,6 +365,50 @@ TEST(CriteriaMatchWildcard, StarAloneMatchesNonEmptyTextOnly) {
 }
 
 // ---------------------------------------------------------------------------
+// wildcard_match: codepoint-aware `*` backtracking and `?` matching.
+// ---------------------------------------------------------------------------
+
+TEST(WildcardMatchCodepoint, StarBacktrackAdvancesWholeCodepoints) {
+  // Regression: `*` backtracking used to advance one BYTE, letting a
+  // following `?` match a UTF-8 continuation byte and spuriously match.
+  // `*??c*` against "あcう" must NOT match (only 3 codepoints: あ, c, う —
+  // there is no "c" two codepoints in from any start after consuming two).
+  EXPECT_FALSE(wildcard_match("*??c*",
+                              "\xE3\x81\x82"
+                              "c"
+                              "\xE3\x81\x86"));
+}
+
+TEST(WildcardMatchCodepoint, QuestionMatchesExactlyOneCodepoint) {
+  // "?" matches a single multibyte codepoint.
+  EXPECT_TRUE(wildcard_match("?", "\xE3\x81\x82"));  // あ
+  EXPECT_FALSE(wildcard_match("?",
+                              "\xE3\x81\x82"
+                              "\xE3\x81\x84"));        // あい (2 cp)
+  EXPECT_FALSE(wildcard_match("??", "\xE3\x81\x82"));  // one cp cannot fill two ?
+}
+
+TEST(WildcardMatchCodepoint, QuestionMatchesSupplementaryPlaneEmoji) {
+  // A 4-byte codepoint (U+1F600) is one "?" unit.
+  EXPECT_TRUE(wildcard_match("?", "\xF0\x9F\x98\x80"));
+  EXPECT_TRUE(wildcard_match("a?b",
+                             "a"
+                             "\xF0\x9F\x98\x80"
+                             "b"));
+}
+
+TEST(WildcardMatchCodepoint, StarSwallowsMultibyteRun) {
+  // `*` skips a run of multibyte codepoints and the trailing literal aligns.
+  EXPECT_TRUE(wildcard_match("*c",
+                             "\xE3\x81\x82"
+                             "\xE3\x81\x84"
+                             "c"));  // あいc
+  EXPECT_TRUE(wildcard_match("*?c",
+                             "\xE3\x81\x82"
+                             "c"));  // あc
+}
+
+// ---------------------------------------------------------------------------
 // matches_criterion: blank-cell rules
 // ---------------------------------------------------------------------------
 

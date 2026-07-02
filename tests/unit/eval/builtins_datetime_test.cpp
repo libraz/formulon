@@ -77,6 +77,22 @@ Value EvalSourceIn(std::string_view src, const Workbook& wb, const Sheet& curren
   return evaluate(*root, eval_arena, default_registry(), ctx);
 }
 
+// Evaluates `src` under the 1904 date system (the calendar family reads the
+// epoch from `EvalContext::date1904()`).
+Value EvalSource1904(std::string_view src) {
+  static thread_local Arena parse_arena;
+  static thread_local Arena eval_arena;
+  parse_arena.reset();
+  eval_arena.reset();
+  parser::Parser p(src, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  return evaluate(*root, eval_arena, default_registry(), test::mac_context().with_date1904(true));
+}
+
 // ---------------------------------------------------------------------------
 // DATE
 // ---------------------------------------------------------------------------
@@ -701,6 +717,31 @@ TEST(DateTimeYearfrac, Basis1_ActualActual_OneFullLeapYear) {
   EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
 }
 
+TEST(DateTimeYearfrac, Basis1_ActualActual_OneYearSpanEnclosingFeb29) {
+  // 2020-01-01 -> 2021-01-01 is exactly one year and encloses 2020-02-29, so
+  // the denominator is the single leap year length 366 (not the multi-year
+  // average 365.5): 366/366 = 1.0 exactly. Regression for the actual/actual
+  // leap-year bug (previously 1.0013679890560876).
+  const Value v = EvalSource("=YEARFRAC(DATE(2020,1,1),DATE(2021,1,1),1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
+}
+
+TEST(DateTimeYearfrac, Basis1_ActualActual_OneYearSpanAnniversaryEnclosingFeb29) {
+  // 2019-03-01 -> 2020-03-01 is a one-year span whose interval includes
+  // 2020-02-29, so the denominator is 366 and the fraction is exactly 1.0.
+  const Value v = EvalSource("=YEARFRAC(DATE(2019,3,1),DATE(2020,3,1),1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
+}
+
+TEST(DateTimeYearfrac, Basis1_ActualActual_NonLeapOneYearSpan) {
+  // 2021-01-01 -> 2022-01-01: neither year is leap, span is one year -> 1.0.
+  const Value v = EvalSource("=YEARFRAC(DATE(2021,1,1),DATE(2022,1,1),1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
+}
+
 TEST(DateTimeYearfrac, Basis2_Actual360_HalfLeapYear) {
   // 2024-01-01 -> 2024-07-01 is 182 days in 2024; 182/360.
   const Value v = EvalSource("=YEARFRAC(DATE(2024,1,1),DATE(2024,7,1),2)");
@@ -908,6 +949,98 @@ TEST(DateTimeWorkday, ErrorPropagates) {
   const Value v = EvalSource("=WORKDAY(\"abc\",5)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// ---------------------------------------------------------------------------
+// 1904 date system. The 1904 epoch is 1462 days after the 1900 epoch, so a
+// given calendar date has a serial 1462 smaller. The calendar family reads
+// the epoch from `EvalContext::date1904()`.
+// ---------------------------------------------------------------------------
+
+TEST(DateTime1904, DateSerialIs1462Less) {
+  // DATE(2020,1,1) is serial 43831 under the 1900 system, 42369 under 1904.
+  const Value v1900 = EvalSource("=DATE(2020,1,1)");
+  ASSERT_TRUE(v1900.is_number());
+  EXPECT_DOUBLE_EQ(v1900.as_number(), 43831.0);
+  const Value v1904 = EvalSource1904("=DATE(2020,1,1)");
+  ASSERT_TRUE(v1904.is_number());
+  EXPECT_DOUBLE_EQ(v1904.as_number(), 42369.0);
+}
+
+TEST(DateTime1904, YearMonthDayInvertUnder1904) {
+  // Serial 42369 is 2020-01-01 in the 1904 system.
+  const Value y = EvalSource1904("=YEAR(42369)");
+  ASSERT_TRUE(y.is_number());
+  EXPECT_DOUBLE_EQ(y.as_number(), 2020.0);
+  const Value m = EvalSource1904("=MONTH(42369)");
+  ASSERT_TRUE(m.is_number());
+  EXPECT_DOUBLE_EQ(m.as_number(), 1.0);
+  const Value d = EvalSource1904("=DAY(42369)");
+  ASSERT_TRUE(d.is_number());
+  EXPECT_DOUBLE_EQ(d.as_number(), 1.0);
+}
+
+TEST(DateTime1904, EdateShiftsWithin1904Epoch) {
+  // EDATE(2020-01-01, 1) -> 2020-02-01; serial 42400 in the 1904 system
+  // (43862 - 1462).
+  const Value v = EvalSource1904("=EDATE(42369,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 42400.0);
+}
+
+TEST(DateTime1904, DateValueUsesWorkbookEpoch) {
+  const Value v = EvalSource1904("=DATEVALUE(\"2020-01-01\")");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 42369.0);
+}
+
+TEST(DateTime1904, WeekdayMatchesCalendarDateUnder1904) {
+  // 2020-01-01 is a Wednesday -> WEEKDAY type 1 (Sun=1) returns 4.
+  const Value v = EvalSource1904("=WEEKDAY(42369)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
+TEST(DateTime1904, DefaultSystemUnaffected) {
+  // Sanity: the 1900 default path is unchanged (YEAR of the 1900 serial).
+  const Value v = EvalSource("=YEAR(43831)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2020.0);
+}
+
+TEST(DateTime1904, TodayIsPositiveIntegerUnder1904) {
+  // TODAY() reads the wall clock; assert only that the 1904 epoch yields a
+  // positive integer serial (deterministic value would depend on the date).
+  const Value v = EvalSource1904("=TODAY()");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_GT(v.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), std::floor(v.as_number()));
+}
+
+TEST(DateTime1904, TextDateRenderingUsesWorkbookEpoch) {
+  // Serial 42369 is 2015-12-31 in the 1900 system and 2020-01-01 in the 1904
+  // system. TEXT's date format must render against the workbook epoch.
+  const Value v1900 = EvalSource("=TEXT(42369,\"yyyy-mm-dd\")");
+  ASSERT_TRUE(v1900.is_text());
+  EXPECT_EQ(v1900.as_text(), "2015-12-31");
+  const Value v1904 = EvalSource1904("=TEXT(42369,\"yyyy-mm-dd\")");
+  ASSERT_TRUE(v1904.is_text());
+  EXPECT_EQ(v1904.as_text(), "2020-01-01");
+}
+
+TEST(DateTime1904, TextRoundTripsDateBuiltinUnder1904) {
+  // DATE and TEXT share the workbook epoch, so DATE(2020,3,15) formatted back
+  // reads "2020-03-15" under both systems.
+  const Value v = EvalSource1904("=TEXT(DATE(2020,3,15),\"yyyy-mm-dd\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "2020-03-15");
+}
+
+TEST(DateTime1904, TextNumericFormatUnaffectedByEpoch) {
+  // A pure-numeric format has no date tokens, so the epoch is irrelevant.
+  const Value v = EvalSource1904("=TEXT(1234.5,\"0.00\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "1234.50");
 }
 
 }  // namespace

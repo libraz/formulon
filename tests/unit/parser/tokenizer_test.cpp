@@ -284,6 +284,68 @@ TEST(TokenizerErrorLiterals, InvalidSpelling) {
   EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidErrorLiteral);
 }
 
+TEST(TokenizerErrorLiterals, LongestPrefixLeavesTrailingOperator) {
+  // Excel rewrites operands of a deleted column into `#REF!` literals, so a
+  // surviving formula reads `#REF!/2`. The scanner must commit on the
+  // literal and leave the `/2` for the main loop instead of treating the
+  // whole run as an invalid spelling.
+  Tokenizer tz("#REF!/2");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 4u);  // ErrorLiteral, Slash, Number, Eof
+  EXPECT_EQ(v[0].kind, TokenKind::ErrorLiteral);
+  EXPECT_EQ(v[0].error_code, ErrorCode::Ref);
+  EXPECT_EQ(v[1].kind, TokenKind::Slash);
+  EXPECT_EQ(v[2].kind, TokenKind::Number);
+  EXPECT_TRUE(tz.errors().empty());
+}
+
+TEST(TokenizerErrorLiterals, NaFollowedBySlashReference) {
+  // `#N/A/B1`: the four-byte `#N/A` matches, leaving `/B1`. The trailing
+  // `/` after the literal must not be folded into the error run.
+  Tokenizer tz("#N/A/B1");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 4u);  // ErrorLiteral, Slash, CellRef, Eof
+  EXPECT_EQ(v[0].kind, TokenKind::ErrorLiteral);
+  EXPECT_EQ(v[0].error_code, ErrorCode::NA);
+  EXPECT_EQ(v[1].kind, TokenKind::Slash);
+  EXPECT_EQ(v[2].kind, TokenKind::CellRef);
+  EXPECT_TRUE(tz.errors().empty());
+}
+
+TEST(TokenizerErrorLiterals, DivZeroWithTrailingSlashReference) {
+  // `#DIV/0!/A1`: `#DIV/0!` itself contains a `/`, so the match must span
+  // the whole literal (7 bytes) and only then leave `/A1`.
+  Tokenizer tz("#DIV/0!/A1");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 4u);  // ErrorLiteral, Slash, CellRef, Eof
+  EXPECT_EQ(v[0].kind, TokenKind::ErrorLiteral);
+  EXPECT_EQ(v[0].error_code, ErrorCode::Div0);
+  EXPECT_EQ(std::string(v[0].lexeme), "#DIV/0!");
+  EXPECT_EQ(v[1].kind, TokenKind::Slash);
+  EXPECT_EQ(v[2].kind, TokenKind::CellRef);
+  EXPECT_TRUE(tz.errors().empty());
+}
+
+TEST(TokenizerErrorLiterals, AllVariantsFollowedByOperator) {
+  // Every catalog literal immediately followed by `+1` must tokenize as
+  // ErrorLiteral, Plus, Number, Eof.
+  const char* literals[] = {
+      "#NULL!", "#DIV/0!", "#VALUE!",   "#REF!",     "#NAME?",     "#NUM!",  "#N/A",     "#GETTING_DATA", "#SPILL!",
+      "#CALC!", "#FIELD!", "#BLOCKED!", "#CONNECT!", "#EXTERNAL!", "#BUSY!", "#PYTHON!", "#UNKNOWN!",
+  };
+  for (const char* lit : literals) {
+    const std::string src = std::string(lit) + "+1";
+    Tokenizer tz(src);
+    const auto& v = tz.tokens();
+    ASSERT_EQ(v.size(), 4u) << lit;
+    EXPECT_EQ(v[0].kind, TokenKind::ErrorLiteral) << lit;
+    EXPECT_EQ(std::string(v[0].lexeme), lit) << lit;
+    EXPECT_EQ(v[1].kind, TokenKind::Plus) << lit;
+    EXPECT_EQ(v[2].kind, TokenKind::Number) << lit;
+    EXPECT_TRUE(tz.errors().empty()) << lit;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Identifiers
 // ---------------------------------------------------------------------------

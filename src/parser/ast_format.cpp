@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "parser/ast.h"
 #include "parser/parser_detail.h"
@@ -158,6 +159,62 @@ void FormatRef(const Reference& r, std::string& out) {
   out.append(format_a1(r));
 }
 
+// Returns true iff `sheet` contains a character outside the bare
+// (unquoted) sheet-name set `[A-Za-z0-9_.]`, or is empty.
+bool SheetNameHasForbiddenChar(std::string_view sheet) noexcept {
+  if (sheet.empty()) {
+    return true;
+  }
+  for (char c : sheet) {
+    const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
+    if (!ok) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Returns true iff `sheet` has the exact shape of an A1-style cell
+// reference (`[A-Za-z]{1,3}[1-9][0-9]*`, e.g. `S2`, `AB12`). Such a name
+// is indistinguishable from a cell reference when left unquoted -- the
+// tokenizer resolves it to a `CellRef` token before a qualifying `!` can
+// reclassify it -- so Excel itself always quotes it. Verified against a
+// real Excel-365-produced package: a sheet literally named `S2`
+// serialises as `'S2'!A1*2`, never the bare form.
+bool SheetNameLooksLikeCellRef(std::string_view sheet) noexcept {
+  std::size_t i = 0;
+  while (i < sheet.size() && ((sheet[i] >= 'A' && sheet[i] <= 'Z') || (sheet[i] >= 'a' && sheet[i] <= 'z'))) {
+    ++i;
+  }
+  const std::size_t letters = i;
+  if (letters == 0 || letters > 3 || i >= sheet.size()) {
+    return false;
+  }
+  if (sheet[i] < '1' || sheet[i] > '9') {
+    return false;
+  }
+  ++i;
+  while (i < sheet.size() && sheet[i] >= '0' && sheet[i] <= '9') {
+    ++i;
+  }
+  return i == sheet.size();
+}
+
+bool SheetNameNeedsQuote(std::string_view sheet) noexcept {
+  return SheetNameHasForbiddenChar(sheet) || SheetNameLooksLikeCellRef(sheet);
+}
+
+// Appends `s`, doubling any embedded single quotes per Excel's escaping
+// convention.
+void AppendQuoteEscaped(std::string_view s, std::string& out) {
+  for (char c : s) {
+    if (c == '\'') {
+      out.push_back('\'');
+    }
+    out.push_back(c);
+  }
+}
+
 void FormatExternalRef(const AstNode& node, std::string& out) {
   out.push_back('[');
   out.append(std::to_string(node.as_external_ref_book_id()));
@@ -167,23 +224,9 @@ void FormatExternalRef(const AstNode& node, std::string& out) {
   // field. We bypass format_a1's sheet handling here because the cell sub-
   // ref's own `sheet` is normally empty (the parser strips it).
   const std::string_view sheet = node.as_external_ref_sheet();
-  // Quote when the sheet contains anything outside [A-Za-z0-9_.] or is empty.
-  bool needs_quote = sheet.empty();
-  for (char c : sheet) {
-    const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
-    if (!ok) {
-      needs_quote = true;
-      break;
-    }
-  }
-  if (needs_quote) {
+  if (SheetNameNeedsQuote(sheet)) {
     out.push_back('\'');
-    for (char c : sheet) {
-      if (c == '\'') {
-        out.push_back('\'');
-      }
-      out.push_back(c);
-    }
+    AppendQuoteEscaped(sheet, out);
     out.push_back('\'');
   } else {
     out.append(sheet);
@@ -195,40 +238,39 @@ void FormatExternalRef(const AstNode& node, std::string& out) {
   out.append(format_a1(cell_no_sheet));
 }
 
-// Appends `sheet`, single-quoting it when it contains characters outside the
-// bare-name set, mirroring FormatExternalRef's heuristic.
-void AppendSheetNameQuoted(std::string_view sheet, std::string& out) {
-  bool needs_quote = sheet.empty();
-  for (char c : sheet) {
-    const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
-    if (!ok) {
-      needs_quote = true;
-      break;
-    }
-  }
-  if (needs_quote) {
+void FormatRef3D(const AstNode& node, std::string& out) {
+  // A 3-D range's sheet span (`SheetFrom:SheetTo`) quotes as a SINGLE
+  // unit when either endpoint needs quoting -- `'Data:S2'!B1`, not
+  // `Data:'S2'!B1` -- rather than quoting each sheet name independently.
+  // Verified against a real Excel-365-produced package: a genuine 3-D
+  // range from sheet `Data` to sheet `S2` (the latter ambiguous with a
+  // cell reference) serialises as `SUM('Data:S2'!B1)`.
+  const std::string_view begin = node.as_ref3d_sheet_begin();
+  const std::string_view end = node.as_ref3d_sheet_end();
+  if (SheetNameNeedsQuote(begin) || SheetNameNeedsQuote(end)) {
     out.push_back('\'');
-    for (char c : sheet) {
-      if (c == '\'') {
-        out.push_back('\'');
-      }
-      out.push_back(c);
-    }
+    AppendQuoteEscaped(begin, out);
+    out.push_back(':');
+    AppendQuoteEscaped(end, out);
     out.push_back('\'');
   } else {
-    out.append(sheet);
+    out.append(begin);
+    out.push_back(':');
+    out.append(end);
   }
-}
-
-void FormatRef3D(const AstNode& node, std::string& out) {
-  AppendSheetNameQuoted(node.as_ref3d_sheet_begin(), out);
-  out.push_back(':');
-  AppendSheetNameQuoted(node.as_ref3d_sheet_end(), out);
   out.push_back('!');
   Reference cell_no_sheet = node.as_ref3d_cell();
   cell_no_sheet.sheet = {};
   cell_no_sheet.sheet_quoted = false;
   out.append(format_a1(cell_no_sheet));
+  // Range tail (`'Data:S2'!A1:B2`): append the bottom-right corner.
+  if (node.as_ref3d_is_range()) {
+    out.push_back(':');
+    Reference end_no_sheet = node.as_ref3d_cell_end();
+    end_no_sheet.sheet = {};
+    end_no_sheet.sheet_quoted = false;
+    out.append(format_a1(end_no_sheet));
+  }
 }
 
 void FormatStructuredRef(const AstNode& node, std::string& out) {
@@ -346,9 +388,31 @@ void FormatRangeOp(const AstNode& node, std::string& out, int min_bp) {
   if (wrap) {
     out.push_back('(');
   }
-  FormatNode(node.as_range_lhs(), out, kBpRange);
+  const AstNode& lhs = node.as_range_lhs();
+  const AstNode& rhs = node.as_range_rhs();
+  // Multi-column (`A:C`) / multi-row (`1:3`) whole references are stored as a
+  // RangeOp over two whole-column / whole-row Refs. Each endpoint's
+  // `format_a1` output duplicates its own axis (`A:A`, `C:C`), so a naive
+  // `<lhs>:<rhs>` join would emit `A:A:C:C`. Splice the two endpoints at
+  // their leading axis token to reproduce the compact `A:C` / `1:3` form.
+  if (lhs.kind() == NodeKind::Ref && rhs.kind() == NodeKind::Ref) {
+    const Reference& lr = lhs.as_ref();
+    const Reference& rr = rhs.as_ref();
+    if ((lr.is_full_col && rr.is_full_col) || (lr.is_full_row && rr.is_full_row)) {
+      const std::string lhs_str = format_a1(lr);
+      const std::string rhs_str = format_a1(rr);
+      out.append(lhs_str, 0, lhs_str.find(':'));
+      out.push_back(':');
+      out.append(rhs_str, 0, rhs_str.find(':'));
+      if (wrap) {
+        out.push_back(')');
+      }
+      return;
+    }
+  }
+  FormatNode(lhs, out, kBpRange);
   out.push_back(':');
-  FormatNode(node.as_range_rhs(), out, kBpRange + 1);
+  FormatNode(rhs, out, kBpRange + 1);
   if (wrap) {
     out.push_back(')');
   }
@@ -570,12 +634,320 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
   }
 }
 
+// Storage-form emitter: mirrors `FormatNode`'s dispatch but re-applies the
+// `_xlfn.` / `_xlfn._xlws.` function prefixes (via the injected classifier)
+// and the `_xlpm.` LET / LAMBDA parameter prefix (tracked through a lexical
+// scope stack). Leaf / operator rendering reuses the same free helpers and
+// precedence rules as the canonical formatter so the two stay in lockstep.
+struct StorageEmitter {
+  StoragePrefixClassifier classify;
+  std::vector<std::string_view> scope;  // in-scope LET binding / LAMBDA param names
+
+  bool in_scope(std::string_view name) const {
+    for (const std::string_view s : scope) {
+      if (s == name) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void append_function_name(std::string& out, std::string_view canonical) const {
+    switch (classify(canonical)) {
+      case StoragePrefixKind::XlfnXlws:
+        out.append("_xlfn._xlws.");
+        break;
+      case StoragePrefixKind::Xlfn:
+        out.append("_xlfn.");
+        break;
+      case StoragePrefixKind::None:
+        break;
+    }
+    out.append(canonical);
+  }
+
+  void emit(const AstNode& node, std::string& out, int min_bp) {
+    switch (node.kind()) {
+      case NodeKind::Literal:
+        FormatLiteral(node.as_literal(), out);
+        return;
+      case NodeKind::Ref:
+        FormatRef(node.as_ref(), out);
+        return;
+      case NodeKind::SpillRef: {
+        const bool wrap = kBpPostfixHash < min_bp;
+        if (wrap) {
+          out.push_back('(');
+        }
+        FormatRef(node.as_spill_ref(), out);
+        out.push_back('#');
+        if (wrap) {
+          out.push_back(')');
+        }
+        return;
+      }
+      case NodeKind::ExternalRef:
+        FormatExternalRef(node, out);
+        return;
+      case NodeKind::Ref3D:
+        FormatRef3D(node, out);
+        return;
+      case NodeKind::StructuredRef:
+        FormatStructuredRef(node, out);
+        return;
+      case NodeKind::NameRef: {
+        const std::string_view name = node.as_name();
+        if (in_scope(name)) {
+          out.append("_xlpm.");
+        }
+        out.append(name);
+        return;
+      }
+      case NodeKind::UnaryOp:
+        emit_unary(node, out, min_bp);
+        return;
+      case NodeKind::BinaryOp:
+        emit_binary(node, out, min_bp);
+        return;
+      case NodeKind::RangeOp:
+        emit_binary_ref(node, out, min_bp, kBpRange, ':');
+        return;
+      case NodeKind::UnionOp:
+        emit_union(node, out);
+        return;
+      case NodeKind::IntersectOp:
+        emit_binary_ref(node, out, min_bp, kBpIntersect, ' ');
+        return;
+      case NodeKind::ImplicitIntersection: {
+        const bool wrap = kBpAtPrefix < min_bp;
+        if (wrap) {
+          out.push_back('(');
+        }
+        out.push_back('@');
+        emit(node.as_implicit_intersection_operand(), out, kBpAtPrefix);
+        if (wrap) {
+          out.push_back(')');
+        }
+        return;
+      }
+      case NodeKind::Call:
+        emit_call(node, out);
+        return;
+      case NodeKind::ArrayLiteral:
+        emit_array(node, out);
+        return;
+      case NodeKind::Lambda:
+        emit_lambda(node, out);
+        return;
+      case NodeKind::LetBinding:
+        emit_let(node, out);
+        return;
+      case NodeKind::LambdaCall:
+        emit_lambda_call(node, out);
+        return;
+      case NodeKind::ErrorLiteral:
+        out.append(display_name(node.as_error_literal()));
+        return;
+      case NodeKind::ErrorPlaceholder:
+        out.append(display_name(ErrorCode::Ref));
+        return;
+    }
+  }
+
+  void emit_unary(const AstNode& node, std::string& out, int min_bp) {
+    const UnaryOp op = node.as_unary_op();
+    if (op == UnaryOp::Percent) {
+      const bool wrap = kBpPostfixPercent < min_bp;
+      if (wrap) {
+        out.push_back('(');
+      }
+      emit(node.as_unary_operand(), out, kBpPostfixPercent);
+      out.push_back('%');
+      if (wrap) {
+        out.push_back(')');
+      }
+      return;
+    }
+    const bool wrap = kBpUnaryPrefix < min_bp;
+    if (wrap) {
+      out.push_back('(');
+    }
+    out.push_back(op == UnaryOp::Plus ? '+' : '-');
+    emit(node.as_unary_operand(), out, kBpUnaryPrefix);
+    if (wrap) {
+      out.push_back(')');
+    }
+  }
+
+  void emit_binary(const AstNode& node, std::string& out, int min_bp) {
+    const BinOp op = node.as_binary_op();
+    const int bp = BinOpBp(op);
+    const bool wrap = bp < min_bp;
+    if (wrap) {
+      out.push_back('(');
+    }
+    const int lhs_min = (op == BinOp::Pow) ? bp + 1 : bp;
+    const int rhs_min = (op == BinOp::Pow) ? bp : bp + 1;
+    emit(node.as_binary_lhs(), out, lhs_min);
+    out.append(BinOpToken(op));
+    emit(node.as_binary_rhs(), out, rhs_min);
+    if (wrap) {
+      out.push_back(')');
+    }
+  }
+
+  // Shared shape for the two reference binary operators (`:` range and the
+  // space intersect): wrap at `bp`, emit lhs at `bp`, rhs at `bp + 1`.
+  void emit_binary_ref(const AstNode& node, std::string& out, int min_bp, int bp, char sep) {
+    const bool wrap = bp < min_bp;
+    if (wrap) {
+      out.push_back('(');
+    }
+    if (node.kind() == NodeKind::RangeOp) {
+      emit(node.as_range_lhs(), out, bp);
+      out.push_back(sep);
+      emit(node.as_range_rhs(), out, bp + 1);
+    } else {
+      emit(node.as_intersect_lhs(), out, bp);
+      out.push_back(sep);
+      emit(node.as_intersect_rhs(), out, bp + 1);
+    }
+    if (wrap) {
+      out.push_back(')');
+    }
+  }
+
+  void emit_union(const AstNode& node, std::string& out) {
+    out.push_back('(');
+    const std::uint32_t n = node.as_union_arity();
+    for (std::uint32_t i = 0; i < n; ++i) {
+      if (i > 0) {
+        out.push_back(',');
+      }
+      emit(node.as_union_child(i), out, 0);
+    }
+    out.push_back(')');
+  }
+
+  void emit_call(const AstNode& node, std::string& out) {
+    append_function_name(out, node.as_call_name());
+    out.push_back('(');
+    const std::uint32_t n = node.as_call_arity();
+    for (std::uint32_t i = 0; i < n; ++i) {
+      if (i > 0) {
+        out.push_back(',');
+      }
+      emit(node.as_call_arg(i), out, 0);
+    }
+    out.push_back(')');
+  }
+
+  void emit_array(const AstNode& node, std::string& out) {
+    out.push_back('{');
+    const std::uint32_t rows = node.as_array_rows();
+    const std::uint32_t cols = node.as_array_cols();
+    for (std::uint32_t r = 0; r < rows; ++r) {
+      if (r > 0) {
+        out.push_back(';');
+      }
+      for (std::uint32_t c = 0; c < cols; ++c) {
+        if (c > 0) {
+          out.push_back(',');
+        }
+        emit(node.as_array_element(r, c), out, 0);
+      }
+    }
+    out.push_back('}');
+  }
+
+  void emit_lambda(const AstNode& node, std::string& out) {
+    append_function_name(out, "LAMBDA");
+    out.push_back('(');
+    const std::uint32_t n = node.as_lambda_param_count();
+    const std::uint32_t opt = node.as_lambda_optional_count();
+    const std::uint32_t first_optional = n - opt;
+    const std::size_t base = scope.size();
+    for (std::uint32_t i = 0; i < n; ++i) {
+      if (i > 0) {
+        out.push_back(',');
+      }
+      const std::string_view param = node.as_lambda_param(i);
+      if (i >= first_optional) {
+        out.push_back('[');
+        out.append("_xlpm.");
+        out.append(param);
+        out.push_back(']');
+      } else {
+        out.append("_xlpm.");
+        out.append(param);
+      }
+      scope.push_back(param);
+    }
+    if (n > 0) {
+      out.push_back(',');
+    }
+    emit(node.as_lambda_body(), out, 0);
+    out.push_back(')');
+    scope.resize(base);
+  }
+
+  void emit_let(const AstNode& node, std::string& out) {
+    append_function_name(out, "LET");
+    out.push_back('(');
+    const std::uint32_t n = node.as_let_binding_count();
+    const std::size_t base = scope.size();
+    for (std::uint32_t i = 0; i < n; ++i) {
+      const std::string_view name = node.as_let_binding_name(i);
+      out.append("_xlpm.");
+      out.append(name);
+      out.push_back(',');
+      // A binding value may reference earlier bindings but not itself, so it
+      // is emitted with the scope accumulated so far (before pushing `name`).
+      emit(node.as_let_binding_expr(i), out, 0);
+      out.push_back(',');
+      scope.push_back(name);
+    }
+    emit(node.as_let_body(), out, 0);
+    out.push_back(')');
+    scope.resize(base);
+  }
+
+  void emit_lambda_call(const AstNode& node, std::string& out) {
+    const AstNode& callee = node.as_lambda_call_callee();
+    if (callee.kind() == NodeKind::Lambda || callee.kind() == NodeKind::NameRef ||
+        callee.kind() == NodeKind::LambdaCall) {
+      emit(callee, out, 0);
+    } else {
+      out.push_back('(');
+      emit(callee, out, 0);
+      out.push_back(')');
+    }
+    out.push_back('(');
+    const std::uint32_t n = node.as_lambda_call_arity();
+    for (std::uint32_t i = 0; i < n; ++i) {
+      if (i > 0) {
+        out.push_back(',');
+      }
+      emit(node.as_lambda_call_arg(i), out, 0);
+    }
+    out.push_back(')');
+  }
+};
+
 }  // namespace
 
 std::string format_formula(const AstNode& node) {
   std::string out;
   out.reserve(64);
   FormatNode(node, out, 0);
+  return out;
+}
+
+std::string format_formula_storage(const AstNode& node, StoragePrefixClassifier classify) {
+  StorageEmitter emitter{classify, {}};
+  std::string out;
+  out.reserve(64);
+  emitter.emit(node, out, 0);
   return out;
 }
 

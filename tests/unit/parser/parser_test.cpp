@@ -125,6 +125,70 @@ TEST(ParserAtoms, SheetQualifiedFullRow) {
   EXPECT_EQ(ParseToSexpr("=Sheet1!1:1"), "(ref Sheet1!1:1)");
 }
 
+TEST(ParserAtoms, AbsoluteFullColumnRef) {
+  EXPECT_EQ(ParseToSexpr("=$A:$A"), "(ref $A:$A)");
+}
+
+TEST(ParserAtoms, AbsoluteFullRowRef) {
+  EXPECT_EQ(ParseToSexpr("=$1:$1"), "(ref $1:$1)");
+}
+
+TEST(ParserAtoms, AbsoluteMultiColumnFullRange) {
+  EXPECT_EQ(ParseToSexpr("=$A:$C"), "(range (ref $A:$A) (ref $C:$C))");
+}
+
+TEST(ParserAtoms, AbsoluteMultiRowFullRange) {
+  EXPECT_EQ(ParseToSexpr("=$1:$3"), "(range (ref $1:$1) (ref $3:$3))");
+}
+
+TEST(ParserAtoms, SheetQualifiedAbsoluteMultiColumn) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1!$A:$C"), "(range (ref Sheet1!$A:$A) (ref $C:$C))");
+}
+
+TEST(ParserAtoms, SheetQualifiedAbsoluteMultiRow) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1!$1:$3"), "(range (ref Sheet1!$1:$1) (ref $3:$3))");
+}
+
+TEST(ParserAtoms, ThreeDSingleCell) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1:Sheet3!A1"), "(ref3d Sheet1:Sheet3 A1)");
+}
+
+TEST(ParserAtoms, ThreeDRangeTail) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1:Sheet3!A1:B2"), "(ref3d Sheet1:Sheet3 A1:B2)");
+}
+
+TEST(ParserAtoms, ThreeDRangeTailQuotedSheetSpan) {
+  // A cell-ref-shaped sheet name (`S2`) forces Excel to quote the whole
+  // span; the `:` inside the quotes is the sheet-range separator.
+  EXPECT_EQ(ParseToSexpr("='Data:S2'!A1:B2"), "(ref3d Data:S2 A1:B2)");
+}
+
+TEST(ParserAtoms, ThreeDRangeTailAbsolute) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1:Sheet3!$A$1:$B$2"), "(ref3d Sheet1:Sheet3 $A$1:$B$2)");
+}
+
+TEST(ParserAtoms, FullRowOverflowDoesNotWrapToSmallRow) {
+  // 2^64 + 1 == 18446744073709551617. Unguarded `std::uint64_t`
+  // accumulation wraps this back to 1, so `18446744073709551617:1` used
+  // to silently parse as the valid single-row ref `(ref 1:1)`. The
+  // clamped digit-run decode must reject the out-of-range row instead.
+  Arena a;
+  Parser p("=18446744073709551617:1", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_NE(dump_sexpr(*root), "(ref 1:1)");
+}
+
+TEST(ParserAtoms, SheetQualifiedFullRowOverflowDoesNotWrapToSmallRow) {
+  // Same wraparound hazard as above, through the sheet-qualified full-row
+  // path (`Sheet1!<row>:<row>`).
+  Arena a;
+  Parser p("=Sheet1!18446744073709551617:1", a);
+  AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_NE(dump_sexpr(*root), "(ref Sheet1!1:1)");
+}
+
 TEST(ParserAtoms, NameRef) {
   EXPECT_EQ(ParseToSexpr("=foo"), "(name foo)");
 }
@@ -389,9 +453,21 @@ TEST(ParserAt, AtPrefixOnRef) {
   EXPECT_EQ(ParseToSexpr("=@A1"), "(at (ref A1))");
 }
 
-TEST(ParserAt, AtConsumesRestOfExpression) {
-  // `@` has the lowest precedence, so it wraps the whole RHS expression.
-  EXPECT_EQ(ParseToSexpr("=@A1+B1"), "(at (binary + (ref A1) (ref B1)))");
+TEST(ParserAt, AtBindsTighterThanArithmetic) {
+  // `@` binds to the reference, then the intersected scalar participates in
+  // arithmetic: `=@A1+B1` is `(@A1)+B1`, matching Mac Excel 365.
+  EXPECT_EQ(ParseToSexpr("=@A1+B1"), "(binary + (at (ref A1)) (ref B1))");
+}
+
+TEST(ParserAt, AtBindsRangeBeforeMultiply) {
+  // `=@D3:D5*2` is `(@D3:D5)*2`: `@` first binds the whole range, then the
+  // intersected scalar is multiplied.
+  EXPECT_EQ(ParseToSexpr("=@D3:D5*2"), "(binary * (at (range (ref D3) (ref D5))) (num 2))");
+}
+
+TEST(ParserAt, AtBindsRange) {
+  // `@` absorbs the range operator so `=@A1:A5` is `@(A1:A5)`.
+  EXPECT_EQ(ParseToSexpr("=@A1:A5"), "(at (range (ref A1) (ref A5)))");
 }
 
 TEST(ParserAt, AtBeforeCall) {

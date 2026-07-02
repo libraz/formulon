@@ -293,9 +293,14 @@ bool wildcard_match_impl(std::string_view pattern, std::string_view text, bool p
       }
     }
     if (star_pi != std::string_view::npos) {
-      // Backtrack: extend the most-recent `*` by one byte of text.
+      // Backtrack: extend the most-recent `*` by one CODEPOINT of text. This
+      // must advance a whole UTF-8 codepoint, not a single byte — otherwise
+      // `star_ti` can land mid-sequence and a following `?` or literal would
+      // match a continuation byte (e.g. `*??c*` against `あcう` split the
+      // 3-byte `あ`). Codepoint-stepping keeps every subsequent match aligned.
       pi = star_pi + 1;
-      ++star_ti;
+      const std::size_t step = utf8_codepoint_bytes(text, star_ti);
+      star_ti += (step == 0 ? 1 : step);
       ti = star_ti;
       continue;
     }
@@ -685,9 +690,16 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
     case CriteriaOp::LtEq:
     case CriteriaOp::Gt:
     case CriteriaOp::GtEq: {
-      // Wildcards in ordering ops are literal — Excel does not interpret
-      // `*`/`?` for comparison. Fold both sides for ja-JP parity, then
-      // pass through the case-insensitive compare.
+      // An ordering operator against a text criterion only compares text
+      // cells; a Number or Bool cell is a different Excel type and never
+      // matches. This is type separation, NOT a cross-type ordering: both
+      // `COUNTIF(range, ">5x")` and `COUNTIF(range, "<5x")` skip a Number 6
+      // entirely (Mac Excel 365 returns 1 and 0 respectively over
+      // {6, "5y", TRUE}). Text cells compare case-insensitively (ja-JP
+      // folded); wildcards are literal for ordering ops.
+      if (cell.kind() != ValueKind::Text) {
+        return false;
+      }
       const std::string rhs_folded = fold_criteria_text_for_profile(rhs, profile);
       const int cmp = strings::case_insensitive_compare(cell_folded, rhs_folded);
       return apply_ordering(c.op, cmp);
@@ -697,7 +709,12 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
 }
 
 bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
-  // Excel's rule for a numeric / bool criterion:
+  // Excel's rule for a numeric / bool criterion. Eq and NotEq are
+  // intentionally NOT exact complements: a Text cell whose string coerces
+  // to the criterion number satisfies BOTH `=N` (via the cross-kind Eq
+  // coercion below) AND `<>N` (via the cross-kind "different type" NotEq
+  // rule). Mac Excel 365 reproduces this — over {23, "23", "abc", TRUE},
+  // COUNTIF("=23")=2 and COUNTIF("<>23")=3 overlap on the text "23".
   //
   //   * Same-kind cell (Number vs numeric RHS, Bool vs bool RHS): compare
   //     the numeric projection with the criterion operator.

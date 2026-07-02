@@ -19,8 +19,10 @@ namespace formulon {
 namespace text_format {
 namespace number_format_detail {
 
-// Render the date/time section for the given serial.
-void render_date(const Section& section, std::string_view fmt, double serial, std::string& out);
+// Render the date/time section for the given serial. `date1904` selects the
+// workbook date epoch for the serial->calendar conversion (1462-day shift);
+// it is trailing + defaulted so pure-1900 callers need no change.
+void render_date(const Section& section, std::string_view fmt, double serial, std::string& out, bool date1904 = false);
 
 }  // namespace number_format_detail
 }  // namespace text_format
