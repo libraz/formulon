@@ -276,10 +276,110 @@ bool cf_values_equal(const Value& lhs, const Value& rhs) {
   return false;
 }
 
+namespace {
+
+// True when a stored cell carries observable content.
+bool cf_cell_has_content(const Cell& cell) {
+  return !cell.formula_text.empty() || !cell.cached_value.is_blank();
+}
+
+// Largest 0-based row holding content within columns [col_lo, col_hi].
+bool cf_max_row_in_cols(const Sheet& sheet, std::uint32_t col_lo, std::uint32_t col_hi, std::uint32_t* out_max_row) {
+  bool any = false;
+  std::uint32_t max_row = 0;
+  for (const auto& [row_index, cells] : sheet.rows()) {
+    const std::size_t upper = std::min<std::size_t>(cells.size(), static_cast<std::size_t>(col_hi) + 1U);
+    for (std::size_t c = col_lo; c < upper; ++c) {
+      if (!cf_cell_has_content(cells[c])) {
+        continue;
+      }
+      if (!any || row_index > max_row) {
+        max_row = row_index;
+        any = true;
+      }
+      break;
+    }
+  }
+  if (!any) {
+    return false;
+  }
+  *out_max_row = max_row;
+  return true;
+}
+
+// Largest 0-based column holding content within rows [row_lo, row_hi].
+bool cf_max_col_in_rows(const Sheet& sheet, std::uint32_t row_lo, std::uint32_t row_hi, std::uint32_t* out_max_col) {
+  bool any = false;
+  std::uint32_t max_col = 0;
+  for (const auto& [row_index, cells] : sheet.rows()) {
+    if (row_index < row_lo || row_index > row_hi) {
+      continue;
+    }
+    for (std::size_t c = cells.size(); c-- > 0;) {
+      if (!cf_cell_has_content(cells[c])) {
+        continue;
+      }
+      const auto col_index = static_cast<std::uint32_t>(c);
+      if (!any || col_index > max_col) {
+        max_col = col_index;
+        any = true;
+      }
+      break;
+    }
+  }
+  if (!any) {
+    return false;
+  }
+  *out_max_col = max_col;
+  return true;
+}
+
+// Resolves a sqref range to concrete inclusive iteration bounds, clamping a
+// whole-column / whole-row range to the sheet's populated extent so a full
+// column never walks all `Sheet::kMaxRows` rows. Returns false when the
+// clamped range is empty (no content in range).
+bool resolve_sqref_rect(const CFCellRange& range, const Sheet& sheet, std::uint32_t* r0, std::uint32_t* c0,
+                        std::uint32_t* r1, std::uint32_t* c1) {
+  *r0 = range.first.row;
+  *c0 = range.first.col;
+  *r1 = range.last.row;
+  *c1 = range.last.col;
+  if (range.is_full_col()) {
+    std::uint32_t max_row = 0;
+    if (!cf_max_row_in_cols(sheet, range.first.col, range.last.col, &max_row)) {
+      return false;
+    }
+    *r0 = 0;
+    *r1 = max_row;
+  } else if (range.is_full_row()) {
+    std::uint32_t max_col = 0;
+    if (!cf_max_col_in_rows(sheet, range.first.row, range.last.row, &max_col)) {
+      return false;
+    }
+    *c0 = 0;
+    *c1 = max_col;
+  }
+  return true;
+}
+
+// Keep the lightweight grid constants in `cf_types.h` in sync with the
+// canonical `Sheet` extents used everywhere else.
+static_assert(kCfMaxRows == Sheet::kMaxRows, "kCfMaxRows must match Sheet::kMaxRows");
+static_assert(kCfMaxCols == Sheet::kMaxCols, "kCfMaxCols must match Sheet::kMaxCols");
+
+}  // namespace
+
 std::size_t count_matches_in_sqref(const Value& target, const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
   std::size_t count = 0;
   for (const CFCellRange& range : sqref) {
-    for (auto [row, col] : utils::RectRange(range.first.row, range.first.col, range.last.row, range.last.col)) {
+    std::uint32_t r0 = 0;
+    std::uint32_t c0 = 0;
+    std::uint32_t r1 = 0;
+    std::uint32_t c1 = 0;
+    if (!resolve_sqref_rect(range, sheet, &r0, &c0, &r1, &c1)) {
+      continue;
+    }
+    for (auto [row, col] : utils::RectRange(r0, c0, r1, c1)) {
       const Value cell = sheet.resolve_cell_value(row, col);
       if (cf_values_equal(target, cell)) {
         ++count;
@@ -292,7 +392,14 @@ std::size_t count_matches_in_sqref(const Value& target, const std::vector<CFCell
 std::vector<double> collect_numeric_values(const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
   std::vector<double> values;
   for (const CFCellRange& range : sqref) {
-    for (auto [row, col] : utils::RectRange(range.first.row, range.first.col, range.last.row, range.last.col)) {
+    std::uint32_t r0 = 0;
+    std::uint32_t c0 = 0;
+    std::uint32_t r1 = 0;
+    std::uint32_t c1 = 0;
+    if (!resolve_sqref_rect(range, sheet, &r0, &c0, &r1, &c1)) {
+      continue;
+    }
+    for (auto [row, col] : utils::RectRange(r0, c0, r1, c1)) {
       const Value cell = sheet.resolve_cell_value(row, col);
       if (cell.is_number()) {
         values.push_back(cell.as_number());

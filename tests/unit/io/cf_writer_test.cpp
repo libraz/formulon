@@ -111,6 +111,46 @@ TEST(CFWriter, SqrefSingleCellEmitsShortForm) {
   EXPECT_EQ(out[0].sqref[1], cf::CFCellRange({{4, 3}, {14, 3}}));
 }
 
+TEST(CFWriter, FullColumnSqrefEmitsCompactFormAndRoundTrips) {
+  cf::ConditionalFormat cf{};
+  // Whole column A (full row extent), and whole columns B:C.
+  cf.sqref.push_back({{0, 0}, {cf::kCfMaxRows - 1U, 0}});
+  cf.sqref.push_back({{0, 1}, {cf::kCfMaxRows - 1U, 2}});
+  cf::CFRule r;
+  r.type = cf::RuleType::Expression;
+  r.formula1 = "A1=0";
+  r.dxf_id = 0u;
+  cf.rules.push_back(std::move(r));
+
+  std::string xml = write_conditional_formattings({cf});
+  EXPECT_NE(xml.find("sqref=\"A:A B:C\""), std::string::npos) << xml;
+
+  auto out = RoundTrip({cf});
+  ASSERT_EQ(out[0].sqref.size(), 2u);
+  EXPECT_TRUE(out[0].sqref[0].is_full_col());
+  EXPECT_EQ(out[0].sqref[0], cf.sqref[0]);
+  EXPECT_EQ(out[0].sqref[1], cf.sqref[1]);
+}
+
+TEST(CFWriter, FullRowSqrefEmitsCompactFormAndRoundTrips) {
+  cf::ConditionalFormat cf{};
+  // Whole row 3 (full column extent).
+  cf.sqref.push_back({{2, 0}, {2, cf::kCfMaxCols - 1U}});
+  cf::CFRule r;
+  r.type = cf::RuleType::Expression;
+  r.formula1 = "A1=0";
+  r.dxf_id = 0u;
+  cf.rules.push_back(std::move(r));
+
+  std::string xml = write_conditional_formattings({cf});
+  EXPECT_NE(xml.find("sqref=\"3:3\""), std::string::npos) << xml;
+
+  auto out = RoundTrip({cf});
+  ASSERT_EQ(out[0].sqref.size(), 1u);
+  EXPECT_TRUE(out[0].sqref[0].is_full_row());
+  EXPECT_EQ(out[0].sqref[0], cf.sqref[0]);
+}
+
 TEST(CFWriter, ColorScaleThreeStopRoundTrips) {
   cf::ConditionalFormat cf{};
   cf.sqref.push_back({{0, 0}, {9, 0}});
@@ -160,6 +200,10 @@ TEST(CFWriter, DataBarRoundTrips) {
 }
 
 TEST(CFWriter, IconSetReverseAndPercentRoundTrip) {
+  // Three_TrafficLights2 is a 3-icon set: the model carries N-1 = 2 real
+  // thresholds; the writer must re-synthesize the floor cfvo so the
+  // emitted XML carries N = 3 `<cfvo>` elements (schema-valid, matches
+  // what Excel itself emits).
   cf::ConditionalFormat cf{};
   cf.sqref.push_back({{0, 3}, {9, 3}});
   cf::CFRule r;
@@ -168,20 +212,29 @@ TEST(CFWriter, IconSetReverseAndPercentRoundTrip) {
   i.name = cf::IconSetName::Three_TrafficLights2;
   i.reverse = true;
   i.percent = false;
-  i.thresholds.push_back({cf::CfvoType::Number, "0", true});
   i.thresholds.push_back({cf::CfvoType::Number, "50", true});
   i.thresholds.push_back({cf::CfvoType::Number, "100", false});  // gte=0
   r.icon_set = std::move(i);
   cf.rules.push_back(std::move(r));
+
+  std::string xml = write_conditional_formattings({cf});
+  // Floor cfvo (re-synthesized) plus the 2 real thresholds: 3 `<cfvo>`
+  // elements for the 3-icon set. `gte` is omitted when true (the default)
+  // and emitted as `gte="0"` only when false.
+  EXPECT_NE(xml.find(R"(<cfvo type="percent" val="0"/>)"), std::string::npos) << xml;
+  EXPECT_NE(xml.find(R"(<cfvo type="num" val="50"/>)"), std::string::npos) << xml;
+  EXPECT_NE(xml.find(R"(<cfvo type="num" val="100" gte="0"/>)"), std::string::npos) << xml;
 
   auto out = RoundTrip({cf});
   ASSERT_TRUE(out[0].rules[0].icon_set.has_value());
   EXPECT_EQ(out[0].rules[0].icon_set->name, cf::IconSetName::Three_TrafficLights2);
   EXPECT_TRUE(out[0].rules[0].icon_set->reverse);
   EXPECT_FALSE(out[0].rules[0].icon_set->percent);
-  EXPECT_EQ(out[0].rules[0].icon_set->thresholds.size(), 3u);
-  EXPECT_TRUE(out[0].rules[0].icon_set->thresholds[1].gte);
-  EXPECT_FALSE(out[0].rules[0].icon_set->thresholds[2].gte);
+  ASSERT_EQ(out[0].rules[0].icon_set->thresholds.size(), 2u);
+  EXPECT_EQ(out[0].rules[0].icon_set->thresholds[0].value, "50");
+  EXPECT_TRUE(out[0].rules[0].icon_set->thresholds[0].gte);
+  EXPECT_EQ(out[0].rules[0].icon_set->thresholds[1].value, "100");
+  EXPECT_FALSE(out[0].rules[0].icon_set->thresholds[1].gte);
 }
 
 TEST(CFWriter, Top10RoundTrip) {
@@ -234,6 +287,26 @@ TEST(CFWriter, ContainsTextRoundTrip) {
   EXPECT_EQ(out[0].rules[0].text.value(), "error");
 }
 
+TEST(CFWriter, ContainsTextWithNewlineIsAttributeEscaped) {
+  // `text=` is an attribute value; a literal embedded newline would be
+  // normalised away by any conforming XML parser on reload. The writer
+  // must emit a character reference instead of the raw byte, and the
+  // round trip through the reader must still recover the exact string.
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::ContainsText;
+  r.text = "line one\nline two";
+  r.dxf_id = 0u;
+  cf.rules.push_back(std::move(r));
+
+  const std::string xml = write_conditional_formattings({cf});
+  EXPECT_NE(xml.find("text=\"line one&#10;line two\""), std::string::npos) << xml;
+
+  auto out = RoundTrip({cf});
+  EXPECT_EQ(out[0].rules[0].text.value(), "line one\nline two");
+}
+
 TEST(CFWriter, TimePeriodRoundTrip) {
   cf::ConditionalFormat cf{};
   cf.sqref.push_back({{0, 0}, {0, 0}});
@@ -261,6 +334,53 @@ TEST(CFWriter, IdAttributeRoundTrips) {
 
   auto out = RoundTrip({cf});
   EXPECT_EQ(out[0].rules[0].id, "{12345678-90AB-CDEF-1234-567890ABCDEF}");
+}
+
+TEST(CFWriter, RuleExtLstRoundTrips) {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::DataBar;
+  cf::DataBarSpec d;
+  d.min = {cf::CfvoType::Min, "", true};
+  d.max = {cf::CfvoType::Max, "", true};
+  d.fill = {0x63, 0x8E, 0xC6, 255};
+  r.data_bar = std::move(d);
+  r.id = "{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}";
+  r.ext_lst_raw =
+      "<extLst><ext uri=\"{B025F937-C7B1-47D3-B67F-A62EFF666E3E}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\">"
+      "<x14:id>{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}</x14:id></ext></extLst>";
+  cf.rules.push_back(std::move(r));
+
+  std::string xml = write_conditional_formattings({cf});
+  EXPECT_NE(xml.find("<x14:id>{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}</x14:id>"), std::string::npos) << xml;
+
+  auto out = RoundTrip({cf});
+  ASSERT_EQ(out.size(), 1u);
+  ASSERT_EQ(out[0].rules.size(), 1u);
+  ASSERT_TRUE(out[0].rules[0].ext_lst_raw.has_value());
+  EXPECT_NE(out[0].rules[0].ext_lst_raw->find("5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB"), std::string::npos)
+      << *out[0].rules[0].ext_lst_raw;
+}
+
+TEST(CFWriter, ConditionalFormattingBlockExtLstRoundTrips) {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule r;
+  r.type = cf::RuleType::Expression;
+  r.formula1 = "A1=0";
+  r.dxf_id = 0u;
+  cf.rules.push_back(std::move(r));
+  cf.ext_lst_raw = "<extLst><ext uri=\"{some-future-extension}\"><futureThing/></ext></extLst>";
+
+  std::string xml = write_conditional_formattings({cf});
+  EXPECT_NE(xml.find("<futureThing/>"), std::string::npos) << xml;
+
+  auto out = RoundTrip({cf});
+  ASSERT_EQ(out.size(), 1u);
+  ASSERT_TRUE(out[0].ext_lst_raw.has_value());
+  EXPECT_NE(out[0].ext_lst_raw->find("futureThing"), std::string::npos) << *out[0].ext_lst_raw;
 }
 
 TEST(CFWriter, PivotScopeRoundTrips) {

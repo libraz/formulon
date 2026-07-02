@@ -1686,6 +1686,74 @@ TEST(CFEvaluator, DataBarAutomaticAxisProportionalForMixedSignPopulation) {
   EXPECT_DOUBLE_EQ(match.data_bar_render->axis_position_pct, 30.0);
 }
 
+TEST(CFEvaluator, DataBarMixedSignLengthSplitsAtAxisInsteadOfWholeRangeLinear) {
+  // Population [-50, -10, 20, 100] → min = -50, max = 100. Axis at
+  // |min| / (max - min) = 50 / 150 ≈ 33.33%.
+  //
+  // Regression: length used to be the whole-range linear map
+  // `(cell - min) / (max - min)`, which for e.g. cell=-10 would give
+  // `(-10 - -50) / 150 = 26.67%` -- a bar nearly as long as the true
+  // min. The correct OOXML semantics split at the axis: positive bars
+  // scale by `value / max`, negative bars by `value / min` (both
+  // negative, so a positive fraction) -- cell=-10 should be a *short*
+  // bar (20% of the negative side), not a long one.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(-50.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(-10.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(20.0));
+  harness.sheet.set_cell_value(3, 0, Value::number(100.0));
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 3, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch axis_probe = make_match(r, Value::number(20.0), ctx);
+  ASSERT_TRUE(axis_probe.data_bar_render.has_value());
+  EXPECT_NEAR(axis_probe.data_bar_render->axis_position_pct, 33.333333333333336, 1e-9);
+
+  // Most-negative value: full-length bar on the negative side.
+  CFMatch most_negative = make_match(r, Value::number(-50.0), ctx);
+  ASSERT_TRUE(most_negative.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(most_negative.data_bar_render->length_pct, 100.0);
+  EXPECT_TRUE(most_negative.data_bar_render->is_negative);
+
+  // -10 is 20% of the way from 0 to min (-50): a short negative bar.
+  CFMatch small_negative = make_match(r, Value::number(-10.0), ctx);
+  ASSERT_TRUE(small_negative.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(small_negative.data_bar_render->length_pct, 20.0);
+  EXPECT_TRUE(small_negative.data_bar_render->is_negative);
+
+  // 20 is 20% of the way from 0 to max (100): a short positive bar.
+  CFMatch small_positive = make_match(r, Value::number(20.0), ctx);
+  ASSERT_TRUE(small_positive.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(small_positive.data_bar_render->length_pct, 20.0);
+  EXPECT_FALSE(small_positive.data_bar_render->is_negative);
+
+  // Most-positive value (= max): full-length bar on the positive side.
+  CFMatch most_positive = make_match(r, Value::number(100.0), ctx);
+  ASSERT_TRUE(most_positive.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(most_positive.data_bar_render->length_pct, 100.0);
+  EXPECT_FALSE(most_positive.data_bar_render->is_negative);
+}
+
+TEST(CFEvaluator, DataBarAllPositiveDataKeepsWholeRangeLinearLength) {
+  // Non-regression: same-sign data must keep the original whole-range
+  // linear map even though it also uses Automatic axis mode.
+  // Population [10, 20, 30, 40, 50] -- min=10, max=50, mirrors
+  // `DataBarLengthIsLinearBetweenMinAndMax` but pinned to the mixed-sign
+  // code path's guard condition (all non-negative here).
+  CFEvalHarness harness;
+  PopulateLinearPopulation(harness);
+  const std::vector<CFCellRange> sqref{MakeRange(0, 0, 4, 0)};
+  CFRule r = MakeRule(RuleType::DataBar);
+  r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
+  const auto ctx = SqrefContext(harness, sqref);
+
+  CFMatch mid = make_match(r, Value::number(30.0), ctx);
+  ASSERT_TRUE(mid.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(mid.data_bar_render->length_pct, 50.0);
+}
+
 TEST(CFEvaluator, DataBarMiddleAxisIsAlwaysFifty) {
   CFEvalHarness harness;
   PopulateLinearPopulation(harness);

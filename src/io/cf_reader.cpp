@@ -5,9 +5,11 @@
 
 #include "io/cf_reader.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -15,6 +17,7 @@
 #include "io/cell_parser.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
+#include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/structured_log.h"
@@ -189,6 +192,48 @@ std::string_view StripAbsoluteMarkers(std::string_view ref, std::string& buf) {
 /// markers (`$`) are stripped first since CF sqref legitimately contains
 /// them. Returns `kIoSheetCorrupt` for unparseable input — the caller
 /// either folds it into the surrounding sqref error or skips the block.
+// Decodes a run of column letters (`A`, `AB`, `XFD`) to a 1-based column
+// index, or 0 when the run is empty / non-alpha / out of range.
+std::uint32_t DecodeColumnRun(std::string_view s) {
+  if (s.empty() || s.size() > 3) {
+    return 0;
+  }
+  std::uint32_t col = 0;
+  for (char ch : s) {
+    char up = ch;
+    if (up >= 'a' && up <= 'z') {
+      up = static_cast<char>(up - ('a' - 'A'));
+    }
+    if (up < 'A' || up > 'Z') {
+      return 0;
+    }
+    col = col * 26U + static_cast<std::uint32_t>(up - 'A' + 1);
+    if (col > Sheet::kMaxCols) {
+      return 0;
+    }
+  }
+  return col;
+}
+
+// Decodes a run of digits to a 1-based row index, or 0 when the run is
+// empty / non-digit / out of range.
+std::uint32_t DecodeRowRun(std::string_view s) {
+  if (s.empty() || s.size() > 7) {
+    return 0;
+  }
+  std::uint64_t row = 0;
+  for (char ch : s) {
+    if (ch < '0' || ch > '9') {
+      return 0;
+    }
+    row = row * 10U + static_cast<std::uint32_t>(ch - '0');
+  }
+  if (row == 0 || row > Sheet::kMaxRows) {
+    return 0;
+  }
+  return static_cast<std::uint32_t>(row);
+}
+
 Expected<cf::CFCellRange, Error> ParseA1Range(std::string_view ref) {
   const std::size_t colon = ref.find(':');
   if (colon == std::string_view::npos) {
@@ -209,6 +254,30 @@ Expected<cf::CFCellRange, Error> ParseA1Range(std::string_view ref) {
   std::string b_buf;
   const std::string_view a = StripAbsoluteMarkers(ref.substr(0, colon), a_buf);
   const std::string_view b = StripAbsoluteMarkers(ref.substr(colon + 1), b_buf);
+
+  // Whole-column (`A:A`, `A:C`) sqref: both endpoints are column-letter runs
+  // with no row. Store the full logical row extent and flag `full_col` so
+  // membership tests work while range-aware evaluation clamps to the used
+  // range and the writer re-emits the compact form.
+  const std::uint32_t a_col = DecodeColumnRun(a);
+  const std::uint32_t b_col = DecodeColumnRun(b);
+  if (a_col != 0 && b_col != 0) {
+    cf::CFCellRange out{};
+    out.first = {0, (a_col < b_col ? a_col : b_col) - 1U};
+    out.last = {Sheet::kMaxRows - 1U, (a_col < b_col ? b_col : a_col) - 1U};
+    return out;
+  }
+  // Whole-row (`1:1`, `1:3`) sqref: both endpoints are digit runs with no
+  // column.
+  const std::uint32_t a_row = DecodeRowRun(a);
+  const std::uint32_t b_row = DecodeRowRun(b);
+  if (a_row != 0 && b_row != 0) {
+    cf::CFCellRange out{};
+    out.first = {(a_row < b_row ? a_row : b_row) - 1U, 0};
+    out.last = {(a_row < b_row ? b_row : a_row) - 1U, Sheet::kMaxCols - 1U};
+    return out;
+  }
+
   auto a_rc = parse_a1(a);
   auto b_rc = parse_a1(b);
   if (!a_rc || !b_rc) {
@@ -352,6 +421,82 @@ void ReadDataBar(const pugi::xml_node& bar, cf::DataBarSpec* out) {
   }
 }
 
+/// Overlays a `<x14:dataBar>` extension element (Excel 2010+) onto a
+/// `DataBarSpec` already populated from the legacy `<dataBar>` element.
+/// The x14 extension is the only place negative-fill / negative-border /
+/// axis colour+position / gradient-vs-solid are expressed; the legacy
+/// schema has no attributes for them, so the pre-overlay `DataBarSpec`
+/// carries only fallback values (`negative_fill == fill`,
+/// `axis_position == Automatic`, `gradient == true`).
+void ApplyX14DataBarOverlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out) {
+  if (const pugi::xml_attribute gradient = x14_bar.attribute("gradient"); gradient) {
+    out->gradient = parse_xml_bool_attr(gradient);
+  }
+  const std::string_view axis_position = attr_str(x14_bar, "axisPosition");
+  if (axis_position == "middle") {
+    out->axis_position = cf::DataBarAxisPosition::Middle;
+  } else if (axis_position == "none") {
+    out->axis_position = cf::DataBarAxisPosition::None;
+  } else {
+    // "automatic", absent, or any unrecognised token: fold to the
+    // schema default.
+    out->axis_position = cf::DataBarAxisPosition::Automatic;
+  }
+  for (pugi::xml_node child = x14_bar.first_child(); child; child = child.next_sibling()) {
+    const std::string_view name = child.name();
+    if (name == "x14:negativeFillColor") {
+      out->negative_fill = ParseRgbColor(attr_str(child, "rgb"));
+    } else if (name == "x14:negativeBorderColor") {
+      out->negative_border = ParseRgbColor(attr_str(child, "rgb"));
+    } else if (name == "x14:axisColor") {
+      out->axis_color = ParseRgbColor(attr_str(child, "rgb"));
+    } else if (name == "x14:borderColor") {
+      out->border = ParseRgbColor(attr_str(child, "rgb"));
+    }
+  }
+  // `negativeBarColorSameAsPositive="1"` overrides any explicit
+  // `<x14:negativeFillColor>` sibling (Excel does not emit both, but a
+  // hand-edited file could; the flag wins per the CT_DataBar schema).
+  if (attr_bool(x14_bar, "negativeBarColorSameAsPositive", false)) {
+    out->negative_fill = out->fill;
+  }
+}
+
+/// Builds an `id -> <x14:dataBar>` lookup from the worksheet-level
+/// `<extLst><ext><x14:conditionalFormattings>` overlay (Excel 2010+).
+/// Each `<x14:cfRule type="dataBar" id="{GUID}">` cross-references a
+/// legacy `<cfRule id="{GUID}">` (see `CFRule::id`); `read_conditional_
+/// formats` applies the match via `ApplyX14DataBarOverlay`. Returns an
+/// empty map when the sheet carries no such overlay (pre-2010 files, or
+/// files with no DataBar rules at all).
+std::unordered_map<std::string, pugi::xml_node> CollectX14DataBarOverlay(const pugi::xml_node& worksheet) {
+  std::unordered_map<std::string, pugi::xml_node> out;
+  const pugi::xml_node ext_lst = worksheet.child("extLst");
+  if (!ext_lst) {
+    return out;
+  }
+  for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
+    const pugi::xml_node formattings = ext.child("x14:conditionalFormattings");
+    if (!formattings) {
+      continue;
+    }
+    for (pugi::xml_node block = formattings.child("x14:conditionalFormatting"); block;
+         block = block.next_sibling("x14:conditionalFormatting")) {
+      for (pugi::xml_node rule = block.child("x14:cfRule"); rule; rule = rule.next_sibling("x14:cfRule")) {
+        if (attr_str(rule, "type") != "dataBar") {
+          continue;
+        }
+        const pugi::xml_node bar = rule.child("x14:dataBar");
+        const std::string id(attr_str(rule, "id"));
+        if (bar && !id.empty()) {
+          out.emplace(id, bar);
+        }
+      }
+    }
+  }
+  return out;
+}
+
 void ReadIconSet(const pugi::xml_node& iset, cf::IconSetSpec* out) {
   out->name = ParseIconSetName(attr_str(iset, "iconSet"));
   // OOXML defaults: reverse=false, showValue=true, percent=true. The
@@ -359,9 +504,40 @@ void ReadIconSet(const pugi::xml_node& iset, cf::IconSetSpec* out) {
   out->reverse = attr_bool(iset, "reverse", out->reverse);
   out->show_value = attr_bool(iset, "showValue", out->show_value);
   out->percent = attr_bool(iset, "percent", out->percent);
+  // OOXML emits N `<cfvo>` children for an N-icon set. The first one is
+  // the floor of the lowest icon's bucket (conventionally `type="percent"
+  // val="0"`) and carries no boundary of its own — `IconSetSpec::thresholds`
+  // stores only the N-1 real boundaries, matching `resolve_icon_set()`'s
+  // bucket model. The writer re-synthesizes the floor cfvo on output.
+  bool skipped_floor = false;
   for (pugi::xml_node cfvo = iset.child("cfvo"); cfvo; cfvo = cfvo.next_sibling("cfvo")) {
+    if (!skipped_floor) {
+      skipped_floor = true;
+      continue;
+    }
     out->thresholds.push_back(ReadCfvo(cfvo));
   }
+}
+
+/// Serialises a pugixml node to a raw (unindented) XML string. Used to
+/// capture `<extLst>` verbatim for round-trip (see `CFRule::ext_lst_raw`
+/// / `ConditionalFormat::ext_lst_raw`) rather than interpreting its
+/// contents.
+struct StringXmlWriter final : pugi::xml_writer {
+  std::string* dst = nullptr;
+  void write(const void* data, std::size_t size) override {
+    if (dst != nullptr) {
+      dst->append(static_cast<const char*>(data), size);
+    }
+  }
+};
+
+std::string RawXml(const pugi::xml_node& node) {
+  std::string out;
+  StringXmlWriter sink;
+  sink.dst = &out;
+  node.print(sink, /*indent=*/"", pugi::format_raw);
+  return out;
 }
 
 cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
@@ -430,6 +606,12 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
     }
   }
 
+  // `CT_CfRule`'s schema-trailing `extLst?`: capture verbatim rather than
+  // interpreting it (see `CFRule::ext_lst_raw`).
+  if (const pugi::xml_node ext_lst = rule.child("extLst"); ext_lst) {
+    out.ext_lst_raw = RawXml(ext_lst);
+  }
+
   return out;
 }
 
@@ -437,6 +619,7 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
 
 Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet) {
   std::vector<cf::ConditionalFormat> out;
+  const std::unordered_map<std::string, pugi::xml_node> x14_data_bars = CollectX14DataBarOverlay(worksheet);
   for (pugi::xml_node block = worksheet.child("conditionalFormatting"); block;
        block = block.next_sibling("conditionalFormatting")) {
     // A conditional-formatting block is a presentation-only overlay; a
@@ -466,7 +649,19 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     cfmt.sqref = std::move(ranges_or.value());
     cfmt.pivot_scope = attr_bool(block, "pivot");
     for (pugi::xml_node rule = block.child("cfRule"); rule; rule = rule.next_sibling("cfRule")) {
-      cfmt.rules.push_back(ReadCfRule(rule));
+      cf::CFRule parsed = ReadCfRule(rule);
+      if (parsed.type == cf::RuleType::DataBar && parsed.data_bar.has_value() && !parsed.id.empty()) {
+        if (const auto it = x14_data_bars.find(parsed.id); it != x14_data_bars.end()) {
+          ApplyX14DataBarOverlay(it->second, &*parsed.data_bar);
+        }
+      }
+      cfmt.rules.push_back(std::move(parsed));
+    }
+    // `CT_ConditionalFormatting`'s schema-trailing `extLst?`: a sibling of
+    // the block's `<cfRule>` children, captured verbatim (see
+    // `ConditionalFormat::ext_lst_raw`).
+    if (const pugi::xml_node ext_lst = block.child("extLst"); ext_lst) {
+      cfmt.ext_lst_raw = RawXml(ext_lst);
     }
     out.push_back(std::move(cfmt));
   }

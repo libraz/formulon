@@ -15,9 +15,15 @@
 //     prefers the canonical 8-hex form).
 //   * `<cfvo>` thresholds with `gte` boundary attribute.
 //
-// Out of scope (matches the reader):
-//   * `<extLst>` x14 modern overlays — round-trip support lands in a
-//     follow-up PR.
+// Out of scope:
+//   * Synthesising a *new* worksheet-level `<x14:conditionalFormattings>`
+//     overlay for a `DataBarSpec` whose negative-fill / axis / gradient
+//     fields were set programmatically (never loaded from an x14-bearing
+//     file). `<cf_reader.h>` decodes an existing overlay into
+//     `DataBarSpec`, but this writer only re-emits the legacy `<dataBar>`
+//     element here; the worksheet-level overlay text for a *loaded* file
+//     survives a save cycle unchanged via `Sheet::ext_lst_xml()`'s raw
+//     passthrough (see `BuildWorksheetXml`), not through this writer.
 //
 // Design references:
 //   * src/io/cf_reader.h (sister reader; canonical grammar)

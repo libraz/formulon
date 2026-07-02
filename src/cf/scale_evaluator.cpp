@@ -224,11 +224,34 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
   }
 
   const double cell = cell_value.as_number();
-  const double range = *threshold_max - *threshold_min;
-  const double raw_fraction = (cell - *threshold_min) / range;
-  const double clamped_fraction = std::max(0.0, std::min(1.0, raw_fraction));
   const auto min_len = static_cast<double>(spec.min_length_pct);
   const auto max_len = static_cast<double>(spec.max_length_pct);
+
+  // OOXML's "automatic axis" semantics split mixed-sign data (min < 0 <
+  // max) at the axis instead of interpolating linearly across the whole
+  // [min, max] span: a positive value's bar grows rightward from the
+  // axis proportional to `value / max`, a negative value's bar grows
+  // leftward proportional to `value / min` (both negative, so this is a
+  // positive fraction). Using the plain whole-range linear map here
+  // would draw negative bars as if they were mirrored positive ones
+  // instead of shrinking toward the axis as their magnitude drops.
+  //
+  // Same-sign data (min >= 0 or max <= 0) keeps the original whole-range
+  // linear map: `automatic_axis_position` already pins the axis to an
+  // edge in that case, so the two formulas would only coincide when the
+  // pinned-edge threshold is exactly zero, and same-sign data has no
+  // "other side" for the split formula to describe anyway.
+  const bool mixed_sign =
+      spec.axis_position == DataBarAxisPosition::Automatic && *threshold_min < 0.0 && *threshold_max > 0.0;
+  double clamped_fraction;
+  if (mixed_sign) {
+    const double raw_fraction = (cell >= 0.0) ? cell / *threshold_max : cell / *threshold_min;
+    clamped_fraction = std::max(0.0, std::min(1.0, raw_fraction));
+  } else {
+    const double range = *threshold_max - *threshold_min;
+    const double raw_fraction = (cell - *threshold_min) / range;
+    clamped_fraction = std::max(0.0, std::min(1.0, raw_fraction));
+  }
 
   DataBarRender render;
   render.length_pct = min_len + clamped_fraction * (max_len - min_len);

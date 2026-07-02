@@ -2,10 +2,14 @@
 //
 // Reader for `<conditionalFormatting>` blocks inside an OOXML sheet
 // (`xl/worksheets/sheet*.xml`). Walks the worksheet DOM and decodes
-// every CF block into `cf::ConditionalFormat` records. Does NOT consult
-// `<extLst>` for x14 modern overlays — that pass is layered on top in a
-// follow-up PR; the legacy DOM contains enough information for the
-// majority of authored workbooks.
+// every CF block into `cf::ConditionalFormat` records. Consults the
+// worksheet-level `<extLst><ext><x14:conditionalFormattings>` overlay
+// (Excel 2010+) for `dataBar` rules only: negative-fill / negative-
+// border / axis colour+position / gradient-vs-solid have no
+// representation in the legacy `<dataBar>` schema and are only ever
+// expressed there, cross-referenced to the legacy `<cfRule id="...">`
+// GUID. Other x14 rule types (icon-set custom criteria, data-bar
+// exponential scaling beyond what's modelled here) are not consulted.
 //
 // Design references:
 //   * src/io/pivot_table_reader.h (sister reader, similar style)

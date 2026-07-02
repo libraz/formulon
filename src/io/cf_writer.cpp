@@ -169,11 +169,41 @@ std::string_view TimePeriodToString(cf::TimePeriod p) {
   return "today";
 }
 
+/// Appends the Excel column letters (`A`, `AB`, `XFD`) for a 0-based column
+/// index to `out`.
+void AppendColumnLetters(std::string& out, std::uint32_t col) {
+  char buf[4];
+  int len = 0;
+  std::uint32_t n = col + 1U;  // 1-based for the base-26 bijection.
+  while (n > 0U && len < 4) {
+    const std::uint32_t rem = (n - 1U) % 26U;
+    buf[len++] = static_cast<char>('A' + static_cast<int>(rem));
+    n = (n - 1U) / 26U;
+  }
+  for (int i = len - 1; i >= 0; --i) {
+    out.push_back(buf[i]);
+  }
+}
+
 /// Formats one `CFCellRange` as A1 (single cell) or A1:B5 (range). The
 /// reader accepts both `A1:A1` and `A1` for a single cell; the writer
 /// prefers the shorter `A1` form so the round-trip output matches what
-/// Excel emits.
+/// Excel emits. Whole-column / whole-row ranges re-emit the compact
+/// `A:A` / `1:1` form Excel authors.
 std::string EncodeA1Range(const cf::CFCellRange& r) {
+  if (r.is_full_col()) {
+    std::string out;
+    AppendColumnLetters(out, r.first.col);
+    out.push_back(':');
+    AppendColumnLetters(out, r.last.col);
+    return out;
+  }
+  if (r.is_full_row()) {
+    std::string out = std::to_string(r.first.row + 1U);
+    out.push_back(':');
+    out.append(std::to_string(r.last.row + 1U));
+    return out;
+  }
   std::string a = EncodeA1(r.first.row, r.first.col);
   if (r.first == r.last) {
     return a;
@@ -210,7 +240,7 @@ void AppendCfvo(std::string& out, const cf::CfValueObject& v) {
   out.push_back('"');
   if (!v.value.empty()) {
     out.append(" val=\"");
-    AppendXmlEscaped(out, v.value);
+    AppendXmlAttrEscaped(out, v.value);
     out.push_back('"');
   }
   if (!v.gte) {
@@ -262,6 +292,14 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i) {
     out.append(" percent=\"0\"");
   }
   out.push_back('>');
+  // OOXML requires N `<cfvo>` children for an N-icon set, but the model
+  // only carries the N-1 real boundary thresholds (see cf_reader.cpp's
+  // `ReadIconSet`); re-synthesize the dropped floor cfvo here so the
+  // emitted XML stays schema-valid and round-trips through Excel.
+  cf::CfValueObject floor;
+  floor.type = cf::CfvoType::Percent;
+  floor.value = "0";
+  AppendCfvo(out, floor);
   for (const auto& th : i.thresholds) {
     AppendCfvo(out, th);
   }
@@ -317,7 +355,7 @@ void AppendCfRule(std::string& out, const cf::CFRule& r) {
       out.push_back('"');
     }
     out.append(" text=\"");
-    AppendXmlEscaped(out, r.text.value());
+    AppendXmlAttrEscaped(out, r.text.value());
     out.push_back('"');
   }
   if (r.type == cf::RuleType::Top10) {
@@ -355,7 +393,7 @@ void AppendCfRule(std::string& out, const cf::CFRule& r) {
   }
   if (!r.id.empty()) {
     out.append(" id=\"");
-    AppendXmlEscaped(out, r.id);
+    AppendXmlAttrEscaped(out, r.id);
     out.push_back('"');
   }
   out.push_back('>');
@@ -379,6 +417,12 @@ void AppendCfRule(std::string& out, const cf::CFRule& r) {
   if (r.icon_set.has_value()) {
     AppendIconSet(out, r.icon_set.value());
   }
+  // `CT_CfRule`'s schema-trailing `extLst?`, round-tripped byte-for-byte
+  // (see `CFRule::ext_lst_raw`); already a complete `<extLst>...</extLst>`
+  // string captured verbatim by the reader.
+  if (r.ext_lst_raw.has_value()) {
+    out.append(r.ext_lst_raw.value());
+  }
 
   out.append("</cfRule>");
 }
@@ -393,7 +437,7 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
   out.reserve(formats.size() * 128);
   for (const auto& cf : formats) {
     out.append("<conditionalFormatting sqref=\"");
-    AppendXmlEscaped(out, EncodeSqref(cf.sqref));
+    AppendXmlAttrEscaped(out, EncodeSqref(cf.sqref));
     out.push_back('"');
     if (cf.pivot_scope) {
       out.append(" pivot=\"1\"");
@@ -401,6 +445,11 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
     out.push_back('>');
     for (const auto& rule : cf.rules) {
       AppendCfRule(out, rule);
+    }
+    // `CT_ConditionalFormatting`'s schema-trailing `extLst?`, round-tripped
+    // byte-for-byte (see `ConditionalFormat::ext_lst_raw`).
+    if (cf.ext_lst_raw.has_value()) {
+      out.append(cf.ext_lst_raw.value());
     }
     out.append("</conditionalFormatting>");
   }

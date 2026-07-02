@@ -122,14 +122,36 @@ struct Color {
   friend bool operator!=(Color x, Color y) noexcept { return !(x == y); }
 };
 
+/// Excel grid extent, mirrored from `Sheet::kMaxRows` / `Sheet::kMaxCols`
+/// so `CFCellRange` can classify whole-column / whole-row ranges without a
+/// heavy `sheet.h` include here. A `static_assert` in `cf_helpers.cpp`
+/// keeps these in sync with the canonical `Sheet` constants.
+inline constexpr std::uint32_t kCfMaxRows = 1048576U;
+inline constexpr std::uint32_t kCfMaxCols = 16384U;
+
 /// Inclusive cell-range expressed as two `CellAddress` corners. `first`
 /// is the top-left, `last` is the bottom-right; single-cell ranges have
 /// `first == last`. `sqref` lists are `std::vector<CFCellRange>`; the
 /// OOXML reader splits whitespace-separated A1 tokens into one entry
 /// each.
+///
+/// Whole-column (`A:A`, `A:C`) and whole-row (`1:1`, `1:3`) sqref tokens are
+/// stored at their full logical extent — a whole column covers every row
+/// (0..kCfMaxRows-1), a whole row every column (0..kCfMaxCols-1) — so
+/// membership tests work unchanged. `is_full_col()` / `is_full_row()`
+/// recover the classification from that extent (matching Excel, which
+/// treats `A:A` and `A1:A1048576` as identical); range-aware evaluation
+/// clamps the unbounded axis to the sheet's used range, and the writer
+/// re-emits the compact `A:A` / `1:1` form. This keeps the struct layout
+/// (and its C-ABI mirror `fm_cf_cell_range_t`) unchanged.
 struct CFCellRange {
   CellAddress first{};
   CellAddress last{};
+
+  /// True when the range spans every row of its column span (`A:A`, `A:C`).
+  bool is_full_col() const noexcept { return first.row == 0 && last.row == kCfMaxRows - 1U; }
+  /// True when the range spans every column of its row span (`1:1`, `1:3`).
+  bool is_full_row() const noexcept { return first.col == 0 && last.col == kCfMaxCols - 1U; }
 
   friend bool operator==(CFCellRange a, CFCellRange b) noexcept { return a.first == b.first && a.last == b.last; }
   friend bool operator!=(CFCellRange a, CFCellRange b) noexcept { return !(a == b); }
@@ -194,9 +216,15 @@ struct IconSetSpec {
 /// `cellIs` rules carry `op` and `formula1` (+ `formula2` for `Between`/
 /// `NotBetween`); `colorScale` rules carry `color_scale`; etc.
 struct CFRule {
-  /// Stable identifier for the rule. Empty for legacy rules without an
-  /// extLst id. Reader populates from `<x14:cfRule id="...">` when
-  /// present; writer round-trips it.
+  /// Stable identifier for the rule, read from the `id` attribute on the
+  /// base `<cfRule id="...">` element itself (not from any `<x14:cfRule>`
+  /// extension, which this engine does not parse). Excel emits this
+  /// attribute directly on the legacy `<cfRule>` when the rule has a
+  /// richer `<x14:cfRule>` counterpart elsewhere in `<extLst>`, using it
+  /// to cross-reference the two; the value happens to be the same
+  /// GUID-shaped string `<x14:cfRule id="...">` carries. Empty for
+  /// legacy rules with no such counterpart. The writer round-trips
+  /// whatever value is present onto the base element.
   std::string id;
   RuleType type = RuleType::Expression;
   /// Workbook-global priority. Smaller numbers evaluate first.
@@ -241,6 +269,15 @@ struct CFRule {
 
   /// `timePeriod` bucket.
   std::optional<TimePeriod> time_period;
+
+  /// Verbatim, unparsed `<extLst>...</extLst>` XML captured from this
+  /// rule's own `<cfRule>` element (`CT_CfRule`'s schema-trailing
+  /// `extLst?`). Typically carries a 2010+ `<x14:id>` cross-reference to
+  /// a richer `<x14:cfRule>` counterpart, or other forward-compat
+  /// extension content this engine does not model. Round-tripped
+  /// byte-for-byte by the writer; never interpreted. `nullopt` when the
+  /// rule has no `<extLst>` child.
+  std::optional<std::string> ext_lst_raw;
 };
 
 /// One `<conditionalFormatting>` block — the sqref union plus its rule
@@ -250,6 +287,14 @@ struct ConditionalFormat {
   std::vector<CFCellRange> sqref;
   std::vector<CFRule> rules;
   bool pivot_scope = false;
+
+  /// Verbatim, unparsed `<extLst>...</extLst>` XML captured from this
+  /// block's own `<conditionalFormatting>` element (`CT_ConditionalFormatting`'s
+  /// schema-trailing `extLst?`, a sibling of the block's `<cfRule>`
+  /// children — distinct from each rule's own `CFRule::ext_lst_raw`).
+  /// Round-tripped byte-for-byte by the writer; never interpreted.
+  /// `nullopt` when the block has no `<extLst>` child.
+  std::optional<std::string> ext_lst_raw;
 };
 
 }  // namespace formulon::cf

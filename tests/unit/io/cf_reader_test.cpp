@@ -124,6 +124,61 @@ TEST(CFReader, MultipleRangesInSqref) {
   EXPECT_EQ(cf.sqref[2].first, cf.sqref[2].last);  // Single-cell.
 }
 
+TEST(CFReader, FullColumnSqrefAccepted) {
+  // A whole-column sqref must not drop the CF block; it is stored at full
+  // row extent and classifies as a whole column.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A:A">
+        <cfRule type="expression" priority="1" dxfId="0"/>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 1u);
+  const auto& cf = cfs.value()[0];
+  ASSERT_EQ(cf.sqref.size(), 1u);
+  EXPECT_TRUE(cf.sqref[0].is_full_col());
+  EXPECT_EQ(cf.sqref[0].first.col, 0u);
+  EXPECT_EQ(cf.sqref[0].last.col, 0u);
+  EXPECT_EQ(cf.sqref[0].first.row, 0u);
+  EXPECT_EQ(cf.sqref[0].last.row, cf::kCfMaxRows - 1U);
+}
+
+TEST(CFReader, MultiColumnFullSqrefAccepted) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A:C">
+        <cfRule type="expression" priority="1" dxfId="0"/>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& cf = cfs.value()[0];
+  ASSERT_EQ(cf.sqref.size(), 1u);
+  EXPECT_TRUE(cf.sqref[0].is_full_col());
+  EXPECT_EQ(cf.sqref[0].first.col, 0u);
+  EXPECT_EQ(cf.sqref[0].last.col, 2u);
+}
+
+TEST(CFReader, FullRowSqrefAccepted) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="2:2">
+        <cfRule type="expression" priority="1" dxfId="0"/>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& cf = cfs.value()[0];
+  ASSERT_EQ(cf.sqref.size(), 1u);
+  EXPECT_TRUE(cf.sqref[0].is_full_row());
+  EXPECT_EQ(cf.sqref[0].first.row, 1u);
+  EXPECT_EQ(cf.sqref[0].last.row, 1u);
+  EXPECT_EQ(cf.sqref[0].first.col, 0u);
+  EXPECT_EQ(cf.sqref[0].last.col, cf::kCfMaxCols - 1U);
+}
+
 TEST(CFReader, ColorScaleThreeStop) {
   pugi::xml_document doc = Load(R"(
     <worksheet>
@@ -181,7 +236,123 @@ TEST(CFReader, DataBarBasic) {
   EXPECT_FALSE(r.data_bar->show_value);
 }
 
+TEST(CFReader, DataBarX14OverlayAppliesNegativeAxisAndGradient) {
+  // Excel 2010+ always writes the legacy `<dataBar>` for backward
+  // compatibility alongside the richer `<x14:dataBar>` extension, cross-
+  // referenced by the base `<cfRule id="...">` GUID. The legacy element
+  // alone cannot express negative fill / axis colour+position / solid
+  // fill — those only exist in the x14 overlay.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="C1:C10">
+        <cfRule type="dataBar" priority="1" id="{DA7ABA51-AAAA-BBBB-0001-000000000001}">
+          <dataBar minLength="0" maxLength="100">
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF638EC6"/>
+          </dataBar>
+        </cfRule>
+      </conditionalFormatting>
+      <extLst>
+        <ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}">
+          <x14:conditionalFormattings>
+            <x14:conditionalFormatting>
+              <x14:cfRule type="dataBar" id="{DA7ABA51-AAAA-BBBB-0001-000000000001}">
+                <x14:dataBar minLength="0" maxLength="100" gradient="0" axisPosition="middle">
+                  <x14:cfvo type="autoMin"/>
+                  <x14:cfvo type="autoMax"/>
+                  <x14:negativeFillColor rgb="FFFF0000"/>
+                  <x14:negativeBorderColor rgb="FFAA0000"/>
+                  <x14:axisColor rgb="FF808080"/>
+                  <x14:borderColor rgb="FF000000"/>
+                </x14:dataBar>
+              </x14:cfRule>
+            </x14:conditionalFormatting>
+          </x14:conditionalFormattings>
+        </ext>
+      </extLst>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.data_bar.has_value());
+  // The legacy positive fill is untouched by the overlay.
+  EXPECT_EQ(r.data_bar->fill, cf::Color({0x63, 0x8E, 0xC6, 255}));
+  EXPECT_EQ(r.data_bar->negative_fill, cf::Color({0xFF, 0x00, 0x00, 255}));
+  ASSERT_TRUE(r.data_bar->negative_border.has_value());
+  EXPECT_EQ(*r.data_bar->negative_border, cf::Color({0xAA, 0x00, 0x00, 255}));
+  EXPECT_EQ(r.data_bar->axis_color, cf::Color({0x80, 0x80, 0x80, 255}));
+  EXPECT_EQ(r.data_bar->axis_position, cf::DataBarAxisPosition::Middle);
+  EXPECT_FALSE(r.data_bar->gradient);
+  ASSERT_TRUE(r.data_bar->border.has_value());
+  EXPECT_EQ(*r.data_bar->border, cf::Color({0x00, 0x00, 0x00, 255}));
+}
+
+TEST(CFReader, DataBarX14OverlayNegativeSameAsPositiveOverridesExplicitColor) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="C1:C10">
+        <cfRule type="dataBar" priority="1" id="{DA7ABA51-AAAA-BBBB-0001-000000000002}">
+          <dataBar minLength="0" maxLength="100">
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF00B050"/>
+          </dataBar>
+        </cfRule>
+      </conditionalFormatting>
+      <extLst>
+        <ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}">
+          <x14:conditionalFormattings>
+            <x14:conditionalFormatting>
+              <x14:cfRule type="dataBar" id="{DA7ABA51-AAAA-BBBB-0001-000000000002}">
+                <x14:dataBar minLength="0" maxLength="100" negativeBarColorSameAsPositive="1">
+                  <x14:cfvo type="autoMin"/>
+                  <x14:cfvo type="autoMax"/>
+                  <x14:negativeFillColor rgb="FFFF0000"/>
+                </x14:dataBar>
+              </x14:cfRule>
+            </x14:conditionalFormatting>
+          </x14:conditionalFormattings>
+        </ext>
+      </extLst>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.data_bar.has_value());
+  // `negativeBarColorSameAsPositive="1"` wins over the explicit
+  // `<x14:negativeFillColor>` sibling, per the CT_DataBar schema.
+  EXPECT_EQ(r.data_bar->negative_fill, r.data_bar->fill);
+}
+
+TEST(CFReader, DataBarWithoutX14OverlayKeepsLegacyDefaults) {
+  // A pre-2010 (or overlay-less) `<dataBar>` has no way to express
+  // negative fill / axis position; the reader must not invent one.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="C1:C10">
+        <cfRule type="dataBar" priority="1" id="{DA7ABA51-AAAA-BBBB-0001-000000000003}">
+          <dataBar minLength="0" maxLength="100">
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF638EC6"/>
+          </dataBar>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.data_bar.has_value());
+  EXPECT_EQ(r.data_bar->negative_fill, r.data_bar->fill);
+  EXPECT_EQ(r.data_bar->axis_position, cf::DataBarAxisPosition::Automatic);
+  EXPECT_TRUE(r.data_bar->gradient);
+}
+
 TEST(CFReader, IconSetWithReverseAndPercent) {
+  // A 3-icon set carries 3 `<cfvo>` elements in the XML; the first is the
+  // floor of the lowest bucket and is dropped, leaving 2 real thresholds
+  // in the in-memory model (see `IconSetSpec::thresholds`).
   pugi::xml_document doc = Load(R"(
     <worksheet>
       <conditionalFormatting sqref="D1:D10">
@@ -202,9 +373,39 @@ TEST(CFReader, IconSetWithReverseAndPercent) {
   EXPECT_EQ(r.icon_set->name, cf::IconSetName::Three_TrafficLights2);
   EXPECT_TRUE(r.icon_set->reverse);
   EXPECT_FALSE(r.icon_set->percent);
-  EXPECT_EQ(r.icon_set->thresholds.size(), 3u);
-  EXPECT_TRUE(r.icon_set->thresholds[1].gte);
-  EXPECT_FALSE(r.icon_set->thresholds[2].gte);
+  ASSERT_EQ(r.icon_set->thresholds.size(), 2u);
+  EXPECT_EQ(r.icon_set->thresholds[0].value, "50");
+  EXPECT_TRUE(r.icon_set->thresholds[0].gte);
+  EXPECT_EQ(r.icon_set->thresholds[1].value, "100");
+  EXPECT_FALSE(r.icon_set->thresholds[1].gte);
+}
+
+TEST(CFReader, IconSetFourIconDropsOnlyFloorCfvo) {
+  // 4-icon set: 4 `<cfvo>` in XML → 3 real thresholds after the floor is
+  // dropped. Regression for the off-by-one that previously kept all N
+  // cfvo entries, pushing every bucket boundary index up by one and
+  // making the top icon unreachable (index N would exceed [0, N-1]).
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="E1:E10">
+        <cfRule type="iconSet" priority="1">
+          <iconSet iconSet="4TrafficLights">
+            <cfvo type="percent" val="0"/>
+            <cfvo type="percent" val="25"/>
+            <cfvo type="percent" val="50"/>
+            <cfvo type="percent" val="75"/>
+          </iconSet>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.icon_set.has_value());
+  ASSERT_EQ(r.icon_set->thresholds.size(), 3u);
+  EXPECT_EQ(r.icon_set->thresholds[0].value, "25");
+  EXPECT_EQ(r.icon_set->thresholds[1].value, "50");
+  EXPECT_EQ(r.icon_set->thresholds[2].value, "75");
 }
 
 TEST(CFReader, Top10AttributesRoundTrip) {
@@ -303,7 +504,11 @@ TEST(CFReader, MultipleBlocksAndRulesPreserveOrder) {
   EXPECT_EQ(cfs.value()[1].rules[0].formula1.value(), "$A1=0");
 }
 
-TEST(CFReader, ExtLstChildIsIgnored) {
+TEST(CFReader, ExtLstChildIsCapturedVerbatim) {
+  // The rule's own <extLst> (typically an `<x14:id>` cross-reference to a
+  // richer `<x14:cfRule>` counterpart) does not stop the rest of the rule
+  // from parsing, and is captured verbatim rather than silently dropped
+  // (see `CFRule::ext_lst_raw`).
   pugi::xml_document doc = Load(R"(
     <worksheet>
       <conditionalFormatting sqref="A1:A10">
@@ -322,6 +527,79 @@ TEST(CFReader, ExtLstChildIsIgnored) {
   const auto& r = cfs.value()[0].rules[0];
   ASSERT_TRUE(r.formula1.has_value());
   EXPECT_EQ(r.formula1.value(), "0");
+  ASSERT_TRUE(r.ext_lst_raw.has_value());
+  EXPECT_NE(r.ext_lst_raw->find("x14:id"), std::string::npos) << *r.ext_lst_raw;
+  EXPECT_NE(r.ext_lst_raw->find("{ABCDEF}"), std::string::npos) << *r.ext_lst_raw;
+}
+
+TEST(CFReader, RuleWithoutExtLstLeavesRawFieldEmpty) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1:A10">
+        <cfRule type="cellIs" priority="1" operator="equal" dxfId="0">
+          <formula>0</formula>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  EXPECT_FALSE(cfs.value()[0].rules[0].ext_lst_raw.has_value());
+  EXPECT_FALSE(cfs.value()[0].ext_lst_raw.has_value());
+}
+
+TEST(CFReader, DataBarWithX14ExtensionExtLstIsCapturedVerbatim) {
+  // A real Excel 2010+ DataBar rule's own `<extLst>` typically carries
+  // only the `<x14:id>` cross-reference (the extended negative-fill /
+  // axis / gradient properties live in a separate `<x14:cfRule>` at the
+  // worksheet level, referenced by this same id -- out of scope for this
+  // per-rule capture). The cross-reference itself must still round-trip.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1:A10">
+        <cfRule type="dataBar" priority="1" id="{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}">
+          <dataBar>
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF638EC6"/>
+          </dataBar>
+          <extLst>
+            <ext uri="{B025F937-C7B1-47D3-B67F-A62EFF666E3E}"
+                 xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">
+              <x14:id>{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}</x14:id>
+            </ext>
+          </extLst>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.data_bar.has_value());
+  ASSERT_TRUE(r.ext_lst_raw.has_value());
+  EXPECT_NE(r.ext_lst_raw->find("5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB"), std::string::npos) << *r.ext_lst_raw;
+}
+
+TEST(CFReader, ConditionalFormattingBlockExtLstIsCapturedVerbatim) {
+  // `<conditionalFormatting>`'s own schema-trailing `extLst?` (a sibling
+  // of the block's `<cfRule>` children, distinct from any individual
+  // rule's own `<extLst>`) is also captured verbatim.
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1:A10">
+        <cfRule type="cellIs" priority="1" operator="equal" dxfId="0">
+          <formula>0</formula>
+        </cfRule>
+        <extLst>
+          <ext uri="{some-future-extension}">
+            <futureThing/>
+          </ext>
+        </extLst>
+      </conditionalFormatting>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  ASSERT_TRUE(cfs.value()[0].ext_lst_raw.has_value());
+  EXPECT_NE(cfs.value()[0].ext_lst_raw->find("futureThing"), std::string::npos) << *cfs.value()[0].ext_lst_raw;
 }
 
 TEST(CFReader, AbsoluteMarkersInSqrefAreAccepted) {
