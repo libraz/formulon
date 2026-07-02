@@ -37,6 +37,14 @@ F64 = ("f64", 8, 8)
 # decoded by :meth:`Struct.unpack`; callers read it via Value._from_wasm
 # against ``ptr + offset``.
 VALUE_BLOB = ("blob16", 16, 8)
+# Opaque 12-byte, 4-aligned blob: an inline ``fm_cfvo_t`` (``uint8_t type;
+# uint8_t _pad[3]; int32_t gte; const char* value;``). Not decoded by
+# :meth:`Struct.unpack`; callers who need the sub-fields read them at
+# ``ptr + offset`` with their own struct.unpack_from calls.
+CFVO_BLOB = ("blob_cfvo", 12, 4)
+# Opaque 4-byte, 1-aligned blob: an inline ``fm_cf_color_t`` (four
+# ``uint8_t`` channels). Not decoded by :meth:`Struct.unpack`.
+CF_COLOR_BLOB = ("blob_cf_color", 4, 1)
 
 _FMT = {
     "ptr": "<I",
@@ -77,13 +85,14 @@ class Struct:
     def unpack(self, lib, ptr: int) -> Dict[str, int]:
         """Read every scalar field from ``[ptr, ptr+size)`` into a dict.
 
-        Opaque ``blob16`` fields (inline ``fm_value_t``) are skipped; read
-        them separately via ``Value._from_wasm(ptr + self.offsets[name][1])``.
+        Opaque blob fields (any ``kind`` not in ``_FMT``, e.g. an inline
+        ``fm_value_t`` or ``fm_cfvo_t``) are skipped; callers decode those
+        separately against ``ptr + self.offsets[name][1]``.
         """
         raw = lib.read_bytes(ptr, self.size)
         out: Dict[str, int] = {}
         for fname, (kind, off) in self.offsets.items():
-            if kind == "blob16":
+            if kind not in _FMT:
                 continue
             out[fname] = struct.unpack_from(_FMT[kind], raw, off)[0]
         return out
@@ -248,6 +257,23 @@ CF_RULE = Struct(
         ("std_dev", F64),
         ("text", PTR),
         ("time_period_engaged", I32),
+        ("color_scale_thresholds", PTR),
+        ("color_scale_colors", PTR),
+        ("color_scale_count", U32),
+        ("data_bar_engaged", I32),
+        ("data_bar_min", CFVO_BLOB),
+        ("data_bar_max", CFVO_BLOB),
+        ("data_bar_fill", CF_COLOR_BLOB),
+        ("data_bar_show_value", I32),
+        ("data_bar_min_length_pct", U8),
+        ("data_bar_max_length_pct", U8),
+        ("icon_set_engaged", I32),
+        ("icon_set_name", U8),
+        ("icon_set_thresholds", PTR),
+        ("icon_set_threshold_count", U32),
+        ("icon_set_reverse", I32),
+        ("icon_set_show_value", I32),
+        ("icon_set_percent", I32),
     ],
 )
 

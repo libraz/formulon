@@ -45,7 +45,7 @@ class StructLayoutTests(unittest.TestCase):
         "SHEET_PROTECTION": 88,
         "VIEWPORT": 20,
         "CF_MATCH": 72,
-        "CF_RULE": 88,
+        "CF_RULE": 168,
         "PIVOT_CELL": 40,
         "PIVOT_FIELD_SPEC": 20,
         "PIVOT_DATA_FIELD_SPEC": 28,
