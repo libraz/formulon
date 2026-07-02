@@ -122,22 +122,27 @@ void collect_row_entries_impl(const RowHierarchyNode& node, std::vector<std::str
   if (node.children.empty()) {
     rows.push_back({AxisLeaf{path}, false, 0});
   } else {
-    // Capture the subtotal slot up-front so `subtotal_first` mode can
-    // emit it ahead of the children while keeping the cursor in
-    // monotonic lock-step with the evaluator-produced sequence.
-    const bool has_subtotal =
-        subtotal_cursor < subtotals.size() && labels_equal(subtotals[subtotal_cursor].labels, path);
-    const std::size_t subtotal_idx = has_subtotal ? subtotal_cursor : 0;
-    if (has_subtotal && subtotal_first) {
-      rows.push_back({AxisLeaf{path}, true, subtotal_idx});
-      ++subtotal_cursor;
+    // A group may own more than one subtotal row (one per custom subtotal
+    // function). They appear consecutively in the evaluator's sequence with
+    // the same label path, so consume every consecutive match here to keep
+    // the cursor in monotonic lock-step with that sequence.
+    auto matches_here = [&](std::size_t idx) {
+      return idx < subtotals.size() && labels_equal(subtotals[idx].labels, path);
+    };
+    if (subtotal_first) {
+      while (matches_here(subtotal_cursor)) {
+        rows.push_back({AxisLeaf{path}, true, subtotal_cursor});
+        ++subtotal_cursor;
+      }
     }
     for (const RowHierarchyNode& child : node.children) {
       collect_row_entries_impl(child, path, subtotals, subtotal_cursor, rows, subtotal_first);
     }
-    if (has_subtotal && !subtotal_first) {
-      rows.push_back({AxisLeaf{path}, true, subtotal_idx});
-      ++subtotal_cursor;
+    if (!subtotal_first) {
+      while (matches_here(subtotal_cursor)) {
+        rows.push_back({AxisLeaf{path}, true, subtotal_cursor});
+        ++subtotal_cursor;
+      }
     }
   }
   path.pop_back();
@@ -682,6 +687,19 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       }
       const std::uint32_t row = data_top + static_cast<std::uint32_t>(r_entry);
       for (std::size_t df = 0; df < data_field_count; ++df) {
+        // Use the evaluator's per-row-leaf re-aggregation rather than
+        // summing this row's per-column cells: a non-additive function
+        // (Average/Max/Min/StdDev/Var) cannot be recovered from the cell
+        // aggregates. Fall back to the per-cell sum only when the
+        // re-aggregated total is unavailable.
+        if (total_r_leaf < result.row_leaf_totals.size() && df < result.row_leaf_totals[total_r_leaf].size()) {
+          const Value& total = result.row_leaf_totals[total_r_leaf][df];
+          if (!total.is_blank()) {
+            append_cell(cells, row, total_left + static_cast<std::uint32_t>(df), reify_value(cells, total),
+                        PivotCellKind::GrandTotal, 0, data_field_name(table, df), data_field_format(table, df));
+            continue;
+          }
+        }
         double sum = 0.0;
         bool numeric = true;
         for (std::size_t c_leaf = 0; c_leaf < col_leaves.size(); ++c_leaf) {
@@ -742,6 +760,17 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
             !result.grand_totals[df].is_blank()) {
           append_cell(cells, total_row, col, reify_value(cells, result.grand_totals[df]), PivotCellKind::GrandTotal, 0,
                       data_field_name(table, df), data_field_format(table, df));
+          continue;
+        }
+        // A non-subtotal leaf column under a column hierarchy: use the
+        // evaluator's per-column-leaf re-aggregation instead of summing
+        // the column's per-row cells, so non-additive functions match
+        // Excel. Subtotal columns fall through to the per-row sum below.
+        if (!col_entry.subtotal && total_col_leaf_index < result.col_leaf_totals.size() &&
+            df < result.col_leaf_totals[total_col_leaf_index].size() &&
+            !result.col_leaf_totals[total_col_leaf_index][df].is_blank()) {
+          append_cell(cells, total_row, col, reify_value(cells, result.col_leaf_totals[total_col_leaf_index][df]),
+                      PivotCellKind::GrandTotal, 0, data_field_name(table, df), data_field_format(table, df));
           continue;
         }
         double sum = 0.0;

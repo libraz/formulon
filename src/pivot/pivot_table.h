@@ -42,6 +42,14 @@ class PivotTable {
   std::uint32_t pivot_cache_id() const { return pivot_cache_id_; }
   void set_pivot_cache_id(std::uint32_t id) { pivot_cache_id_ = id; }
 
+  /// The `dataCaption` attribute on `<pivotTableDefinition>` — the header
+  /// shown over the Values area (e.g. "Values" / "値"). ECMA-376 marks it
+  /// required, so the writer always emits it; the reader captures the
+  /// authored value and defaults to "Values" when absent so a file built
+  /// from scratch still round-trips a schema-valid definition.
+  const std::string& data_caption() const { return data_caption_; }
+  void set_data_caption(std::string caption) { data_caption_ = std::move(caption); }
+
   // Field configuration ------------------------------------------------------
 
   const std::vector<PivotField>& fields() const { return fields_; }
@@ -143,16 +151,40 @@ class PivotTable {
   // OOXML round-trip passthrough --------------------------------------------
   //
   // OOXML pivot definitions can carry several elements that v1.0 does
-  // not model structurally — `<calculatedFields>`, `<calculatedItems>`,
-  // `<pivotTableStyleInfo>`, `<chartFormats>`, `<formats>`, etc. The
-  // reader captures them as concatenated raw XML so the writer can emit
-  // them back verbatim, keeping a round trip stable for files that
-  // depend on those features (e.g. user-authored calculated items that
-  // Excel re-evaluates on open). Mutating the structured state does not
-  // invalidate the passthrough buffer; consumers that need exact bit
-  // parity should regenerate the buffer or strip it.
+  // not model structurally — `<rowItems>`, `<colItems>`, `<pageFields>`,
+  // `<calculatedFields>`, `<calculatedItems>`, `<pivotTableStyleInfo>`,
+  // `<chartFormats>`, `<formats>`, etc. The reader captures them as
+  // concatenated raw XML so the writer can emit them back verbatim,
+  // keeping a round trip stable for files that depend on those features.
+  //
+  // `CT_pivotTableDefinition` mandates a strict child order, so a single
+  // trailing buffer would re-emit `<rowItems>`/`<colItems>`/`<pageFields>`
+  // after `<dataFields>` and make Excel flag the file for repair. Those
+  // three are the only unmodelled elements the schema places *before*
+  // `<dataFields>`, so the reader bins them by name into the two
+  // pre-dataFields slots (rowItems after `<rowFields>`; colItems and
+  // pageFields after `<colFields>`) and routes everything else — formats,
+  // style info, extLst, ... — into the tail bin `raw_passthrough_xml_`.
+  // The writer flushes each bin at the matching slot so schema order is
+  // preserved. Mutating the structured state does not invalidate these
+  // buffers; consumers that need exact bit parity should regenerate or
+  // strip them.
   const std::string& raw_passthrough_xml() const { return raw_passthrough_xml_; }
   std::string& mutable_raw_passthrough_xml() { return raw_passthrough_xml_; }
+
+  const std::string& raw_passthrough_after_row_fields() const { return raw_passthrough_after_row_fields_; }
+  std::string& mutable_raw_passthrough_after_row_fields() { return raw_passthrough_after_row_fields_; }
+
+  const std::string& raw_passthrough_after_col_fields() const { return raw_passthrough_after_col_fields_; }
+  std::string& mutable_raw_passthrough_after_col_fields() { return raw_passthrough_after_col_fields_; }
+
+  // Unmodelled `<pivotTableDefinition>` root attributes (`updatedVersion`,
+  // `createdVersion`, `itemPrintTitles`, `indent`, ...), captured as
+  // `(name, value)` pairs so the writer re-emits them verbatim. Modelled
+  // attributes (name / cacheId / dataCaption / grand totals / compact /
+  // outline) are excluded and written from the structured state.
+  const std::vector<std::pair<std::string, std::string>>& passthrough_attrs() const { return passthrough_attrs_; }
+  std::vector<std::pair<std::string, std::string>>& mutable_passthrough_attrs() { return passthrough_attrs_; }
 
   // Grand totals layout flags -----------------------------------------------
 
@@ -165,6 +197,7 @@ class PivotTable {
 
  private:
   std::string name_;
+  std::string data_caption_ = "Values";
   std::uint32_t pivot_cache_id_ = 0;
   std::vector<PivotField> fields_;
   std::vector<PivotDataField> data_fields_;
@@ -184,6 +217,9 @@ class PivotTable {
   bool grand_totals_cols_ = true;
   std::vector<PivotFilter> active_filters_;
   std::string raw_passthrough_xml_;
+  std::string raw_passthrough_after_row_fields_;
+  std::string raw_passthrough_after_col_fields_;
+  std::vector<std::pair<std::string, std::string>> passthrough_attrs_;
   // Logical-const memoisation slot for the most recent evaluation result.
   // GETPIVOTDATA refreshes this through `const PivotTable&` so the field
   // must be `mutable`; see the docstring on `last_result()` /

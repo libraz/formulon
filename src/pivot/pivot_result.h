@@ -97,6 +97,19 @@ struct PivotResult {
   /// compatibility with older GETPIVOTDATA paths and single-value callers.
   std::vector<Value> grand_totals;
 
+  /// Per-row-leaf total across every column leaf, re-aggregated from the
+  /// underlying records rather than summed from the per-cell aggregates.
+  /// `row_leaf_totals[row_leaf][data_field]`. This is what the rendered
+  /// right-hand "Grand Total" column shows; summing the row's cells would
+  /// be wrong for non-additive functions (Average/Max/Min/StdDev/Var).
+  /// Empty when there are no data fields.
+  std::vector<std::vector<Value>> row_leaf_totals;
+
+  /// Per-column-leaf total across every row leaf, re-aggregated from the
+  /// underlying records. `col_leaf_totals[col_leaf][data_field]`. Mirror of
+  /// `row_leaf_totals` for the bottom "Grand Total" row.
+  std::vector<std::vector<Value>> col_leaf_totals;
+
   /// Lifetime-stable backing store for any `Value::text` payload appearing
   /// in `values`, `subtotals`, or `grand_total`. The evaluator may need to
   /// surface text values from the source cache (e.g. when MAX-ing over a

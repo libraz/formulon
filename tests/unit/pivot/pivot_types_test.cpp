@@ -70,7 +70,8 @@ TEST(PivotTypes, PivotFieldDefault) {
   EXPECT_TRUE(f.aggregations.empty());
   EXPECT_TRUE(f.sort.ascending);
   EXPECT_TRUE(f.items.empty());
-  EXPECT_FALSE(f.subtotal_top);
+  // subtotalTop defaults to true in OOXML (subtotals render above the group).
+  EXPECT_TRUE(f.subtotal_top);
   EXPECT_TRUE(f.subtotal_fns.empty());
   EXPECT_TRUE(f.number_format.empty());
   EXPECT_FALSE(f.date_group.has_value());

@@ -13,17 +13,24 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
 namespace formulon::pivot {
 
 /// Where a pivot field is positioned within the report layout.
+///
+/// `None` is a field that appears in `<pivotFields>` but is placed on no
+/// axis and is not a data field — an "available" field in Excel's field
+/// list. It must be distinguished from `Value` so the writer does not
+/// stamp `dataField="1"` onto an unused field on round trip.
 enum class PivotAxis : std::uint8_t {
   Row = 0,
   Col = 1,
   Value = 2,
   Page = 3,
+  None = 4,
 };
 
 /// Aggregation function applied to a `Value` field.
@@ -105,6 +112,17 @@ enum class CalendarSystem : std::uint8_t {
 struct PivotItem {
   std::string name;
   bool visible = true;
+
+  /// Index into the bound cache field's `shared_items`, taken from the
+  /// source `<item x="N">`. The OOXML reader captures this so it can
+  /// (a) resolve `name` against the cache after load and (b) re-emit the
+  /// exact same index on write. `has_cache_index` distinguishes an
+  /// explicit `x` attribute from the implicit sequential order Excel uses
+  /// when it omits the attribute; when false the writer falls back to the
+  /// item's document-order position. Hand-built items (C API, tests) leave
+  /// both at their defaults.
+  bool has_cache_index = false;
+  std::uint32_t cache_index = 0;
 };
 
 /// Configuration for grouping a date-typed source column.
@@ -234,7 +252,11 @@ struct PivotField {
   std::vector<Aggregation> aggregations;
   SortSpec sort;
   std::vector<PivotItem> items;
-  bool subtotal_top = false;
+  /// Position of the subtotal row relative to its group: true = above
+  /// (the OOXML `subtotalTop` default), false = below. Layout flag only;
+  /// whether a subtotal exists is governed by `default_subtotal` /
+  /// `subtotal_fns`.
+  bool subtotal_top = true;
 
   /// Custom subtotal functions selected on this field, mirroring the
   /// OOXML `<pivotField>` `*Subtotal` boolean attribute family
@@ -249,6 +271,13 @@ struct PivotField {
 
   std::string number_format;
   std::optional<PivotDateGroup> date_group;
+
+  /// OOXML `<pivotField>` attributes the model does not represent
+  /// structurally (e.g. `compact`, `outline`, `showAll`,
+  /// `includeNewItemsInFilter`), captured as `(name, value)` pairs so the
+  /// writer re-emits them verbatim. Rendering keys off `PivotTable::layout`,
+  /// so these are preserved for round-trip only.
+  std::vector<std::pair<std::string, std::string>> passthrough_attrs;
 };
 
 }  // namespace formulon::pivot

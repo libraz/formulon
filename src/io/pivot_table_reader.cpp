@@ -174,10 +174,15 @@ Expected<void, Error> DecodeLocationRef(std::string_view ref, pivot::PivotTable*
 /// `field.items`. `<item t="default">` and `<item t="grand">` are
 /// subtotal / grand-total markers in the OOXML schema, NOT real items;
 /// they are skipped here. For real items we capture visibility from
-/// `h="1"` (hidden -> `visible = false`) and leave `name` empty: the
-/// `x` attribute references the cache's `shared_items` by index, which
-/// the evaluator resolves later against the bound `PivotCache`.
+/// `h="1"` (hidden -> `visible = false`) and the `x` attribute, which
+/// indexes the bound cache's `shared_items`. `name` is left empty here
+/// and resolved against the cache after both parts are loaded (see
+/// `resolve_pivot_names`). When `x` is absent we fall back to the item's
+/// document-order position among real items so name resolution still has
+/// an index to look up; `has_cache_index` stays false so the writer can
+/// re-emit the original (attribute-absent) form.
 void ParseItems(const pugi::xml_node& items_node, pivot::PivotField* field) {
+  std::uint32_t ordinal = 0;
   for (pugi::xml_node it = items_node.child("item"); it; it = it.next_sibling("item")) {
     const std::string_view t = it.attribute("t").as_string();
     if (t == "default" || t == "grand" || t == "blank" || t == "sum" || t == "count" || t == "avg" || t == "max" ||
@@ -187,7 +192,14 @@ void ParseItems(const pugi::xml_node& items_node, pivot::PivotField* field) {
     }
     pivot::PivotItem entry;
     entry.visible = !parse_xml_bool_attr(it.attribute("h"));
+    if (pugi::xml_attribute x = it.attribute("x"); x) {
+      entry.has_cache_index = true;
+      entry.cache_index = parse_xml_u32_attr(x, 0U);
+    } else {
+      entry.cache_index = ordinal;
+    }
     field->items.push_back(std::move(entry));
+    ++ordinal;
   }
 }
 
@@ -219,11 +231,23 @@ constexpr SubtotalAttrEntry kSubtotalAttrs[] = {
 void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out) {
   for (pugi::xml_node f = fields_node.child("pivotField"); f; f = f.next_sibling("pivotField")) {
     pivot::PivotField field;
-    field.axis = ParseAxis(f.attribute("axis").as_string());
+    // Axis resolution: an explicit `axis` attribute wins; otherwise a
+    // `dataField="1"` marks a Value field; a field with neither is an
+    // unused ("available") field, which must round-trip as None rather
+    // than being stamped `dataField="1"` on write.
+    if (pugi::xml_attribute axis_attr = f.attribute("axis"); axis_attr) {
+      field.axis = ParseAxis(axis_attr.as_string());
+    } else if (attr_bool(f, "dataField", false)) {
+      field.axis = pivot::PivotAxis::Value;
+    } else {
+      field.axis = pivot::PivotAxis::None;
+    }
     if (pugi::xml_attribute name_attr = f.attribute("name"); name_attr) {
       field.custom_name = name_attr.value();
     }
-    field.subtotal_top = parse_xml_bool_attr(f.attribute("subtotalTop"));
+    // `subtotalTop` defaults to true in OOXML (subtotals render above the
+    // group). Only an explicit "0" moves them to the bottom.
+    field.subtotal_top = attr_bool(f, "subtotalTop", true);
     // `defaultSubtotal` defaults to true in OOXML; only an explicit "0"
     // turns the implicit default subtotal off. The `*Subtotal` boolean
     // family selects custom subtotal functions; capture each present /
@@ -240,6 +264,13 @@ void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out)
     if (pugi::xml_node items_node = f.child("items"); items_node) {
       ParseItems(items_node, &field);
     }
+    // Preserve unmodelled `<pivotField>` attributes (`compact`, `outline`,
+    // `showAll`, `includeNewItemsInFilter`, ...) for verbatim round-trip.
+    capture_unknown_attrs(f,
+                          {"axis", "dataField", "name", "subtotalTop", "defaultSubtotal", "sumSubtotal",
+                           "countASubtotal", "avgSubtotal", "maxSubtotal", "minSubtotal", "productSubtotal",
+                           "countSubtotal", "stdDevSubtotal", "stdDevPSubtotal", "varSubtotal", "varPSubtotal"},
+                          field.passthrough_attrs);
     out->mutable_fields().push_back(std::move(field));
   }
 }
@@ -299,6 +330,11 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   if (pugi::xml_attribute name_attr = root.attribute("name"); name_attr) {
     table.set_name(name_attr.value());
   }
+  // `dataCaption` is a required attribute; capture the authored value so
+  // the writer re-emits it verbatim (default stays "Values" when absent).
+  if (pugi::xml_attribute cap = root.attribute("dataCaption"); cap) {
+    table.set_data_caption(cap.value());
+  }
   table.set_pivot_cache_id(parse_xml_u32_attr(root.attribute("cacheId"), 0U));
 
   // Grand-total layout flags. OOXML defaults both to true when absent, so a
@@ -311,6 +347,30 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     const bool col_grand = attr_bool(root, "colGrandTotals", true);
     table.set_grand_totals(row_grand, col_grand);
   }
+
+  // Report layout mode. OOXML expresses it on `<pivotTableDefinition>` via
+  // `compact` (default true) and `outline` (default false): `outline="1"`
+  // is Outline form, an explicit `compact="0"` (with outline off) is
+  // Tabular, and the default is Compact. The writer re-derives the same
+  // attributes so the layout round-trips and drives the renderer.
+  {
+    const bool outline = attr_bool(root, "outline", false);
+    const bool compact = attr_bool(root, "compact", true);
+    if (outline) {
+      table.set_layout(pivot::PivotLayout::Outline);
+    } else if (compact) {
+      table.set_layout(pivot::PivotLayout::Compact);
+    } else {
+      table.set_layout(pivot::PivotLayout::Tabular);
+    }
+  }
+
+  // Capture every root attribute the model does not represent structurally
+  // (`updatedVersion`, `createdVersion`, `itemPrintTitles`, `indent`, ...)
+  // so the writer re-emits them verbatim.
+  capture_unknown_attrs(root,
+                        {"name", "cacheId", "dataCaption", "rowGrandTotals", "colGrandTotals", "compact", "outline"},
+                        table.mutable_passthrough_attrs());
 
   pugi::xml_node loc = root.child("location");
   if (!loc) {
@@ -359,32 +419,31 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     }
   }
   // Capture any remaining direct children of <pivotTableDefinition> that
-  // we do not model structurally (`<pageFields>`, `<formats>`,
-  // `<conditionalFormats>`, `<chartFormats>`, `<calculatedFields>`,
-  // `<calculatedItems>`, `<pivotTableStyleInfo>`, `<extLst>`, ...) into
-  // a single raw-XML buffer. The writer re-emits the buffer verbatim
-  // between the structured tail and `</pivotTableDefinition>`, so
-  // unmodelled features survive a read -> write round trip even when
-  // v1.0 cannot evaluate them.
-  // `<rowItems>` / `<colItems>` are intentionally NOT listed here: v1.0
-  // does not model the materialised layout-item cache, so they must fall
-  // through to the raw-passthrough buffer and be re-emitted verbatim.
-  // Listing them would suppress passthrough and silently drop the cache
-  // for consumers that read the saved layout without refreshing.
-  static const std::string_view kRecognized[] = {"location", "pivotFields", "rowFields", "colFields", "dataFields"};
+  // we do not model structurally into position-keyed raw-XML buffers, so
+  // the writer can re-emit them at schema-valid slots.
+  //
+  // `CT_pivotTableDefinition` mandates a strict child order. `<rowItems>`,
+  // `<colItems>`, and `<pageFields>` are the only unmodelled elements the
+  // schema places *before* `<dataFields>`; they are binned by name into
+  // the two pre-dataFields slots (rowItems after `<rowFields>`; colItems
+  // and pageFields after `<colFields>`). Every other unmodelled element
+  // (`<formats>`, `<conditionalFormats>`, `<chartFormats>`,
+  // `<calculatedFields>`, `<calculatedItems>`, `<pivotTableStyleInfo>`,
+  // `<extLst>`, ...) belongs after `<dataFields>` and goes to the tail
+  // buffer. Relative order within each bin follows document order.
   struct StringXmlWriter : pugi::xml_writer {
     std::string* dst;
     void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
   };
-  StringXmlWriter sink{};
-  sink.dst = &table.mutable_raw_passthrough_xml();
+  static const std::string_view kRecognized[] = {"location", "pivotFields", "rowFields", "colFields", "dataFields"};
   for (pugi::xml_node child = root.first_child(); child; child = child.next_sibling()) {
     if (child.type() != pugi::node_element) {
       continue;
     }
+    const std::string_view name = child.name();
     bool recognised = false;
-    for (std::string_view name : kRecognized) {
-      if (name == child.name()) {
+    for (std::string_view r : kRecognized) {
+      if (r == name) {
         recognised = true;
         break;
       }
@@ -392,6 +451,16 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     if (recognised) {
       continue;
     }
+    std::string* bucket = nullptr;
+    if (name == "rowItems") {
+      bucket = &table.mutable_raw_passthrough_after_row_fields();
+    } else if (name == "colItems" || name == "pageFields") {
+      bucket = &table.mutable_raw_passthrough_after_col_fields();
+    } else {
+      bucket = &table.mutable_raw_passthrough_xml();
+    }
+    StringXmlWriter sink{};
+    sink.dst = bucket;
     child.print(sink, /*indent=*/"", pugi::format_raw);
   }
 

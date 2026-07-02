@@ -61,6 +61,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/zip_reader_test.cpp
   unit/io/format_detect_test.cpp
   unit/io/roundtrip_symmetry_test.cpp
+  unit/io/pivot_roundtrip_symmetry_test.cpp
   unit/io/sheet_roundtrip_symmetry_test.cpp
   unit/io/xlsb_roundtrip_symmetry_test.cpp
   unit/io/xlsb/func_id_test.cpp

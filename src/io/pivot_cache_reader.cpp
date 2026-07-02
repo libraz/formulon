@@ -199,21 +199,22 @@ bool IsTypedValueElement(std::string_view name) {
 /// attribute was found, gating the writer's legacy placeholder fallback.
 void ReadSharedItemsHints(const pugi::xml_node& items, pivot::SharedItemsHints* out) {
   bool any = false;
-  const auto read_flag = [&](const char* attr, bool* dst) {
+  const auto read_flag = [&](const char* attr, bool* dst, bool* has) {
     if (pugi::xml_attribute a = items.attribute(attr); a) {
       bool ok = false;
       *dst = ParseBoolFlag(a.as_string(), &ok);
+      *has = true;
       any = true;
     }
   };
-  read_flag("containsNumber", &out->contains_number);
-  read_flag("containsInteger", &out->contains_integer);
-  read_flag("containsDate", &out->contains_date);
-  read_flag("containsString", &out->contains_string);
-  read_flag("containsBlank", &out->contains_blank);
-  read_flag("containsSemiMixedTypes", &out->contains_semi_mixed);
-  read_flag("containsNonDate", &out->contains_non_date);
-  read_flag("containsMixedTypes", &out->contains_mixed_types);
+  read_flag("containsNumber", &out->contains_number, &out->has_contains_number);
+  read_flag("containsInteger", &out->contains_integer, &out->has_contains_integer);
+  read_flag("containsDate", &out->contains_date, &out->has_contains_date);
+  read_flag("containsString", &out->contains_string, &out->has_contains_string);
+  read_flag("containsBlank", &out->contains_blank, &out->has_contains_blank);
+  read_flag("containsSemiMixedTypes", &out->contains_semi_mixed, &out->has_contains_semi_mixed);
+  read_flag("containsNonDate", &out->contains_non_date, &out->has_contains_non_date);
+  read_flag("containsMixedTypes", &out->contains_mixed_types, &out->has_contains_mixed_types);
   const auto read_str = [&](const char* attr, bool* present, std::string* dst) {
     if (pugi::xml_attribute a = items.attribute(attr); a) {
       *present = true;
@@ -240,6 +241,12 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
   }
 
   pivot::PivotCache cache;
+
+  // Preserve unmodelled root attributes (`refreshedBy`, `refreshedDate`,
+  // `refreshOnLoad`, `createdVersion`, ...) for verbatim round-trip. `r:id`
+  // and `recordCount` are written from the structured state; namespace
+  // declarations are skipped by the capture helper.
+  capture_unknown_attrs(root, {"r:id", "recordCount"}, cache.mutable_passthrough_attrs());
 
   // External cache sources require live data-connection plumbing we do
   // not implement; fail explicitly so the workbook reader can surface
@@ -278,14 +285,24 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       if (pugi::xml_attribute name_attr = f.attribute("name"); name_attr) {
         field.name = name_attr.value();
       }
+      // `databaseField` defaults to true; `databaseField="0"` marks a
+      // grouping-derived field that carries no per-record cell.
+      field.is_database_field = attr_bool(f, "databaseField", true);
+      // Capture any `<fieldGroup>` verbatim so a grouped field round-trips
+      // even though the grouping structure is not modelled.
+      if (pugi::xml_node group = f.child("fieldGroup"); group) {
+        struct RawSink : pugi::xml_writer {
+          std::string* dst;
+          void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
+        };
+        RawSink sink{};
+        sink.dst = &field.field_group_xml;
+        group.print(sink, /*indent=*/"", pugi::format_raw);
+      }
 
       // Walk `<sharedItems>` children. Any typed value child marks this
       // as a discrete (shared) field; absence of children leaves
-      // `shared_items` empty so the records part is read as inline
-      // values. `<fieldGroup>` (date grouping / numeric grouping) is
-      // intentionally not parsed here — a follow-up PR will add real
-      // semantics; for now group fields land with empty shared_items
-      // and their records carry the raw `<x>` indices unchanged.
+      // `shared_items` empty so the records part is read as inline values.
       if (pugi::xml_node items = f.child("sharedItems"); items) {
         // Capture the numeric / date range + grouping hint attributes so
         // Excel's Refresh keeps its grouping boundaries; dropping them
@@ -321,34 +338,50 @@ Expected<void, Error> read_pivot_cache_records(const std::vector<std::uint8_t>& 
   }
 
   const std::size_t field_count = cache.fields().size();
+  // Only database fields carry a per-record cell (`<x>` / typed value);
+  // grouping-derived fields (`databaseField="0"`) are computed from a base
+  // field and have no cell. Map the j-th record child onto the position of
+  // the j-th database field so record cells stay index-aligned with
+  // `cache.fields()` (group-field slots remain blank).
+  std::vector<std::size_t> db_positions;
+  for (std::size_t i = 0; i < field_count; ++i) {
+    if (cache.fields()[i].is_database_field) {
+      db_positions.push_back(i);
+    }
+  }
   std::vector<pivot::PivotCacheRecord>& records = cache.mutable_records();
 
   for (pugi::xml_node r = root.child("r"); r; r = r.next_sibling("r")) {
     pivot::PivotCacheRecord record;
-    record.cells.reserve(field_count);
+    // Pre-fill every field slot with an inline blank; database-field slots
+    // are overwritten as the record's children are consumed.
+    record.cells.assign(field_count, Value::blank());
+    record.cell_is_index.assign(field_count, false);
 
-    std::size_t field_idx = 0;
+    std::size_t db_idx = 0;
     for (pugi::xml_node child = r.first_child(); child; child = child.next_sibling()) {
       // Forward compatibility: silently ignore any extra children once we
-      // have already populated one cell per cache field.
-      if (field_idx >= field_count) {
+      // have already populated one cell per database field.
+      if (db_idx >= db_positions.size()) {
         break;
       }
       const std::string_view child_name = child.name();
+      const std::size_t field_pos = db_positions[db_idx];
       if (child_name == "x") {
         // `<x v="N">` indexes the matching field's shared_items. Missing
         // `v` defaults to 0 (matches OOXML schema default). The cell stores
         // the raw index (as a Number), not the resolved shared value;
         // `pivot::cell_value` performs the shared_items lookup on read.
         const int raw = child.attribute("v").as_int(0);
-        if (raw < 0 || static_cast<std::size_t>(raw) >= cache.fields()[field_idx].shared_items.size()) {
+        if (raw < 0 || static_cast<std::size_t>(raw) >= cache.fields()[field_pos].shared_items.size()) {
           std::string ctx("context=pivot_cache_reader field=");
-          ctx.append(std::to_string(field_idx)).append(" index=").append(std::to_string(raw));
+          ctx.append(std::to_string(field_pos)).append(" index=").append(std::to_string(raw));
           return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivot cache: <x v=...> index out of range",
                             std::move(ctx));
         }
-        record.cells.push_back(Value::number(static_cast<double>(raw)));
-        ++field_idx;
+        record.cells[field_pos] = Value::number(static_cast<double>(raw));
+        record.cell_is_index[field_pos] = true;
+        ++db_idx;
         continue;
       }
       if (IsTypedValueElement(child_name)) {
@@ -356,18 +389,14 @@ Expected<void, Error> read_pivot_cache_records(const std::vector<std::uint8_t>& 
         if (!val_or) {
           return val_or.error();
         }
-        record.cells.push_back(val_or.value());
-        ++field_idx;
+        record.cells[field_pos] = val_or.value();
+        record.cell_is_index[field_pos] = false;
+        ++db_idx;
         continue;
       }
       // Unknown element: skip without consuming a field slot. This keeps
       // the record-vs-field alignment honest in the face of forward-
       // compat additions Excel might emit.
-    }
-    // Trailing blanks: Excel sometimes elides them. Pad up to the
-    // declared field count so consumers can index by field index.
-    while (record.cells.size() < field_count) {
-      record.cells.push_back(Value::blank());
     }
     records.push_back(std::move(record));
   }

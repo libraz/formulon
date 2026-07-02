@@ -429,5 +429,233 @@ TEST(PivotTableWriter, GrandTotalsDefaultTrueOmitsAttributes) {
   EXPECT_NE(written.find("firstDataCol=\"0\""), std::string::npos) << "xml=" << written;
 }
 
+// ---------------------------------------------------------------------------
+// Item cache index round-trips verbatim (item b)
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, ItemCacheIndexRoundTripsVerbatim) {
+  // Excel can emit items whose x indices are neither sequential nor in
+  // ascending order (e.g. a manually reordered field). The writer must
+  // re-emit the captured indices, not synthesise 0,1,2.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"1\"><pivotField axis=\"axisRow\"><items count=\"3\">");
+  xml.append("<item x=\"2\"/><item x=\"0\" h=\"1\"/><item x=\"1\"/>");
+  xml.append("</items></pivotField></pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  const pivot::PivotTable& table = parsed_or.value();
+  ASSERT_EQ(table.fields().size(), 1U);
+  ASSERT_EQ(table.fields()[0].items.size(), 3U);
+  EXPECT_TRUE(table.fields()[0].items[0].has_cache_index);
+  EXPECT_EQ(table.fields()[0].items[0].cache_index, 2U);
+  EXPECT_EQ(table.fields()[0].items[1].cache_index, 0U);
+  EXPECT_FALSE(table.fields()[0].items[1].visible);
+  EXPECT_EQ(table.fields()[0].items[2].cache_index, 1U);
+
+  const std::string written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find("<item x=\"2\"/>"), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("<item x=\"0\" h=\"1\"/>"), std::string::npos) << "xml=" << written;
+  EXPECT_NE(written.find("<item x=\"1\"/>"), std::string::npos) << "xml=" << written;
+}
+
+// ---------------------------------------------------------------------------
+// Position-keyed passthrough keeps schema child order (item c)
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, PassthroughElementsKeepSchemaOrder) {
+  // rowItems (after rowFields) and pageFields (after colFields) precede
+  // dataFields in CT_pivotTableDefinition; pivotTableStyleInfo trails it.
+  // A single tail buffer would emit rowItems/pageFields after dataFields
+  // and trip Excel's repair. Verify each lands in its schema slot.
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:D10\"/>");
+  xml.append("<pivotFields count=\"2\"><pivotField axis=\"axisRow\"/><pivotField dataField=\"1\"/></pivotFields>");
+  xml.append("<rowFields count=\"1\"><field x=\"0\"/></rowFields>");
+  xml.append("<rowItems count=\"1\"><i><x/></i></rowItems>");
+  xml.append("<colFields count=\"1\"><field x=\"-2\"/></colFields>");
+  xml.append("<pageFields count=\"1\"><pageField fld=\"0\"/></pageFields>");
+  xml.append("<dataFields count=\"1\"><dataField name=\"Sum of V\" fld=\"1\" subtotal=\"sum\"/></dataFields>");
+  xml.append("<pivotTableStyleInfo name=\"PivotStyleLight16\"/>");
+  xml.append("</pivotTableDefinition>");
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  const std::string written = write_pivot_table_definition(parsed_or.value());
+
+  const std::size_t p_rowfields = written.find("<rowFields");
+  const std::size_t p_rowitems = written.find("<rowItems");
+  const std::size_t p_colfields = written.find("<colFields");
+  const std::size_t p_pagefields = written.find("<pageFields");
+  const std::size_t p_datafields = written.find("<dataFields");
+  const std::size_t p_styleinfo = written.find("<pivotTableStyleInfo");
+  ASSERT_NE(p_rowitems, std::string::npos) << "xml=" << written;
+  ASSERT_NE(p_pagefields, std::string::npos) << "xml=" << written;
+  ASSERT_NE(p_styleinfo, std::string::npos) << "xml=" << written;
+  // rowFields < rowItems < colFields < pageFields < dataFields < styleInfo.
+  EXPECT_LT(p_rowfields, p_rowitems);
+  EXPECT_LT(p_rowitems, p_colfields);
+  EXPECT_LT(p_colfields, p_pagefields);
+  EXPECT_LT(p_pagefields, p_datafields);
+  EXPECT_LT(p_datafields, p_styleinfo);
+
+  // A second round trip must be stable (idempotent passthrough binning).
+  auto reparsed_or = read_pivot_table_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(reparsed_or)) << "reparse failed: " << reparsed_or.error().message;
+  EXPECT_EQ(write_pivot_table_definition(reparsed_or.value()), written);
+}
+
+// ---------------------------------------------------------------------------
+// H-20: an unused pivotField round-trips as None (no axis, no dataField="1")
+// and the required dataCaption attribute is always emitted.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, UnusedFieldRoundTripsAsNoneAndDataCaptionEmitted) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\" dataCaption=\"Vals\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"3\">");
+  xml.append("<pivotField axis=\"axisRow\"/>");  // used: Row
+  xml.append("<pivotField/>");                   // unused: None
+  xml.append("<pivotField dataField=\"1\"/>");   // Value
+  xml.append("</pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  const pivot::PivotTable& table = parsed_or.value();
+  ASSERT_EQ(table.fields().size(), 3U);
+  EXPECT_EQ(table.fields()[0].axis, pivot::PivotAxis::Row);
+  EXPECT_EQ(table.fields()[1].axis, pivot::PivotAxis::None);
+  EXPECT_EQ(table.fields()[2].axis, pivot::PivotAxis::Value);
+  EXPECT_EQ(table.data_caption(), "Vals");
+
+  const std::string written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find("dataCaption=\"Vals\""), std::string::npos) << written;
+  // The unused field emits neither an axis nor dataField="1".
+  EXPECT_NE(written.find("<pivotField/>"), std::string::npos) << written;
+
+  // A second round trip keeps the None field None (no dataField="1" creep).
+  auto reparsed_or = read_pivot_table_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
+  EXPECT_EQ(reparsed_or.value().fields()[1].axis, pivot::PivotAxis::None);
+}
+
+TEST(PivotTableWriter, DataCaptionDefaultsToValuesWhenAbsent) {
+  pivot::PivotTable table;
+  const std::string xml = write_pivot_table_definition(table);
+  EXPECT_NE(xml.find("dataCaption=\"Values\""), std::string::npos) << xml;
+}
+
+// ---------------------------------------------------------------------------
+// Report layout (compact / tabular / outline) is read and round-tripped.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, ReadsAndRoundTripsLayoutMode) {
+  struct Case {
+    const char* attrs;
+    pivot::PivotLayout expected;
+  };
+  const Case cases[] = {
+      {"", pivot::PivotLayout::Compact},                // defaults
+      {" compact=\"0\"", pivot::PivotLayout::Tabular},  // tabular
+      {" compact=\"0\" outline=\"1\"", pivot::PivotLayout::Outline},
+  };
+  for (const Case& c : cases) {
+    std::string xml(kXmlDecl);
+    xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\"");
+    xml.append(c.attrs);
+    xml.append("><location ref=\"A1:B2\"/></pivotTableDefinition>");
+    auto parsed_or = read_pivot_table_definition(Bytes(xml));
+    ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+    EXPECT_EQ(parsed_or.value().layout(), c.expected);
+    // Write -> read keeps the same layout.
+    const std::string written = write_pivot_table_definition(parsed_or.value());
+    auto reparsed_or = read_pivot_table_definition(Bytes(written));
+    ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
+    EXPECT_EQ(reparsed_or.value().layout(), c.expected) << "written=" << written;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Unmodelled root + pivotField attributes round-trip verbatim.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, UnknownRootAndFieldAttributesRoundTrip) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs);
+  xml.append(" name=\"P\" cacheId=\"0\" updatedVersion=\"8\" createdVersion=\"8\" itemPrintTitles=\"1\" indent=\"0\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"1\"><pivotField axis=\"axisRow\" compact=\"0\" showAll=\"0\"/></pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  const pivot::PivotTable& table = parsed_or.value();
+  auto has_attr = [](const std::vector<std::pair<std::string, std::string>>& v, const std::string& n,
+                     const std::string& val) {
+    for (const auto& [name, value] : v) {
+      if (name == n) {
+        return value == val;
+      }
+    }
+    return false;
+  };
+  EXPECT_TRUE(has_attr(table.passthrough_attrs(), "updatedVersion", "8"));
+  EXPECT_TRUE(has_attr(table.passthrough_attrs(), "createdVersion", "8"));
+  EXPECT_TRUE(has_attr(table.passthrough_attrs(), "itemPrintTitles", "1"));
+  EXPECT_TRUE(has_attr(table.passthrough_attrs(), "indent", "0"));
+  // Modelled attributes are NOT double-captured into the passthrough list.
+  for (const auto& [name, value] : table.passthrough_attrs()) {
+    (void)value;
+    EXPECT_NE(name, "name");
+    EXPECT_NE(name, "cacheId");
+  }
+  ASSERT_EQ(table.fields().size(), 1U);
+  EXPECT_TRUE(has_attr(table.fields()[0].passthrough_attrs, "compact", "0"));
+  EXPECT_TRUE(has_attr(table.fields()[0].passthrough_attrs, "showAll", "0"));
+
+  const std::string written = write_pivot_table_definition(table);
+  EXPECT_NE(written.find("updatedVersion=\"8\""), std::string::npos) << written;
+  EXPECT_NE(written.find("createdVersion=\"8\""), std::string::npos) << written;
+  EXPECT_NE(written.find("itemPrintTitles=\"1\""), std::string::npos) << written;
+  EXPECT_NE(written.find("indent=\"0\""), std::string::npos) << written;
+  EXPECT_NE(written.find("compact=\"0\""), std::string::npos) << written;
+  EXPECT_NE(written.find("showAll=\"0\""), std::string::npos) << written;
+  // `name="P"` appears once (not duplicated by the passthrough path).
+  EXPECT_EQ(written.find("name=\"P\""), written.rfind("name=\"P\""));
+}
+
+// ---------------------------------------------------------------------------
+// Attribute escaping: a field name with newline / tab / quote survives the
+// attribute-context escaper round trip.
+// ---------------------------------------------------------------------------
+
+TEST(PivotTableWriter, FieldNameWithControlCharsRoundTrips) {
+  pivot::PivotTable table;
+  table.set_name("a\nb\tc\"d");
+  table.set_anchor(0U, 0U, 1U, 1U);
+  pivot::PivotField f;
+  f.axis = pivot::PivotAxis::Row;
+  f.custom_name = "x\ty\nz";
+  table.mutable_fields().push_back(std::move(f));
+
+  const std::string xml = write_pivot_table_definition(table);
+  // The newline / tab must be emitted as numeric character references, not
+  // raw control bytes (which some XML parsers silently normalise to space).
+  EXPECT_NE(xml.find("&#10;"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("&#9;"), std::string::npos) << xml;
+
+  auto parsed_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(parsed_or)) << "read failed: " << parsed_or.error().message;
+  EXPECT_EQ(parsed_or.value().name(), "a\nb\tc\"d");
+  ASSERT_EQ(parsed_or.value().fields().size(), 1U);
+  EXPECT_EQ(parsed_or.value().fields()[0].custom_name, "x\ty\nz");
+}
+
 }  // namespace
 }  // namespace formulon::io

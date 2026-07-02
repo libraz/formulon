@@ -14,13 +14,13 @@
 #include <string_view>
 
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "pivot/pivot_cache.h"
 #include "value.h"
 
 namespace formulon::io {
 namespace {
 
-constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
 constexpr std::string_view kPivotNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 constexpr std::string_view kRelsNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
@@ -50,7 +50,7 @@ void AppendNumber(std::string& out, double v) {
 void AppendInlineTypedValue(std::string& out, const Value& v) {
   if (v.is_text()) {
     out.append("<s v=\"");
-    AppendXmlEscaped(out, v.as_text());
+    AppendXmlAttrEscaped(out, v.as_text());
     out.append("\"/>");
     return;
   }
@@ -75,7 +75,7 @@ void AppendInlineTypedValue(std::string& out, const Value& v) {
     // Error display names are static literals (see `display_name` in
     // value.h); they contain no XML-critical characters but we still
     // route through the escaper to keep the encoding rule uniform.
-    AppendXmlEscaped(out, display_name(v.as_error()));
+    AppendXmlAttrEscaped(out, display_name(v.as_error()));
     out.append("\"/>");
     return;
   }
@@ -107,39 +107,36 @@ void AppendOptionalAttr(std::string& out, std::string_view name, std::string_vie
   out.push_back(' ');
   out.append(name);
   out.append("=\"");
-  AppendXmlEscaped(out, value);
+  AppendXmlAttrEscaped(out, value);
   out.push_back('"');
 }
 
-/// Appends ` name="1"` when `flag` is set. The OOXML `<sharedItems>`
-/// content hints are boolean attributes that default to false; only
-/// emit the set ones to keep the output lean.
-void AppendBoolHint(std::string& out, std::string_view name, bool flag) {
-  if (!flag) {
+/// Appends ` name="0"` / ` name="1"` when the attribute was present in the
+/// source (`has`). Emitting the exact captured value — not "only when
+/// true" — is what lets the default-true hints (containsString /
+/// containsSemiMixedTypes / containsNonDate) round-trip without flipping.
+void AppendBoolHint(std::string& out, std::string_view name, bool has, bool value) {
+  if (!has) {
     return;
   }
   out.push_back(' ');
   out.append(name);
-  out.append("=\"1\"");
+  out.append(value ? "=\"1\"" : "=\"0\"");
 }
 
-/// Emits the `<sharedItems>` opening attributes for a range-typed field
-/// from the captured hints. When no hints were captured, falls back to
-/// the legacy minimal `containsNumber="1"` placeholder so freshly built
-/// caches still produce schema-valid output.
+/// Emits the captured `<sharedItems>` content-hint / range attributes
+/// verbatim (present stays present with its value, absent stays absent).
+/// Emits nothing when no hints were captured; callers pick the fallback
+/// placeholder for the range-typed / empty case.
 void AppendSharedItemsHints(std::string& out, const pivot::SharedItemsHints& h) {
-  if (!h.present) {
-    out.append(" containsNumber=\"1\"");
-    return;
-  }
-  AppendBoolHint(out, "containsSemiMixedTypes", h.contains_semi_mixed);
-  AppendBoolHint(out, "containsNonDate", h.contains_non_date);
-  AppendBoolHint(out, "containsDate", h.contains_date);
-  AppendBoolHint(out, "containsString", h.contains_string);
-  AppendBoolHint(out, "containsBlank", h.contains_blank);
-  AppendBoolHint(out, "containsMixedTypes", h.contains_mixed_types);
-  AppendBoolHint(out, "containsNumber", h.contains_number);
-  AppendBoolHint(out, "containsInteger", h.contains_integer);
+  AppendBoolHint(out, "containsSemiMixedTypes", h.has_contains_semi_mixed, h.contains_semi_mixed);
+  AppendBoolHint(out, "containsNonDate", h.has_contains_non_date, h.contains_non_date);
+  AppendBoolHint(out, "containsDate", h.has_contains_date, h.contains_date);
+  AppendBoolHint(out, "containsString", h.has_contains_string, h.contains_string);
+  AppendBoolHint(out, "containsBlank", h.has_contains_blank, h.contains_blank);
+  AppendBoolHint(out, "containsMixedTypes", h.has_contains_mixed_types, h.contains_mixed_types);
+  AppendBoolHint(out, "containsNumber", h.has_contains_number, h.contains_number);
+  AppendBoolHint(out, "containsInteger", h.has_contains_integer, h.contains_integer);
   if (h.has_min_value) {
     AppendOptionalAttr(out, "minValue", h.min_value);
   }
@@ -175,7 +172,11 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
   out.append(kRelsNs);
   out.append("\" r:id=\"rId1\" recordCount=\"");
   out.append(std::to_string(cache.records().size()));
-  out.append("\">");
+  out.append("\"");
+  // Re-emit any unmodelled root attributes captured on read (refreshedBy,
+  // refreshedDate, createdVersion, ...).
+  append_raw_attrs(out, cache.passthrough_attrs());
+  out.append(">");
 
   // Re-emit the `<cacheSource>` with its `<worksheetSource>` child when
   // the reader captured one, so Excel's Refresh can locate the source
@@ -198,8 +199,14 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
 
   for (const pivot::PivotCacheField& field : cache.fields()) {
     out.append("<cacheField name=\"");
-    AppendXmlEscaped(out, field.name);
-    out.append("\">");
+    AppendXmlAttrEscaped(out, field.name);
+    out.append("\"");
+    // `databaseField` defaults to true; emit `="0"` only for a
+    // grouping-derived field so it is excluded from record output on read.
+    if (!field.is_database_field) {
+      out.append(" databaseField=\"0\"");
+    }
+    out.append(">");
 
     if (field.shared_items.empty()) {
       // Range-typed field: re-emit the captured numeric / date range +
@@ -207,10 +214,19 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
       // Falls back to a minimal `containsNumber="1"` placeholder when the
       // field was built from scratch (no hints captured).
       out.append("<sharedItems");
-      AppendSharedItemsHints(out, field.shared_items_hints);
+      if (field.shared_items_hints.present) {
+        AppendSharedItemsHints(out, field.shared_items_hints);
+      } else {
+        out.append(" containsNumber=\"1\"");
+      }
       out.append("/>");
     } else {
-      out.append("<sharedItems count=\"");
+      // Discrete field: emit any captured content hints (containsBlank /
+      // containsString / ...) alongside the item count so a discrete
+      // field's hints survive the round trip instead of being dropped.
+      out.append("<sharedItems");
+      AppendSharedItemsHints(out, field.shared_items_hints);
+      out.append(" count=\"");
       out.append(std::to_string(field.shared_items.size()));
       out.append("\">");
       for (const Value& item : field.shared_items) {
@@ -218,6 +234,8 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache) {
       }
       out.append("</sharedItems>");
     }
+    // Re-emit the captured `<fieldGroup>` verbatim (grouping definition).
+    out.append(field.field_group_xml);
     out.append("</cacheField>");
   }
 
@@ -245,16 +263,29 @@ std::string write_pivot_cache_records(const pivot::PivotCache& cache) {
   for (const pivot::PivotCacheRecord& record : cache.records()) {
     out.append("<r>");
     for (std::size_t i = 0; i < field_count; ++i) {
-      // Pad missing trailing cells with `<m/>` so every `<r>` has exactly
-      // `field_count` children. The reader pads symmetrically on read,
-      // but emitting them explicitly keeps the bytes self-describing.
+      // Only database fields carry a per-record cell; grouping-derived
+      // fields (`databaseField="0"`) are excluded so the record arity
+      // matches Excel's (one cell per database field).
+      if (!cache.fields()[i].is_database_field) {
+        continue;
+      }
+      // Missing trailing cells become `<m/>` so every `<r>` has exactly one
+      // child per database field; the reader pre-fills symmetrically.
       if (i >= record.cells.size()) {
         out.append("<m/>");
         continue;
       }
       const Value& cell = record.cells[i];
-      const bool field_is_shared = !cache.fields()[i].shared_items.empty();
-      if (field_is_shared && cell.is_number()) {
+      // Prefer the per-cell encoding flag captured on read; fall back to
+      // inferring "shared field + numeric cell = index" for hand-built
+      // caches that leave `cell_is_index` empty.
+      bool emit_index;
+      if (i < record.cell_is_index.size()) {
+        emit_index = record.cell_is_index[i] && cell.is_number();
+      } else {
+        emit_index = !cache.fields()[i].shared_items.empty() && cell.is_number();
+      }
+      if (emit_index) {
         AppendSharedIndex(out, cell.as_number());
       } else {
         AppendInlineTypedValue(out, cell);

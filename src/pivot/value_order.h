@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <string>
 
+#include "eval/jp_fold.h"
 #include "utils/error.h"
 #include "value.h"
 #include "value_sort_order.h"
@@ -50,7 +51,11 @@ inline bool value_less(const Value& a, const Value& b) noexcept {
       // false < true.
       return !a.as_boolean() && b.as_boolean();
     case ValueKind::Text:
-      return a.as_text() < b.as_text();
+      // Match the GROUPBY / SORT comparator (`groupby_pivotby/common.cpp`)
+      // by folding through `fold_jp_text` before the byte compare, so the
+      // two families cannot diverge on Japanese text collation (half-width
+      // kana, hiragana/katakana, full-width ASCII).
+      return eval::fold_jp_text(a.as_text()) < eval::fold_jp_text(b.as_text());
     case ValueKind::Error:
       return static_cast<std::uint16_t>(a.as_error()) < static_cast<std::uint16_t>(b.as_error());
     default:

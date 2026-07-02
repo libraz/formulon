@@ -35,6 +35,21 @@ struct SharedItemsHints {
   bool contains_semi_mixed = false;
   bool contains_non_date = false;
   bool contains_mixed_types = false;
+  // Presence flags for the boolean content hints. Several of these default
+  // to true in OOXML (containsString / containsSemiMixedTypes /
+  // containsNonDate), so a plain value flag cannot round-trip an absent
+  // attribute (absent would be re-emitted as its false value, flipping the
+  // meaning). Tracking presence lets the writer re-emit each attribute
+  // verbatim — present stays present with its body, absent stays absent —
+  // sidestepping default semantics entirely.
+  bool has_contains_number = false;
+  bool has_contains_integer = false;
+  bool has_contains_date = false;
+  bool has_contains_string = false;
+  bool has_contains_blank = false;
+  bool has_contains_semi_mixed = false;
+  bool has_contains_non_date = false;
+  bool has_contains_mixed_types = false;
   // Presence flags + raw bodies for the bound attributes.
   bool has_min_value = false;
   bool has_max_value = false;
@@ -69,6 +84,20 @@ struct PivotCacheField {
   /// Numeric / date range + grouping hints from `<sharedItems>`. Preserved
   /// verbatim so Excel's Refresh keeps its grouping boundaries.
   SharedItemsHints shared_items_hints;
+
+  /// Whether this cache field is a *database* field (backed by a source
+  /// column) rather than one derived by grouping. OOXML marks a derived
+  /// field with `databaseField="0"`; only database fields contribute a
+  /// cell to each `<r>` record, so the record arity is the number of
+  /// database fields, not the total field count. Defaults to true so
+  /// hand-built caches keep the "every field is a source column" shape.
+  bool is_database_field = true;
+
+  /// Raw `<fieldGroup>` element captured verbatim (date / numeric / discrete
+  /// grouping definition) so a grouped field round-trips even though v1.0
+  /// does not model grouping structurally. Empty when the field carries no
+  /// `<fieldGroup>`.
+  std::string field_group_xml;
 };
 
 /// The `<cacheSource>/<worksheetSource>` reference that tells Excel where
@@ -85,12 +114,20 @@ struct WorksheetSource {
 /// One row of the pivot cache.
 ///
 /// Each `cells` entry is either a `Number` index into the corresponding
-/// field's `shared_items` (when that field is shared) or an inline `Value`
-/// (when the field is range-typed). Encoding the index as a `Number` keeps
-/// the `Value` shape uniform; consumers branch on whether the matching
-/// field's `shared_items` is empty.
+/// field's `shared_items` (source `<x v="N"/>`) or an inline `Value`
+/// (source `<n>`/`<s>`/`<b>`/`<d>`/`<m>`/`<e>`). Encoding the index as a
+/// `Number` keeps the `Value` shape uniform.
+///
+/// `cell_is_index` records, per cell, which of the two encodings the
+/// source used, so a numeric inline value in a shared field is not
+/// mistaken for an index (or vice versa) on write. It is sized in
+/// lock-step with `cells` by the reader. When it is empty — a hand-built
+/// cache (C API, tests) that does not populate it — consumers fall back
+/// to inferring the encoding from the field's `shared_items` being
+/// non-empty, preserving the legacy behaviour.
 struct PivotCacheRecord {
   std::vector<Value> cells;
+  std::vector<bool> cell_is_index;
 };
 
 /// Owning container for the cache definition + records. Held by the
@@ -114,6 +151,14 @@ class PivotCache {
   const std::vector<PivotCacheRecord>& records() const { return records_; }
   std::vector<PivotCacheRecord>& mutable_records() { return records_; }
 
+  /// Unmodelled `<pivotCacheDefinition>` root attributes (`refreshedBy`,
+  /// `refreshedDate`, `refreshOnLoad`, `createdVersion`, ...), captured as
+  /// `(name, value)` pairs so the writer re-emits them verbatim. The
+  /// modelled attributes (`r:id` / `recordCount`, plus the namespace
+  /// declarations) are excluded and written from the structured state.
+  const std::vector<std::pair<std::string, std::string>>& passthrough_attrs() const { return passthrough_attrs_; }
+  std::vector<std::pair<std::string, std::string>>& mutable_passthrough_attrs() { return passthrough_attrs_; }
+
   /// Lifetime-stable backing store for any `Value::text` payload that the
   /// reader produces (whether on a `shared_items` entry or inline on a
   /// record cell). The reader appends one entry per decoded string and
@@ -136,6 +181,7 @@ class PivotCache {
   std::vector<PivotCacheRecord> records_;
   std::deque<std::string> text_storage_;
   WorksheetSource worksheet_source_;
+  std::vector<std::pair<std::string, std::string>> passthrough_attrs_;
 };
 
 }  // namespace formulon::pivot

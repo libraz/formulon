@@ -166,7 +166,11 @@ void walk_subtotal_tree(HierNode& tree, const std::vector<HierLevel>& levels, co
     if (top.it == top.node->children.end()) {
       if (top.depth > 0 && !top.node->children.empty()) {
         const PivotField* field = field_at_depth(top.depth - 1);
-        const bool wants_subtotal = field != nullptr && (field->subtotal_top || !field->subtotal_fns.empty());
+        // `subtotal_top` is only the position (top vs bottom) of the
+        // subtotal row; whether a subtotal is emitted at all is governed
+        // by `default_subtotal` (OOXML default true) plus any explicit
+        // custom subtotal functions.
+        const bool wants_subtotal = field != nullptr && (field->default_subtotal || !field->subtotal_fns.empty());
         if (wants_subtotal) {
           emit_subtotal(top.labels, top.depth - 1, top.collected_start, stack_leaves);
         }

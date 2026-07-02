@@ -67,6 +67,12 @@ void compact_row_axis_values(std::vector<std::vector<std::vector<Value>>>& value
 /// to `keep`. Mirror of `compact_row_axis_values` for the column axis.
 void compact_col_axis_values(std::vector<std::vector<std::vector<Value>>>& values, const std::vector<bool>& keep);
 
+/// Compacts a per-leaf totals vector (`row_leaf_totals` / `col_leaf_totals`,
+/// shape `[leaf][data_field]`) according to `keep`, dropping the leaves a
+/// value filter pruned so the totals stay index-aligned with
+/// `result.values`.
+void compact_leaf_totals(std::vector<std::vector<Value>>& totals, const std::vector<bool>& keep);
+
 }  // namespace formulon::pivot
 
 #endif  // FORMULON_PIVOT_FILTER_ENGINE_H_

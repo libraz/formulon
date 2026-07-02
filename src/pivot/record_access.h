@@ -26,11 +26,19 @@ inline Value cell_value(const PivotCache& cache, const PivotCacheRecord& record,
   }
   const auto& field = cache.fields()[field_index];
   const Value& cell = record.cells[field_index];
-  if (field.shared_items.empty()) {
+  // Prefer the explicit per-cell encoding flag when the reader populated
+  // it: an inline cell (`cell_is_index == false`) is returned verbatim
+  // even inside a shared field, and an index cell is always resolved
+  // against `shared_items`. When the flag vector is empty (hand-built
+  // caches), fall back to inferring from the field being shared.
+  const bool have_flag = field_index < record.cell_is_index.size();
+  const bool is_index =
+      have_flag ? record.cell_is_index[field_index] : (!field.shared_items.empty() && cell.is_number());
+  if (!is_index) {
     return cell;
   }
   if (!cell.is_number()) {
-    return cell;  // Inline override (rare; Excel allows it).
+    return cell;  // Defensive: an index flag on a non-numeric cell.
   }
   const double idx = cell.as_number();
   if (idx < 0.0) {

@@ -15,13 +15,13 @@
 
 #include "io/ooxml_writer_cell.h"  // EncodeA1
 #include "io/xml_escape.h"
+#include "io/xml_utils.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 
 namespace formulon::io {
 namespace {
 
-constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
 constexpr std::string_view kPivotNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
 /// Emits an A1 range string `"<topLeft>:<bottomRight>"` for the pivot's
@@ -70,8 +70,9 @@ std::string_view AxisAttrName(pivot::PivotAxis axis) {
     case pivot::PivotAxis::Page:
       return "axisPage";
     case pivot::PivotAxis::Value:
-      // Caller handles this branch via `dataField="1"`; returning an
-      // empty view here means "do not emit an axis attribute".
+    case pivot::PivotAxis::None:
+      // Value is handled by the caller via `dataField="1"`; None emits no
+      // axis at all. An empty view means "do not emit an axis attribute".
       return {};
   }
   return {};
@@ -92,9 +93,11 @@ std::string_view ShowDataAsAttrName(pivot::ShowValuesAs s) {
     case pivot::ShowValuesAs::PercentOfTotal:
       return "percentOfTotal";
     case pivot::ShowValuesAs::RunningTotalInRow:
-      return "runTotal";
     case pivot::ShowValuesAs::RunningTotalInCol:
-      return "runTotalInCol";
+      // OOXML has only `runTotal`; the direction is carried by `baseField`,
+      // not the attribute spelling. Emit the standard name for both and let
+      // the base-field axis distinguish row vs column accumulation.
+      return "runTotal";
     case pivot::ShowValuesAs::Index:
       return "index";
     case pivot::ShowValuesAs::DifferenceFrom:
@@ -183,6 +186,8 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     // reader accepts both that and `axis="axisValues"`, but emitting
     // `dataField="1"` keeps the integration-test fixture grammar.
     out.append(" dataField=\"1\"");
+  } else if (field.axis == pivot::PivotAxis::None) {
+    // Unused ("available") field: emit neither an axis nor dataField.
   } else {
     out.append(" axis=\"");
     out.append(AxisAttrName(field.axis));
@@ -190,13 +195,13 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
   }
   if (!field.custom_name.empty()) {
     out.append(" name=\"");
-    AppendXmlEscaped(out, field.custom_name);
+    AppendXmlAttrEscaped(out, field.custom_name);
     out.append("\"");
   }
-  if (field.subtotal_top) {
-    // Default in OOXML is "0"; only emit when true to keep the output
-    // compact. The reader treats missing `subtotalTop` as false.
-    out.append(" subtotalTop=\"1\"");
+  // `subtotalTop` defaults to true in OOXML; only emit it when turned OFF
+  // so an explicit "subtotals at bottom" choice survives the round trip.
+  if (!field.subtotal_top) {
+    out.append(" subtotalTop=\"0\"");
   }
   // `defaultSubtotal` defaults to true; only emit it when turned OFF so
   // an explicit suppression survives the round trip. The custom
@@ -214,6 +219,8 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
     out.append(attr);
     out.append("=\"1\"");
   }
+  // Re-emit any unmodelled `<pivotField>` attributes captured on read.
+  append_raw_attrs(out, field.passthrough_attrs);
   if (field.items.empty()) {
     out.append("/>");
     return;
@@ -223,13 +230,15 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field) {
   out.append("\">");
   for (std::size_t i = 0; i < field.items.size(); ++i) {
     const pivot::PivotItem& item = field.items[i];
-    // The item's `x` attribute is the document-order index of this
-    // item in `field.items`, which mirrors the cache `shared_items`
-    // ordering on the reader's round trip. The reader does not store
-    // item names today (they are resolved against the cache at eval
-    // time), so we never emit a name attribute here.
+    // Re-emit the cache index the reader captured from `<item x="N">` so
+    // the item still points at the same `shared_items` entry after a
+    // round trip. When the source omitted `x` (or the item was built
+    // from scratch), fall back to the document-order position, matching
+    // Excel's implicit ordering. Item names are resolved against the
+    // cache, not stored on the element, so no name attribute is emitted.
+    const std::uint32_t x = item.has_cache_index ? item.cache_index : static_cast<std::uint32_t>(i);
     out.append("<item x=\"");
-    out.append(std::to_string(i));
+    out.append(std::to_string(x));
     out.append("\"");
     if (!item.visible) {
       out.append(" h=\"1\"");
@@ -265,7 +274,7 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
   out.append("\">");
   for (const pivot::PivotDataField& df : data_fields) {
     out.append("<dataField name=\"");
-    AppendXmlEscaped(out, df.name);
+    AppendXmlAttrEscaped(out, df.name);
     out.append("\" fld=\"");
     out.append(std::to_string(df.field_index));
     // Always emit the subtotal attribute, even for the implicit Sum
@@ -279,7 +288,7 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
       // in the source attribute (typically a numFmtId integer in
       // string form, but we do not enforce that here).
       out.append(" numFmtId=\"");
-      AppendXmlEscaped(out, df.number_format);
+      AppendXmlAttrEscaped(out, df.number_format);
       out.append("\"");
     }
     if (df.show_as != pivot::ShowValuesAs::Normal) {
@@ -320,9 +329,11 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table) {
   out.append("<pivotTableDefinition xmlns=\"");
   out.append(kPivotNs);
   out.append("\" name=\"");
-  AppendXmlEscaped(out, table.name());
+  AppendXmlAttrEscaped(out, table.name());
   out.append("\" cacheId=\"");
   out.append(std::to_string(table.pivot_cache_id()));
+  out.append("\" dataCaption=\"");
+  AppendXmlAttrEscaped(out, table.data_caption());
   out.append("\"");
   // Grand-total flags default to true in OOXML and in the model. Emit them
   // only when turned OFF so an explicit OFF state survives the round trip
@@ -333,6 +344,22 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table) {
   if (!table.grand_totals_cols()) {
     out.append(" colGrandTotals=\"0\"");
   }
+  // Report layout. `compact` defaults to true and `outline` to false, so
+  // Compact needs no attribute; Tabular emits `compact="0"`; Outline emits
+  // `compact="0" outline="1"`. The reader derives the enum from the same
+  // pair (see `read_pivot_table_definition`).
+  switch (table.layout()) {
+    case pivot::PivotLayout::Compact:
+      break;
+    case pivot::PivotLayout::Tabular:
+      out.append(" compact=\"0\"");
+      break;
+    case pivot::PivotLayout::Outline:
+      out.append(" compact=\"0\" outline=\"1\"");
+      break;
+  }
+  // Re-emit any unmodelled root attributes captured on read.
+  append_raw_attrs(out, table.passthrough_attrs());
   out.append(">");
 
   out.append("<location ref=\"");
@@ -367,19 +394,26 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table) {
   if (!table.row_field_order().empty()) {
     AppendFieldOrder(out, "rowFields", table.row_field_order());
   }
+  // `<rowItems>` and any other post-rowFields unmodelled elements.
+  out.append(table.raw_passthrough_after_row_fields());
+
   if (!table.col_field_order().empty()) {
     AppendFieldOrder(out, "colFields", table.col_field_order());
   }
+  // `<colItems>` / `<pageFields>` and other post-colFields unmodelled
+  // elements, which the schema places before `<dataFields>`.
+  out.append(table.raw_passthrough_after_col_fields());
+
   if (!table.data_fields().empty()) {
     AppendDataFields(out, table.data_fields());
   }
 
-  // Re-emit any unmodelled child elements the reader captured during the
-  // last load (`<pageFields>`, `<formats>`, `<calculatedFields>`,
-  // `<calculatedItems>`, `<pivotTableStyleInfo>`, `<extLst>`, ...). The
-  // bytes are owned by the table and re-appended verbatim so a
-  // read -> write round trip preserves features v1.0 does not model
-  // structurally. Tables built from scratch leave the buffer empty.
+  // Re-emit the tail bin: unmodelled elements the reader captured after
+  // `<dataFields>` (`<formats>`, `<conditionalFormats>`, `<chartFormats>`,
+  // `<pivotTableStyleInfo>`, `<extLst>`, ...). The bytes are owned by the
+  // table and re-appended verbatim so a read -> write round trip preserves
+  // features v1.0 does not model structurally. Tables built from scratch
+  // leave every bin empty.
   if (!table.raw_passthrough_xml().empty()) {
     out.append(table.raw_passthrough_xml());
   }

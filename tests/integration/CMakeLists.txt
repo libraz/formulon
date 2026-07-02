@@ -16,6 +16,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_passthrough_rels_test.cpp
   ooxml_phonetic_roundtrip_test.cpp
   ooxml_pivot_test.cpp
+  ooxml_pivot_names_roundtrip_test.cpp
   ooxml_roundtrip_test.cpp
   ooxml_sax_metadata_test.cpp
   ooxml_sheet_features_batch_test.cpp

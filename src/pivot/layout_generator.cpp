@@ -359,42 +359,62 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
         }
         break;
       }
-      case ShowValuesAs::RunningTotalInRow: {
-        // Subtotals and grand totals are intentionally left at their
-        // raw aggregate; see the header comment for this section.
-        for (std::size_t r = 0; r < actual_row_count; ++r) {
-          double running = 0.0;
-          for (std::size_t c = 0; c < actual_col_count && c < result.values[r].size(); ++c) {
-            if (df_idx >= result.values[r][c].size()) {
-              continue;
+      case ShowValuesAs::RunningTotalInRow:
+      case ShowValuesAs::RunningTotalInCol: {
+        // OOXML has a single `runTotal` show-data-as; the accumulation
+        // direction is carried by the data field's `baseField`, not by the
+        // attribute name. Resolve the direction from that base field's
+        // axis, defaulting to the enum's baked direction when no base field
+        // is set. Subtotals and grand totals are intentionally left at
+        // their raw aggregate; see the header comment for this section.
+        const PivotDataField& df = table.data_fields()[df_idx];
+        bool run_in_col = (mode == ShowValuesAs::RunningTotalInCol);
+        if (df.show_as_base_field.has_value()) {
+          const std::uint32_t bf = *df.show_as_base_field;
+          for (const std::uint32_t fi : table.col_field_order()) {
+            if (fi == bf) {
+              run_in_col = true;
+              break;
             }
-            Value& cell = result.values[r][c][df_idx];
-            auto [ok, n] = cell_num(cell);
-            if (!ok) {
-              continue;
+          }
+          for (const std::uint32_t fi : table.row_field_order()) {
+            if (fi == bf) {
+              run_in_col = false;
+              break;
             }
-            running += n;
-            cell = Value::number(running);
           }
         }
-        break;
-      }
-      case ShowValuesAs::RunningTotalInCol: {
-        // Subtotals and grand totals are intentionally left at their
-        // raw aggregate; see the header comment for this section.
-        for (std::size_t c = 0; c < actual_col_count; ++c) {
-          double running = 0.0;
+        if (run_in_col) {
+          for (std::size_t c = 0; c < actual_col_count; ++c) {
+            double running = 0.0;
+            for (std::size_t r = 0; r < actual_row_count; ++r) {
+              if (c >= result.values[r].size() || df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              Value& cell = result.values[r][c][df_idx];
+              auto [ok, n] = cell_num(cell);
+              if (!ok) {
+                continue;
+              }
+              running += n;
+              cell = Value::number(running);
+            }
+          }
+        } else {
           for (std::size_t r = 0; r < actual_row_count; ++r) {
-            if (c >= result.values[r].size() || df_idx >= result.values[r][c].size()) {
-              continue;
+            double running = 0.0;
+            for (std::size_t c = 0; c < actual_col_count && c < result.values[r].size(); ++c) {
+              if (df_idx >= result.values[r][c].size()) {
+                continue;
+              }
+              Value& cell = result.values[r][c][df_idx];
+              auto [ok, n] = cell_num(cell);
+              if (!ok) {
+                continue;
+              }
+              running += n;
+              cell = Value::number(running);
             }
-            Value& cell = result.values[r][c][df_idx];
-            auto [ok, n] = cell_num(cell);
-            if (!ok) {
-              continue;
-            }
-            running += n;
-            cell = Value::number(running);
           }
         }
         break;
@@ -406,10 +426,12 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
         // at their raw aggregate; see the header comment for this
         // section.
         double total = 0.0;
+        bool total_known = false;
         if (df_idx < result.grand_totals.size()) {
           auto [ok, n] = cell_num(result.grand_totals[df_idx]);
           if (ok) {
             total = n;
+            total_known = true;
           }
         }
         // Precompute row sums + col sums for this df.
@@ -425,6 +447,15 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
               row_sums[r] += n;
               col_sums[c] += n;
             }
+          }
+        }
+        // When grand totals are turned off the grand-total slot is empty,
+        // which would leave `total == 0` and collapse every Index cell to
+        // zero. Recompute the total from the surviving leaf cells, mirroring
+        // the PercentOfTotal fallback.
+        if (!total_known) {
+          for (double rs : row_sums) {
+            total += rs;
           }
         }
         for (std::size_t r = 0; r < actual_row_count; ++r) {
@@ -511,25 +542,35 @@ void apply_show_values_as_transforms(const PivotTable& table, PivotResult& resul
             base_pos[p] = p + 1;
           }
         } else {
-          // Specific item: look up the field's `items[base_item].name`
-          // and find the matching leaf label on the chosen axis.
+          // Specific item: `baseItem` is a cache shared-items index, the
+          // same space as `<item x="N">`. Resolve it to a base-field item
+          // by matching `cache_index` rather than the item's position in
+          // `items` — `items` excludes subtotal / grand-total markers, so a
+          // positional lookup shifts by the number of preceding markers.
           std::optional<std::size_t> fixed;
           if (df.show_as_base_field.has_value()) {
             const std::uint32_t bf = *df.show_as_base_field;
             if (bf < table.fields().size()) {
               const auto& items = table.fields()[bf].items;
-              if (base_item < items.size()) {
-                const std::string& target = items[base_item].name;
+              const std::string* target = nullptr;
+              for (std::size_t j = 0; j < items.size(); ++j) {
+                const bool hit = items[j].has_cache_index ? (items[j].cache_index == base_item) : (j == base_item);
+                if (hit) {
+                  target = &items[j].name;
+                  break;
+                }
+              }
+              if (target != nullptr) {
                 if (base_axis == BaseAxis::Row) {
                   for (std::size_t p = 0; p < result.rows.size() && p < axis_n; ++p) {
-                    if (result.rows[p].label == target) {
+                    if (result.rows[p].label == *target) {
                       fixed = p;
                       break;
                     }
                   }
                 } else {
                   for (std::size_t p = 0; p < result.cols.size() && p < axis_n; ++p) {
-                    if (result.cols[p].label == target) {
+                    if (result.cols[p].label == *target) {
                       fixed = p;
                       break;
                     }

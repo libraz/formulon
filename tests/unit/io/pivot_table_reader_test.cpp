@@ -492,20 +492,29 @@ TEST(PivotTableReader, RowItemsAndColItemsSurviveRoundTrip) {
 
   auto table_or = read_pivot_table_definition(Bytes(xml));
   ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
-  const std::string& passthrough = table_or.value().raw_passthrough_xml();
-  EXPECT_NE(passthrough.find("<rowItems"), std::string::npos);
-  EXPECT_NE(passthrough.find("<colItems"), std::string::npos);
-  EXPECT_NE(passthrough.find("t=\"grand\""), std::string::npos);
+  // rowItems / colItems are binned into their schema-position buffers so
+  // the writer can re-emit them before <dataFields> (a single tail buffer
+  // would place them after <dataFields> and trip Excel's repair).
+  const pivot::PivotTable& table = table_or.value();
+  EXPECT_NE(table.raw_passthrough_after_row_fields().find("<rowItems"), std::string::npos);
+  EXPECT_NE(table.raw_passthrough_after_row_fields().find("t=\"grand\""), std::string::npos);
+  EXPECT_NE(table.raw_passthrough_after_col_fields().find("<colItems"), std::string::npos);
+  // They must NOT leak into the tail buffer.
+  EXPECT_EQ(table.raw_passthrough_xml().find("<rowItems"), std::string::npos);
 
-  // Write -> read again: the layout-item cache must still be present.
-  const std::string round = write_pivot_table_definition(table_or.value());
-  EXPECT_NE(round.find("<rowItems"), std::string::npos);
-  EXPECT_NE(round.find("<colItems"), std::string::npos);
+  // Write -> read again: the layout-item cache must still be present, and
+  // rowItems must precede colItems in the emitted bytes.
+  const std::string round = write_pivot_table_definition(table);
+  const std::size_t p_rowitems = round.find("<rowItems");
+  const std::size_t p_colitems = round.find("<colItems");
+  ASSERT_NE(p_rowitems, std::string::npos) << round;
+  ASSERT_NE(p_colitems, std::string::npos) << round;
+  EXPECT_LT(p_rowitems, p_colitems);
   auto reparsed_or = read_pivot_table_definition(Bytes(round));
   ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
-  const std::string& passthrough2 = reparsed_or.value().raw_passthrough_xml();
-  EXPECT_NE(passthrough2.find("<rowItems"), std::string::npos);
-  EXPECT_NE(passthrough2.find("<colItems"), std::string::npos);
+  const pivot::PivotTable& reparsed = reparsed_or.value();
+  EXPECT_NE(reparsed.raw_passthrough_after_row_fields().find("<rowItems"), std::string::npos);
+  EXPECT_NE(reparsed.raw_passthrough_after_col_fields().find("<colItems"), std::string::npos);
 }
 
 }  // namespace

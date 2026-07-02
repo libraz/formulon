@@ -2432,5 +2432,143 @@ TEST(PivotEvaluator, ShowAsPercentOfParentColSingleParent) {
   EXPECT_NEAR(r.values[0][3][0].as_number(), 60.0 / 90.0, 1e-9);
 }
 
+// ---------------------------------------------------------------------------
+// Regression: subtotals are gated by default_subtotal, not subtotal_top.
+// A multi-level row hierarchy emits outer-field subtotals by default even
+// when subtotal_top was never set (subtotal_top is only the position flag).
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, OuterSubtotalEmittedByDefaultWithoutSubtotalTop) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0, 1}, /*col=*/{});
+  // Do not touch subtotal_top; default_subtotal defaults to true.
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  // Region-level (depth 0) subtotals for North and South are present.
+  ASSERT_EQ(r.row_subtotals.size(), 2U);
+  EXPECT_EQ(r.row_subtotals[0].depth, 0U);
+}
+
+TEST(PivotEvaluator, DefaultSubtotalOffSuppressesOuterSubtotal) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0, 1}, /*col=*/{});
+  table.mutable_fields()[0].default_subtotal = false;  // Region: no subtotal.
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  EXPECT_TRUE(r_or.value().row_subtotals.empty());
+}
+
+// ---------------------------------------------------------------------------
+// H-23: a custom subtotal function replaces the default aggregation for the
+// group's subtotal row.
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, CustomSubtotalFunctionUsesSelectedAggregation) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0, 1}, /*col=*/{});
+  // Region subtotal computed with Average instead of the data field's Sum.
+  table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Average};
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.row_subtotals.size(), 2U);
+  // North amounts: 100, 50, 25 -> average 58.333..., not the Sum 175.
+  std::size_t north = r.row_subtotals[0].labels[0] == "North" ? 0 : 1;
+  ASSERT_LT(north, r.row_subtotals.size());
+  ASSERT_FALSE(r.row_subtotals[north].values.empty());
+  ASSERT_TRUE(r.row_subtotals[north].values[0].is_number());
+  EXPECT_NEAR(r.row_subtotals[north].values[0].as_number(), 175.0 / 3.0, 1e-9);
+}
+
+// ---------------------------------------------------------------------------
+// H-24: per-leaf row/col totals re-aggregate the underlying records so a
+// non-additive function (Average) is not computed as an average of the
+// per-cell averages.
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, NonAdditiveRowTotalReaggregates) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.mutable_data_fields()[0].aggregation = Aggregation::Average;
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  const std::size_t north = row_index(r, "North");
+  ASSERT_LT(north, r.row_leaf_totals.size());
+  ASSERT_FALSE(r.row_leaf_totals[north].empty());
+  ASSERT_TRUE(r.row_leaf_totals[north][0].is_number());
+  // North across all products: mean(100, 50, 25) = 58.333..., NOT the mean
+  // of the per-cell averages (62.5, 50) = 56.25.
+  EXPECT_NEAR(r.row_leaf_totals[north][0].as_number(), 175.0 / 3.0, 1e-9);
+}
+
+// ---------------------------------------------------------------------------
+// H-25: Index still produces non-zero results when grand totals are off.
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, IndexWorksWithoutGrandTotals) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::Index;
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  // At least one leaf cell must be a non-zero index (the pre-fix behaviour
+  // collapsed every cell to 0 because the total denominator was 0).
+  bool saw_nonzero = false;
+  for (const auto& row_slot : r.values) {
+    for (const auto& cell_slot : row_slot) {
+      if (!cell_slot.empty() && cell_slot[0].is_number() && cell_slot[0].as_number() != 0.0) {
+        saw_nonzero = true;
+      }
+    }
+  }
+  EXPECT_TRUE(saw_nonzero);
+}
+
+// ---------------------------------------------------------------------------
+// M-19: runTotal accumulation direction follows the data field's baseField,
+// not the enum spelling. A base field on the column axis accumulates down
+// columns even when the mode is RunningTotalInRow.
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, RunTotalDirectionFollowsBaseFieldAxis) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.mutable_data_fields()[0].show_as = ShowValuesAs::RunningTotalInRow;
+  table.mutable_data_fields()[0].show_as_base_field = 1;  // Product = a column field.
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  // Row leaves: North(0), South(1). Col leaves: Gadget(0), Widget(1).
+  // Column-direction running total down the Gadget column: North=50,
+  // South=50+300=350. Row-direction would have left South/Gadget at 300.
+  const std::size_t south = row_index(r, "South");
+  ASSERT_LT(south, r.values.size());
+  ASSERT_GE(r.values[south].size(), 1U);
+  ASSERT_FALSE(r.values[south][0].empty());
+  ASSERT_TRUE(r.values[south][0][0].is_number());
+  EXPECT_NEAR(r.values[south][0][0].as_number(), 350.0, 1e-9);
+}
+
+// ---------------------------------------------------------------------------
+// M-22: the pivot comparator folds Japanese text (half-width katakana to
+// full-width) exactly like the GROUPBY / SORT comparator, so the two cannot
+// diverge on kana collation.
+// ---------------------------------------------------------------------------
+
+TEST(PivotComparatorParity, FoldsHalfWidthKatakana) {
+  // U+FF76 (halfwidth ｶ) folds to U+30AB (fullwidth カ); after folding the
+  // two are equal, so neither orders before the other.
+  const Value full = Value::text("\xE3\x82\xAB");  // カ
+  const Value half = Value::text("\xEF\xBD\xB6");  // ｶ
+  EXPECT_FALSE(value_less(full, half));
+  EXPECT_FALSE(value_less(half, full));
+  // GROUPBY / SORT agrees they are equal.
+  EXPECT_EQ(eval::cmp_value_asc(full, half), 0);
+}
+
 }  // namespace
 }  // namespace formulon::pivot

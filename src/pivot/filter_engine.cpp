@@ -271,4 +271,15 @@ void compact_col_axis_values(std::vector<std::vector<std::vector<Value>>>& value
   }
 }
 
+void compact_leaf_totals(std::vector<std::vector<Value>>& totals, const std::vector<bool>& keep) {
+  std::vector<std::vector<Value>> compacted;
+  compacted.reserve(totals.size());
+  for (std::size_t i = 0; i < totals.size() && i < keep.size(); ++i) {
+    if (keep[i]) {
+      compacted.push_back(std::move(totals[i]));
+    }
+  }
+  totals = std::move(compacted);
+}
+
 }  // namespace formulon::pivot
