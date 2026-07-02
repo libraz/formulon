@@ -477,6 +477,62 @@ TEST(FormulonCApiPivot, PivotCacheSharedItemsAcceptErrorValues) {
   EXPECT_EQ(count, 3U);
 }
 
+TEST(FormulonCApiPivot, PivotCacheWorksheetSourceRoundTripsThroughApi) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  int32_t present = -1;
+  const char* ref = nullptr;
+  const char* sheet = nullptr;
+  const char* name = nullptr;
+  ASSERT_EQ(fm_workbook_pivot_cache_get_worksheet_source(wb.handle, cache_id, &present, &ref, &sheet, &name), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_STREQ(ref, "");
+  EXPECT_STREQ(sheet, "");
+  EXPECT_STREQ(name, "");
+
+  ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb.handle, cache_id, 1, "$A$1:$C$5", "Data", nullptr), 0)
+      << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_cache_get_worksheet_source(wb.handle, cache_id, &present, &ref, &sheet, &name), 0);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(ref, "$A$1:$C$5");
+  EXPECT_STREQ(sheet, "Data");
+  EXPECT_STREQ(name, "");
+
+  ASSERT_EQ(fm_workbook_pivot_cache_set_worksheet_source(wb.handle, cache_id, 0, "ignored", "ignored", "ignored"), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_get_worksheet_source(wb.handle, cache_id, &present, &ref, &sheet, &name), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_STREQ(ref, "");
+  EXPECT_STREQ(sheet, "");
+  EXPECT_STREQ(name, "");
+}
+
+TEST(FormulonCApiPivot, PivotReportLayoutRoundTripsThroughApi) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  fm_pivot_layout_t layout = FM_PIVOT_LAYOUT_TABULAR;
+  ASSERT_EQ(fm_workbook_pivot_get_layout(wb.handle, 0, pivot_idx, &layout), 0);
+  EXPECT_EQ(layout, FM_PIVOT_LAYOUT_COMPACT);
+
+  ASSERT_EQ(fm_workbook_pivot_set_layout(wb.handle, 0, pivot_idx, FM_PIVOT_LAYOUT_TABULAR), 0);
+  ASSERT_EQ(fm_workbook_pivot_get_layout(wb.handle, 0, pivot_idx, &layout), 0);
+  EXPECT_EQ(layout, FM_PIVOT_LAYOUT_TABULAR);
+
+  ASSERT_EQ(fm_workbook_pivot_set_layout(wb.handle, 0, pivot_idx, FM_PIVOT_LAYOUT_OUTLINE), 0);
+  ASSERT_EQ(fm_workbook_pivot_get_layout(wb.handle, 0, pivot_idx, &layout), 0);
+  EXPECT_EQ(layout, FM_PIVOT_LAYOUT_OUTLINE);
+
+  EXPECT_EQ(fm_workbook_pivot_set_layout(wb.handle, 0, pivot_idx, static_cast<fm_pivot_layout_t>(99)),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
 TEST(FormulonCApiPivot, PivotCacheErrorSettersRejectInvalidErrorCodes) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

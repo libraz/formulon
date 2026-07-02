@@ -139,6 +139,54 @@ extern "C" fm_status_t fm_workbook_pivot_cache_remove(fm_workbook_t* wb, std::ui
                            "cache_id=" + std::to_string(cache_id));
 }
 
+extern "C" fm_status_t fm_workbook_pivot_cache_get_worksheet_source(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                    std::int32_t* out_present, const char** out_ref,
+                                                                    const char** out_sheet, const char** out_name) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out_ref == nullptr || out_sheet == nullptr || out_name == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_get_worksheet_source: NULL argument");
+  }
+  const auto* cache = find_cache(wb->workbook(), cache_id);
+  if (cache == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_cache_get_worksheet_source: cache_id not found",
+                             "cache_id=" + std::to_string(cache_id));
+  }
+  const formulon::pivot::WorksheetSource& src = cache->worksheet_source();
+  *out_present = src.present ? 1 : 0;
+  *out_ref = src.ref.c_str();
+  *out_sheet = src.sheet.c_str();
+  *out_name = src.name.c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_t* wb, std::uint32_t cache_id,
+                                                                    std::int32_t present, const char* ref,
+                                                                    const char* sheet, const char* name) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_cache_set_worksheet_source: wb is NULL");
+  }
+  auto* cache = find_cache_mut(wb->workbook(), cache_id);
+  if (cache == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_cache_set_worksheet_source: cache_id not found",
+                             "cache_id=" + std::to_string(cache_id));
+  }
+  formulon::pivot::WorksheetSource& src = cache->mutable_worksheet_source();
+  if (present == 0) {
+    src = formulon::pivot::WorksheetSource{};
+    return 0;
+  }
+  src.present = true;
+  src.ref = ref != nullptr ? ref : "";
+  src.sheet = sheet != nullptr ? sheet : "";
+  src.name = name != nullptr ? name : "";
+  return 0;
+}
+
 // ---------------------------------------------------------------------------
 // PivotCache fields + shared items
 // ---------------------------------------------------------------------------

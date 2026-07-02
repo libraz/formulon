@@ -222,16 +222,27 @@ class _WasmInstance:
         return self._call_lock
 
     def read_bytes(self, ptr: int, length: int) -> bytes:
-        """Copy ``length`` bytes from WASM memory starting at ``ptr``."""
+        """Copy ``length`` bytes from WASM memory starting at ``ptr``.
+
+        Takes ``_call_lock`` for the duration of the read: the
+        wasmtime ``Store`` is not thread-safe, so a concurrent WASM
+        call on another thread (which can grow linear memory) must not
+        race with this read.
+        """
         self._ensure()
         assert self._memory is not None
-        return bytes(self._memory.read(self._store, ptr, ptr + length))
+        with self._call_lock:
+            return bytes(self._memory.read(self._store, ptr, ptr + length))
 
     def write_bytes(self, ptr: int, data: bytes) -> None:
-        """Write ``data`` into WASM memory starting at ``ptr``."""
+        """Write ``data`` into WASM memory starting at ``ptr``.
+
+        Takes ``_call_lock`` for the same reason as :meth:`read_bytes`.
+        """
         self._ensure()
         assert self._memory is not None
-        self._memory.write(self._store, data, ptr)
+        with self._call_lock:
+            self._memory.write(self._store, data, ptr)
 
     def read_u32(self, ptr: int) -> int:
         return struct.unpack("<I", self.read_bytes(ptr, 4))[0]
@@ -245,7 +256,9 @@ class _WasmInstance:
     def read_cstr(self, ptr: int) -> str:
         """Decode a NUL-terminated UTF-8 C string from ``ptr``.
 
-        Returns the empty string when ``ptr`` is 0.
+        Returns the empty string when ``ptr`` is 0. The whole scan runs
+        under ``_call_lock`` (see :meth:`read_bytes`) so a concurrent
+        WASM call on another thread cannot grow memory mid-read.
         """
         if ptr == 0:
             return ""
@@ -255,16 +268,17 @@ class _WasmInstance:
         chunks: list[bytes] = []
         offset = ptr
         chunk_size = 256
-        mem_len = self._memory.data_len(self._store)
-        while offset < mem_len:
-            end = min(offset + chunk_size, mem_len)
-            buf = bytes(self._memory.read(self._store, offset, end))
-            nul = buf.find(b"\x00")
-            if nul >= 0:
-                chunks.append(buf[:nul])
-                break
-            chunks.append(buf)
-            offset = end
+        with self._call_lock:
+            mem_len = self._memory.data_len(self._store)
+            while offset < mem_len:
+                end = min(offset + chunk_size, mem_len)
+                buf = bytes(self._memory.read(self._store, offset, end))
+                nul = buf.find(b"\x00")
+                if nul >= 0:
+                    chunks.append(buf[:nul])
+                    break
+                chunks.append(buf)
+                offset = end
         return b"".join(chunks).decode("utf-8", errors="replace")
 
     def alloc(self, size: int) -> int:

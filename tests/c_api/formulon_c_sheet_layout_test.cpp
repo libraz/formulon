@@ -47,6 +47,50 @@ TEST(FormulonCApiSheetLayout, SetViewSetters) {
   EXPECT_EQ(v.tab_hidden, 1);
 }
 
+TEST(FormulonCApiSheetLayout, GetViewExDefaults) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_sheet_view_ex_t v{};
+  ASSERT_EQ(fm_sheet_get_view_ex(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.zoom_scale, 100U);
+  EXPECT_EQ(v.freeze_rows, 0U);
+  EXPECT_EQ(v.freeze_cols, 0U);
+  EXPECT_EQ(v.tab_hidden, 0);
+  EXPECT_EQ(v.show_grid_lines, 1);
+  EXPECT_EQ(v.show_row_col_headers, 1);
+  EXPECT_EQ(v.show_zeros, 1);
+  EXPECT_EQ(v.right_to_left, 0);
+  EXPECT_EQ(v.tab_selected, 0);
+  ASSERT_NE(v.view_mode, nullptr);
+  EXPECT_STREQ(v.view_mode, "");
+}
+
+TEST(FormulonCApiSheetLayout, SetViewExSetters) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_show_grid_lines(wb.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_set_show_row_col_headers(wb.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_set_show_zeros(wb.handle, 0, 0), 0);
+  ASSERT_EQ(fm_sheet_set_right_to_left(wb.handle, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_tab_selected(wb.handle, 0, 1), 0);
+  ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, "pageBreakPreview"), 0);
+  fm_sheet_view_ex_t v{};
+  ASSERT_EQ(fm_sheet_get_view_ex(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.show_grid_lines, 0);
+  EXPECT_EQ(v.show_row_col_headers, 0);
+  EXPECT_EQ(v.show_zeros, 0);
+  EXPECT_EQ(v.right_to_left, 1);
+  EXPECT_EQ(v.tab_selected, 1);
+  ASSERT_NE(v.view_mode, nullptr);
+  EXPECT_STREQ(v.view_mode, "pageBreakPreview");
+}
+
+TEST(FormulonCApiSheetLayout, SetViewModeRejectsNullPointer) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  EXPECT_NE(fm_sheet_set_view_mode(wb.handle, 0, nullptr), 0);
+}
+
 TEST(FormulonCApiSheetLayout, ZoomClampedToBounds) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

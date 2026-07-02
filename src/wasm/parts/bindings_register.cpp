@@ -97,7 +97,13 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("zoomScale", &JsSheetView::zoomScale)
       .field("freezeRows", &JsSheetView::freezeRows)
       .field("freezeCols", &JsSheetView::freezeCols)
-      .field("tabHidden", &JsSheetView::tabHidden);
+      .field("tabHidden", &JsSheetView::tabHidden)
+      .field("showGridLines", &JsSheetView::showGridLines)
+      .field("showRowColHeaders", &JsSheetView::showRowColHeaders)
+      .field("showZeros", &JsSheetView::showZeros)
+      .field("rightToLeft", &JsSheetView::rightToLeft)
+      .field("tabSelected", &JsSheetView::tabSelected)
+      .field("viewMode", &JsSheetView::viewMode);
 
   value_object<JsSheetViewResult>("SheetViewResult")
       .field("status", &JsSheetViewResult::status)
@@ -172,6 +178,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .class_function("loadBytes", &JsWorkbook::loadBytes, allow_raw_pointers())
       .function("addBorder", &JsWorkbook::addBorder)
       .function("addConditionalFormat", &JsWorkbook::addConditionalFormat)
+      .function("addDxf", &JsWorkbook::addDxf)
       .function("addFill", &JsWorkbook::addFill)
       .function("addFont", &JsWorkbook::addFont)
       .function("addHyperlink", &JsWorkbook::addHyperlink)
@@ -246,6 +253,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotCacheFieldName", &JsWorkbook::pivotCacheFieldName)
       .function("pivotCacheFieldSharedItemCount", &JsWorkbook::pivotCacheFieldSharedItemCount)
       .function("pivotCacheIdAt", &JsWorkbook::pivotCacheIdAt)
+      .function("pivotCacheGetWorksheetSource", &JsWorkbook::pivotCacheGetWorksheetSource)
       .function("pivotCacheRecordAdd", &JsWorkbook::pivotCacheRecordAdd)
       .function("pivotCacheRecordClear", &JsWorkbook::pivotCacheRecordClear)
       .function("pivotCacheRecordCount", &JsWorkbook::pivotCacheRecordCount)
@@ -255,6 +263,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotCacheRecordSetNumber", &JsWorkbook::pivotCacheRecordSetNumber)
       .function("pivotCacheRecordSetText", &JsWorkbook::pivotCacheRecordSetText)
       .function("pivotCacheRemove", &JsWorkbook::pivotCacheRemove)
+      .function("pivotCacheSetWorksheetSource", &JsWorkbook::pivotCacheSetWorksheetSource)
       .function("pivotCount", &JsWorkbook::pivotCount)
       .function("pivotCreate", &JsWorkbook::pivotCreate)
       .function("pivotDataFieldAdd", &JsWorkbook::pivotDataFieldAdd)
@@ -286,6 +295,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotSetAnchor", &JsWorkbook::pivotSetAnchor)
       .function("pivotSetColFieldOrder", &JsWorkbook::pivotSetColFieldOrder)
       .function("pivotSetGrandTotals", &JsWorkbook::pivotSetGrandTotals)
+      .function("pivotGetLayout", &JsWorkbook::pivotGetLayout)
+      .function("pivotSetLayout", &JsWorkbook::pivotSetLayout)
       .function("pivotSetName", &JsWorkbook::pivotSetName)
       .function("pivotSetRowFieldOrder", &JsWorkbook::pivotSetRowFieldOrder)
       .function("precedents", &JsWorkbook::precedents)
@@ -299,6 +310,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("removeValidationAt", &JsWorkbook::removeValidationAt)
       .function("renameSheet", &JsWorkbook::renameSheet)
       .function("save", &JsWorkbook::save)
+      .function("saveEx", &JsWorkbook::saveEx)
       .function("setBlank", &JsWorkbook::setBlank)
       .function("setBool", &JsWorkbook::setBool)
       .function("setCalcMode", &JsWorkbook::setCalcMode)
@@ -320,7 +332,13 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setRowOutline", &JsWorkbook::setRowOutline)
       .function("setSheetFreeze", &JsWorkbook::setSheetFreeze)
       .function("setSheetProtection", &JsWorkbook::setSheetProtection)
+      .function("setSheetRightToLeft", &JsWorkbook::setSheetRightToLeft)
+      .function("setSheetShowGridLines", &JsWorkbook::setSheetShowGridLines)
+      .function("setSheetShowRowColHeaders", &JsWorkbook::setSheetShowRowColHeaders)
+      .function("setSheetShowZeros", &JsWorkbook::setSheetShowZeros)
       .function("setSheetTabHidden", &JsWorkbook::setSheetTabHidden)
+      .function("setSheetTabSelected", &JsWorkbook::setSheetTabSelected)
+      .function("setSheetViewMode", &JsWorkbook::setSheetViewMode)
       .function("setSheetZoom", &JsWorkbook::setSheetZoom)
       .function("setText", &JsWorkbook::setText)
       .function("sheetCount", &JsWorkbook::sheetCount)
@@ -333,6 +351,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
   // ---- Free functions ------------------------------------------------------
   function("evalFormula", &eval_formula);
   function("versionString", &version_string);
+  function("version", &version_string);
   function("statusString", &status_string);
   function("lastErrorMessage", &last_error_message);
   function("lastErrorContext", &last_error_context);

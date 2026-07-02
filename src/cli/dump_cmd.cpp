@@ -161,10 +161,19 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
   for (std::size_t i = 0; i < n_names; ++i) {
     const char* name = nullptr;
     const char* formula = nullptr;
-    if (auto rc = fm_workbook_defined_name_at(wb, i, &name, &formula); rc != 0) {
+    int32_t local_sheet_id = -1;
+    if (auto rc = fm_workbook_defined_name_at_ex(wb, i, &name, &formula, &local_sheet_id); rc != 0) {
       return rc;
     }
-    out << name << ' ' << formula << '\n';
+    if (local_sheet_id >= 0) {
+      const char* sheet_name = nullptr;
+      if (auto rc = fm_workbook_sheet_name(wb, static_cast<std::size_t>(local_sheet_id), &sheet_name); rc != 0) {
+        return rc;
+      }
+      out << sheet_name << '!' << name << ' ' << formula << '\n';
+    } else {
+      out << name << ' ' << formula << '\n';
+    }
   }
   out << "[tables]\n";
   const std::size_t n_tables = fm_workbook_table_count(wb);

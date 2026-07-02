@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // PivotTable mutation bindings: pivot create/remove, anchor / name /
 // totals, per-field configuration (axis, sort, items, subtotals,
 // aggregations, date grouping, number format), data fields, filters,
@@ -82,6 +80,40 @@ Napi::Value Workbook::PivotSetGrandTotals(const Napi::CallbackInfo& info) {
   const bool cols_enabled = ArgBool(info, 3);
   fm_status_t rc =
       fm_workbook_pivot_set_grand_totals(handle_, sheet, pivot_idx, rows_enabled ? 1 : 0, cols_enabled ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotGetLayout(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("layout", Napi::Number::New(env, 0));
+    return out;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  fm_pivot_layout_t layout = FM_PIVOT_LAYOUT_COMPACT;
+  fm_status_t rc = fm_workbook_pivot_get_layout(handle_, sheet, pivot_idx, &layout);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("layout", Napi::Number::New(env, 0));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("layout", Napi::Number::New(env, static_cast<uint32_t>(layout)));
+  return out;
+}
+
+Napi::Value Workbook::PivotSetLayout(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const uint32_t layout = ArgU32(info, 2);
+  fm_status_t rc = fm_workbook_pivot_set_layout(handle_, sheet, pivot_idx, static_cast<fm_pivot_layout_t>(layout));
   return MakeStatus(env, rc);
 }
 

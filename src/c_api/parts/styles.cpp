@@ -356,6 +356,71 @@ bool cell_xfs_equal(const formulon::io::CellXf& a, const formulon::io::CellXf& b
          a.vertical_align == b.vertical_align && a.wrap_text == b.wrap_text;
 }
 
+bool dxf_records_equal(const formulon::io::DifferentialFormat& a, const formulon::io::DifferentialFormat& b) noexcept {
+  return a.has_font == b.has_font && (!a.has_font || font_records_equal(a.font, b.font)) && a.has_fill == b.has_fill &&
+         (!a.has_fill || fill_records_equal(a.fill, b.fill)) && a.has_border == b.has_border &&
+         (!a.has_border || border_records_equal(a.border, b.border)) && a.has_num_fmt == b.has_num_fmt &&
+         (!a.has_num_fmt || (a.num_fmt_id == b.num_fmt_id && a.num_fmt_code == b.num_fmt_code));
+}
+
+void ensure_default_style_roots(formulon::io::StylesTable& styles) {
+  if (styles.fonts.empty()) {
+    styles.fonts.emplace_back();
+  }
+  if (styles.fills.empty()) {
+    styles.fills.emplace_back();
+  }
+  if (styles.borders.empty()) {
+    styles.borders.emplace_back();
+  }
+}
+
+void ensure_default_cell_xf(formulon::io::StylesTable& styles) {
+  ensure_default_style_roots(styles);
+  if (styles.cell_xfs.empty()) {
+    styles.cell_xfs.emplace_back();
+  }
+}
+
+formulon::io::FontRecord font_from_c(const fm_font_record& record) {
+  formulon::io::FontRecord out;
+  out.name = (record.name != nullptr) ? std::string(record.name) : std::string();
+  out.size = record.size;
+  out.bold = record.bold != 0;
+  out.italic = record.italic != 0;
+  out.strike = record.strike != 0;
+  out.underline = record.underline;
+  out.color_argb = record.color_argb;
+  return out;
+}
+
+formulon::io::FillRecord fill_from_c(const fm_fill_record& record) noexcept {
+  formulon::io::FillRecord out;
+  out.pattern = record.pattern;
+  out.fg_argb = record.fg_argb;
+  out.bg_argb = record.bg_argb;
+  return out;
+}
+
+formulon::io::BorderSide border_side_from_c(const fm_border_side& src) noexcept {
+  formulon::io::BorderSide dst;
+  dst.style = src.style;
+  dst.color_argb = src.color_argb;
+  return dst;
+}
+
+formulon::io::BorderRecord border_from_c(const fm_border_record& record) noexcept {
+  formulon::io::BorderRecord out;
+  out.left = border_side_from_c(record.left);
+  out.right = border_side_from_c(record.right);
+  out.top = border_side_from_c(record.top);
+  out.bottom = border_side_from_c(record.bottom);
+  out.diagonal = border_side_from_c(record.diagonal);
+  out.diagonal_up = record.diagonal_up != 0;
+  out.diagonal_down = record.diagonal_down != 0;
+  return out;
+}
+
 }  // namespace
 
 extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record record, uint32_t* out_index) {
@@ -363,16 +428,10 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   if (wb == nullptr || out_index == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_font: NULL argument");
   }
-  formulon::io::FontRecord candidate;
-  candidate.name = (record.name != nullptr) ? std::string(record.name) : std::string();
-  candidate.size = record.size;
-  candidate.bold = record.bold != 0;
-  candidate.italic = record.italic != 0;
-  candidate.strike = record.strike != 0;
-  candidate.underline = record.underline;
-  candidate.color_argb = record.color_argb;
+  formulon::io::FontRecord candidate = font_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  ensure_default_style_roots(styles);
   for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
     if (font_records_equal(styles.fonts[i], candidate)) {
       *out_index = static_cast<uint32_t>(i);
@@ -389,12 +448,10 @@ extern "C" fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record reco
   if (wb == nullptr || out_index == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_fill: NULL argument");
   }
-  formulon::io::FillRecord candidate;
-  candidate.pattern = record.pattern;
-  candidate.fg_argb = record.fg_argb;
-  candidate.bg_argb = record.bg_argb;
+  formulon::io::FillRecord candidate = fill_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  ensure_default_style_roots(styles);
   for (std::size_t i = 0; i < styles.fills.size(); ++i) {
     if (fill_records_equal(styles.fills[i], candidate)) {
       *out_index = static_cast<uint32_t>(i);
@@ -411,22 +468,10 @@ extern "C" fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record 
   if (wb == nullptr || out_index == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_border: NULL argument");
   }
-  auto pull_side = [](const fm_border_side& src) noexcept {
-    formulon::io::BorderSide dst;
-    dst.style = src.style;
-    dst.color_argb = src.color_argb;
-    return dst;
-  };
-  formulon::io::BorderRecord candidate;
-  candidate.left = pull_side(record.left);
-  candidate.right = pull_side(record.right);
-  candidate.top = pull_side(record.top);
-  candidate.bottom = pull_side(record.bottom);
-  candidate.diagonal = pull_side(record.diagonal);
-  candidate.diagonal_up = record.diagonal_up != 0;
-  candidate.diagonal_down = record.diagonal_down != 0;
+  formulon::io::BorderRecord candidate = border_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  ensure_default_style_roots(styles);
   for (std::size_t i = 0; i < styles.borders.size(); ++i) {
     if (border_records_equal(styles.borders[i], candidate)) {
       *out_index = static_cast<uint32_t>(i);
@@ -491,6 +536,7 @@ extern "C" fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf recor
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_cell_xf: NULL argument");
   }
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  ensure_default_cell_xf(styles);
 
   // Validate referenced indices. Reject out-of-range references rather
   // than auto-growing the parallel tables; callers must register fonts /
@@ -560,5 +606,42 @@ extern "C" fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf recor
   }
   styles.cell_xfs.push_back(candidate);
   *out_xf_index = static_cast<uint32_t>(styles.cell_xfs.size() - 1);
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_add_dxf(fm_workbook_t* wb, fm_dxf_record record, uint32_t* out_dxf_index) {
+  clear_last_error();
+  if (wb == nullptr || out_dxf_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_dxf: NULL argument");
+  }
+
+  formulon::io::DifferentialFormat candidate;
+  candidate.has_font = record.font_engaged != 0;
+  if (candidate.has_font) {
+    candidate.font = font_from_c(record.font);
+  }
+  candidate.has_fill = record.fill_engaged != 0;
+  if (candidate.has_fill) {
+    candidate.fill = fill_from_c(record.fill);
+  }
+  candidate.has_border = record.border_engaged != 0;
+  if (candidate.has_border) {
+    candidate.border = border_from_c(record.border);
+  }
+  candidate.has_num_fmt = record.num_fmt_engaged != 0;
+  if (candidate.has_num_fmt) {
+    candidate.num_fmt_id = record.num_fmt_id;
+    candidate.num_fmt_code = (record.num_fmt_code != nullptr) ? std::string(record.num_fmt_code) : std::string();
+  }
+
+  formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  for (std::size_t i = 0; i < styles.dxfs.size(); ++i) {
+    if (dxf_records_equal(styles.dxfs[i], candidate)) {
+      *out_dxf_index = static_cast<uint32_t>(i);
+      return 0;
+    }
+  }
+  styles.dxfs.push_back(std::move(candidate));
+  *out_dxf_index = static_cast<uint32_t>(styles.dxfs.size() - 1);
   return 0;
 }

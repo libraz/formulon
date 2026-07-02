@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "io/format_detect.h"
 
 #ifndef FORMULON_CLI_PATH
 #error "FORMULON_CLI_PATH must be defined by the build system"
@@ -305,6 +306,43 @@ TEST(FormulonCli, RecalcRoundTripsFormulae) {
   fm_workbook_destroy(wb);
 }
 
+TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
+  // `-o out.xlsb` must select the MS-XLSB writer, not silently emit an
+  // OOXML package under an `.xlsb` name.
+  std::string in = "/tmp/fm_cli_in_for_xlsb.xlsx";
+  std::string out_path = "/tmp/fm_cli_out.xlsb";
+  PathGuard g_in(in);
+  PathGuard g_out(out_path);
+  ASSERT_TRUE(write_fixture_workbook(in));
+
+  CliRun r = run_cli({"recalc", in, "-o", out_path, "--quiet"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+
+  std::ifstream f(out_path, std::ios::binary);
+  ASSERT_TRUE(f);
+  f.seekg(0, std::ios::end);
+  const std::streamsize size = f.tellg();
+  ASSERT_GT(size, 0);
+  f.seekg(0, std::ios::beg);
+  std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
+  f.read(reinterpret_cast<char*>(bytes.data()), size);
+  ASSERT_TRUE(f);
+
+  // The written package must declare `xl/workbook.bin` (xlsb), not
+  // `xl/workbook.xml` (ooxml).
+  formulon::io::ByteSpan span{bytes.data(), bytes.size()};
+  EXPECT_EQ(formulon::io::detect_workbook_format(span), formulon::io::WorkbookFormat::Xlsb);
+
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb), 0);
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb, 0, 0, 1, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 8.0);
+  fm_workbook_destroy(wb);
+}
+
 TEST(FormulonCli, RecalcMissingOutputExits64) {
   std::string in = "/tmp/fm_cli_in_missing_o.xlsx";
   PathGuard g_in(in);
@@ -362,4 +400,32 @@ TEST(FormulonCli, DumpMetadataPrintsSectionHeaders) {
 TEST(FormulonCli, DumpMissingInputExits64) {
   CliRun r = run_cli({"dump", "--sheets"});
   EXPECT_EQ(r.exit_code, 64);
+}
+
+TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
+  std::string in = "/tmp/fm_cli_dump_metadata_scoped.xlsx";
+  PathGuard g_in(in);
+
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create(&wb), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_defined_name(wb, "WorkbookConst", "=1"), 0);
+  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb, "SheetLocal", "=Sheet1!$A$1", 0), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb), 0);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb, &bytes, &len), 0);
+  std::ofstream out(in, std::ios::binary | std::ios::trunc);
+  ASSERT_TRUE(out);
+  out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
+  out.close();
+  fm_buffer_free(bytes);
+  fm_workbook_destroy(wb);
+
+  CliRun r = run_cli({"dump", "--metadata", in});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  // Workbook-scoped names print bare; sheet-scoped names are prefixed
+  // with `SheetName!` so the two scopes don't collide in the dump.
+  EXPECT_NE(r.stdout_text.find("WorkbookConst =1"), std::string::npos) << "stdout=" << r.stdout_text;
+  EXPECT_NE(r.stdout_text.find("Sheet1!SheetLocal ="), std::string::npos) << "stdout=" << r.stdout_text;
 }

@@ -252,6 +252,18 @@ class PivotAxis(IntEnum):
     PAGE = 3
 
 
+class WorkbookFormat(IntEnum):
+    """Container format selector for :meth:`Workbook.save_ex`.
+
+    Mirrors ``fm_workbook_format_t``. ``UNKNOWN`` is not a valid save
+    target.
+    """
+
+    UNKNOWN = 0
+    XLSX = 1
+    XLSB = 2
+
+
 class PivotAggregation(IntEnum):
     """Aggregation function for a value-axis field."""
 
@@ -454,12 +466,19 @@ class SheetProtection:
 
 @dataclass(frozen=True)
 class SheetView:
-    """Per-sheet view: zoom, frozen-pane counts, tab-hidden flag."""
+    """Per-sheet view: zoom, frozen-pane counts, tab-hidden flag, and the
+    display / orientation flags mirrored from OOXML ``<sheetView>``."""
 
     zoom_scale: int
     freeze_rows: int
     freeze_cols: int
     tab_hidden: bool
+    show_grid_lines: bool = True
+    show_row_col_headers: bool = True
+    show_zeros: bool = True
+    right_to_left: bool = False
+    tab_selected: bool = False
+    view_mode: str = ""
 
 
 @dataclass(frozen=True)
@@ -908,8 +927,8 @@ class Workbook:
     def _require(self) -> int:
         if not self.is_valid:
             raise FormulonError(
-                # 7000-band: bindings / C API. 7000 is kBindingNullPointer
-                # in the live error_codes table.
+                # 7000-band: bindings / C API. 7000 is kBindingInvalidHandle
+                # in src/utils/error.h.
                 7000,
                 op="Workbook (handle is NULL or already closed)",
             )
@@ -1036,6 +1055,35 @@ class Workbook:
         try:
             status = LIB.fm_workbook_save(h, out_ptr_ptr, out_len_ptr)
             _check(status, "fm_workbook_save")
+            data_ptr = LIB.read_u32(out_ptr_ptr)
+            data_len = LIB.read_u32(out_len_ptr)
+            try:
+                if data_len == 0 or data_ptr == 0:
+                    return b""
+                return LIB.read_bytes(data_ptr, data_len)
+            finally:
+                if data_ptr:
+                    LIB.fm_buffer_free(data_ptr)
+        finally:
+            LIB.free(out_ptr_ptr)
+            LIB.free(out_len_ptr)
+
+    def save_ex(self, fmt: "WorkbookFormat | int") -> bytes:
+        """Serialise the workbook to an in-memory byte stream in ``fmt``.
+
+        ``WorkbookFormat.XLSX`` produces the same bytes as :meth:`save`;
+        ``WorkbookFormat.XLSB`` produces an MS-XLSB package via the
+        ``.xlsb`` writer. The returned bytes are an independent copy;
+        the underlying WASM buffer is freed before this method returns.
+        """
+        h = self._require()
+        out_ptr_ptr = LIB.alloc(4)
+        out_len_ptr = LIB.alloc(4)
+        LIB.write_bytes(out_ptr_ptr, b"\x00\x00\x00\x00")
+        LIB.write_bytes(out_len_ptr, b"\x00\x00\x00\x00")
+        try:
+            status = LIB.fm_workbook_save_ex(h, int(fmt), out_ptr_ptr, out_len_ptr)
+            _check(status, "fm_workbook_save_ex")
             data_ptr = LIB.read_u32(out_ptr_ptr)
             data_len = LIB.read_u32(out_len_ptr)
             try:
@@ -1725,17 +1773,24 @@ class Workbook:
 
     # -- Sheet view / layout -----------------------------------------------
     def get_sheet_view(self, sheet: int) -> SheetView:
-        """Read the per-sheet view (zoom, freeze, tab-hidden)."""
+        """Read the full per-sheet view (zoom, freeze, tab-hidden, and the
+        display / orientation flags)."""
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.SHEET_VIEW)
+        ptr = S.alloc_struct(LIB, S.SHEET_VIEW_EX)
         try:
-            _check(LIB.fm_sheet_get_view(h, int(sheet), ptr), "fm_sheet_get_view")
-            d = S.SHEET_VIEW.unpack(LIB, ptr)
+            _check(LIB.fm_sheet_get_view_ex(h, int(sheet), ptr), "fm_sheet_get_view_ex")
+            d = S.SHEET_VIEW_EX.unpack(LIB, ptr)
             return SheetView(
                 zoom_scale=d["zoom_scale"],
                 freeze_rows=d["freeze_rows"],
                 freeze_cols=d["freeze_cols"],
                 tab_hidden=bool(d["tab_hidden"]),
+                show_grid_lines=bool(d["show_grid_lines"]),
+                show_row_col_headers=bool(d["show_row_col_headers"]),
+                show_zeros=bool(d["show_zeros"]),
+                right_to_left=bool(d["right_to_left"]),
+                tab_selected=bool(d["tab_selected"]),
+                view_mode=LIB.read_cstr(d["view_mode"]) or "",
             )
         finally:
             LIB.free(ptr)
@@ -1762,6 +1817,65 @@ class Workbook:
             LIB.fm_sheet_set_tab_hidden(h, int(sheet), 1 if hidden else 0),
             "fm_sheet_set_tab_hidden",
         )
+
+    def set_sheet_show_grid_lines(self, sheet: int, show: bool) -> None:
+        """Set the sheet's ``showGridLines`` flag."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_show_grid_lines(h, int(sheet), 1 if show else 0),
+            "fm_sheet_set_show_grid_lines",
+        )
+
+    def set_sheet_show_row_col_headers(self, sheet: int, show: bool) -> None:
+        """Set the sheet's ``showRowColHeaders`` flag."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_show_row_col_headers(h, int(sheet), 1 if show else 0),
+            "fm_sheet_set_show_row_col_headers",
+        )
+
+    def set_sheet_show_zeros(self, sheet: int, show: bool) -> None:
+        """Set the sheet's ``showZeros`` flag."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_show_zeros(h, int(sheet), 1 if show else 0),
+            "fm_sheet_set_show_zeros",
+        )
+
+    def set_sheet_right_to_left(self, sheet: int, right_to_left: bool) -> None:
+        """Set the sheet's ``rightToLeft`` flag."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_right_to_left(h, int(sheet), 1 if right_to_left else 0),
+            "fm_sheet_set_right_to_left",
+        )
+
+    def set_sheet_tab_selected(self, sheet: int, selected: bool) -> None:
+        """Set the sheet's ``tabSelected`` flag."""
+        h = self._require()
+        _check(
+            LIB.fm_sheet_set_tab_selected(h, int(sheet), 1 if selected else 0),
+            "fm_sheet_set_tab_selected",
+        )
+
+    def set_sheet_view_mode(self, sheet: int, mode: str) -> None:
+        """Set the sheet's ``<sheetView view="...">`` mode: ``""``,
+        ``"pageBreakPreview"``, or ``"pageLayout"``. Stored verbatim.
+
+        Unlike most string setters in this module, an empty ``mode`` is a
+        meaningful value here (the OOXML-default "normal" view), not a
+        request to pass ``NULL`` -- ``fm_sheet_set_view_mode`` rejects a
+        `NULL` pointer outright, so this always allocates a real buffer.
+        """
+        h = self._require()
+        mode_ptr, _ = LIB.alloc_utf8(mode)
+        try:
+            _check(
+                LIB.fm_sheet_set_view_mode(h, int(sheet), mode_ptr),
+                "fm_sheet_set_view_mode",
+            )
+        finally:
+            LIB.free(mode_ptr)
 
     def get_sheet_columns(self, sheet: int) -> List[ColumnLayout]:
         """Return the column-layout overrides on ``sheet``."""
@@ -2626,6 +2740,18 @@ class Workbook:
                 h, int(cache_id), int(field_idx)
             ),
             "fm_workbook_pivot_cache_field_add_shared_item_blank",
+        )
+
+    def pivot_cache_field_add_shared_item_error(
+        self, cache_id: int, field_idx: int, error_code: int
+    ) -> None:
+        """Append an Excel error shared item to a cache field."""
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_error(
+                h, int(cache_id), int(field_idx), int(error_code)
+            ),
+            "fm_workbook_pivot_cache_field_add_shared_item_error",
         )
 
     def pivot_cache_field_clear_shared_items(

@@ -72,12 +72,14 @@ emscripten::val JsWorkbook::getMerges(uint32_t sheet) const {
   if (fm_sheet_get_merge_count(handle_, sheet, &count) != 0) {
     return arr;
   }
+  uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_merge_range m{};
     if (fm_sheet_get_merge_at(handle_, sheet, i, &m) != 0) {
       continue;
     }
-    arr.set(i, merge_range_to_val(m));
+    arr.set(emitted, merge_range_to_val(m));
+    ++emitted;
   }
   return arr;
 }
@@ -160,6 +162,7 @@ emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
   if (fm_sheet_get_hyperlink_count(handle_, sheet, &count) != 0) {
     return arr;
   }
+  uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_hyperlink h{};
     if (fm_sheet_get_hyperlink_at(handle_, sheet, i, &h) != 0) {
@@ -171,7 +174,8 @@ emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
     item.set("target", h.target != nullptr ? std::string(h.target) : std::string());
     item.set("display", h.display != nullptr ? std::string(h.display) : std::string());
     item.set("tooltip", h.tooltip != nullptr ? std::string(h.tooltip) : std::string());
-    arr.set(i, item);
+    arr.set(emitted, item);
+    ++emitted;
   }
   return arr;
 }
@@ -187,6 +191,7 @@ emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
   if (fm_sheet_get_validation_count(handle_, sheet, &count) != 0) {
     return arr;
   }
+  uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_data_validation v{};
     if (fm_sheet_get_validation_at(handle_, sheet, i, &v) != 0) {
@@ -210,7 +215,8 @@ emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
     item.set("errorMessage", v.error_message != nullptr ? std::string(v.error_message) : std::string());
     item.set("promptTitle", v.prompt_title != nullptr ? std::string(v.prompt_title) : std::string());
     item.set("promptMessage", v.prompt_message != nullptr ? std::string(v.prompt_message) : std::string());
-    arr.set(i, item);
+    arr.set(emitted, item);
+    ++emitted;
   }
   return arr;
 }

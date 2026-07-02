@@ -79,6 +79,46 @@ JsStatus JsWorkbook::pivotCacheRemove(uint32_t cacheId) {
   return status_from_rc(rc);
 }
 
+emscripten::val JsWorkbook::pivotCacheGetWorksheetSource(uint32_t cacheId) const {
+  emscripten::val o = emscripten::val::object();
+  if (handle_ == nullptr) {
+    o.set("status", error_status(7000));
+    return o;
+  }
+  int32_t present = 0;
+  const char* ref = nullptr;
+  const char* sheet = nullptr;
+  const char* name = nullptr;
+  fm_status_t rc = fm_workbook_pivot_cache_get_worksheet_source(handle_, cacheId, &present, &ref, &sheet, &name);
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    return o;
+  }
+  o.set("status", ok_status());
+  o.set("present", present != 0);
+  o.set("ref", std::string(ref != nullptr ? ref : ""));
+  o.set("sheet", std::string(sheet != nullptr ? sheet : ""));
+  o.set("name", std::string(name != nullptr ? name : ""));
+  return o;
+}
+
+JsStatus JsWorkbook::pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val source) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  const bool present = js_pull_bool(source, "present", true);
+  const bool has_ref = !source["ref"].isUndefined() && !source["ref"].isNull();
+  const bool has_sheet = !source["sheet"].isUndefined() && !source["sheet"].isNull();
+  const bool has_name = !source["name"].isUndefined() && !source["name"].isNull();
+  const std::string ref = has_ref ? source["ref"].as<std::string>() : std::string();
+  const std::string sheet = has_sheet ? source["sheet"].as<std::string>() : std::string();
+  const std::string name = has_name ? source["name"].as<std::string>() : std::string();
+  fm_status_t rc = fm_workbook_pivot_cache_set_worksheet_source(
+      handle_, cacheId, present ? 1 : 0, has_ref ? ref.c_str() : nullptr, has_sheet ? sheet.c_str() : nullptr,
+      has_name ? name.c_str() : nullptr);
+  return status_from_rc(rc);
+}
+
 uint32_t JsWorkbook::pivotCacheFieldCount(uint32_t cacheId) const {
   if (handle_ == nullptr) {
     return 0;
@@ -322,6 +362,31 @@ JsStatus JsWorkbook::pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool
   }
   fm_status_t rc =
       fm_workbook_pivot_set_grand_totals(handle_, sheet, pivotIdx, rowsEnabled ? 1 : 0, colsEnabled ? 1 : 0);
+  return status_from_rc(rc);
+}
+
+emscripten::val JsWorkbook::pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const {
+  emscripten::val o = emscripten::val::object();
+  if (handle_ == nullptr) {
+    o.set("status", error_status(7000));
+    return o;
+  }
+  fm_pivot_layout_t layout = FM_PIVOT_LAYOUT_COMPACT;
+  fm_status_t rc = fm_workbook_pivot_get_layout(handle_, sheet, pivotIdx, &layout);
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    return o;
+  }
+  o.set("status", ok_status());
+  o.set("layout", static_cast<uint32_t>(layout));
+  return o;
+}
+
+JsStatus JsWorkbook::pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t layout) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_workbook_pivot_set_layout(handle_, sheet, pivotIdx, static_cast<fm_pivot_layout_t>(layout));
   return status_from_rc(rc);
 }
 

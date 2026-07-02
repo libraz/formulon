@@ -322,6 +322,36 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # Behaviour drift is checked by `make test-slow` and CI's nightly tier
   # rather than the fast-loop gate.
   set_tests_properties(BehaviorDrift PROPERTIES LABELS "SLOW")
+
+  # Manual-sync file drift guards: cross-checks the C-ABI export list, the
+  # WASM/N-API `.d.ts` surfaces, and a README method-count blurb against
+  # what is actually registered in the source. Pure static regex analysis
+  # (no build artifacts, no network), so it stays in the fast-loop gate.
+  add_test(
+    NAME binding_drift_python_exports
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-exports
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME binding_drift_dts_wasm
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-wasm
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME binding_drift_dts_node
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-node
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME binding_drift_readme_counts
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py readme-counts
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME binding_drift_dts_enums
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-enums
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
 endif()
 
 add_subdirectory(integration)

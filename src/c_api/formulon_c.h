@@ -218,7 +218,46 @@ FM_API void fm_workbook_destroy(fm_workbook_t* wb);
 FM_API fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len);
 
 /**
- * @brief Releases a buffer returned by `fm_workbook_save`.
+ * @brief Container format selector for `fm_workbook_save_ex`.
+ *
+ * Mirrors `formulon::io::WorkbookFormat`. `FM_WORKBOOK_FORMAT_UNKNOWN`
+ * is not a valid save target; passing it to `fm_workbook_save_ex`
+ * returns `kInvalidArgument`.
+ */
+typedef enum {
+  FM_WORKBOOK_FORMAT_UNKNOWN = 0,
+  FM_WORKBOOK_FORMAT_XLSX = 1,
+  FM_WORKBOOK_FORMAT_XLSB = 2,
+} fm_workbook_format_t;
+
+/**
+ * @brief Serialises the workbook to an in-memory byte stream in the
+ *        requested container `format`.
+ *
+ * `FM_WORKBOOK_FORMAT_XLSX` produces the same bytes as
+ * `fm_workbook_save`. `FM_WORKBOOK_FORMAT_XLSB` produces an MS-XLSB
+ * package via the `.xlsb` writer.
+ *
+ * On success the caller receives a heap-allocated buffer that MUST be
+ * released with `fm_buffer_free` (NOT `free`). Mixing allocators
+ * across the boundary is undefined.
+ *
+ * @param wb         Workbook handle. Must be non-NULL.
+ * @param format     Target container format.
+ * @param out_bytes  Receives a pointer to the freshly allocated buffer.
+ * @param out_len    Receives the buffer length in bytes.
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` if `format` is `FM_WORKBOOK_FORMAT_UNKNOWN`
+ *         or otherwise undocumented;
+ *         a `kIo*` code on archive / writer failure.
+ */
+FM_API fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, fm_workbook_format_t format, uint8_t** out_bytes,
+                                       size_t* out_len);
+
+/**
+ * @brief Releases a buffer returned by `fm_workbook_save` or
+ *        `fm_workbook_save_ex`.
  *
  * `bytes == NULL` is a no-op. Internally pairs with `new uint8_t[]`;
  * callers must not pass pointers obtained from `malloc`.
@@ -1762,6 +1801,16 @@ typedef enum {
 typedef enum { FM_PIVOT_CALENDAR_GREGORIAN = 0, FM_PIVOT_CALENDAR_JAPANESE = 1 } fm_pivot_calendar_t;
 
 /**
+ * @brief Pivot report layout form. Numbering mirrors
+ *        `formulon::pivot::PivotLayout`.
+ */
+typedef enum {
+  FM_PIVOT_LAYOUT_COMPACT = 0,
+  FM_PIVOT_LAYOUT_TABULAR = 1,
+  FM_PIVOT_LAYOUT_OUTLINE = 2
+} fm_pivot_layout_t;
+
+/**
  * @brief Discriminator for the variant payload carried by a pivot filter
  *        spec. `FM_PIVOT_FILTER_VALUE_NONE` (= -1) means the slot is unset
  *        (only meaningful for the optional upper-bound payload on range
@@ -1896,6 +1945,26 @@ FM_API fm_status_t fm_workbook_pivot_cache_create(fm_workbook_t* wb, uint32_t re
  */
 FM_API fm_status_t fm_workbook_pivot_cache_remove(fm_workbook_t* wb, uint32_t cache_id);
 
+/**
+ * @brief Reads the cache's worksheet source metadata.
+ *
+ * `out_present` is non-zero when a `<worksheetSource>` is present.
+ * `out_ref`, `out_sheet`, and `out_name` are borrowed strings owned by
+ * the workbook handle and remain valid until the cache is mutated.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_get_worksheet_source(const fm_workbook_t* wb, uint32_t cache_id,
+                                                                int32_t* out_present, const char** out_ref,
+                                                                const char** out_sheet, const char** out_name);
+
+/**
+ * @brief Sets or clears the cache's worksheet source metadata.
+ *
+ * Pass `present == 0` to clear `<worksheetSource>`. When present is
+ * non-zero, nullable string attributes are copied; `NULL` means absent.
+ */
+FM_API fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_t* wb, uint32_t cache_id, int32_t present,
+                                                                const char* ref, const char* sheet, const char* name);
+
 /** @brief Number of fields on the cache identified by `cache_id`. */
 FM_API fm_status_t fm_workbook_pivot_cache_field_count(const fm_workbook_t* wb, uint32_t cache_id, size_t* out_count);
 
@@ -2015,6 +2084,14 @@ FM_API fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, size_t sheet_
 /** @brief Toggles the row / column grand total bands on the pivot. */
 FM_API fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                       int32_t rows_enabled, int32_t cols_enabled);
+
+/** @brief Reads the pivot's compact / tabular / outline report layout. */
+FM_API fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                fm_pivot_layout_t* out_layout);
+
+/** @brief Sets the pivot's compact / tabular / outline report layout. */
+FM_API fm_status_t fm_workbook_pivot_set_layout(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                                fm_pivot_layout_t layout);
 
 /** @brief Number of fields configured on the pivot. */
 FM_API fm_status_t fm_workbook_pivot_field_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -2326,6 +2403,34 @@ typedef struct {
 } fm_sheet_view_t;
 
 /**
+ * @brief Full per-sheet view state, extending `fm_sheet_view_t` with the
+ *        display / orientation flags `fm_sheet_view_t` predates.
+ *
+ * Mirrors `formulon::SheetView` in full. Added via `fm_sheet_get_view_ex`
+ * rather than widening `fm_sheet_view_t` in place, so existing callers
+ * of `fm_sheet_get_view` keep their original struct layout (matches the
+ * `fm_workbook_defined_name_at` / `fm_workbook_defined_name_at_ex`
+ * convention).
+ *
+ * `view_mode` borrows a NUL-terminated UTF-8 pointer from the workbook
+ * handle (same lifetime contract as other borrowed string fields in
+ * this header, e.g. `fm_hyperlink_t::target`); it is `""` for the
+ * OOXML-default "normal" view, `"pageBreakPreview"`, or `"pageLayout"`.
+ */
+typedef struct {
+  uint32_t zoom_scale;
+  uint32_t freeze_rows;
+  uint32_t freeze_cols;
+  int32_t tab_hidden;           /* 0/1 */
+  int32_t show_grid_lines;      /* 0/1; OOXML default 1 */
+  int32_t show_row_col_headers; /* 0/1; OOXML default 1 */
+  int32_t show_zeros;           /* 0/1; OOXML default 1 */
+  int32_t right_to_left;        /* 0/1; OOXML default 0 */
+  int32_t tab_selected;         /* 0/1; OOXML default 0 */
+  const char* view_mode;        /* "", "pageBreakPreview", or "pageLayout" */
+} fm_sheet_view_ex_t;
+
+/**
  * @brief Per-column layout override surfaced over the C ABI.
  *
  * Mirrors `formulon::ColumnLayout`. Both endpoints are 0-based and
@@ -2401,6 +2506,16 @@ FM_API fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t she
  *         `kInvalidArgument` when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out);
+
+/**
+ * @brief Reads the full sheet-view state, including the display /
+ *        orientation flags `fm_sheet_get_view` does not surface.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_view_ex(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_ex_t* out);
 
 /**
  * @brief Sets or replaces the column width override for the inclusive
@@ -2500,6 +2615,69 @@ FM_API fm_status_t fm_sheet_set_freeze(fm_workbook_t* wb, size_t sheet_index, ui
  *         `kInvalidArgument` when `sheet_index` is out of range.
  */
 FM_API fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_index, int32_t hidden);
+
+/**
+ * @brief Sets the sheet's gridline-visibility flag (`showGridLines`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_show_grid_lines(fm_workbook_t* wb, size_t sheet_index, int32_t show);
+
+/**
+ * @brief Sets the sheet's row/column header-visibility flag
+ *        (`showRowColHeaders`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_show_row_col_headers(fm_workbook_t* wb, size_t sheet_index, int32_t show);
+
+/**
+ * @brief Sets the sheet's zero-value display flag (`showZeros`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_show_zeros(fm_workbook_t* wb, size_t sheet_index, int32_t show);
+
+/**
+ * @brief Sets the sheet's right-to-left display flag (`rightToLeft`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_right_to_left(fm_workbook_t* wb, size_t sheet_index, int32_t right_to_left);
+
+/**
+ * @brief Sets the sheet's tab-selected flag (`tabSelected`). Plain
+ *        metadata mirroring the OOXML attribute; setting this on more
+ *        than one sheet does not affect evaluation, only what a host
+ *        UI reproduces as the active tab.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_tab_selected(fm_workbook_t* wb, size_t sheet_index, int32_t selected);
+
+/**
+ * @brief Sets the sheet's view mode (`<sheetView view="...">`).
+ *
+ * `mode` is stored verbatim (no validation): pass `""` for the OOXML-
+ * default "normal" view, `"pageBreakPreview"`, or `"pageLayout"`. Any
+ * other value round-trips unchanged, matching the engine's tolerance
+ * for future OOXML view-mode values.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL` or `mode == NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index, const char* mode);
 
 /* -------------------------------------------------------------------------- */
 /* Diagnostics                                                                */
@@ -2768,6 +2946,20 @@ FM_API fm_status_t fm_styles_get_dxf_count(fm_workbook_t* wb, uint32_t* out_coun
  *         `kInvalidArgument` when `dxf_index >= dxfs.size()`.
  */
 FM_API fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_record* out);
+
+/**
+ * @brief Adds a `<dxf>` differential-format record to the workbook's
+ *        styles table, deduplicating against existing entries.
+ *
+ * Unlike `<xf>`, a dxf carries inline optional style fragments. Only
+ * fields whose `*_engaged` flag is non-zero are copied. `num_fmt_code`
+ * is copied when `num_fmt_engaged != 0`; passing `NULL` stores an empty
+ * string.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_dxf_index` is `NULL`.
+ */
+FM_API fm_status_t fm_styles_add_dxf(fm_workbook_t* wb, fm_dxf_record record, uint32_t* out_dxf_index);
 
 /**
  * @brief Returns the number of font records currently registered in the

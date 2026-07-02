@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Shared translation helpers and module-global state for the Node.js
 // N-API addon. See `addon_common.h` for the contract.
 

@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Shared translation helpers and module-global state for the Node.js
 // N-API addon. Per-area implementation TUs (`parts/*.cc`) include this
 // header to obtain the small kit of `Make*Status`, `TranslateValue`,

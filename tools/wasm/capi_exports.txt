@@ -19,6 +19,7 @@ fm_workbook_destroy
 
 # -- Save ------------------------------------------------------------------------
 fm_workbook_save
+fm_workbook_save_ex
 fm_buffer_free
 
 # -- Sheets ----------------------------------------------------------------------
@@ -29,6 +30,7 @@ fm_workbook_move_sheet
 fm_workbook_remove_sheet
 fm_workbook_rename_sheet
 fm_workbook_set_defined_name
+fm_workbook_set_defined_name_scoped
 
 # -- Row / column structural edits -----------------------------------------------
 fm_workbook_insert_rows
@@ -42,6 +44,7 @@ fm_workbook_set_bool
 fm_workbook_set_text
 fm_workbook_set_blank
 fm_workbook_set_formula
+fm_workbook_set_error
 
 # -- Cell read -------------------------------------------------------------------
 fm_workbook_get_value
@@ -52,6 +55,7 @@ fm_workbook_cell_count
 fm_workbook_cell_at
 fm_workbook_defined_name_count
 fm_workbook_defined_name_at
+fm_workbook_defined_name_at_ex
 fm_workbook_table_count
 fm_workbook_table_at
 fm_workbook_passthrough_count
@@ -96,9 +100,16 @@ fm_sheet_set_protection
 
 # -- Sheet view / layout ---------------------------------------------------------
 fm_sheet_get_view
+fm_sheet_get_view_ex
 fm_sheet_set_zoom
 fm_sheet_set_freeze
 fm_sheet_set_tab_hidden
+fm_sheet_set_show_grid_lines
+fm_sheet_set_show_row_col_headers
+fm_sheet_set_show_zeros
+fm_sheet_set_right_to_left
+fm_sheet_set_tab_selected
+fm_sheet_set_view_mode
 fm_sheet_get_column_count
 fm_sheet_get_column
 fm_sheet_set_column_width
@@ -153,6 +164,7 @@ fm_styles_add_fill
 fm_styles_add_border
 fm_styles_add_num_fmt
 fm_styles_add_cell_xf
+fm_styles_add_dxf
 
 # -- Pivot layout projection -----------------------------------------------------
 fm_workbook_pivot_count
@@ -167,6 +179,8 @@ fm_workbook_pivot_cache_count
 fm_workbook_pivot_cache_id_at
 fm_workbook_pivot_cache_create
 fm_workbook_pivot_cache_remove
+fm_workbook_pivot_cache_get_worksheet_source
+fm_workbook_pivot_cache_set_worksheet_source
 fm_workbook_pivot_cache_field_count
 fm_workbook_pivot_cache_field_name
 fm_workbook_pivot_cache_field_add
@@ -193,6 +207,8 @@ fm_workbook_pivot_remove
 fm_workbook_pivot_set_name
 fm_workbook_pivot_set_anchor
 fm_workbook_pivot_set_grand_totals
+fm_workbook_pivot_get_layout
+fm_workbook_pivot_set_layout
 fm_workbook_pivot_field_count
 fm_workbook_pivot_field_add
 fm_workbook_pivot_field_clear

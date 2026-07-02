@@ -122,6 +122,39 @@ extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_b
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, fm_workbook_format_t format, uint8_t** out_bytes,
+                                           size_t* out_len) {
+  clear_last_error();
+  if (wb == nullptr || out_bytes == nullptr || out_len == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_save_ex: NULL argument");
+  }
+  formulon::io::WorkbookFormat engine_format;
+  switch (format) {
+    case FM_WORKBOOK_FORMAT_XLSX:
+      engine_format = formulon::io::WorkbookFormat::Ooxml;
+      break;
+    case FM_WORKBOOK_FORMAT_XLSB:
+      engine_format = formulon::io::WorkbookFormat::Xlsb;
+      break;
+    case FM_WORKBOOK_FORMAT_UNKNOWN:
+    default:
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_save_ex: unsupported format",
+                               "format=" + std::to_string(static_cast<int>(format)));
+  }
+  auto bytes = wb->workbook().save_ex(engine_format);
+  if (!bytes) {
+    return set_last_error(bytes.error());
+  }
+  const std::vector<std::uint8_t>& src = bytes.value();
+  auto* buffer = new uint8_t[src.size()];
+  if (!src.empty()) {
+    std::memcpy(buffer, src.data(), src.size());
+  }
+  *out_bytes = buffer;
+  *out_len = src.size();
+  return 0;
+}
+
 extern "C" void fm_buffer_free(uint8_t* bytes) {
   delete[] bytes;
 }

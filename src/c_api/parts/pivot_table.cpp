@@ -36,6 +36,34 @@ using formulon::c_api::parts::resolve_pivot;
 using formulon::c_api::parts::resolve_pivot_mut;
 using formulon::c_api::parts::set_binding_error;
 
+namespace {
+
+fm_pivot_layout_t pivot_layout_to_fm(formulon::pivot::PivotLayout layout) {
+  switch (layout) {
+    case formulon::pivot::PivotLayout::Tabular:
+      return FM_PIVOT_LAYOUT_TABULAR;
+    case formulon::pivot::PivotLayout::Outline:
+      return FM_PIVOT_LAYOUT_OUTLINE;
+    case formulon::pivot::PivotLayout::Compact:
+    default:
+      return FM_PIVOT_LAYOUT_COMPACT;
+  }
+}
+
+formulon::pivot::PivotLayout pivot_layout_from_fm(fm_pivot_layout_t layout) {
+  switch (layout) {
+    case FM_PIVOT_LAYOUT_TABULAR:
+      return formulon::pivot::PivotLayout::Tabular;
+    case FM_PIVOT_LAYOUT_OUTLINE:
+      return formulon::pivot::PivotLayout::Outline;
+    case FM_PIVOT_LAYOUT_COMPACT:
+    default:
+      return formulon::pivot::PivotLayout::Compact;
+  }
+}
+
+}  // namespace
+
 // ---------------------------------------------------------------------------
 // PivotTable lifecycle / metadata
 // ---------------------------------------------------------------------------
@@ -129,6 +157,42 @@ extern "C" fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, std
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   table->set_grand_totals(rows_enabled != 0, cols_enabled != 0);
+  invalidate_pivot_result(*table);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                    std::size_t pivot_index, fm_pivot_layout_t* out_layout) {
+  clear_last_error();
+  if (wb == nullptr || out_layout == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_get_layout: NULL argument");
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_get_layout");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  *out_layout = pivot_layout_to_fm(table->layout());
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_set_layout(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                                    fm_pivot_layout_t layout) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_set_layout: wb is NULL");
+  }
+  if (layout != FM_PIVOT_LAYOUT_COMPACT && layout != FM_PIVOT_LAYOUT_TABULAR && layout != FM_PIVOT_LAYOUT_OUTLINE) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_set_layout: layout out of range",
+                             "layout=" + std::to_string(static_cast<int>(layout)));
+  }
+  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_set_layout");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  table->set_layout(pivot_layout_from_fm(layout));
   invalidate_pivot_result(*table);
   return 0;
 }

@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Sheet-level bindings: sheet add/remove/rename/move, row/column
 // structural edits, metadata iteration (cells, defined names, tables,
 // passthroughs, pivots) and defined-name mutation.
@@ -220,13 +218,19 @@ Napi::Value Workbook::PivotLayout(const Napi::CallbackInfo& info) {
   }
 
   const std::size_t count = fm_pivot_cells_count(cells);
-  Napi::Array arr = Napi::Array::New(env, count);
+  // Pre-sized `Array::New(env, count)` would leave trailing `undefined`
+  // holes whenever `fm_pivot_cells_at` skips an index below, so grow
+  // the array dynamically and track a separate `emitted` counter —
+  // matching the dense-array contract the other list getters use.
+  Napi::Array arr = Napi::Array::New(env);
+  std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_pivot_cell_t cell{};
     if (fm_pivot_cells_at(cells, i, &cell) != 0) {
       continue;
     }
-    arr.Set(static_cast<uint32_t>(i), TranslatePivotCell(env, cell));
+    arr.Set(static_cast<uint32_t>(emitted), TranslatePivotCell(env, cell));
+    ++emitted;
   }
   fm_pivot_cells_destroy(cells);
 

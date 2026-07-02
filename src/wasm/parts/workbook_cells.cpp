@@ -219,12 +219,14 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
 
   emscripten::val arr = emscripten::val::array();
   const std::size_t count = fm_pivot_cells_count(cells);
+  std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_pivot_cell_t cell{};
     if (fm_pivot_cells_at(cells, i, &cell) != 0) {
       continue;
     }
-    arr.set(i, pivot_cell_to_val(cell));
+    arr.set(emitted, pivot_cell_to_val(cell));
+    ++emitted;
   }
 
   fm_pivot_cells_destroy(cells);
@@ -247,6 +249,7 @@ emscripten::val JsWorkbook::getExternalLinks() const {
   if (fm_workbook_external_link_count(handle_, &count) != 0) {
     return arr;
   }
+  uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_external_link_record_t rec{};
     if (fm_workbook_external_link_at(handle_, i, &rec) != 0) {
@@ -259,7 +262,8 @@ emscripten::val JsWorkbook::getExternalLinks() const {
     item.set("target", std::string(rec.target != nullptr ? rec.target : ""));
     item.set("targetExternal", rec.target_external != 0);
     item.set("kind", rec.kind);
-    arr.set(i, item);
+    arr.set(emitted, item);
+    ++emitted;
   }
   return arr;
 }

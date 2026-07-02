@@ -60,11 +60,18 @@ export interface EvalResult {
   value: Value;
 }
 
-/** Return type of `Workbook.save()`. */
+/** Return type of `Workbook.save()` / `Workbook.saveEx(format)`. */
 export interface SaveResult {
   status: Status;
   /** Freshly-allocated `Uint8Array` on success; `null` on failure. */
   bytes: Uint8Array | null;
+}
+
+/** `fm_workbook_format_t` ordinals: container format for `saveEx`. */
+export enum WorkbookFormat {
+  Unknown = 0,
+  Xlsx = 1,
+  Xlsb = 2,
 }
 
 /** Return type of `Workbook.sheetName(idx)`. */
@@ -229,6 +236,33 @@ export enum PivotCalendar {
   Japanese = 1,
 }
 
+/** Pivot report layout form. Mirrors `fm_pivot_layout_t`. */
+export enum PivotReportLayout {
+  Compact = 0,
+  Tabular = 1,
+  Outline = 2,
+}
+
+/** Worksheet source metadata for a pivot cache. */
+export interface PivotWorksheetSource {
+  present: boolean;
+  ref?: string;
+  sheet?: string;
+  name?: string;
+}
+
+export interface PivotWorksheetSourceResult extends PivotWorksheetSource {
+  status: Status;
+  ref: string;
+  sheet: string;
+  name: string;
+}
+
+export interface PivotReportLayoutResult {
+  status: Status;
+  layout: PivotReportLayout;
+}
+
 /** Discriminator for the variant payload carried by a pivot filter
  *  spec. `None` (= -1) means the slot is unset (only meaningful for
  *  the optional upper-bound payload on range filters). Mirrors
@@ -376,13 +410,28 @@ export interface CfRangeResult {
 }
 
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
- *  counts, and tab-hidden flag (0/1). */
+ *  counts, tab-hidden flag, and the display / orientation flags mirrored
+ *  from OOXML `<sheetView>` (gridlines, row/col headers, zero display,
+ *  right-to-left, tab-selected, view mode). Booleans are encoded as
+ *  `0`/`1` to match the embind binding's wire shape. */
 export interface SheetView {
   zoomScale: number;
   freezeRows: number;
   freezeCols: number;
   /** Boolean stored as 0/1 to match the embind binding's wire shape. */
   tabHidden: number;
+  /** `showGridLines`; default 1. */
+  showGridLines: number;
+  /** `showRowColHeaders`; default 1. */
+  showRowColHeaders: number;
+  /** `showZeros`; default 1. */
+  showZeros: number;
+  /** `rightToLeft`; default 0. */
+  rightToLeft: number;
+  /** `tabSelected`; default 0. */
+  tabSelected: number;
+  /** `view` mode: `""` (normal), `"pageBreakPreview"`, or `"pageLayout"`. */
+  viewMode: string;
 }
 
 /** Return type of `Workbook.getSheetView(sheet)`. */
@@ -819,8 +868,7 @@ export interface NumFmtResult {
 
 /** Return type of `Workbook.getDxf(dxfIndex)`.
  *  Optional properties are present only when that `<dxf>` child exists. */
-export interface DxfResult {
-  status: Status;
+export interface DxfRecord {
   font?: FontRecord;
   fill?: FillRecord;
   border?: BorderRecord;
@@ -828,6 +876,10 @@ export interface DxfResult {
     numFmtId: number;
     formatCode: string;
   };
+}
+
+export interface DxfResult extends DxfRecord {
+  status: Status;
 }
 
 /** Return type of `Workbook.getLambdaText(sheet, row, col)`. The
@@ -943,6 +995,8 @@ export interface Workbook {
   delete(): void;
 
   save(): SaveResult;
+  /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
+  saveEx(format: WorkbookFormat | number): SaveResult;
   addSheet(name: string): Status;
   /** Removes the sheet at `index`. */
   removeSheet(index: number): Status;
@@ -1041,6 +1095,10 @@ export interface Workbook {
   /** Removes the pivot cache with id `cacheId`. Fails if any pivot
    *  table still references it. */
   pivotCacheRemove(cacheId: number): Status;
+  /** Reads the cache's worksheet source range / defined-name metadata. */
+  pivotCacheGetWorksheetSource(cacheId: number): PivotWorksheetSourceResult;
+  /** Sets or clears the cache's worksheet source metadata. */
+  pivotCacheSetWorksheetSource(cacheId: number, source: PivotWorksheetSource): Status;
 
   /** Number of fields on the cache identified by `cacheId`. */
   pivotCacheFieldCount(cacheId: number): number;
@@ -1102,6 +1160,10 @@ export interface Workbook {
   ): Status;
   /** Toggles the row / column grand total bands on the pivot. */
   pivotSetGrandTotals(sheet: number, pivotIdx: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
+  /** Reads the pivot's compact / tabular / outline report layout. */
+  pivotGetLayout(sheet: number, pivotIdx: number): PivotReportLayoutResult;
+  /** Sets the pivot's compact / tabular / outline report layout. */
+  pivotSetLayout(sheet: number, pivotIdx: number, layout: PivotReportLayout): Status;
 
   /** Number of fields configured on the pivot. */
   pivotFieldCount(sheet: number, pivotIdx: number): number;
@@ -1201,7 +1263,8 @@ export interface Workbook {
     todaySerial: number,
   ): CfRangeResult;
 
-  /** Reads the per-sheet view (zoom, freeze, tab-hidden). */
+  /** Reads the full per-sheet view (zoom, freeze, tab-hidden, and the
+   *  display / orientation flags). */
   getSheetView(sheet: number): SheetViewResult;
   /** Sets the sheet zoom percentage (clamped to `[10, 400]`). */
   setSheetZoom(sheet: number, zoomScale: number): Status;
@@ -1209,6 +1272,19 @@ export interface Workbook {
   setSheetFreeze(sheet: number, freezeRows: number, freezeCols: number): Status;
   /** Sets the sheet tab's hidden flag. */
   setSheetTabHidden(sheet: number, hidden: boolean): Status;
+  /** Sets the sheet's `showGridLines` flag. */
+  setSheetShowGridLines(sheet: number, show: boolean): Status;
+  /** Sets the sheet's `showRowColHeaders` flag. */
+  setSheetShowRowColHeaders(sheet: number, show: boolean): Status;
+  /** Sets the sheet's `showZeros` flag. */
+  setSheetShowZeros(sheet: number, show: boolean): Status;
+  /** Sets the sheet's `rightToLeft` flag. */
+  setSheetRightToLeft(sheet: number, rightToLeft: boolean): Status;
+  /** Sets the sheet's `tabSelected` flag. */
+  setSheetTabSelected(sheet: number, selected: boolean): Status;
+  /** Sets the sheet's `<sheetView view="...">` mode: `""`,
+   *  `"pageBreakPreview"`, or `"pageLayout"`. Stored verbatim. */
+  setSheetViewMode(sheet: number, mode: string): Status;
 
   /**
    * Reads the sheet's `<sheetProtection>` flags. Strings are
@@ -1273,6 +1349,8 @@ export interface Workbook {
    *  surface `kInvalidArgument` rather than auto-growing the parallel
    *  tables. */
   addXf(record: CellXf): AddStyleResult;
+  /** Adds a `<dxf>` differential-format record for conditional formats. */
+  addDxf(record: DxfRecord): AddStyleResult;
 
   /** Returns the number of font records currently registered. */
   fontCount(): number;
@@ -1424,6 +1502,9 @@ export interface FormulonModule {
 
   /** Library version string (UTF-8). */
   versionString(): string;
+
+  /** Alias of {@link versionString}, matching the Node binding's name. */
+  version(): string;
 
   /** Static description of `status` (e.g. `"kOk"`). */
   statusString(status: number): string;

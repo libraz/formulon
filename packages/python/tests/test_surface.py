@@ -252,6 +252,36 @@ class SheetViewProtectionTests(unittest.TestCase):
             self.assertEqual(view.zoom_scale, 150)
             self.assertEqual((view.freeze_rows, view.freeze_cols), (1, 2))
 
+    def test_view_display_defaults(self) -> None:
+        with Workbook.create_default() as wb:
+            view = wb.get_sheet_view(0)
+            self.assertTrue(view.show_grid_lines)
+            self.assertTrue(view.show_row_col_headers)
+            self.assertTrue(view.show_zeros)
+            self.assertFalse(view.right_to_left)
+            self.assertFalse(view.tab_selected)
+            self.assertEqual(view.view_mode, "")
+
+    def test_view_display_setters_roundtrip(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_sheet_show_grid_lines(0, False)
+            wb.set_sheet_show_row_col_headers(0, False)
+            wb.set_sheet_show_zeros(0, False)
+            wb.set_sheet_right_to_left(0, True)
+            wb.set_sheet_tab_selected(0, True)
+            wb.set_sheet_view_mode(0, "pageBreakPreview")
+            view = wb.get_sheet_view(0)
+            self.assertFalse(view.show_grid_lines)
+            self.assertFalse(view.show_row_col_headers)
+            self.assertFalse(view.show_zeros)
+            self.assertTrue(view.right_to_left)
+            self.assertTrue(view.tab_selected)
+            self.assertEqual(view.view_mode, "pageBreakPreview")
+            # An empty mode is a meaningful value (the OOXML-default
+            # "normal" view), not a no-op -- it must round-trip too.
+            wb.set_sheet_view_mode(0, "")
+            self.assertEqual(wb.get_sheet_view(0).view_mode, "")
+
     def test_column_row_overrides(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_column_width(0, 0, 2, 18.5)
@@ -426,7 +456,10 @@ class SurfaceParityTests(unittest.TestCase):
         "add_validation", "remove_validation_at", "clear_validations",
         "get_sheet_protection", "set_sheet_protection",
         "get_sheet_view", "set_sheet_zoom", "set_sheet_freeze",
-        "set_sheet_tab_hidden", "get_sheet_columns", "set_column_width",
+        "set_sheet_tab_hidden", "set_sheet_show_grid_lines",
+        "set_sheet_show_row_col_headers", "set_sheet_show_zeros",
+        "set_sheet_right_to_left", "set_sheet_tab_selected", "set_sheet_view_mode",
+        "get_sheet_columns", "set_column_width",
         "set_column_hidden", "set_column_outline", "get_sheet_row_overrides",
         "set_row_height", "set_row_hidden", "set_row_outline",
         "evaluate_cf_range", "cf_count", "get_conditional_format_at",

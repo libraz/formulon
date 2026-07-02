@@ -64,6 +64,7 @@ from .workbook import (
     Table,
     Value,
     Workbook,
+    WorkbookFormat,
 )
 
 def _resolve_version() -> str:
@@ -158,6 +159,7 @@ __all__ = [
     "Value",
     "ValueKind",
     "Workbook",
+    "WorkbookFormat",
     "__version__",
     "eval_formula",
     "library_version",

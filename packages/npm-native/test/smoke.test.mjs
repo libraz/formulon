@@ -251,6 +251,38 @@ test('setSheetZoom + getSheetView surface the new zoom', async () => {
   assert.equal(v.view.tabHidden, 0);
 });
 
+test('getSheetView surfaces display / orientation defaults', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const v = wb.getSheetView(0);
+  assert.ok(v.status.ok, `getSheetView: ${JSON.stringify(v.status)}`);
+  assert.equal(v.view.showGridLines, 1);
+  assert.equal(v.view.showRowColHeaders, 1);
+  assert.equal(v.view.showZeros, 1);
+  assert.equal(v.view.rightToLeft, 0);
+  assert.equal(v.view.tabSelected, 0);
+  assert.equal(v.view.viewMode, '');
+});
+
+test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setSheetViewMode round-trip', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setSheetShowGridLines(0, false).ok);
+  assert.ok(wb.setSheetShowRowColHeaders(0, false).ok);
+  assert.ok(wb.setSheetShowZeros(0, false).ok);
+  assert.ok(wb.setSheetRightToLeft(0, true).ok);
+  assert.ok(wb.setSheetTabSelected(0, true).ok);
+  assert.ok(wb.setSheetViewMode(0, 'pageBreakPreview').ok);
+  const v = wb.getSheetView(0);
+  assert.ok(v.status.ok, `getSheetView: ${JSON.stringify(v.status)}`);
+  assert.equal(v.view.showGridLines, 0);
+  assert.equal(v.view.showRowColHeaders, 0);
+  assert.equal(v.view.showZeros, 0);
+  assert.equal(v.view.rightToLeft, 1);
+  assert.equal(v.view.tabSelected, 1);
+  assert.equal(v.view.viewMode, 'pageBreakPreview');
+});
+
 test('insertRows shifts an existing literal forward', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -460,6 +492,35 @@ test('default export exposes CfMatchKind ordinals', async () => {
   assert.equal(mod.CfMatchKind.ColorScale, 1);
   assert.equal(mod.CfMatchKind.DataBar, 2);
   assert.equal(mod.CfMatchKind.IconSet, 3);
+});
+
+test('default export exposes ErrorCode ordinals and versionString alias', async () => {
+  const mod = await getModule();
+  assert.equal(typeof mod.ErrorCode, 'object');
+  assert.equal(mod.ErrorCode.Div0, 1);
+  assert.equal(mod.ErrorCode.Ref, 3);
+  assert.equal(mod.ErrorCode.NA, 6);
+  assert.equal(typeof mod.versionString, 'function');
+  assert.equal(mod.versionString(), mod.version());
+});
+
+test('setError() rejects a missing errorCode argument', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.throws(() => wb.setError(0, 0, 0), TypeError);
+});
+
+test('saveEx() writes xlsx and xlsb bytes; rejects a missing format argument', async () => {
+  const mod = await getModule();
+  assert.equal(typeof mod.WorkbookFormat, 'object');
+  const wb = mod.Workbook.createDefault();
+  const xlsx = wb.saveEx(mod.WorkbookFormat.Xlsx);
+  assert.ok(xlsx.status.ok, JSON.stringify(xlsx.status));
+  assert.ok(xlsx.bytes.length > 0);
+  const xlsb = wb.saveEx(mod.WorkbookFormat.Xlsb);
+  assert.ok(xlsb.status.ok, JSON.stringify(xlsb.status));
+  assert.ok(xlsb.bytes.length > 0);
+  assert.throws(() => wb.saveEx(), TypeError);
 });
 
 test('addValidation / getValidations / removeValidationAt / clearValidations round-trip', async () => {

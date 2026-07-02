@@ -1,9 +1,8 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Free (non-method) bindings exposed on the module exports object:
-// `evalFormula`, `version`, `lastErrorMessage`, `lastErrorContext`, and
-// `statusString`. Declared here so `addon.cc::Init` can attach them
-// without leaking the per-area TU layout.
+// `evalFormula`, `version` (aliased as `versionString` to match the WASM
+// binding), `lastErrorMessage`, `lastErrorContext`, and `statusString`.
+// Declared here so `addon.cc::Init` can attach them without leaking the
+// per-area TU layout.
 
 #ifndef FORMULON_NODE_ADDON_PARTS_FREE_FUNCS_H_
 #define FORMULON_NODE_ADDON_PARTS_FREE_FUNCS_H_

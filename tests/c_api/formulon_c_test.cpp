@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/format_detect.h"
 #include "io/xlsb/writer.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -254,6 +255,60 @@ TEST(FormulonCApi, SaveLoadRoundTrip) {
   ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 0, &a1), 0);
   EXPECT_EQ(a1.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(a1.u.number, 7.0);
+}
+
+TEST(FormulonCApi, SaveExXlsxMatchesSave) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 7.0), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  BufferGuard xlsx_buf;
+  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len), 0);
+  ASSERT_NE(xlsx_buf.data, nullptr);
+  EXPECT_GT(xlsx_buf.len, 0U);
+
+  // `FM_WORKBOOK_FORMAT_XLSX` must produce an OOXML container, so the
+  // C ABI's own format sniff (used by `fm_workbook_load`) reports it as
+  // such rather than xlsb.
+  formulon::io::ByteSpan xlsx_span{xlsx_buf.data, xlsx_buf.len};
+  EXPECT_EQ(formulon::io::detect_workbook_format(xlsx_span), formulon::io::WorkbookFormat::Ooxml);
+}
+
+TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 42.0), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  BufferGuard xlsb_buf;
+  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len), 0);
+  ASSERT_NE(xlsb_buf.data, nullptr);
+  EXPECT_GT(xlsb_buf.len, 0U);
+
+  // The bytes must be a real MS-XLSB package (declares `xl/workbook.bin`,
+  // not `xl/workbook.xml`), and must load back through the byte-only
+  // C ABI, which auto-detects the container from its contents.
+  formulon::io::ByteSpan xlsb_span{xlsb_buf.data, xlsb_buf.len};
+  EXPECT_EQ(formulon::io::detect_workbook_format(xlsb_span), formulon::io::WorkbookFormat::Xlsb);
+
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(xlsb_buf.data, xlsb_buf.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(loaded.handle, 0, 0, 0, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 42.0);
+}
+
+TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  BufferGuard buf;
+  const fm_status_t rc = fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_UNKNOWN, &buf.data, &buf.len);
+  EXPECT_NE(rc, 0);
+  EXPECT_EQ(buf.data, nullptr);
 }
 
 TEST(FormulonCApi, LoadRoutesXlsbBytesToXlsbReader) {

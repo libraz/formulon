@@ -334,6 +334,69 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
   return r;
 }
 
+JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
+  JsAddStyleResult r;
+  if (handle_ == nullptr) {
+    r.status = error_status(7000);
+    return r;
+  }
+
+  std::string font_name;
+  std::string num_fmt_code;
+  fm_dxf_record dxf{};
+
+  emscripten::val font = record["font"];
+  if (!font.isUndefined() && !font.isNull()) {
+    dxf.font_engaged = 1;
+    font_name = js_pull_string(font, "name");
+    dxf.font.name = font_name.c_str();
+    dxf.font.size = js_pull_double(font, "size", 11.0);
+    dxf.font.bold = js_pull_bool(font, "bold", false) ? 1 : 0;
+    dxf.font.italic = js_pull_bool(font, "italic", false) ? 1 : 0;
+    dxf.font.strike = js_pull_bool(font, "strike", false) ? 1 : 0;
+    dxf.font.underline = js_pull_u8(font, "underline", 0U);
+    dxf.font.color_argb = js_pull_u32(font, "colorArgb", 0xFF000000U);
+  }
+
+  emscripten::val fill = record["fill"];
+  if (!fill.isUndefined() && !fill.isNull()) {
+    dxf.fill_engaged = 1;
+    dxf.fill.pattern = js_pull_u8(fill, "pattern", 0U);
+    dxf.fill.fg_argb = js_pull_u32(fill, "fgArgb", 0U);
+    dxf.fill.bg_argb = js_pull_u32(fill, "bgArgb", 0U);
+  }
+
+  emscripten::val border = record["border"];
+  if (!border.isUndefined() && !border.isNull()) {
+    dxf.border_engaged = 1;
+    dxf.border.left = js_pull_border_side(border["left"]);
+    dxf.border.right = js_pull_border_side(border["right"]);
+    dxf.border.top = js_pull_border_side(border["top"]);
+    dxf.border.bottom = js_pull_border_side(border["bottom"]);
+    dxf.border.diagonal = js_pull_border_side(border["diagonal"]);
+    dxf.border.diagonal_up = js_pull_bool(border, "diagonalUp", false) ? 1 : 0;
+    dxf.border.diagonal_down = js_pull_bool(border, "diagonalDown", false) ? 1 : 0;
+  }
+
+  emscripten::val num_fmt = record["numFmt"];
+  if (!num_fmt.isUndefined() && !num_fmt.isNull()) {
+    dxf.num_fmt_engaged = 1;
+    dxf.num_fmt_id = js_pull_u16(num_fmt, "numFmtId", 0U);
+    num_fmt_code = js_pull_string(num_fmt, "formatCode");
+    dxf.num_fmt_code = num_fmt_code.c_str();
+  }
+
+  uint32_t idx = 0;
+  fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  r.status = ok_status();
+  r.index = idx;
+  return r;
+}
+
 // ---- Style count accessors ---------------------------------------------
 //
 // `fontCount` / `fillCount` / `borderCount` / `xfCount` are now emitted

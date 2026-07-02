@@ -138,12 +138,18 @@ struct JsCfRangeResult {
   std::vector<JsCfCellResult> cells;
 };
 
-/// JS-side mirror of `fm_sheet_view_t`.
+/// JS-side mirror of `fm_sheet_view_ex_t` (superset of `fm_sheet_view_t`).
 struct JsSheetView {
   uint32_t zoomScale = 100U;
   uint32_t freezeRows = 0U;
   uint32_t freezeCols = 0U;
   int32_t tabHidden = 0;
+  int32_t showGridLines = 1;
+  int32_t showRowColHeaders = 1;
+  int32_t showZeros = 1;
+  int32_t rightToLeft = 0;
+  int32_t tabSelected = 0;
+  std::string viewMode;
 };
 
 /// Return envelope for `Workbook.getSheetView(...)`.

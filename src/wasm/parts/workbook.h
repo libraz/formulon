@@ -47,6 +47,11 @@ class JsWorkbook {
   bool isValid() const { return handle_ != nullptr; }
   JsSaveResult save() const;
 
+  /// Serialises the workbook using an explicit container `format`
+  /// (`fm_workbook_format_t` ordinal: 1 = xlsx, 2 = xlsb). Unknown /
+  /// undocumented values return `kInvalidArgument` via `status`.
+  JsSaveResult saveEx(int32_t format) const;
+
   // ---- Sheet management ---------------------------------------------------
 
   JsStatus addSheet(const std::string& name);
@@ -116,6 +121,12 @@ class JsWorkbook {
   JsStatus setSheetZoom(uint32_t sheet, uint32_t zoomScale);
   JsStatus setSheetFreeze(uint32_t sheet, uint32_t freezeRows, uint32_t freezeCols);
   JsStatus setSheetTabHidden(uint32_t sheet, bool hidden);
+  JsStatus setSheetShowGridLines(uint32_t sheet, bool show);
+  JsStatus setSheetShowRowColHeaders(uint32_t sheet, bool show);
+  JsStatus setSheetShowZeros(uint32_t sheet, bool show);
+  JsStatus setSheetRightToLeft(uint32_t sheet, bool rightToLeft);
+  JsStatus setSheetTabSelected(uint32_t sheet, bool selected);
+  JsStatus setSheetViewMode(uint32_t sheet, std::string mode);
 
   JsColumnsResult getSheetColumns(uint32_t sheet) const;
   JsStatus setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width);
@@ -143,6 +154,7 @@ class JsWorkbook {
   JsAddStyleResult addBorder(emscripten::val record);
   JsAddNumFmtResult addNumFmt(const std::string& format_code);
   JsAddStyleResult addXf(emscripten::val record);
+  JsAddStyleResult addDxf(emscripten::val record);
 
   uint32_t fontCount() const;
   uint32_t fillCount() const;
@@ -202,6 +214,8 @@ class JsWorkbook {
   JsAddStyleResult pivotCacheIdAt(uint32_t idx) const;
   JsAddStyleResult pivotCacheCreate(uint32_t requestedId);
   JsStatus pivotCacheRemove(uint32_t cacheId);
+  emscripten::val pivotCacheGetWorksheetSource(uint32_t cacheId) const;
+  JsStatus pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val source);
 
   uint32_t pivotCacheFieldCount(uint32_t cacheId) const;
   JsStringResult pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIdx) const;
@@ -234,6 +248,8 @@ class JsWorkbook {
   JsStatus pivotSetAnchor(uint32_t sheet, uint32_t pivotIdx, uint32_t anchorRow, uint32_t anchorCol, uint32_t spanRows,
                           uint32_t spanCols);
   JsStatus pivotSetGrandTotals(uint32_t sheet, uint32_t pivotIdx, bool rowsEnabled, bool colsEnabled);
+  emscripten::val pivotGetLayout(uint32_t sheet, uint32_t pivotIdx) const;
+  JsStatus pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t layout);
 
   uint32_t pivotFieldCount(uint32_t sheet, uint32_t pivotIdx) const;
   JsAddStyleResult pivotFieldAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);

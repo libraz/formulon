@@ -155,6 +155,48 @@ TEST(FormulonCApiStyles, DifferentialFormatGetterExposesCfDxfTable) {
   EXPECT_NE(fm_styles_get_dxf(wb.handle, 1, &out), 0);
 }
 
+TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_dxf_record dxf{};
+  dxf.font_engaged = 1;
+  dxf.font.name = "Arial";
+  dxf.font.size = 12.0;
+  dxf.font.bold = 1;
+  dxf.font.color_argb = 0xFFFF0000U;
+  dxf.fill_engaged = 1;
+  dxf.fill.pattern = 1;
+  dxf.fill.fg_argb = 0xFFFFFF00U;
+  dxf.num_fmt_engaged = 1;
+  dxf.num_fmt_id = 164;
+  dxf.num_fmt_code = "0.00";
+
+  uint32_t a = 0xFFFFFFFFU;
+  uint32_t b = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, dxf, &a), 0);
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, dxf, &b), 0);
+  EXPECT_EQ(a, b);
+
+  uint32_t count = 0;
+  ASSERT_EQ(fm_styles_get_dxf_count(wb.handle, &count), 0);
+  EXPECT_EQ(count, 1U);
+
+  fm_dxf_record out{};
+  ASSERT_EQ(fm_styles_get_dxf(wb.handle, a, &out), 0);
+  EXPECT_EQ(out.font_engaged, 1);
+  EXPECT_STREQ(out.font.name, "Arial");
+  EXPECT_EQ(out.font.bold, 1);
+  EXPECT_EQ(out.font.color_argb, 0xFFFF0000U);
+  EXPECT_EQ(out.fill_engaged, 1);
+  EXPECT_EQ(out.fill.pattern, 1U);
+  EXPECT_EQ(out.fill.fg_argb, 0xFFFFFF00U);
+  EXPECT_EQ(out.num_fmt_engaged, 1);
+  EXPECT_EQ(out.num_fmt_id, 164U);
+  ASSERT_NE(out.num_fmt_code, nullptr);
+  EXPECT_STREQ(out.num_fmt_code, "0.00");
+}
+
 TEST(FormulonCApiStyles, GetCellXfRejectsOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -256,7 +298,9 @@ TEST(FormulonCApiStyles, AddFontGrowsTable) {
   ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &idx), 0);
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_font_count(wb.handle, &after), 0);
-  EXPECT_EQ(after, before + 1U);
+  EXPECT_EQ(before, 0U);
+  EXPECT_EQ(after, 2U);
+  EXPECT_EQ(idx, 1U);
   // Round-trip: the freshly added font should read back equal.
   fm_font_record out{};
   ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &out), 0);
@@ -298,7 +342,9 @@ TEST(FormulonCApiStyles, AddFillGrowsTable) {
   ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &idx), 0);
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_fill_count(wb.handle, &after), 0);
-  EXPECT_EQ(after, before + 1U);
+  EXPECT_EQ(before, 0U);
+  EXPECT_EQ(after, 2U);
+  EXPECT_EQ(idx, 1U);
   fm_fill_record out{};
   ASSERT_EQ(fm_styles_get_fill(wb.handle, idx, &out), 0);
   EXPECT_EQ(out.pattern, 1U);
@@ -337,7 +383,9 @@ TEST(FormulonCApiStyles, AddBorderGrowsTable) {
   ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &idx), 0);
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_border_count(wb.handle, &after), 0);
-  EXPECT_EQ(after, before + 1U);
+  EXPECT_EQ(before, 0U);
+  EXPECT_EQ(after, 2U);
+  EXPECT_EQ(idx, 1U);
   fm_border_record out{};
   ASSERT_EQ(fm_styles_get_border(wb.handle, idx, &out), 0);
   EXPECT_EQ(out.left.style, 1U);
@@ -455,7 +503,41 @@ TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
   ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &idx), 0);
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_cell_xf_count(wb.handle, &after), 0);
-  EXPECT_EQ(after, before + 1U);
+  EXPECT_EQ(before, 0U);
+  EXPECT_EQ(after, 2U);
+  EXPECT_EQ(idx, 1U);
+}
+
+TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  uint32_t font_idx = 0;
+  uint32_t fill_idx = 0;
+  uint32_t border_idx = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &font_idx), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
+
+  EXPECT_NE(font_idx, 0U);
+  EXPECT_NE(fill_idx, 0U);
+  EXPECT_NE(border_idx, 0U);
+
+  fm_cell_xf xf{};
+  xf.font_index = font_idx;
+  xf.fill_index = fill_idx;
+  xf.border_index = border_idx;
+  xf.num_fmt_id = 0;
+
+  uint32_t xf_idx = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_idx), 0);
+  EXPECT_NE(xf_idx, 0U);
+
+  fm_cell_xf default_xf{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, 0, &default_xf), 0);
+  EXPECT_EQ(default_xf.font_index, 0U);
+  EXPECT_EQ(default_xf.fill_index, 0U);
+  EXPECT_EQ(default_xf.border_index, 0U);
+  EXPECT_EQ(default_xf.num_fmt_id, 0U);
 }
 
 TEST(FormulonCApiStyles, AddCellXfRejectsOutOfRangeIndex) {
@@ -499,6 +581,8 @@ TEST(FormulonCApiStyles, AddNullArgumentRejected) {
   uint16_t id = 0;
   EXPECT_NE(fm_styles_add_num_fmt(nullptr, "General", &id), 0);
   EXPECT_NE(fm_styles_add_num_fmt(wb.handle, "General", nullptr), 0);
+  EXPECT_NE(fm_styles_add_dxf(nullptr, fm_dxf_record{}, &idx), 0);
+  EXPECT_NE(fm_styles_add_dxf(wb.handle, fm_dxf_record{}, nullptr), 0);
 }
 
 TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {

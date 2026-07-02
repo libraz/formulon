@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Sheet view / layout bindings (zoom, freeze, tab visibility, column /
 // row layout) and the per-sheet UI feature surfaces: merges,
 // comments, hyperlinks, and data validations.
@@ -15,30 +13,39 @@ namespace formulon_node {
 
 // ---- Sheet view / layout --------------------------------------------
 
+namespace {
+
+Napi::Object DefaultSheetView(Napi::Env env) {
+  Napi::Object view = Napi::Object::New(env);
+  view.Set("zoomScale", Napi::Number::New(env, 100));
+  view.Set("freezeRows", Napi::Number::New(env, 0));
+  view.Set("freezeCols", Napi::Number::New(env, 0));
+  view.Set("tabHidden", Napi::Number::New(env, 0));
+  view.Set("showGridLines", Napi::Number::New(env, 1));
+  view.Set("showRowColHeaders", Napi::Number::New(env, 1));
+  view.Set("showZeros", Napi::Number::New(env, 1));
+  view.Set("rightToLeft", Napi::Number::New(env, 0));
+  view.Set("tabSelected", Napi::Number::New(env, 0));
+  view.Set("viewMode", Napi::String::New(env, ""));
+  return view;
+}
+
+}  // namespace
+
 Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
-    Napi::Object view = Napi::Object::New(env);
-    view.Set("zoomScale", Napi::Number::New(env, 100));
-    view.Set("freezeRows", Napi::Number::New(env, 0));
-    view.Set("freezeCols", Napi::Number::New(env, 0));
-    view.Set("tabHidden", Napi::Number::New(env, 0));
-    out.Set("view", view);
+    out.Set("view", DefaultSheetView(env));
     return out;
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  fm_sheet_view_t v{};
-  fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
+  fm_sheet_view_ex_t v{};
+  fm_status_t rc = fm_sheet_get_view_ex(handle_, sheet, &v);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
-    Napi::Object view = Napi::Object::New(env);
-    view.Set("zoomScale", Napi::Number::New(env, 100));
-    view.Set("freezeRows", Napi::Number::New(env, 0));
-    view.Set("freezeCols", Napi::Number::New(env, 0));
-    view.Set("tabHidden", Napi::Number::New(env, 0));
-    out.Set("view", view);
+    out.Set("view", DefaultSheetView(env));
     return out;
   }
   Napi::Object view = Napi::Object::New(env);
@@ -46,6 +53,12 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("freezeRows", Napi::Number::New(env, v.freeze_rows));
   view.Set("freezeCols", Napi::Number::New(env, v.freeze_cols));
   view.Set("tabHidden", Napi::Number::New(env, v.tab_hidden));
+  view.Set("showGridLines", Napi::Number::New(env, v.show_grid_lines));
+  view.Set("showRowColHeaders", Napi::Number::New(env, v.show_row_col_headers));
+  view.Set("showZeros", Napi::Number::New(env, v.show_zeros));
+  view.Set("rightToLeft", Napi::Number::New(env, v.right_to_left));
+  view.Set("tabSelected", Napi::Number::New(env, v.tab_selected));
+  view.Set("viewMode", Napi::String::New(env, v.view_mode != nullptr ? v.view_mode : ""));
   out.Set("status", MakeOkStatus(env));
   out.Set("view", view);
   return out;
@@ -177,6 +190,72 @@ Napi::Value Workbook::SetSheetTabHidden(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const bool hidden = ArgBool(info, 1);
   fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetShowGridLines(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const bool show = ArgBool(info, 1);
+  fm_status_t rc = fm_sheet_set_show_grid_lines(handle_, sheet, show ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetShowRowColHeaders(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const bool show = ArgBool(info, 1);
+  fm_status_t rc = fm_sheet_set_show_row_col_headers(handle_, sheet, show ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetShowZeros(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const bool show = ArgBool(info, 1);
+  fm_status_t rc = fm_sheet_set_show_zeros(handle_, sheet, show ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetRightToLeft(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const bool right_to_left = ArgBool(info, 1);
+  fm_status_t rc = fm_sheet_set_right_to_left(handle_, sheet, right_to_left ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetTabSelected(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const bool selected = ArgBool(info, 1);
+  fm_status_t rc = fm_sheet_set_tab_selected(handle_, sheet, selected ? 1 : 0);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetSheetViewMode(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::string mode = ArgString(info, 1);
+  fm_status_t rc = fm_sheet_set_view_mode(handle_, sheet, mode.c_str());
   return MakeStatus(env, rc);
 }
 

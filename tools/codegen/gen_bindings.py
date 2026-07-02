@@ -137,7 +137,6 @@ def _check_header_coverage(entries: List[dict], header: Path) -> bool:
 _BANNER_LICENSE_APACHE = (
     "// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0."
 )
-_BANNER_LICENSE_MIT = "// Copyright 2026 libraz. Licensed under the MIT License."
 
 _GEN_BANNER = (
     "//\n"
@@ -148,6 +147,11 @@ _GEN_BANNER = (
 
 
 def _file_header(license_banner: str, summary: str) -> str:
+    """Builds a generated-file header. Pass an empty `license_banner` to
+    omit the license line entirely (no per-file header, matching the
+    project's convention for generated Node addon bindings)."""
+    if not license_banner:
+        return f"// {summary}\n{_GEN_BANNER}\n"
     return f"{license_banner}\n//\n// {summary}\n{_GEN_BANNER}\n"
 
 
@@ -435,7 +439,7 @@ def _emit_node(entries: List[dict]) -> Dict[str, str]:
             f"Generated N-API glue for the `{area}` group: Workbook\n"
             "// method bodies that delegate to the C ABI passthroughs."
         )
-        header = _file_header(_BANNER_LICENSE_MIT, summary)
+        header = _file_header("", summary)
         out = header
         out += "\n"
         out += "#include <cstddef>\n"

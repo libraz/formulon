@@ -73,12 +73,19 @@ export interface EvalResult {
   value: Value;
 }
 
-/** Return type of `Workbook.save()`. */
+/** Return type of `Workbook.save()` / `Workbook.saveEx(format)`. */
 export interface SaveResult {
   status: Status;
   /** Freshly-allocated `Uint8Array` on success; `null` on failure. */
   bytes: Uint8Array | null;
 }
+
+/** `fm_workbook_format_t` ordinals: container format for `saveEx`. */
+export const WorkbookFormat: Readonly<{
+  Unknown: 0;
+  Xlsx: 1;
+  Xlsb: 2;
+}>;
 
 /** Return type of `Workbook.sheetName(idx)`. */
 export interface StringResult {
@@ -251,6 +258,13 @@ export const PivotFilterValueKind: Readonly<{
   Text: 2;
 }>;
 
+/** Pivot report layout form. Mirrors `fm_pivot_layout_t`. */
+export const PivotReportLayout: Readonly<{
+  Compact: 0;
+  Tabular: 1;
+  Outline: 2;
+}>;
+
 /** Plain-data spec for `Workbook.pivotFieldAdd`. Mirrors
  *  `fm_pivot_field_spec_t`. */
 export interface PivotFieldSpec {
@@ -296,12 +310,57 @@ export interface PivotFilterSpec {
   valueHighDouble?: number;
 }
 
+/** Worksheet source metadata for a pivot cache. Input shape for
+ *  `Workbook.pivotCacheSetWorksheetSource`. */
+export interface PivotWorksheetSource {
+  present: boolean;
+  ref?: string;
+  sheet?: string;
+  name?: string;
+}
+
+/** Return type of `Workbook.pivotCacheGetWorksheetSource(cacheId)`. */
+export interface PivotWorksheetSourceResult extends PivotWorksheetSource {
+  status: Status;
+  ref: string;
+  sheet: string;
+  name: string;
+}
+
+/** Return type of `Workbook.pivotGetLayout(sheet, pivotIdx)`. */
+export interface PivotReportLayoutResult {
+  status: Status;
+  /** One of `PivotReportLayout.*`. */
+  layout: number;
+}
+
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
 export const CfMatchKind: Readonly<{
   DifferentialFormat: 0;
   ColorScale: 1;
   DataBar: 2;
   IconSet: 3;
+}>;
+
+/** `fm_error_code_t` ordinals (mirror of `formulon::ErrorCode`). */
+export const ErrorCode: Readonly<{
+  Null: 0;
+  Div0: 1;
+  Value: 2;
+  Ref: 3;
+  Name: 4;
+  Num: 5;
+  NA: 6;
+  GettingData: 7;
+  Spill: 8;
+  Calc: 9;
+  Field: 10;
+  Blocked: 11;
+  Connect: 12;
+  External: 13;
+  Busy: 14;
+  Python: 15;
+  Unknown: 16;
 }>;
 
 /** Workbook-level calc mode (Excel `<calcPr calcMode>` policy). Mirrors
@@ -367,13 +426,27 @@ export interface CfRangeResult {
 }
 
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
- *  counts, and tab-hidden flag (0/1). */
+ *  counts, tab-hidden flag, and the display / orientation flags mirrored
+ *  from OOXML `<sheetView>`. Booleans are encoded as `0`/`1` to match
+ *  the native binding's wire shape. */
 export interface SheetView {
   zoomScale: number;
   freezeRows: number;
   freezeCols: number;
-  /** Boolean stored as 0/1 to match the embind binding's wire shape. */
+  /** Boolean stored as 0/1 to match the native binding's wire shape. */
   tabHidden: number;
+  /** `showGridLines`; default 1. */
+  showGridLines: number;
+  /** `showRowColHeaders`; default 1. */
+  showRowColHeaders: number;
+  /** `showZeros`; default 1. */
+  showZeros: number;
+  /** `rightToLeft`; default 0. */
+  rightToLeft: number;
+  /** `tabSelected`; default 0. */
+  tabSelected: number;
+  /** `view` mode: `""` (normal), `"pageBreakPreview"`, or `"pageLayout"`. */
+  viewMode: string;
 }
 
 /** Return type of `Workbook.getSheetView(sheet)`. */
@@ -624,6 +697,20 @@ export interface NumFmtResult {
   status: Status;
   numFmtId: number;
   formatCode: string;
+}
+
+/** Plain-data shape of a differential format (`<dxf>`) record, used as
+ *  the input to `Workbook.addDxf(...)`. Optional properties mirror
+ *  `getDxf`'s `DxfResult`: only the sub-records actually engaged in the
+ *  `<dxf>` are present. */
+export interface DxfRecord {
+  font?: FontRecord;
+  fill?: FillRecord;
+  border?: BorderRecord;
+  numFmt?: {
+    numFmtId: number;
+    formatCode: string;
+  };
 }
 
 /** Return type of `Workbook.getDxf(dxfIndex)`.
@@ -913,6 +1000,8 @@ export interface Workbook {
    *  addon instance -- installing a new one displaces the previous. */
   setIterativeProgress(callback: IterativeProgressCallback | null): Status;
   save(): SaveResult;
+  /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
+  saveEx(format: number): SaveResult;
 
   // Workbook-level calc policy / behaviour profile.
   /** Workbook-level calc mode (Excel `<calcPr calcMode>` policy). The
@@ -972,6 +1061,10 @@ export interface Workbook {
   /** Removes the pivot cache with id `cacheId`. Fails if any pivot
    *  table still references it. */
   pivotCacheRemove(cacheId: number): Status;
+  /** Reads the cache's worksheet source range / defined-name metadata. */
+  pivotCacheGetWorksheetSource(cacheId: number): PivotWorksheetSourceResult;
+  /** Sets or clears the cache's worksheet source metadata. */
+  pivotCacheSetWorksheetSource(cacheId: number, source: PivotWorksheetSource): Status;
 
   /** Number of fields on the cache identified by `cacheId`. */
   pivotCacheFieldCount(cacheId: number): number;
@@ -1033,6 +1126,11 @@ export interface Workbook {
   ): Status;
   /** Toggles the row / column grand total bands on the pivot. */
   pivotSetGrandTotals(sheet: number, pivotIdx: number, rowsEnabled: boolean, colsEnabled: boolean): Status;
+  /** Reads the pivot's compact / tabular / outline report layout. */
+  pivotGetLayout(sheet: number, pivotIdx: number): PivotReportLayoutResult;
+  /** Sets the pivot's compact / tabular / outline report layout. One of
+   *  `PivotReportLayout.*`. */
+  pivotSetLayout(sheet: number, pivotIdx: number, layout: number): Status;
 
   /** Number of fields configured on the pivot. */
   pivotFieldCount(sheet: number, pivotIdx: number): number;
@@ -1140,7 +1238,8 @@ export interface Workbook {
   ): CfRangeResult;
 
   // Sheet view / layout.
-  /** Reads the per-sheet view (zoom, freeze, tab-hidden). */
+  /** Reads the full per-sheet view (zoom, freeze, tab-hidden, and the
+   *  display / orientation flags). */
   getSheetView(sheet: number): SheetViewResult;
   /** Sets the sheet zoom percentage (clamped to `[10, 400]`). */
   setSheetZoom(sheet: number, zoomScale: number): Status;
@@ -1148,6 +1247,19 @@ export interface Workbook {
   setSheetFreeze(sheet: number, freezeRows: number, freezeCols: number): Status;
   /** Sets the sheet tab's hidden flag. */
   setSheetTabHidden(sheet: number, hidden: boolean): Status;
+  /** Sets the sheet's `showGridLines` flag. */
+  setSheetShowGridLines(sheet: number, show: boolean): Status;
+  /** Sets the sheet's `showRowColHeaders` flag. */
+  setSheetShowRowColHeaders(sheet: number, show: boolean): Status;
+  /** Sets the sheet's `showZeros` flag. */
+  setSheetShowZeros(sheet: number, show: boolean): Status;
+  /** Sets the sheet's `rightToLeft` flag. */
+  setSheetRightToLeft(sheet: number, rightToLeft: boolean): Status;
+  /** Sets the sheet's `tabSelected` flag. */
+  setSheetTabSelected(sheet: number, selected: boolean): Status;
+  /** Sets the sheet's `<sheetView view="...">` mode: `""`,
+   *  `"pageBreakPreview"`, or `"pageLayout"`. Stored verbatim. */
+  setSheetViewMode(sheet: number, mode: string): Status;
   /** Reads the sheet's `<sheetProtection>` flags. Strings are
    *  deep-copied; the returned object is independent of the workbook's
    *  storage. */
@@ -1208,6 +1320,9 @@ export interface Workbook {
    *  surface `kInvalidArgument` rather than auto-growing the parallel
    *  tables. */
   addXf(record: CellXf): AddStyleResult;
+  /** Adds a differential format (`<dxf>`) record (deduplicating against
+   *  existing entries). */
+  addDxf(record: DxfRecord): AddStyleResult;
 
   /** Returns the number of font records currently registered. */
   fontCount(): number;
@@ -1348,6 +1463,9 @@ export function evalFormula(formula: string): EvalResult;
 /** Library version string (UTF-8). */
 export function version(): string;
 
+/** Alias of {@link version}, matching the WASM binding's name. */
+export function versionString(): string;
+
 /** Most-recent thread-local error message. */
 export function lastErrorMessage(): string;
 
@@ -1361,11 +1479,14 @@ declare const _default: {
   Workbook: WorkbookCtor;
   evalFormula: typeof evalFormula;
   version: typeof version;
+  versionString: typeof versionString;
   lastErrorMessage: typeof lastErrorMessage;
   lastErrorContext: typeof lastErrorContext;
   statusString: typeof statusString;
   ValueKind: typeof ValueKind;
   CfMatchKind: typeof CfMatchKind;
   PivotCellKind: typeof PivotCellKind;
+  ErrorCode: typeof ErrorCode;
+  WorkbookFormat: typeof WorkbookFormat;
 };
 export default _default;

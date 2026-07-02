@@ -346,6 +346,22 @@ SHEET_VIEW = Struct(
     ],
 )
 
+SHEET_VIEW_EX = Struct(
+    "fm_sheet_view_ex_t",
+    [
+        ("zoom_scale", U32),
+        ("freeze_rows", U32),
+        ("freeze_cols", U32),
+        ("tab_hidden", I32),
+        ("show_grid_lines", I32),
+        ("show_row_col_headers", I32),
+        ("show_zeros", I32),
+        ("right_to_left", I32),
+        ("tab_selected", I32),
+        ("view_mode", PTR),
+    ],
+)
+
 COLUMN_LAYOUT = Struct(
     "fm_column_layout_t",
     [

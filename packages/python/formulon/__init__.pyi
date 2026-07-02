@@ -63,6 +63,11 @@ class PivotAxis(IntEnum):
     VALUE = 2
     PAGE = 3
 
+class WorkbookFormat(IntEnum):
+    UNKNOWN = 0
+    XLSX = 1
+    XLSB = 2
+
 class PivotAggregation(IntEnum):
     SUM = 0
     COUNT = 1
@@ -253,6 +258,12 @@ class SheetView:
     freeze_rows: int
     freeze_cols: int
     tab_hidden: bool
+    show_grid_lines: bool
+    show_row_col_headers: bool
+    show_zeros: bool
+    right_to_left: bool
+    tab_selected: bool
+    view_mode: str
 
 class ColumnLayout:
     first: int
@@ -579,6 +590,7 @@ class Workbook:
 
     # Save.
     def save(self) -> bytes: ...
+    def save_ex(self, fmt: int) -> bytes: ...
 
     # Iteration.
     def iter_cells(self, sheet: int) -> Iterator[Cell]: ...
@@ -640,6 +652,12 @@ class Workbook:
         self, sheet: int, freeze_rows: int, freeze_cols: int
     ) -> None: ...
     def set_sheet_tab_hidden(self, sheet: int, hidden: bool) -> None: ...
+    def set_sheet_show_grid_lines(self, sheet: int, show: bool) -> None: ...
+    def set_sheet_show_row_col_headers(self, sheet: int, show: bool) -> None: ...
+    def set_sheet_show_zeros(self, sheet: int, show: bool) -> None: ...
+    def set_sheet_right_to_left(self, sheet: int, right_to_left: bool) -> None: ...
+    def set_sheet_tab_selected(self, sheet: int, selected: bool) -> None: ...
+    def set_sheet_view_mode(self, sheet: int, mode: str) -> None: ...
     def get_sheet_columns(self, sheet: int) -> List[ColumnLayout]: ...
     def set_column_width(
         self, sheet: int, first: int, last: int, width: float
@@ -727,6 +745,9 @@ class Workbook:
     ) -> None: ...
     def pivot_cache_field_add_shared_item_blank(
         self, cache_id: int, field_idx: int
+    ) -> None: ...
+    def pivot_cache_field_add_shared_item_error(
+        self, cache_id: int, field_idx: int, error_code: int
     ) -> None: ...
     def pivot_cache_field_clear_shared_items(
         self, cache_id: int, field_idx: int

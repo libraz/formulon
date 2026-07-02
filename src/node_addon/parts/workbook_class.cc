@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // `Workbook` ObjectWrap lifecycle and class registration. Holds the
 // ctor / dtor, the shared argument extraction helpers, and the
 // `DefineClass` table that wires every per-area method into the JS
@@ -139,6 +137,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           StaticMethod<&Workbook::LoadBytes>("loadBytes"),
           InstanceMethod<&Workbook::AddBorder>("addBorder"),
           InstanceMethod<&Workbook::AddConditionalFormat>("addConditionalFormat"),
+          InstanceMethod<&Workbook::AddDxf>("addDxf"),
           InstanceMethod<&Workbook::AddFill>("addFill"),
           InstanceMethod<&Workbook::AddFont>("addFont"),
           InstanceMethod<&Workbook::AddHyperlink>("addHyperlink"),
@@ -212,6 +211,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::PivotCacheFieldCount>("pivotCacheFieldCount"),
           InstanceMethod<&Workbook::PivotCacheFieldName>("pivotCacheFieldName"),
           InstanceMethod<&Workbook::PivotCacheFieldSharedItemCount>("pivotCacheFieldSharedItemCount"),
+          InstanceMethod<&Workbook::PivotCacheGetWorksheetSource>("pivotCacheGetWorksheetSource"),
           InstanceMethod<&Workbook::PivotCacheIdAt>("pivotCacheIdAt"),
           InstanceMethod<&Workbook::PivotCacheRecordAdd>("pivotCacheRecordAdd"),
           InstanceMethod<&Workbook::PivotCacheRecordClear>("pivotCacheRecordClear"),
@@ -222,6 +222,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::PivotCacheRecordSetNumber>("pivotCacheRecordSetNumber"),
           InstanceMethod<&Workbook::PivotCacheRecordSetText>("pivotCacheRecordSetText"),
           InstanceMethod<&Workbook::PivotCacheRemove>("pivotCacheRemove"),
+          InstanceMethod<&Workbook::PivotCacheSetWorksheetSource>("pivotCacheSetWorksheetSource"),
           InstanceMethod<&Workbook::PivotCount>("pivotCount"),
           InstanceMethod<&Workbook::PivotCreate>("pivotCreate"),
           InstanceMethod<&Workbook::PivotDataFieldAdd>("pivotDataFieldAdd"),
@@ -253,6 +254,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::PivotSetAnchor>("pivotSetAnchor"),
           InstanceMethod<&Workbook::PivotSetColFieldOrder>("pivotSetColFieldOrder"),
           InstanceMethod<&Workbook::PivotSetGrandTotals>("pivotSetGrandTotals"),
+          InstanceMethod<&Workbook::PivotGetLayout>("pivotGetLayout"),
+          InstanceMethod<&Workbook::PivotSetLayout>("pivotSetLayout"),
           InstanceMethod<&Workbook::PivotSetName>("pivotSetName"),
           InstanceMethod<&Workbook::PivotSetRowFieldOrder>("pivotSetRowFieldOrder"),
           InstanceMethod<&Workbook::Precedents>("precedents"),
@@ -266,6 +269,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::RemoveValidationAt>("removeValidationAt"),
           InstanceMethod<&Workbook::RenameSheet>("renameSheet"),
           InstanceMethod<&Workbook::Save>("save"),
+          InstanceMethod<&Workbook::SaveEx>("saveEx"),
           InstanceMethod<&Workbook::SetBlank>("setBlank"),
           InstanceMethod<&Workbook::SetBool>("setBool"),
           InstanceMethod<&Workbook::SetCalcMode>("setCalcMode"),
@@ -287,7 +291,13 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::SetRowOutline>("setRowOutline"),
           InstanceMethod<&Workbook::SetSheetFreeze>("setSheetFreeze"),
           InstanceMethod<&Workbook::SetSheetProtection>("setSheetProtection"),
+          InstanceMethod<&Workbook::SetSheetRightToLeft>("setSheetRightToLeft"),
+          InstanceMethod<&Workbook::SetSheetShowGridLines>("setSheetShowGridLines"),
+          InstanceMethod<&Workbook::SetSheetShowRowColHeaders>("setSheetShowRowColHeaders"),
+          InstanceMethod<&Workbook::SetSheetShowZeros>("setSheetShowZeros"),
           InstanceMethod<&Workbook::SetSheetTabHidden>("setSheetTabHidden"),
+          InstanceMethod<&Workbook::SetSheetTabSelected>("setSheetTabSelected"),
+          InstanceMethod<&Workbook::SetSheetViewMode>("setSheetViewMode"),
           InstanceMethod<&Workbook::SetSheetZoom>("setSheetZoom"),
           InstanceMethod<&Workbook::SetText>("setText"),
           InstanceMethod<&Workbook::SheetCount>("sheetCount"),

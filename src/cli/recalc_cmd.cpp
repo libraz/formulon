@@ -8,7 +8,8 @@
 //
 //   1. Reads `in` into memory (binary mode).
 //   2. Calls `fm_workbook_load`, then `fm_workbook_recalc`, then
-//      `fm_workbook_save`.
+//      `fm_workbook_save_ex` with a format derived from `-o`'s
+//      extension (`.xlsb` -> MS-XLSB, anything else -> `.xlsx`).
 //   3. Writes the saved buffer back out to `out`.
 //
 // `--iterative` enables iterative-calc with Excel's default knobs
@@ -16,6 +17,7 @@
 // the `Recalculated ...` status line on stderr; otherwise we print one
 // per successful run.
 
+#include <cctype>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -63,6 +65,8 @@ void print_recalc_usage(std::ostream& out) {
   out << "Usage: formulon recalc [--iterative] [--quiet] <in.xlsx> -o <out.xlsx>\n"
       << "\n"
       << "Load <in.xlsx>, drive a full recalc, and write the result to <out.xlsx>.\n"
+      << "The output format is chosen from -o's extension: '.xlsb' writes MS-XLSB,\n"
+      << "any other extension (or none) writes OOXML .xlsx.\n"
       << "Status: prints \"Recalculated N cells -> wrote M bytes\" on stderr unless\n"
       << "--quiet is supplied.\n";
 }
@@ -98,6 +102,23 @@ fm_status_t read_all(const std::string& path, std::vector<std::uint8_t>& out) {
     }
   }
   return 0;
+}
+
+// Derives the `fm_workbook_save_ex` container format from `path`'s
+// extension: `.xlsb` (case-insensitive) selects MS-XLSB; every other
+// extension (including none) selects `.xlsx` so existing callers that
+// never named `.xlsb` keep writing OOXML, matching `fm_workbook_save`'s
+// prior behaviour.
+fm_workbook_format_t format_from_extension(const std::string& path) {
+  const std::size_t dot = path.find_last_of('.');
+  if (dot == std::string::npos) {
+    return FM_WORKBOOK_FORMAT_XLSX;
+  }
+  std::string ext = path.substr(dot + 1);
+  for (char& c : ext) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  return ext == "xlsb" ? FM_WORKBOOK_FORMAT_XLSB : FM_WORKBOOK_FORMAT_XLSX;
 }
 
 // Writes `bytes` to `path` in binary mode. Returns `kCliOutputFailed`
@@ -195,7 +216,8 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   SaveBuffer buf;
-  if (auto rc = fm_workbook_save(wb.handle, &buf.data, &buf.len); rc != 0) {
+  const fm_workbook_format_t format = format_from_extension(output_path);
+  if (auto rc = fm_workbook_save_ex(wb.handle, format, &buf.data, &buf.len); rc != 0) {
     emit_last_error(err, "recalc");
     return rc;
   }

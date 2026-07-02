@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // `Workbook` ObjectWrap declaration for the Node.js N-API addon. The
 // class declaration lives in this shared header because its method
 // bodies are split across per-area TUs under `src/node_addon/parts/`.
@@ -59,6 +57,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetIterative(const Napi::CallbackInfo& info);
   Napi::Value SetIterativeProgress(const Napi::CallbackInfo& info);
   Napi::Value Save(const Napi::CallbackInfo& info);
+  Napi::Value SaveEx(const Napi::CallbackInfo& info);
 
   // Workbook-level calc policy / behaviour profile.
   Napi::Value CalcMode(const Napi::CallbackInfo& info);
@@ -111,6 +110,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotCacheIdAt(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheCreate(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRemove(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheGetWorksheetSource(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheSetWorksheetSource(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldCount(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldName(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldAdd(const Napi::CallbackInfo& info);
@@ -137,6 +138,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotSetName(const Napi::CallbackInfo& info);
   Napi::Value PivotSetAnchor(const Napi::CallbackInfo& info);
   Napi::Value PivotSetGrandTotals(const Napi::CallbackInfo& info);
+  Napi::Value PivotGetLayout(const Napi::CallbackInfo& info);
+  Napi::Value PivotSetLayout(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldCount(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotFieldClear(const Napi::CallbackInfo& info);
@@ -182,6 +185,12 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetSheetZoom(const Napi::CallbackInfo& info);
   Napi::Value SetSheetFreeze(const Napi::CallbackInfo& info);
   Napi::Value SetSheetTabHidden(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetShowGridLines(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetShowRowColHeaders(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetShowZeros(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetRightToLeft(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetTabSelected(const Napi::CallbackInfo& info);
+  Napi::Value SetSheetViewMode(const Napi::CallbackInfo& info);
   Napi::Value GetSheetColumns(const Napi::CallbackInfo& info);
   Napi::Value SetColumnWidth(const Napi::CallbackInfo& info);
   Napi::Value SetColumnHidden(const Napi::CallbackInfo& info);
@@ -205,6 +214,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value AddBorder(const Napi::CallbackInfo& info);
   Napi::Value AddNumFmt(const Napi::CallbackInfo& info);
   Napi::Value AddXf(const Napi::CallbackInfo& info);
+  Napi::Value AddDxf(const Napi::CallbackInfo& info);
   Napi::Value FontCount(const Napi::CallbackInfo& info);
   Napi::Value FillCount(const Napi::CallbackInfo& info);
   Napi::Value BorderCount(const Napi::CallbackInfo& info);

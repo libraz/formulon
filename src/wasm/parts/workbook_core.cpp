@@ -90,6 +90,25 @@ JsSaveResult JsWorkbook::save() const {
   return r;
 }
 
+JsSaveResult JsWorkbook::saveEx(int32_t format) const {
+  JsSaveResult r;
+  if (handle_ == nullptr) {
+    r.status = error_status(/*kBindingNullPointer=*/7000);
+    return r;
+  }
+  uint8_t* out = nullptr;
+  std::size_t len = 0;
+  fm_status_t rc = fm_workbook_save_ex(handle_, static_cast<fm_workbook_format_t>(format), &out, &len);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  r.bytes = bytes_to_val(out, len);
+  fm_buffer_free(out);
+  r.status = ok_status();
+  return r;
+}
+
 // ---- Sheet management ----------------------------------------------------
 
 JsStatus JsWorkbook::addSheet(const std::string& name) {

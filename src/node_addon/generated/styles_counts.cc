@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Generated N-API glue for the `styles_counts` group: Workbook
 // method bodies that delegate to the C ABI passthroughs.
 //

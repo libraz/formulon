@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Implementation of the module-level free functions exported alongside
 // the `Workbook` class. See `free_funcs.h` for the contract.
 

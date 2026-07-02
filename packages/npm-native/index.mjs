@@ -42,6 +42,8 @@ const native = require_(nativePath);
 export const Workbook = native.Workbook;
 export const evalFormula = native.evalFormula;
 export const version = native.version;
+/** Alias of {@link version}, matching the WASM binding's name. */
+export const versionString = native.versionString;
 export const lastErrorMessage = native.lastErrorMessage;
 export const lastErrorContext = native.lastErrorContext;
 export const statusString = native.statusString;
@@ -78,14 +80,45 @@ export const PivotCellKind = Object.freeze({
   Blank: 7,
 });
 
+/** `fm_workbook_format_t` ordinals: container format for `saveEx`. */
+export const WorkbookFormat = Object.freeze({
+  Unknown: 0,
+  Xlsx: 1,
+  Xlsb: 2,
+});
+
+/** `fm_error_code_t` ordinals (mirror of `formulon::ErrorCode`). */
+export const ErrorCode = Object.freeze({
+  Null: 0,
+  Div0: 1,
+  Value: 2,
+  Ref: 3,
+  Name: 4,
+  Num: 5,
+  NA: 6,
+  GettingData: 7,
+  Spill: 8,
+  Calc: 9,
+  Field: 10,
+  Blocked: 11,
+  Connect: 12,
+  External: 13,
+  Busy: 14,
+  Python: 15,
+  Unknown: 16,
+});
+
 export default {
   Workbook,
   evalFormula,
   version,
+  versionString,
   lastErrorMessage,
   lastErrorContext,
   statusString,
   ValueKind,
   CfMatchKind,
   PivotCellKind,
+  ErrorCode,
+  WorkbookFormat,
 };

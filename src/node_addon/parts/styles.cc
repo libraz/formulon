@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Style-table bindings: read / write entries in the xf / font / fill /
 // border / numFmt pools plus the per-cell xf-index getters, the named
 // cell-style accessors, the conditional-formatting read / mutate
@@ -385,6 +383,79 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
   xf.wrap_text = (record.Has("wrapText") && record.Get("wrapText").ToBoolean().Value()) ? 1 : 0;
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
+  if (rc != 0) {
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
+  }
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", idx);
+}
+
+Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
+  }
+  Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
+
+  std::string font_name;
+  std::string num_fmt_code;
+  fm_dxf_record dxf{};
+
+  if (record.Has("font") && record.Get("font").IsObject()) {
+    Napi::Object font = record.Get("font").As<Napi::Object>();
+    dxf.font_engaged = 1;
+    if (font.Has("name") && !font.Get("name").IsUndefined() && !font.Get("name").IsNull()) {
+      font_name = font.Get("name").ToString().Utf8Value();
+    }
+    dxf.font.name = font_name.c_str();
+    dxf.font.size = font.Has("size") ? font.Get("size").ToNumber().DoubleValue() : 11.0;
+    dxf.font.bold = SpecPullBool(font, "bold", false) ? 1 : 0;
+    dxf.font.italic = SpecPullBool(font, "italic", false) ? 1 : 0;
+    dxf.font.strike = SpecPullBool(font, "strike", false) ? 1 : 0;
+    dxf.font.underline = static_cast<uint8_t>(SpecPullU32(font, "underline", 0U) & 0xFFU);
+    dxf.font.color_argb = SpecPullU32(font, "colorArgb", 0xFF000000U);
+  }
+
+  if (record.Has("fill") && record.Get("fill").IsObject()) {
+    Napi::Object fill = record.Get("fill").As<Napi::Object>();
+    dxf.fill_engaged = 1;
+    dxf.fill.pattern = static_cast<uint8_t>(SpecPullU32(fill, "pattern", 0U) & 0xFFU);
+    dxf.fill.fg_argb = SpecPullU32(fill, "fgArgb", 0U);
+    dxf.fill.bg_argb = SpecPullU32(fill, "bgArgb", 0U);
+  }
+
+  if (record.Has("border") && record.Get("border").IsObject()) {
+    Napi::Object border = record.Get("border").As<Napi::Object>();
+    auto pull_side = [&](const char* key) {
+      fm_border_side s{};
+      if (border.Has(key) && border.Get(key).IsObject()) {
+        Napi::Object so = border.Get(key).As<Napi::Object>();
+        s.style = static_cast<uint8_t>(SpecPullU32(so, "style", 0U) & 0xFFU);
+        s.color_argb = SpecPullU32(so, "colorArgb", 0U);
+      }
+      return s;
+    };
+    dxf.border_engaged = 1;
+    dxf.border.left = pull_side("left");
+    dxf.border.right = pull_side("right");
+    dxf.border.top = pull_side("top");
+    dxf.border.bottom = pull_side("bottom");
+    dxf.border.diagonal = pull_side("diagonal");
+    dxf.border.diagonal_up = SpecPullBool(border, "diagonalUp", false) ? 1 : 0;
+    dxf.border.diagonal_down = SpecPullBool(border, "diagonalDown", false) ? 1 : 0;
+  }
+
+  if (record.Has("numFmt") && record.Get("numFmt").IsObject()) {
+    Napi::Object num_fmt = record.Get("numFmt").As<Napi::Object>();
+    dxf.num_fmt_engaged = 1;
+    dxf.num_fmt_id = static_cast<uint16_t>(SpecPullU32(num_fmt, "numFmtId", 0U) & 0xFFFFU);
+    if (num_fmt.Has("formatCode") && !num_fmt.Get("formatCode").IsUndefined() && !num_fmt.Get("formatCode").IsNull()) {
+      num_fmt_code = num_fmt.Get("formatCode").ToString().Utf8Value();
+    }
+    dxf.num_fmt_code = num_fmt_code.c_str();
+  }
+
+  uint32_t idx = 0;
+  fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);
   if (rc != 0) {
     return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
   }

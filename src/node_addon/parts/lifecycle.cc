@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Workbook lifecycle bindings: cell mutation / read, recalc & save,
 // iterative-solver registration, and the trivial `isValid` predicate.
 
@@ -45,13 +43,23 @@ Napi::Value Workbook::SetBool(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::SetError(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  if (info.Length() < 4) {
+    // Unlike the other cell-mutation setters, a missing 4th argument
+    // here has no sane zero-value default: `error_code = 0` silently
+    // writes `#NULL!`, masking a caller bug instead of surfacing it.
+    // Reject it the same way the WASM (embind arity check) and Python
+    // (required positional parameter) bindings already do.
+    Napi::TypeError::New(env, "setError requires 4 arguments (sheet, row, col, errorCode)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const uint32_t row = ArgU32(info, 1);
   const uint32_t col = ArgU32(info, 2);
-  const int32_t error_code = info.Length() > 3 ? info[3].As<Napi::Number>().Int32Value() : 0;
+  const int32_t error_code = info[3].As<Napi::Number>().Int32Value();
   fm_status_t rc = fm_workbook_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(error_code));
   return MakeStatus(env, rc);
 }
@@ -270,6 +278,41 @@ Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {
   }
   // Copy into a fresh Uint8Array on the JS heap; the C-side buffer is
   // owned by the engine and must be released with `fm_buffer_free`.
+  Napi::Uint8Array dst = Napi::Uint8Array::New(env, len);
+  if (len != 0 && buf != nullptr) {
+    std::memcpy(dst.Data(), buf, len);
+  }
+  fm_buffer_free(buf);
+  out.Set("status", MakeOkStatus(env));
+  out.Set("bytes", dst);
+  return out;
+}
+
+Napi::Value Workbook::SaveEx(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1) {
+    // `format` has no sane default (unlike the other setters' 0-valued
+    // fallbacks): a silent default would pick a container format the
+    // caller never asked for. Reject like the WASM binding (embind
+    // arity check) and the Python binding (required positional arg).
+    Napi::TypeError::New(env, "saveEx requires 1 argument (format)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("bytes", env.Null());
+    return out;
+  }
+  const auto format = static_cast<fm_workbook_format_t>(info[0].As<Napi::Number>().Int32Value());
+  uint8_t* buf = nullptr;
+  std::size_t len = 0;
+  fm_status_t rc = fm_workbook_save_ex(handle_, format, &buf, &len);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("bytes", env.Null());
+    return out;
+  }
   Napi::Uint8Array dst = Napi::Uint8Array::New(env, len);
   if (len != 0 && buf != nullptr) {
     std::memcpy(dst.Data(), buf, len);

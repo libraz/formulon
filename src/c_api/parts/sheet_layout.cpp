@@ -287,3 +287,82 @@ extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_i
   wb->workbook().sheet(sheet_index).mutable_view().tab_hidden = (hidden != 0);
   return 0;
 }
+
+extern "C" fm_status_t fm_sheet_get_view_ex(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_ex_t* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_view_ex: NULL argument");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_view_ex"); rc != 0) {
+    return rc;
+  }
+  const formulon::SheetView& v = wb->workbook().sheet(sheet_index).view();
+  out->zoom_scale = v.zoom_scale;
+  out->freeze_rows = v.freeze_rows;
+  out->freeze_cols = v.freeze_cols;
+  out->tab_hidden = v.tab_hidden ? 1 : 0;
+  out->show_grid_lines = v.show_grid_lines ? 1 : 0;
+  out->show_row_col_headers = v.show_row_col_headers ? 1 : 0;
+  out->show_zeros = v.show_zeros ? 1 : 0;
+  out->right_to_left = v.right_to_left ? 1 : 0;
+  out->tab_selected = v.tab_selected ? 1 : 0;
+  out->view_mode = v.view_mode.c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_show_grid_lines(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_show_grid_lines"); rc != 0) {
+    return rc;
+  }
+  wb->workbook().sheet(sheet_index).mutable_view().show_grid_lines = (show != 0);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_show_row_col_headers(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_show_row_col_headers"); rc != 0) {
+    return rc;
+  }
+  wb->workbook().sheet(sheet_index).mutable_view().show_row_col_headers = (show != 0);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_show_zeros(fm_workbook_t* wb, size_t sheet_index, int32_t show) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_show_zeros"); rc != 0) {
+    return rc;
+  }
+  wb->workbook().sheet(sheet_index).mutable_view().show_zeros = (show != 0);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_right_to_left(fm_workbook_t* wb, size_t sheet_index, int32_t right_to_left) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_right_to_left"); rc != 0) {
+    return rc;
+  }
+  wb->workbook().sheet(sheet_index).mutable_view().right_to_left = (right_to_left != 0);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_tab_selected(fm_workbook_t* wb, size_t sheet_index, int32_t selected) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_tab_selected"); rc != 0) {
+    return rc;
+  }
+  wb->workbook().sheet(sheet_index).mutable_view().tab_selected = (selected != 0);
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index, const char* mode) {
+  clear_last_error();
+  if (mode == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_set_view_mode: NULL mode");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_view_mode"); rc != 0) {
+    return rc;
+  }
+  wb->workbook().sheet(sheet_index).mutable_view().view_mode = mode;
+  return 0;
+}

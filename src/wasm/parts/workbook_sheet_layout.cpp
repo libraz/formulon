@@ -21,8 +21,8 @@ JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
     r.status = error_status(7000);
     return r;
   }
-  fm_sheet_view_t v{};
-  fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
+  fm_sheet_view_ex_t v{};
+  fm_status_t rc = fm_sheet_get_view_ex(handle_, sheet, &v);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
@@ -31,6 +31,12 @@ JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
   r.view.freezeRows = v.freeze_rows;
   r.view.freezeCols = v.freeze_cols;
   r.view.tabHidden = v.tab_hidden;
+  r.view.showGridLines = v.show_grid_lines;
+  r.view.showRowColHeaders = v.show_row_col_headers;
+  r.view.showZeros = v.show_zeros;
+  r.view.rightToLeft = v.right_to_left;
+  r.view.tabSelected = v.tab_selected;
+  r.view.viewMode = v.view_mode == nullptr ? std::string() : v.view_mode;
   r.status = ok_status();
   return r;
 }
@@ -125,6 +131,54 @@ JsStatus JsWorkbook::setSheetTabHidden(uint32_t sheet, bool hidden) {
     return error_status(7000);
   }
   fm_status_t rc = fm_sheet_set_tab_hidden(handle_, sheet, hidden ? 1 : 0);
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setSheetShowGridLines(uint32_t sheet, bool show) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_sheet_set_show_grid_lines(handle_, sheet, show ? 1 : 0);
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setSheetShowRowColHeaders(uint32_t sheet, bool show) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_sheet_set_show_row_col_headers(handle_, sheet, show ? 1 : 0);
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setSheetShowZeros(uint32_t sheet, bool show) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_sheet_set_show_zeros(handle_, sheet, show ? 1 : 0);
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setSheetRightToLeft(uint32_t sheet, bool rightToLeft) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_sheet_set_right_to_left(handle_, sheet, rightToLeft ? 1 : 0);
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setSheetTabSelected(uint32_t sheet, bool selected) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_sheet_set_tab_selected(handle_, sheet, selected ? 1 : 0);
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_sheet_set_view_mode(handle_, sheet, mode.c_str());
   return status_from_rc(rc);
 }
 

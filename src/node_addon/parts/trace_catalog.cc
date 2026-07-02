@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // Dependency-graph trace (precedents / dependents), dynamic-array
 // spill info, external-link enumeration, and the function-catalog
 // metadata surface (metadata / names / localize / canonicalize). These

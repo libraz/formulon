@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the MIT License.
-//
 // PivotCache mutation bindings.
 //
 // Each method is a thin wrapper over `fm_workbook_pivot_cache_*`. The
@@ -64,6 +62,51 @@ Napi::Value Workbook::PivotCacheRemove(const Napi::CallbackInfo& info) {
   }
   const uint32_t cache_id = ArgU32(info, 0);
   fm_status_t rc = fm_workbook_pivot_cache_remove(handle_, cache_id);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  int32_t present = 0;
+  const char* ref = nullptr;
+  const char* sheet = nullptr;
+  const char* name = nullptr;
+  fm_status_t rc = fm_workbook_pivot_cache_get_worksheet_source(handle_, cache_id, &present, &ref, &sheet, &name);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("present", Napi::Boolean::New(env, present != 0));
+  out.Set("ref", Napi::String::New(env, ref != nullptr ? ref : ""));
+  out.Set("sheet", Napi::String::New(env, sheet != nullptr ? sheet : ""));
+  out.Set("name", Napi::String::New(env, name != nullptr ? name : ""));
+  return out;
+}
+
+Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  Napi::Object source = (info.Length() > 1 && info[1].IsObject()) ? info[1].As<Napi::Object>() : Napi::Object::New(env);
+  const bool present = SpecPullBool(source, "present", true);
+  const bool has_ref = SpecHas(source, "ref");
+  const bool has_sheet = SpecHas(source, "sheet");
+  const bool has_name = SpecHas(source, "name");
+  const std::string ref = has_ref ? source.Get("ref").ToString().Utf8Value() : std::string();
+  const std::string sheet = has_sheet ? source.Get("sheet").ToString().Utf8Value() : std::string();
+  const std::string name = has_name ? source.Get("name").ToString().Utf8Value() : std::string();
+  fm_status_t rc = fm_workbook_pivot_cache_set_worksheet_source(
+      handle_, cache_id, present ? 1 : 0, has_ref ? ref.c_str() : nullptr, has_sheet ? sheet.c_str() : nullptr,
+      has_name ? name.c_str() : nullptr);
   return MakeStatus(env, rc);
 }
 
