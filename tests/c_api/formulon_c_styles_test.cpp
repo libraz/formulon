@@ -299,8 +299,8 @@ TEST(FormulonCApiStyles, AddFontGrowsTable) {
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_font_count(wb.handle, &after), 0);
   EXPECT_EQ(before, 0U);
-  EXPECT_EQ(after, 2U);
-  EXPECT_EQ(idx, 1U);
+  EXPECT_EQ(after, 1U);
+  EXPECT_EQ(idx, 0U);
   // Round-trip: the freshly added font should read back equal.
   fm_font_record out{};
   ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &out), 0);
@@ -343,8 +343,8 @@ TEST(FormulonCApiStyles, AddFillGrowsTable) {
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_fill_count(wb.handle, &after), 0);
   EXPECT_EQ(before, 0U);
-  EXPECT_EQ(after, 2U);
-  EXPECT_EQ(idx, 1U);
+  EXPECT_EQ(after, 1U);
+  EXPECT_EQ(idx, 0U);
   fm_fill_record out{};
   ASSERT_EQ(fm_styles_get_fill(wb.handle, idx, &out), 0);
   EXPECT_EQ(out.pattern, 1U);
@@ -384,8 +384,8 @@ TEST(FormulonCApiStyles, AddBorderGrowsTable) {
   uint32_t after = 0;
   ASSERT_EQ(fm_styles_get_border_count(wb.handle, &after), 0);
   EXPECT_EQ(before, 0U);
-  EXPECT_EQ(after, 2U);
-  EXPECT_EQ(idx, 1U);
+  EXPECT_EQ(after, 1U);
+  EXPECT_EQ(idx, 0U);
   fm_border_record out{};
   ASSERT_EQ(fm_styles_get_border(wb.handle, idx, &out), 0);
   EXPECT_EQ(out.left.style, 1U);
@@ -499,6 +499,10 @@ TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
   xf.fill_index = fill_idx;
   xf.border_index = border_idx;
   xf.num_fmt_id = 0;
+  // Distinguish this record from the all-zero placeholder xf that
+  // `ensure_default_cell_xf` seeds at index 0 so the caller's record is
+  // guaranteed to land at a fresh index instead of deduping to it.
+  xf.wrap_text = 1;
   uint32_t idx = 0;
   ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &idx), 0);
   uint32_t after = 0;
@@ -518,15 +522,22 @@ TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
   ASSERT_EQ(fm_styles_add_border(wb.handle, MakeThinBoxBorder(), &border_idx), 0);
 
-  EXPECT_NE(font_idx, 0U);
-  EXPECT_NE(fill_idx, 0U);
-  EXPECT_NE(border_idx, 0U);
+  // A fresh workbook's tables start empty, so the first font/fill/border
+  // added legitimately becomes index 0 — there is no anonymous placeholder
+  // seeded ahead of it.
+  EXPECT_EQ(font_idx, 0U);
+  EXPECT_EQ(fill_idx, 0U);
+  EXPECT_EQ(border_idx, 0U);
 
   fm_cell_xf xf{};
   xf.font_index = font_idx;
   xf.fill_index = fill_idx;
   xf.border_index = border_idx;
   xf.num_fmt_id = 0;
+  // Distinguish this record from the all-zero placeholder xf that
+  // `ensure_default_cell_xf` seeds at index 0 so the caller's record is
+  // guaranteed to land at a fresh index instead of deduping to it.
+  xf.wrap_text = 1;
 
   uint32_t xf_idx = 0;
   ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_idx), 0);
@@ -538,6 +549,7 @@ TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   EXPECT_EQ(default_xf.fill_index, 0U);
   EXPECT_EQ(default_xf.border_index, 0U);
   EXPECT_EQ(default_xf.num_fmt_id, 0U);
+  EXPECT_EQ(default_xf.wrap_text, 0);
 }
 
 TEST(FormulonCApiStyles, AddCellXfRejectsOutOfRangeIndex) {

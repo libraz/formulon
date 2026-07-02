@@ -431,7 +431,6 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   formulon::io::FontRecord candidate = font_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
-  ensure_default_style_roots(styles);
   for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
     if (font_records_equal(styles.fonts[i], candidate)) {
       *out_index = static_cast<uint32_t>(i);
@@ -451,7 +450,6 @@ extern "C" fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record reco
   formulon::io::FillRecord candidate = fill_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
-  ensure_default_style_roots(styles);
   for (std::size_t i = 0; i < styles.fills.size(); ++i) {
     if (fill_records_equal(styles.fills[i], candidate)) {
       *out_index = static_cast<uint32_t>(i);
@@ -471,7 +469,6 @@ extern "C" fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record 
   formulon::io::BorderRecord candidate = border_from_c(record);
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
-  ensure_default_style_roots(styles);
   for (std::size_t i = 0; i < styles.borders.size(); ++i) {
     if (border_records_equal(styles.borders[i], candidate)) {
       *out_index = static_cast<uint32_t>(i);
