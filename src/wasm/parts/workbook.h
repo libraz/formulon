@@ -136,6 +136,7 @@ class JsWorkbook {
   emscripten::val getFill(uint32_t fill_index) const;
   emscripten::val getBorder(uint32_t border_index) const;
   emscripten::val getNumFmt(uint32_t num_fmt_id) const;
+  emscripten::val getDxf(uint32_t dxf_index) const;
 
   JsAddStyleResult addFont(emscripten::val record);
   JsAddStyleResult addFill(emscripten::val record);
@@ -147,6 +148,7 @@ class JsWorkbook {
   uint32_t fillCount() const;
   uint32_t borderCount() const;
   uint32_t xfCount() const;
+  uint32_t dxfCount() const;
   uint32_t cellStyleCount() const;
   uint32_t cellStyleXfCount() const;
   emscripten::val getCellStyle(uint32_t index) const;

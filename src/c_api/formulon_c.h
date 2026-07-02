@@ -1310,16 +1310,29 @@ typedef struct {
 } fm_cf_cell_range_t;
 
 /**
+ * @brief Conditional-format value object used by visual rule authoring.
+ *
+ * `type` is the `formulon::cf::CfvoType` ordinal:
+ * `0=number`, `1=percent`, `2=percentile`, `3=min`, `4=max`,
+ * `5=formula`, `6=autoMin`, `7=autoMax`. `value` is optional and is
+ * copied by `fm_sheet_cf_add_rule`; pass `NULL` for valueless min/max
+ * thresholds. `gte` maps to OOXML `gte` (`1` by default).
+ */
+typedef struct {
+  uint8_t type;
+  uint8_t _pad[3];
+  int32_t gte; /* 0/1 */
+  const char* value;
+} fm_cfvo_t;
+
+/**
  * @brief CF rule wire format used by `fm_sheet_cf_*` APIs.
  *
- * Wide POD covering the non-visual rule subset. Visual rules
- * (`ColorScale`, `DataBar`, `IconSet`) are stored verbatim by the OOXML
- * reader / writer but are *not* creatable through this API in the
- * current surface — `fm_sheet_cf_add_rule` returns `kInvalidArgument`
- * for those `type` values. `fm_sheet_cf_get_at` reports them with the
- * `type` field populated (so a UI can recognise them as "visual rule
- * present, not editable here") but leaves the variant payload at its
- * zero default.
+ * Wide POD covering both differential-format rules and visual rules.
+ * `fm_sheet_cf_add_rule` deep-copies every pointer-backed payload into
+ * the engine model. `fm_sheet_cf_get_at` returns borrowed views for the
+ * selected rule; pointer-backed visual payloads use the workbook handle's
+ * read scratch.
  *
  * Active fields by `type`:
  *   - `Expression` (0): `formula1`.
@@ -1334,6 +1347,12 @@ typedef struct {
  *     `NotContainsErrors` (11-14): no extra payload.
  *   - `TimePeriod` (15): `time_period_engaged` + `time_period`.
  *   - `DuplicateValues` / `UniqueValues` (16-17): no extra payload.
+ *   - `ColorScale` (2): `color_scale_thresholds` +
+ *     `color_scale_colors` with matching counts of 2 or 3.
+ *   - `DataBar` (3): `data_bar_min`, `data_bar_max`,
+ *     `data_bar_fill`, and optional display flags.
+ *   - `IconSet` (4): `icon_set_name` plus N-1
+ *     `icon_set_thresholds`.
  *
  * String fields use C-string convention: `NULL` means "absent",
  * non-`NULL` is a NUL-terminated borrowed view. On the input path
@@ -1384,6 +1403,31 @@ typedef struct {
 
   /* TimePeriod */
   int32_t time_period_engaged; /* 0/1 */
+
+  /* ColorScale payload. Counts must match and be 2 or 3 on input. */
+  const fm_cfvo_t* color_scale_thresholds;
+  const fm_cf_color_t* color_scale_colors;
+  uint32_t color_scale_count;
+
+  /* DataBar payload. */
+  int32_t data_bar_engaged; /* 0/1 */
+  fm_cfvo_t data_bar_min;
+  fm_cfvo_t data_bar_max;
+  fm_cf_color_t data_bar_fill;
+  int32_t data_bar_show_value; /* 0/1, default 1 */
+  uint8_t data_bar_min_length_pct;
+  uint8_t data_bar_max_length_pct;
+  uint8_t _pad1[2];
+
+  /* IconSet payload. */
+  int32_t icon_set_engaged; /* 0/1 */
+  uint8_t icon_set_name;    /* `formulon::cf::IconSetName` ordinal */
+  uint8_t _pad2[3];
+  const fm_cfvo_t* icon_set_thresholds;
+  uint32_t icon_set_threshold_count;
+  int32_t icon_set_reverse;    /* 0/1 */
+  int32_t icon_set_show_value; /* 0/1, default 1 */
+  int32_t icon_set_percent;    /* 0/1, default 1 */
 } fm_cf_rule_t;
 
 /**
@@ -1402,10 +1446,11 @@ FM_API fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, size_t sheet_index
 /**
  * @brief Reads the `idx`-th CF rule (in flattened order) into `out`.
  *
- * The string and sqref-array views in `*out` borrow from the engine's
- * storage and are valid until the next CF mutation on the same sheet
- * (`fm_sheet_cf_add_rule`, `fm_sheet_cf_remove_at`,
- * `fm_sheet_cf_clear`, or any reader/writer round-trip).
+ * String and sqref-array views in `*out` borrow from engine storage or
+ * the workbook handle's read scratch. They are valid until the next read
+ * call on the same handle, the next CF mutation on the same sheet
+ * (`fm_sheet_cf_add_rule`, `fm_sheet_cf_remove_at`, `fm_sheet_cf_clear`),
+ * any reader/writer round-trip, or handle destruction.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -1422,16 +1467,12 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  * `rule.id` is `NULL` or empty, a new id is synthesised from the
  * priority.
  *
- * Visual rule types (`ColorScale`, `DataBar`, `IconSet`) are
- * rejected — those payloads still round-trip through the OOXML
- * reader / writer but are not creatable from this API yet.
- *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb` is `NULL` or `rule.sqref`
  *           is `NULL` while `rule.sqref_count > 0`;
  *         `kInvalidArgument` when `sheet_index` is out of range, when
- *           `rule.sqref_count == 0`, or when `rule.type` denotes a
- *           visual rule.
+ *           `rule.sqref_count == 0`, or when a visual payload is
+ *           missing / malformed.
  */
 FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule);
 
@@ -2572,6 +2613,26 @@ typedef struct {
   int32_t diagonal_down; /* 0=false, 1=true */
 } fm_border_record;
 
+/**
+ * @brief Plain-data projection of one OOXML `<dxf>` differential format.
+ *
+ * Each `*_engaged` flag mirrors whether the corresponding child element
+ * exists in the source `<dxf>`. `num_fmt_code` borrows storage owned by
+ * the workbook's styles table and is valid until the next mutation that
+ * replaces the styles table or until the handle is destroyed.
+ */
+typedef struct {
+  int32_t font_engaged; /* 0=false, 1=true */
+  fm_font_record font;
+  int32_t fill_engaged; /* 0=false, 1=true */
+  fm_fill_record fill;
+  int32_t border_engaged; /* 0=false, 1=true */
+  fm_border_record border;
+  int32_t num_fmt_engaged; /* 0=false, 1=true */
+  uint16_t num_fmt_id;
+  const char* num_fmt_code; /* UTF-8, NUL-terminated; never NULL */
+} fm_dxf_record;
+
 /** Sentinel for `fm_cell_style_record_t::builtin_id` indicating the
  *  style is custom (no `builtinId` attribute on the OOXML element). */
 #define FM_CELL_STYLE_BUILTIN_ID_NONE 0xFFFFFFFFu
@@ -2689,6 +2750,24 @@ FM_API fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index, fm
  *         `kInvalidArgument` when `border_index >= borders.size()`.
  */
 FM_API fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_index, fm_border_record* out);
+
+/**
+ * @brief Returns the number of `<dxf>` differential-format records
+ *        available for conditional-format `dxfId` resolution.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ */
+FM_API fm_status_t fm_styles_get_dxf_count(fm_workbook_t* wb, uint32_t* out_count);
+
+/**
+ * @brief Reads the `dxf_index`-th differential-format record.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `dxf_index >= dxfs.size()`.
+ */
+FM_API fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_record* out);
 
 /**
  * @brief Returns the number of font records currently registered in the

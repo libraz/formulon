@@ -183,6 +183,33 @@ TEST(StylesReader, IgnoresUnknownChildren) {
   EXPECT_TRUE(result_or.value().num_fmts.empty());
 }
 
+TEST(StylesReader, ReadsDifferentialFormats) {
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  xml.append("  <dxfs count=\"1\"><dxf>");
+  xml.append("<font><b/><color rgb=\"FFFF0000\"/></font>");
+  xml.append("<numFmt numFmtId=\"164\" formatCode=\"0.00\"/>");
+  xml.append("<fill><patternFill patternType=\"solid\"><fgColor rgb=\"FFFFFF00\"/></patternFill></fill>");
+  xml.append("<border><left style=\"thin\"><color rgb=\"FF000000\"/></left></border>");
+  xml.append("</dxf></dxfs>\n");
+  xml.append("</styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or));
+  ASSERT_EQ(result_or.value().dxfs.size(), 1U);
+  const DifferentialFormat& dxf = result_or.value().dxfs[0];
+  ASSERT_TRUE(dxf.has_font);
+  EXPECT_TRUE(dxf.font.bold);
+  EXPECT_EQ(dxf.font.color_argb, 0xFFFF0000U);
+  ASSERT_TRUE(dxf.has_num_fmt);
+  EXPECT_EQ(dxf.num_fmt_id, 164U);
+  EXPECT_EQ(dxf.num_fmt_code, "0.00");
+  ASSERT_TRUE(dxf.has_fill);
+  EXPECT_EQ(dxf.fill.fg_argb, 0xFFFFFF00U);
+  ASSERT_TRUE(dxf.has_border);
+  EXPECT_EQ(dxf.border.left.style, 1U);
+}
+
 TEST(BuiltinNumFmt, ResolvesKnownIds) {
   // Built-in 0 = "General"; 14 = "mm-dd-yy"; 49 = "@".
   EXPECT_STREQ(builtin_num_fmt(0), "General");

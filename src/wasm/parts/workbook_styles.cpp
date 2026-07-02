@@ -161,6 +161,63 @@ emscripten::val JsWorkbook::getNumFmt(uint32_t num_fmt_id) const {
   return o;
 }
 
+emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
+  emscripten::val o = emscripten::val::object();
+  if (handle_ == nullptr) {
+    o.set("status", error_status(7000));
+    return o;
+  }
+  fm_dxf_record d{};
+  fm_status_t rc = fm_styles_get_dxf(handle_, dxf_index, &d);
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    return o;
+  }
+  o.set("status", ok_status());
+  if (d.font_engaged != 0) {
+    emscripten::val font = emscripten::val::object();
+    font.set("name", std::string(d.font.name != nullptr ? d.font.name : ""));
+    font.set("size", d.font.size);
+    font.set("colorArgb", d.font.color_argb);
+    font.set("bold", d.font.bold != 0);
+    font.set("italic", d.font.italic != 0);
+    font.set("strike", d.font.strike != 0);
+    font.set("underline", static_cast<uint32_t>(d.font.underline));
+    o.set("font", font);
+  }
+  if (d.fill_engaged != 0) {
+    emscripten::val fill = emscripten::val::object();
+    fill.set("pattern", static_cast<uint32_t>(d.fill.pattern));
+    fill.set("fgArgb", d.fill.fg_argb);
+    fill.set("bgArgb", d.fill.bg_argb);
+    o.set("fill", fill);
+  }
+  if (d.border_engaged != 0) {
+    auto side_obj = [](const fm_border_side& s) {
+      emscripten::val v = emscripten::val::object();
+      v.set("style", static_cast<uint32_t>(s.style));
+      v.set("colorArgb", s.color_argb);
+      return v;
+    };
+    emscripten::val border = emscripten::val::object();
+    border.set("left", side_obj(d.border.left));
+    border.set("right", side_obj(d.border.right));
+    border.set("top", side_obj(d.border.top));
+    border.set("bottom", side_obj(d.border.bottom));
+    border.set("diagonal", side_obj(d.border.diagonal));
+    border.set("diagonalUp", d.border.diagonal_up != 0);
+    border.set("diagonalDown", d.border.diagonal_down != 0);
+    o.set("border", border);
+  }
+  if (d.num_fmt_engaged != 0) {
+    emscripten::val num_fmt = emscripten::val::object();
+    num_fmt.set("numFmtId", static_cast<uint32_t>(d.num_fmt_id));
+    num_fmt.set("formatCode", std::string(d.num_fmt_code != nullptr ? d.num_fmt_code : ""));
+    o.set("numFmt", num_fmt);
+  }
+  return o;
+}
+
 // ---- Style record adders -----------------------------------------------
 
 JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
@@ -281,6 +338,17 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
 //
 // `fontCount` / `fillCount` / `borderCount` / `xfCount` are now emitted
 // by the binding codegen (see `src/wasm/generated/styles_counts.cpp`).
+
+uint32_t JsWorkbook::dxfCount() const {
+  if (handle_ == nullptr) {
+    return 0;
+  }
+  uint32_t n = 0;
+  if (fm_styles_get_dxf_count(handle_, &n) != 0) {
+    return 0;
+  }
+  return n;
+}
 // `cellStyleCount` / `cellStyleXfCount` stay here because they have no
 // N-API counterpart and are therefore not part of the cross-binding
 // manifest.

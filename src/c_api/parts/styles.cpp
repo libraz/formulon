@@ -178,6 +178,81 @@ extern "C" fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_i
   return 0;
 }
 
+namespace {
+
+void font_to_c(const formulon::io::FontRecord& f, fm_font_record* out) {
+  out->name = f.name.c_str();
+  out->size = f.size;
+  out->color_argb = f.color_argb;
+  out->bold = f.bold ? 1 : 0;
+  out->italic = f.italic ? 1 : 0;
+  out->strike = f.strike ? 1 : 0;
+  out->underline = f.underline;
+}
+
+void fill_to_c(const formulon::io::FillRecord& f, fm_fill_record* out) {
+  out->pattern = f.pattern;
+  out->fg_argb = f.fg_argb;
+  out->bg_argb = f.bg_argb;
+}
+
+void border_to_c(const formulon::io::BorderRecord& b, fm_border_record* out) {
+  auto fill_side = [](const formulon::io::BorderSide& src, fm_border_side& dst) noexcept {
+    dst.style = src.style;
+    dst.color_argb = src.color_argb;
+  };
+  fill_side(b.left, out->left);
+  fill_side(b.right, out->right);
+  fill_side(b.top, out->top);
+  fill_side(b.bottom, out->bottom);
+  fill_side(b.diagonal, out->diagonal);
+  out->diagonal_up = b.diagonal_up ? 1 : 0;
+  out->diagonal_down = b.diagonal_down ? 1 : 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_styles_get_dxf_count(fm_workbook_t* wb, uint32_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_get_dxf_count: NULL argument");
+  }
+  *out_count = static_cast<uint32_t>(wb->workbook().styles().dxfs.size());
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_dxf_record* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_dxf: NULL argument");
+  }
+  const formulon::io::StylesTable& styles = wb->workbook().styles();
+  if (dxf_index >= styles.dxfs.size()) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_dxf: dxf_index out of range",
+        "dxf_index=" + std::to_string(dxf_index) + " dxfs_count=" + std::to_string(styles.dxfs.size()));
+  }
+  *out = fm_dxf_record{};
+  const formulon::io::DifferentialFormat& dxf = styles.dxfs[dxf_index];
+  out->font_engaged = dxf.has_font ? 1 : 0;
+  if (dxf.has_font) {
+    font_to_c(dxf.font, &out->font);
+  }
+  out->fill_engaged = dxf.has_fill ? 1 : 0;
+  if (dxf.has_fill) {
+    fill_to_c(dxf.fill, &out->fill);
+  }
+  out->border_engaged = dxf.has_border ? 1 : 0;
+  if (dxf.has_border) {
+    border_to_c(dxf.border, &out->border);
+  }
+  out->num_fmt_engaged = dxf.has_num_fmt ? 1 : 0;
+  out->num_fmt_id = dxf.num_fmt_id;
+  out->num_fmt_code = dxf.num_fmt_code.c_str();
+  return 0;
+}
+
 // `fm_styles_get_{font,fill,border,cell_xf}_count` are now emitted by
 // the binding codegen (see `src/c_api/generated/styles_counts.cpp`).
 // `fm_styles_get_cell_style_count` /

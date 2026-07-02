@@ -603,6 +603,106 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
   out.append("  </cellStyles>\n");
 }
 
+void AppendFontFragment(std::string& out, const FontRecord& f) {
+  out.append("<font>");
+  if (f.bold) {
+    out.append("<b/>");
+  }
+  if (f.italic) {
+    out.append("<i/>");
+  }
+  if (f.strike) {
+    out.append("<strike/>");
+  }
+  if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
+    out.append("<u val=\"");
+    out.append(uname);
+    out.append("\"/>");
+  }
+  out.append("<sz val=\"");
+  AppendDouble(out, f.size);
+  out.append("\"/>");
+  out.append("<color rgb=\"");
+  AppendArgb(out, f.color_argb);
+  out.append("\"/>");
+  if (!f.name.empty()) {
+    out.append("<name val=\"");
+    AppendXmlEscaped(out, f.name);
+    out.append("\"/>");
+  }
+  out.append("</font>");
+}
+
+void AppendFillFragment(std::string& out, const FillRecord& fill) {
+  out.append("<fill><patternFill patternType=\"");
+  out.append(FillPatternName(fill.pattern));
+  out.append("\"");
+  if (fill.fg_argb != 0U || fill.bg_argb != 0U) {
+    out.append(">");
+    if (fill.fg_argb != 0U) {
+      out.append("<fgColor rgb=\"");
+      AppendArgb(out, fill.fg_argb);
+      out.append("\"/>");
+    }
+    if (fill.bg_argb != 0U) {
+      out.append("<bgColor rgb=\"");
+      AppendArgb(out, fill.bg_argb);
+      out.append("\"/>");
+    }
+    out.append("</patternFill>");
+  } else {
+    out.append("/>");
+  }
+  out.append("</fill>");
+}
+
+void AppendBorderFragment(std::string& out, const BorderRecord& b) {
+  out.append("<border");
+  if (b.diagonal_up) {
+    out.append(" diagonalUp=\"1\"");
+  }
+  if (b.diagonal_down) {
+    out.append(" diagonalDown=\"1\"");
+  }
+  out.append(">");
+  AppendBorderSide(out, "left", b.left);
+  AppendBorderSide(out, "right", b.right);
+  AppendBorderSide(out, "top", b.top);
+  AppendBorderSide(out, "bottom", b.bottom);
+  AppendBorderSide(out, "diagonal", b.diagonal);
+  out.append("</border>");
+}
+
+void AppendDxfs(std::string& out, const StylesTable& table) {
+  if (table.dxfs.empty()) {
+    return;
+  }
+  out.append("  <dxfs count=\"");
+  AppendUint(out, table.dxfs.size());
+  out.append("\">\n");
+  for (const DifferentialFormat& dxf : table.dxfs) {
+    out.append("    <dxf>");
+    if (dxf.has_font) {
+      AppendFontFragment(out, dxf.font);
+    }
+    if (dxf.has_num_fmt) {
+      out.append("<numFmt numFmtId=\"");
+      AppendUint(out, dxf.num_fmt_id);
+      out.append("\" formatCode=\"");
+      AppendXmlEscaped(out, dxf.num_fmt_code);
+      out.append("\"/>");
+    }
+    if (dxf.has_fill) {
+      AppendFillFragment(out, dxf.fill);
+    }
+    if (dxf.has_border) {
+      AppendBorderFragment(out, dxf.border);
+    }
+    out.append("</dxf>\n");
+  }
+  out.append("  </dxfs>\n");
+}
+
 }  // namespace
 
 const char* builtin_num_fmt(std::uint16_t id) {
@@ -626,6 +726,7 @@ std::string write_styles(const StylesTable& table) {
   AppendCellStyleXfs(out, table);
   AppendCellXfs(out, table);
   AppendCellStyles(out, table);
+  AppendDxfs(out, table);
   out.append("</styleSheet>\n");
   return out;
 }

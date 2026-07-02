@@ -249,6 +249,28 @@ void ReadFonts(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
+FontRecord ParseFontNode(const pugi::xml_node& f) {
+  FontRecord rec;
+  pugi::xml_node name = f.child("name");
+  if (name) {
+    rec.name = name.attribute("val").value();
+  }
+  pugi::xml_node sz = f.child("sz");
+  if (sz) {
+    rec.size = sz.attribute("val").as_double(11.0);
+  }
+  rec.bold = static_cast<bool>(f.child("b"));
+  rec.italic = static_cast<bool>(f.child("i"));
+  rec.strike = static_cast<bool>(f.child("strike"));
+  pugi::xml_node u = f.child("u");
+  if (u) {
+    const std::string_view val = u.attribute("val").value();
+    rec.underline = val.empty() ? 1U : ParseUnderline(val);
+  }
+  rec.color_argb = ParseColorArgb(f.child("color"), 0xFF000000U);
+  return rec;
+}
+
 void ReadFills(const pugi::xml_node& root, StylesTable& table) {
   pugi::xml_node fills = root.child("fills");
   if (!fills) {
@@ -268,6 +290,17 @@ void ReadFills(const pugi::xml_node& root, StylesTable& table) {
   if (table.fills.empty()) {
     table.fills.emplace_back();
   }
+}
+
+FillRecord ParseFillNode(const pugi::xml_node& fill) {
+  FillRecord rec;
+  pugi::xml_node pattern = fill.child("patternFill");
+  if (pattern) {
+    rec.pattern = ParseFillPattern(pattern.attribute("patternType").value());
+    rec.fg_argb = ParseColorArgb(pattern.child("fgColor"), 0U);
+    rec.bg_argb = ParseColorArgb(pattern.child("bgColor"), 0U);
+  }
+  return rec;
 }
 
 void ReadBorderSide(const pugi::xml_node& side, BorderSide* out) {
@@ -298,6 +331,18 @@ void ReadBorders(const pugi::xml_node& root, StylesTable& table) {
   if (table.borders.empty()) {
     table.borders.emplace_back();
   }
+}
+
+BorderRecord ParseBorderNode(const pugi::xml_node& b) {
+  BorderRecord rec;
+  rec.diagonal_up = b.attribute("diagonalUp").as_bool(false);
+  rec.diagonal_down = b.attribute("diagonalDown").as_bool(false);
+  ReadBorderSide(b.child("left"), &rec.left);
+  ReadBorderSide(b.child("right"), &rec.right);
+  ReadBorderSide(b.child("top"), &rec.top);
+  ReadBorderSide(b.child("bottom"), &rec.bottom);
+  ReadBorderSide(b.child("diagonal"), &rec.diagonal);
+  return rec;
 }
 
 void ReadNumFmts(const pugi::xml_node& root, StylesTable& table) {
@@ -379,6 +424,34 @@ void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
+void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
+  pugi::xml_node dxfs = root.child("dxfs");
+  if (!dxfs) {
+    return;
+  }
+  for (pugi::xml_node dxf = dxfs.child("dxf"); dxf; dxf = dxf.next_sibling("dxf")) {
+    DifferentialFormat rec;
+    if (pugi::xml_node font = dxf.child("font")) {
+      rec.has_font = true;
+      rec.font = ParseFontNode(font);
+    }
+    if (pugi::xml_node fill = dxf.child("fill")) {
+      rec.has_fill = true;
+      rec.fill = ParseFillNode(fill);
+    }
+    if (pugi::xml_node border = dxf.child("border")) {
+      rec.has_border = true;
+      rec.border = ParseBorderNode(border);
+    }
+    if (pugi::xml_node num_fmt = dxf.child("numFmt")) {
+      rec.has_num_fmt = true;
+      rec.num_fmt_id = static_cast<std::uint16_t>(num_fmt.attribute("numFmtId").as_uint(0U));
+      rec.num_fmt_code = num_fmt.attribute("formatCode").value();
+    }
+    table.dxfs.push_back(std::move(rec));
+  }
+}
+
 }  // namespace
 
 Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles_bytes) {
@@ -398,6 +471,7 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
   ReadCellStyleXfs(root, table);
   ReadCellXfs(root, table);
   ReadCellStyles(root, table);
+  ReadDxfs(root, table);
   return table;
 }
 

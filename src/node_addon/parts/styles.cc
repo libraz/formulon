@@ -15,6 +15,48 @@
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
+namespace {
+
+fm_cf_color_t PullCfColor(const Napi::Object& spec) {
+  fm_cf_color_t out{};
+  out.r = static_cast<uint8_t>(SpecPullU32(spec, "r", 0U) & 0xFFU);
+  out.g = static_cast<uint8_t>(SpecPullU32(spec, "g", 0U) & 0xFFU);
+  out.b = static_cast<uint8_t>(SpecPullU32(spec, "b", 0U) & 0xFFU);
+  out.a = static_cast<uint8_t>(SpecPullU32(spec, "a", 255U) & 0xFFU);
+  return out;
+}
+
+fm_cfvo_t PullCfvo(const Napi::Object& spec, std::vector<std::string>* strings) {
+  fm_cfvo_t out{};
+  out.type = static_cast<uint8_t>(SpecPullU32(spec, "type", 0U) & 0xFFU);
+  out.gte = SpecPullBool(spec, "gte", true) ? 1 : 0;
+  if (SpecHas(spec, "value")) {
+    strings->push_back(spec.Get("value").ToString().Utf8Value());
+    out.value = strings->back().c_str();
+  }
+  return out;
+}
+
+Napi::Object CfColorToJs(Napi::Env env, fm_cf_color_t color) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("r", Napi::Number::New(env, color.r));
+  out.Set("g", Napi::Number::New(env, color.g));
+  out.Set("b", Napi::Number::New(env, color.b));
+  out.Set("a", Napi::Number::New(env, color.a));
+  return out;
+}
+
+Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("type", Napi::Number::New(env, static_cast<uint32_t>(cfvo.type)));
+  out.Set("gte", Napi::Boolean::New(env, cfvo.gte != 0));
+  if (cfvo.value != nullptr) {
+    out.Set("value", Napi::String::New(env, cfvo.value));
+  }
+  return out;
+}
+
+}  // namespace
 
 // ---- Cell-XF index --------------------------------------------------
 
@@ -171,6 +213,65 @@ Napi::Value Workbook::GetNumFmt(const Napi::CallbackInfo& info) {
   return out;
 }
 
+Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const uint32_t dxf_index = ArgU32(info, 0);
+  fm_dxf_record d{};
+  fm_status_t rc = fm_styles_get_dxf(handle_, dxf_index, &d);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  if (d.font_engaged != 0) {
+    Napi::Object font = Napi::Object::New(env);
+    font.Set("name", Napi::String::New(env, d.font.name != nullptr ? d.font.name : ""));
+    font.Set("size", Napi::Number::New(env, d.font.size));
+    font.Set("colorArgb", Napi::Number::New(env, d.font.color_argb));
+    font.Set("bold", Napi::Boolean::New(env, d.font.bold != 0));
+    font.Set("italic", Napi::Boolean::New(env, d.font.italic != 0));
+    font.Set("strike", Napi::Boolean::New(env, d.font.strike != 0));
+    font.Set("underline", Napi::Number::New(env, static_cast<uint32_t>(d.font.underline)));
+    out.Set("font", font);
+  }
+  if (d.fill_engaged != 0) {
+    Napi::Object fill = Napi::Object::New(env);
+    fill.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(d.fill.pattern)));
+    fill.Set("fgArgb", Napi::Number::New(env, d.fill.fg_argb));
+    fill.Set("bgArgb", Napi::Number::New(env, d.fill.bg_argb));
+    out.Set("fill", fill);
+  }
+  if (d.border_engaged != 0) {
+    auto side_obj = [&](const fm_border_side& s) {
+      Napi::Object so = Napi::Object::New(env);
+      so.Set("style", Napi::Number::New(env, static_cast<uint32_t>(s.style)));
+      so.Set("colorArgb", Napi::Number::New(env, s.color_argb));
+      return so;
+    };
+    Napi::Object border = Napi::Object::New(env);
+    border.Set("left", side_obj(d.border.left));
+    border.Set("right", side_obj(d.border.right));
+    border.Set("top", side_obj(d.border.top));
+    border.Set("bottom", side_obj(d.border.bottom));
+    border.Set("diagonal", side_obj(d.border.diagonal));
+    border.Set("diagonalUp", Napi::Boolean::New(env, d.border.diagonal_up != 0));
+    border.Set("diagonalDown", Napi::Boolean::New(env, d.border.diagonal_down != 0));
+    out.Set("border", border);
+  }
+  if (d.num_fmt_engaged != 0) {
+    Napi::Object num_fmt = Napi::Object::New(env);
+    num_fmt.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(d.num_fmt_id)));
+    num_fmt.Set("formatCode", Napi::String::New(env, d.num_fmt_code != nullptr ? d.num_fmt_code : ""));
+    out.Set("numFmt", num_fmt);
+  }
+  return out;
+}
+
 // ---- Style adders ---------------------------------------------------
 
 Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
@@ -294,6 +395,18 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
 //
 // `FontCount` / `FillCount` / `BorderCount` / `XfCount` are now emitted
 // by the binding codegen (see `src/node_addon/generated/styles_counts.cc`).
+
+Napi::Value Workbook::DxfCount(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  uint32_t n = 0;
+  if (fm_styles_get_dxf_count(handle_, &n) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  return Napi::Number::New(env, n);
+}
 
 // ---- Conditional formatting -----------------------------------------
 
@@ -495,6 +608,41 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
     if (rule.time_period_engaged != 0) {
       item.Set("timePeriod", Napi::Number::New(env, static_cast<uint32_t>(rule.time_period)));
     }
+    if (rule.color_scale_count > 0 && rule.color_scale_thresholds != nullptr && rule.color_scale_colors != nullptr) {
+      Napi::Object color_scale = Napi::Object::New(env);
+      Napi::Array thresholds = Napi::Array::New(env, rule.color_scale_count);
+      Napi::Array colors = Napi::Array::New(env, rule.color_scale_count);
+      for (uint32_t j = 0; j < rule.color_scale_count; ++j) {
+        thresholds.Set(j, CfvoToJs(env, rule.color_scale_thresholds[j]));
+        colors.Set(j, CfColorToJs(env, rule.color_scale_colors[j]));
+      }
+      color_scale.Set("thresholds", thresholds);
+      color_scale.Set("colors", colors);
+      item.Set("colorScale", color_scale);
+    }
+    if (rule.data_bar_engaged != 0) {
+      Napi::Object data_bar = Napi::Object::New(env);
+      data_bar.Set("min", CfvoToJs(env, rule.data_bar_min));
+      data_bar.Set("max", CfvoToJs(env, rule.data_bar_max));
+      data_bar.Set("fill", CfColorToJs(env, rule.data_bar_fill));
+      data_bar.Set("showValue", Napi::Boolean::New(env, rule.data_bar_show_value != 0));
+      data_bar.Set("minLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_min_length_pct)));
+      data_bar.Set("maxLengthPct", Napi::Number::New(env, static_cast<uint32_t>(rule.data_bar_max_length_pct)));
+      item.Set("dataBar", data_bar);
+    }
+    if (rule.icon_set_engaged != 0) {
+      Napi::Object icon_set = Napi::Object::New(env);
+      icon_set.Set("name", Napi::Number::New(env, static_cast<uint32_t>(rule.icon_set_name)));
+      Napi::Array thresholds = Napi::Array::New(env, rule.icon_set_threshold_count);
+      for (uint32_t j = 0; j < rule.icon_set_threshold_count; ++j) {
+        thresholds.Set(j, CfvoToJs(env, rule.icon_set_thresholds[j]));
+      }
+      icon_set.Set("thresholds", thresholds);
+      icon_set.Set("reverse", Napi::Boolean::New(env, rule.icon_set_reverse != 0));
+      icon_set.Set("showValue", Napi::Boolean::New(env, rule.icon_set_show_value != 0));
+      icon_set.Set("percent", Napi::Boolean::New(env, rule.icon_set_percent != 0));
+      item.Set("iconSet", icon_set);
+    }
     arr.Set(static_cast<uint32_t>(emitted), item);
     ++emitted;
   }
@@ -517,6 +665,10 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   // borrowed `const char*` views that must stay valid until
   // `fm_sheet_cf_add_rule` returns.
   std::vector<fm_cf_cell_range_t> ranges_buf;
+  std::vector<fm_cfvo_t> color_scale_thresholds;
+  std::vector<fm_cf_color_t> color_scale_colors;
+  std::vector<fm_cfvo_t> icon_set_thresholds;
+  std::vector<std::string> cfvo_strings;
   if (v.Has("sqref")) {
     Napi::Value sqref_js = v.Get("sqref");
     if (sqref_js.IsArray()) {
@@ -576,6 +728,65 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   if (SpecHas(v, "timePeriod")) {
     rule.time_period_engaged = 1;
     rule.time_period = static_cast<uint8_t>(SpecPullU32(v, "timePeriod", 0U) & 0xFFU);
+  }
+  if (SpecHas(v, "colorScale") && v.Get("colorScale").IsObject()) {
+    Napi::Object cs = v.Get("colorScale").As<Napi::Object>();
+    if (SpecHas(cs, "thresholds") && cs.Get("thresholds").IsArray()) {
+      Napi::Array arr = cs.Get("thresholds").As<Napi::Array>();
+      color_scale_thresholds.reserve(arr.Length());
+      for (uint32_t i = 0; i < arr.Length(); ++i) {
+        if (arr.Get(i).IsObject()) {
+          color_scale_thresholds.push_back(PullCfvo(arr.Get(i).As<Napi::Object>(), &cfvo_strings));
+        }
+      }
+    }
+    if (SpecHas(cs, "colors") && cs.Get("colors").IsArray()) {
+      Napi::Array arr = cs.Get("colors").As<Napi::Array>();
+      color_scale_colors.reserve(arr.Length());
+      for (uint32_t i = 0; i < arr.Length(); ++i) {
+        if (arr.Get(i).IsObject()) {
+          color_scale_colors.push_back(PullCfColor(arr.Get(i).As<Napi::Object>()));
+        }
+      }
+    }
+    rule.color_scale_thresholds = color_scale_thresholds.empty() ? nullptr : color_scale_thresholds.data();
+    rule.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
+    rule.color_scale_count = static_cast<uint32_t>(color_scale_thresholds.size());
+  }
+  if (SpecHas(v, "dataBar") && v.Get("dataBar").IsObject()) {
+    Napi::Object db = v.Get("dataBar").As<Napi::Object>();
+    rule.data_bar_engaged = 1;
+    if (SpecHas(db, "min") && db.Get("min").IsObject()) {
+      rule.data_bar_min = PullCfvo(db.Get("min").As<Napi::Object>(), &cfvo_strings);
+    }
+    if (SpecHas(db, "max") && db.Get("max").IsObject()) {
+      rule.data_bar_max = PullCfvo(db.Get("max").As<Napi::Object>(), &cfvo_strings);
+    }
+    if (SpecHas(db, "fill") && db.Get("fill").IsObject()) {
+      rule.data_bar_fill = PullCfColor(db.Get("fill").As<Napi::Object>());
+    }
+    rule.data_bar_show_value = SpecPullBool(db, "showValue", true) ? 1 : 0;
+    rule.data_bar_min_length_pct = static_cast<uint8_t>(SpecPullU32(db, "minLengthPct", 10U) & 0xFFU);
+    rule.data_bar_max_length_pct = static_cast<uint8_t>(SpecPullU32(db, "maxLengthPct", 90U) & 0xFFU);
+  }
+  if (SpecHas(v, "iconSet") && v.Get("iconSet").IsObject()) {
+    Napi::Object is = v.Get("iconSet").As<Napi::Object>();
+    rule.icon_set_engaged = 1;
+    rule.icon_set_name = static_cast<uint8_t>(SpecPullU32(is, "name", 0U) & 0xFFU);
+    if (SpecHas(is, "thresholds") && is.Get("thresholds").IsArray()) {
+      Napi::Array arr = is.Get("thresholds").As<Napi::Array>();
+      icon_set_thresholds.reserve(arr.Length());
+      for (uint32_t i = 0; i < arr.Length(); ++i) {
+        if (arr.Get(i).IsObject()) {
+          icon_set_thresholds.push_back(PullCfvo(arr.Get(i).As<Napi::Object>(), &cfvo_strings));
+        }
+      }
+    }
+    rule.icon_set_thresholds = icon_set_thresholds.empty() ? nullptr : icon_set_thresholds.data();
+    rule.icon_set_threshold_count = static_cast<uint32_t>(icon_set_thresholds.size());
+    rule.icon_set_reverse = SpecPullBool(is, "reverse", false) ? 1 : 0;
+    rule.icon_set_show_value = SpecPullBool(is, "showValue", true) ? 1 : 0;
+    rule.icon_set_percent = SpecPullBool(is, "percent", true) ? 1 : 0;
   }
   fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule);
   return MakeStatus(env, rc);

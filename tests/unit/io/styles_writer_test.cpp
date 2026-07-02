@@ -141,6 +141,18 @@ TEST(StylesWriter, RoundTripsThroughReader) {
   xf.horizontal_align = 1;  // left
   original.cell_xfs.push_back(xf);
 
+  DifferentialFormat dxf;
+  dxf.has_font = true;
+  dxf.font.bold = true;
+  dxf.font.color_argb = 0xFFFF0000U;
+  dxf.has_fill = true;
+  dxf.fill.pattern = 1;
+  dxf.fill.fg_argb = 0xFFFFFF00U;
+  dxf.has_num_fmt = true;
+  dxf.num_fmt_id = 201;
+  dxf.num_fmt_code = "0.0";
+  original.dxfs.push_back(dxf);
+
   const std::string xml = write_styles(original);
   std::vector<std::uint8_t> bytes(xml.begin(), xml.end());
   auto round_or = read_styles(bytes);
@@ -159,6 +171,14 @@ TEST(StylesWriter, RoundTripsThroughReader) {
   ASSERT_EQ(rt.cell_xfs.size(), 1U);
   EXPECT_EQ(rt.cell_xfs[0].num_fmt_id, 200U);
   EXPECT_EQ(rt.cell_xfs[0].horizontal_align, 1U);
+  ASSERT_EQ(rt.dxfs.size(), 1U);
+  EXPECT_TRUE(rt.dxfs[0].has_font);
+  EXPECT_TRUE(rt.dxfs[0].font.bold);
+  EXPECT_EQ(rt.dxfs[0].font.color_argb, 0xFFFF0000U);
+  EXPECT_TRUE(rt.dxfs[0].has_fill);
+  EXPECT_EQ(rt.dxfs[0].fill.fg_argb, 0xFFFFFF00U);
+  EXPECT_TRUE(rt.dxfs[0].has_num_fmt);
+  EXPECT_EQ(rt.dxfs[0].num_fmt_code, "0.0");
 }
 
 }  // namespace

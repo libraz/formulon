@@ -199,6 +199,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetFill(const Napi::CallbackInfo& info);
   Napi::Value GetBorder(const Napi::CallbackInfo& info);
   Napi::Value GetNumFmt(const Napi::CallbackInfo& info);
+  Napi::Value GetDxf(const Napi::CallbackInfo& info);
   Napi::Value AddFont(const Napi::CallbackInfo& info);
   Napi::Value AddFill(const Napi::CallbackInfo& info);
   Napi::Value AddBorder(const Napi::CallbackInfo& info);
@@ -208,6 +209,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value FillCount(const Napi::CallbackInfo& info);
   Napi::Value BorderCount(const Napi::CallbackInfo& info);
   Napi::Value XfCount(const Napi::CallbackInfo& info);
+  Napi::Value DxfCount(const Napi::CallbackInfo& info);
 
   // Named cell styles.
   Napi::Value CellStyleCount(const Napi::CallbackInfo& info);

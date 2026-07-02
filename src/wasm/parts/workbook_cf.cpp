@@ -3,9 +3,8 @@
 // JsWorkbook conditional-formatting surface: read / add / remove / clear
 // rules plus `evaluateCfRange` which projects matched rules onto a
 // requested cell window. Visual rule kinds (`ColorScale`, `DataBar`,
-// `IconSet`) round-trip through OOXML reader / writer but cannot be
-// constructed via the embind add path yet -- the read surface returns
-// `type` populated but with the visual sub-spec fields omitted.
+// `IconSet`) are exposed as structured payload objects on both read and
+// add paths.
 
 #include <emscripten/val.h>
 
@@ -22,6 +21,48 @@
 namespace formulon {
 namespace wasm {
 namespace parts {
+namespace {
+
+fm_cf_color_t js_pull_cf_color(emscripten::val v) {
+  fm_cf_color_t out{};
+  out.r = js_pull_u8(v, "r", 0U);
+  out.g = js_pull_u8(v, "g", 0U);
+  out.b = js_pull_u8(v, "b", 0U);
+  out.a = js_pull_u8(v, "a", 255U);
+  return out;
+}
+
+fm_cfvo_t js_pull_cfvo(emscripten::val v, std::vector<std::string>* strings) {
+  fm_cfvo_t out{};
+  out.type = js_pull_u8(v, "type", 0U);
+  out.gte = js_pull_bool(v, "gte", true) ? 1 : 0;
+  if (!v["value"].isUndefined() && !v["value"].isNull()) {
+    strings->push_back(v["value"].as<std::string>());
+    out.value = strings->back().c_str();
+  }
+  return out;
+}
+
+emscripten::val cf_color_to_js(fm_cf_color_t color) {
+  emscripten::val out = emscripten::val::object();
+  out.set("r", color.r);
+  out.set("g", color.g);
+  out.set("b", color.b);
+  out.set("a", color.a);
+  return out;
+}
+
+emscripten::val cfvo_to_js(const fm_cfvo_t& cfvo) {
+  emscripten::val out = emscripten::val::object();
+  out.set("type", static_cast<uint32_t>(cfvo.type));
+  out.set("gte", cfvo.gte != 0);
+  if (cfvo.value != nullptr) {
+    out.set("value", std::string(cfvo.value));
+  }
+  return out;
+}
+
+}  // namespace
 
 JsCfRangeResult JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
                                             uint32_t lastCol, double todaySerial) const {
@@ -128,6 +169,41 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
     if (rule.time_period_engaged != 0) {
       item.set("timePeriod", static_cast<uint32_t>(rule.time_period));
     }
+    if (rule.color_scale_count > 0 && rule.color_scale_thresholds != nullptr && rule.color_scale_colors != nullptr) {
+      emscripten::val color_scale = emscripten::val::object();
+      emscripten::val thresholds = emscripten::val::array();
+      emscripten::val colors = emscripten::val::array();
+      for (uint32_t j = 0; j < rule.color_scale_count; ++j) {
+        thresholds.set(j, cfvo_to_js(rule.color_scale_thresholds[j]));
+        colors.set(j, cf_color_to_js(rule.color_scale_colors[j]));
+      }
+      color_scale.set("thresholds", thresholds);
+      color_scale.set("colors", colors);
+      item.set("colorScale", color_scale);
+    }
+    if (rule.data_bar_engaged != 0) {
+      emscripten::val data_bar = emscripten::val::object();
+      data_bar.set("min", cfvo_to_js(rule.data_bar_min));
+      data_bar.set("max", cfvo_to_js(rule.data_bar_max));
+      data_bar.set("fill", cf_color_to_js(rule.data_bar_fill));
+      data_bar.set("showValue", rule.data_bar_show_value != 0);
+      data_bar.set("minLengthPct", static_cast<uint32_t>(rule.data_bar_min_length_pct));
+      data_bar.set("maxLengthPct", static_cast<uint32_t>(rule.data_bar_max_length_pct));
+      item.set("dataBar", data_bar);
+    }
+    if (rule.icon_set_engaged != 0) {
+      emscripten::val icon_set = emscripten::val::object();
+      icon_set.set("name", static_cast<uint32_t>(rule.icon_set_name));
+      emscripten::val thresholds = emscripten::val::array();
+      for (uint32_t j = 0; j < rule.icon_set_threshold_count; ++j) {
+        thresholds.set(j, cfvo_to_js(rule.icon_set_thresholds[j]));
+      }
+      icon_set.set("thresholds", thresholds);
+      icon_set.set("reverse", rule.icon_set_reverse != 0);
+      icon_set.set("showValue", rule.icon_set_show_value != 0);
+      icon_set.set("percent", rule.icon_set_percent != 0);
+      item.set("iconSet", icon_set);
+    }
     arr.set(static_cast<uint32_t>(i), item);
   }
   return arr;
@@ -141,6 +217,10 @@ JsStatus JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   // borrowed `const char*` views that must stay valid for the
   // duration of the call.
   std::vector<fm_cf_cell_range_t> ranges_buf;
+  std::vector<fm_cfvo_t> color_scale_thresholds;
+  std::vector<fm_cf_color_t> color_scale_colors;
+  std::vector<fm_cfvo_t> icon_set_thresholds;
+  std::vector<std::string> cfvo_strings;
   if (v.hasOwnProperty("sqref")) {
     emscripten::val sqref_js = v["sqref"];
     if (sqref_js.isArray()) {
@@ -195,6 +275,53 @@ JsStatus JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
   if (!v["timePeriod"].isUndefined() && !v["timePeriod"].isNull()) {
     rule.time_period_engaged = 1;
     rule.time_period = js_pull_u8(v, "timePeriod", 0U);
+  }
+  if (!v["colorScale"].isUndefined() && !v["colorScale"].isNull()) {
+    emscripten::val cs = v["colorScale"];
+    if (cs.hasOwnProperty("thresholds") && cs["thresholds"].isArray()) {
+      const uint32_t n = cs["thresholds"]["length"].as<uint32_t>();
+      color_scale_thresholds.reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        color_scale_thresholds.push_back(js_pull_cfvo(cs["thresholds"][i], &cfvo_strings));
+      }
+    }
+    if (cs.hasOwnProperty("colors") && cs["colors"].isArray()) {
+      const uint32_t n = cs["colors"]["length"].as<uint32_t>();
+      color_scale_colors.reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        color_scale_colors.push_back(js_pull_cf_color(cs["colors"][i]));
+      }
+    }
+    rule.color_scale_thresholds = color_scale_thresholds.empty() ? nullptr : color_scale_thresholds.data();
+    rule.color_scale_colors = color_scale_colors.empty() ? nullptr : color_scale_colors.data();
+    rule.color_scale_count = static_cast<uint32_t>(color_scale_thresholds.size());
+  }
+  if (!v["dataBar"].isUndefined() && !v["dataBar"].isNull()) {
+    emscripten::val db = v["dataBar"];
+    rule.data_bar_engaged = 1;
+    rule.data_bar_min = js_pull_cfvo(db["min"], &cfvo_strings);
+    rule.data_bar_max = js_pull_cfvo(db["max"], &cfvo_strings);
+    rule.data_bar_fill = js_pull_cf_color(db["fill"]);
+    rule.data_bar_show_value = js_pull_bool(db, "showValue", true) ? 1 : 0;
+    rule.data_bar_min_length_pct = js_pull_u8(db, "minLengthPct", 10U);
+    rule.data_bar_max_length_pct = js_pull_u8(db, "maxLengthPct", 90U);
+  }
+  if (!v["iconSet"].isUndefined() && !v["iconSet"].isNull()) {
+    emscripten::val is = v["iconSet"];
+    rule.icon_set_engaged = 1;
+    rule.icon_set_name = js_pull_u8(is, "name", 0U);
+    if (is.hasOwnProperty("thresholds") && is["thresholds"].isArray()) {
+      const uint32_t n = is["thresholds"]["length"].as<uint32_t>();
+      icon_set_thresholds.reserve(n);
+      for (uint32_t i = 0; i < n; ++i) {
+        icon_set_thresholds.push_back(js_pull_cfvo(is["thresholds"][i], &cfvo_strings));
+      }
+    }
+    rule.icon_set_thresholds = icon_set_thresholds.empty() ? nullptr : icon_set_thresholds.data();
+    rule.icon_set_threshold_count = static_cast<uint32_t>(icon_set_thresholds.size());
+    rule.icon_set_reverse = js_pull_bool(is, "reverse", false) ? 1 : 0;
+    rule.icon_set_show_value = js_pull_bool(is, "showValue", true) ? 1 : 0;
+    rule.icon_set_percent = js_pull_bool(is, "percent", true) ? 1 : 0;
   }
   fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule);
   return status_from_rc(rc);

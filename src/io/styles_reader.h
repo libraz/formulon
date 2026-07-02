@@ -97,6 +97,21 @@ struct CellXf {
   bool wrap_text = false;
 };
 
+/// One `<dxf>` differential-format record. Unlike `<xf>`, a dxf stores
+/// inline optional style fragments instead of indexes into the global
+/// font/fill/border tables.
+struct DifferentialFormat {
+  bool has_font = false;
+  FontRecord font;
+  bool has_fill = false;
+  FillRecord fill;
+  bool has_border = false;
+  BorderRecord border;
+  bool has_num_fmt = false;
+  std::uint16_t num_fmt_id = 0;
+  std::string num_fmt_code;
+};
+
 /// One `<cellStyle>` entry inside `<cellStyles>`. Defines a named cell
 /// style ("Normal", "Heading 1", custom user names, etc.) that points
 /// at a record in the parallel `<cellStyleXfs>` table via `xf_id`.
@@ -145,6 +160,8 @@ struct StylesTable {
   /// `cell_style_xfs`. Empty when the workbook does not declare any
   /// named cell styles.
   std::vector<CellStyleRecord> cell_styles;
+  /// `<dxfs>` records referenced by conditional-format `dxfId`.
+  std::vector<DifferentialFormat> dxfs;
 };
 
 /// Parses an OOXML styles part.
@@ -156,8 +173,8 @@ struct StylesTable {
 ///   * Sections present but empty (`<fonts count="0"/>`) similarly fall
 ///     back to the single-default-record shape.
 ///   * Children other than the recognised set (`numFmts`, `fonts`,
-///     `fills`, `borders`, `cellStyleXfs`, `cellXfs`, `cellStyles`)
-///     are accepted but ignored — forward compatibility for `<dxfs>`,
+///     `fills`, `borders`, `cellStyleXfs`, `cellXfs`, `cellStyles`,
+///     `dxfs`) are accepted but ignored — forward compatibility for
 ///     `<tableStyles>`, `<extLst>`, and so on.
 ///   * Unknown attributes inside a recognised element are ignored.
 ///

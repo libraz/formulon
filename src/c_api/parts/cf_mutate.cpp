@@ -10,6 +10,7 @@
 // merging with semantically distinct sqref unions; removes prune the
 // block too when its rule list goes empty.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -26,6 +27,7 @@ using formulon::c_api::parts::check_range_count;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::TextStore;
 
 // `fm_cf_cell_range_t` mirrors `cf::CFCellRange` so the OOXML reader's
 // pre-allocated vector buffer can be handed back as a borrowed
@@ -40,21 +42,6 @@ static_assert(offsetof(fm_cf_cell_range_t, last_row) == offsetof(formulon::cf::C
               "fm_cf_cell_range_t::last_row layout mismatch");
 
 namespace {
-
-// Returns `true` for the three visual rule types whose payloads
-// (color_scale / data_bar / icon_set sub-specs) are not yet creatable
-// through the C ABI. The OOXML reader / writer still round-trip them
-// verbatim - this gate only fires on the mutation entry point.
-bool is_visual_rule_type(std::uint8_t type) {
-  switch (static_cast<formulon::cf::RuleType>(type)) {
-    case formulon::cf::RuleType::ColorScale:
-    case formulon::cf::RuleType::DataBar:
-    case formulon::cf::RuleType::IconSet:
-      return true;
-    default:
-      return false;
-  }
-}
 
 // Walks the sheet's `conditional_formats` vector and resolves the
 // `flat_idx`-th rule into the (block_idx, rule_idx) pair. Returns
@@ -79,7 +66,23 @@ bool resolve_flat_index(const std::vector<formulon::cf::ConditionalFormat>& bloc
 // observe deterministic defaults. String views borrow the engine's
 // storage; the contract documented in the header is "valid until the
 // next CF mutation".
-void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf::CFRule& rule, fm_cf_rule_t* out) {
+fm_cf_color_t from_cf_color(formulon::cf::Color color) {
+  return fm_cf_color_t{color.r, color.g, color.b, color.a};
+}
+
+fm_cfvo_t from_cfvo(const formulon::cf::CfValueObject& src, TextStore& text_store) {
+  fm_cfvo_t out{};
+  out.type = static_cast<std::uint8_t>(src.type);
+  out.gte = src.gte ? 1 : 0;
+  if (!src.value.empty()) {
+    text_store.push_back(src.value);
+    out.value = text_store.back().c_str();
+  }
+  return out;
+}
+
+void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf::CFRule& rule, TextStore& text_store,
+               std::vector<fm_cfvo_t>& cfvo_scratch, std::vector<fm_cf_color_t>& color_scratch, fm_cf_rule_t* out) {
   *out = fm_cf_rule_t{};
   out->id = rule.id.c_str();
   out->type = static_cast<std::uint8_t>(rule.type);
@@ -114,6 +117,121 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
     out->time_period_engaged = 1;
     out->time_period = static_cast<std::uint8_t>(*rule.time_period);
   }
+  if (rule.color_scale.has_value()) {
+    const auto& spec = *rule.color_scale;
+    const std::size_t count = std::min(spec.thresholds.size(), spec.colors.size());
+    cfvo_scratch.reserve(cfvo_scratch.size() + count);
+    color_scratch.reserve(color_scratch.size() + count);
+    const std::size_t threshold_start = cfvo_scratch.size();
+    const std::size_t color_start = color_scratch.size();
+    for (std::size_t i = 0; i < count; ++i) {
+      cfvo_scratch.push_back(from_cfvo(spec.thresholds[i], text_store));
+      color_scratch.push_back(from_cf_color(spec.colors[i]));
+    }
+    out->color_scale_thresholds = count == 0 ? nullptr : cfvo_scratch.data() + threshold_start;
+    out->color_scale_colors = count == 0 ? nullptr : color_scratch.data() + color_start;
+    out->color_scale_count = static_cast<std::uint32_t>(count);
+  }
+  if (rule.data_bar.has_value()) {
+    const auto& spec = *rule.data_bar;
+    out->data_bar_engaged = 1;
+    out->data_bar_min = from_cfvo(spec.min, text_store);
+    out->data_bar_max = from_cfvo(spec.max, text_store);
+    out->data_bar_fill = from_cf_color(spec.fill);
+    out->data_bar_show_value = spec.show_value ? 1 : 0;
+    out->data_bar_min_length_pct = spec.min_length_pct;
+    out->data_bar_max_length_pct = spec.max_length_pct;
+  }
+  if (rule.icon_set.has_value()) {
+    const auto& spec = *rule.icon_set;
+    cfvo_scratch.reserve(cfvo_scratch.size() + spec.thresholds.size());
+    const std::size_t threshold_start = cfvo_scratch.size();
+    for (const auto& threshold : spec.thresholds) {
+      cfvo_scratch.push_back(from_cfvo(threshold, text_store));
+    }
+    out->icon_set_engaged = 1;
+    out->icon_set_name = static_cast<std::uint8_t>(spec.name);
+    out->icon_set_thresholds = spec.thresholds.empty() ? nullptr : cfvo_scratch.data() + threshold_start;
+    out->icon_set_threshold_count = static_cast<std::uint32_t>(spec.thresholds.size());
+    out->icon_set_reverse = spec.reverse ? 1 : 0;
+    out->icon_set_show_value = spec.show_value ? 1 : 0;
+    out->icon_set_percent = spec.percent ? 1 : 0;
+  }
+}
+
+formulon::cf::Color to_cf_color(fm_cf_color_t color) {
+  return formulon::cf::Color{color.r, color.g, color.b, color.a};
+}
+
+formulon::cf::CfValueObject to_cfvo(const fm_cfvo_t& src) {
+  formulon::cf::CfValueObject out;
+  out.type = static_cast<formulon::cf::CfvoType>(src.type);
+  out.value = src.value != nullptr ? std::string(src.value) : std::string();
+  out.gte = src.gte != 0;
+  return out;
+}
+
+bool is_valid_cfvo_type(std::uint8_t type) {
+  return type <= static_cast<std::uint8_t>(formulon::cf::CfvoType::AutoMax);
+}
+
+bool copy_color_scale_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
+  if (rule.color_scale_count < 2 || rule.color_scale_count > 3 || rule.color_scale_thresholds == nullptr ||
+      rule.color_scale_colors == nullptr) {
+    return false;
+  }
+  formulon::cf::ColorScaleSpec spec;
+  spec.thresholds.reserve(rule.color_scale_count);
+  spec.colors.reserve(rule.color_scale_count);
+  for (std::uint32_t i = 0; i < rule.color_scale_count; ++i) {
+    if (!is_valid_cfvo_type(rule.color_scale_thresholds[i].type)) {
+      return false;
+    }
+    spec.thresholds.push_back(to_cfvo(rule.color_scale_thresholds[i]));
+    spec.colors.push_back(to_cf_color(rule.color_scale_colors[i]));
+  }
+  out_rule->color_scale = std::move(spec);
+  return true;
+}
+
+bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
+  if (rule.data_bar_engaged == 0 || !is_valid_cfvo_type(rule.data_bar_min.type) ||
+      !is_valid_cfvo_type(rule.data_bar_max.type) || rule.data_bar_min_length_pct > 100 ||
+      rule.data_bar_max_length_pct > 100) {
+    return false;
+  }
+  formulon::cf::DataBarSpec spec;
+  spec.min = to_cfvo(rule.data_bar_min);
+  spec.max = to_cfvo(rule.data_bar_max);
+  spec.fill = to_cf_color(rule.data_bar_fill);
+  spec.negative_fill = spec.fill;
+  spec.show_value = rule.data_bar_show_value != 0;
+  spec.min_length_pct = rule.data_bar_min_length_pct;
+  spec.max_length_pct = rule.data_bar_max_length_pct;
+  out_rule->data_bar = spec;
+  return true;
+}
+
+bool copy_icon_set_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
+  if (rule.icon_set_engaged == 0 ||
+      rule.icon_set_name > static_cast<std::uint8_t>(formulon::cf::IconSetName::Five_Quarters) ||
+      (rule.icon_set_threshold_count > 0 && rule.icon_set_thresholds == nullptr)) {
+    return false;
+  }
+  formulon::cf::IconSetSpec spec;
+  spec.name = static_cast<formulon::cf::IconSetName>(rule.icon_set_name);
+  spec.thresholds.reserve(rule.icon_set_threshold_count);
+  for (std::uint32_t i = 0; i < rule.icon_set_threshold_count; ++i) {
+    if (!is_valid_cfvo_type(rule.icon_set_thresholds[i].type)) {
+      return false;
+    }
+    spec.thresholds.push_back(to_cfvo(rule.icon_set_thresholds[i]));
+  }
+  spec.reverse = rule.icon_set_reverse != 0;
+  spec.show_value = rule.icon_set_show_value != 0;
+  spec.percent = rule.icon_set_percent != 0;
+  out_rule->icon_set = std::move(spec);
+  return true;
 }
 
 }  // namespace
@@ -150,7 +268,12 @@ extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t s
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_get_at: idx out of range",
                              "idx=" + std::to_string(idx));
   }
-  fill_rule(blocks[b], blocks[b].rules[r], out);
+  fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
+  mutable_wb->read_scratch.clear();
+  mutable_wb->cfvo_scratch.clear();
+  mutable_wb->cf_color_scratch.clear();
+  fill_rule(blocks[b], blocks[b].rules[r], mutable_wb->read_scratch, mutable_wb->cfvo_scratch,
+            mutable_wb->cf_color_scratch, out);
   return 0;
 }
 
@@ -169,12 +292,6 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   }
   if (!check_range_count(rule.sqref_count, "fm_sheet_cf_add_rule")) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
-  if (is_visual_rule_type(rule.type)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_cf_add_rule: visual rule types (ColorScale/DataBar/IconSet) "
-                             "are not creatable through this API",
-                             "type=" + std::to_string(rule.type));
   }
   if (rule.type > static_cast<std::uint8_t>(formulon::cf::RuleType::UniqueValues)) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_cf_add_rule: unknown rule type",
@@ -239,6 +356,18 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   }
   if (rule.time_period_engaged != 0) {
     out_rule.time_period = static_cast<formulon::cf::TimePeriod>(rule.time_period);
+  }
+  if (out_rule.type == formulon::cf::RuleType::ColorScale && !copy_color_scale_payload(rule, &out_rule)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_add_rule: invalid colorScale payload");
+  }
+  if (out_rule.type == formulon::cf::RuleType::DataBar && !copy_data_bar_payload(rule, &out_rule)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_add_rule: invalid dataBar payload");
+  }
+  if (out_rule.type == formulon::cf::RuleType::IconSet && !copy_icon_set_payload(rule, &out_rule)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_cf_add_rule: invalid iconSet payload");
   }
 
   new_block.rules.push_back(std::move(out_rule));

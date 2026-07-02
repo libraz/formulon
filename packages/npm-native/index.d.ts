@@ -320,6 +320,15 @@ export interface CfColor {
   a: number;
 }
 
+/** Conditional-format value object.
+ *  `type`: 0 number, 1 percent, 2 percentile, 3 min, 4 max,
+ *  5 formula, 6 autoMin, 7 autoMax. */
+export interface CfValueObjectInput {
+  type: number;
+  value?: string;
+  gte?: boolean;
+}
+
 /** Resolved CF match. Active fields depend on `kind`; the others carry
  *  default-zero values. */
 export interface CfMatch {
@@ -617,6 +626,19 @@ export interface NumFmtResult {
   formatCode: string;
 }
 
+/** Return type of `Workbook.getDxf(dxfIndex)`.
+ *  Optional properties are present only when that `<dxf>` child exists. */
+export interface DxfResult {
+  status: Status;
+  font?: FontRecord;
+  fill?: FillRecord;
+  border?: BorderRecord;
+  numFmt?: {
+    numFmtId: number;
+    formatCode: string;
+  };
+}
+
 /** Return type of `Workbook.getLambdaText(sheet, row, col)`. The
  *  rendered text never carries a leading `=` and is suitable for
  *  passing back through `setFormula`. `kInvalidArgument` surfaces when
@@ -711,15 +733,35 @@ export interface ConditionalFormatEntry {
   readonly text?: string;
   /** `formulon::cf::TimePeriod` ordinal. Engaged for `timePeriod` rules. */
   readonly timePeriod?: number;
+  /** Engaged for `colorScale` rules. */
+  readonly colorScale?: {
+    readonly thresholds: ReadonlyArray<CfValueObjectInput>;
+    readonly colors: ReadonlyArray<CfColor>;
+  };
+  /** Engaged for `dataBar` rules. */
+  readonly dataBar?: {
+    readonly min: CfValueObjectInput;
+    readonly max: CfValueObjectInput;
+    readonly fill: CfColor;
+    readonly showValue: boolean;
+    readonly minLengthPct: number;
+    readonly maxLengthPct: number;
+  };
+  /** Engaged for `iconSet` rules. */
+  readonly iconSet?: {
+    readonly name: number;
+    readonly thresholds: ReadonlyArray<CfValueObjectInput>;
+    readonly reverse: boolean;
+    readonly showValue: boolean;
+    readonly percent: boolean;
+  };
 }
 
 /** Argument shape accepted by `addConditionalFormat(sheet, rule)`.
  *
- *  Visual rule kinds (`colorScale` / `dataBar` / `iconSet`) are
- *  rejected — their visual sub-specs are not yet creatable through this
- *  API. When `priority` is missing, zero, or negative, the engine
- *  assigns `existing_max + 1`. When `id` is missing or empty, the
- *  engine synthesises one. */
+ *  When `priority` is missing, zero, or negative, the engine assigns
+ *  `existing_max + 1`. When `id` is missing or empty, the engine
+ *  synthesises one. */
 export interface ConditionalFormatInput {
   sqref: ReadonlyArray<ConditionalFormatRange>;
   type: number;
@@ -738,6 +780,28 @@ export interface ConditionalFormatInput {
   stdDev?: number;
   text?: string;
   timePeriod?: number;
+  /** Payload for type 2 (`colorScale`). Threshold and color counts must match: 2 or 3. */
+  colorScale?: {
+    thresholds: ReadonlyArray<CfValueObjectInput>;
+    colors: ReadonlyArray<CfColor>;
+  };
+  /** Payload for type 3 (`dataBar`). */
+  dataBar?: {
+    min: CfValueObjectInput;
+    max: CfValueObjectInput;
+    fill: CfColor;
+    showValue?: boolean;
+    minLengthPct?: number;
+    maxLengthPct?: number;
+  };
+  /** Payload for type 4 (`iconSet`). `name` is `formulon::cf::IconSetName` ordinal. */
+  iconSet?: {
+    name: number;
+    thresholds: ReadonlyArray<CfValueObjectInput>;
+    reverse?: boolean;
+    showValue?: boolean;
+    percent?: boolean;
+  };
 }
 
 /** Workbook-wide cell coordinate returned by `precedents` /
@@ -1125,6 +1189,8 @@ export interface Workbook {
   getBorder(borderIndex: number): BorderResult;
   /** Returns the format string registered for `numFmtId`. */
   getNumFmt(numFmtId: number): NumFmtResult;
+  /** Returns the differential-format record referenced by CF `dxfId`. */
+  getDxf(dxfIndex: number): DxfResult;
 
   /** Adds a font (deduplicating against existing entries) and returns
    *  the resolved index. */
@@ -1151,6 +1217,8 @@ export interface Workbook {
   borderCount(): number;
   /** Returns the number of `<xf>` records currently registered. */
   xfCount(): number;
+  /** Returns the number of `<dxf>` records available for CF `dxfId`. */
+  dxfCount(): number;
 
   // Named cell styles.
   /** Returns the number of named cell styles (`<cellStyle>` entries). */
@@ -1209,8 +1277,7 @@ export interface Workbook {
    *  them as immutable view objects. */
   getConditionalFormats(sheet: number): ReadonlyArray<ConditionalFormatEntry>;
   /** Appends a new single-rule `<conditionalFormatting>` block to
-   *  `sheet`. Visual rule types (`colorScale` / `dataBar` / `iconSet`)
-   *  are rejected with `kInvalidArgument`. */
+   *  `sheet`, including visual rules when their payload object is supplied. */
   addConditionalFormat(sheet: number, rule: ConditionalFormatInput): Status;
   /** Removes the CF rule at `index` (flattened order). When the
    *  containing block becomes empty it is removed too. */

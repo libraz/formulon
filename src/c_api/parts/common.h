@@ -19,6 +19,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "utils/error.h"
@@ -130,6 +131,12 @@ struct fm_workbook {
   // call on the same handle (or any mutation, or handle destruction) —
   // the standard C-ABI scratch contract documented in `formulon_c.h`.
   formulon::c_api::parts::TextStore read_scratch;
+
+  // Scratch buffers for `fm_sheet_cf_get_at` visual payload arrays. The
+  // returned pointers follow the same read-scratch lifetime as textual
+  // readbacks: valid until the next read/mutation on this handle.
+  std::vector<fm_cfvo_t> cfvo_scratch;
+  std::vector<fm_cf_color_t> cf_color_scratch;
 
   formulon::Workbook& workbook() { return *wb; }
   const formulon::Workbook& workbook() const { return *wb; }

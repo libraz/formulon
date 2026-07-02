@@ -113,6 +113,48 @@ TEST(FormulonCApiStyles, UnknownNumFmtIdRejected) {
   EXPECT_NE(fm_styles_get_num_fmt_string(wb.handle, 5, &s), 0);
 }
 
+TEST(FormulonCApiStyles, DifferentialFormatGetterExposesCfDxfTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  formulon::io::StylesTable& styles = wb.handle->workbook().mutable_styles();
+  formulon::io::DifferentialFormat dxf;
+  dxf.has_font = true;
+  dxf.font.bold = true;
+  dxf.font.color_argb = 0xFFFF0000U;
+  dxf.has_fill = true;
+  dxf.fill.pattern = 1;
+  dxf.fill.fg_argb = 0xFFFFFF00U;
+  dxf.has_border = true;
+  dxf.border.left.style = 1;
+  dxf.border.left.color_argb = 0xFF000000U;
+  dxf.has_num_fmt = true;
+  dxf.num_fmt_id = 164;
+  dxf.num_fmt_code = "0.00";
+  styles.dxfs.push_back(dxf);
+
+  uint32_t count = 0;
+  ASSERT_EQ(fm_styles_get_dxf_count(wb.handle, &count), 0);
+  EXPECT_EQ(count, 1U);
+
+  fm_dxf_record out{};
+  ASSERT_EQ(fm_styles_get_dxf(wb.handle, 0, &out), 0);
+  EXPECT_EQ(out.font_engaged, 1);
+  EXPECT_EQ(out.font.bold, 1);
+  EXPECT_EQ(out.font.color_argb, 0xFFFF0000U);
+  EXPECT_EQ(out.fill_engaged, 1);
+  EXPECT_EQ(out.fill.pattern, 1U);
+  EXPECT_EQ(out.fill.fg_argb, 0xFFFFFF00U);
+  EXPECT_EQ(out.border_engaged, 1);
+  EXPECT_EQ(out.border.left.style, 1U);
+  EXPECT_EQ(out.border.left.color_argb, 0xFF000000U);
+  EXPECT_EQ(out.num_fmt_engaged, 1);
+  EXPECT_EQ(out.num_fmt_id, 164U);
+  ASSERT_NE(out.num_fmt_code, nullptr);
+  EXPECT_STREQ(out.num_fmt_code, "0.00");
+
+  EXPECT_NE(fm_styles_get_dxf(wb.handle, 1, &out), 0);
+}
+
 TEST(FormulonCApiStyles, GetCellXfRejectsOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
