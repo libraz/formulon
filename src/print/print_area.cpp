@@ -61,6 +61,27 @@ std::string_view StripSheetQualifier(std::string_view token) {
   return token.substr(boundary + 1);
 }
 
+/// Finds the next unquoted `,` area separator in `body` at or after
+/// `start`, skipping over any `'...'`-quoted sheet-name segment that may
+/// itself contain a literal comma (e.g. `'Sheet,1'!A1:B2,C3:D4` has two
+/// print areas, not three). Mirrors `StripSheetQualifier`'s quote
+/// tracking: each `'` toggles the quote state, so Excel's `''`-escaped
+/// literal apostrophe inside a quoted name round-trips back to the same
+/// state instead of prematurely closing it. Returns
+/// `std::string_view::npos` when no unquoted separator remains.
+std::size_t FindAreaSeparator(std::string_view body, std::size_t start) {
+  bool in_quote = false;
+  for (std::size_t i = start; i < body.size(); ++i) {
+    const char c = body[i];
+    if (c == '\'') {
+      in_quote = !in_quote;
+    } else if (c == kAreaSeparator && !in_quote) {
+      return i;
+    }
+  }
+  return std::string_view::npos;
+}
+
 /// Trims ASCII whitespace from both ends of `text`.
 std::string_view Trim(std::string_view text) {
   std::size_t begin = 0;
@@ -264,7 +285,7 @@ Expected<std::vector<CellRange>, Error> resolve_print_area(const Workbook& wb, s
 
   std::size_t start = 0;
   while (start <= body.size()) {
-    std::size_t comma = body.find(kAreaSeparator, start);
+    std::size_t comma = FindAreaSeparator(body, start);
     if (comma == std::string_view::npos) {
       comma = body.size();
     }
@@ -300,7 +321,7 @@ Expected<PrintTitles, Error> resolve_print_titles(const Workbook& wb, std::uint3
 
   std::size_t start = 0;
   while (start <= body.size()) {
-    std::size_t comma = body.find(kAreaSeparator, start);
+    std::size_t comma = FindAreaSeparator(body, start);
     if (comma == std::string_view::npos) {
       comma = body.size();
     }

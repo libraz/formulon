@@ -113,3 +113,25 @@ cases:
       sheet: Sheet1
       page_setup: {orientation: portrait, paper: 9, scale: 100}
       manual_breaks: {rows: [7]}
+
+  - id: multi_area_row_stacked_col_break
+    description: >
+      Two vertically-stacked print areas (A1:H6 and A9:H14), each spanning
+      wide columns A:H so the columns overflow one A4-portrait page, split
+      by a manual column break before D. Exercises multi-area pagination
+      where each print area is an independent page grid: the shared manual
+      column break splits both areas' columns, symmetric with how a shared
+      manual row break splits two side-by-side areas.
+    sheets:
+      Sheet1:
+        A1: x
+        H6: x
+        A9: x
+        H14: x
+    column_widths:
+      A:H: 20
+    print:
+      sheet: Sheet1
+      print_area: A1:H6,A9:H14
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+      manual_breaks: {cols: [D]}

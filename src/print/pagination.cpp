@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -71,7 +72,9 @@ double ColumnCharsToPoints(double chars) {
 double ColumnWidthChars(const Sheet& sheet, std::uint32_t col) {
   for (const ColumnLayout& span : sheet.layout().columns) {
     if (col >= span.first && col <= span.last) {
-      return span.width;
+      // Hidden columns occupy no printed width, so they never advance the
+      // page grid (Excel excludes them from pagination extent).
+      return span.hidden ? 0.0 : span.width;
     }
   }
   const SheetFormatDefaults& defaults = sheet.format_defaults();
@@ -89,7 +92,9 @@ double ColumnWidthChars(const Sheet& sheet, std::uint32_t col) {
 double RowHeightPoints(const Sheet& sheet, std::uint32_t row) {
   for (const RowLayout& override_row : sheet.layout().row_overrides) {
     if (override_row.row == row) {
-      return override_row.height;
+      // Hidden rows occupy no printed height, so they never advance the
+      // page grid (Excel excludes them from pagination extent).
+      return override_row.hidden ? 0.0 : override_row.height;
     }
   }
   const SheetFormatDefaults& defaults = sheet.format_defaults();
@@ -282,9 +287,22 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     effective_areas.push_back(used_box);
   } else if (!has_used_range) {
     // Explicit print area on an otherwise-empty sheet: Excel still
-    // paginates the declared geometry (the area defines the page grid
-    // even when no cell carries content).
-    effective_areas = result.print_area;
+    // paginates a *bounded* declared geometry (the area defines the page
+    // grid even when no cell carries content). A whole-column (`$A:$A`) or
+    // whole-row (`$1:$1`) print area, however, has no content to paginate
+    // and must not walk the full 1,048,576-row / 16,384-column grid (which
+    // would also reserve a multi-megabyte track vector below). Drop the
+    // unbounded rectangles; if none remain the sheet produces no pages.
+    constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
+    constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
+    for (const CellRange& r : result.print_area) {
+      if (r.last_row < kMaxRowIndex && r.last_col < kMaxColIndex) {
+        effective_areas.push_back(r);
+      }
+    }
+    if (effective_areas.empty()) {
+      return result;
+    }
   } else {
     // Intersect each declared rectangle with the populated bounding box.
     // A rectangle whose populated intersection is empty contributes no
@@ -360,49 +378,43 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   std::vector<std::uint32_t> all_h;
   std::vector<std::uint32_t> all_v;
   std::uint32_t total_pages = 0;
-  // A manual column break that falls inside more than one (horizontally
-  // overlapping) print rectangle is a single page boundary, not one per
-  // rectangle. Track the column ids already counted so an overlapping
-  // break contributes its extra page-column exactly once.
-  std::vector<std::uint32_t> counted_col_breaks;
   for (const CellRange& rect : effective_areas) {
+    // Row axis: automatic overflow breaks plus manual row breaks within the
+    // area's rows, counted per area.
     std::vector<double> row_points;
     row_points.reserve(rect.last_row - rect.first_row + 1);
     for (std::uint32_t row = rect.first_row; row <= rect.last_row; ++row) {
       row_points.push_back(RowHeightPoints(sheet, row) * scale);
     }
-
-    // Excel never auto-breaks columns: a wide print area renders on a
-    // single page-column at the chosen scale (and is clipped at the right
-    // margin), regardless of geometric overflow. Both VPageBreaks and
-    // Pages.Count ignore automatic column overflow; only manually-inserted
-    // column breaks contribute. See tests/oracle/cases_wb/print_matrix.yaml
-    // Block C (density variants of A1:H30 all yield v_breaks=[] pages=1)
-    // and tests/oracle/cases_wb/print_pagination.yaml wide_table_vertical_
-    // breaks / landscape_wide_table / tall_and_wide_table (all pages=1).
-    std::uint32_t col_pages = 1;
-    for (const ManualBreak& brk : settings.manual_col_breaks) {
-      // Auto breaks (man="0") never force a column boundary.
-      if (!brk.manual) {
-        continue;
-      }
-      if (brk.id > rect.first_col && brk.id <= rect.last_col) {
-        const bool already_counted =
-            std::find(counted_col_breaks.begin(), counted_col_breaks.end(), brk.id) != counted_col_breaks.end();
-        all_v.push_back(brk.id);
-        if (!already_counted) {
-          counted_col_breaks.push_back(brk.id);
-          ++col_pages;
-        }
-      }
-    }
-
     AxisInput row_axis;
     row_axis.first = rect.first_row;
     row_axis.track_sizes = std::move(row_points);
     row_axis.manual = &settings.manual_row_breaks;
     row_axis.limit_pt = body.height_pt;
     const std::uint32_t row_pages = WalkAxis(row_axis, &all_h);
+
+    // Column axis: symmetric per-area walk through the same axis walker.
+    // Excel never auto-breaks columns at explicit print scale (a wide
+    // print area renders on a single page-column and clips at the right
+    // margin; both VPageBreaks and Pages.Count ignore automatic column
+    // overflow — see tests/oracle/cases_wb/print_matrix.yaml Block C and
+    // print_pagination.yaml wide_table_vertical_breaks), so the width limit
+    // is unbounded and only manual column breaks contribute. Using the same
+    // per-area walker as the row axis makes multi-area column pagination
+    // symmetric with multi-area row pagination: each area's manual column
+    // breaks are counted within that area rather than de-duplicated across
+    // areas.
+    std::vector<double> col_points;
+    col_points.reserve(rect.last_col - rect.first_col + 1);
+    for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
+      col_points.push_back(ColumnCharsToPoints(ColumnWidthChars(sheet, col)) * scale);
+    }
+    AxisInput col_axis;
+    col_axis.first = rect.first_col;
+    col_axis.track_sizes = std::move(col_points);
+    col_axis.manual = &settings.manual_col_breaks;
+    col_axis.limit_pt = std::numeric_limits<double>::infinity();
+    const std::uint32_t col_pages = WalkAxis(col_axis, &all_v);
 
     total_pages += col_pages * row_pages;
   }

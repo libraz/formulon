@@ -63,6 +63,20 @@ TEST(PrintAreaTest, MultiAreaCommaSeparated) {
   EXPECT_EQ(result.value()[1].last_col, 7U);
 }
 
+TEST(PrintAreaTest, QuotedSheetNameWithEmbeddedCommaSplitsCorrectly) {
+  // The sheet name itself contains a comma (`'Sheet,1'`); a naive
+  // top-level `,` split would cut this into 4 pieces instead of the 2
+  // actual print areas.
+  Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Area", "'Sheet,1'!$A$1:$B$2,'Sheet,1'!$C$3:$D$4", 0)});
+  auto result = resolve_print_area(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_EQ(result.value().size(), 2U);
+  EXPECT_EQ(result.value()[0].first_col, 0U);
+  EXPECT_EQ(result.value()[0].last_col, 1U);
+  EXPECT_EQ(result.value()[1].first_col, 2U);
+  EXPECT_EQ(result.value()[1].last_col, 3U);
+}
+
 TEST(PrintAreaTest, AnchorFreeAndUnqualifiedRangeAccepted) {
   Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Area", "A1:C3", 0)});
   auto result = resolve_print_area(wb, 0);
@@ -163,6 +177,16 @@ TEST(PrintTitlesTest, RepeatColsResolution) {
 
 TEST(PrintTitlesTest, BothRowsAndColsResolution) {
   Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Titles", "Sheet1!$A:$B,Sheet1!$1:$1", 0)});
+  auto result = resolve_print_titles(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  ASSERT_TRUE(result.value().repeat_cols.has_value());
+  ASSERT_TRUE(result.value().repeat_rows.has_value());
+  EXPECT_EQ(result.value().repeat_cols->second, 1U);
+  EXPECT_EQ(result.value().repeat_rows->first, 0U);
+}
+
+TEST(PrintTitlesTest, QuotedSheetNameWithEmbeddedCommaSplitsCorrectly) {
+  Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Titles", "'Sheet,1'!$A:$B,'Sheet,1'!$1:$1", 0)});
   auto result = resolve_print_titles(wb, 0);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   ASSERT_TRUE(result.value().repeat_cols.has_value());
