@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/sst_writer.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -42,7 +43,8 @@ namespace xlsb {
 /// Returns `kIoXlsbUnsupportedPtg` (propagated from `emit_cell`) when a
 /// formula cell cannot be lowered to the supported Ptg token set.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst,
-                                                      const std::vector<std::string>& sheet_names);
+                                                      const std::vector<std::string>& sheet_names,
+                                                      const SheetRangeTable& sheet_ranges, const NameTable& name_table);
 
 }  // namespace xlsb
 }  // namespace io

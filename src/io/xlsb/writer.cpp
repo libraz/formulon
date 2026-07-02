@@ -18,14 +18,19 @@
 #include <utility>
 #include <vector>
 
+#include "cell.h"
 #include "io/passthrough_part.h"
+#include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_writer.h"
 #include "io/xlsb/sst_writer.h"
 #include "io/xml_escape.h"
 #include "miniz.h"
+#include "parser/ast.h"
+#include "parser/parser.h"
 #include "sheet.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/structured_log.h"
@@ -51,7 +56,11 @@ constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" 
 // accepted for compatibility on input only.
 constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
 constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.binary.macroEnabled.main";
-constexpr std::string_view kCtWorksheetXlsb = "application/vnd.ms-excel.binIndexWs";
+// Worksheet part content type. This is the worksheet data part, NOT the
+// binary-index part (`application/vnd.ms-excel.binIndexWs`); mislabelling it as
+// the index type makes Excel treat the package as having zero worksheets and
+// reject it (-50).
+constexpr std::string_view kCtWorksheetXlsb = "application/vnd.ms-excel.worksheet";
 constexpr std::string_view kCtSharedStringsXlsb = "application/vnd.ms-excel.sharedStrings";
 
 constexpr std::string_view kRelOfficeDocument =
@@ -60,6 +69,29 @@ constexpr std::string_view kRelWorksheet =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
 constexpr std::string_view kRelSharedStrings =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
+constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+constexpr std::string_view kRelTheme = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+constexpr std::string_view kRelSheetMetadata =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
+constexpr std::string_view kRelCoreProps =
+    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+constexpr std::string_view kRelExtendedProps =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+
+// Workbook-globals record ids the reader does not consume (so they are absent
+// from `XlsbRecordType`) but the writer must emit for a well-formed stream.
+// A `BrtExternSheet` must live inside a `BrtBeginExternals ... BrtEndExternals`
+// block with a `BrtSupSelf` (self-referencing supporting book); Excel rejects a
+// bare `BrtExternSheet`. Ids per [MS-XLSB] §2.4.
+constexpr std::uint16_t kBrtBeginExternals = 353;
+constexpr std::uint16_t kBrtSupSelf = 357;
+constexpr std::uint16_t kBrtEndExternals = 354;
+// Workbook-globals structural records Excel expects before the sheet bundle.
+constexpr std::uint16_t kBrtFileVersion = 128;
+constexpr std::uint16_t kBrtWbProp = 153;
+constexpr std::uint16_t kBrtBeginBookViews = 135;
+constexpr std::uint16_t kBrtWbView = 158;
+constexpr std::uint16_t kBrtEndBookViews = 136;
 
 // ---------------------------------------------------------------------------
 // Emission plan: where do passthrough parts land, do any collide?
@@ -69,6 +101,14 @@ struct EmissionPlan {
   std::vector<const PassthroughPart*> passthrough_kept;
   bool has_text_cells = false;  // gates emission of xl/sharedStrings.bin
 };
+
+// True for a worksheet binary-index part (`xl/worksheets/binaryIndex<N>.bin`).
+// These describe the original sheet bodies' row layout and are stale once we
+// regenerate the sheets; Excel opens without them.
+bool IsBinaryIndexPart(const std::string& path) {
+  constexpr std::string_view kPrefix = "xl/worksheets/binaryIndex";
+  return path.size() > kPrefix.size() && path.compare(0, kPrefix.size(), kPrefix) == 0;
+}
 
 std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part) {
   std::unordered_set<std::string> paths;
@@ -98,6 +138,17 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool sst_present) {
           .warn();
       continue;
     }
+    // Drop parts that would be stale or orphaned after we regenerate the
+    // worksheets. The binary-index parts (`xl/worksheets/binaryIndex*.bin`)
+    // describe the ROW layout of the original sheet bodies; once we re-emit
+    // sheets they no longer match, and Excel opens fine without them. The
+    // calc chain likewise references the original formula graph; a stale
+    // chain is rejected, and Excel rebuilds it on load when absent (same
+    // policy as the OOXML writer). Neither carries a workbook relationship
+    // here, so keeping them would leave dangling / mismatched parts.
+    if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin") {
+      continue;
+    }
     plan.passthrough_kept.push_back(&part);
   }
   return plan;
@@ -123,9 +174,8 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   out.append("  <Default Extension=\"bin\" ContentType=\"");
   out.append(kCtWorkbookXlsb);
   out.append("\"/>\n");
-  out.append("  <Override PartName=\"/xl/workbook.bin\" ContentType=\"");
-  out.append(kCtWorkbookXlsb);
-  out.append("\"/>\n");
+  // No Override for `/xl/workbook.bin`: it already resolves to the `bin`
+  // Default above, and real Excel omits the redundant Override.
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     out.append("  <Override PartName=\"/xl/worksheets/sheet");
     out.append(std::to_string(i + 1));
@@ -155,26 +205,55 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-std::string BuildPackageRels() {
+// Appends one `<Relationship>` with a fresh rId drawn from `*next_rid`.
+void AppendRelationship(std::string& out, std::size_t* next_rid, std::string_view type, std::string_view target) {
+  out.append("  <Relationship Id=\"rId");
+  out.append(std::to_string((*next_rid)++));
+  out.append("\" Type=\"");
+  out.append(type);
+  out.append("\" Target=\"");
+  out.append(target);
+  out.append("\"/>\n");
+}
+
+// Returns true when a passthrough part with `path` will be emitted.
+bool HasPassthrough(const EmissionPlan& plan, std::string_view path) {
+  for (const PassthroughPart* part : plan.passthrough_kept) {
+    if (part->path == path) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string BuildPackageRels(const EmissionPlan& plan) {
   std::string out;
-  out.reserve(256);
+  out.reserve(384);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
-  out.append("  <Relationship Id=\"rId1\" Type=\"");
-  out.append(kRelOfficeDocument);
-  out.append("\" Target=\"xl/workbook.bin\"/>\n");
+  std::size_t next_rid = 1;
+  AppendRelationship(out, &next_rid, kRelOfficeDocument, "xl/workbook.bin");
+  // docProps parts ride the passthrough path but need package-level rels or
+  // Excel treats them as orphaned (and drops the document properties).
+  if (HasPassthrough(plan, "docProps/core.xml")) {
+    AppendRelationship(out, &next_rid, kRelCoreProps, "docProps/core.xml");
+  }
+  if (HasPassthrough(plan, "docProps/app.xml")) {
+    AppendRelationship(out, &next_rid, kRelExtendedProps, "docProps/app.xml");
+  }
   out.append("</Relationships>\n");
   return out;
 }
 
-std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst) {
+std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan) {
   std::string out;
   out.reserve(256 + sheet_count * 192);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  std::size_t next_rid = 1;
   for (std::size_t i = 0; i < sheet_count; ++i) {
     out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(i + 1));
+    out.append(std::to_string(next_rid++));
     out.append("\" Type=\"");
     out.append(kRelWorksheet);
     out.append("\" Target=\"worksheets/sheet");
@@ -182,23 +261,274 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst) {
     out.append(".bin\"/>\n");
   }
   if (emit_sst) {
-    out.append("  <Relationship Id=\"rId");
-    out.append(std::to_string(sheet_count + 1));
-    out.append("\" Type=\"");
-    out.append(kRelSharedStrings);
-    out.append("\" Target=\"sharedStrings.bin\"/>\n");
+    AppendRelationship(out, &next_rid, kRelSharedStrings, "sharedStrings.bin");
+  }
+  // The styles / theme / metadata parts ride the passthrough path, but the
+  // reader (and Excel) locate them only through these workbook relationships.
+  // Without them a styled cell's iStyleRef dangles against an empty style
+  // table, and the theme / metadata parts are treated as orphans. Emit a rel
+  // for each part that is actually present in the package.
+  if (HasPassthrough(plan, "xl/styles.bin")) {
+    AppendRelationship(out, &next_rid, kRelStyles, "styles.bin");
+  }
+  if (HasPassthrough(plan, "xl/theme/theme1.xml")) {
+    AppendRelationship(out, &next_rid, kRelTheme, "theme/theme1.xml");
+  }
+  if (HasPassthrough(plan, "xl/metadata.bin")) {
+    AppendRelationship(out, &next_rid, kRelSheetMetadata, "metadata.bin");
   }
   out.append("</Relationships>\n");
   return out;
 }
 
 // ---------------------------------------------------------------------------
+// PtgName table (BrtName): defined names + future-function callees
+// ---------------------------------------------------------------------------
+
+/// Parses `formula` (no leading `=`) and folds every name
+/// `collect_ptg_names` finds into `names` / `seen`. Parse failures are
+/// silently skipped here — `EncodeCellFormula` / the defined-name
+/// encode pass below surface the same failure as a proper `Expected`
+/// error when the formula is actually encoded.
+void CollectNamesFromFormula(std::string_view formula, std::vector<std::string>& names,
+                             std::unordered_set<std::string>& seen) {
+  Arena arena;
+  parser::Parser p(formula, arena);
+  parser::AstNode* root = p.parse();
+  if (root == nullptr || !p.errors().empty()) {
+    return;
+  }
+  collect_ptg_names(*root, names, seen);
+}
+
+/// Builds the `PtgName` table for the whole workbook: every genuine
+/// defined name (`Workbook::defined_names()`, in declaration order) is
+/// registered first, then every future-function callee / `NameRef`
+/// `collect_ptg_names` discovers across every sheet's formulas (in
+/// first-encounter order) that is not already a defined name. Returns
+/// the ordered name list (index `i` <-> 1-based `ilbl` `i + 1`) and the
+/// name -> ilbl map `encode_ptgs` consults.
+void BuildNameTable(const Workbook& wb, std::vector<std::string>& ordered_names, NameTable& name_table) {
+  std::unordered_set<std::string> seen;
+  for (const io::DefinedName& dn : wb.defined_names()) {
+    if (seen.insert(dn.name).second) {
+      ordered_names.push_back(dn.name);
+    }
+  }
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    for (const auto& [row, cells] : wb.sheet(i).rows()) {
+      (void)row;
+      for (const Cell& cell : cells) {
+        if (cell.formula_text.empty()) {
+          continue;
+        }
+        std::string_view body(cell.formula_text);
+        if (!body.empty() && body.front() == '=') {
+          body.remove_prefix(1);
+        }
+        CollectNamesFromFormula(body, ordered_names, seen);
+      }
+    }
+  }
+  for (std::size_t i = 0; i < ordered_names.size(); ++i) {
+    name_table.emplace(ordered_names[i], static_cast<std::uint32_t>(i + 1));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ExternSheet table (BrtExternSheet): every sheet-qualified reference's
+// (itabFirst, itabLast) span, single- and multi-sheet alike.
+// ---------------------------------------------------------------------------
+
+/// Parses `formula` (no leading `=`) and folds every distinct
+/// `(itabFirst, itabLast)` span `collect_ptg_sheet_ranges` finds into
+/// `ranges` / `seen`. Parse failures are silently skipped here --
+/// `EncodeCellFormula` surfaces the same failure as a proper `Expected`
+/// error when the formula is actually encoded.
+void CollectSheetRangesFromFormula(std::string_view formula, const std::vector<std::string>& sheet_names,
+                                   SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen) {
+  Arena arena;
+  parser::Parser p(formula, arena);
+  parser::AstNode* root = p.parse();
+  if (root == nullptr || !p.errors().empty()) {
+    return;
+  }
+  collect_ptg_sheet_ranges(*root, sheet_names, ranges, seen);
+}
+
+/// Builds the `BrtExternSheet` table for the whole workbook: every
+/// distinct sheet-qualified reference span (single-sheet `(itab, itab)`
+/// or a genuine 3-D range `(itabFirst, itabLast)`) any cell formula or
+/// defined-name formula needs, in first-encounter order. Every
+/// `PtgRef3d` / `PtgArea3d` token this writer emits -- single- or
+/// multi-sheet alike -- resolves its `ixti` through this one table:
+/// once the workbook emits any `BrtExternSheet` entry, the reader
+/// interprets *every* `ixti` as an index into it rather than a bare
+/// sheet index (see `ptg_reader.cpp`'s `sheet_for_ixti` /
+/// `sheet_range_for_ixti`), so single- and multi-sheet references
+/// cannot use two different numbering schemes in the same file.
+SheetRangeTable BuildSheetRangeTable(const Workbook& wb, const std::vector<std::string>& sheet_names) {
+  SheetRangeTable ranges;
+  std::unordered_set<std::uint64_t> seen;
+  for (const io::DefinedName& dn : wb.defined_names()) {
+    CollectSheetRangesFromFormula(dn.formula, sheet_names, ranges, seen);
+  }
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    for (const auto& [row, cells] : wb.sheet(i).rows()) {
+      (void)row;
+      for (const Cell& cell : cells) {
+        if (cell.formula_text.empty()) {
+          continue;
+        }
+        std::string_view body(cell.formula_text);
+        if (!body.empty() && body.front() == '=') {
+          body.remove_prefix(1);
+        }
+        CollectSheetRangesFromFormula(body, sheet_names, ranges, seen);
+      }
+    }
+  }
+  return ranges;
+}
+
+/// Emits one `BrtExternSheet` record. Byte layout verified against a
+/// real Excel-365-produced `xl/workbook.bin` (see `ptg_reader.cpp`'s
+/// `DecodeExternSheet`, the decoder counterpart): `count(u32)` followed
+/// by `count` entries of `(iSupBook, itabFirst, itabLast)` as three
+/// `i32`s each. `iSupBook` is always 0 here (internal-workbook sheets
+/// only; external-workbook 3-D ranges are out of scope for this
+/// writer).
+void EmitExternSheet(std::vector<std::uint8_t>& body, const SheetRangeTable& ranges) {
+  if (ranges.empty()) {
+    return;
+  }
+  std::vector<std::uint8_t> p;
+  emit_u32(p, static_cast<std::uint32_t>(ranges.size()));
+  for (const auto& [itab_first, itab_last] : ranges) {
+    emit_u32(p, 0);  // iSupBook
+    emit_u32(p, static_cast<std::uint32_t>(itab_first));
+    emit_u32(p, static_cast<std::uint32_t>(itab_last));
+  }
+  emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtExternSheet), p);
+}
+
+/// Emits one `BrtName` record. Byte layout verified against a real
+/// Excel-365-produced `xl/workbook.bin` (see `ptg_reader.cpp`'s
+/// `DecodeWorkbookNames`, the decoder counterpart):
+///   flags (u16: bit 0 = fHidden) + 3 reserved bytes + itab (i32,
+///   `-1` = workbook scope) + cch (u32) + cch x UTF-16LE name +
+///   cce (u32) + cce bytes rgce + cb (u32) + cb bytes rgcb.
+/// `formula` is the name's own bare expression text (no leading `=`,
+/// matching `<definedName>`'s XML text content); an empty string emits
+/// a zero-length `rgce` (the hidden future-function / LET-parameter
+/// placeholders this writer registers carry no real formula body — real
+/// Excel stores a `#NAME?` placeholder there, which is not required for
+/// this writer's own reader to round-trip the name table).
+Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::string& name, std::string_view formula,
+                               std::int32_t itab, bool hidden, const std::vector<std::string>& sheet_names,
+                               const SheetRangeTable& sheet_ranges, const NameTable& name_table) {
+  // Names carrying Excel's hidden storage prefixes are not ordinary
+  // defined names: `_xlfn.<FN>` registers a post-2007 "future function"
+  // and `_xlpm.<param>` a LET / LAMBDA parameter. Real Excel stores each
+  // with a specific flag word (fHidden | fFunc | fFutureFunction for the
+  // former, the proc-parameter flags for the latter), a PtgErr(#NAME?)
+  // placeholder body, and five trailing null strings. A cell's future-
+  // function call resolves through the matching BrtName's ilbl, so these
+  // flags and the placeholder body must match Excel byte-for-byte or the
+  // callee shows up as #NAME? on load.
+  const bool is_param = name.rfind("_xlpm.", 0) == 0;
+  const bool is_future_fn = name.rfind("_xlfn.", 0) == 0;
+  const bool is_placeholder = is_param || is_future_fn;
+  std::uint32_t flags;
+  if (is_param) {
+    flags = 0x00020019U;
+  } else if (is_future_fn) {
+    flags = 0x0002000bU;
+  } else {
+    flags = hidden ? 0x00000001U : 0x00000000U;
+  }
+  std::vector<std::uint8_t> p;
+  emit_u32(p, flags);  // grbit (flags word)
+  emit_u8(p, 0);       // chKey
+  emit_u32(p, static_cast<std::uint32_t>(itab));
+  emit_xlwidestring(p, name);
+  if (is_placeholder) {
+    emit_u32(p, 2);    // cce
+    emit_u8(p, 0x1C);  // PtgErr
+    emit_u8(p, 0x1D);  // #NAME? error code
+    emit_u32(p, 0);    // cb
+  } else if (formula.empty()) {
+    emit_u32(p, 0);  // cce
+    emit_u32(p, 0);  // cb
+  } else {
+    Arena arena;
+    parser::Parser parser(formula, arena);
+    parser::AstNode* root = parser.parse();
+    if (root == nullptr || !parser.errors().empty()) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                        "xlsb writer: defined-name formula failed to parse for Ptg encoding",
+                        std::string("context=xlsb_writer name=") + name);
+    }
+    auto encoded_or = encode_ptgs(*root, sheet_names, sheet_ranges, name_table);
+    if (!encoded_or) {
+      return encoded_or.error();
+    }
+    const EncodedFormula& encoded = encoded_or.value();
+    emit_u32(p, static_cast<std::uint32_t>(encoded.rgce.size()));
+    p.insert(p.end(), encoded.rgce.begin(), encoded.rgce.end());
+    emit_u32(p, static_cast<std::uint32_t>(encoded.rgcb.size()));
+    p.insert(p.end(), encoded.rgcb.begin(), encoded.rgcb.end());
+  }
+  // Trailing BrtName strings ([MS-XLSB] §2.4.649), each a null
+  // XLNullableWideString (cchCharacters = 0xFFFFFFFF, no character data).
+  // Excel rejects a BrtName that stops after the formula. A plain defined
+  // name carries just the comment; a future-function / proc-parameter
+  // placeholder carries five strings (comment plus four further unused
+  // strings), matching real Excel output.
+  const int trailing_strings = is_placeholder ? 5 : 1;
+  for (int i = 0; i < trailing_strings; ++i) {
+    emit_u32(p, 0xFFFFFFFFU);  // null XLNullableWideString
+  }
+  emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtName), p);
+  return Expected<void, Error>::Ok();
+}
+
+// ---------------------------------------------------------------------------
 // Workbook stream (xl/workbook.bin)
 // ---------------------------------------------------------------------------
 
-std::vector<std::uint8_t> BuildWorkbookBin(const Workbook& wb) {
+Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
+                                                            const std::vector<std::string>& ordered_names,
+                                                            const NameTable& name_table,
+                                                            const SheetRangeTable& sheet_ranges,
+                                                            const std::vector<std::string>& sheet_names) {
   std::vector<std::uint8_t> body;
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginBook), ByteSpan{});
+
+  // Workbook globals Excel expects before the sheet bundle. These are
+  // fixed-shape records with no dependency on workbook content, so we emit
+  // known-valid default payloads (byte layout captured from a real Excel 365
+  // `xl/workbook.bin`):
+  //   * BrtFileVersion : appName "xl", lastEdited/lowestEdited "7", build.
+  //   * BrtWbProp      : default flags + defaultThemeVersion 202300.
+  //   * BrtWbView      : a single window view; itabCur is left at 0 (first
+  //                      sheet) since the model does not track an active tab.
+  // Omitting these produced a workbook stream Excel rejected.
+  static const std::vector<std::uint8_t> kFileVersionPayload = {
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+      0x00, 0x00, 0x00, 0x78, 0x00, 0x6c, 0x00, 0x01, 0x00, 0x00, 0x00, 0x37, 0x00, 0x01, 0x00, 0x00, 0x00,
+      0x37, 0x00, 0x05, 0x00, 0x00, 0x00, 0x31, 0x00, 0x30, 0x00, 0x36, 0x00, 0x32, 0x00, 0x38, 0x00};
+  static const std::vector<std::uint8_t> kWbPropPayload = {0x20, 0x00, 0x01, 0x00, 0x3c, 0x16,
+                                                           0x03, 0x00, 0x00, 0x00, 0x00, 0x00};
+  static const std::vector<std::uint8_t> kWbViewPayload = {0x10, 0x4f, 0x00, 0x00, 0x18, 0x15, 0x00, 0x00, 0x8c, 0x6e,
+                                                           0x00, 0x00, 0xd0, 0x43, 0x00, 0x00, 0x58, 0x02, 0x00, 0x00,
+                                                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78};
+  emit_record(body, kBrtFileVersion, kFileVersionPayload);
+  emit_record(body, kBrtWbProp, kWbPropPayload);
+  emit_record(body, kBrtBeginBookViews, ByteSpan{});
+  emit_record(body, kBrtWbView, kWbViewPayload);
+  emit_record(body, kBrtEndBookViews, ByteSpan{});
+
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginBundleShs), ByteSpan{});
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     // BrtBundleSh ([MS-XLSB] §2.4.304):
@@ -220,14 +550,50 @@ std::vector<std::uint8_t> BuildWorkbookBin(const Workbook& wb) {
   }
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndBundleShs), ByteSpan{});
 
-  // Defined names + tables are deferred. Surface a single warning so
-  // callers can see what's being dropped without a per-name spam.
-  if (!wb.defined_names().empty()) {
-    StructuredLog("xlsb.writer.deferred")
-        .field("kind", std::string_view("defined_names"))
-        .field("count", static_cast<std::int64_t>(wb.defined_names().size()))
-        .info();
+  // BrtExternSheet: every distinct sheet-qualified reference span this
+  // workbook's formulas need an `ixti` for (single- and multi-sheet
+  // alike; see `BuildSheetRangeTable`'s doc comment for why both share
+  // this one table). Omitted entirely when no formula uses a qualified
+  // reference, matching the fallback the reader's `sheet_for_ixti` /
+  // `sheet_range_for_ixti` already implement for that case.
+  //
+  // The record MUST be wrapped in the externals block: a bare
+  // `BrtExternSheet` outside `BrtBeginExternals ... BrtEndExternals` is an
+  // out-of-place record that makes Excel reject the package. A workbook that
+  // only references its own sheets still needs a single `BrtSupSelf`
+  // supporting-book entry inside the block.
+  if (!sheet_ranges.empty()) {
+    emit_record(body, kBrtBeginExternals, ByteSpan{});
+    emit_record(body, kBrtSupSelf, ByteSpan{});
+    EmitExternSheet(body, sheet_ranges);
+    emit_record(body, kBrtEndExternals, ByteSpan{});
   }
+
+  // BrtName table: every genuine defined name (hidden per its own OOXML
+  // `hidden` flag) followed by every future-function callee / defined
+  // name `collect_ptg_names` needed a `PtgName` reference for that
+  // wasn't already a defined name (always hidden — these are never
+  // user-visible). `ordered_names` / `name_table` are built once by
+  // `BuildNameTable` and shared with every sheet's cell encoder so
+  // `ilbl` assignments stay consistent workbook-wide.
+  const std::size_t defined_count = wb.defined_names().size();
+  for (std::size_t i = 0; i < ordered_names.size(); ++i) {
+    if (i < defined_count) {
+      const io::DefinedName& dn = wb.defined_names()[i];
+      if (auto r =
+              EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, sheet_names, sheet_ranges, name_table);
+          !r) {
+        return r.error();
+      }
+    } else {
+      if (auto r = EmitName(body, ordered_names[i], /*formula=*/{}, /*itab=*/-1, /*hidden=*/true, sheet_names,
+                            sheet_ranges, name_table);
+          !r) {
+        return r.error();
+      }
+    }
+  }
+
   if (!wb.tables().empty()) {
     StructuredLog("xlsb.writer.deferred")
         .field("kind", std::string_view("tables"))
@@ -320,11 +686,26 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
     sheet_names.push_back(workbook.sheet(i).name());
   }
 
+  // PtgName table: every genuine defined name plus every future-function
+  // callee / `NameRef` any cell's formula needs, built once so `ilbl`
+  // assignments are shared between the sheet bodies below and the
+  // `BrtName` table `BuildWorkbookBin` emits into `xl/workbook.bin`.
+  std::vector<std::string> ordered_names;
+  NameTable name_table;
+  BuildNameTable(workbook, ordered_names, name_table);
+
+  // ExternSheet table: every distinct sheet-qualified reference span
+  // (single- or multi-sheet) any cell or defined-name formula needs an
+  // `ixti` for, built once so the assignment is shared between the
+  // sheet bodies below and the `BrtExternSheet` record `BuildWorkbookBin`
+  // emits into `xl/workbook.bin`.
+  const SheetRangeTable sheet_ranges = BuildSheetRangeTable(workbook, sheet_names);
+
   SstBuilder sst;
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names);
+    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, name_table);
     if (!sheet_body_or) {
       return sheet_body_or.error();
     }
@@ -344,17 +725,24 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
     return r.error();
   }
   // 2. _rels/.rels
-  if (auto r = AddPart(writer.get(), "_rels/.rels", BuildPackageRels()); !r) {
+  if (auto r = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(plan)); !r) {
     return r.error();
   }
   // 3. xl/_rels/workbook.bin.rels
-  if (auto r = AddPart(writer.get(), "xl/_rels/workbook.bin.rels", BuildWorkbookRels(sheet_count, emit_sst_part)); !r) {
+  // Passthrough parts (styles.bin, theme, metadata, sharedStrings) are only
+  // discoverable through workbook relationships; BuildWorkbookRels emits a rel
+  // for each part actually present so none dangle on reload.
+  if (auto r = AddPart(writer.get(), "xl/_rels/workbook.bin.rels", BuildWorkbookRels(sheet_count, emit_sst_part, plan));
+      !r) {
     return r.error();
   }
   // 4. xl/workbook.bin
   {
-    const std::vector<std::uint8_t> wb_bytes = BuildWorkbookBin(workbook);
-    if (auto r = AddPartBytes(writer.get(), "xl/workbook.bin", wb_bytes); !r) {
+    auto wb_bytes_or = BuildWorkbookBin(workbook, ordered_names, name_table, sheet_ranges, sheet_names);
+    if (!wb_bytes_or) {
+      return wb_bytes_or.error();
+    }
+    if (auto r = AddPartBytes(writer.get(), "xl/workbook.bin", wb_bytes_or.value()); !r) {
       return r.error();
     }
   }

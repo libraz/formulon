@@ -26,9 +26,11 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/sst_writer.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "value.h"
 
 namespace formulon {
 namespace io {
@@ -61,7 +63,30 @@ namespace xlsb {
 /// `row` is used only for diagnostic logs; it does not appear in the
 /// cell payload (the enclosing `BrtRowHdr` carries the row index).
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
-                                SstBuilder& sst, const std::vector<std::string>& sheet_names);
+                                SstBuilder& sst, const std::vector<std::string>& sheet_names,
+                                const SheetRangeTable& sheet_ranges, const NameTable& name_table);
+
+/// Emits the anchor cell of a spilled dynamic-array formula, matching how
+/// Excel structures one: a `BrtFmla*` "shell" record (typed by
+/// `anchor_value`) whose `CellParsedFormula` is a lone `PtgExp` token
+/// pointing back at the anchor, immediately followed by a `BrtArrFmla`
+/// record carrying the real Ptg tokens and the spill footprint
+/// (`anchor_row`/`col` .. `last_row`/`last_col`). Every phantom cell in
+/// the footprint carries the same shell (see `emit_array_phantom`); the
+/// real tokens appear exactly once, here. Returns the encode error when
+/// `cell.formula_text` cannot be lowered to the supported Ptg set.
+Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, const Value& anchor_value,
+                                        std::uint32_t col, std::uint32_t anchor_row, std::uint32_t last_row,
+                                        std::uint32_t last_col, const std::vector<std::string>& sheet_names,
+                                        const SheetRangeTable& sheet_ranges, const NameTable& name_table);
+
+/// Emits a phantom cell of a spilled dynamic-array formula: a `BrtFmla*`
+/// "shell" record (typed by `cached`, the spilled value at this position)
+/// whose `CellParsedFormula` is a lone `PtgExp` token pointing at the
+/// region's anchor (`anchor_row`, `anchor_col`). The phantom has no
+/// formula of its own; the real tokens live in the anchor's `BrtArrFmla`.
+void emit_array_phantom(std::vector<std::uint8_t>& dst, std::uint32_t col, std::uint32_t xf_index, const Value& cached,
+                        std::uint32_t anchor_row, std::uint32_t anchor_col);
 
 }  // namespace xlsb
 }  // namespace io

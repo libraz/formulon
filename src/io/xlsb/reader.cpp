@@ -1,15 +1,16 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
-// Implementation of the XLSB read pipeline skeleton. See
-// `io/xlsb/reader.h` for the design context.
+// Implementation of the XLSB read pipeline. See `io/xlsb/reader.h` for
+// the design context.
 //
 // The reader reuses the OOXML zip envelope plus three XML parts
 // (`[Content_Types].xml`, `_rels/.rels`, `xl/_rels/workbook.xml.rels`).
 // The binary parts (`xl/workbook.bin`, `xl/worksheets/sheet*.bin`,
 // `xl/sharedStrings.bin`) are decoded via the record framing in
-// `io/xlsb/record.h`. Formulas are not yet AST-decoded; we emit a stub
-// formula text plus a structured-log warning so callers can see the
-// gap. Bundle 4.2 lands the real decoder.
+// `io/xlsb/record.h`. Formulas are decoded through a full
+// `Ptg → AST → Excel-formula-text` pipeline (`DecodeFormulaText`
+// below); a Ptg stream outside the supported token set logs a
+// structured warning and leaves the formula text empty instead.
 
 #include "io/xlsb/reader.h"
 
@@ -29,6 +30,7 @@
 #include "io/passthrough_part.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/styles_reader.h"
 #include "io/zip_reader.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
@@ -37,6 +39,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "value.h"
 #include "workbook.h"
@@ -178,7 +181,22 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
   ContentTypesView view;
   bool saw_workbook = false;
   for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
-    if (std::string_view(node.name()) != "Override") {
+    const std::string_view node_name(node.name());
+    if (node_name == "Default") {
+      // Real Excel-365 output does not always carry a per-part
+      // `<Override>` for `xl/workbook.bin`: the workbook part can rely
+      // on the blanket `<Default Extension="bin">` registration alone
+      // (verified against a real Excel-365-produced `.xlsb`). Accept
+      // that form too, rather than requiring an Override that a
+      // genuinely valid package may not emit.
+      const std::string_view ext(node.attribute("Extension").value());
+      const std::string_view ct(node.attribute("ContentType").value());
+      if (strings::case_insensitive_eq(ext, "bin") && (ct == kCtWorkbookXlsb || ct == kCtWorkbookXlsbAlt)) {
+        saw_workbook = true;
+      }
+      continue;
+    }
+    if (node_name != "Override") {
       continue;
     }
     std::string part_name = NormalisePartName(node.attribute("PartName").value());
@@ -299,8 +317,8 @@ struct SheetBundleEntry {
 };
 
 /// Decodes `xl/workbook.bin` to extract the ordered sheet-bundle list.
-/// Records other than `BrtBundleSh` are skipped — Bundle 4.1 only
-/// needs the (name, rId) tuples to build sheets in document order.
+/// Records other than `BrtBundleSh` are skipped — only the (name, rId)
+/// tuples are needed to build sheets in document order.
 Expected<std::vector<SheetBundleEntry>, Error> DecodeWorkbookBin(const std::vector<std::uint8_t>& body) {
   std::vector<SheetBundleEntry> entries;
   ByteSpan cursor{body.data(), body.size()};
@@ -349,6 +367,136 @@ Expected<std::vector<SheetBundleEntry>, Error> DecodeWorkbookBin(const std::vect
   return entries;
 }
 
+/// Decodes a UTF-16LE name of `units` code units starting at `cursor`,
+/// advancing it past the name. Shares `read_xlwidestring`'s decode logic
+/// via a synthetic length-prefixed buffer rather than duplicating the
+/// surrogate-pair handling; `units` is caller-known (from a fixed-size
+/// header field), unlike `read_xlwidestring`'s self-describing length.
+Expected<std::string, Error> ReadFixedWideString(ByteSpan& cursor, std::uint32_t units) {
+  const std::size_t byte_len = static_cast<std::size_t>(units) * 2;
+  if (byte_len > cursor.size) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb fixed-length wide string truncated",
+                      "context=xlsb_reader");
+  }
+  std::vector<std::uint8_t> framed(4 + byte_len);
+  framed[0] = static_cast<std::uint8_t>(units & 0xFFU);
+  framed[1] = static_cast<std::uint8_t>((units >> 8) & 0xFFU);
+  framed[2] = static_cast<std::uint8_t>((units >> 16) & 0xFFU);
+  framed[3] = static_cast<std::uint8_t>((units >> 24) & 0xFFU);
+  std::memcpy(framed.data() + 4, cursor.data, byte_len);
+  ByteSpan framed_span{framed.data(), framed.size()};
+  auto out = read_xlwidestring(framed_span);
+  if (!out) {
+    return out.error();
+  }
+  cursor.data += byte_len;
+  cursor.size -= byte_len;
+  return out;
+}
+
+/// Decodes the workbook-scope `BrtName` table from `xl/workbook.bin`:
+/// ordinary defined names and the hidden `_xlfn.*` / `_xlpm.*`
+/// future-function / LET-parameter placeholders `PtgName` resolves by
+/// 1-based declaration order. Byte layout verified against a real
+/// Excel-365-produced `xl/workbook.bin`:
+///   flags (u16) + 3 reserved bytes + itab (i32) + cch (u32) +
+///   cch x UTF-16LE code units + <formula body, not consumed here>.
+/// Records other than `BrtName` are skipped.
+Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std::uint8_t>& body) {
+  std::vector<XlsbName> names;
+  ByteSpan cursor{body.data(), body.size()};
+  while (cursor.size > 0) {
+    auto rec_or = read_record(cursor);
+    if (!rec_or) {
+      return rec_or.error();
+    }
+    const XlsbRecord& rec = rec_or.value();
+    if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtName)) {
+      continue;
+    }
+    ByteSpan p = rec.payload;
+    if (p.size < 5) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "workbook.bin: BrtName header truncated",
+                        "context=xlsb_reader");
+    }
+    auto flags_or = read_u16(p);
+    if (!flags_or) {
+      return flags_or.error();
+    }
+    p.data += 3;  // 3 reserved bytes between flags and itab.
+    p.size -= 3;
+    auto itab_or = read_u32(p);
+    if (!itab_or) {
+      return itab_or.error();
+    }
+    auto cch_or = read_u32(p);
+    if (!cch_or) {
+      return cch_or.error();
+    }
+    auto name_or = ReadFixedWideString(p, cch_or.value());
+    if (!name_or) {
+      return name_or.error();
+    }
+    XlsbName entry;
+    entry.itab = static_cast<std::int32_t>(itab_or.value());
+    entry.name = std::move(name_or.value());
+    entry.hidden = (flags_or.value() & 0x0001U) != 0;
+    names.push_back(std::move(entry));
+  }
+  return names;
+}
+
+/// Decodes the `BrtExternSheet` table from `xl/workbook.bin`: resolves a
+/// `PtgRef3d` / `PtgArea3d` `ixti` (0-based index into the returned
+/// vector) to a `(itabFirst, itabLast)` sheet-index range. Byte layout
+/// verified against a real Excel-365-produced `xl/workbook.bin`: u32
+/// count, followed by `count` entries of `(iSupBook, itabFirst,
+/// itabLast)` as 3 x i32 each. `iSupBook` is not consulted — external-
+/// workbook 3-D references (a non-zero `iSupBook`) are out of scope;
+/// only the internal (`iSupBook == 0`, "this workbook") case is
+/// resolved. A workbook with no qualified references at all carries no
+/// `BrtExternSheet` record, so an empty result is a normal outcome, not
+/// an error.
+Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector<std::uint8_t>& body) {
+  std::vector<XlsbSheetRange> ranges;
+  ByteSpan cursor{body.data(), body.size()};
+  while (cursor.size > 0) {
+    auto rec_or = read_record(cursor);
+    if (!rec_or) {
+      return rec_or.error();
+    }
+    const XlsbRecord& rec = rec_or.value();
+    if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtExternSheet)) {
+      continue;
+    }
+    ByteSpan p = rec.payload;
+    auto count_or = read_u32(p);
+    if (!count_or) {
+      return count_or.error();
+    }
+    ranges.reserve(count_or.value());
+    for (std::uint32_t i = 0; i < count_or.value(); ++i) {
+      auto sup_book_or = read_u32(p);
+      if (!sup_book_or) {
+        return sup_book_or.error();
+      }
+      auto first_or = read_u32(p);
+      if (!first_or) {
+        return first_or.error();
+      }
+      auto last_or = read_u32(p);
+      if (!last_or) {
+        return last_or.error();
+      }
+      (void)sup_book_or;
+      ranges.push_back(
+          XlsbSheetRange{static_cast<std::int32_t>(first_or.value()), static_cast<std::int32_t>(last_or.value())});
+    }
+    break;  // Exactly one BrtExternSheet record per workbook.
+  }
+  return ranges;
+}
+
 /// Decodes `xl/sharedStrings.bin` into an in-order list of string
 /// payloads, appending each one into `text_storage` so cells can take
 /// non-owning views. Returns the list of `string_view`s parallel to the
@@ -369,7 +517,7 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(const std:
     // BrtSSTItem ([MS-XLSB] §2.4.293):
     //   richStr   : RichStr (we only need the string — first byte is a
     //               flags byte; rich-format runs follow when fRichStr is
-    //               set, but we ignore those for the skeleton).
+    //               set, but those are not decoded here).
     ByteSpan p = rec.payload;
     auto flags_or = read_u8(p);
     if (!flags_or) {
@@ -393,10 +541,11 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(const std:
 /// path the caller PRESERVES the cell's cached value and stores no
 /// formula, so the cell still displays the correct cached result instead
 /// of a fabricated formula that would recalc to `#NAME?`.
-std::string DecodeFormulaText(ByteSpan ptg_bytes, const std::vector<std::string>& sheet_names, std::size_t sheet_index,
-                              std::uint32_t row, std::uint32_t col) {
+std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vector<std::string>& sheet_names,
+                              const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
+                              std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
   Arena arena;
-  auto ast_or = decode_ptgs(ptg_bytes, arena, sheet_names);
+  auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges);
   if (!ast_or) {
     StructuredLog("xlsb.formula.not_decoded")
         .field("sheet_index", static_cast<std::int64_t>(sheet_index))
@@ -412,6 +561,106 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, const std::vector<std::string>
   return out;
 }
 
+/// Registers every non-hidden `BrtName` entry as a workbook defined
+/// name (`Workbook::set_defined_name_scoped`). Hidden entries (the
+/// `_xlfn.*` / `_xlpm.*` future-function and LET/LAMBDA-parameter
+/// placeholders `PtgName` resolves during Ptg decode — see
+/// `name_table`) are skipped; they are not user-visible names. Walks
+/// `xl/workbook.bin`'s `BrtName` records a second time (after
+/// `DecodeWorkbookNames` has already built the complete `name_table`),
+/// decoding each entry's own formula body so a qualified or
+/// name-referencing formula (e.g. `Rate` defined as a cell reference)
+/// resolves against the full table rather than a partially-built one.
+/// A name whose formula uses a Ptg token outside the supported set logs
+/// a structured warning and is skipped rather than failing the whole
+/// read — the OOXML reader's `DecodeFormulaText` contract mirrored at
+/// the workbook-name level.
+Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body,
+                                           const std::vector<XlsbName>& name_table,
+                                           const std::vector<std::string>& sheet_names,
+                                           const std::vector<XlsbSheetRange>& sheet_ranges, Workbook& wb) {
+  ByteSpan cursor{body.data(), body.size()};
+  std::size_t name_index = 0;
+  while (cursor.size > 0) {
+    auto rec_or = read_record(cursor);
+    if (!rec_or) {
+      return rec_or.error();
+    }
+    const XlsbRecord& rec = rec_or.value();
+    if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtName)) {
+      continue;
+    }
+    if (name_index >= name_table.size()) {
+      break;  // Defensive: should be unreachable (same records, same order).
+    }
+    const XlsbName& entry = name_table[name_index];
+    ++name_index;
+    if (entry.hidden) {
+      continue;
+    }
+    ByteSpan p = rec.payload;
+    if (p.size < 9) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
+                        "workbook.bin: BrtName header truncated (defined-name pass)", "context=xlsb_reader");
+    }
+    p.data += 9;  // flags (2) + 3 reserved bytes + itab (4).
+    p.size -= 9;
+    auto cch_or = read_u32(p);
+    if (!cch_or) {
+      return cch_or.error();
+    }
+    const std::size_t name_bytes = static_cast<std::size_t>(cch_or.value()) * 2;
+    if (name_bytes > p.size) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
+                        "workbook.bin: BrtName name truncated (defined-name pass)", "context=xlsb_reader");
+    }
+    p.data += name_bytes;
+    p.size -= name_bytes;
+    auto cce_or = read_u32(p);
+    if (!cce_or) {
+      return cce_or.error();
+    }
+    const std::uint32_t cce = cce_or.value();
+    if (cce > p.size) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
+                        "workbook.bin: BrtName formula rgce length exceeds payload", "context=xlsb_reader");
+    }
+    if (cce == 0) {
+      continue;
+    }
+    ByteSpan rgce{p.data, cce};
+    Arena arena;
+    auto ast_or = decode_ptgs(rgce, ByteSpan{}, arena, sheet_names, name_table, sheet_ranges);
+    if (!ast_or) {
+      StructuredLog("xlsb.defined_name.not_decoded")
+          .field("name", entry.name)
+          .field("reason", ast_or.error().message)
+          .warn();
+      continue;
+    }
+    // Defined-name formulas store the bare expression text (no leading
+    // `=`), matching the OOXML `<definedName>` element's text content.
+    const std::string formula_text = parser::format_formula(*ast_or.value());
+    auto reg = wb.set_defined_name_scoped(entry.name, formula_text, entry.itab);
+    if (!reg) {
+      return reg.error();
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+/// A dynamic-array formula's anchor cell plus its footprint, decoded
+/// from a `BrtArrFmla` record's `RfX`. `row` / `col` is the anchor
+/// (`rwFirst`, `colFirst`); `last_row` / `last_col` is the footprint's
+/// bottom-right corner (`rwLast`, `colLast`). Only spans wider than the
+/// anchor cell are recorded (see `RegisterArraySpills`).
+struct ArrayAnchor {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::uint32_t last_row = 0;
+  std::uint32_t last_col = 0;
+};
+
 /// Per-sheet decode state. The reader walks records in order and
 /// updates `current_row` whenever it sees a `BrtRowHdr`. Cell records
 /// then resolve `(current_row, col)` to the absolute cell address.
@@ -419,28 +668,92 @@ struct SheetDecodeState {
   std::uint32_t current_row = 0;
   bool row_seen = false;
   std::uint32_t cells_decoded = 0;
+  /// Dynamic-array anchors recorded while walking `BrtArrFmla` records.
+  /// Registered as spill regions in a second pass after the whole sheet
+  /// has been decoded (see `RegisterArraySpills`'s doc comment for why
+  /// this cannot happen inline).
+  std::vector<ArrayAnchor> array_anchors;
+};
+
+/// Column + style-table index decoded by `ReadCellHeader`.
+struct CellHeaderInfo {
+  std::uint32_t col = 0;
+  /// 0-based index into `StylesTable::cell_xfs`. `0` is the default xf
+  /// and is never stored on a cell (mirrors the OOXML reader's
+  /// `xf_index != 0` guard before calling `set_cell_xf_index`).
+  std::uint32_t xf_index = 0;
 };
 
 /// Reads the eight-byte cell header common to every cell record:
 ///   * column   : u32 (zero-based)
-///   * iStyleRef: u24 (we ignore the style for now — Bundle 4.x will
-///                consume it)
+///   * iStyleRef: u24 (index into `StylesTable::cell_xfs`)
 ///   * fPhShow  : u8  (Phonetic-text flag; ignored)
 ///
-/// Returns the column index and advances the cursor past the header.
-Expected<std::uint32_t, Error> ReadCellHeader(ByteSpan& cursor) {
+/// Returns the column index and style-xf index, and advances the
+/// cursor past the header.
+Expected<CellHeaderInfo, Error> ReadCellHeader(ByteSpan& cursor) {
   auto col_or = read_u32(cursor);
   if (!col_or) {
     return col_or.error();
   }
-  // iStyleRef (3 bytes) + fPhShow (1 byte) = 4 bytes total.
+  // iStyleRef (3 bytes, little-endian) + fPhShow (1 byte) = 4 bytes.
   if (cursor.size < 4) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb cell header truncated (style/phonetic)",
                       "context=xlsb_reader");
   }
+  const std::uint32_t xf_index = static_cast<std::uint32_t>(cursor.data[0]) |
+                                 (static_cast<std::uint32_t>(cursor.data[1]) << 8) |
+                                 (static_cast<std::uint32_t>(cursor.data[2]) << 16);
   cursor.data += 4;
   cursor.size -= 4;
-  return col_or.value();
+  return CellHeaderInfo{col_or.value(), xf_index};
+}
+
+/// Stores `xf_index` on `(sheet_index, row, col)` when it differs from
+/// the default xf (`0`), mirroring the OOXML sheet reader's
+/// `xf_index != 0` guard before calling `Workbook::set_cell_xf_index`.
+Expected<void, Error> ApplyXfIndex(Workbook& wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                   std::uint32_t xf_index) {
+  if (xf_index == 0) {
+    return Expected<void, Error>::Ok();
+  }
+  return wb.set_cell_xf_index(sheet_index, row, col, xf_index);
+}
+
+/// Registers each recorded dynamic-array anchor as a spill region so the
+/// footprint's non-anchor cells' raw literal payload (Excel writes a
+/// plain `BrtCellRk` / `BrtCellReal` / ... for the cached spill targets
+/// of e.g. `=SEQUENCE(3)` in F6, spilling into F7:F8) does not read back
+/// as independent literals that block the anchor's own re-spill on
+/// recalc. Mirrors the OOXML reader's `RegisterArraySpills`
+/// (`io/sheet_reader.cpp`) byte-for-byte in intent: capture the
+/// footprint's current cached values, blank the non-anchor cells, then
+/// commit the spill region. Must run only after the entire sheet has
+/// been decoded -- see the `BrtArrFmla` case's comment in
+/// `DecodeSheetBin` for why registering inline (while later rows in the
+/// footprint have not been decoded yet) does not work.
+void RegisterArraySpills(Workbook& wb, std::size_t sheet_index, const std::vector<ArrayAnchor>& anchors) {
+  for (const ArrayAnchor& a : anchors) {
+    const std::uint32_t rows = a.last_row - a.row + 1U;
+    const std::uint32_t cols = a.last_col - a.col + 1U;
+    std::vector<Value> values;
+    values.reserve(static_cast<std::size_t>(rows) * cols);
+    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
+      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
+        const Cell* cell = wb.sheet(sheet_index).cell_at(r, c);
+        values.push_back(cell != nullptr ? cell->cached_value : Value::blank());
+      }
+    }
+    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
+      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
+        if (r == a.row && c == a.col) {
+          continue;
+        }
+        wb.sheet(sheet_index).set_cell_cached_value(r, c, Value::blank());
+      }
+    }
+    wb.sheet(sheet_index).commit_spill(a.row, a.col, rows, cols, std::move(values));
+  }
 }
 
 /// Decodes one sheet binary part. Cells (literal + formula) flow into
@@ -450,7 +763,9 @@ Expected<std::uint32_t, Error> ReadCellHeader(ByteSpan& cursor) {
 Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>& body, std::size_t sheet_index,
                                                  Workbook& wb, const std::vector<std::string_view>& sst_entries,
                                                  std::deque<std::string>& text_storage,
-                                                 const std::vector<std::string>& sheet_names) {
+                                                 const std::vector<std::string>& sheet_names,
+                                                 const std::vector<XlsbName>& name_table,
+                                                 const std::vector<XlsbSheetRange>& sheet_ranges) {
   SheetDecodeState state;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
@@ -481,7 +796,11 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         if (!col_or) {
           return col_or.error();
         }
-        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value(), Value::blank());
+        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, Value::blank());
+        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+            !r) {
+          return r.error();
+        }
         ++state.cells_decoded;
         break;
       }
@@ -499,7 +818,11 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
           return rk_or.error();
         }
         const double v = decode_rk_number(rk_or.value());
-        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value(), Value::number(v));
+        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, Value::number(v));
+        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+            !r) {
+          return r.error();
+        }
         ++state.cells_decoded;
         break;
       }
@@ -518,7 +841,11 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         }
         double v;
         std::memcpy(&v, p.data, sizeof(v));
-        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value(), Value::number(v));
+        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, Value::number(v));
+        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+            !r) {
+          return r.error();
+        }
         ++state.cells_decoded;
         break;
       }
@@ -536,7 +863,11 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
           return b_or.error();
         }
         wb.sheet(sheet_index)
-            .set_cell_cached_value(state.current_row, col_or.value(), Value::boolean(b_or.value() != 0));
+            .set_cell_cached_value(state.current_row, col_or.value().col, Value::boolean(b_or.value() != 0));
+        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+            !r) {
+          return r.error();
+        }
         ++state.cells_decoded;
         break;
       }
@@ -553,39 +884,16 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         if (!code_or) {
           return code_or.error();
         }
-        // Map OOXML wire codes to ErrorCode. Anything outside the
-        // documented set surfaces as Unknown.
-        ErrorCode ec = ErrorCode::Unknown;
-        switch (code_or.value()) {
-          case 0:
-            ec = ErrorCode::Null;
-            break;
-          case 7:
-            ec = ErrorCode::Div0;
-            break;
-          case 15:
-            ec = ErrorCode::Value;
-            break;
-          case 23:
-            ec = ErrorCode::Ref;
-            break;
-          case 29:
-            ec = ErrorCode::Name;
-            break;
-          case 36:
-            ec = ErrorCode::Num;
-            break;
-          case 42:
-            ec = ErrorCode::NA;
-            break;
-          case 43:
-            ec = ErrorCode::GettingData;
-            break;
-          default:
-            ec = ErrorCode::Unknown;
-            break;
+        // Map the OOXML wire code to `ErrorCode` via the single
+        // `kErrorTable`-backed lookup shared with the writer, so this
+        // path stays symmetric with `ooxml_code()` (see
+        // `error_from_ooxml_code` in `value.h`).
+        const ErrorCode ec = error_from_ooxml_code(static_cast<std::int32_t>(code_or.value()));
+        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, Value::error(ec));
+        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+            !r) {
+          return r.error();
         }
-        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value(), Value::error(ec));
         ++state.cells_decoded;
         break;
       }
@@ -604,7 +912,11 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         }
         text_storage.push_back(std::move(str_or.value()));
         wb.sheet(sheet_index)
-            .set_cell_cached_value(state.current_row, col_or.value(), Value::text(text_storage.back()));
+            .set_cell_cached_value(state.current_row, col_or.value().col, Value::text(text_storage.back()));
+        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+            !r) {
+          return r.error();
+        }
         ++state.cells_decoded;
         break;
       }
@@ -625,13 +937,17 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
           std::string ctx("context=xlsb_reader sheet_index=");
           ctx.append(std::to_string(sheet_index));
           ctx.append(" row=").append(std::to_string(state.current_row));
-          ctx.append(" col=").append(std::to_string(col_or.value()));
+          ctx.append(" col=").append(std::to_string(col_or.value().col));
           ctx.append(" sst_index=").append(std::to_string(idx_or.value()));
           ctx.append(" sst_size=").append(std::to_string(sst_entries.size()));
           return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb sst index out of range", std::move(ctx));
         }
         wb.sheet(sheet_index)
-            .set_cell_cached_value(state.current_row, col_or.value(), Value::text(sst_entries[idx_or.value()]));
+            .set_cell_cached_value(state.current_row, col_or.value().col, Value::text(sst_entries[idx_or.value()]));
+        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+            !r) {
+          return r.error();
+        }
         ++state.cells_decoded;
         break;
       }
@@ -693,38 +1009,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
             if (!b) {
               return b.error();
             }
-            // Reuse the same wire-code mapping the literal path uses.
-            ErrorCode ec = ErrorCode::Unknown;
-            switch (b.value()) {
-              case 0:
-                ec = ErrorCode::Null;
-                break;
-              case 7:
-                ec = ErrorCode::Div0;
-                break;
-              case 15:
-                ec = ErrorCode::Value;
-                break;
-              case 23:
-                ec = ErrorCode::Ref;
-                break;
-              case 29:
-                ec = ErrorCode::Name;
-                break;
-              case 36:
-                ec = ErrorCode::Num;
-                break;
-              case 42:
-                ec = ErrorCode::NA;
-                break;
-              case 43:
-                ec = ErrorCode::GettingData;
-                break;
-              default:
-                ec = ErrorCode::Unknown;
-                break;
-            }
-            cached = Value::error(ec);
+            // Same `kErrorTable`-backed lookup the literal path uses.
+            cached = Value::error(error_from_ooxml_code(static_cast<std::int32_t>(b.value())));
             break;
           }
           default:
@@ -738,8 +1024,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         p.data += 2;
         p.size -= 2;
         // CellParsedFormula: u32 cce (rgce byte length) + cce bytes of
-        // Ptg stream + u32 cb + cb bytes of rgcb. Slice exactly the rgce
-        // span and hand it to the decoder.
+        // Ptg stream + u32 cb + cb bytes of rgcb (the array-constant
+        // extra-data area `PtgArray` consumes; empty for formulas with
+        // no array literals).
         auto cce_or = read_u32(p);
         if (!cce_or) {
           return cce_or.error();
@@ -750,13 +1037,28 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
                             "context=xlsb_reader");
         }
         ByteSpan rgce{p.data, cce};
-        const std::string formula_text =
-            DecodeFormulaText(rgce, sheet_names, sheet_index, state.current_row, col_or.value());
+        p.data += cce;
+        p.size -= cce;
+        ByteSpan rgcb{};
+        if (p.size >= 4) {
+          auto cb_or = read_u32(p);
+          if (!cb_or) {
+            return cb_or.error();
+          }
+          const std::uint32_t cb = cb_or.value();
+          if (cb > p.size) {
+            return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula rgcb length exceeds payload",
+                              "context=xlsb_reader");
+          }
+          rgcb = ByteSpan{p.data, cb};
+        }
+        const std::string formula_text = DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges,
+                                                           sheet_index, state.current_row, col_or.value().col);
         if (!formula_text.empty()) {
           // Register the real formula via the workbook-level entry so the
           // dep graph tracks it (matching the OOXML reader). The cached
           // value is preserved separately below.
-          auto wf = wb.set_cell_formula(sheet_index, state.current_row, col_or.value(), formula_text);
+          auto wf = wb.set_cell_formula(sheet_index, state.current_row, col_or.value().col, formula_text);
           if (!wf) {
             return wf.error();
           }
@@ -765,15 +1067,110 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         // is the only correct datum the cell carries; for decoded ones it
         // matches Excel's stored result until the next recalc).
         if (!cached.is_blank()) {
-          wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value(), cached);
+          wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, cached);
+        }
+        if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
+            !r) {
+          return r.error();
         }
         ++state.cells_decoded;
+        break;
+      }
+      case XlsbRecordType::BrtArrFmla: {
+        if (!state.row_seen) {
+          break;
+        }
+        // BrtArrFmla ([MS-XLSB], verified against a real Excel-produced
+        // `xl/worksheets/sheetN.bin`): RfX (4 x u32: rwFirst, rwLast,
+        // colFirst, colLast) + 1 reserved/flag byte + CellParsedFormula
+        // (u32 cce + cce bytes rgce + u32 cb + cb bytes rgcb). This
+        // record supplies the REAL Ptg tokens for a CSE / dynamic-array
+        // formula whose anchor cell's own formula-result "shell" record
+        // (BrtFmlaNum/String/Bool/Error, processed above) carries only a
+        // `PtgExp` placeholder. Only the anchor cell (`rwFirst`,
+        // `colFirst`) gets a formula string; the rest of the array range
+        // (if any) has no formula of its own — matching the OOXML
+        // reader's treatment of `t="array"` / dynamic-array spill
+        // formulas, where only the anchor cell stores `<f>`.
+        ByteSpan p = rec.payload;
+        auto rw_first_or = read_u32(p);
+        if (!rw_first_or) {
+          return rw_first_or.error();
+        }
+        auto rw_last_or = read_u32(p);
+        if (!rw_last_or) {
+          return rw_last_or.error();
+        }
+        auto col_first_or = read_u32(p);
+        if (!col_first_or) {
+          return col_first_or.error();
+        }
+        auto col_last_or = read_u32(p);
+        if (!col_last_or) {
+          return col_last_or.error();
+        }
+        if (p.size < 1) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla flag truncated",
+                            "context=xlsb_reader");
+        }
+        p.data += 1;
+        p.size -= 1;
+        auto cce_or = read_u32(p);
+        if (!cce_or) {
+          return cce_or.error();
+        }
+        const std::uint32_t cce = cce_or.value();
+        if (cce > p.size) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla rgce length exceeds payload",
+                            "context=xlsb_reader");
+        }
+        ByteSpan rgce{p.data, cce};
+        p.data += cce;
+        p.size -= cce;
+        ByteSpan rgcb{};
+        if (p.size >= 4) {
+          auto cb_or = read_u32(p);
+          if (!cb_or) {
+            return cb_or.error();
+          }
+          const std::uint32_t cb = cb_or.value();
+          if (cb > p.size) {
+            return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla rgcb length exceeds payload",
+                              "context=xlsb_reader");
+          }
+          rgcb = ByteSpan{p.data, cb};
+        }
+        const std::string formula_text = DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges,
+                                                           sheet_index, rw_first_or.value(), col_first_or.value());
+        if (formula_text.empty()) {
+          break;
+        }
+        auto wf = wb.set_cell_formula(sheet_index, rw_first_or.value(), col_first_or.value(), formula_text);
+        if (!wf) {
+          return wf.error();
+        }
+        // Record the footprint for a second pass after the whole sheet
+        // has been decoded (see `RegisterArraySpills`, called at the end
+        // of this function). `BrtArrFmla` for the anchor `(rwFirst,
+        // colFirst)` appears within the anchor's OWN row group in the
+        // record stream, i.e. BEFORE the non-anchor rows' own cell
+        // records (`rwLast > rwFirst` spans into rows not yet decoded).
+        // Registering the spill immediately here would have those later
+        // records' `set_cell_cached_value` calls silently repopulate the
+        // phantom cells with their raw literal payload, which a
+        // subsequent recalc's spill-commit would then see as "already
+        // occupied" and surface `#SPILL!` instead of the real result.
+        if (rw_last_or.value() > rw_first_or.value() || col_last_or.value() > col_first_or.value()) {
+          state.array_anchors.push_back(
+              ArrayAnchor{rw_first_or.value(), col_first_or.value(), rw_last_or.value(), col_last_or.value()});
+        }
         break;
       }
       default:
         break;
     }
   }
+  RegisterArraySpills(wb, sheet_index, state.array_anchors);
   return state;
 }
 
@@ -837,6 +1234,22 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   }
   const std::vector<SheetBundleEntry>& bundle = bundle_or.value();
 
+  // `BrtName` (defined names + hidden future-function / LET-parameter
+  // placeholders) and `BrtExternSheet` (qualified-reference sheet
+  // ranges) both live in `xl/workbook.bin` globals; decode them once so
+  // every sheet's `PtgName` / `PtgRef3d` / `PtgArea3d` tokens can
+  // resolve against the same tables.
+  auto name_table_or = DecodeWorkbookNames(wb_bytes_or.value());
+  if (!name_table_or) {
+    return name_table_or.error();
+  }
+  const std::vector<XlsbName>& name_table = name_table_or.value();
+  auto sheet_ranges_or = DecodeExternSheet(wb_bytes_or.value());
+  if (!sheet_ranges_or) {
+    return sheet_ranges_or.error();
+  }
+  const std::vector<XlsbSheetRange>& sheet_ranges = sheet_ranges_or.value();
+
   // 5. Build the workbook bottom-up.
   Workbook wb = Workbook::create_empty();
   std::vector<std::string> sheet_part_paths;
@@ -874,6 +1287,15 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     sheet_names.push_back(b.name);
   }
 
+  // 5b. Register every non-hidden `BrtName` entry as a defined name.
+  // Needs `sheet_names` (for qualified references inside a name's own
+  // formula) and the complete `name_table` / `sheet_ranges` (for
+  // self-consistent `PtgName` / `PtgRef3d` resolution), so this can
+  // only run after both are fully built above.
+  if (auto r = RegisterDefinedNames(wb_bytes_or.value(), name_table, sheet_names, sheet_ranges, wb); !r) {
+    return r.error();
+  }
+
   // 6. xl/sharedStrings.bin — load before the per-sheet decode loop so
   // BrtCellIsst can resolve indices in-pipeline. The text deque is
   // owned by the workbook itself so `Value::text` views remain valid
@@ -892,6 +1314,27 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     sst_entries = std::move(sst_or.value());
   }
 
+  // 6b. xl/styles.bin — numFmt + cellXfs/cellStyleXfs (see
+  // `io/xlsb/styles_reader.h`). Deliberately NOT added to
+  // `consumed_parts` below: leaving it out lets step 8's passthrough
+  // loop capture the raw bytes (with the correct `[Content_Types].xml`
+  // content-type) alongside the parsed `StylesTable`, so a
+  // read-modify-write cycle keeps the original font/fill/border detail
+  // this reader does not model in-memory.
+  if (!wb_rels.styles_path.empty() && zip.has_entry(wb_rels.styles_path)) {
+    auto styles_bytes_or = zip.read_entry(wb_rels.styles_path);
+    if (!styles_bytes_or) {
+      return styles_bytes_or.error();
+    }
+    const std::vector<std::uint8_t>& styles_bytes = styles_bytes_or.value();
+    ByteSpan styles_span{styles_bytes.data(), styles_bytes.size()};
+    auto styles_or = read_styles_bin(styles_span);
+    if (!styles_or) {
+      return styles_or.error();
+    }
+    wb.set_styles(std::move(styles_or.value()));
+  }
+
   // 7. Each sheet binary.
   std::uint32_t cells_read = 0;
   std::unordered_set<std::string> consumed_parts;
@@ -901,9 +1344,6 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   consumed_parts.insert(RelsPathForPart(workbook_path));
   if (!wb_rels.sst_path.empty()) {
     consumed_parts.insert(wb_rels.sst_path);
-  }
-  if (!wb_rels.styles_path.empty()) {
-    consumed_parts.insert(wb_rels.styles_path);
   }
 
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
@@ -917,7 +1357,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!sheet_bytes_or) {
       return sheet_bytes_or.error();
     }
-    auto state_or = DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, text_storage, sheet_names);
+    auto state_or =
+        DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, text_storage, sheet_names, name_table, sheet_ranges);
     if (!state_or) {
       return state_or.error();
     }

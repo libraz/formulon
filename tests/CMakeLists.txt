@@ -62,6 +62,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/format_detect_test.cpp
   unit/io/roundtrip_symmetry_test.cpp
   unit/io/sheet_roundtrip_symmetry_test.cpp
+  unit/io/xlsb_roundtrip_symmetry_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
@@ -70,6 +71,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/record_writer_test.cpp
   unit/io/xlsb/sst_writer_test.cpp
   unit/io/xlsb/writer_test.cpp
+  unit/io/xlsb_fidelity_test.cpp
   unit/parser/tokenizer_test.cpp
   unit/parser/ast_test.cpp
   unit/parser/ast_dump_test.cpp

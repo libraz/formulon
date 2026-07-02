@@ -6,7 +6,7 @@
 // emitted by `emit_record` round-trips through `read_record` to the
 // same `(type, payload)` pair.
 //
-// The Bundle 4.2 writer composes these primitives to build:
+// `io/xlsb/writer.cpp` composes these primitives to build:
 //
 //   * variable-length record headers (1- or 2-byte type, 1..4-byte
 //     payload size with MSB-set continuation, per [MS-XLSB] §2.1.4);

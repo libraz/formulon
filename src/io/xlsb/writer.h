@@ -10,18 +10,20 @@
 // Round-trip with the reader is the primary correctness contract:
 // `read_xlsb(write_xlsb(wb))` reproduces every cell value `wb` carried
 // in for the in-scope literal kinds (number, boolean, text, error,
-// blank). Formula cells round-trip via the Bundle 4.1 stub: a
-// `formula_text` of the form `=__FORMULON_XLSB_PTG__(...)` is
-// recognised here and the captured Ptg bytes are spliced back into a
-// `BrtFmla*` record. Authored-in-engine formulas (no Ptg bytes
-// available) currently fall back to writing the cached value as a
-// literal and emit a `xlsb.writer.formula_lost` warning; full
-// AST→Ptg encoding lands in a later bundle.
+// blank). Formula cells round-trip through a full AST→Ptg encoding
+// pipeline (`io/xlsb/cell_writer.cpp`'s `EncodeCellFormula`, backed by
+// `io/xlsb/ptg_writer.h`'s `encode_ptgs`): `cell.formula_text` is
+// re-parsed and lowered directly to the `rgce` Ptg byte stream spliced
+// into a `BrtFmla*` record. A formula that cannot be parsed or lowered
+// to the supported Ptg token set is a hard write failure
+// (`kIoXlsbUnsupportedPtg`), not a silent fallback to the cached
+// literal — losing the formula silently would be worse than failing
+// the write outright.
 //
 // Defined names, tables, conditional formats, styles, and other
-// sheet-level metadata are out of scope for v1: if the workbook
-// carries any, we log `xlsb.writer.deferred` and skip them. The OOXML
-// writer remains the canonical round-trip path for those features.
+// sheet-level metadata are out of scope: if the workbook carries any,
+// we log `xlsb.writer.deferred` and skip them. The OOXML writer
+// remains the canonical round-trip path for those features.
 
 #ifndef FORMULON_IO_XLSB_WRITER_H_
 #define FORMULON_IO_XLSB_WRITER_H_

@@ -24,6 +24,29 @@
 namespace formulon {
 namespace io {
 namespace xlsb {
+
+// Storage name Excel writes into the BrtName table for a "future"
+// (post-2007) function absent from the classic func-id table. Worksheet-
+// only dynamic-array functions (the original 2018 set) carry the
+// `_xlfn._xlws.` prefix; every other future function carries `_xlfn.`.
+// Mirrors ClassifyStoragePrefix in the OOXML writer so both persistence
+// formats name the callee identically. The name is upper-cased to match
+// Excel's own BrtName spelling byte-for-byte.
+std::string future_function_storage_name(std::string_view name) {
+  std::string upper;
+  upper.reserve(name.size());
+  for (char c : name) {
+    upper.push_back((c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c);
+  }
+  static constexpr std::string_view kXlwsFunctions[] = {"FILTER", "SORT", "SORTBY", "UNIQUE"};
+  for (const std::string_view fn : kXlwsFunctions) {
+    if (upper == fn) {
+      return std::string("_xlfn._xlws.") + upper;
+    }
+  }
+  return std::string("_xlfn.") + upper;
+}
+
 namespace {
 
 constexpr std::uint16_t kColRelBit = 0x4000;
@@ -127,6 +150,31 @@ void emit_loc(std::vector<std::uint8_t>& dst, const parser::Reference& ref) {
   emit_u16(dst, col);
 }
 
+/// Packs a single `RgceArea` corner's column field (14-bit column plus
+/// the two relative-flag bits), matching `emit_loc`'s bit layout.
+std::uint16_t pack_area_col(const parser::Reference& ref) {
+  std::uint16_t col = static_cast<std::uint16_t>(ref.col & 0x3FFF);
+  if (!ref.col_abs) {
+    col |= kColRelBit;
+  }
+  if (!ref.row_abs) {
+    col |= kRowRelBit;
+  }
+  return col;
+}
+
+/// Emits the `RgceArea` two-corner range coordinate: rows first, then
+/// columns — `row1(u32), row2(u32), col1(u16 w/ flags), col2(u16 w/
+/// flags)` — NOT two back-to-back `RgceLoc` (`emit_loc`) pairs. Verified
+/// against a real Excel-365-produced `xl/worksheets/sheetN.bin` (see
+/// `ptg_reader.cpp`'s `read_area`, the decoder counterpart).
+void emit_area(std::vector<std::uint8_t>& dst, const parser::Reference& a, const parser::Reference& b) {
+  emit_u32(dst, a.row);
+  emit_u32(dst, b.row);
+  emit_u16(dst, pack_area_col(a));
+  emit_u16(dst, pack_area_col(b));
+}
+
 Error unsupported_node(const char* kind) {
   return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
                     std::string("xlsb encoder cannot lower AST node kind: ") + kind, "context=xlsb_ptg_writer");
@@ -144,7 +192,8 @@ int resolve_ixti(const std::vector<std::string>& sheet_names, std::string_view s
 
 class Encoder {
  public:
-  explicit Encoder(const std::vector<std::string>& sheet_names) : sheet_names_(sheet_names) {}
+  Encoder(const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges, const NameTable& name_table)
+      : sheet_names_(sheet_names), sheet_ranges_(sheet_ranges), name_table_(name_table) {}
 
   Expected<void, Error> emit(const parser::AstNode& node) {
     switch (node.kind()) {
@@ -157,9 +206,7 @@ class Encoder {
       case parser::NodeKind::Ref:
         return emit_ref(node.as_ref());
       case parser::NodeKind::Ref3D:
-        // A node-level 3-D ref spans a run of sheets; only single-sheet
-        // qualified refs round-trip through the scalar Ptg forms here.
-        return unsupported_node("Ref3D");
+        return emit_ref3d(node);
       case parser::NodeKind::UnaryOp:
         return emit_unary(node);
       case parser::NodeKind::BinaryOp:
@@ -175,7 +222,7 @@ class Encoder {
       case parser::NodeKind::ArrayLiteral:
         return emit_array(node);
       case parser::NodeKind::NameRef:
-        return unsupported_node("NameRef");
+        return emit_name_ref(node.as_name());
       case parser::NodeKind::ExternalRef:
         return unsupported_node("ExternalRef");
       case parser::NodeKind::StructuredRef:
@@ -187,7 +234,7 @@ class Encoder {
       case parser::NodeKind::Lambda:
         return unsupported_node("Lambda");
       case parser::NodeKind::LetBinding:
-        return unsupported_node("LetBinding");
+        return emit_let(node);
       case parser::NodeKind::LambdaCall:
         return unsupported_node("LambdaCall");
       case parser::NodeKind::ErrorPlaceholder:
@@ -196,7 +243,7 @@ class Encoder {
     return unsupported_node("unknown");
   }
 
-  std::vector<std::uint8_t> take() { return std::move(out_); }
+  EncodedFormula take() { return EncodedFormula{std::move(out_), std::move(extra_)}; }
 
  private:
   Expected<void, Error> emit_literal(const Value& v) {
@@ -236,6 +283,76 @@ class Encoder {
     return unsupported_node("Literal(unknown)");
   }
 
+  /// Emits `PtgName` (reference-class) for a defined-name reference,
+  /// OR — when `name` matches a LET/LAMBDA parameter currently in scope
+  /// (`let_scope_`, innermost binding first) — for that parameter's
+  /// hidden `_xlpm.<name>` placeholder. `name_table_` must already
+  /// carry every name this encoder is asked to reference — the caller
+  /// (`write_xlsb`) builds it from `collect_ptg_names` before encoding
+  /// any cell, so a live `NameRef` always resolves.
+  Expected<void, Error> emit_name_ref(std::string_view name) {
+    for (auto it = let_scope_.rbegin(); it != let_scope_.rend(); ++it) {
+      if (it->first == name) {
+        emit_u8(out_, 0x23);  // PtgName (reference-class base)
+        emit_u32(out_, it->second);
+        return Expected<void, Error>::Ok();
+      }
+    }
+    const auto it = name_table_.find(std::string(name));
+    if (it == name_table_.end()) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: name reference not in name table",
+                        std::string("context=xlsb_ptg_writer name=") + std::string(name));
+    }
+    emit_u8(out_, 0x23);  // PtgName (reference-class base)
+    emit_u32(out_, it->second);
+    return Expected<void, Error>::Ok();
+  }
+
+  /// Encodes a `LetBinding` the same way a real Excel-365-produced
+  /// `xl/worksheets/sheetN.bin` does: `PtgName(ilbl for "_xlfn.LET")`,
+  /// then for each binding `PtgName(ilbl for "_xlpm.<name>")` + the
+  /// value expression, then the body, then `PtgFuncVar` with
+  /// `id == 255` and `cparams == 1 + 2*n + 1` (LET name-ref + `n`
+  /// name/value pairs + body). Verified against real bytes — see
+  /// `ptg_reader.cpp`'s LET handling in `decode_future_function`.
+  Expected<void, Error> emit_let(const parser::AstNode& node) {
+    const auto it_let = name_table_.find("_xlfn.LET");
+    if (it_let == name_table_.end()) {
+      return unsupported_node("LetBinding(_xlfn.LET not registered)");
+    }
+    emit_u8(out_, 0x23);  // PtgName (reference-class): the LET name-ref
+    emit_u32(out_, it_let->second);
+    const std::uint32_t n = node.as_let_binding_count();
+    for (std::uint32_t i = 0; i < n; ++i) {
+      const std::string_view raw_name = node.as_let_binding_name(i);
+      const std::string param_name = std::string("_xlpm.") + std::string(raw_name);
+      const auto it_param = name_table_.find(param_name);
+      if (it_param == name_table_.end()) {
+        return unsupported_node("LetBinding(param name not registered)");
+      }
+      emit_u8(out_, 0x23);  // PtgName (reference-class): the binding-name-ref
+      emit_u32(out_, it_param->second);
+      RETURN_IF_ERROR(emit(node.as_let_binding_expr(i)));
+      // Subsequent binding expressions and the body can reference this
+      // binding; push it onto scope only after its own value expression
+      // has been emitted (a binding cannot reference itself).
+      let_scope_.emplace_back(raw_name, it_param->second);
+    }
+    auto status = emit(node.as_let_body());
+    for (std::uint32_t i = 0; i < n; ++i) {
+      let_scope_.pop_back();
+    }
+    RETURN_IF_ERROR(status);
+    const std::uint32_t cparams = 1U + (2U * n) + 1U;
+    if (cparams > 0xFF) {
+      return unsupported_node("LetBinding(too many bindings)");
+    }
+    emit_u8(out_, 0x22);  // PtgFuncVar
+    emit_u8(out_, static_cast<std::uint8_t>(cparams));
+    emit_u16(out_, 255);
+    return Expected<void, Error>::Ok();
+  }
+
   Expected<void, Error> emit_ref(const parser::Reference& ref) {
     if (ref.is_full_col || ref.is_full_row) {
       // Whole-column / whole-row refs need the Area form with sentinel
@@ -245,17 +362,82 @@ class Encoder {
     if (ref.sheet.empty()) {
       emit_u8(out_, 0x24 | kPtgValueClass);  // PtgRef
       emit_loc(out_, ref);
-    } else {
-      const int ixti = resolve_ixti(sheet_names_, ref.sheet);
-      if (ixti < 0) {
-        return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet not found for 3-D ref",
-                          std::string("context=xlsb_ptg_writer sheet=") + std::string(ref.sheet));
-      }
-      emit_u8(out_, 0x3A | kPtgValueClass);  // PtgRef3d
-      emit_u16(out_, static_cast<std::uint16_t>(ixti));
-      emit_loc(out_, ref);
+      return Expected<void, Error>::Ok();
     }
+    ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(ref.sheet));
+    emit_u8(out_, 0x3A | kPtgValueClass);  // PtgRef3d
+    emit_u16(out_, ixti);
+    emit_loc(out_, ref);
     return Expected<void, Error>::Ok();
+  }
+
+  /// Encodes a `Ref3D` node over a sheet span resolved to `ixti` through
+  /// `sheet_ranges_`. A single-cell tail (`Sheet1:Sheet3!A1`) emits
+  /// `PtgRef3d(ixti) + RgceLoc`; a range tail (`Sheet1:Sheet3!A1:B2`) emits
+  /// `PtgArea3d(ixti) + RgceArea` so the rectangle survives the round-trip.
+  Expected<void, Error> emit_ref3d(const parser::AstNode& node) {
+    const std::string_view begin = node.as_ref3d_sheet_begin();
+    const std::string_view end = node.as_ref3d_sheet_end();
+    const int itab_begin = resolve_ixti(sheet_names_, begin);
+    const int itab_end = resolve_ixti(sheet_names_, end);
+    if (itab_begin < 0 || itab_end < 0) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet not found for 3-D range",
+                        std::string("context=xlsb_ptg_writer sheets=") + std::string(begin) + ":" + std::string(end));
+    }
+    ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(itab_begin, itab_end));
+    // 3-D references only appear as arguments to reference-taking functions
+    // (SUM, COUNT, ...), so Excel writes them in the reference class (the
+    // base ptg with no value/array class bit). A value/array-class 3-D
+    // reference reads back as #REF! in real Excel.
+    if (node.as_ref3d_is_range()) {
+      emit_u8(out_, 0x3B);  // PtgArea3d (reference class)
+      emit_u16(out_, ixti);
+      emit_area(out_, node.as_ref3d_cell(), node.as_ref3d_cell_end());
+      return Expected<void, Error>::Ok();
+    }
+    emit_u8(out_, 0x3A);  // PtgRef3d (reference class)
+    emit_u16(out_, ixti);
+    emit_loc(out_, node.as_ref3d_cell());
+    return Expected<void, Error>::Ok();
+  }
+
+  /// Resolves `sheet`'s single-sheet-qualified `ixti` (stored in
+  /// `sheet_ranges_` as `(itab, itab)`), so single- and multi-sheet
+  /// qualified references share the same `ixti` numbering space. See
+  /// the `SheetRangeTable` doc comment for why: once the workbook emits
+  /// any `BrtExternSheet` entry, the reader interprets every `ixti` as a
+  /// table index rather than a direct sheet index, so a single-sheet ref
+  /// cannot fall back to a bare index once a genuine 3-D range exists
+  /// anywhere in the same workbook.
+  Expected<std::uint16_t, Error> resolve_single_sheet_ixti(std::string_view sheet) {
+    const int itab = resolve_ixti(sheet_names_, sheet);
+    if (itab < 0) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet not found for 3-D ref",
+                        std::string("context=xlsb_ptg_writer sheet=") + std::string(sheet));
+    }
+    return resolve_range_ixti(itab, itab);
+  }
+
+  Expected<std::uint16_t, Error> resolve_range_ixti(int itab_first, int itab_last) {
+    const int ixti = try_resolve_range_ixti(itab_first, itab_last);
+    if (ixti < 0) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: sheet range not pre-registered",
+                        "context=xlsb_ptg_writer");
+    }
+    return static_cast<std::uint16_t>(ixti);
+  }
+
+  /// Non-`Expected` variant for callers (the `PtgArea` fast path) that
+  /// fall back to a different encoding on a lookup miss rather than
+  /// failing outright. Returns -1 when `(itab_first, itab_last)` is not
+  /// in `sheet_ranges_`.
+  int try_resolve_range_ixti(int itab_first, int itab_last) const {
+    for (std::size_t i = 0; i < sheet_ranges_.size(); ++i) {
+      if (sheet_ranges_[i].first == itab_first && sheet_ranges_[i].second == itab_last) {
+        return static_cast<int>(i);
+      }
+    }
+    return -1;
   }
 
   Expected<void, Error> emit_unary(const parser::AstNode& node) {
@@ -333,16 +515,15 @@ class Encoder {
       if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
         if (a.sheet.empty()) {
           emit_u8(out_, 0x25 | kPtgValueClass);  // PtgArea
-          emit_loc(out_, a);
-          emit_loc(out_, b);
+          emit_area(out_, a, b);
           return Expected<void, Error>::Ok();
         }
-        const int ixti = resolve_ixti(sheet_names_, a.sheet);
+        const int itab = resolve_ixti(sheet_names_, a.sheet);
+        const int ixti = itab >= 0 ? try_resolve_range_ixti(itab, itab) : -1;
         if (ixti >= 0) {
           emit_u8(out_, 0x3B | kPtgValueClass);  // PtgArea3d
           emit_u16(out_, static_cast<std::uint16_t>(ixti));
-          emit_loc(out_, a);
-          emit_loc(out_, b);
+          emit_area(out_, a, b);
           return Expected<void, Error>::Ok();
         }
       }
@@ -379,8 +560,7 @@ class Encoder {
     const std::string_view name = node.as_call_name();
     const XlsbFuncEntry* entry = lookup_func_by_name(name);
     if (entry == nullptr) {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: function has no XLSB id",
-                        std::string("context=xlsb_ptg_writer fn=") + std::string(name));
+      return emit_future_function_call(node, name);
     }
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
@@ -405,58 +585,282 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
+  /// Encodes a call to a function absent from the classic
+  /// `func_id_table` as a "future function": `PtgName(ilbl)` naming the
+  /// callee, then the real arguments, then `PtgFuncVar` with the
+  /// `id == 255` sentinel and `cparams == arity + 1` (the name-ref
+  /// counts as an operand). Verified against a real Excel-365-produced
+  /// `xl/worksheets/sheetN.bin` for XLOOKUP / TEXTJOIN / CONCAT / IFS /
+  /// SEQUENCE — see `ptg_reader.cpp`'s `decode_future_function`, the
+  /// decoder counterpart.
+  Expected<void, Error> emit_future_function_call(const parser::AstNode& node, std::string_view name) {
+    const auto it = name_table_.find(future_function_storage_name(name));
+    if (it == name_table_.end()) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                        "xlsb encoder: function has no XLSB id and no future-function name registered",
+                        std::string("context=xlsb_ptg_writer fn=") + std::string(name));
+    }
+    emit_u8(out_, 0x23);  // PtgName (reference-class): the callee name-ref
+    emit_u32(out_, it->second);
+    const std::uint32_t arity = node.as_call_arity();
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      RETURN_IF_ERROR(emit(node.as_call_arg(i)));
+    }
+    const std::uint32_t cparams = arity + 1;  // +1 for the name-ref operand
+    if (cparams > 0xFF) {
+      return unsupported_node("Call(arity>254, future function)");
+    }
+    emit_u8(out_, 0x22);  // PtgFuncVar
+    emit_u8(out_, static_cast<std::uint8_t>(cparams));
+    emit_u16(out_, 255);
+    return Expected<void, Error>::Ok();
+  }
+
   Expected<void, Error> emit_array(const parser::AstNode& node) {
+    // The main token stream carries only a 15-byte placeholder (opcode
+    // + 14 reserved bytes, contents unconstrained); the real dimensions
+    // and elements go into `extra_` (this formula's `rgcb`), consumed
+    // by the decoder in encounter order. Verified against a real
+    // Excel-365-produced `xl/worksheets/sheetN.bin` (see
+    // `ptg_reader.cpp`'s `PtgKind::Array` case, the decoder
+    // counterpart).
     const std::uint32_t rows = node.as_array_rows();
     const std::uint32_t cols = node.as_array_cols();
-    emit_u8(out_, 0x20);  // PtgArray (reference-class base)
-    emit_u32(out_, rows);
-    emit_u32(out_, cols);
+    emit_u8(out_, 0x60);  // PtgArray (array-class base, matches the decoder)
+    for (int i = 0; i < 14; ++i) {
+      emit_u8(out_, 0);
+    }
+    emit_u32(extra_, rows);
+    emit_u32(extra_, cols);
     for (std::uint32_t r = 0; r < rows; ++r) {
       for (std::uint32_t c = 0; c < cols; ++c) {
         const parser::AstNode& elem = node.as_array_element(r, c);
-        if (elem.kind() == parser::NodeKind::ErrorLiteral) {
-          emit_u8(out_, 16);
-          emit_u8(out_, error_wire_code(elem.as_error_literal()));
-          continue;
+        if (elem.kind() != parser::NodeKind::Literal || elem.as_literal().kind() != ValueKind::Number) {
+          // Only the numeric element tag (`0x00`) has been verified
+          // against real Excel output; string / bool / error
+          // array-constant elements are not encoded speculatively (see
+          // the matching decoder-side note).
+          return unsupported_node("ArrayLiteral(non-numeric element)");
         }
-        if (elem.kind() != parser::NodeKind::Literal) {
-          return unsupported_node("ArrayLiteral(non-constant element)");
-        }
-        const Value& v = elem.as_literal();
-        switch (v.kind()) {
-          case ValueKind::Number:
-            emit_u8(out_, 1);
-            emit_double(out_, v.as_number());
-            break;
-          case ValueKind::Text:
-            emit_u8(out_, 2);
-            emit_ptg_string_body(out_, v.as_text());
-            break;
-          case ValueKind::Bool:
-            emit_u8(out_, 4);
-            emit_u8(out_, v.as_boolean() ? 1U : 0U);
-            break;
-          case ValueKind::Error:
-            emit_u8(out_, 16);
-            emit_u8(out_, error_wire_code(v.as_error()));
-            break;
-          default:
-            return unsupported_node("ArrayLiteral(non-scalar element)");
-        }
+        emit_u8(extra_, 0);  // number (verified: tag byte 0x00 precedes the double)
+        emit_double(extra_, elem.as_literal().as_number());
       }
     }
     return Expected<void, Error>::Ok();
   }
 
   const std::vector<std::string>& sheet_names_;
+  const SheetRangeTable& sheet_ranges_;
+  const NameTable& name_table_;
   std::vector<std::uint8_t> out_;
+  /// `rgcb`: the array-constant extra-data area `emit_array` appends to.
+  std::vector<std::uint8_t> extra_;
+  /// Stack of `(parameter name, ilbl)` pairs currently in scope from an
+  /// enclosing `LetBinding` (innermost last). Consulted by
+  /// `emit_name_ref` before falling back to `name_table_`.
+  std::vector<std::pair<std::string_view, std::uint32_t>> let_scope_;
 };
+
+/// Recursion helper for `collect_ptg_names`: adds `name` to `names` (and
+/// marks it in `seen`) unless already present.
+void AddName(std::string_view name, std::vector<std::string>& names, std::unordered_set<std::string>& seen) {
+  std::string owned(name);
+  if (seen.insert(owned).second) {
+    names.push_back(std::move(owned));
+  }
+}
+
+/// Packs an `(itabFirst, itabLast)` pair into a single dedupe key.
+std::uint64_t PackRangeKey(std::int32_t itab_first, std::int32_t itab_last) {
+  return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(itab_first)) << 32) |
+         static_cast<std::uint64_t>(static_cast<std::uint32_t>(itab_last));
+}
+
+/// Recursion helper for `collect_ptg_sheet_ranges`: resolves `itab_first`
+/// / `itab_last` and, when both are valid, appends the pair to `ranges`
+/// unless already present in `seen`.
+void AddSheetRange(std::int32_t itab_first, std::int32_t itab_last, SheetRangeTable& ranges,
+                   std::unordered_set<std::uint64_t>& seen) {
+  if (itab_first < 0 || itab_last < 0) {
+    return;  // Unresolvable sheet name; the encode fails later with a precise error.
+  }
+  if (seen.insert(PackRangeKey(itab_first, itab_last)).second) {
+    ranges.emplace_back(itab_first, itab_last);
+  }
+}
+
+/// Recursive worker for `collect_ptg_names` carrying the LET / LAMBDA
+/// parameter names currently in scope (innermost last). A `NameRef`
+/// matching an in-scope parameter resolves at encode time to that
+/// parameter's hidden `_xlpm.<name>` placeholder (see
+/// `Encoder::emit_name_ref`), so it must not be registered as an ordinary
+/// workbook defined name.
+void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& names,
+                        std::unordered_set<std::string>& seen, std::vector<std::string_view>& scope) {
+  switch (node.kind()) {
+    case parser::NodeKind::NameRef: {
+      const std::string_view name = node.as_name();
+      for (const std::string_view param : scope) {
+        if (param == name) {
+          return;  // LET / LAMBDA parameter: encoded via its _xlpm. placeholder.
+        }
+      }
+      AddName(name, names, seen);
+      return;
+    }
+    case parser::NodeKind::Call: {
+      const std::string_view name = node.as_call_name();
+      if (lookup_func_by_name(name) == nullptr) {
+        AddName(future_function_storage_name(name), names, seen);
+      }
+      const std::uint32_t arity = node.as_call_arity();
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        CollectNamesScoped(node.as_call_arg(i), names, seen, scope);
+      }
+      return;
+    }
+    case parser::NodeKind::UnaryOp:
+      CollectNamesScoped(node.as_unary_operand(), names, seen, scope);
+      return;
+    case parser::NodeKind::BinaryOp:
+      CollectNamesScoped(node.as_binary_lhs(), names, seen, scope);
+      CollectNamesScoped(node.as_binary_rhs(), names, seen, scope);
+      return;
+    case parser::NodeKind::RangeOp:
+      CollectNamesScoped(node.as_range_lhs(), names, seen, scope);
+      CollectNamesScoped(node.as_range_rhs(), names, seen, scope);
+      return;
+    case parser::NodeKind::IntersectOp:
+      CollectNamesScoped(node.as_intersect_lhs(), names, seen, scope);
+      CollectNamesScoped(node.as_intersect_rhs(), names, seen, scope);
+      return;
+    case parser::NodeKind::UnionOp: {
+      const std::uint32_t arity = node.as_union_arity();
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        CollectNamesScoped(node.as_union_child(i), names, seen, scope);
+      }
+      return;
+    }
+    case parser::NodeKind::ImplicitIntersection:
+      CollectNamesScoped(node.as_implicit_intersection_operand(), names, seen, scope);
+      return;
+    case parser::NodeKind::ArrayLiteral: {
+      const std::uint32_t rows = node.as_array_rows();
+      const std::uint32_t cols = node.as_array_cols();
+      for (std::uint32_t r = 0; r < rows; ++r) {
+        for (std::uint32_t c = 0; c < cols; ++c) {
+          CollectNamesScoped(node.as_array_element(r, c), names, seen, scope);
+        }
+      }
+      return;
+    }
+    case parser::NodeKind::LetBinding: {
+      AddName("_xlfn.LET", names, seen);
+      const std::uint32_t n = node.as_let_binding_count();
+      const std::size_t scope_base = scope.size();
+      for (std::uint32_t i = 0; i < n; ++i) {
+        AddName(std::string("_xlpm.") + std::string(node.as_let_binding_name(i)), names, seen);
+        // Excel LET binds sequentially: a value expression sees only the
+        // earlier bindings, so collect it before pushing this parameter.
+        CollectNamesScoped(node.as_let_binding_expr(i), names, seen, scope);
+        scope.push_back(node.as_let_binding_name(i));
+      }
+      CollectNamesScoped(node.as_let_body(), names, seen, scope);
+      scope.resize(scope_base);
+      return;
+    }
+    // Leaves, and forms the encoder does not lower (Lambda / LambdaCall /
+    // StructuredRef / ExternalRef / SpillRef): nothing to collect. A
+    // future writer bundle that lowers these would extend this switch
+    // alongside the corresponding `emit_*` case.
+    default:
+      return;
+  }
+}
 
 }  // namespace
 
-Expected<std::vector<std::uint8_t>, Error> encode_ptgs(const parser::AstNode& node,
-                                                       const std::vector<std::string>& sheet_names) {
-  Encoder enc(sheet_names);
+void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names,
+                       std::unordered_set<std::string>& seen) {
+  std::vector<std::string_view> scope;
+  CollectNamesScoped(node, names, seen, scope);
+}
+
+void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
+                              SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref: {
+      const parser::Reference& r = node.as_ref();
+      if (!r.sheet.empty()) {
+        const int itab = resolve_ixti(sheet_names, r.sheet);
+        AddSheetRange(itab, itab, ranges, seen);
+      }
+      return;
+    }
+    case parser::NodeKind::Ref3D: {
+      const int itab_begin = resolve_ixti(sheet_names, node.as_ref3d_sheet_begin());
+      const int itab_end = resolve_ixti(sheet_names, node.as_ref3d_sheet_end());
+      AddSheetRange(itab_begin, itab_end, ranges, seen);
+      return;
+    }
+    case parser::NodeKind::Call: {
+      const std::uint32_t arity = node.as_call_arity();
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        collect_ptg_sheet_ranges(node.as_call_arg(i), sheet_names, ranges, seen);
+      }
+      return;
+    }
+    case parser::NodeKind::UnaryOp:
+      collect_ptg_sheet_ranges(node.as_unary_operand(), sheet_names, ranges, seen);
+      return;
+    case parser::NodeKind::BinaryOp:
+      collect_ptg_sheet_ranges(node.as_binary_lhs(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_binary_rhs(), sheet_names, ranges, seen);
+      return;
+    case parser::NodeKind::RangeOp:
+      collect_ptg_sheet_ranges(node.as_range_lhs(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_range_rhs(), sheet_names, ranges, seen);
+      return;
+    case parser::NodeKind::IntersectOp:
+      collect_ptg_sheet_ranges(node.as_intersect_lhs(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_intersect_rhs(), sheet_names, ranges, seen);
+      return;
+    case parser::NodeKind::UnionOp: {
+      const std::uint32_t arity = node.as_union_arity();
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        collect_ptg_sheet_ranges(node.as_union_child(i), sheet_names, ranges, seen);
+      }
+      return;
+    }
+    case parser::NodeKind::ImplicitIntersection:
+      collect_ptg_sheet_ranges(node.as_implicit_intersection_operand(), sheet_names, ranges, seen);
+      return;
+    case parser::NodeKind::ArrayLiteral: {
+      const std::uint32_t rows = node.as_array_rows();
+      const std::uint32_t cols = node.as_array_cols();
+      for (std::uint32_t r = 0; r < rows; ++r) {
+        for (std::uint32_t c = 0; c < cols; ++c) {
+          collect_ptg_sheet_ranges(node.as_array_element(r, c), sheet_names, ranges, seen);
+        }
+      }
+      return;
+    }
+    case parser::NodeKind::LetBinding: {
+      const std::uint32_t n = node.as_let_binding_count();
+      for (std::uint32_t i = 0; i < n; ++i) {
+        collect_ptg_sheet_ranges(node.as_let_binding_expr(i), sheet_names, ranges, seen);
+      }
+      collect_ptg_sheet_ranges(node.as_let_body(), sheet_names, ranges, seen);
+      return;
+    }
+    default:
+      return;
+  }
+}
+
+Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
+                                            const SheetRangeTable& sheet_ranges, const NameTable& name_table) {
+  Encoder enc(sheet_names, sheet_ranges, name_table);
   auto status = enc.emit(node);
   if (!status) {
     return status.error();

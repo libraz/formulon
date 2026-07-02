@@ -56,8 +56,8 @@ enum class PtgClass : std::uint8_t {
 /// on the raw first byte to recover the class.
 ///
 /// Names mirror the [MS-XLSB] §2.5.97 enumeration. The enum is
-/// intentionally opaque w.r.t. the wire byte so Bundle 4.1 callers
-/// reach for `PtgInfo::base_byte` rather than bit-twiddling the kind.
+/// intentionally opaque w.r.t. the wire byte so callers reach for
+/// `PtgInfo::base_byte` rather than bit-twiddling the kind.
 enum class PtgKind : std::uint8_t {
   Unknown = 0,
 
@@ -164,8 +164,17 @@ inline constexpr std::size_t kPtgInfoCount = 51;
 /// from the implementation TU.
 inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     // ---- Operators (no class mark) -----------------------------------------
-    {PtgKind::Exp, 0x01, "Exp", PtgStatus::Full},
-    {PtgKind::Tbl, 0x02, "Tbl", PtgStatus::PreserveOnly},
+    // `Exp` (shared/array-formula shell): the reader does not decode this
+    // token directly -- `decode_ptgs` has no `PtgKind::Exp` case, so a
+    // cell whose `rgce` is a bare `PtgExp` logs
+    // `xlsb.formula.not_decoded` and keeps its cached value only. The
+    // *cell*-level workaround (`DecodeSheetBin`'s `BrtArrFmla` handling,
+    // which supplies the array/CSE formula's real Ptg tokens out-of-band
+    // and registers the spill) recovers the correct formula text and
+    // value despite this, but that is a record-layer mechanism, not a
+    // `PtgKind::Exp` decode.
+    {PtgKind::Exp, 0x01, "Exp", PtgStatus::Unsupported},
+    {PtgKind::Tbl, 0x02, "Tbl", PtgStatus::Unsupported},
     {PtgKind::Add, 0x03, "Add", PtgStatus::Full},
     {PtgKind::Sub, 0x04, "Sub", PtgStatus::Full},
     {PtgKind::Mul, 0x05, "Mul", PtgStatus::Full},
@@ -184,10 +193,22 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::Uplus, 0x12, "Uplus", PtgStatus::Full},
     {PtgKind::Uminus, 0x13, "Uminus", PtgStatus::Full},
     {PtgKind::Percent, 0x14, "Percent", PtgStatus::Full},
-    {PtgKind::Paren, 0x15, "Paren", PtgStatus::Full},
+    // Neither the reader nor the writer handles `Paren` despite the
+    // "writer-only" framing in `PtgKind::Paren`'s doc comment: source
+    // parenthesisation is captured structurally (via `AstNode` operator
+    // precedence / explicit grouping), and the writer never re-derives
+    // a standalone `PtgParen` byte from that structure.
+    {PtgKind::Paren, 0x15, "Paren", PtgStatus::Unsupported},
     {PtgKind::MissArg, 0x16, "MissArg", PtgStatus::Full},
     {PtgKind::Str, 0x17, "Str", PtgStatus::Full},
     {PtgKind::ElfLel, 0x18, "ElfLel", PtgStatus::Unsupported},
+    // Reader-only: `decode_ptgs` handles every `PtgAttr` sub-kind
+    // (Sum/Space/SpaceSemi/If/Choose/Goto/Semi/Baxcel), but the writer
+    // never emits `0x19` -- it re-derives the semantically equivalent
+    // canonical form instead (a single-arg `SUM(x)` call node for
+    // `PtgAttrSum`; whitespace fidelity for `PtgAttrSpace` is not
+    // preserved on write). `Full` still holds because both directions
+    // of the round-trip are covered, just through different wire forms.
     {PtgKind::Attr, 0x19, "Attr", PtgStatus::Full},
     {PtgKind::Err, 0x1C, "Err", PtgStatus::Full},
     {PtgKind::Bool, 0x1D, "Bool", PtgStatus::Full},
@@ -201,17 +222,29 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::Name, 0x23, "Name", PtgStatus::Full},
     {PtgKind::Ref, 0x24, "Ref", PtgStatus::Full},
     {PtgKind::Area, 0x25, "Area", PtgStatus::Full},
-    {PtgKind::MemArea, 0x26, "MemArea", PtgStatus::Full},
-    {PtgKind::MemErr, 0x27, "MemErr", PtgStatus::Full},
-    {PtgKind::MemNoMem, 0x28, "MemNoMem", PtgStatus::PreserveOnly},
-    {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Full},
+    // `MemArea` / `MemErr` / `MemNoMem` / `MemFunc` / `RefN` / `AreaN` /
+    // `MemAreaN` / `MemNoMemN` / `NameX`: none of these has a
+    // `decode_ptgs` case (falls through to the `default:` ->
+    // `unsupported_ptg` branch) or an `encode_ptgs` emission site.
+    {PtgKind::MemArea, 0x26, "MemArea", PtgStatus::Unsupported},
+    {PtgKind::MemErr, 0x27, "MemErr", PtgStatus::Unsupported},
+    {PtgKind::MemNoMem, 0x28, "MemNoMem", PtgStatus::Unsupported},
+    {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Unsupported},
+    // `RefErr` / `AreaErr` / `RefErr3d` / `AreaErr3d`: the reader decodes
+    // these to an `#REF!` `ErrorLiteral` node (see `ptg_reader.cpp`'s
+    // combined `RefErr`/`RefErr3d` and `AreaErr`/`AreaErr3d` cases). The
+    // writer never emits them because the AST never distinguishes "a
+    // reference that is `#REF!`" from a plain `#REF!` error literal --
+    // both directions of the round-trip are covered, just through two
+    // different Ptg bytes (`PtgErr`, 0x1C, on write), so `Full` reflects
+    // the actual read+write contract despite the asymmetric wire form.
     {PtgKind::RefErr, 0x2A, "RefErr", PtgStatus::Full},
     {PtgKind::AreaErr, 0x2B, "AreaErr", PtgStatus::Full},
-    {PtgKind::RefN, 0x2C, "RefN", PtgStatus::Full},
-    {PtgKind::AreaN, 0x2D, "AreaN", PtgStatus::Full},
-    {PtgKind::MemAreaN, 0x2E, "MemAreaN", PtgStatus::Full},
-    {PtgKind::MemNoMemN, 0x2F, "MemNoMemN", PtgStatus::PreserveOnly},
-    {PtgKind::NameX, 0x39, "NameX", PtgStatus::Full},
+    {PtgKind::RefN, 0x2C, "RefN", PtgStatus::Unsupported},
+    {PtgKind::AreaN, 0x2D, "AreaN", PtgStatus::Unsupported},
+    {PtgKind::MemAreaN, 0x2E, "MemAreaN", PtgStatus::Unsupported},
+    {PtgKind::MemNoMemN, 0x2F, "MemNoMemN", PtgStatus::Unsupported},
+    {PtgKind::NameX, 0x39, "NameX", PtgStatus::Unsupported},
     {PtgKind::Ref3d, 0x3A, "Ref3d", PtgStatus::Full},
     {PtgKind::Area3d, 0x3B, "Area3d", PtgStatus::Full},
     {PtgKind::RefErr3d, 0x3C, "RefErr3d", PtgStatus::Full},

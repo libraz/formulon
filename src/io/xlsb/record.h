@@ -15,8 +15,8 @@
 // `type`, and forwards the `payload` slice to a per-record decoder.
 // This module keeps the parsing primitives ([MS-XLSB] §2.5 dispatches —
 // "varint type", "varint size", "RkNumber", "XLWideString",
-// "XLNullableWideString") in one place so the per-record decoders that
-// land in Bundle 4.1+ don't each re-derive them.
+// "XLNullableWideString") in one place so the per-record decoders don't
+// each re-derive them.
 //
 // Design references:
 //   * [MS-XLSB] §2.1 (Record framing) and §2.5.121 (RkNumber)
@@ -39,8 +39,8 @@ namespace xlsb {
 ///
 ///   * `type`     — decoded record-type id (`BrtCellReal`, etc.). The
 ///                  enum `XlsbRecordType` lists every record the
-///                  Bundle 4.1 skeleton dispatches on; unknown ids are
-///                  surfaced as the raw integer.
+///                  reader dispatches on; unknown ids are surfaced as
+///                  the raw integer.
 ///   * `payload`  — non-owning view into the record body. Lifetime is
 ///                  the same as the underlying `ByteSpan` passed to
 ///                  `read_record`; the reader will make a copy if it
@@ -50,9 +50,9 @@ struct XlsbRecord {
   ByteSpan payload;
 };
 
-/// The subset of record types the Bundle 4.1 skeleton consumes. Numeric
-/// ids come from [MS-XLSB] §2.4.x; record types not in this enum still
-/// flow through `read_record` (they're simply not dispatched on).
+/// The subset of record types the reader consumes. Numeric ids come
+/// from [MS-XLSB] §2.4.x; record types not in this enum still flow
+/// through `read_record` (they're simply not dispatched on).
 ///
 /// Keeping the enum minimal is intentional: the rest of the binary
 /// surface lands as it becomes Reader-relevant. Anything unrecognised
@@ -86,6 +86,37 @@ enum class XlsbRecordType : std::uint16_t {
   BrtBundleSh = 156,        ///< One entry in the sheet-bundle list.
   BrtBeginSst = 159,        ///< Start of the shared-string table.
   BrtEndSst = 160,          ///< End of the shared-string table.
+
+  // Defined-name / future-function-name table (workbook globals).
+  BrtName = 39,  ///< One `<definedName>`-equivalent, incl. hidden
+                 ///< `_xlfn.*` / `_xlpm.*` future-function and LET/LAMBDA
+                 ///< parameter name entries referenced by `PtgName`.
+
+  // ExternSheet table (workbook globals): resolves a `PtgRef3d` /
+  // `PtgArea3d` `ixti` to a `(itabFirst, itabLast)` sheet-index range.
+  // `itabFirst == itabLast` is a single-sheet qualified reference;
+  // `itabFirst != itabLast` is a genuine 3-D range (e.g. `Sheet1:Sheet3`).
+  BrtExternSheet = 362,
+
+  // Array-formula body: the real Ptg tokens for a CSE / dynamic-array
+  // formula. The formula-result "shell" record at the array's anchor
+  // cell carries a `PtgExp` placeholder instead of the real tokens; this
+  // record supplies them, keyed by the anchor's `(row, col)` via its
+  // leading `RfX` (row/col range).
+  BrtArrFmla = 426,
+
+  // Styles (`xl/styles.bin`): custom number formats and the font / fill
+  // / border / xf tables `iStyleRef` (in the per-cell header) indexes
+  // into.
+  BrtFmt = 44,                 ///< Custom `<numFmt>` (id + format string).
+  BrtFont = 43,                ///< One `<font>` entry.
+  BrtFill = 45,                ///< One `<fill>` entry.
+  BrtBorder = 46,              ///< One `<border>` entry.
+  BrtXF = 47,                  ///< One `<xf>` entry (cellXfs or cellStyleXfs).
+  BrtBeginCellStyleXFs = 626,  ///< Start of the `<cellStyleXfs>` table.
+  BrtEndCellStyleXFs = 627,    ///< End of the `<cellStyleXfs>` table.
+  BrtBeginCellXFs = 617,       ///< Start of the `<cellXfs>` table.
+  BrtEndCellXFs = 618,         ///< End of the `<cellXfs>` table.
 };
 
 /// Reads one framed record from `cursor`. On success `cursor` advances

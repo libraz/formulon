@@ -161,6 +161,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/record_writer.cpp
   src/io/xlsb/sheet_writer.cpp
   src/io/xlsb/sst_writer.cpp
+  src/io/xlsb/styles_reader.cpp
   src/io/xlsb/writer.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp

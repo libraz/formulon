@@ -24,6 +24,7 @@
 #ifndef FORMULON_IO_XLSB_PTG_READER_H_
 #define FORMULON_IO_XLSB_PTG_READER_H_
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,33 @@
 namespace formulon {
 namespace io {
 namespace xlsb {
+
+/// One workbook-scope `BrtName` entry: a `<definedName>`-equivalent or a
+/// hidden `_xlfn.*` / `_xlpm.*` future-function / LET-LAMBDA-parameter
+/// placeholder. `PtgName`'s `ilbl` (1-based) indexes this table in
+/// declaration order.
+struct XlsbName {
+  /// `-1` = workbook scope; otherwise the 0-based sheet index the name
+  /// is local to.
+  std::int32_t itab = -1;
+  std::string name;
+  /// `BrtName`'s `fHidden` bit. Set for the `_xlfn.*` / `_xlpm.*`
+  /// future-function and LET/LAMBDA-parameter placeholders `PtgName`
+  /// resolves internally; clear for genuine user-visible defined names
+  /// that should also be registered on the workbook's defined-name
+  /// table (see `RegisterDefinedNames`).
+  bool hidden = false;
+};
+
+/// One `BrtExternSheet` entry: resolves a `PtgRef3d` / `PtgArea3d`
+/// `ixti` (a direct 0-based index into this table) to the 0-based sheet
+/// range it qualifies. `itab_first == itab_last` is an ordinary
+/// single-sheet qualified reference (`Sheet2!A1`); `itab_first !=
+/// itab_last` is a genuine 3-D range (`Sheet1:Sheet3!A1`).
+struct XlsbSheetRange {
+  std::int32_t itab_first = -1;
+  std::int32_t itab_last = -1;
+};
 
 /// Decodes the `rgce` Ptg byte stream `ptgs` into a `parser::AstNode`
 /// tree allocated in `arena`. The returned node is the formula root
@@ -50,27 +78,53 @@ namespace xlsb {
 ///     Uplus/Uminus/Percent, Paren, Range(`:`), Union(`,`),
 ///     Isect(space).
 ///   * Functions: PtgFunc (fixed arity) and PtgFuncVar (variable arity)
-///     resolved via `func_id_table`.
+///     resolved via `func_id_table`; PtgFuncVar with the `id == 255`
+///     future-function sentinel resolves the callee from a preceding
+///     `PtgName` operand instead (post-2007 functions such as XLOOKUP,
+///     LET, TEXTJOIN, CONCAT, IFS, SEQUENCE store their name this way —
+///     see `name_table`).
 ///   * PtgAttr sub-kinds that are structurally transparent (Space is
 ///     dropped, Sum collapses to a unary SUM call, If/Choose/Goto
 ///     control jumps are consumed without changing the operand stack).
+///   * PtgName: resolved through `name_table` into a `NameRef` (ordinary
+///     defined-name reference) unless the resolved name is consumed by
+///     the future-function dispatch above.
 ///
-/// `sheet_names` maps a 0-based sheet index to a display name; it is
-/// consulted for the 3-D reference forms (PtgRef3d / PtgArea3d), whose
-/// wire encoding carries an `ixti` index rather than a name. When the
-/// index is out of range the decoder emits `#REF!` for the reference
-/// (Excel's own behaviour for a dangling sheet index) rather than
-/// failing the whole formula.
+/// `rgcb` is the `CellParsedFormula`'s extra-data area (the bytes after
+/// `rgce`, i.e. `cb` + its payload in the caller's framing). `PtgArray`
+/// stores only an 8-byte placeholder in `rgce`; the real dimensions and
+/// element values live in `rgcb`, consumed in encounter order (each
+/// `PtgArray` token advances an internal cursor into `rgcb` by exactly
+/// its own array's worth of bytes). Pass an empty span when the caller
+/// knows the formula carries no array constants.
+///
+/// `sheet_names` maps a 0-based sheet index to a display name.
+///
+/// `name_table` is the workbook's `BrtName` list in declaration order;
+/// `PtgName`'s 1-based `ilbl` indexes it (`name_table[ilbl - 1]`).
+///
+/// `sheet_ranges` is the workbook's `BrtExternSheet` list; `PtgRef3d` /
+/// `PtgArea3d`'s `ixti` directly indexes it (0-based) to resolve the
+/// qualified sheet range. When `sheet_ranges` is empty (no
+/// `BrtExternSheet` record — e.g. a workbook with no qualified
+/// references at all) the decoder falls back to treating `ixti` as a
+/// direct 0-based index into `sheet_names`, matching pre-ExternSheet-
+/// aware behaviour. When an index is out of range for either table the
+/// decoder emits `#REF!` for the reference (Excel's own behaviour for a
+/// dangling sheet index) rather than failing the whole formula.
 ///
 /// Errors:
 ///   * `kIoXlsbUnsupportedPtg` — a token outside the supported set
-///     (PtgExp/PtgTbl/PtgName/PtgNameX/PtgMemFunc materialisation/...).
+///     (PtgTbl/PtgNameX/PtgMemFunc materialisation/...).
 ///   * `kIoXlsbRecordTruncated` — a token's payload would overrun
-///     `ptgs`.
+///     `ptgs` or `rgcb`.
 ///   * `kIoXlsbCorrupt` — the operand stack is unbalanced (too few
 ///     operands for an operator, or not exactly one value remaining).
 ///   * `kOutOfMemory` — arena allocation failed.
-Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, Arena& arena, const std::vector<std::string>& sheet_names);
+Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Arena& arena,
+                                              const std::vector<std::string>& sheet_names,
+                                              const std::vector<XlsbName>& name_table,
+                                              const std::vector<XlsbSheetRange>& sheet_ranges);
 
 }  // namespace xlsb
 }  // namespace io

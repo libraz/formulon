@@ -209,12 +209,18 @@ TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
 }
 
 TEST(XlsbWriter, UnencodableFormulaReturnsErrorNotSilentLiteral) {
-  // A formula that references a defined name has no Ptg lowering in the
-  // common-token codec. The writer must surface that as an Expected
-  // failure rather than silently dropping it to a literal cell.
+  // An implicit-intersection formula (`@A1:A10`) has no Ptg lowering in
+  // the common-token codec (the encoder's `NodeKind::ImplicitIntersection`
+  // case still returns `unsupported_node`, unlike `NodeKind::NameRef` --
+  // any defined-name reference now lowers to `PtgName`, including
+  // references to names that turn out not to be genuine defined names,
+  // since `collect_ptg_names` registers every `NameRef` it sees as a
+  // hidden placeholder). The writer must surface the encode failure as
+  // an `Expected` failure rather than silently dropping it to a literal
+  // cell.
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.add_sheet("F");
-  s.set_cell_formula(0U, 0U, "=MyDefinedName");
+  s.set_cell_formula(0U, 0U, "=@A1:A10");
 
   auto bytes_or = write_xlsb(wb);
   ASSERT_FALSE(static_cast<bool>(bytes_or));

@@ -1,12 +1,12 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
-// MS-XLSB (.xlsb) package reader skeleton.
+// MS-XLSB (.xlsb) package reader.
 //
 // The XLSB package envelope is identical to .xlsx: a ZIP archive with
 // `[Content_Types].xml`, `_rels/.rels`, `xl/_rels/workbook.xml.rels`
 // (XML even in XLSB), plus a parallel set of binary parts —
 // `xl/workbook.bin`, `xl/worksheets/sheet*.bin`, `xl/sharedStrings.bin`.
-// The Bundle 4.1 skeleton:
+// The reader:
 //
 //   * walks the same XML rels/content-types parts as the OOXML reader;
 //   * decodes `xl/workbook.bin` for the sheet-bundle list;
@@ -17,13 +17,16 @@
 //   * decodes `xl/sharedStrings.bin` (BrtSSTItem entries) into the
 //     workbook-lifetime `text_storage` deque.
 //
-// **Formulas in this skeleton are not yet decoded to AST.** The reader
-// stores the raw Ptg byte payload as the formula text via a
-// best-effort hex stub plus a structured-log warning. Bundle 4.2 will
-// replace that with a full `Ptg → AST → Excel-formula-text` pipeline.
+// Formulas are decoded through a full `Ptg → AST → Excel-formula-text`
+// pipeline (`io/xlsb/ptg_reader.h`'s `decode_ptgs` plus
+// `parser::format_formula`; see `DecodeFormulaText` in reader.cpp).
+// When a Ptg stream uses a token outside the supported set, the reader
+// logs a structured warning and leaves the cell's formula text empty so
+// the already-decoded cached value is preserved instead of a fabricated
+// formula that would recalc to `#NAME?`.
 //
 // Default-typed binary parts (images, OLE) are NOT captured here; only
-// Override-listed parts that the skeleton does not consume flow into
+// Override-listed parts the reader does not consume flow into
 // `XlsbReadResult::unknown_parts` and `Workbook::passthrough_parts()`,
 // matching the OOXML reader's contract.
 

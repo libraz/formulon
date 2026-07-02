@@ -4,12 +4,12 @@
 // flat `constexpr` array sorted by id, so a binary search lands the row
 // in O(log N) without `<map>` / `<unordered_map>`.
 //
-// Coverage policy (Bundle 4.1): we include the classic Excel function
-// set up to id ~0x17F whose ids are documented in [MS-XLS] §2.5.198.17
+// Coverage policy: the table includes the classic Excel function set
+// up to id ~0x17F whose ids are documented in [MS-XLS] §2.5.198.17
 // (Cetab) and [MS-XLSB] §2.5.97.74. The Reader surfaces `#NAME?` for
 // any id missing from this table, so the table can grow incrementally
-// as later bundles need additional names; we deliberately do not pad
-// it out with guessed ids.
+// as additional names are needed; we deliberately do not pad it out
+// with guessed ids.
 
 #include "io/xlsb/func_id_table.h"
 
