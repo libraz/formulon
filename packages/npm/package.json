@@ -1,6 +1,6 @@
 {
   "name": "@libraz/formulon",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Excel 365 calculation engine -- WASM binding",
   "license": "Apache-2.0",
   "author": "libraz",

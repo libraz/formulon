@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-07-03
+
+### Added
+
+- Full binding-surface parity across C API, Node addon, WASM, and Python:
+  pivot-cache worksheet-source/layout, sheet-view display/orientation
+  flags, `save_ex` (XLSX/XLSB selector), a static cell-error setter,
+  sheet-scoped defined names, CF `ColorScale`/`DataBar`/`IconSet`
+  payloads, and dxf differential-format record reads. CLI `recalc`/`dump`
+  pick up the same surface (extension-driven XLSB output, sheet-scoped
+  name printing).
+- Conditional formatting: whole-row/whole-column `sqref` support, x14
+  data-bar overlay decoding (gradient, axis position, negative
+  fill/border), and verbatim `extLst` passthrough.
+- XLSB reader/writer closes binary-format protocol gaps: styles
+  (`BrtFmt`/`BrtXF`), workbook-scope names including future functions and
+  `LET`, cross-sheet 3-D references, and dynamic-array spill formulas
+  (`BrtArrFmla`) — several of these previously produced `.xlsb` files
+  that real Excel could not open.
+- OOXML round-trip fidelity: `workbookPr`/`bookViews`/
+  `workbookProtection`, `date1904`, Default-content-type passthrough,
+  table style info, and per-cell style color specs (theme/indexed) all
+  survive a load-modify-save cycle on real Excel-authored workbooks.
+- Evaluator/parser: `date1904` threaded through the tree-walker and VM,
+  defined-name resolution with circular-reference detection, whole-
+  column/row range expansion against the sheet's used range, Excel's
+  actual array-broadcast rule, and 3-D range tails
+  (`Sheet1:Sheet3!A1:B2`).
+
+### Fixed
+
+- `PIVOTBY`/`GROUPBY` grand totals re-aggregate correctly for
+  non-additive functions (Average/Max/Min/StdDev/Var); multi-value
+  grand-total column blanking restored.
+- Pivot `ShowValuesAs` (RunningTotal direction, Index, DifferenceFrom/
+  PercentOf) and `GETPIVOTDATA` field-name resolution fixed.
+- Conditional-formatting text rules now match numeric and blank cells
+  via General-format coercion, matching Excel's SEARCH-based generated
+  formula.
+- Print pagination excludes hidden rows/columns from the pagination
+  extent, makes column-break counting symmetric with row-break
+  handling, and no longer mis-splits print-area/print-titles tokens on
+  a quoted sheet name containing a comma.
+- `AREAS` recurses into `CHOOSE`/`IF` reference branches instead of
+  always returning 1; `INDEX`/`XLOOKUP`/`INDIRECT` range results route
+  through the dynamic-array allocator instead of collapsing to a
+  scalar.
+- `IFNA` no longer promotes `Blank` to `0`; volatile-function detection
+  is case-insensitive.
+
+### Changed
+
+- A shared value-kind rank centralizes `GROUPBY`/`PIVOTBY`/`SORT`
+  ordering so the three comparators cannot diverge.
+- WASM size ceiling raised from 1.9 MiB/600 KB soft to 3.0 MiB hard /
+  2.5 MiB soft (current binary: 2.09 MiB uncompressed / 560 KiB
+  Brotli).
+- GitHub Actions workflows bumped to Node 24-compatible major versions
+  (`actions/checkout@v7`, `setup-node@v6`, `setup-python@v6`,
+  `cache@v6`, `upload-artifact@v7`, `download-artifact@v8`,
+  `codecov-action@v6`, `setup-emsdk@v16`, `action-gh-release@v3`),
+  ahead of GitHub's Node 20 removal.
+
+See the
+[GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.3)
+for the full auto-generated change list.
+
 ## [0.9.2] - 2026-05-18
 
 ### Added
@@ -90,7 +157,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/libraz/formulon/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/libraz/formulon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/libraz/formulon/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/libraz/formulon/releases/tag/v0.9.0
