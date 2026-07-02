@@ -8,6 +8,14 @@
 #include "eval/number_parse.h"
 
 #include <locale.h>  // newlocale / uselocale / freelocale (POSIX 2008)
+#if defined(__APPLE__) || defined(__FreeBSD__)
+// Older Apple/BSD SDKs (e.g. the macOS 14 SDK on GitHub's macos-14 CI
+// runner) declare the extended-locale API in xlocale.h rather than
+// pulling it in via locale.h; newer SDKs fold it in already, so this is
+// a no-op there. glibc has no xlocale.h at all (removed as a deprecated
+// shim), hence the platform guard.
+#include <xlocale.h>
+#endif
 
 #include <cmath>
 #include <cstdint>
