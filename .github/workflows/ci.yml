@@ -140,12 +140,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check d.ts drift (dist vs src)
-        # Fails if packages/npm/dist/formulon.d.ts has drifted from the
-        # canonical src/wasm/formulon.d.ts. Needs no WASM build, so it runs
-        # before the expensive Emscripten step for a fast signal.
-        run: make npm-check-dts
-
       - name: Diagnose cmake before WASM build
         # mymindstorm/setup-emsdk@v16 prepends emsdk paths to PATH and
         # historically leaks a non-executable bundled `cmake` into PATH
@@ -165,6 +159,17 @@ jobs:
         # Force the Makefile to use the apt-installed cmake instead of
         # whatever PATH currently points at first (see diagnose step).
         run: make CMAKE=/usr/bin/cmake wasm
+
+      - name: Stage npm package and check d.ts drift
+        # `packages/npm/dist/formulon.d.ts` is a gitignored staged copy that
+        # only exists after `make npm-package` runs (it needs build-wasm/ to
+        # exist first, hence this runs after the Build WASM step, not
+        # before it). npm-check-dts then byte-compares it against the
+        # canonical src/wasm/formulon.d.ts, catching a staging bug rather
+        # than genuine environment drift (stage.mjs always re-copies fresh).
+        run: |
+          make CMAKE=/usr/bin/cmake npm-package
+          make npm-check-dts
 
       - name: Size report (human)
         run: tools/bench/wasm_size_report.sh build-wasm/formulon.wasm

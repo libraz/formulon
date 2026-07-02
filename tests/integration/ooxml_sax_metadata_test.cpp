@@ -282,7 +282,7 @@ void ExpectSheetsEquivalent(const Sheet& dom, const Sheet& sax) {
     EXPECT_EQ(dom.print_settings().manual_row_breaks[i].manual, sax.print_settings().manual_row_breaks[i].manual);
   }
   // Formulas: shared follower (B2) + array master (C1).
-  for (const std::pair<std::uint32_t, std::uint32_t> rc :
+  for (const std::pair<std::uint32_t, std::uint32_t>& rc :
        {std::pair<std::uint32_t, std::uint32_t>{1U, 1U}, std::pair<std::uint32_t, std::uint32_t>{0U, 2U}}) {
     const Cell* d = dom.cell_at(rc.first, rc.second);
     const Cell* s = sax.cell_at(rc.first, rc.second);
