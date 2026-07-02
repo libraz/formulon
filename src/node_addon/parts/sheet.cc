@@ -138,7 +138,8 @@ Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
   const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 0));
   const char* name = nullptr;
   const char* formula = nullptr;
-  fm_status_t rc = fm_workbook_defined_name_at(handle_, idx, &name, &formula);
+  int32_t local_sheet_id = -1;
+  fm_status_t rc = fm_workbook_defined_name_at_ex(handle_, idx, &name, &formula, &local_sheet_id);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
@@ -146,6 +147,7 @@ Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
   out.Set("status", MakeOkStatus(env));
   out.Set("name", Napi::String::New(env, name != nullptr ? name : ""));
   out.Set("formula", Napi::String::New(env, formula != nullptr ? formula : ""));
+  out.Set("localSheetId", Napi::Number::New(env, local_sheet_id));
   return out;
 }
 
@@ -248,6 +250,18 @@ Napi::Value Workbook::SetDefinedName(const Napi::CallbackInfo& info) {
   const std::string name = ArgString(info, 0);
   const std::string formula = ArgString(info, 1);
   fm_status_t rc = fm_workbook_set_defined_name(handle_, name.c_str(), formula.c_str());
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::SetDefinedNameScoped(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::string name = ArgString(info, 0);
+  const std::string formula = ArgString(info, 1);
+  const int32_t local_sheet_id = info.Length() > 2 ? info[2].As<Napi::Number>().Int32Value() : -1;
+  fm_status_t rc = fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), local_sheet_id);
   return MakeStatus(env, rc);
 }
 

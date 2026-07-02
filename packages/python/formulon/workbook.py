@@ -208,6 +208,7 @@ class DefinedName(NamedTuple):
 
     name: str
     formula: str
+    local_sheet_id: int
 
 
 class Table(NamedTuple):
@@ -952,6 +953,11 @@ class Workbook:
         status = LIB.fm_workbook_set_bool(h, sheet, row, col, 1 if value else 0)
         _check(status, "fm_workbook_set_bool")
 
+    def set_error(self, sheet: int, row: int, col: int, error_code: int) -> None:
+        h = self._require()
+        status = LIB.fm_workbook_set_error(h, sheet, row, col, int(error_code))
+        _check(status, "fm_workbook_set_error")
+
     def set_text(self, sheet: int, row: int, col: int, value: str) -> None:
         h = self._require()
         text_ptr, _ = LIB.alloc_utf8(value)
@@ -1095,17 +1101,21 @@ class Workbook:
         for i in range(n):
             name_ptr = LIB.alloc(4)
             formula_ptr = LIB.alloc(4)
+            local_sheet_ptr = LIB.alloc(4)
             LIB.write_bytes(name_ptr, b"\x00\x00\x00\x00")
             LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
+            LIB.write_bytes(local_sheet_ptr, b"\x00\x00\x00\x00")
             try:
-                status = LIB.fm_workbook_defined_name_at(h, i, name_ptr, formula_ptr)
-                _check(status, "fm_workbook_defined_name_at")
+                status = LIB.fm_workbook_defined_name_at_ex(h, i, name_ptr, formula_ptr, local_sheet_ptr)
+                _check(status, "fm_workbook_defined_name_at_ex")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 formula = LIB.read_cstr(LIB.read_u32(formula_ptr))
+                local_sheet_id = LIB.read_i32(local_sheet_ptr)
             finally:
                 LIB.free(name_ptr)
                 LIB.free(formula_ptr)
-            yield DefinedName(name=name, formula=formula)
+                LIB.free(local_sheet_ptr)
+            yield DefinedName(name=name, formula=formula, local_sheet_id=local_sheet_id)
 
     def iter_tables(self) -> Iterator[Table]:
         """Iterate over every table in declaration order."""
@@ -1188,6 +1198,25 @@ class Workbook:
             _check(
                 LIB.fm_workbook_set_defined_name(h, name_ptr, formula_ptr),
                 "fm_workbook_set_defined_name",
+            )
+        finally:
+            LIB.free(name_ptr)
+            LIB.free(formula_ptr)
+
+    def set_defined_name_scoped(self, name: str, formula: str, local_sheet_id: int) -> None:
+        """Set, append, or remove a defined name in workbook or sheet scope.
+
+        Use ``local_sheet_id=-1`` for workbook scope, or a 0-based sheet
+        index for sheet-local scope. An empty ``formula`` removes the
+        matching entry in that scope.
+        """
+        h = self._require()
+        name_ptr, _ = LIB.alloc_utf8(name)
+        formula_ptr, _ = LIB.alloc_utf8(formula)
+        try:
+            _check(
+                LIB.fm_workbook_set_defined_name_scoped(h, name_ptr, formula_ptr, int(local_sheet_id)),
+                "fm_workbook_set_defined_name_scoped",
             )
         finally:
             LIB.free(name_ptr)

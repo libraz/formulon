@@ -108,6 +108,25 @@ TEST(FormulonCApi, BoolAndBlankSetters) {
   EXPECT_EQ(v.kind, FM_VAL_BLANK);
 }
 
+TEST(FormulonCApi, ErrorSetterStoresStaticErrorLiteral) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_error(wb.handle, 0, 0, 0, 1), 0);  // ErrorCode::Div0
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_ERROR);
+  EXPECT_EQ(v.u.error_code, 1);
+}
+
+TEST(FormulonCApi, ErrorSetterRejectsInvalidErrorCode) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  EXPECT_NE(fm_workbook_set_error(wb.handle, 0, 0, 0, -1), 0);
+  EXPECT_NE(fm_workbook_set_error(wb.handle, 0, 0, 0, 999), 0);
+}
+
 TEST(FormulonCApi, FormulaNumericResult) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

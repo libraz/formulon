@@ -127,6 +127,22 @@ class DefinedNameTests(unittest.TestCase):
                 "MyRef", {dn.name for dn in wb.iter_defined_names()}
             )
 
+    def test_scoped_defined_name_set_get_remove(self) -> None:
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Sheet1")
+            wb.add_sheet("Sheet2")
+            wb.set_defined_name("Rate", "=1")
+            wb.set_defined_name_scoped("Rate", "=2", 1)
+            names = {(dn.name, dn.local_sheet_id): dn.formula for dn in wb.iter_defined_names()}
+            self.assertEqual(names[("Rate", -1)], "=1")
+            self.assertEqual(names[("Rate", 1)], "=2")
+
+            wb.set_defined_name_scoped("Rate", "", 1)
+            self.assertNotIn(
+                ("Rate", 1),
+                {(dn.name, dn.local_sheet_id) for dn in wb.iter_defined_names()},
+            )
+
 
 class CalcPolicyTests(unittest.TestCase):
     def test_calc_mode_roundtrip(self) -> None:
@@ -397,6 +413,7 @@ class SurfaceParityTests(unittest.TestCase):
 
     METHODS = [
         "move_sheet", "remove_sheet", "rename_sheet", "set_defined_name",
+        "set_defined_name_scoped", "set_error",
         "insert_rows", "delete_rows", "insert_cols", "delete_cols",
         "calc_mode", "set_calc_mode", "excel_profile_id", "set_excel_profile_id",
         "partial_recalc", "lambda_text_at",

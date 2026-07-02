@@ -85,6 +85,14 @@ typedef int32_t fm_status_t;
 typedef struct fm_workbook fm_workbook_t;
 
 /**
+ * @brief Cell error code payload. Mirrors `formulon::ErrorCode`.
+ *
+ * Used by cell and PivotCache error setters. The ordinal values are the
+ * engine's stable in-memory enum values, not OOXML wire codes.
+ */
+typedef int32_t fm_error_code_t;
+
+/**
  * @brief Discriminator tag for `fm_value_t::kind`.
  *
  * Numbering matches `formulon::ValueKind` so bindings can cast
@@ -312,14 +320,29 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, c
  * insensitive match), its formula text is replaced. Otherwise — when
  * `formula` is non-empty — a new entry is appended. Passing an empty
  * `formula` removes the existing entry, or is a no-op when no such
- * entry is present. Sheet-scoped defined names (`local_sheet_id >= 0`)
- * are NOT addressable through this entry point.
+ * entry is present. Use `fm_workbook_set_defined_name_scoped` for
+ * sheet-scoped names.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kInvalidArgument` when `name` is empty.
  */
 FM_API fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const char* name, const char* formula);
+
+/**
+ * @brief Sets (or appends, or removes) a defined name in a specific scope.
+ *
+ * `local_sheet_id == -1` selects workbook scope. Values `>= 0` select
+ * the corresponding 0-based sheet-local scope. An empty `formula`
+ * removes the matching entry in that scope.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `name` is empty or `local_sheet_id`
+ *         is outside `[-1, sheet_count)`.
+ */
+FM_API fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const char* name, const char* formula,
+                                                       int32_t local_sheet_id);
 
 /* -------------------------------------------------------------------------- */
 /* Row / column structural edits                                              */
@@ -388,6 +411,19 @@ FM_API fm_status_t fm_workbook_set_number(fm_workbook_t* wb, size_t sheet_index,
  */
 FM_API fm_status_t fm_workbook_set_bool(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                         int32_t value);
+
+/**
+ * @brief Stores a static Excel error literal at `(row, col)`.
+ *
+ * This writes a cell whose value is `#DIV/0!`, `#VALUE!`, etc. It is
+ * distinct from writing a formula that evaluates to an error.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet_index` or `error` is out of range.
+ */
+FM_API fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                         fm_error_code_t error);
 
 /**
  * @brief Stores a text literal. The handle copies the UTF-8 contents
@@ -551,6 +587,16 @@ FM_API size_t fm_workbook_defined_name_count(const fm_workbook_t* wb);
  */
 FM_API fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
                                                const char** out_formula);
+
+/**
+ * @brief Reads the `idx`-th defined name including its scope.
+ *
+ * `*out_local_sheet_id` receives `-1` for workbook scope, or a 0-based
+ * sheet index for sheet-local scope. String pointer lifetimes match
+ * `fm_workbook_defined_name_at`.
+ */
+FM_API fm_status_t fm_workbook_defined_name_at_ex(const fm_workbook_t* wb, size_t idx, const char** out_name,
+                                                  const char** out_formula, int32_t* out_local_sheet_id);
 
 /**
  * @brief Returns the number of tables attached to the workbook.
@@ -1687,12 +1733,6 @@ typedef enum {
   FM_PIVOT_FILTER_VALUE_DOUBLE = 1,
   FM_PIVOT_FILTER_VALUE_TEXT = 2
 } fm_pivot_filter_value_kind_t;
-
-/**
- * @brief Errors carried by `fm_workbook_pivot_cache_record_set_error`.
- *        Mirrors `formulon::ErrorCode`.
- */
-typedef int32_t fm_error_code_t;
 
 /**
  * @brief Plain-data spec for `fm_workbook_pivot_field_add`.

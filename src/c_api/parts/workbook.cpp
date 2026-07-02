@@ -208,6 +208,20 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const cha
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const char* name, const char* formula,
+                                                           int32_t local_sheet_id) {
+  clear_last_error();
+  if (wb == nullptr || name == nullptr || formula == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_defined_name_scoped: NULL argument");
+  }
+  auto r = wb->workbook().set_defined_name_scoped(std::string(name), std::string(formula), local_sheet_id);
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count) {
   clear_last_error();
   if (wb == nullptr) {
@@ -270,19 +284,27 @@ extern "C" fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet
 
 extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
                                                    const char** out_formula) {
+  return fm_workbook_defined_name_at_ex(wb, idx, out_name, out_formula, nullptr);
+}
+
+extern "C" fm_status_t fm_workbook_defined_name_at_ex(const fm_workbook_t* wb, size_t idx, const char** out_name,
+                                                      const char** out_formula, int32_t* out_local_sheet_id) {
   clear_last_error();
   if (wb == nullptr || out_name == nullptr || out_formula == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_defined_name_at: NULL argument");
+                             "fm_workbook_defined_name_at_ex: NULL argument");
   }
   const auto& names = wb->workbook().defined_names();
   if (idx >= names.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_defined_name_at: idx out of range",
+                             "fm_workbook_defined_name_at_ex: idx out of range",
                              "idx=" + std::to_string(idx) + " count=" + std::to_string(names.size()));
   }
   *out_name = names[idx].name.c_str();
   *out_formula = names[idx].formula.c_str();
+  if (out_local_sheet_id != nullptr) {
+    *out_local_sheet_id = names[idx].local_sheet_id;
+  }
   return 0;
 }
 

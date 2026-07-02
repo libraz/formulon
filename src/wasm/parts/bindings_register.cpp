@@ -305,6 +305,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setColumnWidth", &JsWorkbook::setColumnWidth)
       .function("setComment", &JsWorkbook::setComment)
       .function("setDefinedName", &JsWorkbook::setDefinedName)
+      .function("setDefinedNameScoped", &JsWorkbook::setDefinedNameScoped)
+      .function("setError", &JsWorkbook::setError)
       .function("setExcelProfileId", &JsWorkbook::setExcelProfileId)
       .function("setFormula", &JsWorkbook::setFormula)
       .function("setIterative", &JsWorkbook::setIterative)

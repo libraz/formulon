@@ -88,6 +88,8 @@ export interface DefinedNameEntry {
   status: Status;
   name: string;
   formula: string;
+  /** -1 for workbook scope; otherwise a 0-based sheet index. */
+  localSheetId: number;
 }
 
 /** Return type of `Workbook.tableAt(idx)`. */
@@ -892,6 +894,8 @@ export interface Workbook {
 
   setNumber(sheet: number, row: number, col: number, value: number): Status;
   setBool(sheet: number, row: number, col: number, value: boolean): Status;
+  /** Stores a static Excel error literal; `errorCode` is an ErrorCode ordinal. */
+  setError(sheet: number, row: number, col: number, errorCode: number): Status;
   setText(sheet: number, row: number, col: number, text: string): Status;
   setBlank(sheet: number, row: number, col: number): Status;
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
@@ -949,6 +953,9 @@ export interface Workbook {
   /** Adds, replaces, or (when `formula` is empty) removes a workbook-
    *  scoped defined name. */
   setDefinedName(name: string, formula: string): Status;
+  /** Adds, replaces, or removes a defined name in workbook scope (-1)
+   *  or a sheet-local scope (0-based sheet index). */
+  setDefinedNameScoped(name: string, formula: string, localSheetId: number): Status;
 
   tableCount(): number;
   tableAt(idx: number): TableEntry;

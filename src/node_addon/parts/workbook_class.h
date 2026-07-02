@@ -39,6 +39,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Cell mutation.
   Napi::Value SetNumber(const Napi::CallbackInfo& info);
   Napi::Value SetBool(const Napi::CallbackInfo& info);
+  Napi::Value SetError(const Napi::CallbackInfo& info);
   Napi::Value SetText(const Napi::CallbackInfo& info);
   Napi::Value SetBlank(const Napi::CallbackInfo& info);
   Napi::Value SetFormula(const Napi::CallbackInfo& info);
@@ -164,6 +165,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Defined names.
   Napi::Value SetDefinedName(const Napi::CallbackInfo& info);
+  Napi::Value SetDefinedNameScoped(const Napi::CallbackInfo& info);
 
   // Conditional formatting.
   Napi::Value EvaluateCfRange(const Napi::CallbackInfo& info);

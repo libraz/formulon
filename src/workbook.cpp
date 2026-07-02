@@ -384,14 +384,23 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
 }
 
 Expected<void, Error> Workbook::set_defined_name(std::string name, std::string formula) {
+  return set_defined_name_scoped(std::move(name), std::move(formula), -1);
+}
+
+Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::string formula,
+                                                        std::int32_t local_sheet_id) {
   if (name.empty()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name: name is empty");
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: name is empty");
+  }
+  if (local_sheet_id < -1 || (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) >= sheets_.size())) {
+    return make_error(
+        FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: local_sheet_id out of range",
+        "local_sheet_id=" + std::to_string(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
   }
   // Case-insensitive lookup: Excel resolves defined names case-folded.
-  // Restrict the search to workbook-scoped entries; sheet-scoped names
-  // are not addressable through this single-arg API.
+  // Restrict the search to the requested scope.
   for (auto it = defined_names_.begin(); it != defined_names_.end(); ++it) {
-    if (it->local_sheet_id >= 0) {
+    if (it->local_sheet_id != local_sheet_id) {
       continue;
     }
     if (strings::case_insensitive_eq(it->name, name)) {
@@ -412,7 +421,7 @@ Expected<void, Error> Workbook::set_defined_name(std::string name, std::string f
   io::DefinedName entry;
   entry.name = std::move(name);
   entry.formula = std::move(formula);
-  entry.local_sheet_id = -1;
+  entry.local_sheet_id = local_sheet_id;
   defined_names_.push_back(std::move(entry));
   return Expected<void, Error>::Ok();
 }

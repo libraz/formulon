@@ -132,6 +132,14 @@ JsStatus JsWorkbook::setDefinedName(const std::string& name, const std::string& 
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_workbook_set_defined_name_scoped(handle_, name.c_str(), formula.c_str(), localSheetId);
+  return status_from_rc(rc);
+}
+
 // ---- Row / column edits --------------------------------------------------
 
 JsStatus JsWorkbook::invoke_row_col_edit(RowColEditFn fn, uint32_t sheet, uint32_t index, uint32_t count) {

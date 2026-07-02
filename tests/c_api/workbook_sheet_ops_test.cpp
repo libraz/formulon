@@ -155,6 +155,46 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
   EXPECT_STREQ(fr, "=99");
 }
 
+TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
+  WorkbookGuard wb;
+  MakeThreeSheets(wb);
+
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "Rate", "=1"), 0);
+  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "=2", 1), 0);
+  EXPECT_EQ(fm_workbook_defined_name_count(wb.handle), 2U);
+
+  const char* nm = nullptr;
+  const char* fr = nullptr;
+  int32_t local_sheet_id = -99;
+  ASSERT_EQ(fm_workbook_defined_name_at_ex(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
+  EXPECT_STREQ(nm, "Rate");
+  EXPECT_STREQ(fr, "=1");
+  EXPECT_EQ(local_sheet_id, -1);
+
+  ASSERT_EQ(fm_workbook_defined_name_at_ex(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
+  EXPECT_STREQ(nm, "Rate");
+  EXPECT_STREQ(fr, "=2");
+  EXPECT_EQ(local_sheet_id, 1);
+
+  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "RATE", "=3", 1), 0);
+  ASSERT_EQ(fm_workbook_defined_name_at_ex(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
+  EXPECT_STREQ(nm, "Rate");
+  EXPECT_STREQ(fr, "=3");
+  EXPECT_EQ(local_sheet_id, 1);
+
+  ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "", 1), 0);
+  EXPECT_EQ(fm_workbook_defined_name_count(wb.handle), 1U);
+  ASSERT_EQ(fm_workbook_defined_name_at_ex(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
+  EXPECT_EQ(local_sheet_id, -1);
+}
+
+TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedRejectsOutOfRangeScope) {
+  WorkbookGuard wb;
+  MakeThreeSheets(wb);
+  EXPECT_NE(fm_workbook_set_defined_name_scoped(wb.handle, "Bad", "=1", -2), 0);
+  EXPECT_NE(fm_workbook_set_defined_name_scoped(wb.handle, "Bad", "=1", 3), 0);
+}
+
 TEST(WorkbookSheetOpsCApi, SetDefinedNameEmptyFormulaRemoves) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

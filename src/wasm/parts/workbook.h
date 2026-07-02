@@ -55,6 +55,7 @@ class JsWorkbook {
   JsStatus renameSheet(uint32_t index, const std::string& newName);
 
   JsStatus setDefinedName(const std::string& name, const std::string& formula);
+  JsStatus setDefinedNameScoped(const std::string& name, const std::string& formula, int32_t localSheetId);
 
   JsStatus insertRows(uint32_t sheet, uint32_t row, uint32_t count);
   JsStatus deleteRows(uint32_t sheet, uint32_t row, uint32_t count);
@@ -68,6 +69,7 @@ class JsWorkbook {
 
   JsStatus setNumber(uint32_t sheet, uint32_t row, uint32_t col, double value);
   JsStatus setBool(uint32_t sheet, uint32_t row, uint32_t col, bool value);
+  JsStatus setError(uint32_t sheet, uint32_t row, uint32_t col, int32_t errorCode);
   JsStatus setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text);
   JsStatus setBlank(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula);

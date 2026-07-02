@@ -60,6 +60,24 @@ extern "C" fm_status_t fm_workbook_set_bool(fm_workbook_t* wb, size_t sheet_inde
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                             fm_error_code_t error) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_error"); rc != 0) {
+    return rc;
+  }
+  if (error < 0 || error > static_cast<fm_error_code_t>(formulon::ErrorCode::Unknown)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_error: error code out of range", "error=" + std::to_string(error));
+  }
+  auto r = wb->workbook().set_cell_value(sheet_index, row, col,
+                                         formulon::Value::error(static_cast<formulon::ErrorCode>(error)));
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                             const char* utf8) {
   clear_last_error();

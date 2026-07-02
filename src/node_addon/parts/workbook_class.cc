@@ -272,6 +272,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::SetColumnWidth>("setColumnWidth"),
           InstanceMethod<&Workbook::SetComment>("setComment"),
           InstanceMethod<&Workbook::SetDefinedName>("setDefinedName"),
+          InstanceMethod<&Workbook::SetDefinedNameScoped>("setDefinedNameScoped"),
+          InstanceMethod<&Workbook::SetError>("setError"),
           InstanceMethod<&Workbook::SetExcelProfileId>("setExcelProfileId"),
           InstanceMethod<&Workbook::SetFormula>("setFormula"),
           InstanceMethod<&Workbook::SetIterative>("setIterative"),

@@ -37,6 +37,14 @@ JsStatus JsWorkbook::setBool(uint32_t sheet, uint32_t row, uint32_t col, bool va
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::setError(uint32_t sheet, uint32_t row, uint32_t col, int32_t errorCode) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_workbook_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(errorCode));
+  return status_from_rc(rc);
+}
+
 JsStatus JsWorkbook::setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text) {
   if (handle_ == nullptr) {
     return error_status(7000);
@@ -135,7 +143,8 @@ emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
   }
   const char* name = nullptr;
   const char* formula = nullptr;
-  fm_status_t rc = fm_workbook_defined_name_at(handle_, idx, &name, &formula);
+  int32_t local_sheet_id = -1;
+  fm_status_t rc = fm_workbook_defined_name_at_ex(handle_, idx, &name, &formula, &local_sheet_id);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
@@ -143,6 +152,7 @@ emscripten::val JsWorkbook::definedNameAt(uint32_t idx) const {
   o.set("status", ok_status());
   o.set("name", name != nullptr ? std::string(name) : std::string());
   o.set("formula", formula != nullptr ? std::string(formula) : std::string());
+  o.set("localSheetId", local_sheet_id);
   return o;
 }
 

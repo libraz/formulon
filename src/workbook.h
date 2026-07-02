@@ -308,19 +308,24 @@ class Workbook {
 
   /// Sets the formula text of the workbook-scoped defined name `name`,
   /// or appends it if it does not exist. An empty `formula` removes
-  /// the entry instead. Lookups are case-insensitive (mirroring
-  /// Excel's name-resolution semantics); when an existing entry is
-  /// updated, its authored casing is preserved. Newly-appended entries
-  /// adopt the supplied `name` verbatim. Sheet-scoped defined names
-  /// (`local_sheet_id >= 0`) are not addressable through this entry
-  /// point; callers wanting to mutate them should use the bulk
-  /// `set_defined_names` API.
+  /// the entry instead. This is a compatibility wrapper around
+  /// `set_defined_name_scoped(name, formula, -1)`.
   ///
   /// Returns `kOk` on success. Validation of the formula text is
   /// deliberately deferred to evaluation time (matching how the I/O
   /// reader carries formulas through unchanged), so this function
   /// never surfaces a parser error.
   Expected<void, Error> set_defined_name(std::string name, std::string formula);
+
+  /// Sets the formula text of a defined name in `local_sheet_id` scope,
+  /// or appends it if it does not exist. Pass `-1` for workbook scope;
+  /// pass a 0-based sheet index for sheet scope. An empty formula
+  /// removes the matching entry. Lookups are case-insensitive within
+  /// the same scope only, matching Excel's name-resolution model.
+  ///
+  /// Returns `kInvalidArgument` when `name` is empty or
+  /// `local_sheet_id` names a sheet outside the workbook.
+  Expected<void, Error> set_defined_name_scoped(std::string name, std::string formula, std::int32_t local_sheet_id);
 
   /// Read-only access to the workbook's table-metadata list (in
   /// archive-discovery order, which matches the per-sheet rels walk).

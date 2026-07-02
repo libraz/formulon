@@ -43,6 +43,19 @@ Napi::Value Workbook::SetBool(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::SetError(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const int32_t error_code = info.Length() > 3 ? info[3].As<Napi::Number>().Int32Value() : 0;
+  fm_status_t rc = fm_workbook_set_error(handle_, sheet, row, col, static_cast<fm_error_code_t>(error_code));
+  return MakeStatus(env, rc);
+}
+
 Napi::Value Workbook::SetText(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
