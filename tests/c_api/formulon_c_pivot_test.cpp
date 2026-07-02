@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string_view>
 #include <vector>
 
@@ -529,7 +530,15 @@ TEST(FormulonCApiPivot, PivotReportLayoutRoundTripsThroughApi) {
   ASSERT_EQ(fm_workbook_pivot_get_layout(wb.handle, 0, pivot_idx, &layout), 0);
   EXPECT_EQ(layout, FM_PIVOT_LAYOUT_OUTLINE);
 
-  EXPECT_EQ(fm_workbook_pivot_set_layout(wb.handle, 0, pivot_idx, static_cast<fm_pivot_layout_t>(99)),
+  // Domain is {0, 1, 2}; build an out-of-range value via memcpy because a
+  // direct `static_cast<fm_pivot_layout_t>(99)` is unspecified per the
+  // standard (99 sits outside the enum's representable range, which GCC's
+  // -Wconversion correctly flags). The C ABI accepts the raw byte value
+  // regardless and routes it through the validation switch.
+  fm_pivot_layout_t bad_layout{};
+  const int raw = 99;
+  std::memcpy(&bad_layout, &raw, sizeof(bad_layout));
+  EXPECT_EQ(fm_workbook_pivot_set_layout(wb.handle, 0, pivot_idx, bad_layout),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
