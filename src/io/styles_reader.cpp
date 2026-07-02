@@ -43,6 +43,49 @@ std::uint32_t ParseColorArgb(const pugi::xml_node& color, std::uint32_t fallback
   return parse_rgb_hex(color.attribute("rgb").value(), fallback);
 }
 
+/// Parses the original specification of a `<color>` element (rgb / theme
+/// / indexed / auto). Returns `kNone` when the element is absent or
+/// carries none of the recognised attributes; the caller keeps the
+/// resolved AARRGGBB value separately via `ParseColorArgb`.
+ColorSpec ParseColorSpec(const pugi::xml_node& color) {
+  ColorSpec spec;
+  if (!color) {
+    return spec;
+  }
+  if (pugi::xml_attribute rgb = color.attribute("rgb"); rgb) {
+    spec.kind = ColorSpec::Kind::kRgb;
+    spec.rgb = parse_rgb_hex(rgb.value(), 0xFF000000U);
+    return spec;
+  }
+  if (pugi::xml_attribute theme = color.attribute("theme"); theme) {
+    spec.kind = ColorSpec::Kind::kTheme;
+    spec.theme = theme.as_uint(0U);
+    spec.tint = color.attribute("tint").as_double(0.0);
+    return spec;
+  }
+  if (pugi::xml_attribute indexed = color.attribute("indexed"); indexed) {
+    spec.kind = ColorSpec::Kind::kIndexed;
+    spec.indexed = indexed.as_uint(0U);
+    return spec;
+  }
+  if (color.attribute("auto")) {
+    spec.kind = ColorSpec::Kind::kAuto;
+  }
+  return spec;
+}
+
+/// Parses a `<vertAlign val="..."/>` run into the `FontRecord::vert_align`
+/// ordinal. Missing / baseline / unknown collapse to 0 (baseline).
+std::uint8_t ParseVertAlign(std::string_view s) {
+  if (s == "superscript") {
+    return 1;
+  }
+  if (s == "subscript") {
+    return 2;
+  }
+  return 0;
+}
+
 /// Maps OOXML border-style strings to the integer ordinal stored in
 /// `BorderSide::style`. Unknown strings collapse to `0` (none).
 std::uint8_t ParseBorderStyle(std::string_view s) {
@@ -216,39 +259,6 @@ std::uint8_t ParseVerticalAlign(std::string_view s) {
   return 2;
 }
 
-void ReadFonts(const pugi::xml_node& root, StylesTable& table) {
-  pugi::xml_node fonts = root.child("fonts");
-  if (!fonts) {
-    table.fonts.emplace_back();
-    return;
-  }
-  for (pugi::xml_node f = fonts.child("font"); f; f = f.next_sibling("font")) {
-    FontRecord rec;
-    pugi::xml_node name = f.child("name");
-    if (name) {
-      rec.name = name.attribute("val").value();
-    }
-    pugi::xml_node sz = f.child("sz");
-    if (sz) {
-      rec.size = sz.attribute("val").as_double(11.0);
-    }
-    rec.bold = static_cast<bool>(f.child("b"));
-    rec.italic = static_cast<bool>(f.child("i"));
-    rec.strike = static_cast<bool>(f.child("strike"));
-    pugi::xml_node u = f.child("u");
-    if (u) {
-      // `<u/>` defaults to "single" per OOXML.
-      const std::string_view val = u.attribute("val").value();
-      rec.underline = val.empty() ? 1U : ParseUnderline(val);
-    }
-    rec.color_argb = ParseColorArgb(f.child("color"), 0xFF000000U);
-    table.fonts.push_back(std::move(rec));
-  }
-  if (table.fonts.empty()) {
-    table.fonts.emplace_back();
-  }
-}
-
 FontRecord ParseFontNode(const pugi::xml_node& f) {
   FontRecord rec;
   pugi::xml_node name = f.child("name");
@@ -264,31 +274,37 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
   rec.strike = static_cast<bool>(f.child("strike"));
   pugi::xml_node u = f.child("u");
   if (u) {
+    // `<u/>` defaults to "single" per OOXML.
     const std::string_view val = u.attribute("val").value();
     rec.underline = val.empty() ? 1U : ParseUnderline(val);
   }
+  if (pugi::xml_node va = f.child("vertAlign")) {
+    rec.vert_align = ParseVertAlign(va.attribute("val").value());
+  }
+  if (pugi::xml_node family = f.child("family")) {
+    rec.has_family = true;
+    rec.family = static_cast<std::uint8_t>(family.attribute("val").as_uint(0U));
+  }
+  if (pugi::xml_node charset = f.child("charset")) {
+    rec.has_charset = true;
+    rec.charset = static_cast<std::uint8_t>(charset.attribute("val").as_uint(0U));
+  }
   rec.color_argb = ParseColorArgb(f.child("color"), 0xFF000000U);
+  rec.color = ParseColorSpec(f.child("color"));
   return rec;
 }
 
-void ReadFills(const pugi::xml_node& root, StylesTable& table) {
-  pugi::xml_node fills = root.child("fills");
-  if (!fills) {
-    table.fills.emplace_back();
+void ReadFonts(const pugi::xml_node& root, StylesTable& table) {
+  pugi::xml_node fonts = root.child("fonts");
+  if (!fonts) {
+    table.fonts.emplace_back();
     return;
   }
-  for (pugi::xml_node fill = fills.child("fill"); fill; fill = fill.next_sibling("fill")) {
-    FillRecord rec;
-    pugi::xml_node pattern = fill.child("patternFill");
-    if (pattern) {
-      rec.pattern = ParseFillPattern(pattern.attribute("patternType").value());
-      rec.fg_argb = ParseColorArgb(pattern.child("fgColor"), 0U);
-      rec.bg_argb = ParseColorArgb(pattern.child("bgColor"), 0U);
-    }
-    table.fills.push_back(rec);
+  for (pugi::xml_node f = fonts.child("font"); f; f = f.next_sibling("font")) {
+    table.fonts.push_back(ParseFontNode(f));
   }
-  if (table.fills.empty()) {
-    table.fills.emplace_back();
+  if (table.fonts.empty()) {
+    table.fonts.emplace_back();
   }
 }
 
@@ -299,8 +315,24 @@ FillRecord ParseFillNode(const pugi::xml_node& fill) {
     rec.pattern = ParseFillPattern(pattern.attribute("patternType").value());
     rec.fg_argb = ParseColorArgb(pattern.child("fgColor"), 0U);
     rec.bg_argb = ParseColorArgb(pattern.child("bgColor"), 0U);
+    rec.fg = ParseColorSpec(pattern.child("fgColor"));
+    rec.bg = ParseColorSpec(pattern.child("bgColor"));
   }
   return rec;
+}
+
+void ReadFills(const pugi::xml_node& root, StylesTable& table) {
+  pugi::xml_node fills = root.child("fills");
+  if (!fills) {
+    table.fills.emplace_back();
+    return;
+  }
+  for (pugi::xml_node fill = fills.child("fill"); fill; fill = fill.next_sibling("fill")) {
+    table.fills.push_back(ParseFillNode(fill));
+  }
+  if (table.fills.empty()) {
+    table.fills.emplace_back();
+  }
 }
 
 void ReadBorderSide(const pugi::xml_node& side, BorderSide* out) {
@@ -309,6 +341,7 @@ void ReadBorderSide(const pugi::xml_node& side, BorderSide* out) {
   }
   out->style = ParseBorderStyle(side.attribute("style").value());
   out->color_argb = ParseColorArgb(side.child("color"), 0U);
+  out->color = ParseColorSpec(side.child("color"));
 }
 
 void ReadBorders(const pugi::xml_node& root, StylesTable& table) {
@@ -373,6 +406,13 @@ void ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec) {
     // Default vertical alignment is "bottom" (ordinal 2) per OOXML.
     rec->vertical_align = 2;
   }
+  if (pugi::xml_node protection = xf.child("protection")) {
+    rec->has_protection = true;
+    // Schema defaults: locked=true, hidden=false. A cell is only
+    // unlocked when it explicitly carries locked="0".
+    rec->locked = protection.attribute("locked").as_bool(true);
+    rec->hidden = protection.attribute("hidden").as_bool(false);
+  }
 }
 
 void ReadCellStyleXfs(const pugi::xml_node& root, StylesTable& table) {
@@ -424,6 +464,20 @@ void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
+/// Serialises `node` (element + subtree) to a raw XML string with no
+/// indentation, for verbatim round-trip of unmodelled dxf children.
+std::string CaptureRawXml(const pugi::xml_node& node) {
+  struct RawSink : pugi::xml_writer {
+    std::string* dst;
+    void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
+  };
+  std::string out;
+  RawSink sink{};
+  sink.dst = &out;
+  node.print(sink, /*indent=*/"", pugi::format_raw);
+  return out;
+}
+
 void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
   pugi::xml_node dxfs = root.child("dxfs");
   if (!dxfs) {
@@ -447,6 +501,14 @@ void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
       rec.has_num_fmt = true;
       rec.num_fmt_id = static_cast<std::uint16_t>(num_fmt.attribute("numFmtId").as_uint(0U));
       rec.num_fmt_code = num_fmt.attribute("formatCode").value();
+    }
+    // `<alignment>` / `<protection>` are not modelled structurally on a
+    // dxf; capture them verbatim so they round-trip.
+    if (pugi::xml_node alignment = dxf.child("alignment")) {
+      rec.alignment_xml = CaptureRawXml(alignment);
+    }
+    if (pugi::xml_node protection = dxf.child("protection")) {
+      rec.protection_xml = CaptureRawXml(protection);
     }
     table.dxfs.push_back(std::move(rec));
   }

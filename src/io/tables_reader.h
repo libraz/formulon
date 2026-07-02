@@ -67,6 +67,11 @@ struct TableMetadata {
   bool header_row = true;
   bool totals_row = false;
   std::vector<TableColumn> columns;
+  /// Raw `<tableStyleInfo>` element (style name + banded-row flags), or
+  /// empty when the table carries none. Captured verbatim so the table's
+  /// visual style survives a save cycle; the engine does not model table
+  /// styles.
+  std::string table_style_info_xml;
 };
 
 /// Parses one `xl/tables/tableN.xml` part.

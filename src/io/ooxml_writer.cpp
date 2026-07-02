@@ -111,11 +111,11 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   out.append("<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"");
   out.append(std::to_string(numeric_id));
   out.append("\" name=\"");
-  AppendXmlEscaped(out, t.name);
+  AppendXmlAttrEscaped(out, t.name);
   out.append("\" displayName=\"");
-  AppendXmlEscaped(out, t.display_name);
+  AppendXmlAttrEscaped(out, t.display_name);
   out.append("\" ref=\"");
-  AppendXmlEscaped(out, t.ref);
+  AppendXmlAttrEscaped(out, t.ref);
   out.push_back('"');
   // headerRowCount: emit explicit "0" when disabled; default (1) is
   // implicit via OOXML schema and we omit it.
@@ -133,16 +133,16 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
     out.append("    <tableColumn id=\"");
     out.append(std::to_string(col.id));
     out.append("\" name=\"");
-    AppendXmlEscaped(out, col.name);
+    AppendXmlAttrEscaped(out, col.name);
     out.push_back('"');
     if (!col.totals_label.empty()) {
       out.append(" totalsRowLabel=\"");
-      AppendXmlEscaped(out, col.totals_label);
+      AppendXmlAttrEscaped(out, col.totals_label);
       out.push_back('"');
     }
     if (!col.totals_function.empty()) {
       out.append(" totalsRowFunction=\"");
-      AppendXmlEscaped(out, col.totals_function);
+      AppendXmlAttrEscaped(out, col.totals_function);
       out.push_back('"');
     }
     // <calculatedColumnFormula> is the only child of <tableColumn> we
@@ -160,6 +160,14 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
     }
   }
   out.append("  </tableColumns>\n");
+  // `<tableStyleInfo>` follows `<tableColumns>` in the CT_Table schema.
+  // Re-emit the captured element verbatim so banded-row / style-name
+  // metadata survives the round trip.
+  if (!t.table_style_info_xml.empty()) {
+    out.append("  ");
+    out.append(t.table_style_info_xml);
+    out.push_back('\n');
+  }
   out.append("</table>\n");
   return out;
 }
@@ -220,8 +228,9 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     const bool has_hyperlinks = !wb.sheet(i).hyperlinks().empty();
     const bool has_comments = comments_plan.numeric_id != 0;
     const bool has_print_settings = !wb.sheet(i).print_settings().printer_settings_path.empty();
-    const bool has_rels =
-        !sheet_tables.empty() || !sheet_pivot_tables.empty() || has_hyperlinks || has_comments || has_print_settings;
+    const bool has_drawing = !wb.sheet(i).drawing_rel_target().empty();
+    const bool has_rels = !sheet_tables.empty() || !sheet_pivot_tables.empty() || has_hyperlinks || has_comments ||
+                          has_print_settings || has_drawing;
     // Build the rels first because the hyperlink rId vector feeds into
     // the worksheet's <hyperlinks> block. When the sheet has no rels we
     // still call BuildSheetRels with an empty comments plan to get a
@@ -230,9 +239,9 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto wresult = AddPart(
-        writer.get(), part_path,
-        BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids, rels_result.printer_settings_rid));
+    auto wresult = AddPart(writer.get(), part_path,
+                           BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids,
+                                             rels_result.printer_settings_rid, rels_result.drawing_rid));
     if (!wresult) {
       return wresult.error();
     }

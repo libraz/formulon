@@ -75,6 +75,11 @@ struct Hyperlink {
   std::string display;   ///< Optional `display="..."` attribute.
   std::string tooltip;   ///< Optional `tooltip="..."` attribute.
   std::string rid;       ///< Reader populates from sheet rels; empty for fresh entries.
+  /// Original multi-cell `ref` when the hyperlink covers a range (e.g.
+  /// `"A1:B2"`). Empty for the common single-cell case, in which the
+  /// writer emits `ref` from `row` / `col`. When non-empty it is emitted
+  /// verbatim and `row` / `col` hold the range's top-left anchor.
+  std::string ref_span;
 };
 
 /// One per-cell text comment (`<comment ref="A1" authorId="N"><text>...</text></comment>`).
@@ -156,6 +161,19 @@ struct SheetView {
   std::uint32_t freeze_rows = 0;  // 0 = no row freeze
   std::uint32_t freeze_cols = 0;  // 0 = no column freeze
   bool tab_hidden = false;
+  // `<sheetView>` display attributes. Names mirror the OOXML attributes;
+  // the values shown are the ECMA-376 §18.3.1.87 schema defaults, so a
+  // freshly created sheet round-trips without emitting them. Losing these
+  // on save silently re-shows hidden gridlines/headers, drops the active
+  // tab, and resets the view mode.
+  bool show_grid_lines = true;       ///< `showGridLines` (default true).
+  bool show_row_col_headers = true;  ///< `showRowColHeaders` (default true).
+  bool show_zeros = true;            ///< `showZeros` (default true).
+  bool right_to_left = false;        ///< `rightToLeft` (default false).
+  bool tab_selected = false;         ///< `tabSelected` (default false).
+  /// `view` mode: empty (== "normal"), "pageBreakPreview", or
+  /// "pageLayout". Stored verbatim so unknown future values round-trip.
+  std::string view_mode;
 };
 
 /// Mirror of OOXML `<sheetProtection>` (ECMA-376 §18.3.1.85). Stored as
@@ -192,23 +210,29 @@ struct SheetProtection {
   std::string legacy_password;
 
   // OOXML attribute flags. Names mirror the attributes verbatim; see
-  // ECMA-376 §18.3.1.85 for per-attribute defaults and effects.
+  // ECMA-376 §18.3.1.85 for per-attribute defaults and effects. A flag of
+  // `true` means the corresponding action is LOCKED. Eleven of these
+  // (format*, insert*, delete*, sort, autoFilter, pivotTables) default to
+  // `true` in the schema, so the member initialisers match those defaults:
+  // a default-constructed protection that is then `enabled` mirrors Excel's
+  // "Protect Sheet" defaults. The five action flags whose schema default is
+  // `false` (sheet, objects, scenarios, select*) stay false.
   bool sheet = false;
   bool objects = false;
   bool scenarios = false;
-  bool format_cells = false;
-  bool format_columns = false;
-  bool format_rows = false;
-  bool insert_columns = false;
-  bool insert_rows = false;
-  bool insert_hyperlinks = false;
-  bool delete_columns = false;
-  bool delete_rows = false;
+  bool format_cells = true;
+  bool format_columns = true;
+  bool format_rows = true;
+  bool insert_columns = true;
+  bool insert_rows = true;
+  bool insert_hyperlinks = true;
+  bool delete_columns = true;
+  bool delete_rows = true;
   bool select_locked_cells = false;
   bool select_unlocked_cells = false;
-  bool sort = false;
-  bool auto_filter = false;
-  bool pivot_tables = false;
+  bool sort = true;
+  bool auto_filter = true;
+  bool pivot_tables = true;
 };
 
 /// Layout overrides for a contiguous column span.
@@ -302,7 +326,10 @@ struct ManualBreak {
   std::uint32_t id = 0;   ///< 0-based row/column index the break precedes.
   std::uint32_t min = 0;  ///< Span start (0-based).
   std::uint32_t max = 0;  ///< Span end (0-based).
-  bool manual = true;     ///< True for a user-placed break (`man="1"`).
+  /// True for a user-placed break (`man="1"`). ECMA-376 §18.3.1.1 defaults
+  /// `man` to false: a `<brk>` without the attribute is an automatic break
+  /// that the pagination engine must not treat as a forced boundary.
+  bool manual = false;
 };
 
 /// Page orientation as stored in `<pageSetup orientation="...">`.
@@ -348,9 +375,11 @@ struct PageMargins {
 /// are parsed *alongside* the raw strings for consumers (such as the
 /// pagination engine) that need typed access.
 struct SheetPrintSettings {
-  std::string sheet_pr_xml;      ///< Raw `<sheetPr>` when it carries page setup metadata.
-  std::string page_margins_xml;  ///< Raw `<pageMargins .../>`.
-  std::string page_setup_xml;    ///< Raw `<pageSetup .../>`.
+  std::string sheet_pr_xml;       ///< Raw `<sheetPr>` when it carries page setup metadata.
+  std::string page_margins_xml;   ///< Raw `<pageMargins .../>`.
+  std::string page_setup_xml;     ///< Raw `<pageSetup .../>`.
+  std::string print_options_xml;  ///< Raw `<printOptions .../>` (gridlines/headings printing, centring).
+  std::string header_footer_xml;  ///< Raw `<headerFooter>...</headerFooter>` (odd/even/first page strings).
   std::string printer_settings_rid;
   std::string printer_settings_path;  ///< Package path, e.g. `xl/printerSettings/printerSettings1.bin`.
 
@@ -773,6 +802,51 @@ class Sheet {
   /// Mutable access for the OOXML reader.
   SheetPrintSettings& mutable_print_settings() noexcept { return print_settings_; }
 
+  /// Package-relative path of the DrawingML part (`xl/drawings/drawingN.xml`)
+  /// this sheet references via `<drawing r:id="...">`, or empty when the
+  /// sheet anchors no drawing. Populated by the OOXML reader; the part
+  /// body, its rels, and any anchored media round-trip through the
+  /// workbook's passthrough parts. The writer re-emits both the
+  /// `<drawing>` element and the sheet-rels relationship, minting a fresh
+  /// rId, so the drawing stays reachable in the package graph.
+  const std::string& drawing_rel_target() const noexcept { return drawing_rel_target_; }
+
+  /// Sets the sheet's DrawingML part path. Plain metadata; no lifecycle
+  /// or recalc interaction.
+  void set_drawing_rel_target(std::string target) { drawing_rel_target_ = std::move(target); }
+
+  /// Raw `<autoFilter>` element captured from the worksheet, or empty when
+  /// the sheet has no auto-filter. The engine does not model filter
+  /// criteria yet; the element round-trips verbatim so the filter range
+  /// and any column criteria survive a save cycle. The writer re-emits it
+  /// in ECMA-376 order (after `<sheetProtection>`, before `<mergeCells>`).
+  const std::string& auto_filter_xml() const noexcept { return auto_filter_xml_; }
+
+  /// Sets the raw `<autoFilter>` element. Plain metadata.
+  void set_auto_filter_xml(std::string xml) { auto_filter_xml_ = std::move(xml); }
+
+  /// Raw worksheet-level `<extLst>` element captured from the worksheet,
+  /// or empty. Excel stores the *data* for several 2010+ extensions here —
+  /// most importantly the `x14:conditionalFormattings` block holding
+  /// DataBar negative-fill / axis / gradient / direction, linked back to
+  /// the legacy `cfRule` by an `x14:id` GUID. The engine does not model
+  /// these extensions; the block round-trips verbatim so the extended
+  /// formatting survives a save cycle. Re-emitted at the worksheet tail
+  /// (after `<tableParts>`) per ECMA-376 element order.
+  const std::string& ext_lst_xml() const noexcept { return ext_lst_xml_; }
+
+  /// Sets the raw worksheet-level `<extLst>` element. Plain metadata.
+  void set_ext_lst_xml(std::string xml) { ext_lst_xml_ = std::move(xml); }
+
+  /// Extra namespace declarations (and `mc:Ignorable`) captured from the
+  /// source `<worksheet>` root, serialised as ` name="value"` attribute
+  /// pairs, excluding the default `xmlns` / `xmlns:r`. Re-emitted on the
+  /// writer's `<worksheet>` root so namespaced attributes carried inside a
+  /// raw worksheet capture (e.g. `x14ac:*` in a `<sheetPr>` fragment)
+  /// resolve to a declared prefix — mirrors the workbook-root handling.
+  const std::string& root_extra_ns_attrs() const noexcept { return root_extra_ns_attrs_; }
+  void set_root_extra_ns_attrs(std::string attrs) { root_extra_ns_attrs_ = std::move(attrs); }
+
   // ---------------------------------------------------------------------------
   // Row / column structural edits
   // ---------------------------------------------------------------------------
@@ -873,6 +947,20 @@ class Sheet {
   SheetFormatDefaults format_defaults_;
   // Raw print/page setup metadata and its optional printerSettings rel.
   SheetPrintSettings print_settings_;
+  // Package-relative path of the DrawingML part referenced by
+  // `<drawing r:id>`, or empty. The part itself round-trips via the
+  // workbook's passthrough parts.
+  std::string drawing_rel_target_;
+  // Raw `<autoFilter>` element, or empty. Round-trips verbatim; filter
+  // criteria are not modelled.
+  std::string auto_filter_xml_;
+  // Raw worksheet-level `<extLst>` element (x14 conditional-formatting
+  // data etc.), or empty. Round-trips verbatim.
+  std::string ext_lst_xml_;
+  // Extra `<worksheet>` root namespace declarations captured for verbatim
+  // re-emission so namespaced attributes in raw captures resolve. Empty by
+  // default.
+  std::string root_extra_ns_attrs_;
 };
 
 }  // namespace formulon

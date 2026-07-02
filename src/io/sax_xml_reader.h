@@ -61,8 +61,17 @@ struct CellRecord {
   /// `s=` attribute value (style index). Empty when absent.
   std::string_view s;
   /// `<f>` body, with leading `=` stripped if present. Empty when no
-  /// `<f>` child existed.
+  /// `<f>` child existed, and also empty for a shared-formula follower
+  /// (`<f t="shared" si="N"/>`), whose body lives on the group master.
   std::string_view formula;
+  /// `<f>` element's `t=` attribute (`"shared"`, `"array"`,
+  /// `"dataTable"`), or empty when the `<f>` has no `t=` (a plain
+  /// formula) or no `<f>` child exists. Aliases the source buffer.
+  std::string_view f_t;
+  /// `<f>` element's `si=` (shared-formula group index), or empty.
+  std::string_view f_si;
+  /// `<f>` element's `ref=` (shared-formula master range), or empty.
+  std::string_view f_ref;
   /// Decoded text content of the cell:
   ///   * For `t="inlineStr"`: concatenation of all `<is><t>` and
   ///     `<is><r><t>` text nodes (rich-text formatting dropped). Any
@@ -81,6 +90,20 @@ struct CellRecord {
   std::string_view phonetic;
 };
 
+/// One `<row>` element's opening attributes, surfaced to `on_row_start`
+/// so the streaming path can recover per-row overrides (height / hidden /
+/// outline) the DOM path reads off `<row>`. All views alias the source
+/// buffer and are valid only for the callback's duration; each is empty
+/// when the attribute is absent. `row_1based` is the `r="N"` value (0 when
+/// absent).
+struct RowRecord {
+  std::uint32_t row_1based = 0;
+  std::string_view ht;             ///< `ht=` (row height in points).
+  std::string_view hidden;         ///< `hidden=` (XSD boolean).
+  std::string_view custom_height;  ///< `customHeight=` (XSD boolean).
+  std::string_view outline_level;  ///< `outlineLevel=` (0..7).
+};
+
 /// Callback bundle handed to `scan_sheet_data`. Each callback returns
 /// `Expected<void, Error>`; a non-OK return aborts the scan and the
 /// scanner forwards the error to its caller verbatim.
@@ -95,9 +118,10 @@ struct SheetSaxCallbacks {
   /// User-supplied state. Forwarded as the first argument to every
   /// callback. The scanner does not interpret this pointer.
   void* user_data = nullptr;
-  /// Invoked when a `<row>` opens. `row_1based` is the value of the
-  /// `r="N"` attribute, or 0 when the attribute was absent (rare).
-  Expected<void, Error> (*on_row_start)(void* user_data, std::uint32_t row_1based) = nullptr;
+  /// Invoked when a `<row>` opens, carrying the row's opening attributes
+  /// (index plus any height / hidden / outline overrides) so the consumer
+  /// can reproduce the per-row layout the DOM path reads.
+  Expected<void, Error> (*on_row_start)(void* user_data, const RowRecord& row) = nullptr;
   /// Invoked when the matching `</row>` closes (or when the row was
   /// self-closed).
   Expected<void, Error> (*on_row_end)(void* user_data, std::uint32_t row_1based) = nullptr;

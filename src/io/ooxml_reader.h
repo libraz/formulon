@@ -35,6 +35,7 @@
 #ifndef FORMULON_IO_OOXML_READER_H_
 #define FORMULON_IO_OOXML_READER_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -126,6 +127,14 @@ namespace internal {
 /// in-TU helper directly; this entry exists solely so the unit tests can
 /// exercise the safety predicate in isolation.
 Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base_dir, std::string_view target);
+
+/// Test hook that reads a package while forcing the SAX-vs-DOM decision
+/// at `sax_threshold` bytes instead of the production `kSaxThresholdBytes`.
+/// Lets a parity test drive both read paths over an ordinary-size sheet
+/// (threshold 0 forces SAX; `SIZE_MAX` forces DOM) without generating a
+/// multi-hundred-KiB fixture. Behaviour is otherwise identical to
+/// `read_ooxml`. Not used by production code.
+Expected<OoxmlReadResult, Error> ReadOoxmlWithSaxThresholdForTesting(ByteSpan bytes, std::size_t sax_threshold);
 
 }  // namespace internal
 

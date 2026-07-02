@@ -36,6 +36,7 @@
 #include "eval/iterative_solver.h"
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
+#include "io/default_content_type.h"
 #include "io/defined_names.h"
 #include "io/defined_names_internal.h"
 #include "io/ooxml/external_link_reader.h"
@@ -51,8 +52,10 @@
 #include "io/tables_reader.h"
 #include "io/workbook_kind.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -147,11 +150,145 @@ void ReadManualBreaks(const pugi::xml_node& breaks_node, std::vector<ManualBreak
     entry.id = raw_id > 0U ? raw_id - 1U : 0U;
     entry.min = static_cast<std::uint32_t>(brk.attribute("min").as_uint(0));
     entry.max = static_cast<std::uint32_t>(brk.attribute("max").as_uint(0));
-    if (pugi::xml_attribute man = brk.attribute("man"); man) {
-      entry.manual = man.as_bool(true);
-    }
+    // `man` defaults to false (ECMA-376 §18.3.1.1): a break without it is
+    // automatic and must not be re-emitted as a user break.
+    entry.manual = read_xsd_bool(brk, "man", false);
     out.push_back(entry);
   }
+}
+
+/// Returns a copy of `sheet_xml` with the `<sheetData>` element's children
+/// removed (the open / close tags are kept as an empty element). This lets
+/// the SAX path parse the small non-cell worksheet metadata as a DOM
+/// without materialising the full cell tree the SAX scanner exists to
+/// avoid. Returns the input unchanged when there is no `<sheetData>` (or
+/// it is already empty / self-closing).
+std::vector<std::uint8_t> BuildWorksheetShellBytes(const std::vector<std::uint8_t>& sheet_xml) {
+  const std::string_view sv(reinterpret_cast<const char*>(sheet_xml.data()), sheet_xml.size());
+  constexpr std::string_view kOpen = "<sheetData";
+  constexpr std::string_view kClose = "</sheetData>";
+  // Locate the `<sheetData` open tag, requiring a real name boundary after
+  // it so `<sheetDataX>` (hypothetical) does not match.
+  std::size_t open = std::string_view::npos;
+  for (std::size_t from = 0;;) {
+    const std::size_t hit = sv.find(kOpen, from);
+    if (hit == std::string_view::npos) {
+      break;
+    }
+    const std::size_t after = hit + kOpen.size();
+    const char d = after < sv.size() ? sv[after] : '\0';
+    if (d == ' ' || d == '\t' || d == '\r' || d == '\n' || d == '>' || d == '/') {
+      open = hit;
+      break;
+    }
+    from = hit + 1;
+  }
+  if (open == std::string_view::npos) {
+    return sheet_xml;
+  }
+  const std::size_t gt = sv.find('>', open);
+  if (gt == std::string_view::npos || sv[gt - 1] == '/') {
+    // Malformed, or a self-closing `<sheetData/>` with no children.
+    return sheet_xml;
+  }
+  const std::size_t close = sv.find(kClose, gt + 1);
+  if (close == std::string_view::npos) {
+    return sheet_xml;
+  }
+  const std::size_t close_end = close + kClose.size();
+  std::vector<std::uint8_t> out;
+  out.reserve((gt + 1) + kClose.size() + (sheet_xml.size() - close_end));
+  out.insert(out.end(), sheet_xml.begin(), sheet_xml.begin() + static_cast<std::ptrdiff_t>(gt + 1));
+  out.insert(out.end(), kClose.begin(), kClose.end());
+  out.insert(out.end(), sheet_xml.begin() + static_cast<std::ptrdiff_t>(close_end), sheet_xml.end());
+  return out;
+}
+
+/// Reads every non-cell worksheet element (siblings of `<sheetData>`) from
+/// `doc` into sheet `i`: conditional formats, view / layout, merges,
+/// hyperlinks, data validations, sheet protection, and the raw print
+/// settings (sheetPr / pageMargins / pageSetup / printOptions /
+/// headerFooter / autoFilter / row + col breaks). Shared between the DOM
+/// path (full document) and the SAX path (metadata shell). Per-row
+/// overrides (`<row ht=/hidden=>`) live inside `<sheetData>` and are only
+/// populated on the DOM path; on the SAX shell that content is stripped.
+Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std::size_t i, Workbook& wb) {
+  const pugi::xml_node worksheet = doc.child("worksheet");
+  auto cfs_or = read_conditional_formats(worksheet);
+  if (!cfs_or) {
+    return cfs_or.error();
+  }
+  wb.sheet(i).mutable_conditional_formats() = std::move(cfs_or.value());
+  auto view_layout_or = read_sheet_view_and_layout(doc, i, wb);
+  if (!view_layout_or) {
+    return view_layout_or.error();
+  }
+  auto merges_or = read_merges(worksheet);
+  if (!merges_or) {
+    return merges_or.error();
+  }
+  wb.sheet(i).mutable_merges() = std::move(merges_or.value());
+  auto hls_or = read_hyperlinks(worksheet);
+  if (!hls_or) {
+    return hls_or.error();
+  }
+  wb.sheet(i).mutable_hyperlinks() = std::move(hls_or.value());
+  auto dvs_or = read_data_validations(worksheet);
+  if (!dvs_or) {
+    return dvs_or.error();
+  }
+  wb.sheet(i).mutable_validations() = std::move(dvs_or.value());
+  wb.sheet(i).mutable_protection() = read_sheet_protection(worksheet);
+
+  SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
+  if (pugi::xml_node sheet_pr = worksheet.child("sheetPr"); sheet_pr) {
+    // Capture the whole `<sheetPr>` verbatim whenever it exists — it may
+    // carry only `tabColor` / `codeName` (VBA binding) with no
+    // `<pageSetUpPr>` child, and gating on that child dropped such sheets'
+    // `<sheetPr>` entirely on save. The structured `fit_to_page` view is
+    // populated additionally when `<pageSetUpPr>` is present.
+    print.sheet_pr_xml = RawXml(sheet_pr);
+    if (pugi::xml_node page_setup_pr = sheet_pr.child("pageSetUpPr"); page_setup_pr) {
+      print.page_setup.fit_to_page = page_setup_pr.attribute("fitToPage").as_bool(false);
+    }
+  }
+  if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
+    print.page_margins_xml = RawXml(page_margins);
+    ApplyStructuredPageMargins(page_margins, print.page_margins);
+  }
+  if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
+    print.page_setup_xml = RawXml(page_setup);
+    print.printer_settings_rid = ooxml::relationship_ref_id(page_setup);
+    ApplyStructuredPageSetup(page_setup, print.page_setup);
+  }
+  if (pugi::xml_node print_options = worksheet.child("printOptions")) {
+    print.print_options_xml = RawXml(print_options);
+  }
+  if (pugi::xml_node header_footer = worksheet.child("headerFooter")) {
+    print.header_footer_xml = RawXml(header_footer);
+  }
+  if (pugi::xml_node auto_filter = worksheet.child("autoFilter")) {
+    wb.sheet(i).set_auto_filter_xml(RawXml(auto_filter));
+  }
+  // Worksheet-level `<extLst>` holds the *data* for 2010+ extensions —
+  // notably `x14:conditionalFormattings` (DataBar negative-fill / axis /
+  // gradient), linked to legacy `cfRule`s by the base `id` attribute
+  // (see `cf_reader.h`, which decodes the DataBar fields out of this
+  // block into `cf::DataBarSpec`). Capture the block raw regardless, so
+  // any other 2010+ extension content it carries (unrelated to CF)
+  // survives a save cycle unchanged. Living in this shared helper means
+  // the SAX path recovers it too, via the metadata shell.
+  if (pugi::xml_node ext_lst = worksheet.child("extLst")) {
+    wb.sheet(i).set_ext_lst_xml(RawXml(ext_lst));
+  }
+  // Capture the worksheet root's extra namespace declarations so any
+  // prefixed attribute carried inside a raw capture above resolves when
+  // re-emitted (mirrors the workbook-root handling; keeps the output
+  // well-formed).
+  wb.sheet(i).set_root_extra_ns_attrs(capture_root_extra_ns_attrs(worksheet));
+  ReadManualBreaks(worksheet.child("rowBreaks"), print.manual_row_breaks);
+  ReadManualBreaks(worksheet.child("colBreaks"), print.manual_col_breaks);
+  return Expected<void, Error>::Ok();
 }
 
 }  // namespace
@@ -164,7 +301,12 @@ Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base
 
 }  // namespace internal
 
-Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
+// Shared implementation behind the public `read_ooxml` and the test-only
+// threshold-injection seam. `sax_threshold` is the byte size at or above
+// which a sheet routes through the streaming SAX scanner instead of the
+// pugixml DOM; production passes `kSaxThresholdBytes`, tests pass a tiny
+// value to force the SAX branch on ordinary-size sheets.
+static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, std::size_t sax_threshold) {
   ZipReader zip;
   {
     auto open_result = zip.open(bytes);
@@ -193,6 +335,11 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     return override_part_entries_or.error();
   }
   const std::vector<ooxml::OverrideEntry> override_part_entries = std::move(override_part_entries_or.value());
+  auto default_content_types_or = ooxml::list_default_content_types(ct_bytes);
+  if (!default_content_types_or) {
+    return default_content_types_or.error();
+  }
+  std::vector<DefaultContentType> default_content_types = std::move(default_content_types_or.value());
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {
@@ -250,6 +397,14 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // consistent with the `[Content_Types].xml` declaration we observed.
   Workbook wb = Workbook::create_empty();
   wb.set_kind(workbook_kind);
+
+  // Capture the `<workbook>` root's extra namespace declarations (and
+  // `mc:Ignorable`) so the writer can re-emit them. The raw `<bookViews>`
+  // capture below can carry namespaced attributes (e.g. `xr2:uid`) whose
+  // prefixes are declared only on this root; without re-declaring them the
+  // re-emitted fragment is malformed XML and Excel refuses the file. The
+  // same helper handles the `<worksheet>` root (see ApplyWorksheetMetadata).
+  wb.set_workbook_root_extra_attrs(capture_root_extra_ns_attrs(wb_root));
 
   // Track which sheet relationships were consumed, so the unknown-parts
   // computation can subtract them.
@@ -343,6 +498,27 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     wb.set_iterative_options(opts);
   }
 
+  // Workbook-level elements captured raw for verbatim re-emission:
+  // `<workbookPr>`, `<workbookProtection>`, `<bookViews>`. Without this,
+  // the writer regenerates only `<sheets>` / `<definedNames>` / `<calcPr>`
+  // / `<pivotCaches>` and silently drops the date system, tab-selection
+  // state, and workbook protection. `<workbookPr date1904>` additionally
+  // seeds the model-level `date1904` flag the date-serial conversions read.
+  if (pugi::xml_node workbook_pr = wb_root.child("workbookPr"); workbook_pr) {
+    wb.set_workbook_pr_xml(RawXml(workbook_pr));
+    // Excel emits the attribute as `date1904`; some legacy producers use
+    // the bare `1904` spelling. Both default to false when absent.
+    const bool from_date1904 = read_xsd_bool(workbook_pr, "date1904", false);
+    const bool from_legacy = read_xsd_bool(workbook_pr, "1904", false);
+    wb.set_date1904(from_date1904 || from_legacy);
+  }
+  if (pugi::xml_node workbook_protection = wb_root.child("workbookProtection"); workbook_protection) {
+    wb.set_workbook_protection_xml(RawXml(workbook_protection));
+  }
+  if (pugi::xml_node book_views = wb_root.child("bookViews"); book_views) {
+    wb.set_book_views_xml(RawXml(book_views));
+  }
+
   // The workbook owns the text-storage deque; readers append directly
   // into `wb.mutable_text_storage()`. This keeps `Value::text` views
   // valid for the full workbook lifetime — including after the caller
@@ -379,6 +555,18 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // via Override only). This keeps `unknown_parts` from surfacing it.
   if (zip.has_entry("xl/sharedStrings.xml")) {
     consumed_parts.insert("xl/sharedStrings.xml");
+  }
+
+  // Swallow calcChain.xml rather than passing it through. It is purely a
+  // recalculation-order cache; because the writer rewrites cell values it
+  // is necessarily stale after any save, and a stale calcChain makes real
+  // Excel reject / "repair" the workbook. Dropping it is safe (Excel
+  // rebuilds the chain on demand) and it consuming the part here means the
+  // passthrough sweep skips it, the workbook-rels calcChain relationship is
+  // not re-emitted (its target is no longer a passthrough part, so the
+  // unknown-rel guard drops it), and no `<Override>` is written for it.
+  if (zip.has_entry("xl/calcChain.xml")) {
+    consumed_parts.insert("xl/calcChain.xml");
   }
 
   // 4b. Styles — read for validation only at this slice. The full
@@ -447,15 +635,17 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     // 1M-cell worksheet does not need to materialise as a DOM in
     // memory. Both paths produce identical Workbook output.
     //
-    // The threshold is a compile-time constant. On WASM the value is
-    // `SIZE_MAX` (see `sheet_reader.h`) so the SAX branch is
-    // statically dead and the linker removes the streaming scanner
-    // entirely — saving ~17 KiB of `.wasm`. The `if constexpr` makes
-    // the elimination explicit so this is robust under -O0 / -Og too.
+    // Whether the SAX path is compiled in at all is a compile-time
+    // decision: on WASM `kSaxThresholdBytes` is `SIZE_MAX` (see
+    // `sheet_reader.h`) so the branch is statically dead and the linker
+    // removes the streaming scanner entirely — saving ~17 KiB of `.wasm`.
+    // The `if constexpr` makes the elimination explicit so it is robust
+    // under -O0 / -Og too. The *runtime* threshold is `sax_threshold`
+    // (defaults to `kSaxThresholdBytes`; tests inject a tiny value).
     constexpr bool kSaxEnabled = kSaxThresholdBytes != static_cast<std::size_t>(-1);
     bool sax_used = false;
     if constexpr (kSaxEnabled) {
-      if (sheet_bytes.size() >= kSaxThresholdBytes) {
+      if (sheet_bytes.size() >= sax_threshold) {
         ByteSpan sheet_span{sheet_bytes.data(), sheet_bytes.size()};
         auto rs = read_sheet_data_sax(sheet_span, i, wb, sheet_contexts[i], result_text_storage);
         if (!rs) {
@@ -464,82 +654,26 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         sax_used = true;
       }
     }
-    if (!sax_used) {
-      pugi::xml_document sheet_doc;
+    // Parse the worksheet's non-cell metadata (siblings of <sheetData>)
+    // from a DOM. On the DOM path this is the full sheet DOM the cell
+    // reader already consumed; on the SAX path we parse a lightweight
+    // shell with <sheetData> stripped so the streamed cell tree is never
+    // materialised — recovering conditional formats, view / layout,
+    // merges, hyperlinks, data validations, protection, and print
+    // settings that the SAX path used to drop. Row overrides
+    // (<row ht=/hidden=>) live inside <sheetData> and stay DOM-only.
+    pugi::xml_document sheet_doc;
+    if (sax_used) {
+      const std::vector<std::uint8_t> shell = BuildWorksheetShellBytes(sheet_bytes);
+      RETURN_IF_ERROR(load_xml_buffer(sheet_doc, shell, "ooxml_reader", "sheet*.xml (metadata shell)"));
+    } else {
       RETURN_IF_ERROR(load_xml_buffer(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
       auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage);
       if (!rs) {
         return rs.error();
       }
-      // Conditional-format blocks live at the top level of <worksheet>
-      // (siblings to <sheetData>), so they ride the same DOM the cell
-      // reader just consumed. The SAX path skips this scan; loading a
-      // second DOM purely for CF on multi-MB sheets would defeat the
-      // SAX optimisation, so SAX-side CF reading is deferred to a
-      // follow-up PR. In practice the sheets that exercise the SAX
-      // threshold (>256 KiB) are dominated by row data, not CF blocks,
-      // so the missed coverage is small.
-      auto cfs_or = read_conditional_formats(sheet_doc.child("worksheet"));
-      if (!cfs_or) {
-        return cfs_or.error();
-      }
-      wb.sheet(i).mutable_conditional_formats() = std::move(cfs_or.value());
-      // View / layout metadata (`<sheetView>`, `<sheetPr>`, `<cols>`,
-      // per-row overrides) lives at the same DOM level — process it
-      // here so the round-trip writer can reproduce it. SAX-side
-      // coverage is deferred for the same reason as CF.
-      auto view_layout_or = read_sheet_view_and_layout(sheet_doc, i, wb);
-      if (!view_layout_or) {
-        return view_layout_or.error();
-      }
-
-      // Merge / hyperlink / validation blocks all live at the top
-      // level of <worksheet>, same as CF. Same DOM-only reasoning
-      // applies.
-      auto merges_or = read_merges(sheet_doc.child("worksheet"));
-      if (!merges_or) {
-        return merges_or.error();
-      }
-      wb.sheet(i).mutable_merges() = std::move(merges_or.value());
-
-      auto hls_or = read_hyperlinks(sheet_doc.child("worksheet"));
-      if (!hls_or) {
-        return hls_or.error();
-      }
-      wb.sheet(i).mutable_hyperlinks() = std::move(hls_or.value());
-
-      auto dvs_or = read_data_validations(sheet_doc.child("worksheet"));
-      if (!dvs_or) {
-        return dvs_or.error();
-      }
-      wb.sheet(i).mutable_validations() = std::move(dvs_or.value());
-
-      // `<sheetProtection>` is a single optional element; the reader
-      // never fails for it (default-on-error). Empty = enabled false.
-      wb.sheet(i).mutable_protection() = read_sheet_protection(sheet_doc.child("worksheet"));
-
-      SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
-      pugi::xml_node worksheet = sheet_doc.child("worksheet");
-      if (pugi::xml_node sheet_pr = worksheet.child("sheetPr"); sheet_pr) {
-        if (pugi::xml_node page_setup_pr = sheet_pr.child("pageSetUpPr"); page_setup_pr) {
-          print.sheet_pr_xml = RawXml(sheet_pr);
-          print.page_setup.fit_to_page = page_setup_pr.attribute("fitToPage").as_bool(false);
-        }
-      }
-      if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
-        print.page_margins_xml = RawXml(page_margins);
-        ApplyStructuredPageMargins(page_margins, print.page_margins);
-      }
-      if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
-        print.page_setup_xml = RawXml(page_setup);
-        print.printer_settings_rid = ooxml::relationship_ref_id(page_setup);
-        ApplyStructuredPageSetup(page_setup, print.page_setup);
-      }
-      // Manual page breaks. `<rowBreaks>` / `<colBreaks>` are otherwise
-      // dropped; capture them structurally so a save cycle preserves them.
-      ReadManualBreaks(worksheet.child("rowBreaks"), print.manual_row_breaks);
-      ReadManualBreaks(worksheet.child("colBreaks"), print.manual_col_breaks);
     }
+    RETURN_IF_ERROR(ApplyWorksheetMetadata(sheet_doc, i, wb));
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives
     // the table-part and pivot-table lookups. Optional: most sheets have
@@ -655,6 +789,15 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
         }
         wb.sheet(i).mutable_comments() = std::move(comments_or.value());
         consumed_parts.insert(aux.comments_path);
+      }
+
+      // Drawing (DrawingML) reference. The reader does not model the
+      // drawing part; it records the target path so the writer can
+      // re-emit the `<drawing>` element and its sheet-rels relationship.
+      // The part body, its own rels, and any anchored media round-trip
+      // through the Default-typed passthrough capture below.
+      if (!aux.drawing_path.empty()) {
+        wb.sheet(i).set_drawing_rel_target(aux.drawing_path);
       }
     }
   }
@@ -825,10 +968,22 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
     wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
   }
 
-  // Compute unknown_parts: every Override-listed part the reader did
-  // not consume, captured raw so the writer can re-emit it verbatim.
-  // Default-typed parts (images, OLE) are out of scope at this layer;
-  // see `passthrough_part.h` for the rationale.
+  // Both pivot tables (per sheet) and their caches (workbook-level) are
+  // now in memory. Resolve each table's field / item names against its
+  // bound cache so GETPIVOTDATA can match a field by its source-column
+  // name (the pivot-table part links to the cache only by index). The
+  // loop body lives in the pivot layer to keep this reader hook minimal.
+  pivot::resolve_all_pivot_names(wb);
+
+  // Compute unknown_parts: every part the reader did not consume,
+  // captured raw so the writer can re-emit it verbatim. Two sources:
+  //   (1) `<Override>`-listed parts the reader did not model — captured
+  //       with their declared content type so the writer replicates the
+  //       `<Override>` registration.
+  //   (2) Default-typed parts (vbaProject.bin, xl/media/*, drawings,
+  //       VML, their rels, ...) declared only via `<Default Extension>`
+  //       — captured with an empty content type; the writer relies on
+  //       the round-tripped `<Default>` registration.
   std::vector<PassthroughPart> unknown_parts;
   unknown_parts.reserve(override_part_entries.size());
   for (const ooxml::OverrideEntry& entry : override_part_entries) {
@@ -862,6 +1017,46 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
       unknown_parts.push_back(std::move(part));
     }
   }
+
+  // Sweep every remaining archive entry the reader neither modelled nor
+  // already captured as an Override passthrough. These are Default-typed
+  // parts declared only via `<Default Extension>` — vbaProject.bin,
+  // xl/media/* images, xl/drawings/* (bodies + their rels), VML
+  // companions, and so on. Without this, real Excel-authored .xlsm /
+  // .xlsx packages silently lose macros, images, shapes, and note
+  // geometry on the first round-trip. Captured with an empty content
+  // type; the writer relies on the round-tripped `<Default>` entries.
+  {
+    std::unordered_set<std::string> captured;
+    captured.reserve(unknown_parts.size());
+    for (const PassthroughPart& part : unknown_parts) {
+      captured.insert(part.path);
+    }
+    for (const std::string& name : zip.list_entries()) {
+      // Directory markers and empty names are not parts.
+      if (name.empty() || name.back() == '/') {
+        continue;
+      }
+      if (consumed_parts.find(name) != consumed_parts.end()) {
+        continue;
+      }
+      if (captured.find(name) != captured.end()) {
+        continue;
+      }
+      auto bytes_or = zip.read_entry(name);
+      if (!bytes_or) {
+        return bytes_or.error();
+      }
+      PassthroughPart part;
+      part.path = name;
+      // Empty content type: the part is Default-typed, so the writer
+      // must not emit a per-part `<Override>` for it.
+      part.bytes = std::move(bytes_or.value());
+      unknown_parts.push_back(std::move(part));
+      captured.insert(name);
+    }
+  }
+
   // Stable order so callers / tests can compare deterministically.
   std::sort(unknown_parts.begin(), unknown_parts.end(),
             [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
@@ -872,10 +1067,23 @@ Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
   // tooling that want to inspect what was preserved.
   wb.set_passthrough_parts(unknown_parts);
   wb.set_unknown_workbook_rels(std::move(wb_rels.unknown_rels));
+  wb.set_default_content_types(std::move(default_content_types));
 
   OoxmlReadResult result{std::move(wb), std::move(unknown_parts), pending_sst_count};
   return result;
 }
+
+Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
+  return ReadOoxmlWithThreshold(bytes, kSaxThresholdBytes);
+}
+
+namespace internal {
+
+Expected<OoxmlReadResult, Error> ReadOoxmlWithSaxThresholdForTesting(ByteSpan bytes, std::size_t sax_threshold) {
+  return ReadOoxmlWithThreshold(bytes, sax_threshold);
+}
+
+}  // namespace internal
 
 }  // namespace io
 }  // namespace formulon

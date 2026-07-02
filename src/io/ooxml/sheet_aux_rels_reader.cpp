@@ -84,6 +84,12 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
                                                    }
                                                    out.printer_settings_rid.assign(rel.attribute("Id").value());
                                                    out.printer_settings_path = std::move(resolved).value();
+                                                 } else if (type == kRelDrawing) {
+                                                   auto resolved = resolve_relative_path(sheet_dir, target);
+                                                   if (!resolved) {
+                                                     return resolved.error();
+                                                   }
+                                                   out.drawing_path = std::move(resolved).value();
                                                  }
                                                  return Expected<void, Error>::Ok();
                                                });

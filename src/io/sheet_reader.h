@@ -36,11 +36,30 @@ namespace io {
 /// that carry a shared-string index (`t="s"`); the higher-level reader
 /// resolves these against the workbook's shared-string pool once the
 /// SST part has been loaded (Bundle 2.3).
+/// One dynamic-array formula anchor discovered during the cell scan.
+/// Excel writes a spilling formula (e.g. `=SEQUENCE(3)`) at the anchor as
+/// `<f t="array" ref="F6:F8">` and the spill targets (F7 / F8) as bare
+/// `<v>` cached-value cells. The 0-based inclusive rectangle
+/// `[row..last_row] x [col..last_col]` is the spill footprint; `(row, col)`
+/// is the anchor.
+struct ArrayAnchor {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::uint32_t last_row = 0;
+  std::uint32_t last_col = 0;
+};
+
 struct SheetReadContext {
   /// Side table for SST-typed cells: list of (row, col, sst_index).
   /// Bundle 2.3 will iterate this list and replace the placeholder
   /// `Text("")` cells with the resolved string from the SST.
   std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>> pending_sst_cells;
+  /// Dynamic-array anchors (`<f t="array" ref=...>` spanning >1 cell)
+  /// discovered while scanning cells. After the scan the reader registers
+  /// each as a spill region so the cached spill targets do not read back
+  /// as independent literals that collide (`#SPILL!`) with the anchor's
+  /// re-spill on recalc.
+  std::vector<ArrayAnchor> array_anchors;
 };
 
 /// Reads `<sheetData>` from a parsed `sheet*.xml` document and writes every

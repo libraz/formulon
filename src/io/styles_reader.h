@@ -24,13 +24,37 @@
 namespace formulon {
 namespace io {
 
+/// Original specification of an OOXML `<color>` element, preserved so a
+/// theme / indexed / auto colour survives a read-modify-write cycle
+/// instead of collapsing to a resolved RGB. The parallel `*_argb` field
+/// on the owning record still carries the resolved AARRGGBB value that
+/// the evaluator and bindings consume; this struct exists purely for
+/// verbatim OOXML round-tripping.
+struct ColorSpec {
+  /// How the source `<color>` element expressed its value.
+  enum class Kind : std::uint8_t {
+    kNone = 0,  ///< No `<color>` element, or none of the recognised attributes.
+    kRgb,       ///< `rgb="AARRGGBB"` (or 6-hex `RRGGBB`).
+    kTheme,     ///< `theme="N"` with optional `tint`.
+    kIndexed,   ///< `indexed="N"` legacy palette index.
+    kAuto,      ///< `auto="1"` system foreground / background.
+  };
+  Kind kind = Kind::kNone;
+  std::uint32_t rgb = 0;      ///< AARRGGBB when `kind == kRgb`.
+  std::uint32_t theme = 0;    ///< Theme index when `kind == kTheme`.
+  double tint = 0.0;          ///< Theme tint (-1..1) when `kind == kTheme`.
+  std::uint32_t indexed = 0;  ///< Palette index when `kind == kIndexed`.
+};
+
 /// One `<font>` entry inside `<fonts>`.
 ///
 /// `name` is intentionally a `std::string` because the font-name domain
 /// is open-set (system fonts, custom fonts, locale-specific variants);
 /// the per-record overhead is acceptable. `color_argb` carries the raw
 /// AARRGGBB packed colour. The sentinel `0xFF000000U` is preserved
-/// verbatim and treated as "automatic" by the consumer.
+/// verbatim and treated as "automatic" by the consumer. `color`
+/// preserves the original `<color>` specification (theme / indexed /
+/// auto) for round-tripping; `color_argb` remains the resolved value.
 struct FontRecord {
   std::string name;
   double size = 11.0;
@@ -39,7 +63,20 @@ struct FontRecord {
   bool strike = false;
   /// 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting.
   std::uint8_t underline = 0;
+  /// `<vertAlign>` run: 0=baseline (no element), 1=superscript,
+  /// 2=subscript. Baseline emits no element on write.
+  std::uint8_t vert_align = 0;
+  /// `<family>` font-family class (0..5). `has_family` distinguishes an
+  /// explicit `<family val="0"/>` from an absent element.
+  bool has_family = false;
+  std::uint8_t family = 0;
+  /// `<charset>` codepage id (e.g. 128 = Shift_JIS, relevant to ja-JP
+  /// font substitution). `has_charset` distinguishes an explicit value
+  /// from an absent element.
+  bool has_charset = false;
+  std::uint8_t charset = 0;
   std::uint32_t color_argb = 0xFF000000U;
+  ColorSpec color;
 };
 
 /// One `<fill>` entry inside `<fills>`.
@@ -51,6 +88,11 @@ struct FillRecord {
   std::uint8_t pattern = 0;
   std::uint32_t fg_argb = 0;
   std::uint32_t bg_argb = 0;
+  /// Original `<fgColor>` / `<bgColor>` specifications (theme / indexed /
+  /// auto), preserved for round-tripping. The `*_argb` fields remain the
+  /// resolved values.
+  ColorSpec fg;
+  ColorSpec bg;
 };
 
 /// One side of a `<border>` (left/right/top/bottom/diagonal).
@@ -59,6 +101,9 @@ struct BorderSide {
   /// (OOXML border style ordinal).
   std::uint8_t style = 0;
   std::uint32_t color_argb = 0;
+  /// Original `<color>` specification (theme / indexed / auto), preserved
+  /// for round-tripping. `color_argb` remains the resolved value.
+  ColorSpec color;
 };
 
 /// One `<border>` entry inside `<borders>`.
@@ -95,6 +140,15 @@ struct CellXf {
   /// 0=top, 1=center, 2=bottom (default), 3=justify, 4=distributed.
   std::uint8_t vertical_align = 0;
   bool wrap_text = false;
+  /// Whether a `<protection>` child was present on the source `<xf>`.
+  /// The OOXML schema default is `locked=true`, `hidden=false`; a common
+  /// form ("protected sheet, a few input cells unlocked") sets
+  /// `locked="0"` on those cells. Preserving the element verbatim keeps
+  /// that form from collapsing back to all-locked on save. On write the
+  /// `<protection>` element is emitted only when `has_protection` is set.
+  bool has_protection = false;
+  bool locked = true;
+  bool hidden = false;
 };
 
 /// One `<dxf>` differential-format record. Unlike `<xf>`, a dxf stores
@@ -110,6 +164,13 @@ struct DifferentialFormat {
   bool has_num_fmt = false;
   std::uint16_t num_fmt_id = 0;
   std::string num_fmt_code;
+  /// Raw `<alignment>` / `<protection>` child elements, captured verbatim
+  /// so a dxf that carries them (rare in conditional formats, but valid)
+  /// survives a read -> write round trip. Empty when the child is absent.
+  /// The writer re-emits them at their CT_Dxf positions (alignment after
+  /// fill, protection after border).
+  std::string alignment_xml;
+  std::string protection_xml;
 };
 
 /// One `<cellStyle>` entry inside `<cellStyles>`. Defines a named cell

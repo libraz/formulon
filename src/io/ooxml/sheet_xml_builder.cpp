@@ -203,7 +203,12 @@ std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::stri
   for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
     const Hyperlink& h = sheet.hyperlinks()[i];
     out.append("<hyperlink ref=\"");
-    AppendCellRefForRef(out, h.row, h.col);
+    if (h.ref_span.empty()) {
+      AppendCellRefForRef(out, h.row, h.col);
+    } else {
+      // Range hyperlink: re-emit the captured multi-cell ref verbatim.
+      AppendXmlEscaped(out, h.ref_span);
+    }
     out.append("\"");
     if (i < rid_per_hyperlink.size() && !rid_per_hyperlink[i].empty()) {
       out.append(" r:id=\"");
@@ -326,12 +331,39 @@ std::string BuildSheetViewXml(const SheetView& view) {
   const bool zoom_default = view.zoom_scale == SheetView::kDefaultZoomScale;
   const bool no_freeze = view.freeze_rows == 0U && view.freeze_cols == 0U;
   const bool tab_default = !view.tab_hidden;
-  if (zoom_default && no_freeze && tab_default) {
+  // Display attributes at their schema defaults contribute nothing.
+  const bool display_default = view.show_grid_lines && view.show_row_col_headers && view.show_zeros &&
+                               !view.right_to_left && !view.tab_selected && view.view_mode.empty();
+  if (zoom_default && no_freeze && tab_default && display_default) {
     return std::string();
   }
   std::string out;
-  out.reserve(192);
-  out.append("<sheetViews><sheetView workbookViewId=\"0\"");
+  out.reserve(224);
+  out.append("<sheetViews><sheetView");
+  // Display attributes precede workbookViewId in Excel's own emission
+  // order. Emit each only when it differs from its schema default so a
+  // near-default sheet stays compact.
+  if (!view.show_grid_lines) {
+    out.append(" showGridLines=\"0\"");
+  }
+  if (!view.show_row_col_headers) {
+    out.append(" showRowColHeaders=\"0\"");
+  }
+  if (!view.show_zeros) {
+    out.append(" showZeros=\"0\"");
+  }
+  if (view.right_to_left) {
+    out.append(" rightToLeft=\"1\"");
+  }
+  if (view.tab_selected) {
+    out.append(" tabSelected=\"1\"");
+  }
+  if (!view.view_mode.empty()) {
+    out.append(" view=\"");
+    AppendXmlEscaped(out, view.view_mode);
+    out.push_back('"');
+  }
+  out.append(" workbookViewId=\"0\"");
   if (!zoom_default) {
     out.append(" zoomScale=\"");
     out.append(std::to_string(view.zoom_scale));
@@ -364,8 +396,10 @@ std::string BuildSheetViewXml(const SheetView& view) {
 /// Emits `<sheetProtection .../>` matching the structure ECMA-376
 /// §18.3.1.85 prescribes. Returns an empty string when
 /// `p.enabled == false` so the caller can drop the surrounding
-/// indentation cleanly. Boolean attributes are emitted only when their
-/// value is `true`; the spec defaults absent attributes to `false`.
+/// indentation cleanly. Boolean attributes are emitted only when they
+/// differ from their per-attribute schema default (eleven action flags
+/// default to true, the rest to false), which keeps output compact and
+/// preserves explicit unlocks of otherwise-locked-by-default actions.
 std::string BuildSheetProtectionXml(const SheetProtection& p) {
   if (!p.enabled) {
     return std::string();
@@ -398,33 +432,37 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
     AppendXmlEscaped(out, p.legacy_password);
     out.push_back('"');
   }
-  // Boolean attributes — only emit when `true`. Order mirrors Excel's
-  // own emission order so byte-identical round-trips are achievable
-  // for the common cases.
-  const auto append_bool = [&out](const char* name, bool v) {
-    if (!v) {
+  // Boolean attributes — emit only when the value differs from the
+  // attribute's ECMA-376 §18.3.1.85 schema default. Eleven action flags
+  // default to true (locked); the rest default to false. Emitting only
+  // deltas both matches Excel's own compact output and — crucially —
+  // preserves an explicit unlock (`formatCells="0"`) that a blanket
+  // "emit when true" writer would drop, silently re-locking the action on
+  // the next load. Order mirrors Excel's emission order.
+  const auto append_bool = [&out](const char* name, bool v, bool default_value) {
+    if (v == default_value) {
       return;
     }
     out.push_back(' ');
     out.append(name);
-    out.append("=\"1\"");
+    out.append(v ? "=\"1\"" : "=\"0\"");
   };
-  append_bool("sheet", p.sheet);
-  append_bool("objects", p.objects);
-  append_bool("scenarios", p.scenarios);
-  append_bool("formatCells", p.format_cells);
-  append_bool("formatColumns", p.format_columns);
-  append_bool("formatRows", p.format_rows);
-  append_bool("insertColumns", p.insert_columns);
-  append_bool("insertRows", p.insert_rows);
-  append_bool("insertHyperlinks", p.insert_hyperlinks);
-  append_bool("deleteColumns", p.delete_columns);
-  append_bool("deleteRows", p.delete_rows);
-  append_bool("selectLockedCells", p.select_locked_cells);
-  append_bool("sort", p.sort);
-  append_bool("autoFilter", p.auto_filter);
-  append_bool("pivotTables", p.pivot_tables);
-  append_bool("selectUnlockedCells", p.select_unlocked_cells);
+  append_bool("sheet", p.sheet, false);
+  append_bool("objects", p.objects, false);
+  append_bool("scenarios", p.scenarios, false);
+  append_bool("formatCells", p.format_cells, true);
+  append_bool("formatColumns", p.format_columns, true);
+  append_bool("formatRows", p.format_rows, true);
+  append_bool("insertColumns", p.insert_columns, true);
+  append_bool("insertRows", p.insert_rows, true);
+  append_bool("insertHyperlinks", p.insert_hyperlinks, true);
+  append_bool("deleteColumns", p.delete_columns, true);
+  append_bool("deleteRows", p.delete_rows, true);
+  append_bool("selectLockedCells", p.select_locked_cells, false);
+  append_bool("sort", p.sort, true);
+  append_bool("autoFilter", p.auto_filter, true);
+  append_bool("pivotTables", p.pivot_tables, true);
+  append_bool("selectUnlockedCells", p.select_unlocked_cells, false);
   out.append("/>");
   return out;
 }
@@ -522,7 +560,8 @@ std::string BuildDimensionXml(const Sheet& sheet) {
 }  // namespace
 
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
-                              const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid) {
+                              const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
+                              std::string_view drawing_rid) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string cols_xml = BuildColsXml(sheet.layout());
   const std::string sheet_data = BuildSheetDataXml(sheet);
@@ -542,7 +581,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   out.append(kXmlDecl);
   out.append(
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n");
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"");
+  // Re-declare the source worksheet root's extra namespaces so prefixed
+  // attributes carried in any raw capture below resolve (keeps the output
+  // well-formed; mirrors the workbook-root handling).
+  out.append(sheet.root_extra_ns_attrs());
+  out.append(">\n");
   // ECMA-376 element order: sheetPr -> dimension -> sheetViews ->
   // sheetFormatPr -> cols -> sheetData -> conditionalFormatting ->
   // pageMargins -> pageSetup -> rowBreaks -> colBreaks -> tableParts.
@@ -581,6 +625,13 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       out.push_back('\n');
     }
   }
+  // <autoFilter> sits between <sheetProtection>/<scenarios> and
+  // <mergeCells> in ECMA-376 document order. Round-tripped verbatim.
+  if (!sheet.auto_filter_xml().empty()) {
+    out.append("  ");
+    out.append(sheet.auto_filter_xml());
+    out.push_back('\n');
+  }
   // Merge cells precede CF in ECMA-376 document order.
   if (!merges_xml.empty()) {
     out.append("  ");
@@ -602,6 +653,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     out.append(hl_xml);
     out.push_back('\n');
   }
+  // <printOptions> sits between <hyperlinks> and <pageMargins>.
+  if (!print.print_options_xml.empty()) {
+    out.append("  ");
+    out.append(print.print_options_xml);
+    out.push_back('\n');
+  }
   if (!print.page_margins_xml.empty()) {
     out.append("  ");
     out.append(print.page_margins_xml);
@@ -610,6 +667,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   if (!page_setup_xml.empty()) {
     out.append("  ");
     out.append(page_setup_xml);
+    out.push_back('\n');
+  }
+  // <headerFooter> follows <pageSetup> and precedes <rowBreaks>.
+  if (!print.header_footer_xml.empty()) {
+    out.append("  ");
+    out.append(print.header_footer_xml);
     out.push_back('\n');
   }
   // Manual page breaks. ECMA-376 places <rowBreaks>/<colBreaks> after
@@ -628,6 +691,14 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       out.push_back('\n');
     }
   }
+  // <drawing> precedes <tableParts> in ECMA-376 worksheet element order.
+  // The referenced DrawingML part round-trips through passthrough; here
+  // we only re-emit the reference so the part stays reachable.
+  if (!drawing_rid.empty()) {
+    out.append("  <drawing r:id=\"");
+    out.append(drawing_rid);
+    out.append("\"/>\n");
+  }
   if (!sheet_tables.empty()) {
     out.append("  <tableParts count=\"");
     out.append(std::to_string(sheet_tables.size()));
@@ -638,6 +709,15 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       out.append("\"/>\n");
     }
     out.append("  </tableParts>\n");
+  }
+  // Worksheet-level `<extLst>` is the last child of `<worksheet>` in
+  // ECMA-376 order (after `<tableParts>`). Re-emit the captured block
+  // verbatim so 2010+ extension data (x14 conditional formatting, etc.)
+  // survives the round trip.
+  if (!sheet.ext_lst_xml().empty()) {
+    out.append("  ");
+    out.append(sheet.ext_lst_xml());
+    out.push_back('\n');
   }
   out.append("</worksheet>\n");
   return out;
@@ -705,6 +785,13 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     }
     AppendRelationship(out, res.printer_settings_rid, kRelPrinterSettings,
                        TargetRelativeToWorksheet(print.printer_settings_path));
+  }
+  // Drawing (DrawingML) relationship. The part body, its own rels, and
+  // any anchored media round-trip through passthrough; here we re-mint a
+  // fresh rId so the worksheet's `<drawing r:id>` element resolves.
+  if (!sheet.drawing_rel_target().empty()) {
+    res.drawing_rid = next_unique_rid();
+    AppendRelationship(out, res.drawing_rid, kRelDrawing, TargetRelativeToWorksheet(sheet.drawing_rel_target()));
   }
   // Comments + VML relationships when the sheet has comments. The
   // comments rel comes first; the VML rel follows so the two ids are

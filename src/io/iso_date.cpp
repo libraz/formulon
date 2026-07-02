@@ -42,6 +42,20 @@ bool TakeChar(std::string_view s, std::size_t* pos, char lit) noexcept {
   return true;
 }
 
+bool IsLeapYear(int year) noexcept {
+  return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+}
+
+/// Returns the number of days in `month` (1-12) of `year`. `month` must
+/// already be validated to `[1, 12]` by the caller.
+int DaysInMonth(int year, int month) noexcept {
+  static constexpr int kDaysInMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (month == 2 && IsLeapYear(year)) {
+    return 29;
+  }
+  return kDaysInMonth[month - 1];
+}
+
 }  // namespace
 
 bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
@@ -53,7 +67,11 @@ bool parse_iso_date_serial(std::string_view text, double* out_serial) noexcept {
       !TakeChar(text, &pos, '-') || !TakeDigits(text, &pos, 2, &day)) {
     return false;
   }
-  if (month < 1 || month > 12 || day < 1 || day > 31) {
+  // Reject any calendar date that does not actually exist (e.g.
+  // `2024-02-30`, `2023-02-29`): `serial_from_ymd` silently normalizes an
+  // out-of-range day into the following month, which would violate this
+  // parser's "strict" lexical contract by accepting non-canonical input.
+  if (month < 1 || month > 12 || day < 1 || day > DaysInMonth(year, month)) {
     return false;
   }
 

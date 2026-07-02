@@ -216,20 +216,26 @@ TEST(SheetPrintGeometry, ManualBreaksSurviveWriteReadCycle) {
 
   Workbook src = Workbook::create();
   SheetPrintSettings& print = src.sheet(0).mutable_print_settings();
+  // `man` defaults to false (ECMA-376); user-inserted breaks are manual,
+  // so mark them explicitly so they re-emit with `man="1"` and read back
+  // as manual.
   ManualBreak row_break;
   row_break.id = kRowBreakIndex;
   row_break.min = 0U;
   row_break.max = kLastColumnIndex;
+  row_break.manual = true;
   print.manual_row_breaks.push_back(row_break);
   ManualBreak col_break_a;
   col_break_a.id = kFirstColBreakIndex;
   col_break_a.min = 0U;
   col_break_a.max = kLastRowIndex;
+  col_break_a.manual = true;
   print.manual_col_breaks.push_back(col_break_a);
   ManualBreak col_break_b;
   col_break_b.id = kSecondColBreakIndex;
   col_break_b.min = 0U;
   col_break_b.max = kLastRowIndex;
+  col_break_b.manual = true;
   print.manual_col_breaks.push_back(col_break_b);
 
   const std::vector<std::uint8_t> bytes = SaveOrDie(src);

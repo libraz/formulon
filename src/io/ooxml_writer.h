@@ -1,11 +1,12 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // OOXML (.xlsx) package writer. Round-trips the workbook, including
-// passive metadata (defined names, table parts) and Override-listed
-// parts the reader did not consume (unknown-part passthrough). Cells
-// are emitted with inline strings (`t="inlineStr"`); SST emission is
-// intentionally not done here — the inline form round-trips cleanly
-// already.
+// passive metadata (defined names, table parts) and parts the reader
+// did not model — both `<Override>`-listed parts and Default-typed
+// binary/media parts (vbaProject.bin, images, drawings, VML) captured
+// as unknown-part passthrough. Cells are emitted with inline strings
+// (`t="inlineStr"`); SST emission is intentionally not done here — the
+// inline form round-trips cleanly already.
 
 #ifndef FORMULON_IO_OOXML_WRITER_H_
 #define FORMULON_IO_OOXML_WRITER_H_
@@ -46,13 +47,17 @@ namespace io {
 ///     numeric suffix follows the `TableMetadata::id`; tables with
 ///     `id == 0` get a per-write fallback id (logged via
 ///     `StructuredLog`).
-///   * `xl/worksheets/_rels/sheet<N>.xml.rels` — only for sheets that
-///     own tables; lists the table-part relationships.
+///   * `xl/worksheets/_rels/sheet<N>.xml.rels` — for sheets that own
+///     tables, pivot tables, hyperlinks, comments, printer settings, or
+///     a DrawingML part; lists the corresponding relationships. A sheet
+///     that references a drawing re-emits both the `<drawing r:id>`
+///     element and the matching drawing relationship.
 ///   * Passthrough parts from `wb.passthrough_parts()` — written
 ///     verbatim, with their `<Override>` registration replicated when
 ///     `content_type` is non-empty. Default-typed passthrough parts
-///     (empty `content_type`) are written without an Override (the
-///     package-level `<Default>` covers them).
+///     (empty `content_type` — vbaProject.bin, images, drawings, VML)
+///     are written without an Override; their `<Default Extension>`
+///     registration is round-tripped from `wb.default_content_types()`.
 ///
 /// Sheet IDs and relationship IDs are assigned sequentially per sheet,
 /// with the styles relationship following the last worksheet. Non-ASCII

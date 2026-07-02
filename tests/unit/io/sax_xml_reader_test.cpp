@@ -44,8 +44,8 @@ struct Capture {
   std::vector<CapturedCell> cells;
 };
 
-Expected<void, Error> CaptureRowStart(void* ud, std::uint32_t r) {
-  static_cast<Capture*>(ud)->row_starts.push_back(r);
+Expected<void, Error> CaptureRowStart(void* ud, const RowRecord& row) {
+  static_cast<Capture*>(ud)->row_starts.push_back(row.row_1based);
   return Expected<void, Error>::Ok();
 }
 Expected<void, Error> CaptureRowEnd(void* ud, std::uint32_t r) {
@@ -566,7 +566,7 @@ TEST(SaxXmlReader, TenThousandCellsCallbackCount) {
   Counter counter;
   SheetSaxCallbacks cb;
   cb.user_data = &counter;
-  cb.on_row_start = +[](void* ud, std::uint32_t) -> Expected<void, Error> {
+  cb.on_row_start = +[](void* ud, const RowRecord&) -> Expected<void, Error> {
     ++static_cast<Counter*>(ud)->rows;
     return Expected<void, Error>::Ok();
   };

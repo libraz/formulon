@@ -33,6 +33,10 @@ struct SheetRelsResult {
   std::string xml;
   std::vector<std::string> hyperlink_rids;
   std::string printer_settings_rid;
+  // rId minted for the sheet's DrawingML relationship, or empty when the
+  // sheet anchors no drawing. Threaded back into the worksheet body so
+  // its `<drawing r:id>` element matches the rels entry.
+  std::string drawing_rid;
 };
 
 /// Builds the worksheet part body (`xl/worksheets/sheetN.xml`) for a
@@ -42,7 +46,8 @@ struct SheetRelsResult {
 /// is the rId of the printer-settings rel (empty when the sheet has no
 /// printer settings).
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
-                              const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid);
+                              const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
+                              std::string_view drawing_rid);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, and comments / VML.

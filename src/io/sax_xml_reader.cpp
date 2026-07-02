@@ -756,6 +756,9 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   record->t = AttrOfDecoded(cell_header, "t", &scratch->decoded_attr_t);
   record->s = AttrOfDecoded(cell_header, "s", &scratch->decoded_attr_s);
   record->formula = std::string_view{};
+  record->f_t = std::string_view{};
+  record->f_si = std::string_view{};
+  record->f_ref = std::string_view{};
   record->value = std::string_view{};
   record->is_inline_string = false;
   record->phonetic = std::string_view{};
@@ -778,6 +781,15 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       return true;
     }
     if (child.name == "f") {
+      // Capture the shared/array-formula attributes before handling the
+      // body. `t`/`si`/`ref` never carry XML entities in practice, so the
+      // raw views (aliasing the source buffer) are safe to surface. A
+      // shared-formula follower is self-closing with no body, but its
+      // `si` still has to reach the consumer so the group master can be
+      // shifted into place.
+      record->f_t = AttrOfRaw(child, "t");
+      record->f_si = AttrOfRaw(child, "si");
+      record->f_ref = AttrOfRaw(child, "ref");
       if (child.self_closing) {
         continue;
       }
@@ -851,7 +863,16 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
   }
 
   if (cb.on_row_start != nullptr) {
-    auto rs = cb.on_row_start(cb.user_data, row_1based);
+    // Surface the row's override attributes. These are numeric / boolean
+    // and never entity-encoded, so raw views (aliasing the buffer) are
+    // safe for the callback's duration.
+    RowRecord rec;
+    rec.row_1based = row_1based;
+    rec.ht = AttrOfRaw(row_header, "ht");
+    rec.hidden = AttrOfRaw(row_header, "hidden");
+    rec.custom_height = AttrOfRaw(row_header, "customHeight");
+    rec.outline_level = AttrOfRaw(row_header, "outlineLevel");
+    auto rs = cb.on_row_start(cb.user_data, rec);
     if (!rs) {
       *err = rs.error();
       return false;

@@ -9,11 +9,17 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
+#include "eval/function_registry.h"
+#include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/styles_reader.h"
 #include "io/zip_reader.h"
+#include "parser/parser.h"
 #include "sheet.h"
+#include "utils/arena.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -22,6 +28,24 @@ namespace {
 
 io::ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
   return io::ByteSpan{bytes.data(), bytes.size()};
+}
+
+// Evaluates `src` against `wb` / its first sheet with the formula cell
+// anchored at (row, col). Used to confirm a round-tripped protection flag
+// actually drives CELL("protect").
+Value EvalOn(const Workbook& wb, std::string_view src, std::uint32_t row, std::uint32_t col) {
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser parser(src, parse_arena);
+  parser::AstNode* root = parser.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << src;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  eval::EvalState state;
+  eval::EvalContext ctx(wb, wb.sheet(0), state);
+  ctx = ctx.with_formula_cell(row, col);
+  return eval::evaluate(*root, eval_arena, eval::default_registry(), ctx);
 }
 
 TEST(StylesRoundTrip, PreservesFontFillBorderAndCellXfs) {
@@ -255,6 +279,40 @@ TEST(StylesRoundTrip, EmptyWorkbookHasDefaultStyles) {
   EXPECT_EQ(rt.fills.size(), 1U);
   EXPECT_EQ(rt.borders.size(), 1U);
   EXPECT_EQ(rt.cell_xfs.size(), 1U);
+}
+
+TEST(StylesRoundTrip, CellProtectReflectsRoundTrippedLockedFlag) {
+  // A cell whose xf carries `<protection locked="0"/>` must survive the
+  // writer -> reader cycle and drive CELL("protect") to 0, while a default
+  // (locked) cell stays 1.
+  Workbook src = Workbook::create();
+  io::StylesTable styles;
+  styles.fonts.emplace_back();
+  styles.fills.emplace_back();
+  styles.borders.emplace_back();
+  styles.cell_xfs.emplace_back();  // xf 0: default (locked).
+  io::CellXf unlocked{};
+  unlocked.has_protection = true;
+  unlocked.locked = false;
+  styles.cell_xfs.push_back(unlocked);  // xf 1: unlocked.
+  src.set_styles(std::move(styles));
+  src.sheet(0).set_cell_value(0, 0, Value::number(1.0));  // A1 unlocked.
+  src.sheet(0).set_cell_xf_index(0, 0, 1U);
+  src.sheet(0).set_cell_value(1, 0, Value::number(2.0));  // A2 default (locked).
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+  const Workbook& dst = load_or.value().workbook;
+
+  const Value a1 = EvalOn(dst, "=CELL(\"protect\", A1)", 5U, 5U);
+  ASSERT_TRUE(a1.is_number());
+  EXPECT_DOUBLE_EQ(a1.as_number(), 0.0);
+
+  const Value a2 = EvalOn(dst, "=CELL(\"protect\", A2)", 5U, 5U);
+  ASSERT_TRUE(a2.is_number());
+  EXPECT_DOUBLE_EQ(a2.as_number(), 1.0);
 }
 
 }  // namespace

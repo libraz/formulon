@@ -51,12 +51,19 @@ namespace ooxml {
 ///     marked consumed (passthrough re-emits the bytes).
 ///   * `printer_settings_path` — resolved path of the binary printer
 ///     settings part referenced by `<pageSetup r:id="...">`, or empty.
+///   * `drawing_path` — resolved path of the DrawingML part referenced
+///     by the worksheet's `<drawing r:id="...">` element (charts,
+///     images, shapes), or empty. The drawing part, its own rels, and
+///     any media it anchors round-trip through the passthrough
+///     mechanism; the writer re-emits the `<drawing>` reference and the
+///     matching sheet-rels relationship so the part stays reachable.
 struct SheetAuxRels {
   std::unordered_map<std::string, std::string> hyperlink_rid_to_target;
   std::string comments_path;
   std::string vml_path;
   std::string printer_settings_rid;
   std::string printer_settings_path;
+  std::string drawing_path;
 };
 
 /// Walks `sheet_rels_path` for `kRelTable` entries and returns the

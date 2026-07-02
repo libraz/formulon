@@ -271,6 +271,20 @@ TEST(BuildSheetDataXml, FormulaCellBlankCachedValueOmitsV) {
   EXPECT_EQ(cell_xml.find("<v>"), std::string::npos) << cell_xml;
 }
 
+TEST(BuildSheetDataXml, FormulaCellTextResultPreservesWhitespace) {
+  // Regression: a formula's cached string result is inlined directly in
+  // <v> (not the <is><t xml:space="preserve"> shape literal-text cells
+  // use), but Excel applies the same leading/trailing-whitespace-trim
+  // heuristic on reload to any cached string value -- the <v> needs the
+  // same `xml:space="preserve"` hint literal text cells already carry.
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=A2");
+  std::vector<Value> cells = {Value::text(" abc ")};
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 1U, 1U, std::move(cells)));
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("<v xml:space=\"preserve\"> abc </v>"), std::string::npos) << xml;
+}
+
 TEST(BuildSheetDataXml, FormulaXmlEscaped) {
   Sheet s("Sheet1");
   // Both '&' and '<' must be XML-escaped inside <f>.
@@ -291,15 +305,14 @@ TEST(BuildSheetDataXml, SpillAnchorHasArrayType) {
   ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
   const std::string xml = BuildSheetDataXml(s);
-  // Anchor at A1 carries t="array" on its <f>.
-  EXPECT_NE(xml.find("<f t=\"array\">SEQUENCE(3)</f>"), std::string::npos) << xml;
-  // No ref= attribute is emitted (legacy CSE marker we deliberately omit).
-  const std::size_t f_start = xml.find("<f t=\"array\"");
-  ASSERT_NE(f_start, std::string::npos);
-  const std::size_t f_end = xml.find('>', f_start);
-  ASSERT_NE(f_end, std::string::npos);
-  const std::string f_open = xml.substr(f_start, f_end - f_start);
-  EXPECT_EQ(f_open.find("ref="), std::string::npos) << f_open;
+  // Anchor at A1 carries t="array" plus a ref covering the spill footprint
+  // (A1:A3). Modern Excel needs the ref to recognise the dynamic array and
+  // re-spill on open; a bare t="array" reads back as a legacy single-cell
+  // CSE array. (The SEQUENCE body picks up the `_xlfn.` storage prefix; we
+  // assert the opening tag and the function name separately so this stays
+  // decoupled from prefix formatting.)
+  EXPECT_NE(xml.find("<f t=\"array\" ref=\"A1:A3\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("SEQUENCE(3)</f>"), std::string::npos) << xml;
 }
 
 TEST(BuildSheetDataXml, SpillPhantomsSuppressed) {
@@ -317,7 +330,7 @@ TEST(BuildSheetDataXml, SpillPhantomsSuppressed) {
   EXPECT_EQ(xml.find("r=\"B2\""), std::string::npos) << xml;
 }
 
-TEST(BuildSheetDataXml, SpillCollisionEmitsSpillError) {
+TEST(BuildSheetDataXml, SpillCollisionOmitsRichErrorCachedValue) {
   Sheet s("Sheet1");
   // Pre-populate B1 so the 2x2 spill collides.
   s.set_cell_value(0U, 1U, Value::number(99.0));
@@ -325,22 +338,46 @@ TEST(BuildSheetDataXml, SpillCollisionEmitsSpillError) {
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0)};
   ASSERT_FALSE(s.commit_spill(0U, 0U, 2U, 2U, std::move(cells)));
 
-  // The anchor's cached value is now #SPILL!; the existing B1 literal is
-  // preserved.
+  // The anchor's cached value is now #SPILL! — a rich error that is NOT
+  // representable in the legacy `t="e"` enum. Writing it as a bare `<v>`
+  // makes real Excel reject the whole workbook, so the writer must emit
+  // the formula only (no `t="e"`, no `<v>`) and let Excel recompute.
   const std::string xml = BuildSheetDataXml(s);
-  // A1 has a formula and an error cached value; the cell must surface
-  // t="e" with #SPILL!.
   const std::size_t a1_start = xml.find("<c r=\"A1\"");
   ASSERT_NE(a1_start, std::string::npos);
   const std::size_t a1_end = xml.find("</c>", a1_start);
   ASSERT_NE(a1_end, std::string::npos);
   const std::string a1_xml = xml.substr(a1_start, a1_end - a1_start);
-  EXPECT_NE(a1_xml.find("t=\"e\""), std::string::npos) << a1_xml;
-  EXPECT_NE(a1_xml.find("#SPILL!"), std::string::npos) << a1_xml;
+  EXPECT_EQ(a1_xml.find("t=\"e\""), std::string::npos) << a1_xml;
+  EXPECT_EQ(a1_xml.find("#SPILL!"), std::string::npos) << a1_xml;
+  EXPECT_EQ(a1_xml.find("<v>"), std::string::npos) << "rich error must not emit a cached <v>: " << a1_xml;
+  // The formula itself is preserved.
+  EXPECT_NE(a1_xml.find("<f"), std::string::npos) << a1_xml;
 
   // B1 should still be present and carry its literal 99.
   EXPECT_NE(xml.find("r=\"B1\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("<v>99</v>"), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, LegacyErrorStillEmitsCachedValue) {
+  // Legacy errors remain writable as `t="e"` + `<v>` (they round-trip and
+  // Excel accepts them).
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=1/0");
+  s.set_cell_cached_value(0U, 0U, Value::error(ErrorCode::Div0));
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_NE(xml.find("t=\"e\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("#DIV/0!"), std::string::npos) << xml;
+}
+
+TEST(BuildSheetDataXml, RichErrorLiteralEmitsBlankCell) {
+  // A literal rich-error value (no formula) cannot be written as a legacy
+  // `<v>`; it degrades to a blank cell so the workbook still opens.
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::error(ErrorCode::Calc));
+  const std::string xml = BuildSheetDataXml(s);
+  EXPECT_EQ(xml.find("#CALC!"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("t=\"e\""), std::string::npos) << xml;
 }
 
 }  // namespace

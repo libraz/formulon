@@ -20,6 +20,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/default_content_type.h"
 #include "io/workbook_kind.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -56,6 +57,16 @@ Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_
 /// parts, and the passthrough flow only carries Override-registered
 /// parts.
 Expected<std::vector<OverrideEntry>, Error> list_override_part_entries(const std::vector<std::uint8_t>& ct_bytes);
+
+/// Lists every `<Default>` entry declared in `[Content_Types].xml`,
+/// pairing each file extension with its content type. Excel registers
+/// binary and media parts (vbaProject.bin, images, VML, printer
+/// settings) by extension here rather than through per-part
+/// `<Override>` elements. The reader captures these so the writer can
+/// re-emit the `<Default>` registration for any Default-typed part it
+/// round-trips through passthrough. Extensions are lower-cased so
+/// comparison against archive entry suffixes is case-insensitive.
+Expected<std::vector<DefaultContentType>, Error> list_default_content_types(const std::vector<std::uint8_t>& ct_bytes);
 
 /// Returns the part path the package-level rels file points at for
 /// `OfficeDocument`. The OOXML spec allows arbitrary placement (Excel

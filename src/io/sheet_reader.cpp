@@ -30,6 +30,7 @@
 #include "io/cell_parser.h"
 #include "io/sax_xml_reader.h"
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
 #include "parser/parser.h"
@@ -80,6 +81,67 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
     return master.text;
   }
   return parser::format_formula(*shifted);
+}
+
+/// Records a dynamic-array anchor for a `<f t="array" ref="...">` whose
+/// `ref` spans more than the anchor cell. Single-cell refs (legacy CSE
+/// scalars) and unparseable refs are ignored. `(anchor_row, anchor_col)`
+/// is the anchor; the footprint origin is the anchor and its extent is the
+/// `ref` rectangle's bottom-right corner.
+void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_t anchor_row,
+                       std::uint32_t anchor_col) {
+  const std::size_t colon = ref.find(':');
+  if (colon == std::string_view::npos) {
+    return;  // single-cell array ref: no spill targets to protect.
+  }
+  auto a = parse_a1(ref.substr(0, colon));
+  auto b = parse_a1(ref.substr(colon + 1));
+  if (!a || !b) {
+    return;
+  }
+  const std::uint32_t last_row = std::max(a.value().first, b.value().first);
+  const std::uint32_t last_col = std::max(a.value().second, b.value().second);
+  if (last_row <= anchor_row && last_col <= anchor_col) {
+    return;  // degenerate single-cell footprint.
+  }
+  ctx.array_anchors.push_back(ArrayAnchor{anchor_row, anchor_col, last_row, last_col});
+}
+
+/// Registers each recorded dynamic-array anchor as a spill region so the
+/// cached spill targets (bare `<v>` cells Excel writes for F7 / F8 of a
+/// `=SEQUENCE(3)` in F6) do not read back as independent literals. Without
+/// this, the anchor's re-spill on recalc collides with those literals and
+/// surfaces `#SPILL!`. The phantom values are captured into the region and
+/// the underlying non-anchor cells are blanked so recalc can overwrite the
+/// footprint freely.
+void RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
+  for (const ArrayAnchor& a : anchors) {
+    const std::uint32_t rows = a.last_row - a.row + 1U;
+    const std::uint32_t cols = a.last_col - a.col + 1U;
+    if (static_cast<std::uint64_t>(rows) * cols <= 1U) {
+      continue;
+    }
+    std::vector<Value> values;
+    values.reserve(static_cast<std::size_t>(rows) * cols);
+    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
+      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
+        const Cell* cell = sheet.cell_at(r, c);
+        values.push_back(cell != nullptr ? cell->cached_value : Value::blank());
+      }
+    }
+    // Blank the non-anchor cells: their values now live in the region as
+    // phantoms, and blanking keeps them from blocking either this commit's
+    // collision scan or the anchor's re-spill on recalc.
+    for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
+      for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
+        if (r == a.row && c == a.col) {
+          continue;
+        }
+        sheet.set_cell_cached_value(r, c, Value::blank());
+      }
+    }
+    sheet.commit_spill(a.row, a.col, rows, cols, std::move(values));
+  }
 }
 
 /// Reads the `<f>` child of `c_node` and updates `formula_out`. Returns
@@ -252,8 +314,15 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       if (!applied) {
         return applied.error();
       }
+
+      // Record a dynamic-array anchor so its cached spill targets do not
+      // read back as blocking literals (see `RegisterArraySpills`).
+      if (pugi::xml_node f = c.child("f"); f && std::string_view(f.attribute("t").value()) == "array") {
+        RecordArrayAnchor(ctx, f.attribute("ref").value(), parsed.row, parsed.col);
+      }
     }
   }
+  RegisterArraySpills(workbook.sheet(sheet_index), ctx.array_anchors);
   return Expected<void, Error>::Ok();
 }
 
@@ -307,6 +376,22 @@ void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
     const std::int32_t raw = attr_i32(sheet_view, "zoomScale", 0);
     if (raw >= 10 && raw <= 400) {
       view.zoom_scale = static_cast<std::uint32_t>(raw);
+    }
+  }
+  // Display attributes. Three default to true in the schema, so absence
+  // means "shown"; the tri-state reader applies each attribute's real
+  // default rather than a blanket false.
+  view.show_grid_lines = read_xsd_bool(sheet_view, "showGridLines", true);
+  view.show_row_col_headers = read_xsd_bool(sheet_view, "showRowColHeaders", true);
+  view.show_zeros = read_xsd_bool(sheet_view, "showZeros", true);
+  view.right_to_left = read_xsd_bool(sheet_view, "rightToLeft", false);
+  view.tab_selected = read_xsd_bool(sheet_view, "tabSelected", false);
+  if (pugi::xml_attribute v = sheet_view.attribute("view"); v) {
+    const std::string_view mode = v.value();
+    // "normal" is the schema default; keep the model empty for it so a
+    // default sheet stays byte-clean on re-emit.
+    if (mode != "normal") {
+      view.view_mode.assign(mode);
     }
   }
   pugi::xml_node pane = sheet_view.child("pane");
@@ -521,18 +606,65 @@ struct SaxApplyState {
   Workbook* workbook;
   SheetReadContext* ctx;
   std::deque<std::string>* text_storage;
+  // Shared-formula masters keyed by `si`, accumulated across the scan so
+  // followers (`<f t="shared" si="N"/>`) can shift the master body into
+  // their own position. Mirrors the DOM path's per-sheet `shared_formulas`
+  // map (see `ResolveFormula`).
+  std::unordered_map<std::uint32_t, SharedFormulaMaster> shared_formulas;
 };
+
+/// Resolves a SAX `CellRecord`'s `<f>` into the effective formula text
+/// (leading `=` already stripped by the scanner), mirroring the DOM
+/// `ResolveFormula`. Plain formulas pass through; shared-formula masters
+/// register into `shared`; followers shift the registered master to their
+/// cell. Array / dataTable formulas are treated as plain (body used
+/// verbatim), matching the DOM path.
+Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
+                                                     std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared) {
+  if (rec.f_t != "shared") {
+    return std::string(rec.formula);
+  }
+  if (rec.f_si.empty()) {
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: <f t='shared'> missing 'si'",
+                      "context=sheet_reader_sax");
+  }
+  std::uint32_t si = 0;
+  for (const char ch : rec.f_si) {
+    if (ch < '0' || ch > '9') {
+      std::string ctx("context=sheet_reader_sax si=");
+      ctx.append(rec.f_si);
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: 'si' not a non-negative integer",
+                        std::move(ctx));
+    }
+    si = (si * 10U) + static_cast<std::uint32_t>(ch - '0');
+  }
+  std::string body(rec.formula);
+  if (!body.empty()) {
+    // Master occurrence: register and use its body verbatim.
+    shared[si] = SharedFormulaMaster{body, rec.row, rec.col};
+    return body;
+  }
+  // Follower occurrence: shift the registered master into this cell.
+  auto it = shared.find(si);
+  if (it == shared.end()) {
+    std::string ctx("context=sheet_reader_sax si=");
+    ctx.append(std::to_string(si));
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: slave references unknown si",
+                      std::move(ctx));
+  }
+  return ShiftSharedFormulaText(it->second, rec.row, rec.col);
+}
 
 /// Translates one `CellRecord` into the same workbook mutations the
 /// DOM path produces.
 ///
-/// Shared-formula and array-formula attributes (`<f t="shared" si=>`,
-/// `<f t="array">`) are NOT surfaced through the SAX record, so the
-/// SAX path treats every `<f>` body as plain. Sheets that rely on
-/// shared formulas typically come in well under `kSaxThresholdBytes`
-/// and route through the DOM path instead.
+/// Shared-formula groups (`<f t="shared" si=>`) are resolved through
+/// `shared` so followers recover the shifted master body — matching the
+/// DOM path. Array / dataTable formulas are read as plain (body
+/// verbatim).
 Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_index, Workbook& workbook,
-                                      SheetReadContext& ctx, std::deque<std::string>& text_storage) {
+                                      SheetReadContext& ctx, std::deque<std::string>& text_storage,
+                                      std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared) {
   const bool value_present = rec.is_inline_string || !rec.value.empty();
   auto payload_or = decode_cell_payload(rec.t, rec.value, value_present, rec.is_inline_string, text_storage);
   if (!payload_or) {
@@ -551,20 +683,58 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   if (!rec.s.empty()) {
     xf = ParseXfIndex(rec.s);
   }
+  // Resolve shared-formula groups (plain formulas pass straight through).
+  auto formula_or = ResolveSharedFromRecord(rec, shared);
+  if (!formula_or) {
+    return formula_or.error();
+  }
+  const std::string& formula_text = formula_or.value();
   // Inline-string cells with <rPh> annotations carry their kana on the
   // SAX record. SST-referenced cells (rec.phonetic stays empty by
   // construction) route their phonetic through the post-loop SST
   // resolution pass instead — same contract the DOM path uses.
-  auto applied = ApplyParsedCell(cell, rec.formula, xf, rec.phonetic, sheet_index, workbook, ctx);
+  auto applied = ApplyParsedCell(cell, formula_text, xf, rec.phonetic, sheet_index, workbook, ctx);
   if (!applied) {
     return applied.error();
+  }
+  // Record a dynamic-array anchor so its cached spill targets do not read
+  // back as blocking literals (see `RegisterArraySpills`).
+  if (rec.f_t == "array" && !rec.f_ref.empty()) {
+    RecordArrayAnchor(ctx, rec.f_ref, rec.row, rec.col);
   }
   return applied;
 }
 
 Expected<void, Error> SaxOnCellTrampoline(void* user_data, const CellRecord& rec) {
   auto* st = static_cast<SaxApplyState*>(user_data);
-  return ApplyCellRecord(rec, st->sheet_index, *st->workbook, *st->ctx, *st->text_storage);
+  return ApplyCellRecord(rec, st->sheet_index, *st->workbook, *st->ctx, *st->text_storage, st->shared_formulas);
+}
+
+// Captures per-row overrides on the SAX path, mirroring the DOM
+// `ApplyRowOverrides`: a row contributes a `RowLayout` only when it
+// carries `ht`, `hidden`, or `outlineLevel` (a bare `r=` row is a
+// position marker). `customHeight` alone does not, matching the DOM path.
+Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& rec) {
+  auto* st = static_cast<SaxApplyState*>(user_data);
+  if (rec.ht.empty() && rec.hidden.empty() && rec.outline_level.empty()) {
+    return Expected<void, Error>::Ok();
+  }
+  if (rec.row_1based < 1U) {
+    return Expected<void, Error>::Ok();
+  }
+  RowLayout entry;
+  entry.row = rec.row_1based - 1U;
+  if (!rec.ht.empty()) {
+    entry.height = std::strtod(std::string(rec.ht).c_str(), nullptr);
+  }
+  if (!rec.hidden.empty()) {
+    entry.hidden = parse_xml_bool(rec.hidden);
+  }
+  if (!rec.outline_level.empty()) {
+    entry.outline_level = ParseOutlineLevel(std::string(rec.outline_level).c_str());
+  }
+  st->workbook->sheet(st->sheet_index).mutable_layout().row_overrides.push_back(entry);
+  return Expected<void, Error>::Ok();
 }
 
 }  // namespace
@@ -579,11 +749,17 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
     return make_error(FormulonErrorCode::kInvalidArgument, "read_sheet_data_sax: sheet_index out of range",
                       std::move(ctxs));
   }
-  SaxApplyState state{sheet_index, &workbook, &ctx, &text_storage};
+  SaxApplyState state{sheet_index, &workbook, &ctx, &text_storage, {}};
   SheetSaxCallbacks cb;
   cb.user_data = &state;
+  cb.on_row_start = &SaxOnRowStartTrampoline;
   cb.on_cell = &SaxOnCellTrampoline;
-  return scan_sheet_data(sheet_xml, cb);
+  auto scanned = scan_sheet_data(sheet_xml, cb);
+  if (!scanned) {
+    return scanned.error();
+  }
+  RegisterArraySpills(workbook.sheet(sheet_index), ctx.array_anchors);
+  return Expected<void, Error>::Ok();
 }
 
 #endif  // !FORMULON_WASM || FORMULON_WASM_ENABLE_SAX
@@ -697,17 +873,24 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "hyperlink: missing/empty ref",
                         "context=sheet_reader part=hyperlinks");
     }
-    auto rc = parse_a1(ref);
+    // Hyperlinks may span a range (`ref="A1:B2"`); Excel applies the link
+    // to every cell. We anchor `row`/`col` at the range's top-left and
+    // preserve the full ref in `ref_span` for verbatim re-emission. A
+    // single-cell ref leaves `ref_span` empty.
+    const std::size_t colon = ref.find(':');
+    const std::string_view anchor = colon == std::string_view::npos ? ref : ref.substr(0, colon);
+    auto rc = parse_a1(anchor);
     if (!rc) {
-      // Range refs (rare) are not supported in this slice; treat as corrupt
-      // rather than silently dropping.
       std::string ctx("context=sheet_reader part=hyperlinks ref=");
       ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "hyperlink: ref must be a single cell", std::move(ctx));
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "hyperlink: ref anchor unparseable", std::move(ctx));
     }
     Hyperlink hl;
     hl.row = rc.value().first;
     hl.col = rc.value().second;
+    if (colon != std::string_view::npos) {
+      hl.ref_span.assign(ref);
+    }
     // Accept both Office-namespaced ("r:id") and bare "id" attribute spellings.
     const std::string_view rid_v = attr_str(h, "r:id");
     if (!rid_v.empty()) {
@@ -865,22 +1048,28 @@ SheetProtection read_sheet_protection(const pugi::xml_node& worksheet) {
   }
   out.legacy_password.assign(attr_str(node, "password"));
 
-  out.sheet = attr_bool(node, "sheet");
-  out.objects = attr_bool(node, "objects");
-  out.scenarios = attr_bool(node, "scenarios");
-  out.format_cells = attr_bool(node, "formatCells");
-  out.format_columns = attr_bool(node, "formatColumns");
-  out.format_rows = attr_bool(node, "formatRows");
-  out.insert_columns = attr_bool(node, "insertColumns");
-  out.insert_rows = attr_bool(node, "insertRows");
-  out.insert_hyperlinks = attr_bool(node, "insertHyperlinks");
-  out.delete_columns = attr_bool(node, "deleteColumns");
-  out.delete_rows = attr_bool(node, "deleteRows");
-  out.select_locked_cells = attr_bool(node, "selectLockedCells");
-  out.select_unlocked_cells = attr_bool(node, "selectUnlockedCells");
-  out.sort = attr_bool(node, "sort");
-  out.auto_filter = attr_bool(node, "autoFilter");
-  out.pivot_tables = attr_bool(node, "pivotTables");
+  // Per-attribute XSD defaults (ECMA-376 §18.3.1.85). Eleven action flags
+  // (format*, insert*, delete*, sort, autoFilter, pivotTables) default to
+  // TRUE (locked); the rest default to FALSE. Reading with the wrong
+  // default silently under-reports protection when Excel omits an
+  // at-default attribute, so use the tri-state reader with each attribute's
+  // real default rather than a blanket `false`.
+  out.sheet = read_xsd_bool(node, "sheet", false);
+  out.objects = read_xsd_bool(node, "objects", false);
+  out.scenarios = read_xsd_bool(node, "scenarios", false);
+  out.format_cells = read_xsd_bool(node, "formatCells", true);
+  out.format_columns = read_xsd_bool(node, "formatColumns", true);
+  out.format_rows = read_xsd_bool(node, "formatRows", true);
+  out.insert_columns = read_xsd_bool(node, "insertColumns", true);
+  out.insert_rows = read_xsd_bool(node, "insertRows", true);
+  out.insert_hyperlinks = read_xsd_bool(node, "insertHyperlinks", true);
+  out.delete_columns = read_xsd_bool(node, "deleteColumns", true);
+  out.delete_rows = read_xsd_bool(node, "deleteRows", true);
+  out.select_locked_cells = read_xsd_bool(node, "selectLockedCells", false);
+  out.select_unlocked_cells = read_xsd_bool(node, "selectUnlockedCells", false);
+  out.sort = read_xsd_bool(node, "sort", true);
+  out.auto_filter = read_xsd_bool(node, "autoFilter", true);
+  out.pivot_tables = read_xsd_bool(node, "pivotTables", true);
 
   return out;
 }

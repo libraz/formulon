@@ -6,16 +6,22 @@
 
 set(FORMULON_INTEGRATION_TEST_SOURCES
   external_links_roundtrip_test.cpp
+  formula_corpus_fixture_smoke_test.cpp
   legacy_at_test.cpp
   ooxml_cf_test.cpp
   ooxml_corpus_test.cpp
+  ooxml_default_passthrough_test.cpp
   ooxml_metadata_test.cpp
   ooxml_minimal_writer_test.cpp
   ooxml_passthrough_rels_test.cpp
   ooxml_phonetic_roundtrip_test.cpp
   ooxml_pivot_test.cpp
   ooxml_roundtrip_test.cpp
+  ooxml_sax_metadata_test.cpp
+  ooxml_sheet_features_batch_test.cpp
+  ooxml_workbook_pr_roundtrip_test.cpp
   ooxml_writer_pivot_test.cpp
+  real_excel_fixture_smoke_test.cpp
   recalc_text_lifetime_test.cpp
   sheet_features_roundtrip_test.cpp
   sheet_layout_roundtrip_test.cpp
@@ -40,6 +46,14 @@ target_link_libraries(formulon_integration_tests
 target_include_directories(formulon_integration_tests
   PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+)
+
+# Root of the test fixture tree; mirrors the same define on
+# formulon_unit_tests (tests/CMakeLists.txt) so integration tests can load
+# real Excel-produced packages under tests/fixtures/ too.
+target_compile_definitions(formulon_integration_tests
+  PRIVATE
+    FORMULON_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
 )
 
 formulon_apply_warnings(formulon_integration_tests)

@@ -182,6 +182,35 @@ Expected<std::vector<OverrideEntry>, Error> list_override_part_entries(const std
   return out;
 }
 
+Expected<std::vector<DefaultContentType>, Error> list_default_content_types(const std::vector<std::uint8_t>& ct_bytes) {
+  std::vector<DefaultContentType> out;
+  pugi::xml_document doc;
+  RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "ooxml_reader", "[Content_Types].xml"));
+  pugi::xml_node root = doc.child("Types");
+  if (!root) {
+    return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
+                      "context=ooxml_reader part=[Content_Types].xml");
+  }
+  for (pugi::xml_node node = root.first_child(); node; node = node.next_sibling()) {
+    if (std::string_view(node.name()) != "Default") {
+      continue;
+    }
+    std::string extension(attr_str(node, "Extension"));
+    if (extension.empty()) {
+      continue;
+    }
+    // Normalise to lower case so lookups against archive entry suffixes
+    // stay case-insensitive (OPC treats extensions case-insensitively).
+    for (char& c : extension) {
+      if (c >= 'A' && c <= 'Z') {
+        c = static_cast<char>(c - 'A' + 'a');
+      }
+    }
+    out.push_back(DefaultContentType{std::move(extension), std::string(attr_str(node, "ContentType"))});
+  }
+  return out;
+}
+
 Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, std::string_view target) {
   // Absolute-path targets are not permitted in well-formed OOXML rels
   // files. A writer that emits `Target="/xl/..."` is either misbehaving

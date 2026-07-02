@@ -19,6 +19,28 @@
 
 namespace formulon {
 namespace io {
+namespace {
+
+/// Serialises a pugixml node to a raw (unindented) XML string. Local to
+/// this TU; used to capture `<tableStyleInfo>` verbatim.
+struct StringXmlWriter final : pugi::xml_writer {
+  std::string* dst = nullptr;
+  void write(const void* data, std::size_t size) override {
+    if (dst != nullptr) {
+      dst->append(static_cast<const char*>(data), size);
+    }
+  }
+};
+
+std::string RawXml(const pugi::xml_node& node) {
+  std::string out;
+  StringXmlWriter sink;
+  sink.dst = &out;
+  node.print(sink, /*indent=*/"", pugi::format_raw);
+  return out;
+}
+
+}  // namespace
 
 Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table_bytes, std::size_t sheet_index) {
   pugi::xml_document doc;
@@ -71,6 +93,13 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
       }
       table.columns.push_back(std::move(entry));
     }
+  }
+
+  // `<tableStyleInfo>` (style name + banded-row flags) follows
+  // `<tableColumns>`. Captured verbatim; the engine does not model table
+  // styles but must not drop them on save.
+  if (pugi::xml_node style_info = root.child("tableStyleInfo"); style_info) {
+    table.table_style_info_xml = RawXml(style_info);
   }
 
   return table;

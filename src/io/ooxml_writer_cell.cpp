@@ -32,13 +32,46 @@
 #include "cell.h"
 #include "double-conversion/double-conversion.h"
 #include "eval/utf8_length.h"
+#include "io/xlsb/func_id_table.h"
 #include "io/xml_escape.h"
+#include "parser/ast.h"
+#include "parser/ast_format.h"
+#include "parser/parser.h"
 #include "sheet.h"
+#include "utils/arena.h"
 #include "value.h"
 
 namespace formulon {
 namespace io {
 namespace {
+
+// Classifies a function name into the storage prefix Excel writes for it,
+// for the OOXML `<f>` re-serialisation (see the formula-emit path below).
+// Worksheet-only dynamic-array functions (the original 2018 set) carry
+// `_xlfn._xlws.`; every other function absent from the classic (pre-2007)
+// XLSB function-id table is a post-2007 "future function" carrying
+// `_xlfn.`; classic functions carry no prefix. This mirrors the
+// classic-vs-future split the XLSB writer already uses.
+parser::StoragePrefixKind ClassifyStoragePrefix(std::string_view canonical_name) {
+  std::string upper;
+  upper.reserve(canonical_name.size());
+  for (char c : canonical_name) {
+    if (c >= 'a' && c <= 'z') {
+      c = static_cast<char>(c - 'a' + 'A');
+    }
+    upper.push_back(c);
+  }
+  static constexpr std::string_view kXlwsFunctions[] = {"FILTER", "SORT", "SORTBY", "UNIQUE"};
+  for (const std::string_view name : kXlwsFunctions) {
+    if (upper == name) {
+      return parser::StoragePrefixKind::XlfnXlws;
+    }
+  }
+  if (xlsb::lookup_func_by_name(upper) != nullptr) {
+    return parser::StoragePrefixKind::None;
+  }
+  return parser::StoragePrefixKind::Xlfn;
+}
 
 // ---------------------------------------------------------------------------
 // Number formatting
@@ -115,12 +148,40 @@ void AppendStyleAttr(std::string& out, std::uint32_t xf_index) {
   out.append("\"");
 }
 
+// True for errors representable in the legacy `t="e"` enum, i.e. writable
+// as a bare `<v>#...#</v>`. The rich errors (#SPILL!, #CALC!, linked-data,
+// Python, ...) require a `vm=` value-metadata attribute plus a metadata
+// part; Excel rejects the whole workbook when such a code is written as a
+// plain `<v>`. For those we drop the cached value and let Excel recompute
+// from the formula (or emit a blank cell when there is no formula).
+bool IsLegacyErrorCode(ErrorCode code) noexcept {
+  switch (code) {
+    case ErrorCode::Null:
+    case ErrorCode::Div0:
+    case ErrorCode::Value:
+    case ErrorCode::Ref:
+    case ErrorCode::Name:
+    case ErrorCode::Num:
+    case ErrorCode::NA:
+    case ErrorCode::GettingData:
+      return true;
+    default:
+      return false;
+  }
+}
+
 // Emits the <c> element for an Error value at `addr`.
 void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code, std::uint32_t xf_index) {
   out.append("<c r=\"");
   out.append(addr);
   out.append("\"");
   AppendStyleAttr(out, xf_index);
+  if (!IsLegacyErrorCode(code)) {
+    // Rich error with no formula: not writable as a legacy <v>; emit a
+    // blank cell (keeping any style) so the workbook still opens.
+    out.append("/>");
+    return;
+  }
   out.append(" t=\"e\"><v>");
   out.append(display_name(code));
   out.append("</v></c>");
@@ -185,6 +246,11 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
     return;
   }
   if (value.is_error()) {
+    if (!IsLegacyErrorCode(value.as_error())) {
+      // Rich error literal: not writable as a legacy <v>; emit a blank cell.
+      out.append("\"/>");
+      return;
+    }
     out.append("\" t=\"e\"><v>");
     out.append(display_name(value.as_error()));
     out.append("</v></c>");
@@ -252,7 +318,14 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // emits #NUM! for that branch.
     const Value& cached = cell.cached_value;
     if (cached.is_error()) {
-      out.append(" t=\"e\">");
+      // Only tag t="e" when the cached value will actually be written as a
+      // legacy <v> below; a rich error emits no <v>, so the cell has no
+      // typed body.
+      if (IsLegacyErrorCode(cached.as_error())) {
+        out.append(" t=\"e\">");
+      } else {
+        out.append(">");
+      }
     } else if (cached.is_text()) {
       out.append(" t=\"str\">");
     } else if (cached.is_boolean()) {
@@ -263,10 +336,22 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       out.append(">");
     }
 
-    // <f> with optional t="array" for spill anchors. The formula text
-    // always begins with '='; strip it before serialisation.
+    // <f> with optional t="array" ref="..." for spill anchors. Modern
+    // Excel marks a dynamic-array anchor with `t="array"` plus a `ref`
+    // covering the spill footprint; the `ref` is what lets Excel re-spill
+    // the region on open (a bare `t="array"` reads back as a legacy
+    // single-cell CSE array). The formula text always begins with '=';
+    // strip it before serialisation.
     if (anchored != nullptr) {
-      out.append("<f t=\"array\">");
+      out.append("<f t=\"array\" ref=\"");
+      out.append(EncodeA1(row, col));
+      const std::uint32_t last_row = row + (anchored->rows > 0U ? anchored->rows - 1U : 0U);
+      const std::uint32_t last_col = col + (anchored->cols > 0U ? anchored->cols - 1U : 0U);
+      if (last_row != row || last_col != col) {
+        out.push_back(':');
+        out.append(EncodeA1(last_row, last_col));
+      }
+      out.append("\">");
     } else {
       out.append("<f>");
     }
@@ -274,7 +359,31 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     if (!formula.empty() && formula.front() == '=') {
       formula.remove_prefix(1);
     }
-    AppendXmlEscaped(out, formula);
+    // Re-apply Excel's hidden storage prefixes (`_xlfn.` / `_xlfn._xlws.`
+    // on future functions, `_xlpm.` on LET / LAMBDA parameters) so a real
+    // Excel reading this file resolves the modern functions instead of
+    // showing #NAME?. `formula_text` was normalised to the canonical
+    // formula-bar form on ingestion (io::strip_storage_prefixes). Parse it
+    // and re-serialise through the storage formatter; on any parse failure
+    // fall back to the canonical text unchanged.
+    Arena formula_arena;
+    parser::Parser formula_parser(formula, formula_arena);
+    parser::AstNode* formula_root = formula_parser.parse();
+    bool storage_emitted = false;
+    if (formula_root != nullptr && formula_parser.errors().empty()) {
+      const std::string storage = parser::format_formula_storage(*formula_root, &ClassifyStoragePrefix);
+      // Only re-serialise when a storage prefix was actually added (the
+      // formula uses a future function or LET / LAMBDA). For a classic
+      // formula the storage form equals the plain form, so the stored text
+      // is emitted verbatim below to preserve its exact spelling.
+      if (storage != parser::format_formula(*formula_root)) {
+        AppendXmlEscaped(out, storage);
+        storage_emitted = true;
+      }
+    }
+    if (!storage_emitted) {
+      AppendXmlEscaped(out, formula);
+    }
     out.append("</f>");
 
     // <v>: omit when blank (Excel will recalculate on load); downgrade
@@ -300,14 +409,24 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     } else if (cv.is_text()) {
       // Formula cells with text results inline the string in <v> rather
       // than the <is><t> form used by literal text cells. Excel accepts
-      // both shapes for formula results.
-      out.append("<v>");
+      // both shapes for formula results. `xml:space="preserve"` mirrors
+      // `AppendLiteralCellBody`'s `<is><t xml:space="preserve">`: Excel
+      // trims leading/trailing whitespace from a cached string value on
+      // reload unless this hint is present, and a cached formula result
+      // is just as much a displayed string as a literal one.
+      out.append("<v xml:space=\"preserve\">");
       AppendXmlEscaped(out, cv.as_text());
       out.append("</v>");
     } else if (cv.is_error()) {
-      out.append("<v>");
-      out.append(display_name(cv.as_error()));
-      out.append("</v>");
+      // Legacy errors round-trip as a cached <v>; rich errors (#SPILL! /
+      // #CALC! / ...) are not writable there — omit the <v> and let Excel
+      // recompute from the formula (writing them would make Excel reject
+      // the whole workbook).
+      if (IsLegacyErrorCode(cv.as_error())) {
+        out.append("<v>");
+        out.append(display_name(cv.as_error()));
+        out.append("</v>");
+      }
     }
     // Array / Ref / Lambda cached values fall through with no <v>; the
     // engine evaluates on load.
@@ -366,9 +485,14 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       }
       out.append("</is></c>");
     } else if (cell.cached_value.is_error()) {
-      out.append(" t=\"e\"><v>");
-      out.append(display_name(cell.cached_value.as_error()));
-      out.append("</v></c>");
+      if (IsLegacyErrorCode(cell.cached_value.as_error())) {
+        out.append(" t=\"e\"><v>");
+        out.append(display_name(cell.cached_value.as_error()));
+        out.append("</v></c>");
+      } else {
+        // Rich error literal with a style: blank cell keeping the style.
+        out.append("/>");
+      }
     } else {
       out.append(" t=\"e\"><v>");
       out.append(display_name(ErrorCode::Value));

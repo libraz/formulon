@@ -37,6 +37,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/data_validation_roundtrip_test.cpp
   unit/io/defined_names_test.cpp
   unit/io/hyperlink_roundtrip_test.cpp
+  unit/io/iso_date_test.cpp
   unit/io/merge_roundtrip_test.cpp
   unit/io/ooxml_reader_test.cpp
   unit/io/ooxml_unknown_kind_test.cpp
@@ -46,6 +47,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_cache_writer_test.cpp
   unit/io/pivot_table_reader_test.cpp
   unit/io/pivot_table_writer_test.cpp
+  unit/io/sax_shared_formula_test.cpp
   unit/io/sax_xml_reader_test.cpp
   unit/io/sheet_reader_test.cpp
   unit/io/sst_reader_test.cpp
@@ -59,6 +61,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/zip_reader_test.cpp
   unit/io/format_detect_test.cpp
   unit/io/roundtrip_symmetry_test.cpp
+  unit/io/sheet_roundtrip_symmetry_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp

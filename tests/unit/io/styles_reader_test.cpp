@@ -83,6 +83,71 @@ TEST(StylesReader, ReadsCellXfFields) {
   EXPECT_TRUE(result_or.value().cell_xfs[2].wrap_text);
 }
 
+TEST(StylesReader, ReadsCellXfProtection) {
+  // Excel-shaped input: default xf (no protection) plus an unlocked
+  // input-cell xf. The reader must distinguish "no element" from
+  // "explicit locked=0".
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  xml.append("  <cellXfs count=\"2\">\n");
+  xml.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/>\n");
+  xml.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" applyProtection=\"1\">");
+  xml.append("<protection locked=\"0\" hidden=\"1\"/></xf>\n");
+  xml.append("  </cellXfs>\n");
+  xml.append("</styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read failed: " << result_or.error().message;
+  const StylesTable& table = result_or.value();
+  ASSERT_EQ(table.cell_xfs.size(), 2U);
+  EXPECT_FALSE(table.cell_xfs[0].has_protection);
+  EXPECT_TRUE(table.cell_xfs[0].locked);  // schema default
+  EXPECT_FALSE(table.cell_xfs[0].hidden);
+  EXPECT_TRUE(table.cell_xfs[1].has_protection);
+  EXPECT_FALSE(table.cell_xfs[1].locked);
+  EXPECT_TRUE(table.cell_xfs[1].hidden);
+}
+
+TEST(StylesReader, ReadsThemeIndexedAndAutoColors) {
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  xml.append("  <fonts count=\"1\"><font><sz val=\"11\"/><color theme=\"3\" tint=\"0.5\"/>");
+  xml.append("<name val=\"Calibri\"/></font></fonts>\n");
+  xml.append("  <fills count=\"1\"><fill><patternFill patternType=\"solid\">");
+  xml.append("<fgColor indexed=\"9\"/><bgColor auto=\"1\"/></patternFill></fill></fills>\n");
+  xml.append("</styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read failed: " << result_or.error().message;
+  const StylesTable& table = result_or.value();
+  ASSERT_EQ(table.fonts.size(), 1U);
+  EXPECT_EQ(table.fonts[0].color.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(table.fonts[0].color.theme, 3U);
+  EXPECT_DOUBLE_EQ(table.fonts[0].color.tint, 0.5);
+  ASSERT_EQ(table.fills.size(), 1U);
+  EXPECT_EQ(table.fills[0].fg.kind, ColorSpec::Kind::kIndexed);
+  EXPECT_EQ(table.fills[0].fg.indexed, 9U);
+  EXPECT_EQ(table.fills[0].bg.kind, ColorSpec::Kind::kAuto);
+}
+
+TEST(StylesReader, ReadsFontVertAlignFamilyCharset) {
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  xml.append("  <fonts count=\"1\"><font><vertAlign val=\"subscript\"/><sz val=\"11\"/>");
+  xml.append("<name val=\"MS Gothic\"/><family val=\"3\"/><charset val=\"128\"/></font></fonts>\n");
+  xml.append("</styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read failed: " << result_or.error().message;
+  const StylesTable& table = result_or.value();
+  ASSERT_EQ(table.fonts.size(), 1U);
+  EXPECT_EQ(table.fonts[0].vert_align, 2U);  // subscript
+  EXPECT_TRUE(table.fonts[0].has_family);
+  EXPECT_EQ(table.fonts[0].family, 3U);
+  EXPECT_TRUE(table.fonts[0].has_charset);
+  EXPECT_EQ(table.fonts[0].charset, 128U);
+}
+
 TEST(StylesReader, InternsCustomNumFmts) {
   std::string xml(kXmlDecl);
   xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");

@@ -84,12 +84,18 @@ TEST(HyperlinkRoundTrip, ApplyRelsLeavesUnknownAlone) {
   EXPECT_EQ(hls[0].target, "preserved");
 }
 
-TEST(HyperlinkRoundTrip, RangeRefRejected) {
+TEST(HyperlinkRoundTrip, RangeRefAccepted) {
   pugi::xml_document doc;
-  auto ws = ParseWorksheet(doc, "<hyperlinks><hyperlink ref=\"A1:B2\"/></hyperlinks>");
+  auto ws = ParseWorksheet(doc, "<hyperlinks><hyperlink ref=\"A1:B2\" location=\"Sheet2!A1\"/></hyperlinks>");
   auto out = read_hyperlinks(ws);
-  EXPECT_FALSE(static_cast<bool>(out));
-  EXPECT_EQ(out.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  ASSERT_TRUE(static_cast<bool>(out)) << out.error().message;
+  ASSERT_EQ(out.value().size(), 1U);
+  const Hyperlink& h = out.value().front();
+  // Anchor is the range's top-left; the full span is preserved verbatim.
+  EXPECT_EQ(h.row, 0U);
+  EXPECT_EQ(h.col, 0U);
+  EXPECT_EQ(h.ref_span, "A1:B2");
+  EXPECT_EQ(h.location, "Sheet2!A1");
 }
 
 }  // namespace

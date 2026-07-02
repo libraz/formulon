@@ -217,6 +217,58 @@ void AppendArgb(std::string& out, std::uint32_t argb) {
   out.append(buf);
 }
 
+/// Emits a self-closing colour element (`<color>`, `<fgColor>`, or
+/// `<bgColor>`) from a colour spec, using `tag` as the element name.
+///
+/// When the spec carries no explicit kind (`kNone`) — e.g. a record built
+/// programmatically through the bindings that set only the resolved
+/// `*_argb` field — falls back to emitting `rgb="<fallback>"`, preserving
+/// the legacy writer behaviour for callers that never populate a spec.
+void AppendColor(std::string& out, const char* tag, const ColorSpec& spec, std::uint32_t fallback_argb) {
+  out.push_back('<');
+  out.append(tag);
+  switch (spec.kind) {
+    case ColorSpec::Kind::kTheme:
+      out.append(" theme=\"");
+      AppendUint(out, spec.theme);
+      out.append("\"");
+      if (spec.tint != 0.0) {
+        out.append(" tint=\"");
+        AppendDouble(out, spec.tint);
+        out.append("\"");
+      }
+      break;
+    case ColorSpec::Kind::kIndexed:
+      out.append(" indexed=\"");
+      AppendUint(out, spec.indexed);
+      out.append("\"");
+      break;
+    case ColorSpec::Kind::kAuto:
+      out.append(" auto=\"1\"");
+      break;
+    case ColorSpec::Kind::kRgb:
+      out.append(" rgb=\"");
+      AppendArgb(out, spec.rgb);
+      out.append("\"");
+      break;
+    case ColorSpec::Kind::kNone:
+    default:
+      out.append(" rgb=\"");
+      AppendArgb(out, fallback_argb);
+      out.append("\"");
+      break;
+  }
+  out.append("/>");
+}
+
+/// True when a colour location should emit a `<color>` element: either
+/// the source carried an explicit spec, or a non-zero resolved value was
+/// set programmatically. Used by fills and borders, where an all-zero
+/// colour means "no colour set" and no element is emitted.
+bool HasColor(const ColorSpec& spec, std::uint32_t argb) {
+  return spec.kind != ColorSpec::Kind::kNone || argb != 0U;
+}
+
 const char* HorizontalAlignName(std::uint8_t v) {
   switch (v) {
     case 1:
@@ -266,6 +318,38 @@ const char* UnderlineName(std::uint8_t v) {
       return "doubleAccounting";
     default:
       return nullptr;
+  }
+}
+
+const char* VertAlignName(std::uint8_t v) {
+  switch (v) {
+    case 1:
+      return "superscript";
+    case 2:
+      return "subscript";
+    default:
+      return nullptr;  // 0 = baseline (default); emit no element.
+  }
+}
+
+void AppendVertAlign(std::string& out, std::uint8_t v) {
+  if (const char* name = VertAlignName(v); name != nullptr) {
+    out.append("<vertAlign val=\"");
+    out.append(name);
+    out.append("\"/>");
+  }
+}
+
+void AppendFontFamilyCharset(std::string& out, const FontRecord& f) {
+  if (f.has_family) {
+    out.append("<family val=\"");
+    AppendUint(out, f.family);
+    out.append("\"/>");
+  }
+  if (f.has_charset) {
+    out.append("<charset val=\"");
+    AppendUint(out, f.charset);
+    out.append("\"/>");
   }
 }
 
@@ -356,16 +440,21 @@ void AppendBorderSide(std::string& out, const char* tag, const BorderSide& side)
     out.append(style);
     out.append("\"");
   }
-  if (side.color_argb != 0U) {
-    out.append("><color rgb=\"");
-    AppendArgb(out, side.color_argb);
-    out.append("\"/></");
+  if (HasColor(side.color, side.color_argb)) {
+    out.append(">");
+    AppendColor(out, "color", side.color, side.color_argb);
+    out.append("</");
     out.append(tag);
     out.append(">");
   } else {
     out.append("/>");
   }
 }
+
+// Inline style fragments (used by both `<dxf>` records and, for fills,
+// the section writers). Declared ahead of the section writers that reuse
+// them; defined below alongside the other fragment emitters.
+void AppendFillFragment(std::string& out, const FillRecord& fill);
 
 void AppendNumFmts(std::string& out, const StylesTable& table) {
   // Count emitted entries: only custom ids (>= 164) survive. Excel
@@ -390,7 +479,7 @@ void AppendNumFmts(std::string& out, const StylesTable& table) {
     AppendUint(out, n.id);
     out.append("\" formatCode=\"");
     if (n.format_string_index < table.num_fmt_strings.size()) {
-      AppendXmlEscaped(out, table.num_fmt_strings[n.format_string_index]);
+      AppendXmlAttrEscaped(out, table.num_fmt_strings[n.format_string_index]);
     }
     out.append("\"/>\n");
   }
@@ -423,19 +512,19 @@ void AppendFonts(std::string& out, const StylesTable& table) {
         out.append(uname);
         out.append("\"/>");
       }
+      AppendVertAlign(out, f.vert_align);
       out.append("<sz val=\"");
       AppendDouble(out, f.size);
       out.append("\"/>");
-      out.append("<color rgb=\"");
-      AppendArgb(out, f.color_argb);
-      out.append("\"/>");
+      AppendColor(out, "color", f.color, f.color_argb);
       if (!f.name.empty()) {
         out.append("<name val=\"");
-        AppendXmlEscaped(out, f.name);
+        AppendXmlAttrEscaped(out, f.name);
         out.append("\"/>");
       } else {
         out.append("<name val=\"Calibri\"/>");
       }
+      AppendFontFamilyCharset(out, f);
       out.append("</font>\n");
     }
   }
@@ -451,26 +540,9 @@ void AppendFills(std::string& out, const StylesTable& table) {
     out.append("    <fill><patternFill patternType=\"none\"/></fill>\n");
   } else {
     for (const FillRecord& fill : table.fills) {
-      out.append("    <fill><patternFill patternType=\"");
-      out.append(FillPatternName(fill.pattern));
-      out.append("\"");
-      if (fill.fg_argb != 0U || fill.bg_argb != 0U) {
-        out.append(">");
-        if (fill.fg_argb != 0U) {
-          out.append("<fgColor rgb=\"");
-          AppendArgb(out, fill.fg_argb);
-          out.append("\"/>");
-        }
-        if (fill.bg_argb != 0U) {
-          out.append("<bgColor rgb=\"");
-          AppendArgb(out, fill.bg_argb);
-          out.append("\"/>");
-        }
-        out.append("</patternFill>");
-      } else {
-        out.append("/>");
-      }
-      out.append("</fill>\n");
+      out.append("    ");
+      AppendFillFragment(out, fill);
+      out.append("\n");
     }
   }
   out.append("  </fills>\n");
@@ -520,8 +592,13 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
   const char* halign = HorizontalAlignName(xf.horizontal_align);
   const char* valign = VerticalAlignName(xf.vertical_align);
   const bool has_alignment = halign != nullptr || valign != nullptr || xf.wrap_text;
+  if (!has_alignment && !xf.has_protection) {
+    out.append("/>\n");
+    return;
+  }
+  out.append(">");
   if (has_alignment) {
-    out.append("><alignment");
+    out.append("<alignment");
     if (halign != nullptr) {
       out.append(" horizontal=\"");
       out.append(halign);
@@ -535,10 +612,19 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
     if (xf.wrap_text) {
       out.append(" wrapText=\"1\"");
     }
-    out.append("/></xf>\n");
-  } else {
-    out.append("/>\n");
+    out.append("/>");
   }
+  if (xf.has_protection) {
+    // Child order in CT_Xf is alignment then protection. Both defaults
+    // (locked=1, hidden=0) are emitted explicitly so the element survives
+    // a re-read even when it matches the schema default.
+    out.append("<protection locked=\"");
+    out.append(xf.locked ? "1" : "0");
+    out.append("\" hidden=\"");
+    out.append(xf.hidden ? "1" : "0");
+    out.append("\"/>");
+  }
+  out.append("</xf>\n");
 }
 
 void AppendCellStyleXfs(std::string& out, const StylesTable& table) {
@@ -578,7 +664,7 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
   out.append("\">\n");
   for (const CellStyleRecord& cs : table.cell_styles) {
     out.append("    <cellStyle name=\"");
-    AppendXmlEscaped(out, cs.name);
+    AppendXmlAttrEscaped(out, cs.name);
     out.append("\" xfId=\"");
     AppendUint(out, cs.xf_id);
     out.append("\"");
@@ -619,17 +705,17 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
     out.append(uname);
     out.append("\"/>");
   }
+  AppendVertAlign(out, f.vert_align);
   out.append("<sz val=\"");
   AppendDouble(out, f.size);
   out.append("\"/>");
-  out.append("<color rgb=\"");
-  AppendArgb(out, f.color_argb);
-  out.append("\"/>");
+  AppendColor(out, "color", f.color, f.color_argb);
   if (!f.name.empty()) {
     out.append("<name val=\"");
-    AppendXmlEscaped(out, f.name);
+    AppendXmlAttrEscaped(out, f.name);
     out.append("\"/>");
   }
+  AppendFontFamilyCharset(out, f);
   out.append("</font>");
 }
 
@@ -637,17 +723,15 @@ void AppendFillFragment(std::string& out, const FillRecord& fill) {
   out.append("<fill><patternFill patternType=\"");
   out.append(FillPatternName(fill.pattern));
   out.append("\"");
-  if (fill.fg_argb != 0U || fill.bg_argb != 0U) {
+  const bool has_fg = HasColor(fill.fg, fill.fg_argb);
+  const bool has_bg = HasColor(fill.bg, fill.bg_argb);
+  if (has_fg || has_bg) {
     out.append(">");
-    if (fill.fg_argb != 0U) {
-      out.append("<fgColor rgb=\"");
-      AppendArgb(out, fill.fg_argb);
-      out.append("\"/>");
+    if (has_fg) {
+      AppendColor(out, "fgColor", fill.fg, fill.fg_argb);
     }
-    if (fill.bg_argb != 0U) {
-      out.append("<bgColor rgb=\"");
-      AppendArgb(out, fill.bg_argb);
-      out.append("\"/>");
+    if (has_bg) {
+      AppendColor(out, "bgColor", fill.bg, fill.bg_argb);
     }
     out.append("</patternFill>");
   } else {
@@ -689,15 +773,20 @@ void AppendDxfs(std::string& out, const StylesTable& table) {
       out.append("<numFmt numFmtId=\"");
       AppendUint(out, dxf.num_fmt_id);
       out.append("\" formatCode=\"");
-      AppendXmlEscaped(out, dxf.num_fmt_code);
+      AppendXmlAttrEscaped(out, dxf.num_fmt_code);
       out.append("\"/>");
     }
     if (dxf.has_fill) {
       AppendFillFragment(out, dxf.fill);
     }
+    // CT_Dxf child order: font, numFmt, fill, alignment, border, protection.
+    // The captured `<alignment>` / `<protection>` are re-emitted verbatim
+    // at their schema positions.
+    out.append(dxf.alignment_xml);
     if (dxf.has_border) {
       AppendBorderFragment(out, dxf.border);
     }
+    out.append(dxf.protection_xml);
     out.append("</dxf>\n");
   }
   out.append("  </dxfs>\n");

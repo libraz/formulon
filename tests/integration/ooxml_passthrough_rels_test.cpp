@@ -190,7 +190,12 @@ TEST(OoxmlPassthroughRels, UnknownWorkbookRelsRoundTrip) {
     }
   }
   EXPECT_TRUE(saw_theme_rel) << "theme relationship missing from emitted workbook rels";
-  EXPECT_TRUE(saw_calc_chain_rel) << "calcChain relationship missing from emitted workbook rels";
+  // calcChain is deliberately dropped on save: it is a recalculation-order
+  // cache that goes stale the moment any cell value changes, and a stale
+  // calcChain makes real Excel reject / "repair" the workbook. The reader
+  // still captures its rel (see UnknownWorkbookRelsAreCaptured), but the
+  // writer must not re-emit it.
+  EXPECT_FALSE(saw_calc_chain_rel) << "stale calcChain relationship must be dropped on save";
 
   // The matching `<Override>` entries in `[Content_Types].xml` must
   // also survive (existing passthrough behaviour).
@@ -214,7 +219,8 @@ TEST(OoxmlPassthroughRels, UnknownWorkbookRelsRoundTrip) {
     }
   }
   EXPECT_TRUE(saw_theme_override) << "theme Override missing from [Content_Types].xml";
-  EXPECT_TRUE(saw_calc_chain_override) << "calcChain Override missing from [Content_Types].xml";
+  // calcChain part is dropped, so its Override must not be emitted either.
+  EXPECT_FALSE(saw_calc_chain_override) << "dropped calcChain must not leave an Override in [Content_Types].xml";
 }
 
 }  // namespace

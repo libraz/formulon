@@ -231,7 +231,11 @@ TEST(SpillRoundTrip, AnchorHasArrayType) {
   ASSERT_TRUE(static_cast<bool>(result));
 
   const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
-  ASSERT_NE(body.find("<f t=\"array\">SEQUENCE(3)</f>"), std::string::npos) << body;
+  // The spill anchor is a dynamic-array formula (`t="array"`), and the
+  // future-function name is re-tagged with its `_xlfn.` storage prefix so a
+  // real Excel resolves it on load.
+  ASSERT_NE(body.find("t=\"array\""), std::string::npos) << body;
+  ASSERT_NE(body.find("_xlfn.SEQUENCE(3)</f>"), std::string::npos) << body;
 }
 
 TEST(SpillRoundTrip, PhantomCellsAbsent) {

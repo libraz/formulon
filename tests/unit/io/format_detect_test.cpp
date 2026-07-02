@@ -74,6 +74,33 @@ TEST(FormatDetect, ContentTypeFallbackResolvesXlsb) {
   EXPECT_EQ(detect_workbook_format(SpanOf(archive)), WorkbookFormat::Xlsb);
 }
 
+TEST(FormatDetect, XlsmContentTypeIsNotMisdetectedAsXlsb) {
+  // Regression: `.xlsm`'s macro-enabled main-part content type
+  // (`.../main+xml`) is a superstring of `kCtWorkbookXlsbAlt`
+  // (`.../main`, no `+xml`). A plain substring search used to match the
+  // xlsb fallback here, misclassifying a non-standard-named `.xlsm`
+  // workbook part as MS-XLSB.
+  const std::vector<std::uint8_t> archive = BuildZip({
+      {"[Content_Types].xml",
+       "<Types><Override PartName=\"/xl/wb.xml\" "
+       "ContentType=\"application/vnd.ms-excel.sheet.macroEnabled.main+xml\"/></Types>"},
+      {"xl/wb.xml", "<workbook/>"},
+  });
+  EXPECT_NE(detect_workbook_format(SpanOf(archive)), WorkbookFormat::Xlsb);
+}
+
+TEST(FormatDetect, ContentTypeFallbackResolvesXlsbAltSpelling) {
+  // The "alt" xlsb content-type spelling still matches when it is the
+  // exact (quote-delimited) attribute value.
+  const std::vector<std::uint8_t> archive = BuildZip({
+      {"[Content_Types].xml",
+       "<Types><Override PartName=\"/xl/wb.bin\" "
+       "ContentType=\"application/vnd.ms-excel.sheet.macroEnabled.main\"/></Types>"},
+      {"xl/wb.bin", std::string("\x00", 1)},
+  });
+  EXPECT_EQ(detect_workbook_format(SpanOf(archive)), WorkbookFormat::Xlsb);
+}
+
 TEST(FormatDetect, NonZipIsUnknown) {
   const std::vector<std::uint8_t> garbage = {0xDE, 0xAD, 0xBE, 0xEF, 0x00};
   EXPECT_EQ(detect_workbook_format(SpanOf(garbage)), WorkbookFormat::Unknown);

@@ -15,9 +15,11 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "eval/iterative_solver.h"
+#include "io/default_content_type.h"
 #include "io/defined_names.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/relationship_writer.h"
@@ -28,6 +30,7 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "utils/double_format.h"
+#include "utils/structured_log.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -109,12 +112,17 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   out.reserve(512 + wb.sheet_count() * 128 + plan.passthrough_kept.size() * 128);
   out.append(kXmlDecl);
   out.append("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n");
+  // Track which extensions we have already declared so the captured
+  // source `<Default>` entries below do not duplicate the fixed ones.
+  std::unordered_set<std::string> emitted_default_extensions;
   out.append("  <Default Extension=\"rels\" ContentType=\"");
   out.append(kCtPackageRels);
   out.append("\"/>\n");
+  emitted_default_extensions.insert("rels");
   out.append("  <Default Extension=\"xml\" ContentType=\"");
   out.append(kCtXml);
   out.append("\"/>\n");
+  emitted_default_extensions.insert("xml");
   // VML drawings are referenced by extension via a Default; this lets
   // the per-sheet VML stub avoid an Override entry. Emitted only when
   // at least one sheet has comments (i.e. a VML companion is needed).
@@ -128,6 +136,26 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   if (any_comments) {
     out.append("  <Default Extension=\"vml\" ContentType=\"");
     out.append(kCtVmlDrawing);
+    out.append("\"/>\n");
+    emitted_default_extensions.insert("vml");
+  }
+  // Round-trip the source `<Default>` registrations. Binary and media
+  // parts (vbaProject.bin, xl/media/* images, VML companions, printer
+  // settings, ...) are declared here by extension rather than through a
+  // per-part `<Override>`. Without re-emitting them, the Default-typed
+  // passthrough parts we preserve would have no resolvable content type
+  // and Excel would open the package in "needs repair" mode.
+  for (const DefaultContentType& def : wb.default_content_types()) {
+    if (def.extension.empty() || def.content_type.empty()) {
+      continue;
+    }
+    if (!emitted_default_extensions.insert(def.extension).second) {
+      continue;
+    }
+    out.append("  <Default Extension=\"");
+    AppendXmlEscaped(out, def.extension);
+    out.append("\" ContentType=\"");
+    AppendXmlEscaped(out, def.content_type);
     out.append("\"/>\n");
   }
   AppendOverride(out, "xl/workbook.xml", workbook_kind_content_type(wb.kind()));
@@ -205,7 +233,37 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   out.append(kXmlDecl);
   out.append(
       "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n");
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"");
+  // Re-declare the source root's extra namespaces (xr2 / x15 / mc:Ignorable
+  // etc.) so namespaced attributes carried inside the raw <bookViews> /
+  // <workbookPr> captures below resolve to a declared prefix. Without this
+  // the fragment is malformed XML and Excel refuses the file.
+  out.append(wb.workbook_root_extra_attrs());
+  out.append(">\n");
+  // Workbook-level elements that precede <sheets> in ECMA-376 order
+  // (fileVersion, fileSharing, workbookPr, workbookProtection, bookViews,
+  // sheets, ...). Each is re-emitted verbatim from its raw capture so the
+  // date system, protection, and tab-selection state survive the round
+  // trip. When no raw <workbookPr> was captured but the 1904 date-system
+  // flag was set programmatically, synthesise a minimal element so the
+  // attribute is not lost.
+  if (!wb.workbook_pr_xml().empty()) {
+    out.append("  ");
+    out.append(wb.workbook_pr_xml());
+    out.push_back('\n');
+  } else if (wb.date1904()) {
+    out.append("  <workbookPr date1904=\"1\"/>\n");
+  }
+  if (!wb.workbook_protection_xml().empty()) {
+    out.append("  ");
+    out.append(wb.workbook_protection_xml());
+    out.push_back('\n');
+  }
+  if (!wb.book_views_xml().empty()) {
+    out.append("  ");
+    out.append(wb.book_views_xml());
+    out.push_back('\n');
+  }
   out.append("  <sheets>\n");
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     out.append("    <sheet name=\"");
@@ -342,6 +400,22 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
     AppendRelationship(out, next_rid++, kRelSharedStrings, "sharedStrings.xml");
   }
   for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
+    // Only emit a relationship whose target actually exists in the
+    // output package. External targets need no local part. Internal
+    // targets must resolve to a passthrough part we are re-emitting;
+    // otherwise the relationship would dangle and Excel would open the
+    // package in "needs repair" mode. A part that was dropped upstream
+    // (e.g. collided with a generated path, or was never captured)
+    // surfaces here as a skipped relationship with a warning rather
+    // than a silent dangling reference.
+    if (!r.target_external && !HasPassthroughPart(plan, r.target)) {
+      StructuredLog("ooxml_writer.workbook_rel_skipped")
+          .field("reason", std::string_view("target_part_absent"))
+          .field("type", r.type)
+          .field("target", r.target)
+          .warn();
+      continue;
+    }
     const std::string_view target =
         r.target_external ? std::string_view(r.target) : WithoutXlPrefix(std::string_view(r.target));
     AppendRelationship(out, next_rid++, std::string_view(r.type), target, r.target_external,

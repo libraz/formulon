@@ -246,7 +246,8 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
     const bool has_hyperlinks = i < wb.sheet_count() && !wb.sheet(i).hyperlinks().empty();
     const bool has_comments = i < plan.comments_by_sheet.size() && plan.comments_by_sheet[i].numeric_id != 0;
     const bool has_print_settings = i < wb.sheet_count() && !wb.sheet(i).print_settings().printer_settings_path.empty();
-    if (has_tables || has_pivots || has_hyperlinks || has_comments || has_print_settings) {
+    const bool has_drawing = i < wb.sheet_count() && !wb.sheet(i).drawing_rel_target().empty();
+    if (has_tables || has_pivots || has_hyperlinks || has_comments || has_print_settings || has_drawing) {
       generated.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
     }
   }
