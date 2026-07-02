@@ -1,67 +1,67 @@
 {
-  "_comment": "Formulon bench baseline. Regenerate via `./build/tests/bench/run_bench_all.sh && tools/bench/check_regression.py --runner build/tests/bench/run_bench_all.sh --results build/bench_results --baseline tools/bench/baseline.json --regenerate-baseline --skip-runner`. Per-bench scenario keys are nanobench `name` fields; values are median wall-clock seconds. Threshold for the gate is 20% wall-clock regression.",
+  "_comment": "Formulon bench baseline. Regenerate via `tools/bench/check_regression.py --runner build/tests/bench/run_bench_all.sh --results build/bench_results --baseline tools/bench/baseline.json --regenerate-baseline`. Per-bench scenario keys are nanobench `name` fields; values are the minimum median wall-clock seconds across the --runs driver invocations. The gate compares the same min-of-N reduction against these and fails on a >20% regression (widened per scenario by nanobench's reported error and by a micro-op floor).",
   "bench_compile_to_vm": {
     "branching IF [tree-walk]": {
-      "median": 3.31558675078864e-06
+      "median": 3.52350183150183e-06
     },
     "branching IF [vm]": {
-      "median": 9.52950833333333e-06
+      "median": 1.05221354166667e-05
     },
     "comparison chain [tree-walk]": {
-      "median": 1.1803302433372e-06
+      "median": 1.28253105968331e-06
     },
     "comparison chain [vm]": {
-      "median": 6.48344370860927e-06
+      "median": 7.47458865248227e-06
     },
     "const arithmetic 1+2 [tree-walk]": {
-      "median": 1.1040676835081e-06
+      "median": 1.28067549668874e-06
     },
     "const arithmetic 1+2 [vm]": {
-      "median": 6.16766467065868e-06
+      "median": 7.18808450704225e-06
     },
     "ref arithmetic A1+A2 [tree-walk]": {
-      "median": 1.38743690637721e-06
+      "median": 1.41753472222222e-06
     },
     "ref arithmetic A1+A2 [vm]": {
-      "median": 6.67054658385093e-06
+      "median": 7.63534306569343e-06
     },
     "unary +-* MIN/MAX [tree-walk]": {
-      "median": 2.42030941704036e-06
+      "median": 2.49944567627494e-06
     },
     "unary +-* MIN/MAX [vm]": {
-      "median": 9.51745714285714e-06
+      "median": 1.06162110091743e-05
     }
   },
   "bench_eval_hot_path": {
     "SUMIFS A1:A1000 by B>1500": {
-      "median": 0.000221363549019608
+      "median": 0.00024962337254902
     },
     "VLOOKUP D2 against D1:E5": {
-      "median": 5.51475119617225e-06
+      "median": 6.05114285714286e-06
     },
     "branching IF(A1>0,A1*2,0)": {
-      "median": 3.49515272727273e-06
+      "median": 3.83214285714286e-06
     },
     "range sum SUM(A1:A1000)": {
-      "median": 0.00015755637254902
+      "median": 0.000168378483333333
     },
     "scalar arithmetic A1+B1": {
-      "median": 1.3778677462888e-06
+      "median": 1.42033884297521e-06
     }
   },
   "bench_io_100mb_read": {
     "read_ooxml ~100MB workbook": {
-      "median": 1.63983025
+      "median": 2.211386792
     }
   },
   "bench_recalc_1m_chain": {
     "recalc 1M-cell linear chain": {
-      "median": 1.350592167
+      "median": 0.405471334
     }
   },
   "bench_recalc_1m_wide": {
     "recalc 1M-cell wide layer (8 threads)": {
-      "median": 0.308665292
+      "median": 0.449923375
     }
   }
 }
