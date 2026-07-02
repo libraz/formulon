@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install build and coverage tooling
         run: |
@@ -52,7 +52,7 @@ jobs:
             build-essential cmake ninja-build libbrotli-dev brotli lcov
 
       - name: Cache CMake build directory (coverage)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: build-coverage
           key: coverage-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'Makefile', 'cmake/**', 'CMakePresets.json') }}
@@ -106,7 +106,7 @@ jobs:
                --ignore-errors unused,negative
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: build-coverage/coverage/coverage.filtered.info
@@ -119,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install host tools
         run: |
@@ -127,7 +127,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends brotli cmake
 
       - name: Set up Emscripten
-        uses: mymindstorm/setup-emsdk@v14
+        uses: mymindstorm/setup-emsdk@v16
         with:
           # Pin to keep WASM size deterministic. Update in lockstep with the
           # local toolchain when bumping; size deltas in the report after
@@ -136,7 +136,7 @@ jobs:
           actions-cache-folder: emsdk-cache
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
 
@@ -147,7 +147,7 @@ jobs:
         run: make npm-check-dts
 
       - name: Diagnose cmake before WASM build
-        # mymindstorm/setup-emsdk@v14 prepends emsdk paths to PATH and
+        # mymindstorm/setup-emsdk@v16 prepends emsdk paths to PATH and
         # historically leaks a non-executable bundled `cmake` into PATH
         # ahead of the system one. The `emcmake cmake` configure step
         # masks this (it resolves cmake itself), but plain `cmake --build`
@@ -183,7 +183,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload WASM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: formulon-wasm
           path: |

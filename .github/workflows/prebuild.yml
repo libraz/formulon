@@ -68,10 +68,10 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           # Node >=21 is required so `node --test 'test/*.test.mjs'`
           # expands the glob; Node 20 looks for the literal path.
@@ -92,7 +92,7 @@ jobs:
         run: make node-test
 
       - name: Upload addon artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: formulon-${{ matrix.platform-arch }}
           path: packages/npm-native/dist/prebuilds/${{ matrix.platform-arch }}/formulon.node
@@ -106,10 +106,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download all prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: prebuilds-tmp
           pattern: formulon-*
@@ -131,7 +131,7 @@ jobs:
           find packages/npm-native/dist -type f
 
       - name: Upload bundled npm tree
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: formulon-native-bundle
           path: packages/npm-native/dist/

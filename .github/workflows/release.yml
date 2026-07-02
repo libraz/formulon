@@ -43,7 +43,7 @@ jobs:
     name: Publish npm + create GitHub Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Order matters: setup-emsdk@v14 prepends its bundled (non-executable)
       # node / cmake to PATH. Running setup-node AFTER it re-prepends the
@@ -51,12 +51,12 @@ jobs:
       # binary, not emsdk's broken shim. cmake still needs an explicit
       # CMAKE=/usr/bin/cmake override (emsdk owns its own cmake binary that
       # actions/setup-node cannot displace).
-      - uses: mymindstorm/setup-emsdk@v14
+      - uses: mymindstorm/setup-emsdk@v16
         with:
           version: 3.1.74
           actions-cache-folder: emsdk-cache
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           # Node 24 ships with npm >= 11.5.1 natively, which supports
           # token-less OIDC publishing via Trusted Publisher. Node 22
@@ -99,7 +99,7 @@ jobs:
           make CMAKE=/usr/bin/cmake npm-test
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Formulon ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
@@ -130,7 +130,7 @@ jobs:
             runner: ubuntu-24.04-arm
             archive-ext: tar.gz
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build deps (Linux)
         if: startsWith(matrix.platform-arch, 'linux-')
@@ -159,7 +159,7 @@ jobs:
           shasum -a 256 "${dir}.tar.gz" > "${dir}.tar.gz.sha256"
           echo "archive=${dir}.tar.gz" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: formulon-cli-${{ matrix.platform-arch }}
           path: |
@@ -172,13 +172,13 @@ jobs:
     name: Build py3-none-any wheel
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - uses: mymindstorm/setup-emsdk@v14
+      - uses: mymindstorm/setup-emsdk@v16
         with:
           # Pin to keep WASM size deterministic (matches publish-npm).
           version: 3.1.74
@@ -218,7 +218,7 @@ jobs:
           python -m pip install "${wheel}"
           python -m unittest discover -v -s packages/python/tests
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: formulon-wheel
           path: build-py/dist/formulon-*.whl
@@ -233,7 +233,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/formulon
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: formulon-wheel
           path: dist/
@@ -254,7 +254,7 @@ jobs:
     needs: [publish-npm, build-cli]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: formulon-cli-*
           path: cli-dist/
@@ -264,7 +264,7 @@ jobs:
         run: ls -la cli-dist/
 
       - name: Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           files: cli-dist/*
