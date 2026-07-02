@@ -22,6 +22,7 @@
 
 #include "eval/compat.h"
 #include "io/calc_mode.h"
+#include "io/default_content_type.h"
 #include "io/defined_names.h"
 #include "io/external_links.h"
 #include "io/passthrough_part.h"
@@ -43,6 +44,7 @@ namespace formulon {
 // itself never references an enumerator.
 namespace io {
 enum class WorkbookKind : std::uint8_t;
+enum class WorkbookFormat : std::uint8_t;
 }  // namespace io
 
 namespace eval {
@@ -183,7 +185,15 @@ class Workbook {
   /// Serialises the workbook to an in-memory `.xlsx` byte stream. Delegates
   /// to `io::write_ooxml`; see that function's documentation for the exact
   /// set of OOXML parts emitted by the empty-workbook writer slice.
+  /// Equivalent to `save_ex(io::WorkbookFormat::Ooxml)`.
   Expected<std::vector<std::uint8_t>, Error> save() const;
+
+  /// Serialises the workbook using an explicit container `format`.
+  /// `io::WorkbookFormat::Ooxml` delegates to `io::write_ooxml` (the
+  /// `.xlsx` writer); `io::WorkbookFormat::Xlsb` delegates to
+  /// `io::xlsb::write_xlsb` (the MS-XLSB writer). `io::WorkbookFormat::Unknown`
+  /// is not a valid save target and returns `kInvalidArgument`.
+  Expected<std::vector<std::uint8_t>, Error> save_ex(io::WorkbookFormat format) const;
 
   // ---------------------------------------------------------------------------
   // Recalc-engine integration
@@ -335,10 +345,12 @@ class Workbook {
   /// same reason as `set_defined_names`.
   void set_tables(std::vector<io::TableMetadata> tables) { tables_ = std::move(tables); }
 
-  /// Read-only access to the verbatim Override-listed parts the reader
-  /// did not consume. The writer emits each entry as-is, including its
-  /// `<Override>` registration in `[Content_Types].xml`. Default-typed
-  /// binary parts (images, OLE objects) are NOT represented here.
+  /// Read-only access to the verbatim parts the reader did not model.
+  /// The writer emits each entry as-is. `<Override>`-listed parts
+  /// replicate their `<Override>` registration in `[Content_Types].xml`;
+  /// Default-typed binary/media parts (vbaProject.bin, images, drawings,
+  /// VML, and their rels) rely on the round-tripped `<Default>` entries
+  /// exposed via `default_content_types()`.
   const std::vector<io::PassthroughPart>& passthrough_parts() const noexcept { return passthrough_parts_; }
 
   /// Replaces the workbook's passthrough-part list. Move-assigns to
@@ -359,6 +371,19 @@ class Workbook {
   /// to keep the I/O hand-off allocation-free.
   void set_unknown_workbook_rels(std::vector<io::UnknownRelationship> rels) {
     unknown_workbook_rels_ = std::move(rels);
+  }
+
+  /// Read-only access to the `<Default>` content-type registrations the
+  /// reader captured from `[Content_Types].xml`. The writer re-emits the
+  /// entries whose extension is used by a Default-typed passthrough part
+  /// (vbaProject.bin, images, VML, ...) so those parts keep a resolvable
+  /// content type in the round-tripped package.
+  const std::vector<io::DefaultContentType>& default_content_types() const noexcept { return default_content_types_; }
+
+  /// Replaces the workbook's captured `<Default>` content-type list.
+  /// Move-assigns to keep the I/O hand-off allocation-free.
+  void set_default_content_types(std::vector<io::DefaultContentType> defaults) {
+    default_content_types_ = std::move(defaults);
   }
 
   /// Read-only access to the workbook's external-link list (in
@@ -438,6 +463,67 @@ class Workbook {
   /// Sets the workbook-level calc mode. Plain metadata — does not
   /// affect the recalc engine's evaluation policy.
   void set_calc_mode(CalcMode mode) noexcept { calc_mode_ = mode; }
+
+  // ---------------------------------------------------------------------------
+  // Date system (`<workbookPr date1904>`)
+  // ---------------------------------------------------------------------------
+  //
+  // Excel supports two date-serial epochs. The 1900 system (serial 1 =
+  // 1900-01-01, with Lotus's fictitious 1900-02-29) is the default; the
+  // 1904 system (serial 0 = 1904-01-01, no ghost day) is common in
+  // Mac-authored workbooks. A serial in the 1904 system is 1462 less than
+  // the 1900 serial for the same calendar day, so losing this flag on a
+  // save shifts every date four years. The flag is parsed from
+  // `<workbookPr date1904>` and re-emitted verbatim via the raw
+  // `<workbookPr>` capture below.
+
+  /// True when the workbook uses the 1904 date system. Defaults to false
+  /// (1900 system). Consumed by date-serial conversions
+  /// (`eval::date_time::serial_from_ymd` / `ymd_from_serial`).
+  bool date1904() const noexcept { return date1904_; }
+
+  /// Sets the 1904-date-system flag. Plain model value; the raw
+  /// `<workbookPr>` capture (`workbook_pr_xml`) is the source of truth for
+  /// re-emission when present, so programmatic callers that need the
+  /// attribute written should clear `workbook_pr_xml` or rely on the
+  /// synthesised fallback the writer emits when no raw block exists.
+  void set_date1904(bool value) noexcept { date1904_ = value; }
+
+  // ---------------------------------------------------------------------------
+  // Workbook-level element round-trip (`<workbookPr>` / `<workbookProtection>`
+  // / `<bookViews>`)
+  // ---------------------------------------------------------------------------
+  //
+  // These three workbook.xml elements are captured as raw XML (the same
+  // pattern `SheetPrintSettings` uses for `<pageSetup>` / `<pageMargins>`)
+  // so the writer can re-emit them verbatim in the correct ECMA-376
+  // element order. Without this, tab-selection state (`bookViews` →
+  // `activeTab`), workbook protection, and — most importantly — the
+  // `date1904` flag are silently dropped on save.
+
+  /// Raw `<workbookPr>` element captured from workbook.xml, or empty.
+  const std::string& workbook_pr_xml() const noexcept { return workbook_pr_xml_; }
+  void set_workbook_pr_xml(std::string xml) { workbook_pr_xml_ = std::move(xml); }
+
+  /// Raw `<bookViews>` element captured from workbook.xml, or empty.
+  const std::string& book_views_xml() const noexcept { return book_views_xml_; }
+  void set_book_views_xml(std::string xml) { book_views_xml_ = std::move(xml); }
+
+  /// Raw `<workbookProtection>` element captured from workbook.xml, or
+  /// empty.
+  const std::string& workbook_protection_xml() const noexcept { return workbook_protection_xml_; }
+  void set_workbook_protection_xml(std::string xml) { workbook_protection_xml_ = std::move(xml); }
+
+  /// Extra namespace declarations (and `mc:Ignorable`) captured from the
+  /// source `<workbook>` root element, serialised as ` name="value"`
+  /// attribute pairs (leading space included), excluding the default
+  /// `xmlns` and `xmlns:r` the writer always emits. Re-emitted on the
+  /// writer's `<workbook>` root so namespaced attributes carried inside the
+  /// raw `<bookViews>` / `<workbookPr>` captures (e.g. `xr2:uid`) resolve
+  /// to a declared prefix — without them Excel rejects the file as
+  /// malformed XML.
+  const std::string& workbook_root_extra_attrs() const noexcept { return workbook_root_extra_attrs_; }
+  void set_workbook_root_extra_attrs(std::string attrs) { workbook_root_extra_attrs_ = std::move(attrs); }
 
   // ---------------------------------------------------------------------------
   // Excel host compatibility
@@ -597,6 +683,10 @@ class Workbook {
   // vbaProject, customXml, ...). Round-trip metadata only; the parts
   // themselves live in `passthrough_parts_`.
   std::vector<io::UnknownRelationship> unknown_workbook_rels_;
+  // `<Default>` content-type registrations captured from
+  // `[Content_Types].xml` (extension -> content type). Re-emitted by the
+  // writer for Default-typed passthrough parts. Empty by default.
+  std::vector<io::DefaultContentType> default_content_types_;
   // Pivot caches owned by the workbook. One cache may be referenced by
   // multiple pivot tables (per `Sheet::pivot_tables()`).
   std::vector<std::unique_ptr<pivot::PivotCache>> pivot_caches_;
@@ -611,6 +701,19 @@ class Workbook {
   // calcMode=...>`. Default `kAuto` matches a freshly created
   // workbook in Excel.
   CalcMode calc_mode_ = CalcMode::kAuto;
+  // 1904 date system flag parsed from `<workbookPr date1904>`. Default
+  // false (1900 system).
+  bool date1904_ = false;
+  // Raw workbook.xml level elements captured for verbatim re-emission
+  // (see the `workbook_pr_xml` accessor group). Empty when absent from
+  // the source.
+  std::string workbook_pr_xml_;
+  std::string book_views_xml_;
+  std::string workbook_protection_xml_;
+  // Extra `<workbook>` root namespace declarations (xmlns:mc / xmlns:xr* /
+  // x15 + mc:Ignorable) captured for verbatim re-emission so namespaced
+  // attributes in the raw captures above resolve. Empty by default.
+  std::string workbook_root_extra_attrs_;
   // Formula compatibility profile. Runtime default is Windows Excel 365 ja-JP.
   eval::ExcelProfile excel_profile_ = eval::default_excel_profile();
   // Workbook-scoped style records (fonts, fills, borders, num fmts,

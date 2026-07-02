@@ -1,7 +1,7 @@
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
-// `PassthroughPart`: one Override-listed OOXML part the reader did not
-// consume, captured raw so the writer can re-emit it verbatim.
+// `PassthroughPart`: one OOXML part the reader did not model, captured
+// raw so the writer can re-emit it verbatim.
 //
 // Lives in its own header so both the OOXML reader (which produces
 // these) and `Workbook` (which carries them through the round-trip)
@@ -9,9 +9,13 @@
 // surface in. The writer (`io::write_ooxml`) consumes the same type
 // off the workbook.
 //
-// Default-typed binary parts (images, OLE objects, …) are NOT
-// represented here; only Override-listed parts round-trip. See the
-// reader docs for the v1 caveat.
+// Both `<Override>`-listed parts (theme, calcChain, custom XML, ...)
+// and Default-typed binary/media parts (vbaProject.bin, xl/media/*
+// images, drawings, VML companions, and their rels) round-trip through
+// this type. Override-listed parts carry a non-empty `content_type` so
+// the writer replicates the `<Override>`; Default-typed parts carry an
+// empty `content_type` and rely on the round-tripped `<Default>`
+// registration (see `DefaultContentType`).
 
 #ifndef FORMULON_IO_PASSTHROUGH_PART_H_
 #define FORMULON_IO_PASSTHROUGH_PART_H_

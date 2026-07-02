@@ -16,8 +16,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "pugixml.hpp"
@@ -64,6 +66,21 @@ bool parse_xml_bool_attr(const pugi::xml_attribute& attr);
 /// "1" or "true", false otherwise. Use when the caller already has
 /// the attribute value as `std::string_view`.
 bool parse_xml_bool(std::string_view value);
+
+/// Serialises the "extra" namespace declarations on an OOXML root element
+/// (`<workbook>` / `<worksheet>`): every attribute except the default
+/// `xmlns` and `xmlns:r`, which every writer re-emits itself. The result
+/// is a run of ` name="value"` pairs (each with a leading space), ready to
+/// splice straight into the writer's root open-tag.
+///
+/// Re-emitting these keeps namespaced attributes carried inside
+/// raw-captured child fragments — e.g. `xr2:uid` on `<bookViews>` /
+/// `<workbookView>`, or `x14ac:*` inside a captured `<sheetPr>` — bound to
+/// a declared prefix. Without them the re-emitted fragment is malformed
+/// XML (undeclared prefix) and real Excel refuses to open the file.
+/// Attribute values are namespace URIs / `mc:Ignorable` token lists, which
+/// carry no XML-critical characters, so they are copied verbatim.
+std::string capture_root_extra_ns_attrs(const pugi::xml_node& root);
 
 // ---------------------------------------------------------------------------
 // Node + attribute-name typed accessors.
@@ -120,6 +137,19 @@ inline double attr_f64(const pugi::xml_node& n, const char* name, double def = 0
 /// the OOXML `xs:boolean` lexicon Excel emits across sheet flags, CF
 /// rule attributes, and pivot toggles.
 bool attr_bool(const pugi::xml_node& n, const char* name, bool def = false);
+
+/// Captures every attribute of `node` whose name is NOT in `known` into
+/// `out` as `(name, value)` pairs, in document order. Used to round-trip
+/// OOXML attributes the model does not represent structurally so the
+/// writer can re-emit them verbatim. Namespace declarations (`xmlns` and
+/// any `xmlns:*`) are always skipped — the writer emits its own. Modelled
+/// attributes are listed in `known` so they are not double-emitted.
+void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known,
+                           std::vector<std::pair<std::string, std::string>>& out);
+
+/// Appends ` name="value"` for each captured attribute, escaping the value
+/// for XML attribute context. Inverse of `capture_unknown_attrs`.
+void append_raw_attrs(std::string& out, const std::vector<std::pair<std::string, std::string>>& attrs);
 
 /// Parses a UTF-8 OOXML part body into `doc`. On failure returns a
 /// `kIoXmlParse` error whose context records `<reader_module>` and

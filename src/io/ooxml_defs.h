@@ -52,6 +52,8 @@ inline constexpr std::string_view kRelComments =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
 inline constexpr std::string_view kRelVmlDrawing =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+inline constexpr std::string_view kRelDrawing =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
 inline constexpr std::string_view kRelPrinterSettings =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/printerSettings";
 inline constexpr std::string_view kRelExternalLink =

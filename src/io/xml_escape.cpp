@@ -41,5 +41,43 @@ void AppendXmlEscaped(std::string& out, std::string_view in) {
   }
 }
 
+void AppendXmlAttrEscaped(std::string& out, std::string_view in) {
+  for (char raw : in) {
+    const unsigned char byte = static_cast<unsigned char>(raw);
+    if (byte < 0x20U && raw != '\t' && raw != '\n' && raw != '\r') {
+      continue;
+    }
+    switch (raw) {
+      case '&':
+        out.append("&amp;");
+        break;
+      case '<':
+        out.append("&lt;");
+        break;
+      case '>':
+        out.append("&gt;");
+        break;
+      case '"':
+        out.append("&quot;");
+        break;
+      case '\'':
+        out.append("&apos;");
+        break;
+      case '\t':
+        out.append("&#9;");
+        break;
+      case '\n':
+        out.append("&#10;");
+        break;
+      case '\r':
+        out.append("&#13;");
+        break;
+      default:
+        out.push_back(raw);
+        break;
+    }
+  }
+}
+
 }  // namespace io
 }  // namespace formulon

@@ -21,11 +21,14 @@
 #include "eval/scheduler.h"
 #include "io/defined_names.h"
 #include "io/external_links.h"
+#include "io/format_detect.h"
+#include "io/formula_prefix.h"
 #include "io/ooxml_writer.h"
 #include "io/passthrough_part.h"
 #include "io/styles_reader.h"
 #include "io/tables_reader.h"
 #include "io/workbook_kind.h"
+#include "io/xlsb/writer.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
@@ -461,7 +464,20 @@ const pivot::PivotCache* Workbook::find_pivot_cache(std::uint32_t cache_id) cons
 }
 
 Expected<std::vector<std::uint8_t>, Error> Workbook::save() const {
-  return io::write_ooxml(*this);
+  return save_ex(io::WorkbookFormat::Ooxml);
+}
+
+Expected<std::vector<std::uint8_t>, Error> Workbook::save_ex(io::WorkbookFormat format) const {
+  switch (format) {
+    case io::WorkbookFormat::Ooxml:
+      return io::write_ooxml(*this);
+    case io::WorkbookFormat::Xlsb:
+      return io::xlsb::write_xlsb(*this);
+    case io::WorkbookFormat::Unknown:
+      break;
+  }
+  return make_error(FormulonErrorCode::kInvalidArgument, "Workbook::save_ex: unsupported format",
+                    "context=workbook_save_ex");
 }
 
 namespace {
@@ -535,6 +551,22 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   if (sheet_index >= sheets_.size()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_formula: sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
+  }
+
+  // Normalize Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
+  // storage prefixes to the canonical formula-bar form at the single
+  // ingestion point every reader (OOXML DOM / SAX, XLSB) and binding
+  // funnels through. This keeps the stored `formula_text` (and the
+  // dependency-extraction parse below) matching what Excel's formula bar
+  // shows, and lets LET / LAMBDA resolve their `_xlpm.`-prefixed
+  // parameter names. The transform is a no-op on an already-canonical
+  // formula, so hand-authored / test formulas are unaffected. The writer
+  // re-applies the prefixes on save for Excel readability.
+  {
+    std::string normalized = io::strip_storage_prefixes(formula);
+    if (normalized != formula) {
+      formula = std::move(normalized);
+    }
   }
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);

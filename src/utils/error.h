@@ -162,6 +162,12 @@ enum class FormulonErrorCode : int32_t {
   kIoSheetCorrupt = 5012,
   kIoUnsupportedVariant = 5013,
   kIoXlsbRecordCorrupt = 5014,
+  /// Reserved for a future CSV reader/writer (not yet implemented: no
+  /// `src/io/csv_*`, CLI option, or test currently exercises this code).
+  /// Kept allocated rather than removed or renumbered so any code already
+  /// persisting or comparing this numeric value is not silently broken;
+  /// the 5000-5999 I/O range documented in `CLAUDE.md` reserves this slot
+  /// for CSV specifically.
   kIoCsvEncodingDetect = 5015,
   kIoWriteFailed = 5016,
   kIoCalcChainMismatch = 5017,

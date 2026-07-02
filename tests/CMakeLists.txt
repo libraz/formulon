@@ -53,9 +53,12 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/styles_writer_test.cpp
   unit/io/tables_reader_test.cpp
   unit/io/workbook_kind_test.cpp
+  unit/io/xml_escape_test.cpp
   unit/io/xml_utils_test.cpp
+  unit/io/xsd_bool_test.cpp
   unit/io/zip_reader_test.cpp
   unit/io/format_detect_test.cpp
+  unit/io/roundtrip_symmetry_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
@@ -248,6 +251,10 @@ formulon_apply_warnings(formulon_unit_tests)
 target_compile_definitions(formulon_unit_tests
   PRIVATE
     FORMULON_CATALOG_PATH="${CMAKE_SOURCE_DIR}/tools/catalog/functions.txt"
+    # Root of the test fixture tree; read at runtime by the read<->write
+    # symmetry tests (tests/unit/io/roundtrip_symmetry_test.cpp) to load real
+    # Excel-produced packages under tests/fixtures/.
+    FORMULON_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
 )
 
 # `gtest_discover_tests` registers the suite but cannot apply

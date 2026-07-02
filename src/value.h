@@ -150,6 +150,22 @@ constexpr std::int32_t ooxml_code(ErrorCode e) noexcept {
   return error_info(e).ooxml_code;
 }
 
+/// Inverse of `ooxml_code`: maps a wire code back to its `ErrorCode`.
+///
+/// Every `kErrorTable` row round-trips through this pair of functions, so
+/// a reader and a writer that both go through `ooxml_code` /
+/// `error_from_ooxml_code` can never drift apart the way two
+/// hand-duplicated switch statements can. Wire codes with no matching row
+/// (including genuinely unknown codes) resolve to `ErrorCode::Unknown`.
+constexpr ErrorCode error_from_ooxml_code(std::int32_t code) noexcept {
+  for (std::size_t i = 0; i < std::size(kErrorTable); ++i) {
+    if (kErrorTable[i].ooxml_code == code) {
+      return static_cast<ErrorCode>(i);
+    }
+  }
+  return ErrorCode::Unknown;
+}
+
 /// Returns the tokenised Excel display name for `e` (e.g. `"#DIV/0!"`).
 ///
 /// The pointer references a static string literal with program lifetime.

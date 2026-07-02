@@ -26,7 +26,7 @@ void append_xml_attr(std::string& out, std::string_view name, std::string_view v
   out.push_back(' ');
   out.append(name.data(), name.size());
   out.append("=\"");
-  AppendXmlEscaped(out, value);
+  AppendXmlAttrEscaped(out, value);
   out.append("\"");
 }
 
@@ -125,6 +125,37 @@ bool parse_xml_bool_attr(const pugi::xml_attribute& attr) {
   return parse_xml_bool(attr.value());
 }
 
+void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std::string_view> known,
+                           std::vector<std::pair<std::string, std::string>>& out) {
+  for (pugi::xml_attribute attr = node.first_attribute(); attr; attr = attr.next_attribute()) {
+    const std::string_view name = attr.name();
+    // Never round-trip namespace declarations; the writer emits its own.
+    if (name == "xmlns" || name.rfind("xmlns:", 0) == 0) {
+      continue;
+    }
+    bool is_known = false;
+    for (const std::string_view k : known) {
+      if (k == name) {
+        is_known = true;
+        break;
+      }
+    }
+    if (!is_known) {
+      out.emplace_back(std::string(name), std::string(attr.value()));
+    }
+  }
+}
+
+void append_raw_attrs(std::string& out, const std::vector<std::pair<std::string, std::string>>& attrs) {
+  for (const auto& [name, value] : attrs) {
+    out.push_back(' ');
+    out.append(name);
+    out.append("=\"");
+    AppendXmlAttrEscaped(out, value);
+    out.push_back('"');
+  }
+}
+
 Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector<std::uint8_t>& bytes,
                                       std::string_view reader_module, std::string_view part_name) {
   // `parse_ws_pcdata_single` retains whitespace-only text inside leaf
@@ -201,6 +232,22 @@ std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {
   // would silently leak kana into plain comment / SST output.
 
   return count;
+}
+
+std::string capture_root_extra_ns_attrs(const pugi::xml_node& root) {
+  std::string out;
+  for (pugi::xml_attribute attr = root.first_attribute(); attr; attr = attr.next_attribute()) {
+    const std::string_view name = attr.name();
+    if (name == "xmlns" || name == "xmlns:r") {
+      continue;  // the writer always emits these two itself.
+    }
+    out.push_back(' ');
+    out.append(name.data(), name.size());
+    out.append("=\"");
+    out.append(attr.value());
+    out.push_back('"');
+  }
+  return out;
 }
 
 }  // namespace io
