@@ -25,7 +25,9 @@
 #
 # Triggers:
 #   - PR to main         : matrix verifies each platform still builds
-#                          and `make node-test` smokes pass.
+#                          and `make node-test` smokes pass; python-smoke
+#                          verifies the Python/wasmtime binding still
+#                          loads against the current C ABI.
 #   - push to main       : same, plus refreshed artifacts available
 #                          via the actions UI for download.
 #   - push tag `v*`      : matrix runs, then `release-bundle` aggregates
@@ -98,6 +100,63 @@ jobs:
           path: packages/npm-native/dist/prebuilds/${{ matrix.platform-arch }}/formulon.node
           retention-days: 30
           if-no-files-found: error
+
+  # v0.9.4 incident: a C ABI change (struct layout + a new out-param
+  # on fm_sheet_cf_add_rule) shipped through develop and main untouched
+  # because ci.yml only exercises the native ctest suite and a WASM
+  # smoke test, and this workflow's own `prebuild` job only exercises
+  # the Node addon. The Python/wasmtime binding (packages/python/) was
+  # never rebuilt against the new headers until release.yml's
+  # tag-only `python-wheel` job ran -- by then the tag was already
+  # pushed. This job closes that gap: it rebuilds the capi WASM and
+  # runs the Python package's own smoke suite on every push/PR to
+  # main, so a struct-layout or out-param drift fails here instead of
+  # at release time.
+  #
+  # Deliberately lighter than release.yml's `python-wheel` job: no
+  # setuptools wheel build, no PyPI-facing artifact, single platform
+  # (ubuntu-latest) -- the binding is a pure-Python + wasmtime module,
+  # so the drift this job exists to catch is platform-independent.
+  # `make python-test` (via `python-package` -> `wasm-capi`) is the
+  # cheap path purpose-built for this.
+  python-smoke:
+    name: Python binding smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - uses: mymindstorm/setup-emsdk@v16
+        with:
+          # Pin matches ci.yml's wasm job and release.yml's npm/python
+          # jobs -- keeps the capi WASM build deterministic.
+          version: 3.1.74
+          actions-cache-folder: emsdk-cache
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build
+
+      - name: Install wasmtime
+        run: python -m pip install wasmtime
+
+      - name: Build capi WASM, stage, and smoke-test Python binding
+        # CMAKE override mirrors ci.yml's wasm job and release.yml's
+        # python-wheel job: mymindstorm/setup-emsdk@v16 prepends a
+        # non-executable bundled cmake to PATH ahead of the system one
+        # (see ci.yml's "Diagnose cmake before WASM build" step).
+        #
+        # `make python-test` depends on `python-package` (stages
+        # formulon_capi.wasm via packages/python/scripts/stage.py),
+        # which depends on `wasm-capi` (builds formulon_capi.wasm).
+        run: make CMAKE=/usr/bin/cmake python-test
 
   release-bundle:
     name: Bundle prebuilds for release
