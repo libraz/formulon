@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-07-03
+
+### Added
+
+- Read-only ad-hoc formula evaluation: `evaluateFormulaText` /
+  `evaluateConditionalFormula` (C API, Node addon, WASM) evaluate formula
+  text against a workbook without mutating it — resolving local/
+  cross-sheet refs, defined names, and `ROW()`/`COLUMN()` anchoring, and
+  reducing array/spill results to their top-left element. CF-rule
+  evaluation shifts relative references from the rule's anchor and
+  applies Excel's CF-predicate coercion.
+- Comment enumeration: `getComments` (Node addon) / `fm_sheet_get_comment_count`
+  and `fm_sheet_get_comment_at_index` (C API) list every comment on a
+  sheet, including comments anchored on otherwise-empty cells.
+- `show_dropdown` on data validation, round-tripped through OOXML with
+  the `showDropDown` attribute's inverted semantics corrected.
+- `addConditionalFormat` / `fm_sheet_cf_add_rule` now return the new
+  rule's flattened index.
+
+See the
+[GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.4)
+for the full auto-generated change list.
+
 ## [0.9.3] - 2026-07-03
 
 ### Added
@@ -157,7 +180,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/libraz/formulon/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/libraz/formulon/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/libraz/formulon/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/libraz/formulon/compare/v0.9.0...v0.9.1
