@@ -148,6 +148,7 @@ DATA_VALIDATION = Struct(
         ("allow_blank", I32),
         ("show_input_message", I32),
         ("show_error_message", I32),
+        ("show_dropdown", I32),
         ("formula1", PTR),
         ("formula2", PTR),
         ("error_title", PTR),

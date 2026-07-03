@@ -405,6 +405,7 @@ class DataValidation:
     allow_blank: bool
     show_input_message: bool
     show_error_message: bool
+    show_dropdown: bool
     formula1: str
     formula2: str
     error_title: str
@@ -418,7 +419,9 @@ class DataValidationInput:
     """Argument shape for :meth:`Workbook.add_validation`.
 
     Every field except ``type`` defaults to a benign zero/false/empty so
-    callers populate only the parts they need.
+    callers populate only the parts they need. ``show_dropdown`` defaults
+    to ``True`` to match the OOXML default (the in-cell dropdown arrow is
+    shown for ``list`` validations unless explicitly suppressed).
     """
 
     type: int
@@ -428,6 +431,7 @@ class DataValidationInput:
     allow_blank: bool = False
     show_input_message: bool = False
     show_error_message: bool = False
+    show_dropdown: bool = True
     formula1: str = ""
     formula2: str = ""
     error_title: str = ""
@@ -1632,6 +1636,7 @@ class Workbook:
             allow_blank=bool(d["allow_blank"]),
             show_input_message=bool(d["show_input_message"]),
             show_error_message=bool(d["show_error_message"]),
+            show_dropdown=bool(d["show_dropdown"]),
             formula1=LIB.read_cstr(d["formula1"]),
             formula2=LIB.read_cstr(d["formula2"]),
             error_title=LIB.read_cstr(d["error_title"]),
@@ -1656,6 +1661,7 @@ class Workbook:
                     "allow_blank": 1 if validation.allow_blank else 0,
                     "show_input_message": 1 if validation.show_input_message else 0,
                     "show_error_message": 1 if validation.show_error_message else 0,
+                    "show_dropdown": 1 if validation.show_dropdown else 0,
                 },
             )
             ranges_ptr = _pack_merge_array(validation.ranges, owned)
@@ -2136,11 +2142,12 @@ class Workbook:
 
     def add_conditional_format(
         self, sheet: int, rule: ConditionalFormatInput
-    ) -> None:
-        """Append a non-visual CF rule to ``sheet``."""
+    ) -> int:
+        """Append a non-visual CF rule to ``sheet``; return its index."""
         h = self._require()
         owned: List[int] = []
         ptr = S.alloc_struct(LIB, S.CF_RULE)
+        out = _alloc_out_ptr()
         try:
             S.CF_RULE.pack(
                 LIB,
@@ -2191,10 +2198,13 @@ class Workbook:
             S.write_str_field(LIB, ptr, S.CF_RULE, "formula2", rule.formula2, owned)
             S.write_str_field(LIB, ptr, S.CF_RULE, "text", rule.text, owned)
             _check(
-                LIB.fm_sheet_cf_add_rule(h, int(sheet), ptr), "fm_sheet_cf_add_rule"
+                LIB.fm_sheet_cf_add_rule(h, int(sheet), ptr, out),
+                "fm_sheet_cf_add_rule",
             )
+            return LIB.read_u32(out)
         finally:
             LIB.free(ptr)
+            LIB.free(out)
             for p in owned:
                 LIB.free(p)
 

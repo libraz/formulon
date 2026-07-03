@@ -41,7 +41,7 @@ class StructLayoutTests(unittest.TestCase):
         "MERGE_RANGE": 16,
         "HYPERLINK": 24,
         "COMMENT": 16,
-        "DATA_VALIDATION": 48,
+        "DATA_VALIDATION": 52,
         "SHEET_PROTECTION": 88,
         "VIEWPORT": 20,
         "CF_MATCH": 72,

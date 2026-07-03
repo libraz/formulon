@@ -166,6 +166,7 @@ class DataValidation:
     allow_blank: bool
     show_input_message: bool
     show_error_message: bool
+    show_dropdown: bool
     formula1: str
     formula2: str
     error_title: str
@@ -181,6 +182,7 @@ class DataValidationInput:
     allow_blank: bool
     show_input_message: bool
     show_error_message: bool
+    show_dropdown: bool
     formula1: str
     formula2: str
     error_title: str
@@ -196,6 +198,7 @@ class DataValidationInput:
         allow_blank: bool = ...,
         show_input_message: bool = ...,
         show_error_message: bool = ...,
+        show_dropdown: bool = ...,
         formula1: str = ...,
         formula2: str = ...,
         error_title: str = ...,
@@ -690,7 +693,7 @@ class Workbook:
     def get_conditional_formats(self, sheet: int) -> List[ConditionalFormat]: ...
     def add_conditional_format(
         self, sheet: int, rule: ConditionalFormatInput
-    ) -> None: ...
+    ) -> int: ...
     def remove_conditional_format_at(self, sheet: int, index: int) -> None: ...
     def clear_conditional_formats(self, sheet: int) -> None: ...
 
