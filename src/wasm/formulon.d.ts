@@ -555,6 +555,14 @@ export interface CommentEntry {
   text: string;
 }
 
+/** Sheet-wide comment entry returned by `getComments(sheet)`. Extends
+ *  `CommentEntry` with the anchor cell so comments on otherwise-empty
+ *  cells can be discovered without already knowing their `(row, col)`. */
+export interface SheetCommentEntry extends CommentEntry {
+  row: number;
+  col: number;
+}
+
 /** One cell-range entry inside a `DataValidationEntry.ranges`. Identical
  *  shape to `MergeRange`; declared separately so the data-validation
  *  surface can evolve independently of the merge surface. */
@@ -584,6 +592,9 @@ export interface DataValidationEntry {
   readonly allowBlank: boolean;
   readonly showInputMessage: boolean;
   readonly showErrorMessage: boolean;
+  /** Whether the in-cell dropdown arrow is shown (`list` type only).
+   *  Defaults to `true`, matching Excel's default. */
+  readonly showDropDown: boolean;
   readonly formula1: string;
   readonly formula2: string;
   readonly errorTitle: string;
@@ -605,6 +616,9 @@ export interface DataValidationInput {
   allowBlank?: boolean;
   showInputMessage?: boolean;
   showErrorMessage?: boolean;
+  /** Whether the in-cell dropdown arrow is shown (`list` type only).
+   *  Defaults to `true`, matching Excel's default. */
+  showDropDown?: boolean;
   formula1?: string;
   formula2?: string;
   errorTitle?: string;
@@ -1017,6 +1031,30 @@ export interface Workbook {
 
   getValue(sheet: number, row: number, col: number): CellResult;
 
+  /** Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
+   *  single scalar result, without mutating the workbook. Local and
+   *  cross-sheet references, defined names, and `ROW()` / `COLUMN()` resolve
+   *  relative to the anchor. An array / spill result is reduced to its
+   *  top-left element (a pragmatic API shape, not Excel implicit
+   *  intersection or spilling; multi-cell results are a Phase 2 follow-up).
+   *  Note: a self-reference reads the target cell's cached value rather than
+   *  raising `#REF!`, since the ad-hoc formula never joins the dep graph. */
+  evaluateFormulaText(sheet: number, row: number, col: number, formula: string): EvalResult;
+
+  /** Evaluates `formula` as a conditional-formatting predicate anchored at
+   *  `(sheet, row, col)`, with relative references written relative to
+   *  `(anchorRow, anchorCol)` (the CF-applied range's top-left). The result
+   *  is coerced with Excel's CF rules: error / blank / text / numeric-zero
+   *  yield `false`, any non-zero number yields `true`. Read-only. */
+  evaluateConditionalFormula(
+    sheet: number,
+    row: number,
+    col: number,
+    anchorRow: number,
+    anchorCol: number,
+    formula: string,
+  ): EvalResult;
+
   /** Renders the lambda value stored at `(sheet, row, col)` as Excel
    *  formula text. Returns `kInvalidArgument` when the cell is absent
    *  or its cached value is not a lambda. */
@@ -1397,6 +1435,9 @@ export interface Workbook {
 
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): CommentEntry | null;
+  /** Returns every comment on `sheet`, including comments anchored on
+   *  cells that carry no value. */
+  getComments(sheet: number): ReadonlyArray<SheetCommentEntry>;
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
 
@@ -1432,8 +1473,12 @@ export interface Workbook {
    *  them as immutable view objects. */
   getConditionalFormats(sheet: number): ReadonlyArray<ConditionalFormatEntry>;
   /** Appends a new single-rule `<conditionalFormatting>` block to
-   *  `sheet`, including visual rules when their payload object is supplied. */
-  addConditionalFormat(sheet: number, rule: ConditionalFormatInput): Status;
+   *  `sheet`, including visual rules when their payload object is supplied.
+   *  `index` is the new rule's position in the sheet's flattened CF rule
+   *  sequence (the same indexing `getConditionalFormats` and
+   *  `removeConditionalFormatAt` use); it stays valid until a subsequent
+   *  add/remove/clear mutation on the same sheet renumbers the sequence. */
+  addConditionalFormat(sheet: number, rule: ConditionalFormatInput): AddStyleResult;
   /** Removes the CF rule at `index` (flattened order). When the
    *  containing block becomes empty it is removed too. */
   removeConditionalFormatAt(sheet: number, index: number): Status;

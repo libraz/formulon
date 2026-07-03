@@ -201,6 +201,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/iterative_solver.cpp
   src/eval/recalc_engine.cpp
   src/eval/cell_evaluator.cpp
+  src/eval/adhoc_eval.cpp
   src/eval/scheduler.cpp
   src/eval/volatile_tracker.cpp
   src/eval/function_registry.cpp
@@ -323,6 +324,7 @@ src/eval/aggregate_lazy.cpp
   src/eval/lookups/xlookup.cpp
   src/c_api/parts/cells.cpp
   src/c_api/parts/cf_eval.cpp
+  src/c_api/parts/eval_adhoc.cpp
   src/c_api/parts/cf_mutate.cpp
   src/c_api/parts/common.cpp
   src/c_api/parts/diagnostics.cpp

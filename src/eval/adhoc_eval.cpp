@@ -1,0 +1,114 @@
+// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
+//
+// Implementation of the ad-hoc, side-effect-free formula evaluation
+// drivers declared in `adhoc_eval.h`.
+
+#include "eval/adhoc_eval.h"
+
+#include <cstdint>
+#include <string_view>
+
+#include "eval/eval_context.h"
+#include "eval/eval_state.h"
+#include "eval/formula_text_utils.h"
+#include "eval/function_registry.h"
+#include "eval/tree_walker.h"
+#include "parser/ast.h"
+#include "parser/ast_shift.h"
+#include "parser/parser.h"
+#include "sheet.h"
+#include "utils/arena.h"
+#include "value.h"
+#include "workbook.h"
+
+namespace formulon {
+namespace eval {
+
+namespace {
+
+// Reduces a possibly-array `Value` to a single scalar by taking the
+// top-left cell of an array result. See the header for why this is neither
+// implicit intersection nor spilling. A degenerate empty array (which
+// producers should never emit) surfaces as `#VALUE!`.
+Value reduce_to_scalar(Value v) {
+  if (!v.is_array()) {
+    return v;
+  }
+  if (v.as_array_rows() == 0 || v.as_array_cols() == 0) {
+    return Value::error(ErrorCode::Value);
+  }
+  return v.as_array_cells()[0];
+}
+
+// Builds the read-only evaluation context shared by both drivers. The
+// deliberate omission of `with_mutable_sheet` is the purity guarantee:
+// without it `EvalContext::dispatch_array_result` is inert and recursive
+// `resolve_ref` never commits a spill, so the workbook is never mutated.
+EvalContext make_readonly_context(const Workbook& workbook, const Sheet& sheet, EvalState& state, std::uint32_t row,
+                                  std::uint32_t col) {
+  return EvalContext(workbook, sheet, state)
+      .with_excel_profile(workbook.excel_profile())
+      .with_date1904(workbook.date1904())
+      .with_formula_cell(row, col);
+}
+
+}  // namespace
+
+Value evaluate_formula_text(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                            std::string_view formula, Arena& arena, const FunctionRegistry& registry) {
+  // Strip a leading '=' so both "=A1+1" and "A1+1" parse identically,
+  // matching the recalc path's use of `strip_formula_prefix`.
+  const std::string_view src = strip_formula_prefix(formula);
+
+  parser::Parser parser(src, arena);
+  parser::AstNode* root = parser.parse();
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+
+  EvalState state;
+  const EvalContext ctx = make_readonly_context(workbook, sheet, state, row, col);
+  return reduce_to_scalar(evaluate(*root, arena, registry, ctx));
+}
+
+bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                         std::uint32_t anchor_row, std::uint32_t anchor_col, std::string_view formula, Arena& arena,
+                         const FunctionRegistry& registry) {
+  const std::string_view src = strip_formula_prefix(formula);
+
+  parser::Parser parser(src, arena);
+  parser::AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    // A malformed rule formula does not fire (coerces to false).
+    return false;
+  }
+
+  // Relative refs in a CF rule formula are authored relative to the
+  // applied range's top-left (`anchor`); shift them to the target cell so
+  // they resolve exactly as Excel does for `(row, col)`.
+  const std::int32_t row_delta = static_cast<std::int32_t>(row) - static_cast<std::int32_t>(anchor_row);
+  const std::int32_t col_delta = static_cast<std::int32_t>(col) - static_cast<std::int32_t>(anchor_col);
+  const parser::AstNode* shifted = parser::shift_relative_refs(*root, arena, row_delta, col_delta);
+  if (shifted == nullptr) {
+    return false;
+  }
+
+  EvalState state;
+  const EvalContext ctx = make_readonly_context(workbook, sheet, state, row, col);
+  const Value result = reduce_to_scalar(evaluate(*shifted, arena, registry, ctx));
+  return coerce_cf_predicate(result);
+}
+
+bool coerce_cf_predicate(const Value& v) {
+  if (v.is_boolean()) {
+    return v.as_boolean();
+  }
+  if (v.is_number()) {
+    return v.as_number() != 0.0;
+  }
+  // Error, blank, text, array, lambda: the rule does not fire.
+  return false;
+}
+
+}  // namespace eval
+}  // namespace formulon

@@ -100,6 +100,32 @@ emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t co
   return o;
 }
 
+emscripten::val JsWorkbook::getComments(uint32_t sheet) const {
+  emscripten::val arr = emscripten::val::array();
+  if (handle_ == nullptr) {
+    return arr;
+  }
+  uint32_t count = 0;
+  if (fm_sheet_get_comment_count(handle_, sheet, &count) != 0) {
+    return arr;
+  }
+  uint32_t emitted = 0;
+  for (uint32_t i = 0; i < count; ++i) {
+    fm_comment c{};
+    if (fm_sheet_get_comment_at_index(handle_, sheet, i, &c) != 0) {
+      continue;
+    }
+    emscripten::val o = emscripten::val::object();
+    o.set("row", c.row);
+    o.set("col", c.col);
+    o.set("author", c.author != nullptr ? std::string(c.author) : std::string());
+    o.set("text", c.text != nullptr ? std::string(c.text) : std::string());
+    arr.set(emitted, o);
+    ++emitted;
+  }
+  return arr;
+}
+
 JsStatus JsWorkbook::setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author,
                                 const std::string& text) {
   if (handle_ == nullptr) {
@@ -209,6 +235,7 @@ emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
     item.set("allowBlank", v.allow_blank != 0);
     item.set("showInputMessage", v.show_input_message != 0);
     item.set("showErrorMessage", v.show_error_message != 0);
+    item.set("showDropDown", v.show_dropdown != 0);
     item.set("formula1", v.formula1 != nullptr ? std::string(v.formula1) : std::string());
     item.set("formula2", v.formula2 != nullptr ? std::string(v.formula2) : std::string());
     item.set("errorTitle", v.error_title != nullptr ? std::string(v.error_title) : std::string());
@@ -261,6 +288,7 @@ JsStatus JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   dv.allow_blank = js_pull_bool(v, "allowBlank", true) ? 1 : 0;
   dv.show_input_message = js_pull_bool(v, "showInputMessage", false) ? 1 : 0;
   dv.show_error_message = js_pull_bool(v, "showErrorMessage", false) ? 1 : 0;
+  dv.show_dropdown = js_pull_bool(v, "showDropDown", true) ? 1 : 0;
   dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   dv.error_title = error_title.empty() ? nullptr : error_title.c_str();

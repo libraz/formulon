@@ -553,6 +553,72 @@ FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_in
                                               const char** out_text);
 
 /* -------------------------------------------------------------------------- */
+/* Ad-hoc, side-effect-free formula evaluation                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Evaluates `formula` as if entered at `(row, col)` on
+ *        `sheet_index`, returning a single scalar result — WITHOUT
+ *        mutating the workbook.
+ *
+ * The formula is parsed and evaluated against a read-only view of the
+ * workbook: local and qualified/renamed cross-sheet references,
+ * workbook-scoped defined names, and `ROW()` / `COLUMN()` all resolve
+ * relative to `(row, col)`, with full locale / coercion / 1904 fidelity
+ * from the workbook profile. No cell value is written, no dynamic-array
+ * spill is committed, and the dependency graph is untouched. The `const`
+ * on `wb` is the ABI-level purity contract.
+ *
+ * An Array / spill result is reduced to its top-left element. This is a
+ * pragmatic API-shape choice, NOT Excel implicit intersection (which
+ * selects the element sharing the anchor's row / column and yields
+ * `#VALUE!` when there is none) and NOT dynamic-array spilling (which
+ * returns the whole array). Multi-cell results are a Phase 2 follow-up.
+ *
+ * For `FM_VAL_TEXT`, `out->u.text` borrows the handle's read scratch and
+ * is valid only until the next read on this handle (see
+ * `fm_workbook_get_value`); copy it if you need to retain it.
+ *
+ * @note Because the ad-hoc formula is never inserted into the dependency
+ *       graph, a self-reference such as `=A1` anchored at A1's own address
+ *       reads A1's *cached* value rather than raising `#REF!` or engaging
+ *       iterative calc. This diverges from true in-cell F9 entry;
+ *       self-reference detection is out of scope for this API.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb`, `formula`, or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                const char* formula, fm_value_t* out);
+
+/**
+ * @brief Evaluates `formula` as a conditional-formatting rule predicate
+ *        anchored at `(row, col)`, with relative references written
+ *        relative to `(anchor_row, anchor_col)` (the CF-applied range's
+ *        top-left) — WITHOUT mutating the workbook.
+ *
+ * Relative references are shifted from the anchor to `(row, col)` before
+ * evaluation, mirroring how Excel re-anchors a shared CF rule per cell.
+ * The result is coerced with Excel's CF-predicate rules rather than
+ * propagated verbatim: an error, blank, text, or numeric-zero result
+ * yields `FALSE` (rule does not fire); any non-zero number yields `TRUE`.
+ * `*out` is always `FM_VAL_BOOL`. Read-only, identical purity contract to
+ * `fm_workbook_evaluate_formula`.
+ *
+ * @note The same self-reference caveat as `fm_workbook_evaluate_formula`
+ *       applies: a rule that reads its own anchored cell sees the cached
+ *       value rather than raising `#REF!`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb`, `formula`, or `out` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                   uint32_t col, uint32_t anchor_row, uint32_t anchor_col,
+                                                   const char* formula, fm_value_t* out);
+
+/* -------------------------------------------------------------------------- */
 /* Iteration / dump                                                           */
 /* -------------------------------------------------------------------------- */
 
@@ -810,6 +876,33 @@ FM_API fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, uint32_t sheet, ui
                                            fm_comment* out);
 
 /**
+ * @brief Returns the number of comments attached to `sheet`, including
+ *        comments anchored on cells that carry no value.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_comment_count(fm_workbook_t* wb, uint32_t sheet, uint32_t* out_count);
+
+/**
+ * @brief Reads the `index`-th comment on `sheet` into `out`, in storage
+ *        order. Unlike `fm_sheet_get_comment_at`, this enumerates every
+ *        comment on the sheet regardless of whether the anchor cell holds
+ *        a value, so callers can discover comments without already
+ *        knowing their `(row, col)`.
+ *
+ * `out->author` and `out->text` borrow NUL-terminated UTF-8 pointers from
+ * the workbook handle, with the same lifetime contract as
+ * `fm_sheet_get_comment_at`.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet` or `index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, uint32_t sheet, uint32_t index, fm_comment* out);
+
+/**
  * @brief Reads the `index`-th hyperlink on `sheet` into `out`.
  *
  * String fields in `out` are borrowed pointers (see `fm_hyperlink`).
@@ -859,8 +952,12 @@ FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint3
  *   * `op`   — 0 between, 1 notBetween, 2 equal, 3 notEqual,
  *     4 greaterThan, 5 lessThan, 6 greaterThanOrEqual, 7 lessThanOrEqual.
  *   * `error_style` — 0 stop, 1 warning, 2 information.
- *   * `allow_blank` / `show_input_message` / `show_error_message` —
- *     0 = false, 1 = true.
+ *   * `allow_blank` / `show_input_message` / `show_error_message` /
+ *     `show_dropdown` — 0 = false, 1 = true. `show_dropdown` is the
+ *     user-facing "is the in-cell dropdown arrow shown" meaning for
+ *     `list` validations (default true); this is the inverse of the raw
+ *     OOXML `showDropDown` XML attribute, which the reader/writer already
+ *     translate.
  *   * `formula1` / `formula2` / `error_title` / `error_message` /
  *     `prompt_title` / `prompt_message` — borrowed NUL-terminated UTF-8
  *     strings. On the input path (`fm_sheet_add_validation`) `NULL`
@@ -876,6 +973,7 @@ typedef struct {
   int32_t allow_blank;
   int32_t show_input_message;
   int32_t show_error_message;
+  int32_t show_dropdown;
   const char* formula1;
   const char* formula2;
   const char* error_title;
@@ -1506,14 +1604,23 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  * `rule.id` is `NULL` or empty, a new id is synthesised from the
  * priority.
  *
+ * `*out_index` receives the new rule's position in the sheet's
+ * flattened CF rule sequence (the same indexing `fm_sheet_cf_get_at`
+ * and `fm_sheet_cf_remove_at` use). Since this call always appends a
+ * new block after every existing one, the returned index equals the
+ * flattened rule count observed just before the call; it stays valid
+ * until a subsequent mutation (`fm_sheet_cf_add_rule`,
+ * `fm_sheet_cf_remove_at`, `fm_sheet_cf_clear`) on the same sheet
+ * renumbers the sequence.
+ *
  * @return `kOk` on success;
- *         `kBindingNullPointer` when `wb` is `NULL` or `rule.sqref`
- *           is `NULL` while `rule.sqref_count > 0`;
+ *         `kBindingNullPointer` when `wb` or `out_index` is `NULL`, or
+ *           `rule.sqref` is `NULL` while `rule.sqref_count > 0`;
  *         `kInvalidArgument` when `sheet_index` is out of range, when
  *           `rule.sqref_count == 0`, or when a visual payload is
  *           missing / malformed.
  */
-FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule);
+FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule, size_t* out_index);
 
 /**
  * @brief Removes the `idx`-th CF rule (flattened order). When the

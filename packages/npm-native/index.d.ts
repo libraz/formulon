@@ -548,6 +548,14 @@ export interface CommentEntry {
   text: string;
 }
 
+/** Sheet-wide comment entry returned by `getComments(sheet)`. Extends
+ *  `CommentEntry` with the anchor cell so comments on otherwise-empty
+ *  cells can be discovered without already knowing their `(row, col)`. */
+export interface SheetCommentEntry extends CommentEntry {
+  row: number;
+  col: number;
+}
+
 /** One cell-range entry inside a `DataValidationEntry.ranges`. Identical
  *  shape to `MergeRange`; declared separately so the data-validation
  *  surface can evolve independently of the merge surface. */
@@ -985,6 +993,28 @@ export interface Workbook {
 
   // Cell read.
   getValue(sheet: number, row: number, col: number): CellResult;
+  /** Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
+   *  single scalar result, without mutating the workbook. Local and
+   *  cross-sheet references, defined names, and `ROW()` / `COLUMN()` resolve
+   *  relative to the anchor. An array / spill result is reduced to its
+   *  top-left element (a pragmatic API shape, not Excel implicit
+   *  intersection or spilling; multi-cell results are a Phase 2 follow-up).
+   *  Note: a self-reference reads the target cell's cached value rather than
+   *  raising `#REF!`, since the ad-hoc formula never joins the dep graph. */
+  evaluateFormulaText(sheet: number, row: number, col: number, formula: string): EvalResult;
+  /** Evaluates `formula` as a conditional-formatting predicate anchored at
+   *  `(sheet, row, col)`, with relative references written relative to
+   *  `(anchorRow, anchorCol)` (the CF-applied range's top-left). The result
+   *  is coerced with Excel's CF rules: error / blank / text / numeric-zero
+   *  yield `false`, any non-zero number yields `true`. Read-only. */
+  evaluateConditionalFormula(
+    sheet: number,
+    row: number,
+    col: number,
+    anchorRow: number,
+    anchorCol: number,
+    formula: string,
+  ): EvalResult;
   /** Returns the rendered `LAMBDA(...)` text for the lambda value cached
    *  at `(sheet, row, col)`. `kInvalidArgument` surfaces via `status`
    *  when the cell is absent or its value is not a lambda. */
@@ -1361,6 +1391,9 @@ export interface Workbook {
   getMerges(sheet: number): ReadonlyArray<MergeRange>;
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): CommentEntry | null;
+  /** Returns every comment on `sheet`, including comments anchored on
+   *  cells that carry no value. */
+  getComments(sheet: number): ReadonlyArray<SheetCommentEntry>;
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
   /** Appends a hyperlink to `sheet`. Pass empty strings for `display`

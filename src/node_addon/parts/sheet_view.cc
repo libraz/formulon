@@ -520,6 +520,34 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
   return o;
 }
 
+Napi::Value Workbook::GetComments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Array arr = Napi::Array::New(env);
+  if (handle_ == nullptr) {
+    return arr;
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  uint32_t count = 0;
+  if (fm_sheet_get_comment_count(handle_, sheet, &count) != 0) {
+    return arr;
+  }
+  std::size_t emitted = 0;
+  for (uint32_t i = 0; i < count; ++i) {
+    fm_comment c{};
+    if (fm_sheet_get_comment_at_index(handle_, sheet, i, &c) != 0) {
+      continue;
+    }
+    Napi::Object item = Napi::Object::New(env);
+    item.Set("row", Napi::Number::New(env, c.row));
+    item.Set("col", Napi::Number::New(env, c.col));
+    item.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
+    item.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
+    arr.Set(static_cast<uint32_t>(emitted), item);
+    ++emitted;
+  }
+  return arr;
+}
+
 Napi::Value Workbook::SetComment(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -673,6 +701,7 @@ Napi::Value Workbook::GetValidations(const Napi::CallbackInfo& info) {
     item.Set("allowBlank", Napi::Boolean::New(env, v.allow_blank != 0));
     item.Set("showInputMessage", Napi::Boolean::New(env, v.show_input_message != 0));
     item.Set("showErrorMessage", Napi::Boolean::New(env, v.show_error_message != 0));
+    item.Set("showDropDown", Napi::Boolean::New(env, v.show_dropdown != 0));
     item.Set("formula1", Napi::String::New(env, v.formula1 != nullptr ? v.formula1 : ""));
     item.Set("formula2", Napi::String::New(env, v.formula2 != nullptr ? v.formula2 : ""));
     item.Set("errorTitle", Napi::String::New(env, v.error_title != nullptr ? v.error_title : ""));
@@ -768,6 +797,7 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   dv.allow_blank = pull_bool("allowBlank", true) ? 1 : 0;
   dv.show_input_message = pull_bool("showInputMessage", false) ? 1 : 0;
   dv.show_error_message = pull_bool("showErrorMessage", false) ? 1 : 0;
+  dv.show_dropdown = pull_bool("showDropDown", true) ? 1 : 0;
   dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
   dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
   dv.error_title = error_title.empty() ? nullptr : error_title.c_str();

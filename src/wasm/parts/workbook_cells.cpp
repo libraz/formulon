@@ -86,6 +86,42 @@ JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) co
   return r;
 }
 
+JsEvalResult JsWorkbook::evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col,
+                                             const std::string& formula) const {
+  JsEvalResult r;
+  if (handle_ == nullptr) {
+    r.status = error_status(7000);
+    return r;
+  }
+  fm_value_t v{};
+  fm_status_t rc = fm_workbook_evaluate_formula(handle_, sheet, row, col, formula.c_str(), &v);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  r.value = translate_value(v);
+  r.status = ok_status();
+  return r;
+}
+
+JsEvalResult JsWorkbook::evaluateConditionalFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t anchorRow,
+                                                    uint32_t anchorCol, const std::string& formula) const {
+  JsEvalResult r;
+  if (handle_ == nullptr) {
+    r.status = error_status(7000);
+    return r;
+  }
+  fm_value_t v{};
+  fm_status_t rc = fm_workbook_evaluate_cf_formula(handle_, sheet, row, col, anchorRow, anchorCol, formula.c_str(), &v);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  r.value = translate_value(v);
+  r.status = ok_status();
+  return r;
+}
+
 emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {

@@ -21,7 +21,7 @@ Why prefer the native build:
 ## Surface parity
 
 This package exposes the full `Workbook` surface of the WASM-backed
-`@libraz/formulon` package — the same 171 instance methods plus the
+`@libraz/formulon` package — the same 174 instance methods plus the
 three static factories, all marshalling to the identical C-ABI
 functions. JS callers can swap between the two packages without code
 changes; the `{ status, value }` envelopes and result shapes are

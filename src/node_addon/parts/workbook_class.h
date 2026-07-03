@@ -45,6 +45,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Cell read.
   Napi::Value GetValue(const Napi::CallbackInfo& info);
 
+  // Ad-hoc, side-effect-free formula evaluation.
+  Napi::Value EvaluateFormulaText(const Napi::CallbackInfo& info);
+  Napi::Value EvaluateConditionalFormula(const Napi::CallbackInfo& info);
+
   // Lifecycle.
   Napi::Value IsValid(const Napi::CallbackInfo& info);
 
@@ -234,6 +238,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ClearMerges(const Napi::CallbackInfo& info);
   Napi::Value GetMerges(const Napi::CallbackInfo& info);
   Napi::Value GetComment(const Napi::CallbackInfo& info);
+  Napi::Value GetComments(const Napi::CallbackInfo& info);
   Napi::Value SetComment(const Napi::CallbackInfo& info);
   Napi::Value AddHyperlink(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlinks(const Napi::CallbackInfo& info);

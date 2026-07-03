@@ -82,6 +82,18 @@ class JsWorkbook {
   JsCellResult getValue(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const;
 
+  /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
+  /// single scalar result without mutating the workbook. Array results are
+  /// reduced to their top-left element. See `fm_workbook_evaluate_formula`.
+  JsEvalResult evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) const;
+
+  /// Evaluates `formula` as a conditional-formatting predicate anchored at
+  /// `(sheet, row, col)`, with relative refs written relative to
+  /// `(anchorRow, anchorCol)`; returns a coerced boolean result. See
+  /// `fm_workbook_evaluate_cf_formula`.
+  JsEvalResult evaluateConditionalFormula(uint32_t sheet, uint32_t row, uint32_t col, uint32_t anchorRow,
+                                          uint32_t anchorCol, const std::string& formula) const;
+
   // ---- Recalc / calc mode ------------------------------------------------
 
   JsStatus recalc();
@@ -176,6 +188,7 @@ class JsWorkbook {
   JsStatus clearMerges(uint32_t sheet);
 
   emscripten::val getComment(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getComments(uint32_t sheet) const;
   JsStatus setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text);
 
   JsStatus addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
@@ -194,7 +207,7 @@ class JsWorkbook {
   // ---- Conditional formats -----------------------------------------------
 
   emscripten::val getConditionalFormats(uint32_t sheet) const;
-  JsStatus addConditionalFormat(uint32_t sheet, emscripten::val v);
+  JsAddStyleResult addConditionalFormat(uint32_t sheet, emscripten::val v);
   JsStatus removeConditionalFormatAt(uint32_t sheet, uint32_t index);
   JsStatus clearConditionalFormats(uint32_t sheet);
 

@@ -277,8 +277,13 @@ extern "C" fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, std::size_t s
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet_index, fm_cf_rule_t rule) {
+extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet_index, fm_cf_rule_t rule,
+                                            std::size_t* out_index) {
   clear_last_error();
+  if (out_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_cf_add_rule: out_index is NULL");
+  }
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_add_rule"); rc != 0) {
     return rc;
   }
@@ -371,7 +376,16 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   }
 
   new_block.rules.push_back(std::move(out_rule));
-  wb->workbook().sheet(sheet_index).mutable_conditional_formats().push_back(std::move(new_block));
+  auto& blocks_mut = wb->workbook().sheet(sheet_index).mutable_conditional_formats();
+  // The new block is appended after every existing block, so its single
+  // rule lands at the flattened index equal to the total rule count
+  // observed just before the append.
+  std::size_t new_index = 0;
+  for (const auto& block : blocks_mut) {
+    new_index += block.rules.size();
+  }
+  blocks_mut.push_back(std::move(new_block));
+  *out_index = new_index;
   return 0;
 }
 

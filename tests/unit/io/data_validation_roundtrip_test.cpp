@@ -111,6 +111,32 @@ TEST(DataValidationRoundTrip, AllOperatorVariantsParse) {
   EXPECT_EQ(out.value()[6].op, 7U);
 }
 
+TEST(DataValidationRoundTrip, ShowDropDownDefaultsToShown) {
+  pugi::xml_document doc;
+  auto ws = ParseWorksheet(doc,
+                           "<dataValidations>"
+                           "<dataValidation type=\"list\" sqref=\"A1\"><formula1>1</formula1></dataValidation>"
+                           "</dataValidations>");
+  auto out = read_data_validations(ws);
+  ASSERT_TRUE(static_cast<bool>(out));
+  ASSERT_EQ(out.value().size(), 1U);
+  EXPECT_TRUE(out.value()[0].show_dropdown);
+}
+
+TEST(DataValidationRoundTrip, ShowDropDownAttributeSuppressesArrow) {
+  // ECMA-376: `showDropDown="1"` SUPPRESSES the in-cell dropdown arrow.
+  pugi::xml_document doc;
+  auto ws = ParseWorksheet(doc,
+                           "<dataValidations>"
+                           "<dataValidation type=\"list\" showDropDown=\"1\" sqref=\"A1\">"
+                           "<formula1>1</formula1></dataValidation>"
+                           "</dataValidations>");
+  auto out = read_data_validations(ws);
+  ASSERT_TRUE(static_cast<bool>(out));
+  ASSERT_EQ(out.value().size(), 1U);
+  EXPECT_FALSE(out.value()[0].show_dropdown);
+}
+
 TEST(DataValidationRoundTrip, EmptySqrefRejected) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,

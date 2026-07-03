@@ -209,9 +209,11 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
   return arr;
 }
 
-JsStatus JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
+JsAddStyleResult JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
+  JsAddStyleResult r;
   if (handle_ == nullptr) {
-    return error_status(7000);
+    r.status = error_status(7000);
+    return r;
   }
   // Pull every JS field into local storage; the C ABI receives
   // borrowed `const char*` views that must stay valid for the
@@ -323,8 +325,15 @@ JsStatus JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val v) {
     rule.icon_set_show_value = js_pull_bool(is, "showValue", true) ? 1 : 0;
     rule.icon_set_percent = js_pull_bool(is, "percent", true) ? 1 : 0;
   }
-  fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule);
-  return status_from_rc(rc);
+  std::size_t new_index = 0;
+  fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  r.status = ok_status();
+  r.index = static_cast<uint32_t>(new_index);
+  return r;
 }
 
 JsStatus JsWorkbook::removeConditionalFormatAt(uint32_t sheet, uint32_t index) {

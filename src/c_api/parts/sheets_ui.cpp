@@ -243,6 +243,43 @@ extern "C" fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, std::uint32_t 
                            "row=" + std::to_string(row) + " col=" + std::to_string(col));
 }
 
+extern "C" fm_status_t fm_sheet_get_comment_count(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t* out_count) {
+  clear_last_error();
+  if (out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_comment_count: out_count is NULL");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_comment_count"); rc != 0) {
+    return rc;
+  }
+  *out_count = static_cast<std::uint32_t>(wb->workbook().sheet(sheet).comments().size());
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t index,
+                                                     fm_comment* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_comment_at_index: out is NULL");
+  }
+  if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_get_comment_at_index"); rc != 0) {
+    return rc;
+  }
+  const auto& comments = wb->workbook().sheet(sheet).comments();
+  if (static_cast<std::size_t>(index) >= comments.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_get_comment_at_index: index out of range",
+                             "index=" + std::to_string(index) + " count=" + std::to_string(comments.size()));
+  }
+  const formulon::CellComment& c = comments[index];
+  out->row = c.row;
+  out->col = c.col;
+  out->author = c.author.c_str();
+  out->text = c.text.c_str();
+  return 0;
+}
+
 extern "C" fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, std::uint32_t sheet, std::uint32_t row,
                                             std::uint32_t col, const char* author, const char* text) {
   clear_last_error();
@@ -345,6 +382,7 @@ extern "C" fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, std::uint32
   out->allow_blank = v.allow_blank ? 1 : 0;
   out->show_input_message = v.show_input_message ? 1 : 0;
   out->show_error_message = v.show_error_message ? 1 : 0;
+  out->show_dropdown = v.show_dropdown ? 1 : 0;
   out->formula1 = v.formula1.c_str();
   out->formula2 = v.formula2.c_str();
   out->error_title = v.error_title.c_str();
@@ -383,6 +421,7 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::uint32_t 
   out.allow_blank = v.allow_blank != 0;
   out.show_input_message = v.show_input_message != 0;
   out.show_error_message = v.show_error_message != 0;
+  out.show_dropdown = v.show_dropdown != 0;
   out.formula1 = (v.formula1 != nullptr) ? std::string(v.formula1) : std::string();
   out.formula2 = (v.formula2 != nullptr) ? std::string(v.formula2) : std::string();
   out.error_title = (v.error_title != nullptr) ? std::string(v.error_title) : std::string();

@@ -1004,6 +1004,12 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     if (pugi::xml_attribute sem = dv.attribute("showErrorMessage"); sem) {
       v.show_error_message = parse_xml_bool(sem.value());
     }
+    // `showDropDown` has inverted semantics: presence with a true value
+    // suppresses the arrow, so the user-facing `show_dropdown` is the
+    // negation of the raw attribute (absent/false attribute => shown).
+    if (pugi::xml_attribute sdd = dv.attribute("showDropDown"); sdd) {
+      v.show_dropdown = !parse_xml_bool(sdd.value());
+    }
 
     v.error_title.assign(attr_str(dv, "errorTitle"));
     v.error_message.assign(attr_str(dv, "error"));

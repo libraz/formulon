@@ -723,7 +723,7 @@ Napi::Value Workbook::GetConditionalFormats(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
-    return NullHandleError(env);
+    return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsObject()) {
     Napi::TypeError::New(env, "addConditionalFormat expects (sheet:number, rule:object)").ThrowAsJavaScriptException();
@@ -859,8 +859,12 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
     rule.icon_set_show_value = SpecPullBool(is, "showValue", true) ? 1 : 0;
     rule.icon_set_percent = SpecPullBool(is, "percent", true) ? 1 : 0;
   }
-  fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule);
-  return MakeStatus(env, rc);
+  std::size_t new_index = 0;
+  fm_status_t rc = fm_sheet_cf_add_rule(handle_, sheet, rule, &new_index);
+  if (rc != 0) {
+    return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
+  }
+  return MakeNumberFieldResult(env, MakeOkStatus(env), "index", static_cast<double>(new_index));
 }
 
 Napi::Value Workbook::RemoveConditionalFormatAt(const Napi::CallbackInfo& info) {

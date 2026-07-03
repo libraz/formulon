@@ -43,6 +43,22 @@
 #                                                     # immediately.
 
 entries:
+  # -- ad-hoc evaluate-formula scalar reduction (intentional API shape) ----
+  # `fm_workbook_evaluate_formula` (and the WASM / Node
+  # `evaluateFormulaText`) return a single scalar. When the evaluated
+  # formula produces an array/spill (e.g. `=SEQUENCE(3)`), the API reduces
+  # it to the top-left element. In a real Excel cell the same formula would
+  # spill the whole array; this is a deliberate Phase 1 API-shape choice,
+  # not an Excel-compatibility bug, and not implicit intersection (which
+  # selects the anchor-row/column element and yields #VALUE! when there is
+  # none). Multi-cell results are a Phase 2 follow-up. No oracle case is
+  # generated for this behaviour; the entry documents the intent for
+  # reviewers.
+  - id: evaluate_formula_array_scalar_reduction
+    mode: skip-oracle
+    reason: "fm_workbook_evaluate_formula / evaluateFormulaText reduce an array result to its top-left element (Phase 1 scalar API shape); a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
+    prefer: formulon
+    first_noted: 2026-07-03
   # -- xlwings empty-string / blank read-back gaps -------------------------
   # The Mac xlwings driver cannot write a cell holding the empty string
   # "": assigning "" leaves the cell genuinely blank from Excel's point of

@@ -637,3 +637,80 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   EXPECT_DOUBLE_EQ(reloaded_font.size, 12.0);
   EXPECT_EQ(reloaded_font.bold, 1);
 }
+
+// Regression coverage for the externally-reported symptom fixed by removing
+// the spurious `ensure_default_style_roots` seeding from the font/fill/
+// border adders: a non-default font + fill + custom numFmt combined into an
+// `<xf>` must produce an `<xf>` index that is distinct from (and does not
+// dedup to) the all-zero placeholder xf, and that index must survive
+// `setCellXfIndex` -> save -> reload with the font, fill, and numFmt content
+// intact on the reloaded workbook. Note that a fresh workbook's font/fill
+// tables legitimately start at index 0 (that is the behavior the fix
+// restored), so this test asserts on round-tripped *content*, not on the
+// font/fill indices being non-zero. The WASM (`src/wasm/parts/
+// workbook_styles.cpp`) and Node addon (`src/node_addon/parts/styles.cc`)
+// bindings marshal the identical field set into `fm_cell_xf` and call this
+// same `fm_styles_add_cell_xf` entry point, so this test also exercises
+// their shared code path end to end.
+TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t font_idx = 0xFFFFFFFFU;
+  uint32_t fill_idx = 0xFFFFFFFFU;
+  uint16_t num_fmt_id = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, MakeArial(), &font_idx), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, MakeRedFill(), &fill_idx), 0);
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "0.00%", &num_fmt_id), 0);
+
+  fm_cell_xf xf{};
+  xf.font_index = font_idx;
+  xf.fill_index = fill_idx;
+  xf.border_index = 0;
+  xf.num_fmt_id = num_fmt_id;
+  uint32_t xf_idx = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_idx), 0);
+  ASSERT_NE(xf_idx, 0U) << "non-default font/fill/numFmt must not dedup to the "
+                           "all-zero placeholder xf at index 0";
+
+  // Stability: re-adding the identical record must return the same index.
+  uint32_t xf_idx_again = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_idx_again), 0);
+  EXPECT_EQ(xf_idx, xf_idx_again);
+
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1, 1, 0.4225), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 1, 1, xf_idx), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_GT(saved.len, 0U);
+
+  WorkbookGuard wb2;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+
+  uint32_t reread_xf = 0;
+  ASSERT_EQ(fm_cell_get_xf_index(wb2.handle, 0, 1, 1, &reread_xf), 0);
+  ASSERT_EQ(reread_xf, xf_idx);
+
+  fm_cell_xf reloaded{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb2.handle, reread_xf, &reloaded), 0);
+  EXPECT_EQ(reloaded.font_index, font_idx);
+  EXPECT_EQ(reloaded.fill_index, fill_idx);
+  EXPECT_EQ(reloaded.num_fmt_id, num_fmt_id);
+
+  fm_font_record reloaded_font{};
+  ASSERT_EQ(fm_styles_get_font(wb2.handle, reloaded.font_index, &reloaded_font), 0);
+  EXPECT_STREQ(reloaded_font.name, "Arial");
+  EXPECT_DOUBLE_EQ(reloaded_font.size, 12.0);
+  EXPECT_EQ(reloaded_font.bold, 1);
+
+  fm_fill_record reloaded_fill{};
+  ASSERT_EQ(fm_styles_get_fill(wb2.handle, reloaded.fill_index, &reloaded_fill), 0);
+  EXPECT_EQ(reloaded_fill.pattern, 1U);
+  EXPECT_EQ(reloaded_fill.fg_argb, 0xFFFF0000U);
+
+  const char* reloaded_fmt = nullptr;
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb2.handle, reloaded.num_fmt_id, &reloaded_fmt), 0);
+  ASSERT_NE(reloaded_fmt, nullptr);
+  EXPECT_STREQ(reloaded_fmt, "0.00%");
+}

@@ -262,7 +262,9 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   rule.dxf_id = 3;
   rule.sqref = &sqref;
   rule.sqref_count = 1;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0) << fm_last_error_message();
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  EXPECT_EQ(rule_index, 0U);
 
   CfResultsGuard results;
   ASSERT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 0, 0, 0, std::nan(""), &results.handle), 0)
@@ -291,7 +293,9 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   rule.dxf_id = 4;
   rule.sqref = &sqref;
   rule.sqref_count = 1;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0) << fm_last_error_message();
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  EXPECT_EQ(rule_index, 0U);
 
   // No explicit recalc: CF evaluation should use a recursive EvalState
   // instead of reading the formula cell's stale blank cached value.
@@ -331,7 +335,9 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   rule.dxf_id = 0;
   rule.sqref = &sqref;
   rule.sqref_count = 1;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0);
+  EXPECT_EQ(rule_index, 0U);
 
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
@@ -367,7 +373,9 @@ TEST(FormulonCApiCfMutate, AddMultipleRulesAutoIncrementsPriority) {
     rule.formula1 = f.c_str();
     rule.sqref = &sqref;
     rule.sqref_count = 1;
-    ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+    std::size_t rule_index = 0;
+    ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0);
+    EXPECT_EQ(rule_index, static_cast<std::size_t>(i));
   }
 
   std::size_t count = 0;
@@ -386,13 +394,17 @@ TEST(FormulonCApiCfMutate, RemoveAtFlattensIndices) {
 
   fm_cf_cell_range_t sqref{0, 0, 0, 0};
   std::vector<std::string> formulas{"A1", "A2", "A3"};
+  std::size_t expected_index = 0;
   for (const auto& f : formulas) {
     fm_cf_rule_t rule{};
     rule.type = 0;  // Expression
     rule.formula1 = f.c_str();
     rule.sqref = &sqref;
     rule.sqref_count = 1;
-    ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+    std::size_t rule_index = 0;
+    ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0);
+    EXPECT_EQ(rule_index, expected_index);
+    ++expected_index;
   }
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
@@ -420,7 +432,9 @@ TEST(FormulonCApiCfMutate, ClearRemovesAllBlocks) {
   rule.formula1 = f.c_str();
   rule.sqref = &sqref;
   rule.sqref_count = 1;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0);
+  EXPECT_EQ(rule_index, 0U);
 
   ASSERT_EQ(fm_sheet_cf_clear(wb.handle, 0), 0);
   std::size_t count = 0;
@@ -449,7 +463,9 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   rule.color_scale_thresholds = thresholds;
   rule.color_scale_colors = colors;
   rule.color_scale_count = 3;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule), 0);
+  std::size_t color_rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &color_rule_index), 0);
+  EXPECT_EQ(color_rule_index, 0U);
 
   fm_cf_cell_range_t db_sqref{1, 0, 1, 0};
   fm_cf_rule_t db_rule{};
@@ -465,7 +481,9 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   db_rule.data_bar_show_value = 1;
   db_rule.data_bar_min_length_pct = 10;
   db_rule.data_bar_max_length_pct = 90;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, db_rule), 0);
+  std::size_t data_bar_rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, db_rule, &data_bar_rule_index), 0);
+  EXPECT_EQ(data_bar_rule_index, 1U);
 
   fm_cf_cell_range_t icon_sqref{2, 0, 2, 0};
   fm_cf_rule_t icon_rule{};
@@ -485,7 +503,9 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   icon_rule.icon_set_threshold_count = 2;
   icon_rule.icon_set_show_value = 1;
   icon_rule.icon_set_percent = 1;
-  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, icon_rule), 0);
+  std::size_t icon_rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, icon_rule, &icon_rule_index), 0);
+  EXPECT_EQ(icon_rule_index, 2U);
 
   const auto& blocks = wb.handle->workbook().sheet(0).conditional_formats();
   ASSERT_EQ(blocks.size(), 3U);
@@ -546,7 +566,8 @@ TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
   rule.type = 0;
   rule.sqref = nullptr;
   rule.sqref_count = 0;
-  fm_status_t rc = fm_sheet_cf_add_rule(wb.handle, 0, rule);
+  std::size_t rule_index = 0;
+  fm_status_t rc = fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
@@ -568,7 +589,8 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
   rule.formula1 = f.c_str();
   rule.sqref = &sqref;
   rule.sqref_count = 0xFFFFFFFFu;
-  fm_status_t rc = fm_sheet_cf_add_rule(wb.handle, 0, rule);
+  std::size_t rule_index = 0;
+  fm_status_t rc = fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 
   std::size_t after = 0;
@@ -608,4 +630,62 @@ TEST(FormulonCApiCfMutate, PreLoadedRulesEnumerableViaFlatIndex) {
   EXPECT_EQ(out.type, 1U);
   ASSERT_NE(out.formula1, nullptr);
   EXPECT_STREQ(out.formula1, "50");
+}
+
+TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
+  // Two rules with the identical predicate (same type/op/formula/sqref)
+  // must still be tracked as distinct entries: `fm_sheet_cf_add_rule`
+  // always appends a new block rather than deduping against an existing
+  // one, so the returned index must reflect append order, not predicate
+  // identity.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 1;  // CellIs
+  rule.op_engaged = 1;
+  rule.op = 5;  // GreaterThan
+  rule.formula1 = "50";
+  rule.dxf_id_engaged = 1;
+  rule.dxf_id = 0;
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+
+  std::size_t first_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &first_index), 0) << fm_last_error_message();
+
+  // Re-populate the rule: `fm_sheet_cf_add_rule` deep-copies string /
+  // range payloads, but reuse a fresh `fm_cf_rule_t` to avoid relying on
+  // stale scratch state from the first call.
+  fm_cf_rule_t rule2{};
+  rule2.type = 1;  // CellIs
+  rule2.op_engaged = 1;
+  rule2.op = 5;  // GreaterThan
+  rule2.formula1 = "50";
+  rule2.dxf_id_engaged = 1;
+  rule2.dxf_id = 0;
+  rule2.sqref = &sqref;
+  rule2.sqref_count = 1;
+
+  std::size_t second_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule2, &second_index), 0) << fm_last_error_message();
+
+  EXPECT_EQ(first_index, 0U);
+  EXPECT_EQ(second_index, 1U);
+  EXPECT_NE(first_index, second_index);
+
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 2U);
+
+  // The indices returned by add_rule must match what a subsequent
+  // flattened readback reports for rule order/position.
+  fm_cf_rule_t readback_first{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, first_index, &readback_first), 0);
+  EXPECT_EQ(readback_first.priority, 1);  // auto-assigned to the first rule added
+
+  fm_cf_rule_t readback_second{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, second_index, &readback_second), 0);
+  EXPECT_EQ(readback_second.priority, 2);  // auto-assigned one past the first
 }

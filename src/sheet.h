@@ -117,6 +117,13 @@ struct DataValidation {
   bool allow_blank = true;
   bool show_input_message = false;
   bool show_error_message = false;
+  // Whether the in-cell dropdown arrow is shown for a `list` validation.
+  // Default matches Excel's default (arrow shown). Note the OOXML
+  // `showDropDown` attribute has inverted semantics per ECMA-376: its
+  // presence with value "1" SUPPRESSES the arrow. This field holds the
+  // user-facing meaning (arrow shown/hidden); the reader/writer invert it
+  // when translating to/from the raw XML attribute.
+  bool show_dropdown = true;
   std::string formula1;
   std::string formula2;
   std::string error_title;

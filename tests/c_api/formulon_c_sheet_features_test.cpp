@@ -97,6 +97,49 @@ TEST_F(FormulonCApiSheetFeatures, CommentRemoveViaNullText) {
   EXPECT_NE(fm_sheet_get_comment_at(wb_, 0, 0, 0, &got), 0);
 }
 
+TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {
+  // Two comments: one anchored on a cell that also carries a value, one
+  // anchored on a cell that never had a value written to it. Both must
+  // be discoverable via the count/at-index enumerator without already
+  // knowing their (row, col).
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Alice", "Hello"), 0);
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 5, 3, "Bob", "Empty cell note"), 0);
+
+  std::uint32_t count = 0;
+  ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0, &count), 0);
+  ASSERT_EQ(count, 2U);
+
+  bool saw_alice = false;
+  bool saw_bob = false;
+  for (std::uint32_t i = 0; i < count; ++i) {
+    fm_comment got{};
+    ASSERT_EQ(fm_sheet_get_comment_at_index(wb_, 0, i, &got), 0);
+    if (got.row == 1U && got.col == 1U) {
+      EXPECT_STREQ(got.author, "Alice");
+      EXPECT_STREQ(got.text, "Hello");
+      saw_alice = true;
+    } else if (got.row == 5U && got.col == 3U) {
+      EXPECT_STREQ(got.author, "Bob");
+      EXPECT_STREQ(got.text, "Empty cell note");
+      saw_bob = true;
+    }
+  }
+  EXPECT_TRUE(saw_alice);
+  EXPECT_TRUE(saw_bob);
+}
+
+TEST_F(FormulonCApiSheetFeatures, CommentEnumerateCountZeroWhenNone) {
+  std::uint32_t count = 123;
+  ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, CommentEnumerateOutOfRangeIndex) {
+  ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, "Alice", "x"), 0);
+  fm_comment got{};
+  EXPECT_NE(fm_sheet_get_comment_at_index(wb_, 0, 999, &got), 0);
+}
+
 TEST_F(FormulonCApiSheetFeatures, SheetIndexOutOfRange) {
   fm_merge_range m{};
   EXPECT_NE(fm_sheet_add_merge(wb_, 999, m), 0);

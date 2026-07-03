@@ -120,6 +120,43 @@ Napi::Value Workbook::GetValue(const Napi::CallbackInfo& info) {
   return MakeValueResult(env, MakeOkStatus(env), v);
 }
 
+Napi::Value Workbook::EvaluateFormulaText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeEmptyValueResult(env, NullHandleError(env));
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const std::string formula = ArgString(info, 3);
+  fm_value_t v{};
+  fm_status_t rc = fm_workbook_evaluate_formula(handle_, sheet, row, col, formula.c_str(), &v);
+  if (rc != 0) {
+    return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
+  }
+  return MakeValueResult(env, MakeOkStatus(env), v);
+}
+
+Napi::Value Workbook::EvaluateConditionalFormula(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return MakeEmptyValueResult(env, NullHandleError(env));
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const uint32_t anchor_row = ArgU32(info, 3);
+  const uint32_t anchor_col = ArgU32(info, 4);
+  const std::string formula = ArgString(info, 5);
+  fm_value_t v{};
+  fm_status_t rc =
+      fm_workbook_evaluate_cf_formula(handle_, sheet, row, col, anchor_row, anchor_col, formula.c_str(), &v);
+  if (rc != 0) {
+    return MakeEmptyValueResult(env, MakeErrorStatus(env, rc));
+  }
+  return MakeValueResult(env, MakeOkStatus(env), v);
+}
+
 Napi::Value Workbook::GetLambdaText(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

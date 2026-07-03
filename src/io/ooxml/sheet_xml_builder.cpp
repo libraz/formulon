@@ -146,6 +146,12 @@ std::string BuildDataValidationsBlock(const Sheet& sheet) {
     if (v.show_error_message) {
       out.append(" showErrorMessage=\"1\"");
     }
+    // `showDropDown` is inverted per ECMA-376: writing "1" SUPPRESSES the
+    // in-cell arrow, so it is only emitted when the arrow should be
+    // hidden. Omitting the attribute preserves Excel's default (shown).
+    if (!v.show_dropdown) {
+      out.append(" showDropDown=\"1\"");
+    }
     if (!v.error_title.empty()) {
       out.append(" errorTitle=\"");
       AppendXmlEscaped(out, v.error_title);

@@ -159,6 +159,48 @@ TEST(SheetFeaturesRoundTrip, DataValidations) {
   EXPECT_EQ(loaded.validations()[1].formula2, "100");
 }
 
+TEST(SheetFeaturesRoundTrip, DataValidationShowDropDown) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+
+  // Rule 1: dropdown arrow explicitly hidden (non-default).
+  DataValidation hidden;
+  hidden.ranges.push_back(MergeRange{0, 0, 9, 0});
+  hidden.type = 3;  // list
+  hidden.formula1 = "\"yes,no,maybe\"";
+  hidden.show_dropdown = false;
+  s.mutable_validations().push_back(hidden);
+
+  // Rule 2: dropdown arrow explicitly shown (matches the default, but
+  // set explicitly to make the assertion meaningful either way).
+  DataValidation shown;
+  shown.ranges.push_back(MergeRange{0, 1, 9, 1});
+  shown.type = 3;  // list
+  shown.formula1 = "\"x,y,z\"";
+  shown.show_dropdown = true;
+  s.mutable_validations().push_back(shown);
+
+  auto save_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(save_or));
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or));
+  const Sheet& loaded = load_or.value().workbook.sheet(0);
+  ASSERT_EQ(loaded.validations().size(), 2U);
+  EXPECT_FALSE(loaded.validations()[0].show_dropdown);
+  EXPECT_TRUE(loaded.validations()[1].show_dropdown);
+
+  // Save -> load -> save stability: the second round-trip must preserve
+  // the same values.
+  auto save2_or = io::write_ooxml(load_or.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(save2_or));
+  auto load2_or = io::read_ooxml(SpanOf(save2_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load2_or));
+  const Sheet& reloaded = load2_or.value().workbook.sheet(0);
+  ASSERT_EQ(reloaded.validations().size(), 2U);
+  EXPECT_FALSE(reloaded.validations()[0].show_dropdown);
+  EXPECT_TRUE(reloaded.validations()[1].show_dropdown);
+}
+
 TEST(SheetFeaturesRoundTrip, AllFeaturesCombined) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);
