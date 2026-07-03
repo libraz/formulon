@@ -1425,8 +1425,12 @@ export interface Workbook {
    *  them as immutable view objects. */
   getConditionalFormats(sheet: number): ReadonlyArray<ConditionalFormatEntry>;
   /** Appends a new single-rule `<conditionalFormatting>` block to
-   *  `sheet`, including visual rules when their payload object is supplied. */
-  addConditionalFormat(sheet: number, rule: ConditionalFormatInput): Status;
+   *  `sheet`, including visual rules when their payload object is supplied.
+   *  `index` is the new rule's position in the sheet's flattened CF rule
+   *  sequence (the same indexing `getConditionalFormats` and
+   *  `removeConditionalFormatAt` use); it stays valid until a subsequent
+   *  add/remove/clear mutation on the same sheet renumbers the sequence. */
+  addConditionalFormat(sheet: number, rule: ConditionalFormatInput): AddStyleResult;
   /** Removes the CF rule at `index` (flattened order). When the
    *  containing block becomes empty it is removed too. */
   removeConditionalFormatAt(sheet: number, index: number): Status;

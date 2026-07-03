@@ -612,7 +612,8 @@ test('addConditionalFormat + getConditionalFormats + clearConditionalFormats rou
     dxfId: 0,
     stopIfTrue: false,
   });
-  assert.ok(add.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
+  assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
+  assert.equal(typeof add.index, 'number');
   const list = wb.getConditionalFormats(0);
   assert.equal(list.length, 1);
   assert.equal(list[0].type, 1);
