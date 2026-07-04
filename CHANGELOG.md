@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-07-04
+
+### Added
+
+- Ad-hoc array evaluation: `evaluateFormulaArray` (C API, Node addon,
+  WASM) and `evaluate_formula_array` (Python) evaluate a dynamic-array or
+  spilled formula against a workbook without mutating it, returning the
+  whole `Array` result instead of reducing to its top-left element. The C
+  ABI exposes a two-step surface — `fm_workbook_evaluate_formula_array`
+  stashes the result on the handle, `fm_workbook_evaluate_formula_array_cell`
+  reads it back by row-major index.
+- Function-metadata provider seam: hosts can inject localized function
+  documentation over the engine's structural catalog. `fm_function_metadata`
+  now also recognizes lazy-dispatch forms (`XLOOKUP`, `SUMIFS`, …) and
+  parser special forms (`LET`, `LAMBDA`), and surfaces the unbounded-arity
+  sentinel as `null` / `None`. Pure merge helpers `mergeFunctionMetadata`
+  (Node) and `merge_function_metadata` (Python) resolve
+  signature/description/localized name by locale-override → entry-default →
+  engine-value precedence. Contract documented in
+  `docs/function-metadata-schema.md`.
+
+### Fixed
+
+- Spill-phantom fidelity: `Sheet::spill_phantom_addresses` enumerates
+  phantom cells across all spill regions; cell enumeration and `cell_count`
+  now fold them in, `fm_workbook_cell_at` no longer treats a phantom
+  coordinate as an internal error, and pagination computes the used range
+  against a spilled region's full extent rather than just its anchor.
+- Range-shaped defined names (e.g. `Sheet1!$A$1:$A$5`) now evaluate as a
+  `Value::Array` instead of collapsing to a scalar through implicit
+  intersection.
+
+### Build / CI
+
+- Add a `python-smoke` job to `prebuild.yml` to catch C ABI drift before
+  release.
+
+**Detailed Release Notes**: [GitHub Release](https://github.com/libraz/formulon/releases/tag/v0.9.5)
+
 ## [0.9.4] - 2026-07-03
 
 ### Added
@@ -180,7 +219,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/libraz/formulon/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/libraz/formulon/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/libraz/formulon/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/libraz/formulon/compare/v0.9.1...v0.9.2

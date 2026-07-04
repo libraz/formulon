@@ -20,7 +20,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "formulon"
-version = "0.9.4"
+version = "0.9.5"
 description = "Excel 365 calculation engine -- Python binding"
 readme = "README.md"
 license = "Apache-2.0"
