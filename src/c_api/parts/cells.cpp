@@ -211,7 +211,16 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(cons
       out.emplace_back(row, static_cast<std::uint32_t>(col));
     }
   }
+  // Dynamic-array spill phantoms carry an effective value through
+  // `resolve_cell_value` but live only in the spill table, absent from
+  // `rows()`. Merge them so the flat enumeration surfaces spilled cells, then
+  // sort + unique: a phantom that coincides with an implicitly default-
+  // constructed slot must appear only once.
+  for (const formulon::CellAddress& addr : sheet.spill_phantom_addresses()) {
+    out.emplace_back(addr.row, addr.col);
+  }
   std::sort(out.begin(), out.end());
+  out.erase(std::unique(out.begin(), out.end()), out.end());
   return out;
 }
 
@@ -243,16 +252,13 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
   const auto [row, col] = addrs[idx];
   *out_row = row;
   *out_col = col;
+  // `(row, col)` may be a spill phantom, which has no stored `Cell`: that is
+  // a normal case here, not an error. Phantoms carry no formula text and
+  // their value is resolved below via `resolve_cell_value`. Only a stored
+  // cell can contribute a formula pointer.
   const formulon::Cell* cell = sheet.cell_at(row, col);
-  // `cell_at` must succeed because `(row, col)` came from the sheet's
-  // own row vector. Guard defensively just in case the contract drifts.
-  if (cell == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInternalError,
-                             "fm_workbook_cell_at: cell vanished mid-iteration",
-                             "row=" + std::to_string(row) + " col=" + std::to_string(col));
-  }
   if (out_formula != nullptr) {
-    *out_formula = cell->formula_text.empty() ? nullptr : cell->formula_text.c_str();
+    *out_formula = (cell != nullptr && !cell->formula_text.empty()) ? cell->formula_text.c_str() : nullptr;
   }
   // Use the spill-aware accessor so phantoms surface their owning anchor's
   // value. The phantoms themselves are still indexed via `cell_at`'s

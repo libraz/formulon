@@ -592,6 +592,19 @@ class Sheet {
   /// reverse map. Use `spill_region_at_anchor` to look up by anchor.
   const SpillRegion* spill_region_covering(std::uint32_t row, std::uint32_t col) const noexcept;
 
+  /// Returns the coordinates of every phantom cell across all registered
+  /// spill regions on this sheet. Each region's anchor is excluded because
+  /// it already occupies a real slot in the cell store; only the phantoms
+  /// (which live solely in the spill table and are absent from `rows()`)
+  /// are returned. The result is unordered — callers that need a
+  /// deterministic order must sort it — and empty when the sheet hosts no
+  /// spill regions.
+  ///
+  /// Exposed so flat-enumeration consumers (cell iteration, used-range
+  /// computation) can surface spill phantoms alongside the stored cells;
+  /// a phantom's effective value is read back through `resolve_cell_value`.
+  std::vector<CellAddress> spill_phantom_addresses() const;
+
   /// Returns the spill-aware effective value of `(row, col)`:
   ///
   ///   1. If the cell is a phantom of a spill region, returns the

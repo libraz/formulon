@@ -310,11 +310,53 @@ bool Sheet::has_cell(std::uint32_t row, std::uint32_t col) const noexcept {
 }
 
 std::size_t Sheet::cell_count() const noexcept {
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
   std::size_t total = 0;
   for (const auto& kv : rows_) {
     total += kv.second.size();
   }
+  // Add dynamic-array spill phantoms that have no underlying stored slot. A
+  // phantom may coincide with an implicitly default-constructed slot (created
+  // when the row vector grew to cover a later column); such a coordinate is
+  // already counted above, so only phantoms absent from `rows_` add to the
+  // total. This keeps the count aligned with the flat enumeration exposed
+  // through the C ABI, which surfaces phantoms via `resolve_cell_value`.
+  if (spill_table_ != nullptr) {
+    for (const auto& kv : spill_table_->by_anchor) {
+      const SpillRegion& region = kv.second;
+      for (std::uint32_t r = 0; r < region.rows; ++r) {
+        for (std::uint32_t c = 0; c < region.cols; ++c) {
+          if (r == 0U && c == 0U) {
+            continue;  // Anchor already occupies a real slot in `rows_`.
+          }
+          if (cell_at_locked(region.anchor_row + r, region.anchor_col + c) == nullptr) {
+            ++total;
+          }
+        }
+      }
+    }
+  }
   return total;
+}
+
+std::vector<CellAddress> Sheet::spill_phantom_addresses() const {
+  std::vector<CellAddress> out;
+  const std::lock_guard<std::mutex> guard(spill_mutex_);
+  if (spill_table_ == nullptr) {
+    return out;
+  }
+  for (const auto& kv : spill_table_->by_anchor) {
+    const SpillRegion& region = kv.second;
+    for (std::uint32_t r = 0; r < region.rows; ++r) {
+      for (std::uint32_t c = 0; c < region.cols; ++c) {
+        if (r == 0U && c == 0U) {
+          continue;  // Exclude the anchor; it has a real slot in `rows_`.
+        }
+        out.push_back(CellAddress{region.anchor_row + r, region.anchor_col + c});
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

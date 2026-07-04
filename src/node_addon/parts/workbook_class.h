@@ -47,6 +47,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Ad-hoc, side-effect-free formula evaluation.
   Napi::Value EvaluateFormulaText(const Napi::CallbackInfo& info);
+  Napi::Value EvaluateFormulaArray(const Napi::CallbackInfo& info);
   Napi::Value EvaluateConditionalFormula(const Napi::CallbackInfo& info);
 
   // Lifecycle.

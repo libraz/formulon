@@ -137,6 +137,60 @@ Napi::Value Workbook::EvaluateFormulaText(const Napi::CallbackInfo& info) {
   return MakeValueResult(env, MakeOkStatus(env), v);
 }
 
+Napi::Value Workbook::EvaluateFormulaArray(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("rows", Napi::Number::New(env, 0));
+    out.Set("cols", Napi::Number::New(env, 0));
+    out.Set("cells", Napi::Array::New(env, 0));
+    return out;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const std::string formula = ArgString(info, 3);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  fm_status_t rc = fm_workbook_evaluate_formula_array(handle_, sheet, row, col, formula.c_str(), &rows, &cols);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("rows", Napi::Number::New(env, 0));
+    out.Set("cols", Napi::Number::New(env, 0));
+    out.Set("cells", Napi::Array::New(env, 0));
+    return out;
+  }
+
+  // Build a rows x cols nested array of Value objects, reading each stashed
+  // cell by its row-major index (r * cols + c).
+  Napi::Array cells = Napi::Array::New(env, rows);
+  for (uint32_t r = 0; r < rows; ++r) {
+    Napi::Array js_row = Napi::Array::New(env, cols);
+    for (uint32_t c = 0; c < cols; ++c) {
+      const std::size_t index = static_cast<std::size_t>(r) * cols + c;
+      fm_value_t v{};
+      fm_status_t cell_rc = fm_workbook_evaluate_formula_array_cell(handle_, index, &v);
+      if (cell_rc != 0) {
+        out.Set("status", MakeErrorStatus(env, cell_rc));
+        out.Set("rows", Napi::Number::New(env, 0));
+        out.Set("cols", Napi::Number::New(env, 0));
+        out.Set("cells", Napi::Array::New(env, 0));
+        return out;
+      }
+      js_row.Set(c, TranslateValue(env, v));
+    }
+    cells.Set(r, js_row);
+  }
+
+  out.Set("status", MakeOkStatus(env));
+  out.Set("rows", Napi::Number::New(env, rows));
+  out.Set("cols", Napi::Number::New(env, cols));
+  out.Set("cells", cells);
+  return out;
+}
+
 Napi::Value Workbook::EvaluateConditionalFormula(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

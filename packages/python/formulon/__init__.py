@@ -21,6 +21,13 @@ from importlib.metadata import version as _dist_version
 from pathlib import Path
 
 from ._c import LIB, ValueKind, decode_cstr
+from .metadata import (
+    FunctionMetadataEntry,
+    FunctionMetadataLocalized,
+    FunctionMetadataProvider,
+    MergedFunctionMetadata,
+    merge_function_metadata,
+)
 from .workbook import (
     CalcMode,
     Cell,
@@ -135,8 +142,12 @@ __all__ = [
     "FontRecord",
     "FormulonError",
     "FunctionMetadata",
+    "FunctionMetadataEntry",
+    "FunctionMetadataLocalized",
+    "FunctionMetadataProvider",
     "Hyperlink",
     "MergeRange",
+    "MergedFunctionMetadata",
     "PassthroughPart",
     "PivotAggregation",
     "PivotAxis",
@@ -163,6 +174,7 @@ __all__ = [
     "__version__",
     "eval_formula",
     "library_version",
+    "merge_function_metadata",
     "version_string",
 ]
 

@@ -238,6 +238,27 @@ TEST(PaginationTest, UsedRangeIsPaginatedWhenPrintAreaAbsent) {
   EXPECT_EQ(result.value().page_count, 1U);
 }
 
+TEST(PaginationTest, SpillPhantomsExtendUsedRangeForPagination) {
+  // With no print area, pagination falls back to the used range, which must
+  // include a dynamic-array spill's phantoms, not just its anchor. A tall
+  // single-column spill A1:A60 (60 rows * 15 pt = 900 pt) exceeds the A4 body
+  // height and forces at least one horizontal break; counting only the anchor
+  // A1 would leave a single page.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  std::vector<Value> cells;
+  cells.reserve(60);
+  for (std::uint32_t i = 0; i < 60; ++i) {
+    cells.push_back(Value::number(static_cast<double>(i + 1)));
+  }
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 60U, 1U, std::move(cells)));
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_GE(result.value().page_count, 2U);
+  EXPECT_FALSE(result.value().h_breaks.empty());
+}
+
 TEST(PaginationTest, AutomaticColumnBreakDoesNotForceAnExtraPage) {
   // Excel persists automatic breaks (man="0") once a sheet is previewed.
   // An auto column break must not be treated as a forced page boundary.

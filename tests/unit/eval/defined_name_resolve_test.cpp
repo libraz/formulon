@@ -213,6 +213,62 @@ TEST(DefinedNameResolve, NestedNameResolvesTransitively) {
   EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
 }
 
+// A workbook-scoped range name expands to its full shape inside a range-aware
+// aggregator instead of collapsing to its top-left cell.
+TEST(DefinedNameResolve, RangeNameExpandsInAggregators) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(10.0));  // A1
+  s.set_cell_value(1U, 0U, Value::number(20.0));  // A2
+  s.set_cell_value(2U, 0U, Value::number(30.0));  // A3
+  s.set_cell_value(3U, 0U, Value::number(40.0));  // A4
+  s.set_cell_value(4U, 0U, Value::number(50.0));  // A5
+  wb.set_defined_names({io::DefinedName{"MyRange", "Sheet1!$A$1:$A$5", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value sum = EvalOrDie("=SUM(MyRange)", a, ctx);
+  ASSERT_TRUE(sum.is_number()) << sum.debug_to_string();
+  EXPECT_DOUBLE_EQ(sum.as_number(), 150.0);
+  const Value count = EvalOrDie("=COUNT(MyRange)", a, ctx);
+  ASSERT_TRUE(count.is_number()) << count.debug_to_string();
+  EXPECT_DOUBLE_EQ(count.as_number(), 5.0);
+  const Value avg = EvalOrDie("=AVERAGE(MyRange)", a, ctx);
+  ASSERT_TRUE(avg.is_number()) << avg.debug_to_string();
+  EXPECT_DOUBLE_EQ(avg.as_number(), 30.0);
+}
+
+// A sheet-scoped range name expands the same way on its owning sheet.
+TEST(DefinedNameResolve, SheetScopedRangeNameExpands) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s1 = wb.add_sheet("Sheet1");             // index 0
+  s1.set_cell_value(0U, 0U, Value::number(1.0));  // A1
+  s1.set_cell_value(1U, 0U, Value::number(2.0));  // A2
+  s1.set_cell_value(2U, 0U, Value::number(3.0));  // A3
+  wb.set_defined_names({io::DefinedName{"LocalRange", "Sheet1!$A$1:$A$3", 0, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s1, state);
+  Arena a;
+  const Value sum = EvalOrDie("=SUM(LocalRange)", a, ctx);
+  ASSERT_TRUE(sum.is_number()) << sum.debug_to_string();
+  EXPECT_DOUBLE_EQ(sum.as_number(), 6.0);
+}
+
+// Regression guard: a single-cell reference name stays scalar (does not become
+// a 1x1 array via the range-shaped path).
+TEST(DefinedNameResolve, SingleCellNameStaysScalar) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(7.0));  // A1
+  wb.set_defined_names({io::DefinedName{"Cell", "Sheet1!$A$1", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Cell", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -52,10 +52,15 @@ EvalContext make_readonly_context(const Workbook& workbook, const Sheet& sheet, 
       .with_formula_cell(row, col);
 }
 
-}  // namespace
-
-Value evaluate_formula_text(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
-                            std::string_view formula, Arena& arena, const FunctionRegistry& registry) {
+// Parses and evaluates `formula` at `(row, col)` under a read-only context,
+// returning the raw `Value` WITHOUT the array-to-scalar reduction. Shared by
+// both the scalar-reducing and array-preserving public drivers so their
+// parse / anchor / purity behaviour stays identical. Parser failure surfaces
+// as `#NAME?`, matching `EvalContext::resolve_ref`. The `EvalState` is local:
+// the returned `Value`'s text / array payloads borrow `arena` (which the
+// caller owns), never the transient state.
+Value parse_and_evaluate(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                         std::string_view formula, Arena& arena, const FunctionRegistry& registry) {
   // Strip a leading '=' so both "=A1+1" and "A1+1" parse identically,
   // matching the recalc path's use of `strip_formula_prefix`.
   const std::string_view src = strip_formula_prefix(formula);
@@ -68,7 +73,19 @@ Value evaluate_formula_text(const Workbook& workbook, const Sheet& sheet, std::u
 
   EvalState state;
   const EvalContext ctx = make_readonly_context(workbook, sheet, state, row, col);
-  return reduce_to_scalar(evaluate(*root, arena, registry, ctx));
+  return evaluate(*root, arena, registry, ctx);
+}
+
+}  // namespace
+
+Value evaluate_formula_text(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                            std::string_view formula, Arena& arena, const FunctionRegistry& registry) {
+  return reduce_to_scalar(parse_and_evaluate(workbook, sheet, row, col, formula, arena, registry));
+}
+
+Value evaluate_formula_text_array(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                                  std::string_view formula, Arena& arena, const FunctionRegistry& registry) {
+  return parse_and_evaluate(workbook, sheet, row, col, formula, arena, registry);
 }
 
 bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,

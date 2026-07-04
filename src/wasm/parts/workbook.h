@@ -87,6 +87,16 @@ class JsWorkbook {
   /// reduced to their top-left element. See `fm_workbook_evaluate_formula`.
   JsEvalResult evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) const;
 
+  /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns the
+  /// whole multi-cell result without mutating the workbook. Unlike
+  /// `evaluateFormulaText` (which reduces an array to its top-left element),
+  /// this yields the full grid as a JS object
+  /// `{ status, rows, cols, cells }`, where `cells` is a `rows` x `cols`
+  /// nested array of Value objects (row-major, `cells[r][c]`); a scalar
+  /// result is reported as a 1x1 array. See
+  /// `fm_workbook_evaluate_formula_array`.
+  emscripten::val evaluateFormulaArray(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula) const;
+
   /// Evaluates `formula` as a conditional-formatting predicate anchored at
   /// `(sheet, row, col)`, with relative refs written relative to
   /// `(anchorRow, anchorCol)`; returns a coerced boolean result. See

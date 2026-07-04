@@ -206,6 +206,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("dxfCount", &JsWorkbook::dxfCount)
       .function("evaluateCfRange", &JsWorkbook::evaluateCfRange)
       .function("evaluateConditionalFormula", &JsWorkbook::evaluateConditionalFormula)
+      .function("evaluateFormulaArray", &JsWorkbook::evaluateFormulaArray)
       .function("evaluateFormulaText", &JsWorkbook::evaluateFormulaText)
       .function("excelProfileId", &JsWorkbook::excelProfileId)
       .function("fillCount", &JsWorkbook::fillCount)

@@ -573,7 +573,8 @@ FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_in
  * pragmatic API-shape choice, NOT Excel implicit intersection (which
  * selects the element sharing the anchor's row / column and yields
  * `#VALUE!` when there is none) and NOT dynamic-array spilling (which
- * returns the whole array). Multi-cell results are a Phase 2 follow-up.
+ * returns the whole array). To recover the full multi-cell result instead,
+ * use `fm_workbook_evaluate_formula_array` + `_array_cell`.
  *
  * For `FM_VAL_TEXT`, `out->u.text` borrows the handle's read scratch and
  * is valid only until the next read on this handle (see
@@ -618,6 +619,65 @@ FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size
                                                    uint32_t col, uint32_t anchor_row, uint32_t anchor_col,
                                                    const char* formula, fm_value_t* out);
 
+/**
+ * @brief Evaluates `formula` as if entered at `(row, col)` and stashes the
+ *        WHOLE result — array included — on the handle, returning its
+ *        dimensions. Companion to `fm_workbook_evaluate_formula_array_cell`.
+ *
+ * This is the multi-cell counterpart to `fm_workbook_evaluate_formula`,
+ * which reduces an array / spill result to its top-left element. Here the
+ * result is preserved in full: a dynamic-array formula such as
+ * `=SEQUENCE(2,3)` reports `*out_rows = 2`, `*out_cols = 3`; a scalar
+ * result such as `=1+2` reports `*out_rows = *out_cols = 1` (a 1x1 array).
+ * Parsing, anchoring, cross-sheet / defined-name resolution, `ROW()` /
+ * `COLUMN()`, and the read-only purity contract are identical to
+ * `fm_workbook_evaluate_formula` (the `const` on `wb` is the ABI-level
+ * purity guarantee; the stash is internal handle state, not observable
+ * workbook state, mirroring how the read scratch is populated on the read
+ * path).
+ *
+ * Two-step protocol: call this to evaluate + learn the dimensions, then call
+ * `fm_workbook_evaluate_formula_array_cell` for each row-major index in
+ * `[0, (*out_rows) * (*out_cols))`. The stash — and therefore every pointer
+ * a subsequent `_array_cell` call surfaces — remains valid until the next
+ * `fm_workbook_evaluate_formula_array` call or any mutation on this handle,
+ * whichever comes first.
+ *
+ * A degenerate empty array result (which producers should never emit)
+ * surfaces as a single `#VALUE!` cell with `*out_rows = *out_cols = 1`,
+ * matching the scalar reduction's empty-array handling.
+ *
+ * @note The same self-reference caveat as `fm_workbook_evaluate_formula`
+ *       applies: a self-reference reads the target cell's cached value.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb`, `formula`, `out_rows`, or
+ *         `out_cols` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                      uint32_t col, const char* formula, uint32_t* out_rows,
+                                                      uint32_t* out_cols);
+
+/**
+ * @brief Reads the row-major `index`-th cell of the most recent
+ *        `fm_workbook_evaluate_formula_array` result into `*out`.
+ *
+ * Valid `index` values are `[0, rows * cols)` where `rows` / `cols` are the
+ * dimensions the producing `fm_workbook_evaluate_formula_array` call
+ * returned; cell `(r, c)` is at `index = r * cols + c`.
+ *
+ * For a `FM_VAL_TEXT` cell, `out->u.text` borrows the handle's read scratch
+ * (cleared on each read, exactly like `fm_workbook_cell_at`) and is valid
+ * only until the next read on this handle; copy it if you need to retain it.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` when `index` is past the stashed result (or no
+ *         array evaluation has run on this handle yet).
+ */
+FM_API fm_status_t fm_workbook_evaluate_formula_array_cell(const fm_workbook_t* wb, size_t index, fm_value_t* out);
+
 /* -------------------------------------------------------------------------- */
 /* Iteration / dump                                                           */
 /* -------------------------------------------------------------------------- */
@@ -626,9 +686,12 @@ FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size
  * @brief Returns the number of stored cell slots on `sheet_index`.
  *
  * Counts every populated `Cell` (literal, formula, or implicitly created
- * during row growth) on the sheet's row-sparse / column-dense storage.
- * Phantom cells of a spill region that have no underlying stored slot
- * are NOT counted.
+ * during row growth) on the sheet's row-sparse / column-dense storage,
+ * plus every dynamic-array spill phantom that has no underlying stored
+ * slot. Spill phantoms carry an effective value through
+ * `fm_workbook_get_value` / `fm_workbook_cell_at` but live only in the
+ * spill table; counting them keeps this total aligned with the
+ * `fm_workbook_cell_at` index range.
  *
  * The count is suitable as the upper bound for `fm_workbook_cell_at`
  * iteration: indices in `[0, count)` enumerate every stored cell. The
@@ -2397,12 +2460,28 @@ typedef enum {
  * `canonical_name` is always populated when the function is known.
  * `min_arity` / `max_arity` are pulled from `FunctionDef`; the latter
  * is `0xFFFFFFFFu` (i.e. `eval::kVariadic`) for unbounded variadics.
+ * Lazy-dispatch forms (e.g. `XLOOKUP`, `SUMIFS`) and parser special
+ * forms (`LET`, `LAMBDA`) carry no `FunctionDef`, so their arity is
+ * reported as `min_arity = 0` with the `0xFFFFFFFFu` `max_arity`
+ * sentinel (unknown / unbounded).
  * `availability` reports whether the function is a real implementation,
  * a real-but-not-fully-verified implementation, host/environment-bound,
  * or an intentionally unavailable fixed-error stub.
  * `description` and `signature_template` are populated when the
  * locale-specific metadata table has an entry for this function;
  * otherwise both are `NULL`.
+ *
+ * `description` / `signature_template` are host-injected display metadata,
+ * not engine-owned data: the engine returns `NULL` for them and expects a
+ * host (editor / docs surface) to supply its own document and merge it over
+ * this structural result at display time. The document contract lives in
+ * `docs/function-metadata-schema.md`, and the bindings ship a pure merge
+ * helper (`mergeFunctionMetadata` / `merge_function_metadata`) for it. This
+ * metadata is display-only: formula input parsing stays fixed to the
+ * English canonical names, so `fm_function_localize` /
+ * `fm_function_canonicalize` are unaffected by any injected document and
+ * remain canonical-fallback (formula-language input localization is a
+ * separate, engine-level concern outside this seam).
  *
  * String storage is process-static (the catalog is initialised at
  * static-init time); callers do not free the returned pointers.

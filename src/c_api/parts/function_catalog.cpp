@@ -2,19 +2,29 @@
 //
 // C ABI - function catalog metadata.
 //
-// Surfaces the registry's canonical-name + arity data through the C ABI
+// Surfaces the engine's canonical-name + arity data through the C ABI
 // so JS / Python autocomplete UIs can enumerate Formulon functions
 // without reaching into the engine internals. `description` /
 // `signature_template` are reserved for the locale metadata table
 // (data/function_metadata_<locale>.cpp) and stay `NULL` until that
 // table is wired up; the surface itself is shippable today.
 //
+// A runtime-recognised function name comes from one of three sources:
+// the eager `FunctionRegistry`, the tree walker's lazy-dispatch table
+// (`eval::lazy_form_names()` — IF / XLOOKUP / SUMIFS / VLOOKUP / ...),
+// or the parser's special forms (`eval::parser_special_form_names()` —
+// LET / LAMBDA). All three are enumerated and de-duplicated so the
+// catalog matches what the evaluator actually accepts. Lazy and
+// special forms carry no `FunctionDef`, so they have no arity data;
+// they report `min_arity = 0` and the unbounded `max_arity` sentinel.
+//
 // The sorted name list is computed on first use and cached for the
 // process lifetime - order matters for UIs that expect deterministic
-// enumeration, and the registry's `for_each_name` does not promise
-// any order.
+// enumeration, and the underlying iteration hooks do not promise any
+// order.
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -23,6 +33,8 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "eval/function_registry.h"
+#include "eval/special_forms_catalog.h"
+#include "eval/tree_walker.h"
 #include "utils/error.h"
 
 using formulon::c_api::parts::clear_last_error;
@@ -63,13 +75,53 @@ fm_function_availability_t function_availability(std::string_view canonical_name
   return FM_FUNCTION_IMPLEMENTED;
 }
 
+// Case-insensitive ASCII equality. Canonical catalog names are already
+// UPPERCASE, so this only has to fold the incoming query.
+bool ascii_iequals(std::string_view a, std::string_view b) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    if (std::toupper(static_cast<unsigned char>(a[i])) != std::toupper(static_cast<unsigned char>(b[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Returns the static canonical-name pointer for `name` if it belongs to the
+// lazy-dispatch or parser special-form tables (matched case-insensitively),
+// or nullptr otherwise. The returned pointer has program lifetime.
+const char* lookup_lazy_or_special(std::string_view name) {
+  for (const char* const* p = formulon::eval::lazy_form_names(); p != nullptr && *p != nullptr; ++p) {
+    if (ascii_iequals(name, *p)) {
+      return *p;
+    }
+  }
+  for (const char* const* p = formulon::eval::parser_special_form_names(); p != nullptr && *p != nullptr; ++p) {
+    if (ascii_iequals(name, *p)) {
+      return *p;
+    }
+  }
+  return nullptr;
+}
+
 const std::vector<std::string>& sorted_function_names() {
   static const std::vector<std::string> names = []() {
     std::vector<std::string> out;
     formulon::eval::default_registry().for_each_name(
         [](std::string_view name, void* ctx) { static_cast<std::vector<std::string>*>(ctx)->emplace_back(name); },
         &out);
+    for (const char* const* p = formulon::eval::lazy_form_names(); p != nullptr && *p != nullptr; ++p) {
+      out.emplace_back(*p);
+    }
+    for (const char* const* p = formulon::eval::parser_special_form_names(); p != nullptr && *p != nullptr; ++p) {
+      out.emplace_back(*p);
+    }
     std::sort(out.begin(), out.end());
+    // A name can appear in more than one source (e.g. registry + lazy); keep a
+    // single entry so the enumeration count matches the recognised set.
+    out.erase(std::unique(out.begin(), out.end()), out.end());
     return out;
   }();
   return names;
@@ -85,8 +137,23 @@ extern "C" fm_status_t fm_function_metadata(const char* name, fm_locale_t /*loca
   const auto& reg = formulon::eval::default_registry();
   const auto* def = reg.lookup(std::string_view(name));
   if (def == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_metadata: unknown function",
-                             std::string("name=") + name);
+    // Not in the eager registry: it may still be a lazy-dispatch form
+    // (XLOOKUP / SUMIFS / VLOOKUP / ...) or a parser special form (LET /
+    // LAMBDA). Those have no `FunctionDef`, so arity is unknown and is
+    // reported as `min_arity = 0` with the unbounded `max_arity` sentinel.
+    const char* canonical = lookup_lazy_or_special(std::string_view(name));
+    if (canonical == nullptr) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_metadata: unknown function",
+                               std::string("name=") + name);
+    }
+    *out = fm_function_metadata_t{};
+    out->canonical_name = canonical;
+    out->min_arity = 0;
+    out->max_arity = formulon::eval::kVariadic;
+    out->availability = function_availability(std::string_view(canonical));
+    out->signature_template = nullptr;
+    out->description = nullptr;
+    return 0;
   }
   *out = fm_function_metadata_t{};
   // `canonical_name` is held in static storage by the registry; surface

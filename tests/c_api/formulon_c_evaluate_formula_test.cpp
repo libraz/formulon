@@ -181,6 +181,141 @@ TEST(EvaluateFormula, SheetIndexOutOfRange) {
 }
 
 // ---------------------------------------------------------------------------
+// Ad-hoc array evaluation (two-step: evaluate + per-cell readback).
+// ---------------------------------------------------------------------------
+
+// A column vector: =SEQUENCE(3) is 3 rows x 1 col, values 1,2,3 row-major.
+TEST(EvaluateFormulaArray, ColumnVectorPreservesAllCells) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &rows, &cols), 0);
+  EXPECT_EQ(rows, 3U);
+  EXPECT_EQ(cols, 1U);
+
+  for (uint32_t i = 0; i < 3U; ++i) {
+    fm_value_t v{};
+    ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, i, &v), 0);
+    EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+    EXPECT_DOUBLE_EQ(v.u.number, static_cast<double>(i + 1U));
+  }
+}
+
+// A 2x3 matrix: =SEQUENCE(2,3) fills row-major 1..6.
+TEST(EvaluateFormulaArray, MatrixDimensionsAndRowMajorOrder) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(2,3)", &rows, &cols), 0);
+  EXPECT_EQ(rows, 2U);
+  EXPECT_EQ(cols, 3U);
+
+  for (uint32_t i = 0; i < 6U; ++i) {
+    fm_value_t v{};
+    ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, i, &v), 0);
+    EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+    EXPECT_DOUBLE_EQ(v.u.number, static_cast<double>(i + 1U));
+  }
+}
+
+// A scalar result is reported as a 1x1 array, index 0 carrying the value.
+TEST(EvaluateFormulaArray, ScalarReportedAsOneByOne) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=1+2", &rows, &cols), 0);
+  EXPECT_EQ(rows, 1U);
+  EXPECT_EQ(cols, 1U);
+
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 3.0);
+}
+
+// Text cells survive the arena teardown: the stash owns its own bytes, so
+// reading them back after the producing call (whose arena is gone) returns
+// is safe. Broadcasting concat over a 1x2 SEQUENCE yields {"1x","2x"}.
+TEST(EvaluateFormulaArray, TextCellsStayValidAfterEvaluation) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(1,2)&\"x\"", &rows, &cols), 0);
+  EXPECT_EQ(rows, 1U);
+  EXPECT_EQ(cols, 2U);
+
+  fm_value_t a{};
+  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, &a), 0);
+  ASSERT_EQ(a.kind, FM_VAL_TEXT);
+  EXPECT_EQ(std::string(a.u.text), "1x");
+  fm_value_t b{};
+  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 1, &b), 0);
+  ASSERT_EQ(b.kind, FM_VAL_TEXT);
+  EXPECT_EQ(std::string(b.u.text), "2x");
+}
+
+// The legacy scalar API keeps its top-left reduction (backward compat): the
+// same array formula that the array API preserves must still degrade here.
+TEST(EvaluateFormulaArray, ScalarApiStillReducesToTopLeft) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 1.0);
+}
+
+TEST(EvaluateFormulaArray, IndexOutOfRangeRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=SEQUENCE(3)", &rows, &cols), 0);
+
+  fm_value_t v{};
+  EXPECT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 3, &v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+TEST(EvaluateFormulaArray, NullArgumentsRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, nullptr, &rows, &cols),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=1", nullptr, &cols),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+
+  fm_value_t v{};
+  EXPECT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, nullptr),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(fm_workbook_evaluate_formula_array_cell(nullptr, 0, &v),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+}
+
+TEST(EvaluateFormulaArray, SheetIndexOutOfRange) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  EXPECT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 99, 0, 0, "=1", &rows, &cols),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+// ---------------------------------------------------------------------------
 // Conditional-formula (CF predicate) entry point.
 // ---------------------------------------------------------------------------
 

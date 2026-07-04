@@ -108,6 +108,25 @@ class MatrixEditTests(unittest.TestCase):
             self.assertEqual(wb.get_value(0, 0, 0).to_python(), 2.0)
 
 
+class AdHocArrayEvalTests(unittest.TestCase):
+    def test_sequence_matrix_preserves_all_cells(self) -> None:
+        with Workbook.create_default() as wb:
+            grid = wb.evaluate_formula_array(0, 0, 0, "=SEQUENCE(2,3)")
+            self.assertEqual(len(grid), 2)
+            self.assertEqual(len(grid[0]), 3)
+            # Row-major 1..6.
+            self.assertEqual(grid[0][0].to_python(), 1.0)
+            self.assertEqual(grid[1][2].to_python(), 6.0)
+
+    def test_scalar_reported_as_one_by_one(self) -> None:
+        with Workbook.create_default() as wb:
+            grid = wb.evaluate_formula_array(0, 0, 0, "=1+2")
+            self.assertEqual(len(grid), 1)
+            self.assertEqual(len(grid[0]), 1)
+            self.assertEqual(grid[0][0].kind, ValueKind.NUMBER)
+            self.assertEqual(grid[0][0].to_python(), 3.0)
+
+
 class DefinedNameTests(unittest.TestCase):
     def test_defined_name_set_get_remove(self) -> None:
         with Workbook.create_default() as wb:
@@ -423,12 +442,60 @@ class FunctionCatalogTests(unittest.TestCase):
         self.assertIsNotNone(meta)
         self.assertEqual(meta.name, "SUM")
         self.assertGreaterEqual(meta.min_arity, 1)
+        # SUM is an unbounded variadic; the sentinel is normalized to None.
+        self.assertIsNone(meta.max_arity)
+        # Lazy-dispatch forms (not in the eager registry) still resolve.
+        xlookup = Workbook.function_metadata("XLOOKUP", 0)
+        self.assertIsNotNone(xlookup)
+        self.assertEqual(xlookup.name, "XLOOKUP")
+        names = {Workbook.function_name_at(i) for i in range(Workbook.function_count())}
+        self.assertIn("XLOOKUP", names)
         self.assertIsNone(Workbook.function_metadata("NOT_A_REAL_FUNCTION", 0))
 
     def test_function_name_at(self) -> None:
         name = Workbook.function_name_at(0)
         self.assertIsInstance(name, str)
         self.assertGreater(len(name), 0)
+
+    def test_merge_function_metadata(self) -> None:
+        base = Workbook.function_metadata("XLOOKUP", 0)
+        self.assertIsNotNone(base)
+        # The engine leaves display metadata empty.
+        self.assertIsNone(base.signature_template)
+        self.assertIsNone(base.description)
+
+        entry = {
+            "signature": "XLOOKUP(lookup_value, lookup_array, return_array)",
+            "description": "Searches a range or an array.",
+            "aliases": {"fr-FR": "RECHERCHEX"},
+            "localized": {
+                "fr-FR": {"signature": "RECHERCHEX(...)", "description": "Recherche."}
+            },
+        }
+
+        # Localized override wins for the matching locale.
+        fr = formulon.merge_function_metadata(base, entry, "fr-FR")
+        self.assertEqual(fr.signature_template, "RECHERCHEX(...)")
+        self.assertEqual(fr.description, "Recherche.")
+        self.assertEqual(fr.localized_name, "RECHERCHEX")
+        # Structural fields survive the merge.
+        self.assertEqual(fr.name, "XLOOKUP")
+
+        # A locale with no localized/alias entry falls back to the default
+        # signature/description and the canonical display name.
+        de = formulon.merge_function_metadata(base, entry, "de-DE")
+        self.assertEqual(
+            de.signature_template,
+            "XLOOKUP(lookup_value, lookup_array, return_array)",
+        )
+        self.assertEqual(de.description, "Searches a range or an array.")
+        self.assertEqual(de.localized_name, "XLOOKUP")
+
+        # No provider entry -> base returned verbatim; display metadata NULL.
+        none = formulon.merge_function_metadata(base, None, "fr-FR")
+        self.assertIs(none, base)
+        self.assertIsNone(none.signature_template)
+        self.assertIsNone(none.description)
 
 
 class ExternalLinkTests(unittest.TestCase):
@@ -446,7 +513,7 @@ class SurfaceParityTests(unittest.TestCase):
         "set_defined_name_scoped", "set_error",
         "insert_rows", "delete_rows", "insert_cols", "delete_cols",
         "calc_mode", "set_calc_mode", "excel_profile_id", "set_excel_profile_id",
-        "partial_recalc", "lambda_text_at",
+        "partial_recalc", "lambda_text_at", "evaluate_formula_array",
         "add_merge", "remove_merge", "remove_merge_at", "clear_merges",
         "get_merges", "merge_count",
         "add_hyperlink", "remove_hyperlink", "remove_hyperlink_at",
@@ -500,6 +567,7 @@ class SurfaceParityTests(unittest.TestCase):
             "CellXf", "FontRecord", "FillRecord", "CellStyle", "ExternalLink",
             "PivotCell", "PivotLayout", "PivotFieldSpec", "PivotDataFieldSpec",
             "PivotFilterSpec", "CalcMode", "PivotAxis", "PivotAggregation",
+            "MergedFunctionMetadata", "merge_function_metadata",
         ):
             self.assertTrue(hasattr(formulon, name), f"formulon missing: {name}")
 

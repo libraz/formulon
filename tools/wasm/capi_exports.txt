@@ -50,6 +50,10 @@ fm_workbook_set_error
 fm_workbook_get_value
 fm_workbook_lambda_text_at
 
+# -- Ad-hoc array evaluation (two-step: evaluate + per-cell readback) -------------
+fm_workbook_evaluate_formula_array
+fm_workbook_evaluate_formula_array_cell
+
 # -- Iteration / dump ------------------------------------------------------------
 fm_workbook_cell_count
 fm_workbook_cell_at

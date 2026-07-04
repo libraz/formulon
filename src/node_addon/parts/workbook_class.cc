@@ -165,6 +165,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::DxfCount>("dxfCount"),
           InstanceMethod<&Workbook::EvaluateCfRange>("evaluateCfRange"),
           InstanceMethod<&Workbook::EvaluateConditionalFormula>("evaluateConditionalFormula"),
+          InstanceMethod<&Workbook::EvaluateFormulaArray>("evaluateFormulaArray"),
           InstanceMethod<&Workbook::EvaluateFormulaText>("evaluateFormulaText"),
           InstanceMethod<&Workbook::ExcelProfileId>("excelProfileId"),
           InstanceMethod<&Workbook::FillCount>("fillCount"),

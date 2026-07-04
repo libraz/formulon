@@ -3,6 +3,8 @@
 // Stable C ABI function-catalog metadata tests.
 
 #include <cstring>
+#include <string>
+#include <unordered_set>
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
@@ -89,4 +91,42 @@ TEST(FormulonCApiFunctionMetadata, NameAtOutOfRangeReturnsInvalidArgument) {
   const char* out = nullptr;
   fm_status_t rc = fm_function_name_at(static_cast<std::size_t>(-1), &out);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+}
+
+// Lazy-dispatch forms (XLOOKUP, SUMIFS, ...) and parser special forms (LET,
+// LAMBDA) are recognised by the evaluator but are NOT in the eager registry.
+// The catalog must still enumerate them and resolve their metadata.
+TEST(FormulonCApiFunctionMetadata, EnumerationIncludesLazyAndSpecialForms) {
+  std::unordered_set<std::string> names;
+  const std::size_t count = fm_function_count();
+  for (std::size_t i = 0; i < count; ++i) {
+    const char* name = nullptr;
+    ASSERT_EQ(fm_function_name_at(i, &name), 0);
+    ASSERT_NE(name, nullptr);
+    names.insert(name);
+  }
+  for (const char* expected : {"XLOOKUP", "SUMIFS", "IFERROR", "INDEX", "OFFSET", "INDIRECT", "SORT", "UNIQUE",
+                               "FILTER", "LET", "LAMBDA", "VLOOKUP"}) {
+    EXPECT_TRUE(names.count(expected) != 0) << expected << " missing from catalog enumeration";
+  }
+}
+
+TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsResolveMetadata) {
+  for (const char* fn : {"XLOOKUP", "SUMIFS", "IFERROR", "INDEX", "OFFSET", "INDIRECT", "SORT", "UNIQUE", "FILTER",
+                         "LET", "LAMBDA", "VLOOKUP"}) {
+    fm_function_metadata_t md{};
+    ASSERT_EQ(fm_function_metadata(fn, FM_LOCALE_EN_US, &md), 0) << fn << " did not resolve";
+    ASSERT_NE(md.canonical_name, nullptr);
+    EXPECT_STREQ(md.canonical_name, fn);
+    // No FunctionDef -> arity is unknown: min 0, max unbounded sentinel.
+    EXPECT_EQ(md.min_arity, 0U);
+    EXPECT_EQ(md.max_arity, 0xFFFFFFFFU);
+    EXPECT_EQ(md.availability, FM_FUNCTION_IMPLEMENTED);
+  }
+}
+
+TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
+  fm_function_metadata_t md{};
+  ASSERT_EQ(fm_function_metadata("xlookup", FM_LOCALE_EN_US, &md), 0);
+  EXPECT_STREQ(md.canonical_name, "XLOOKUP");
 }

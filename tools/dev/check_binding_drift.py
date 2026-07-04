@@ -68,6 +68,13 @@ EXTERNAL_LINKS_H = REPO_ROOT / "src" / "io" / "external_links.h"
 # comparing the WASM Workbook interface against bindings_register.cpp.
 WASM_AUTO_METHODS = {"delete"}
 
+# Pure-JS free functions declared in packages/npm-native/index.d.ts that are
+# intentionally NOT backed by a native `exports.Set(...)` registration -- they
+# are host-side helpers implemented in index.mjs (e.g. the function-metadata
+# provider merge helper). Excluded before comparing the d.ts free-function
+# surface against the addon's native exports.
+NODE_PURE_JS_FREE_FUNCTIONS = {"mergeFunctionMetadata"}
+
 
 def _read(path: Path) -> str:
     if not path.is_file():
@@ -223,6 +230,7 @@ def check_dts_node() -> List[str]:
     instance_dts = _extract_ts_methods(_find_interface_body(dts_text, "Workbook", NODE_DTS))
     static_dts = _extract_ts_methods(_find_interface_body(dts_text, "WorkbookCtor", NODE_DTS))
     free_dts = set(re.findall(r"^export function ([A-Za-z0-9_]+)\(", dts_text, re.MULTILINE))
+    free_dts -= NODE_PURE_JS_FREE_FUNCTIONS
 
     for label, cc_set, dts_set in (
         ("Workbook instance methods", instance_cc, instance_dts),

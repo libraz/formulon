@@ -48,6 +48,46 @@ export const lastErrorMessage = native.lastErrorMessage;
 export const lastErrorContext = native.lastErrorContext;
 export const statusString = native.statusString;
 
+/**
+ * Merge a host-supplied metadata entry over the engine's structural
+ * `functionMetadata()` result.
+ *
+ * This is a pure, side-effect-free helper: it does not touch the native
+ * addon. The engine returns `signatureTemplate` / `description` as
+ * `undefined`; a host injects display metadata (see
+ * `docs/function-metadata-schema.md`) and merges it here at display time.
+ * The metadata is display-only and never affects formula parsing or
+ * evaluation.
+ *
+ * Field precedence (first non-nullish wins):
+ *   - signatureTemplate: `entry.localized[locale].signature` ->
+ *     `entry.signature` -> `base.signatureTemplate`
+ *   - description: `entry.localized[locale].description` ->
+ *     `entry.description` -> `base.description`
+ *   - localizedName: `entry.aliases[locale]` -> `base.name`
+ *
+ * @param {object} base A `FunctionMetadataResult` from `functionMetadata()`.
+ * @param {object|undefined} entry The provider's `functions[NAME]` entry, or
+ *   `undefined`/`null` to leave `base` unchanged (signature/description
+ *   stay `undefined`).
+ * @param {string} locale A BCP-47 display locale tag (e.g. `"fr-FR"`),
+ *   matching the keys in `aliases` / `localized`. Independent of the numeric
+ *   locale code passed to `functionMetadata()`.
+ * @returns {object} The merged metadata (a new object), or `base` verbatim
+ *   when `entry` is absent.
+ */
+export function mergeFunctionMetadata(base, entry, locale) {
+  if (entry === undefined || entry === null) {
+    return base;
+  }
+  const localized = (entry.localized && entry.localized[locale]) || {};
+  const signatureTemplate = localized.signature ?? entry.signature ?? base.signatureTemplate;
+  const description = localized.description ?? entry.description ?? base.description;
+  const aliasName = entry.aliases && entry.aliases[locale];
+  const localizedName = aliasName ?? base.name;
+  return { ...base, signatureTemplate, description, localizedName };
+}
+
 /** `fm_value_kind_t` ordinals (mirror of `fm_value_kind_t`). */
 export const ValueKind = Object.freeze({
   Blank: 0,
@@ -116,6 +156,7 @@ export default {
   lastErrorMessage,
   lastErrorContext,
   statusString,
+  mergeFunctionMetadata,
   ValueKind,
   CfMatchKind,
   PivotCellKind,

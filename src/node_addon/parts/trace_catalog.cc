@@ -145,7 +145,13 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
   out.Set("ok", Napi::Boolean::New(env, true));
   out.Set("name", Napi::String::New(env, md.canonical_name != nullptr ? md.canonical_name : ""));
   out.Set("minArity", Napi::Number::New(env, md.min_arity));
-  out.Set("maxArity", Napi::Number::New(env, md.max_arity));
+  // `0xFFFFFFFF` is the unbounded / unknown-arity sentinel; surface it as
+  // `null` so JS callers do not mistake it for a concrete upper bound.
+  if (md.max_arity == 0xFFFFFFFFu) {
+    out.Set("maxArity", env.Null());
+  } else {
+    out.Set("maxArity", Napi::Number::New(env, md.max_arity));
+  }
   out.Set("availability", Napi::Number::New(env, static_cast<uint32_t>(md.availability)));
   if (md.signature_template != nullptr) {
     out.Set("signatureTemplate", Napi::String::New(env, md.signature_template));

@@ -6,6 +6,7 @@
 // the contract that `cell_at` remains spill-blind while
 // `resolve_cell_value` is the spill-aware reader.
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -384,6 +385,59 @@ TEST(SheetSpillDeathTest, FootprintOverflowsColsAborts) {
 // ---------------------------------------------------------------------------
 // cell_at remains spill-blind
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Phantom enumeration (cell_count / spill_phantom_addresses)
+// ---------------------------------------------------------------------------
+
+TEST(SheetSpillTest, SpillPhantomAddressesListsPhantomsExcludingAnchor) {
+  Sheet s("Sheet1");
+  // Anchor D1 (row 0, col 3), 3x1 spill: phantoms at D2 (1,3) and D3 (2,3).
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
+  ASSERT_TRUE(s.commit_spill(0U, 3U, 3U, 1U, std::move(cells)));
+
+  std::vector<CellAddress> phantoms = s.spill_phantom_addresses();
+  std::sort(phantoms.begin(), phantoms.end(),
+            [](CellAddress a, CellAddress b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
+  ASSERT_EQ(phantoms.size(), 2U);
+  EXPECT_EQ(phantoms[0].row, 1U);
+  EXPECT_EQ(phantoms[0].col, 3U);
+  EXPECT_EQ(phantoms[1].row, 2U);
+  EXPECT_EQ(phantoms[1].col, 3U);
+}
+
+TEST(SheetSpillTest, SpillPhantomAddressesIsEmptyWithoutRegions) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  EXPECT_TRUE(s.spill_phantom_addresses().empty());
+}
+
+TEST(SheetSpillTest, CellCountIncludesPhantomsWithoutStoredSlots) {
+  Sheet s("Sheet1");
+  // Anchor D1 (row 0, col 3), 3x1 spill. Committing grows row 0 to 4 slots
+  // (cols 0..3); the two phantoms D2, D3 live in rows 1 and 2, which hold no
+  // stored slots at all, so each adds one to the count.
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
+  ASSERT_TRUE(s.commit_spill(0U, 3U, 3U, 1U, std::move(cells)));
+
+  EXPECT_EQ(s.cell_count(), 4U + 2U);
+}
+
+TEST(SheetSpillTest, CellCountDoesNotDoubleCountPhantomOverImplicitSlot) {
+  Sheet s("Sheet1");
+  // Spill D1:D3 (phantoms at D2, D3), then populate F2 (row 1, col 5). The
+  // literal at F2 grows row 1 to 6 slots (cols 0..5), so phantom D2 (col 3)
+  // now coincides with an implicitly default-constructed slot. It must be
+  // counted once; phantom D3 (row 2) still has no slot and adds one.
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
+  ASSERT_TRUE(s.commit_spill(0U, 3U, 3U, 1U, std::move(cells)));
+  s.set_cell_value(1U, 5U, Value::number(9.0));
+
+  // The write to F2 (not a phantom) leaves the spill intact.
+  ASSERT_NE(s.spill_region_at_anchor(0U, 3U), nullptr);
+  // row 0: 4 slots, row 1: 6 slots, phantom D3 (row 2): +1.
+  EXPECT_EQ(s.cell_count(), 4U + 6U + 1U);
+}
 
 TEST(SheetSpillTest, CellAtIsUnchangedForPhantomCoordinates) {
   Sheet s("Sheet1");

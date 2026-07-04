@@ -131,6 +131,22 @@ bool ComputeUsedRange(const Sheet& sheet, CellRange* out_range) {
       max_col = std::max(max_col, col_index);
     }
   }
+  // Dynamic-array spill phantoms occupy their coordinates in Excel's used
+  // range even though they hold no stored `Cell`; fold them into the bounding
+  // box so a spilled region paginates against its full extent, not just the
+  // anchor.
+  for (const CellAddress& addr : sheet.spill_phantom_addresses()) {
+    if (!any) {
+      min_row = max_row = addr.row;
+      min_col = max_col = addr.col;
+      any = true;
+      continue;
+    }
+    min_row = std::min(min_row, addr.row);
+    max_row = std::max(max_row, addr.row);
+    min_col = std::min(min_col, addr.col);
+    max_col = std::max(max_col, addr.col);
+  }
   if (!any) {
     return false;
   }

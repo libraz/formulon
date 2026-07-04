@@ -72,7 +72,13 @@ emscripten::val JsWorkbook::functionMetadata(const std::string& name, uint32_t l
   o.set("ok", true);
   o.set("name", md.canonical_name != nullptr ? std::string(md.canonical_name) : std::string());
   o.set("minArity", md.min_arity);
-  o.set("maxArity", md.max_arity);
+  // `0xFFFFFFFF` is the unbounded / unknown-arity sentinel; surface it as
+  // `null` so JS callers do not mistake it for a concrete upper bound.
+  if (md.max_arity == 0xFFFFFFFFu) {
+    o.set("maxArity", emscripten::val::null());
+  } else {
+    o.set("maxArity", md.max_arity);
+  }
   o.set("availability", static_cast<uint32_t>(md.availability));
   if (md.signature_template != nullptr) {
     o.set("signatureTemplate", std::string(md.signature_template));

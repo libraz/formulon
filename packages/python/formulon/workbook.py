@@ -620,7 +620,9 @@ class FunctionMetadata:
 
     name: str
     min_arity: int
-    max_arity: int
+    #: ``None`` denotes an unbounded variadic or a lazy / special form
+    #: whose upper arity is unknown.
+    max_arity: Optional[int]
     availability: int
     signature_template: Optional[str]
     description: Optional[str]
@@ -1020,6 +1022,70 @@ class Workbook:
             return Value._from_wasm(value_ptr)
         finally:
             LIB.free(value_ptr)
+
+    # -- Ad-hoc array evaluation ------------------------------------------
+    def evaluate_formula_array(
+        self, sheet: int, row: int, col: int, formula: str
+    ) -> List[List[Value]]:
+        """Evaluate ``formula`` as if entered at ``(sheet, row, col)`` and
+        return the whole multi-cell result, without mutating the workbook.
+
+        Unlike a scalar evaluation (which reduces an array to its top-left
+        element), a dynamic-array formula such as ``=SEQUENCE(2,3)`` yields
+        the full ``rows x cols`` grid as a nested list in row-major order
+        (``result[r][c]``); a scalar result such as ``=1+2`` is returned as
+        a ``1 x 1`` grid (``[[Value(...)]]``).
+
+        The evaluation is read-only: no cell value is written and no spill
+        is committed. Cell-level Excel errors surface as
+        :class:`Value` entries with ``kind == ValueKind.ERROR``; only
+        host-side failures (NULL handle, out-of-range sheet) raise
+        :class:`FormulonError`.
+
+        Args:
+          sheet: 0-based sheet index the formula is anchored on.
+          row: 0-based anchor row (drives ``ROW()`` and relative refs).
+          col: 0-based anchor column (drives ``COLUMN()``).
+          formula: the formula text, with or without a leading ``=``.
+
+        Returns:
+          A ``rows x cols`` nested list of :class:`Value`.
+        """
+        h = self._require()
+        formula_ptr, _ = LIB.alloc_utf8(formula)
+        rows_ptr = _alloc_out_ptr()
+        cols_ptr = _alloc_out_ptr()
+        try:
+            status = LIB.fm_workbook_evaluate_formula_array(
+                h, sheet, row, col, formula_ptr, rows_ptr, cols_ptr
+            )
+            _check(status, "fm_workbook_evaluate_formula_array")
+            rows = LIB.read_u32(rows_ptr)
+            cols = LIB.read_u32(cols_ptr)
+        finally:
+            LIB.free(formula_ptr)
+            LIB.free(rows_ptr)
+            LIB.free(cols_ptr)
+
+        # Second step: read each stashed cell back by its row-major index.
+        # The stash on the handle stays valid until the next array
+        # evaluation or mutation, so it survives the loop below.
+        grid: List[List[Value]] = []
+        value_ptr = LIB.alloc(fm_value_t_size)
+        try:
+            for r in range(rows):
+                out_row: List[Value] = []
+                for c in range(cols):
+                    index = r * cols + c
+                    status = LIB.fm_workbook_evaluate_formula_array_cell(
+                        h, index, value_ptr
+                    )
+                    _check(status, "fm_workbook_evaluate_formula_array_cell")
+                    out_row.append(Value._from_wasm(value_ptr))
+                grid.append(out_row)
+        finally:
+            LIB.free(value_ptr)
+        return grid
 
     # -- Recalc ------------------------------------------------------------
     def recalc(self) -> None:
@@ -3504,10 +3570,14 @@ class Workbook:
             d = S.FUNCTION_METADATA.unpack(LIB, ptr)
             sig = LIB.read_cstr(d["signature_template"]) if d["signature_template"] else None
             desc = LIB.read_cstr(d["description"]) if d["description"] else None
+            # 0xFFFFFFFF is the unbounded / unknown-arity sentinel; expose it
+            # as None so callers do not treat it as a concrete upper bound.
+            raw_max = d["max_arity"]
+            max_arity = None if raw_max == 0xFFFFFFFF else raw_max
             return FunctionMetadata(
                 name=LIB.read_cstr(d["canonical_name"]),
                 min_arity=d["min_arity"],
-                max_arity=d["max_arity"],
+                max_arity=max_arity,
                 availability=d["availability"],
                 signature_template=sig,
                 description=desc,

@@ -60,6 +60,19 @@ export interface EvalResult {
   value: Value;
 }
 
+/**
+ * Return type of `Workbook.evaluateFormulaArray(...)`: the whole multi-cell
+ * result of an ad-hoc formula. `cells` is a `rows` x `cols` nested array in
+ * row-major order (`cells[r][c]`); a scalar result is reported as a 1x1
+ * array (`rows === cols === 1`).
+ */
+export interface EvalArrayResult {
+  status: Status;
+  rows: number;
+  cols: number;
+  cells: Value[][];
+}
+
 /** Return type of `Workbook.save()` / `Workbook.saveEx(format)`. */
 export interface SaveResult {
   status: Status;
@@ -649,14 +662,73 @@ export interface FunctionMetadataResult {
   readonly ok: boolean;
   readonly name?: string;
   readonly minArity?: number;
-  /** `0xFFFFFFFF` (i.e. `4294967295`) denotes an unbounded variadic. */
-  readonly maxArity?: number;
+  /** `null` denotes an unbounded variadic or a lazy / special form whose
+   *  upper arity is unknown. */
+  readonly maxArity?: number | null;
   /** Availability class: 0 implemented, 1 implemented_unverified,
    *  2 environment_bound, 3 unavailable_stub. */
   readonly availability?: number;
   readonly signatureTemplate?: string;
   readonly description?: string;
 }
+
+/** Per-locale display overrides inside a {@link FunctionMetadataEntry}. */
+export interface FunctionMetadataLocalized {
+  signature?: string;
+  description?: string;
+}
+
+/** One host-injected metadata entry, keyed by canonical UPPERCASE function
+ *  name inside a {@link FunctionMetadataProvider}. Display-only metadata
+ *  (see `docs/function-metadata-schema.md`); it never affects formula
+ *  parsing or evaluation. */
+export interface FunctionMetadataEntry {
+  /** Default (locale-agnostic) signature template. */
+  signature?: string;
+  /** Default (locale-agnostic) description. */
+  description?: string;
+  /** Map of BCP-47 locale tag -> localized display name. */
+  aliases?: Record<string, string>;
+  /** Map of BCP-47 locale tag -> per-locale signature/description overrides. */
+  localized?: Record<string, FunctionMetadataLocalized>;
+}
+
+/** A whole host metadata document's `functions` map: canonical UPPERCASE
+ *  function name -> {@link FunctionMetadataEntry}. */
+export type FunctionMetadataProvider = Record<string, FunctionMetadataEntry>;
+
+/** Result of a {@link MergeFunctionMetadata} call: a
+ *  {@link FunctionMetadataResult} with the resolved localized display name
+ *  attached. */
+export interface MergedFunctionMetadataResult extends FunctionMetadataResult {
+  /** `entry.aliases[locale]` when present, else the canonical `name`. */
+  readonly localizedName?: string;
+}
+
+/** Signature of the pure `mergeFunctionMetadata` helper that merges a
+ *  host-supplied {@link FunctionMetadataEntry} over the engine's structural
+ *  `functionMetadata()` result.
+ *
+ *  Field precedence (first non-nullish wins):
+ *    - `signatureTemplate`: `entry.localized[locale].signature` ->
+ *      `entry.signature` -> `base.signatureTemplate`
+ *    - `description`: `entry.localized[locale].description` ->
+ *      `entry.description` -> `base.description`
+ *    - `localizedName`: `entry.aliases[locale]` -> `base.name`
+ *
+ *  When `entry` is `undefined`, `base` is returned verbatim. `locale` is a
+ *  BCP-47 display tag matching the keys in `aliases` / `localized`.
+ *
+ *  NOTE: this is a **type only**. The WASM module's runtime JS is generated
+ *  and does not export a `mergeFunctionMetadata` function. The helper is a
+ *  pure function whose canonical implementation ships in
+ *  `@libraz/formulon-native`; a host should import it from there or
+ *  reimplement it per `docs/function-metadata-schema.md`. */
+export type MergeFunctionMetadata = (
+  base: FunctionMetadataResult,
+  entry: FunctionMetadataEntry | undefined,
+  locale: string,
+) => MergedFunctionMetadataResult;
 
 /** Spill region info returned by `spillInfo(sheet, row, col)`. */
 export interface SpillInfo {
@@ -1040,6 +1112,15 @@ export interface Workbook {
    *  Note: a self-reference reads the target cell's cached value rather than
    *  raising `#REF!`, since the ad-hoc formula never joins the dep graph. */
   evaluateFormulaText(sheet: number, row: number, col: number, formula: string): EvalResult;
+
+  /** Evaluates `formula` as if entered at `(sheet, row, col)` and returns the
+   *  whole multi-cell result without mutating the workbook. Unlike
+   *  `evaluateFormulaText` (which reduces an array to its top-left element),
+   *  a dynamic-array formula such as `=SEQUENCE(2,3)` yields the full
+   *  `rows` x `cols` grid in `result.cells` (row-major, `cells[r][c]`); a
+   *  scalar result is reported as a 1x1 array. Same read-only purity and
+   *  self-reference caveat as `evaluateFormulaText`. */
+  evaluateFormulaArray(sheet: number, row: number, col: number, formula: string): EvalArrayResult;
 
   /** Evaluates `formula` as a conditional-formatting predicate anchored at
    *  `(sheet, row, col)`, with relative references written relative to

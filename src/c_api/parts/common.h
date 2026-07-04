@@ -36,6 +36,30 @@ namespace parts {
 // would invalidate every previously surfaced view.
 using TextStore = std::deque<std::string>;
 
+// Per-handle stash for the most recent ad-hoc array evaluation
+// (`fm_workbook_evaluate_formula_array`). The two-step array surface
+// evaluates once, stashes the whole result here, then hands cells back one
+// at a time by row-major index. The evaluation arena is discarded when the
+// producing call returns, so any `Text` cell is deep-copied into `text_owner`
+// and re-pointed at that owned storage: the stashed `Value`s stay valid until
+// the next array evaluation (or handle destruction). Non-text cells are
+// trivially copied; `value_to_fm` reports Array / Ref / Lambda cells by kind
+// only and never dereferences their (now-dangling) arena pointers.
+struct AdhocArrayStash {
+  std::vector<formulon::Value> cells;  // row-major; size == rows * cols
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  TextStore text_owner;  // owns the bytes behind every Text cell above
+
+  // Drops the previous evaluation's cells and owned text.
+  void clear() {
+    cells.clear();
+    text_owner.clear();
+    rows = 0;
+    cols = 0;
+  }
+};
+
 // Resets the thread-local diagnostics. Called at the start of every
 // fallible entry point so a successful return surfaces an empty error
 // message rather than the previous call's residue.
@@ -137,6 +161,12 @@ struct fm_workbook {
   // readbacks: valid until the next read/mutation on this handle.
   std::vector<fm_cfvo_t> cfvo_scratch;
   std::vector<fm_cf_color_t> cf_color_scratch;
+
+  // Result of the most recent `fm_workbook_evaluate_formula_array`. Owns its
+  // own text storage so cells stay readable via
+  // `fm_workbook_evaluate_formula_array_cell` after the producing call's
+  // arena is gone; superseded by the next array evaluation on this handle.
+  formulon::c_api::parts::AdhocArrayStash adhoc_array;
 
   formulon::Workbook& workbook() { return *wb; }
   const formulon::Workbook& workbook() const { return *wb; }

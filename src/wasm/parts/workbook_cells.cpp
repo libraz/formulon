@@ -122,6 +122,47 @@ JsEvalResult JsWorkbook::evaluateConditionalFormula(uint32_t sheet, uint32_t row
   return r;
 }
 
+emscripten::val JsWorkbook::evaluateFormulaArray(uint32_t sheet, uint32_t row, uint32_t col,
+                                                 const std::string& formula) const {
+  emscripten::val o = emscripten::val::object();
+  auto fail = [&o](fm_status_t rc) {
+    o.set("status", error_status(rc));
+    o.set("rows", 0);
+    o.set("cols", 0);
+    o.set("cells", emscripten::val::array());
+    return o;
+  };
+  if (handle_ == nullptr) {
+    return fail(7000);
+  }
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  fm_status_t rc = fm_workbook_evaluate_formula_array(handle_, sheet, row, col, formula.c_str(), &rows, &cols);
+  if (rc != 0) {
+    return fail(rc);
+  }
+  // Build a rows x cols nested array of Value objects (row-major).
+  emscripten::val cells = emscripten::val::array();
+  for (uint32_t r = 0; r < rows; ++r) {
+    emscripten::val js_row = emscripten::val::array();
+    for (uint32_t c = 0; c < cols; ++c) {
+      const uint32_t index = r * cols + c;
+      fm_value_t v{};
+      fm_status_t cell_rc = fm_workbook_evaluate_formula_array_cell(handle_, index, &v);
+      if (cell_rc != 0) {
+        return fail(cell_rc);
+      }
+      js_row.set(c, emscripten::val(translate_value(v)));
+    }
+    cells.set(r, js_row);
+  }
+  o.set("status", ok_status());
+  o.set("rows", rows);
+  o.set("cols", cols);
+  o.set("cells", cells);
+  return o;
+}
+
 emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const {
   emscripten::val o = emscripten::val::object();
   if (handle_ == nullptr) {

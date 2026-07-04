@@ -3,7 +3,18 @@
 # IDEs and type-checkers consume this rather than the runtime module.
 
 from enum import IntEnum
-from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import (
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    TypedDict,
+    Union,
+)
 
 from ._c import ValueKind as ValueKind
 
@@ -385,10 +396,37 @@ class SpillInfo:
 class FunctionMetadata:
     name: str
     min_arity: int
-    max_arity: int
+    max_arity: Optional[int]
     availability: int
     signature_template: Optional[str]
     description: Optional[str]
+
+class FunctionMetadataLocalized(TypedDict, total=False):
+    signature: str
+    description: str
+
+class FunctionMetadataEntry(TypedDict, total=False):
+    signature: str
+    description: str
+    aliases: Dict[str, str]
+    localized: Dict[str, FunctionMetadataLocalized]
+
+FunctionMetadataProvider = Dict[str, FunctionMetadataEntry]
+
+class MergedFunctionMetadata:
+    name: str
+    min_arity: int
+    max_arity: Optional[int]
+    availability: int
+    signature_template: Optional[str]
+    description: Optional[str]
+    localized_name: str
+
+def merge_function_metadata(
+    base: FunctionMetadata,
+    entry: Optional[Mapping[str, object]],
+    locale: str,
+) -> Union[FunctionMetadata, MergedFunctionMetadata]: ...
 
 class CellXf:
     font_index: int
@@ -561,6 +599,9 @@ class Workbook:
     def set_blank(self, sheet: int, row: int, col: int) -> None: ...
     def set_formula(self, sheet: int, row: int, col: int, formula: str) -> None: ...
     def get_value(self, sheet: int, row: int, col: int) -> Value: ...
+    def evaluate_formula_array(
+        self, sheet: int, row: int, col: int, formula: str
+    ) -> List[List[Value]]: ...
     def lambda_text_at(self, sheet: int, row: int, col: int) -> str: ...
 
     # Defined names.

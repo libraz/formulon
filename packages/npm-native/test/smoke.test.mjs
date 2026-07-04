@@ -114,6 +114,32 @@ test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {
   assert.equal(r.value.number, 3);
 });
 
+test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const r = wb.evaluateFormulaArray(0, 0, 0, '=SEQUENCE(2,3)');
+  assert.ok(r.status.ok);
+  assert.equal(r.rows, 2);
+  assert.equal(r.cols, 3);
+  assert.equal(r.cells.length, 2);
+  assert.equal(r.cells[0].length, 3);
+  // Row-major 1..6.
+  assert.equal(r.cells[0][0].kind, mod.ValueKind.Number);
+  assert.equal(r.cells[0][0].number, 1);
+  assert.equal(r.cells[1][2].number, 6);
+});
+
+test("evaluateFormulaArray('=1+2') reports a 1x1 scalar array", async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const r = wb.evaluateFormulaArray(0, 0, 0, '=1+2');
+  assert.ok(r.status.ok);
+  assert.equal(r.rows, 1);
+  assert.equal(r.cols, 1);
+  assert.equal(r.cells[0][0].kind, mod.ValueKind.Number);
+  assert.equal(r.cells[0][0].number, 3);
+});
+
 test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createEmpty();
@@ -686,6 +712,47 @@ test('functionNames + functionMetadata expose the catalog', async () => {
   // Unknown function returns { ok: false }.
   const miss = wb.functionMetadata('NOT_A_REAL_FUNCTION_XYZ', 0);
   assert.equal(miss.ok, false);
+});
+
+test('mergeFunctionMetadata overlays provider metadata; is identity without a provider', async () => {
+  const mod = await getModule();
+  assert.equal(typeof mod.mergeFunctionMetadata, 'function');
+  const base = mod.Workbook.createDefault().functionMetadata('XLOOKUP', 0);
+  assert.equal(base.ok, true);
+  // The engine leaves display metadata empty.
+  assert.equal(base.signatureTemplate, undefined);
+  assert.equal(base.description, undefined);
+
+  const entry = {
+    signature: 'XLOOKUP(lookup_value, lookup_array, return_array)',
+    description: 'Searches a range or an array.',
+    aliases: { 'fr-FR': 'RECHERCHEX' },
+    localized: {
+      'fr-FR': { signature: 'RECHERCHEX(...)', description: 'Recherche.' },
+    },
+  };
+
+  // Localized override wins for the matching locale.
+  const fr = mod.mergeFunctionMetadata(base, entry, 'fr-FR');
+  assert.equal(fr.signatureTemplate, 'RECHERCHEX(...)');
+  assert.equal(fr.description, 'Recherche.');
+  assert.equal(fr.localizedName, 'RECHERCHEX');
+  // Structural fields survive the merge.
+  assert.equal(fr.ok, true);
+  assert.equal(fr.name, 'XLOOKUP');
+
+  // A locale with no localized/alias entry falls back to the default
+  // signature/description and the canonical display name.
+  const de = mod.mergeFunctionMetadata(base, entry, 'de-DE');
+  assert.equal(de.signatureTemplate, 'XLOOKUP(lookup_value, lookup_array, return_array)');
+  assert.equal(de.description, 'Searches a range or an array.');
+  assert.equal(de.localizedName, 'XLOOKUP');
+
+  // No provider entry -> base returned verbatim, display metadata stays NULL.
+  const none = mod.mergeFunctionMetadata(base, undefined, 'fr-FR');
+  assert.equal(none, base);
+  assert.equal(none.signatureTemplate, undefined);
+  assert.equal(none.description, undefined);
 });
 
 test('localizeFunctionName / canonicalizeFunctionName round-trip', async () => {

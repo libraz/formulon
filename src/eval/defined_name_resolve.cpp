@@ -10,7 +10,9 @@
 
 #include "eval/eval_context.h"
 #include "eval/formula_text_utils.h"
-#include "eval/lazy_impls.h"  // eval_node
+#include "eval/lazy_impls.h"        // eval_node
+#include "eval/name_env_resolve.h"  // is_range_shaped_ast
+#include "eval/shape_ops_lazy.h"    // eval_node_as_array
 #include "io/defined_names.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -102,6 +104,15 @@ Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRe
   // outlives this call, so the frame's `string_view` stays valid.
   const DefinedNameFrame frame{def->name, ctx.defined_name_stack()};
   const EvalContext def_ctx = ctx.with_name_env(nullptr).with_defined_name_frame(&frame);
+  // A range-shaped body (e.g. `Sheet1!$A$1:$A$5`) must surface as a
+  // `Value::Array` so range-aware consumers (`SUM`, `COUNT`, `VLOOKUP`, ...)
+  // and the spill committer pick up its full shape instead of collapsing it to
+  // the scalar `eval_node` would produce via implicit intersection. This mirrors
+  // how `INDIRECT` returns a range as an array. Scalar bodies (including a
+  // single-cell `Ref`) keep the scalar `eval_node` path.
+  if (is_range_shaped_ast(*root)) {
+    return eval_node_as_array(*root, arena, registry, def_ctx);
+  }
   return eval_node(*root, arena, registry, def_ctx);
 }
 

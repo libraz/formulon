@@ -52,6 +52,21 @@ class FunctionRegistry;
 Value evaluate_formula_text(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
                             std::string_view formula, Arena& arena, const FunctionRegistry& registry);
 
+/// Identical to `evaluate_formula_text` in every respect (anchoring,
+/// cross-sheet / defined-name resolution, ROW()/COLUMN(), 1904 / locale
+/// fidelity, read-only purity, `#NAME?` on parse failure) EXCEPT that a
+/// multi-cell Array / spill result is returned whole rather than reduced to
+/// its top-left element. A scalar result is returned verbatim. This is the
+/// driver behind the C ABI's two-step array evaluation surface, which needs
+/// the full array envelope; callers wanting the legacy scalar-reduced shape
+/// keep using `evaluate_formula_text`.
+///
+/// The returned `Value` (and, for an Array, every cell it references)
+/// borrows `arena`, which must outlive it. A degenerate empty array is
+/// returned as-is (rows or cols == 0); callers decide how to surface it.
+Value evaluate_formula_text_array(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
+                                  std::string_view formula, Arena& arena, const FunctionRegistry& registry);
+
 /// Evaluates `formula` as a conditional-formatting rule predicate anchored
 /// at `(row, col)` on `sheet`, with relative references written relative to
 /// `(anchor_row, anchor_col)` (the CF-applied range's top-left) shifted to
