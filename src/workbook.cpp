@@ -510,6 +510,18 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
       } else {
         it->formula = std::move(formula);
       }
+      // Retargeting or removing an existing name changes what every formula
+      // that references it resolves to, so their dep-graph edges (extracted
+      // by expanding the old definition) and cached values are now stale.
+      // Rebuild the graph from the current definitions and mark all formulas
+      // dirty so the next recalc re-resolves the name. Redefinition is a rare
+      // user edit; workbook load appends fresh unique names and never reaches
+      // this branch, so the load path keeps its per-name cost.
+      {
+        std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+        const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+        reindex_all_formulas(sheets_, mutator, *this);
+      }
       return Expected<void, Error>::Ok();
     }
   }
@@ -604,6 +616,27 @@ void mark_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutator, eva
   }
 }
 
+// When `(row, col)` is a *phantom* of a committed spill region (i.e. a
+// spill target that is not the anchor), a write here clears the region via
+// `Sheet::set_cell_value` / `set_cell_formula` but leaves the anchor's
+// cached value untouched. The anchor is not a dep-graph dependent of the
+// phantom, so nothing else dirties it; mark it dirty so the next recalc
+// re-evaluates it — re-spilling if the write vacated the cell, or surfacing
+// `#SPILL!` if it now blocks the footprint. Must be called BEFORE the sheet
+// write, while the region still covers the cell. Precondition: caller holds
+// the engine mutex for the lifetime of the `LockedMutator&`.
+void mark_spill_anchor_dirty_if_covered(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
+                                        const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
+  const SpillRegion* covering = sheets[sheet_index].spill_region_covering(row, col);
+  if (covering == nullptr) {
+    return;
+  }
+  if (covering->anchor_row == row && covering->anchor_col == col) {
+    return;  // Writing the anchor itself is already handled by the caller.
+  }
+  mutator.mark_dirty(make_node(sheet_index, covering->anchor_row, covering->anchor_col));
+}
+
 }  // namespace
 
 Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
@@ -639,6 +672,7 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
     mutator.mark_dirty(node);
     mark_dependents_dirty(mutator, node);
     mutator.clear_cell_dependencies(node);
+    mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
     sheets_[sheet_index].set_cell_value(row, col, value);
   }
   return Expected<void, Error>::Ok();
@@ -686,6 +720,9 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   {
     std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    // Query the covering spill BEFORE the sheet write clears it, so a write
+    // into a live spill's phantom re-dirties the anchor.
+    mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
     // Persist the formula text on the sheet first so a later `recalc()`
     // reads what the user actually typed. This also resets `cached_value`
     // to blank.

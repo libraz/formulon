@@ -180,5 +180,59 @@ TEST(WorkbookRecalc, SpillOffGridEdgeSurfacesSpillError) {
   EXPECT_EQ(anchor.as_error(), ErrorCode::Spill);
 }
 
+TEST(WorkbookRecalc, DirectLambdaCallTracksBodyCellDependency) {
+  // A directly-invoked lambda evaluates its body, so a cell ref inside the
+  // body (A1) is a real dependency. Editing A1 must re-evaluate the caller.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0))));      // A1 = 10
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=LAMBDA(x, x+A1)(5)")));  // B1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 1U).as_number(), 15.0);
+
+  // Change A1; the lambda-call cell must reflect the new value.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(100.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 1U).as_number(), 105.0)
+      << "direct lambda-call body dependency on A1 was not tracked";
+}
+
+TEST(WorkbookRecalc, RedefiningDefinedNameInvalidatesDependents) {
+  // A formula referencing a defined name must re-resolve after the name is
+  // retargeted; the stale value from the old definition must not survive.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));  // A1 = 1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));  // A2 = 2
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Target", "=A1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=Target+10")));  // B1 = Target+10
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 1U).as_number(), 11.0);
+
+  // Retarget Target from A1 to A2; B1 must recompute to 2 + 10 = 12.
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Target", "=A2")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 1U).as_number(), 12.0)
+      << "defined-name dependent kept the stale value after retarget";
+}
+
+TEST(WorkbookRecalc, WritingIntoLiveSpillPhantomResurfacesSpillError) {
+  // A1 spills into A1:A3. Writing a literal into the phantom A2 blocks the
+  // footprint; the anchor A1 must re-evaluate to #SPILL! rather than keep
+  // its old spilled value.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0).resolve_cell_value(0U, 0U).is_number());  // A1 spilled
+
+  // Block the spill by writing into phantom A2.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(99.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value a1 = wb.sheet(0).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(a1.is_error()) << "anchor kept its stale spilled value after a phantom write";
+  EXPECT_EQ(a1.as_error(), ErrorCode::Spill);
+}
+
 }  // namespace
 }  // namespace formulon

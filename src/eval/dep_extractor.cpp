@@ -482,9 +482,28 @@ void walk(const parser::AstNode& node, WalkState& state) {
     }
 
     case parser::NodeKind::LambdaCall: {
-      // Walk the callee and arguments so any embedded refs / volatile calls
-      // are recorded.
-      walk(node.as_lambda_call_callee(), state);
+      const parser::AstNode& callee = node.as_lambda_call_callee();
+      if (callee.kind() == parser::NodeKind::Lambda) {
+        // Directly-invoked lambda (`=LAMBDA(x, x+A1)(5)`): unlike a bare
+        // lambda *value*, the body IS evaluated here, so its cell refs and
+        // volatile calls are genuine dependencies that must reach the graph.
+        // Walk the body with the parameter names shadowed — pushing them onto
+        // `name_stack` makes a parameter that collides with a workbook-scoped
+        // defined name short-circuit the `NameRef` expander instead of
+        // pulling in that name's dependencies.
+        const std::uint32_t param_count = callee.as_lambda_param_count();
+        for (std::uint32_t i = 0; i < param_count; ++i) {
+          state.name_stack.push_back(strings::to_ascii_lower(callee.as_lambda_param(i)));
+        }
+        walk(callee.as_lambda_body(), state);
+        for (std::uint32_t i = 0; i < param_count; ++i) {
+          state.name_stack.pop_back();
+        }
+      } else {
+        // Named / computed callee (e.g. a defined-name lambda): walk it
+        // generically so embedded refs and volatile calls still surface.
+        walk(callee, state);
+      }
       const std::uint32_t arity = node.as_lambda_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
         walk(node.as_lambda_call_arg(i), state);
