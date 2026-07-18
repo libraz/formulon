@@ -117,6 +117,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook.cpp
   src/io/a1_ref.cpp
   src/io/cell_parser.cpp
+  src/io/cf_overlay.cpp
   src/io/cf_reader.cpp
   src/io/cf_writer.cpp
   src/io/comments_reader.cpp

@@ -31,6 +31,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/deps/pugixml_smoke_test.cpp
   unit/io/a1_ref_test.cpp
   unit/io/cell_parser_test.cpp
+  unit/io/cf_overlay_test.cpp
   unit/io/cf_reader_test.cpp
   unit/io/cf_writer_test.cpp
   unit/io/comments_roundtrip_test.cpp

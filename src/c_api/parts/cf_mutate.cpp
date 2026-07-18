@@ -9,6 +9,13 @@
 // single-rule block to keep insertion order deterministic and avoid
 // merging with semantically distinct sqref unions; removes prune the
 // block too when its rule list goes empty.
+//
+// Removals and clears also reconcile the sheet's raw worksheet-level
+// `<extLst>` x14 overlay (see `io/cf_overlay.h`): the save path re-emits
+// that overlay verbatim, so any `<x14:cfRule id="{GUID}">` whose legacy
+// counterpart was just removed must be pruned here or the deleted rule
+// resurfaces on reopen. Adds never remove a model rule and therefore
+// cannot orphan an overlay entry.
 
 #include <algorithm>
 #include <cstddef>
@@ -20,6 +27,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "cf/cf_types.h"
+#include "io/cf_overlay.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -394,7 +402,8 @@ extern "C" fm_status_t fm_sheet_cf_remove_at(fm_workbook_t* wb, std::size_t shee
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_remove_at"); rc != 0) {
     return rc;
   }
-  auto& blocks = wb->workbook().sheet(sheet_index).mutable_conditional_formats();
+  auto& sheet = wb->workbook().sheet(sheet_index);
+  auto& blocks = sheet.mutable_conditional_formats();
   std::size_t b = 0;
   std::size_t r = 0;
   if (!resolve_flat_index(blocks, idx, &b, &r)) {
@@ -405,6 +414,9 @@ extern "C" fm_status_t fm_sheet_cf_remove_at(fm_workbook_t* wb, std::size_t shee
   if (blocks[b].rules.empty()) {
     blocks.erase(blocks.begin() + static_cast<std::ptrdiff_t>(b));
   }
+  // Keep the raw x14 overlay in step with the model so the writer's
+  // verbatim re-emission cannot resurrect the removed rule.
+  sheet.set_ext_lst_xml(formulon::io::reconcile_x14_cf_overlay(sheet.ext_lst_xml(), sheet.conditional_formats()));
   return 0;
 }
 
@@ -413,6 +425,10 @@ extern "C" fm_status_t fm_sheet_cf_clear(fm_workbook_t* wb, std::size_t sheet_in
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_cf_clear"); rc != 0) {
     return rc;
   }
-  wb->workbook().sheet(sheet_index).mutable_conditional_formats().clear();
+  auto& sheet = wb->workbook().sheet(sheet_index);
+  sheet.mutable_conditional_formats().clear();
+  // With no model rules left, every id-bearing x14 overlay entry is a
+  // dangling reference; reconciliation prunes them all.
+  sheet.set_ext_lst_xml(formulon::io::reconcile_x14_cf_overlay(sheet.ext_lst_xml(), sheet.conditional_formats()));
   return 0;
 }
