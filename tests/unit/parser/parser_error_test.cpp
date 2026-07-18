@@ -87,6 +87,23 @@ TEST(ParserErrors, TrailingPlusReportsEof) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnexpectedEof));
 }
 
+// A Number or Text literal followed by `()` is not a callable form and must
+// surface a diagnostic rather than being silently accepted as the bare
+// literal. Only Bool literals (`=TRUE()`) keep the historical no-op path.
+TEST(ParserErrors, NumberLiteralPostfixCallIsError) {
+  Arena a;
+  Parser p("=1()", a);
+  (void)p.parse();
+  EXPECT_FALSE(p.errors().empty()) << "=1() must not be silently accepted";
+}
+
+TEST(ParserErrors, TextLiteralPostfixCallIsError) {
+  Arena a;
+  Parser p("=\"x\"()", a);
+  (void)p.parse();
+  EXPECT_FALSE(p.errors().empty()) << "=\"x\"() must not be silently accepted";
+}
+
 // ---------------------------------------------------------------------------
 // Renamed codes (formerly UnclosedParen / UnclosedBrace / InvalidCellRef)
 // ---------------------------------------------------------------------------

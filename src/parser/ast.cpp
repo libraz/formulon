@@ -190,6 +190,14 @@ AstNode* make_name_ref(Arena& arena, std::string_view name) {
   }
   n->kind_ = NodeKind::NameRef;
   n->data_.name = arena.intern(name);
+  // `intern` returns an empty view both for empty input and for allocation
+  // failure. A non-empty source name that comes back empty therefore means
+  // the arena could not allocate; propagate that as a null node so the
+  // parser surfaces an allocation failure instead of silently minting a
+  // node whose name is empty (a different, valid-looking reference).
+  if (!name.empty() && n->data_.name.empty()) {
+    return nullptr;
+  }
   return n;
 }
 
@@ -289,6 +297,12 @@ AstNode* make_call(Arena& arena, std::string_view name, const AstNode* const* ar
   }
   n->kind_ = NodeKind::Call;
   n->data_.call.name = arena.intern(name);
+  // A call always names a function, so an empty interned name for a
+  // non-empty source name signals arena allocation failure (see
+  // `make_name_ref`); propagate it as a null node.
+  if (!name.empty() && n->data_.call.name.empty()) {
+    return nullptr;
+  }
   n->data_.call.args = copied;
   n->data_.call.arity = arity;
   return n;

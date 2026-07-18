@@ -643,17 +643,22 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // ever sees them.
       const NodeKind lk = lhs->kind();
       if (lk != NodeKind::Lambda && lk != NodeKind::LambdaCall) {
-        // Special-case: a literal LHS (Bool / Number / Text) followed by an
-        // empty `()` is treated as a no-op so the surrounding Pratt loop can
-        // continue and pick up trailing operators. The motivating case is
-        // `=TRUE()+0`: the tokenizer always maps `TRUE` / `FALSE` to a Bool
-        // literal token, so the Pratt loop sees `Bool '(' ')' '+' '0'`. Without
-        // this branch the bail below leaves `()` unconsumed, which then
-        // surfaces as `UnexpectedToken` and `skip_to_sync` discards `+0`.
-        // Excel's documented behaviour is that `=TRUE()+0` evaluates to `1`.
-        // Non-empty arg lists (`=TRUE(1)`) keep the existing bail path so the
-        // `KeywordTokenIsAlwaysBoolLiteral` convention still holds.
-        if (lk == NodeKind::Literal && peek_kind_at(1) == TokenKind::RParen) {
+        // Special-case: a *Bool* literal LHS followed by an empty `()` is
+        // treated as a no-op so the surrounding Pratt loop can continue and
+        // pick up trailing operators. The motivating case is `=TRUE()+0`: the
+        // tokenizer always maps `TRUE` / `FALSE` to a Bool literal token, so
+        // the Pratt loop sees `Bool '(' ')' '+' '0'`. Without this branch the
+        // bail below leaves `()` unconsumed, which then surfaces as
+        // `UnexpectedToken` and `skip_to_sync` discards `+0`. Excel's
+        // documented behaviour is that `=TRUE()+0` evaluates to `1`.
+        //
+        // The no-op is deliberately restricted to Bool literals: a Number or
+        // Text literal followed by `()` (`=1()`, `="x"()`) is a genuine
+        // syntax error and must bail so the diagnostic path reports it rather
+        // than silently accepting the LHS. Non-empty arg lists (`=TRUE(1)`)
+        // likewise keep the bail path so the "keyword token is always a Bool
+        // literal" convention still holds.
+        if (lk == NodeKind::Literal && lhs->as_literal().is_boolean() && peek_kind_at(1) == TokenKind::RParen) {
           if (kBpPostfixCall < min_bp) {
             --depth_;
             return lhs;

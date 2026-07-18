@@ -19,6 +19,7 @@
 
 #include "parser/tokenizer.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -851,6 +852,20 @@ void Tokenizer::scan_number() {
   if (end_ptr != buf + n) {
     emit(TokenKind::Invalid, start);
     record_error(LexerErrorCode::InvalidNumberLiteral, start);
+    return;
+  }
+  // A magnitude that overflows the double range (`1E309`) comes back from
+  // strtod as ±infinity. Excel surfaces such a literal as `#NUM!` rather
+  // than propagating a non-finite Number value, so emit the error literal
+  // directly. Underflow (`1E-400`) returns a finite 0 / subnormal and is
+  // accepted as-is, matching Excel's round-to-zero.
+  if (std::isinf(value)) {
+    Token overflow;
+    overflow.kind = TokenKind::ErrorLiteral;
+    overflow.range = make_range();
+    overflow.lexeme = lex;
+    overflow.error_code = ErrorCode::Num;
+    tokens_.push_back(overflow);
     return;
   }
 

@@ -117,6 +117,27 @@ TEST(TokenizerNumberLiterals, RejectDoubleDot) {
   EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidNumberLiteral);
 }
 
+TEST(TokenizerNumberLiterals, OverflowMagnitudeBecomesNumError) {
+  // `1E309` overflows the double range; strtod returns +inf. Rather than
+  // emitting a non-finite Number token, the tokenizer surfaces `#NUM!` so
+  // the formula evaluates to Excel's overflow error.
+  Tokenizer tz("1E309");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 2u);  // ErrorLiteral + Eof
+  EXPECT_EQ(v[0].kind, TokenKind::ErrorLiteral);
+  EXPECT_EQ(v[0].error_code, ErrorCode::Num);
+}
+
+TEST(TokenizerNumberLiterals, UnderflowMagnitudeRoundsToZero) {
+  // `1E-400` underflows to a finite 0 / subnormal; Excel accepts it as a
+  // rounded-to-zero number rather than an error.
+  Tokenizer tz("1E-400");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 2u);  // Number + Eof
+  EXPECT_EQ(v[0].kind, TokenKind::Number);
+  EXPECT_EQ(v[0].number, 0.0);
+}
+
 TEST(TokenizerNumberLiterals, RejectTrailingSignOnly) {
   Tokenizer tz("1e+");
   (void)tz.tokens();
