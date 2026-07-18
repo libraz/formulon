@@ -5,12 +5,15 @@
 #
 #   - format : `make format-check` — clang-format (C++), ruff (Python),
 #     and biome (.mjs / .d.ts) dry-runs. Hard gate (binary check).
-#   - native-fast : Release build + the fast ctest suite, gated by the
+#   - native-fast : Debug build + the fast ctest suite, gated by the
 #     same allowlist ci.yml uses (tools/ci/expected_flakes.txt). ci.yml's
 #     native job runs only on `main`, so without this a develop push gets
 #     no C++ test signal and a broken test can sit undetected until the
-#     main promotion. This mirrors the fast half of that gate (no
-#     coverage instrumentation, so it stays minutes not hours).
+#     main promotion. This mirrors the fast half of that gate without the
+#     coverage instrumentation, so it stays minutes not hours. Debug
+#     (-O0) matches ci.yml's build type and `make build`; a Release build
+#     OOM-kills the 2-core runner when compiling the heavy TUs in
+#     parallel.
 #
 # Pattern mirrored from ../mygram-db's develop-ci.yml: develop-only
 # checks live here, main keeps the minimal build+test signal in ci.yml.
@@ -79,24 +82,24 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build libbrotli-dev brotli
 
-      - name: Cache CMake build directory (release)
+      - name: Cache CMake build directory (debug)
         uses: actions/cache@v6
         with:
-          path: build-release
-          key: release-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'Makefile', 'cmake/**', 'CMakePresets.json') }}
+          path: build
+          key: debug-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'Makefile', 'cmake/**', 'CMakePresets.json') }}
           restore-keys: |
-            release-build-${{ runner.os }}-
+            debug-build-${{ runner.os }}-
 
-      - name: Configure (release preset)
-        run: cmake --preset release
+      - name: Configure (debug preset)
+        run: cmake --preset debug
 
       - name: Build
-        run: cmake --build build-release --parallel
+        run: cmake --build build --parallel
 
       - name: Run fast tests
         id: ctest
         continue-on-error: true
-        working-directory: build-release
+        working-directory: build
         # Same label exclusion as ci.yml's native job: SLOW/LOAD are the
         # minutes-to-tens-of-minutes tiers, BENCH is a wall-clock
         # regression gate run out of band.
@@ -104,9 +107,9 @@ jobs:
 
       - name: Check failures against allowlist
         run: |
-          if [ -f build-release/Testing/Temporary/LastTestsFailed.log ]; then
+          if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
             python3 tools/ci/check_test_failures.py \
-              --failed build-release/Testing/Temporary/LastTestsFailed.log \
+              --failed build/Testing/Temporary/LastTestsFailed.log \
               --allowlist tools/ci/expected_flakes.txt
           else
             echo "ctest produced no LastTestsFailed.log; assuming success"
