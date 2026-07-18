@@ -1,0 +1,33 @@
+# Ruff config for the repo-tooling Python: tools/** (oracle, catalog, ci,
+# codegen, dev, bench, jis0208) and the standalone test drivers under
+# tests/ (tests/parity/run_parity.py, tests/codegen/*.py). Invoked from
+# the repo root by `make format` / `make format-check`.
+#
+# The Python binding is NOT governed by this file: ruff's closest-config
+# discovery resolves packages/python/** to the [tool.ruff] section in
+# packages/python/pyproject.toml. tools/oracle/pyproject.toml carries no
+# [tool.ruff] section, so this file applies there too. Keep the two
+# configs' conventions in sync (line-length, lint select).
+#
+# target-version is intentionally omitted: the tooling scripts run on
+# whatever python3 the host provides, and pinning here would drift from
+# the binding config, which infers its floor from requires-python.
+
+line-length = 120
+
+# Ruff's defaults already skip .venv, node_modules, dist, *.egg-info and
+# friends; extend with this repo's non-default generated/vendored trees.
+extend-exclude = [
+  "build*",        # build/, build-wasm/, build-py/, ... (CMake out-of-source dirs)
+  ".venv-oracle",  # legacy repo-root oracle venv
+  "third_party",   # vendored sources
+  ".uv-cache",     # uv download cache, if present
+]
+
+[lint]
+# Conservative, auto-fix-friendly set: pycodestyle errors/warnings,
+# pyflakes, and import sorting. Broader opinionated rule families
+# (pyupgrade, bugbear, ...) are deliberately not enabled -- they demand
+# hand edits rather than mechanical fixes. Mirrors
+# packages/python/pyproject.toml [tool.ruff.lint].
+select = ["E4", "E7", "E9", "F", "I", "W"]

@@ -53,6 +53,22 @@ Homepage = "https://formulon.libraz.net"
 Source = "https://github.com/libraz/formulon"
 Issues = "https://github.com/libraz/formulon/issues"
 
+# -- Formatter / linter (ruff) ---------------------------------------------
+# Invoked from the repo root by `make format` / `make format-check`
+# (uvx ruff format / check over packages/python). The target Python
+# version is inferred from requires-python above (>=3.9); do not set
+# target-version here or the two can drift.
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Conservative, auto-fix-friendly set: pycodestyle errors/warnings,
+# pyflakes, and import sorting. Broader opinionated rule families
+# (pyupgrade, bugbear, ...) are deliberately not enabled -- they demand
+# hand edits rather than mechanical fixes.
+select = ["E4", "E7", "E9", "F", "I", "W"]
+
 [tool.setuptools]
 packages = ["formulon", "formulon._wasm"]
 include-package-data = true

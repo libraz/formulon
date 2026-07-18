@@ -14,6 +14,31 @@ CLANG_TIDY ?= clang-tidy
 # `node` shim (see release.yml's `make CMAKE=... NODE=...` pattern).
 NODE ?= node
 
+# Python formatter/linter. Two config scopes, resolved by ruff's
+# closest-config discovery:
+#   packages/python  -> packages/python/pyproject.toml ([tool.ruff])
+#   tools/, tests/   -> ruff.toml at the repo root
+# uvx resolves a cached ruff (first run downloads it); override RUFF to
+# point at a pinned install.
+RUFF ?= uvx ruff
+
+# Repo-tooling Python trees governed by the root ruff.toml. `tools`
+# covers oracle/catalog/ci/codegen/dev/bench/jis0208; `tests` picks up
+# the standalone .py drivers (tests/parity/run_parity.py,
+# tests/codegen/*.py) -- ruff only visits Python files, so the C++ and
+# .mjs trees underneath are ignored. Excludes for build*/venv/vendored
+# dirs live in ruff.toml.
+RUFF_TOOL_PATHS := tools tests
+
+# JS/TS formatter/linter for the .mjs scripts and hand-written .d.ts files.
+# Config lives in biome.json at the repo root; the major is pinned to match
+# that config's schema. npx serves it from the npm cache after the first run.
+BIOME ?= npx --yes @biomejs/biome@2
+
+# Trees biome covers (biome.json's files.includes narrows these to the
+# editable .mjs / .d.ts files and excludes the staged dist/ copies).
+BIOME_PATHS := packages/npm packages/npm-native tests/wasm src/wasm
+
 # Default test parallelism. Override with `make test CTEST_JOBS=N`. CTest
 # infers a reasonable number when the variable is empty (`-j 0` lets it
 # pick), but defaulting to the host CPU count keeps the fast loop near
@@ -56,13 +81,38 @@ test-slow:
 test-all:
 	(cd $(BUILD_DIR) && $(CTEST) -j $(CTEST_JOBS) --output-on-failure --timeout 300)
 
+# `format` is the single auto-fix entry point and must cover every tree
+# with editable source. Current coverage:
+#   src/ tests/            -> clang-format (Google style, .clang-format)
+#   packages/python        -> ruff format + ruff check --fix
+#                             (config: packages/python/pyproject.toml)
+#   packages/npm           -> biome check --write over the .mjs scripts/tests
+#   packages/npm-native    -> biome check --write over .mjs + hand-written
+#                             index.d.ts
+#   tests/wasm, src/wasm   -> biome check --write over run.mjs and the
+#                             canonical hand-written formulon.d.ts
+#                             (config: biome.json at the repo root)
+#   tools/, tests/**/*.py  -> ruff format + ruff check --fix over the
+#                             repo-tooling Python (oracle, catalog, ci,
+#                             codegen, dev, bench, jis0208, parity runner)
+#                             (config: ruff.toml at the repo root)
 format:
 	@find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
 	  | xargs -0 -r $(CLANG_FORMAT) -i
+	$(RUFF) format packages/python
+	$(RUFF) check --fix packages/python
+	$(RUFF) format $(RUFF_TOOL_PATHS)
+	$(RUFF) check --fix $(RUFF_TOOL_PATHS)
+	$(BIOME) check --write $(BIOME_PATHS)
 
 format-check:
 	@find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
 	  | xargs -0 -r $(CLANG_FORMAT) --dry-run --Werror
+	$(RUFF) format --check packages/python
+	$(RUFF) check packages/python
+	$(RUFF) format --check $(RUFF_TOOL_PATHS)
+	$(RUFF) check $(RUFF_TOOL_PATHS)
+	$(BIOME) check $(BIOME_PATHS)
 
 lint:
 	@if [ ! -f $(BUILD_DIR)/compile_commands.json ]; then \
