@@ -61,8 +61,8 @@ DEFAULT_MIN_PERSPECTIVES = 5
 
 sys.path.insert(0, str(CATALOG_DIR))
 sys.path.insert(0, str(ORACLE_DIR))
-import status as catalog_status  # type: ignore  # noqa: E402
 import coverage_gap  # type: ignore  # noqa: E402
+import status as catalog_status  # type: ignore  # noqa: E402
 
 try:
     import yaml as _yaml  # type: ignore
@@ -137,9 +137,7 @@ def load_families() -> Tuple[Dict[str, Family], Dict[str, Family]]:
             name=entry["name"],
             members=list(entry.get("members", [])),
             category_file=cf_path,
-            min_perspectives_per_member=int(
-                entry.get("min_perspectives_per_member", DEFAULT_MIN_PERSPECTIVES)
-            ),
+            min_perspectives_per_member=int(entry.get("min_perspectives_per_member", DEFAULT_MIN_PERSPECTIVES)),
             cluster_reason=entry.get("cluster_reason", ""),
         )
         by_name[fam.name] = fam
@@ -278,18 +276,14 @@ def behavior_probe_match_count(behavior: Dict, cases: List[Dict]) -> int:
     return n
 
 
-def check_condition_1_behaviors(
-    fn: str, all_behaviors: List[Dict], min_required: int
-) -> ConditionResult:
+def check_condition_1_behaviors(fn: str, all_behaviors: List[Dict], min_required: int) -> ConditionResult:
     matched = behaviors_for_function(fn, all_behaviors)
     ok = len(matched) >= min_required
     detail = f"{len(matched)} declared (need >= {min_required})"
     return ConditionResult("behaviors_declared", ok, detail)
 
 
-def check_condition_2_cases(
-    fn: str, fn_behaviors: List[Dict], cases: List[Dict]
-) -> ConditionResult:
+def check_condition_2_cases(fn: str, fn_behaviors: List[Dict], cases: List[Dict]) -> ConditionResult:
     fn_cases = cases_for_function(fn, cases)
     if not fn_cases:
         return ConditionResult("cases_present", False, "no oracle case calls this function")
@@ -311,9 +305,7 @@ def check_condition_2_cases(
     return ConditionResult("cases_cover_behaviors", ok, detail)
 
 
-def check_condition_3_golden(
-    fn: str, cases: List[Dict], golden_ids: Set[str]
-) -> ConditionResult:
+def check_condition_3_golden(fn: str, cases: List[Dict], golden_ids: Set[str]) -> ConditionResult:
     fn_cases = cases_for_function(fn, cases)
     if not fn_cases:
         return ConditionResult("golden_present", False, "no cases to verify against golden")
@@ -330,9 +322,7 @@ def check_condition_3_golden(
     return ConditionResult("golden_present", ok, detail)
 
 
-def check_condition_4_divergence(
-    fn: str, cases: List[Dict], divergence_entries: List[Dict]
-) -> ConditionResult:
+def check_condition_4_divergence(fn: str, cases: List[Dict], divergence_entries: List[Dict]) -> ConditionResult:
     fn_case_ids = {c.get("id") for c in cases_for_function(fn, cases)}
     div_for_fn = [e for e in divergence_entries if e.get("id") in fn_case_ids]
     if not div_for_fn:
@@ -353,10 +343,7 @@ def check_condition_4_divergence(
     if ok:
         detail = f"{len(div_for_fn)} divergences all documented"
     else:
-        detail = (
-            f"{len(incomplete)}/{len(div_for_fn)} divergences incomplete: "
-            + ", ".join(incomplete[:3])
-        )
+        detail = f"{len(incomplete)}/{len(div_for_fn)} divergences incomplete: " + ", ".join(incomplete[:3])
     return ConditionResult("divergence_documented", ok, detail)
 
 
@@ -418,9 +405,7 @@ def evaluate_function(
 ) -> FunctionClosure:
     fn_behaviors = behaviors_for_function(fn, ctx.behaviors)
     fc = FunctionClosure(fn=fn, family=family)
-    fc.conditions.append(
-        check_condition_1_behaviors(fn, ctx.behaviors, family.min_perspectives_per_member)
-    )
+    fc.conditions.append(check_condition_1_behaviors(fn, ctx.behaviors, family.min_perspectives_per_member))
     fc.conditions.append(check_condition_2_cases(fn, fn_behaviors, cases))
     fc.conditions.append(check_condition_3_golden(fn, cases, golden_ids))
     fc.conditions.append(check_condition_4_divergence(fn, cases, ctx.divergence_entries))
@@ -429,9 +414,7 @@ def evaluate_function(
     return fc
 
 
-def audit_family(
-    family: Family, all_behaviors: List[Dict]
-) -> List[Tuple[str, str, str]]:
+def audit_family(family: Family, all_behaviors: List[Dict]) -> List[Tuple[str, str, str]]:
     warnings: List[Tuple[str, str, str]] = []
     by_member: Dict[str, Set[str]] = {}
     aspect_origin: Dict[str, str] = {}
@@ -537,10 +520,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "fn": fc.fn,
                     "family": fc.family.name,
                     "closed": fc.closed,
-                    "conditions": [
-                        {"name": c.name, "ok": c.ok, "detail": c.detail}
-                        for c in fc.conditions
-                    ],
+                    "conditions": [{"name": c.name, "ok": c.ok, "detail": c.detail} for c in fc.conditions],
                 }
                 for fc in closures
             ],
@@ -551,10 +531,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     closed = sum(1 for fc in closures if fc.closed)
     total = len(closures)
-    print(
-        f"closure_check: {closed}/{total} closed, "
-        f"behavior-drift={'ok' if ctx.drift_result.ok else 'FAIL'}"
-    )
+    print(f"closure_check: {closed}/{total} closed, behavior-drift={'ok' if ctx.drift_result.ok else 'FAIL'}")
     print()
     verbose = not args.report
     for fc in closures:

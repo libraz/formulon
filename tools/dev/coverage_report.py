@@ -64,7 +64,6 @@ import os
 import sys
 from typing import Iterable, List, Optional, Tuple
 
-
 AREAS: List[Tuple[str, List[str], Optional[float]]] = [
     (
         "functions",
@@ -236,10 +235,7 @@ def render_table(
 
     Returns ``(rendered_text, any_below_target)``.
     """
-    header = (
-        f"{'Area':<17}  {'Lines hit / total':<22}  "
-        f"{'Coverage':<10}  {'Target':<10}  Status"
-    )
+    header = f"{'Area':<17}  {'Lines hit / total':<22}  {'Coverage':<10}  {'Target':<10}  Status"
     sep = "-" * 17 + "  " + "-" * 22 + "  " + "-" * 10 + "  " + "-" * 10 + "  " + "-" * 8
 
     lines: List[str] = [
@@ -263,10 +259,7 @@ def render_table(
             any_below = True
         gated_lf_total += lf
         gated_lh_total += lh
-        lines.append(
-            f"{name:<17}  {lh:>9} / {lf:<10}  "
-            f"{pct:>8.2f}%  {target:>8.2f}%  {status}"
-        )
+        lines.append(f"{name:<17}  {lh:>9} / {lf:<10}  {pct:>8.2f}%  {target:>8.2f}%  {status}")
 
     info_rows: List[str] = []
     saw_informational = False
@@ -277,10 +270,7 @@ def render_table(
         if lf == 0:
             continue
         pct = _pct(lh, lf)
-        info_rows.append(
-            f"{name:<17}  {lh:>9} / {lf:<10}  "
-            f"{pct:>8.2f}%  {'-':>9}   {'-':<8}"
-        )
+        info_rows.append(f"{name:<17}  {lh:>9} / {lf:<10}  {pct:>8.2f}%  {'-':>9}   {'-':<8}")
         saw_informational = True
 
     if saw_informational:
@@ -289,10 +279,7 @@ def render_table(
 
     lines.append(sep)
     total_pct = _pct(gated_lh_total, gated_lf_total)
-    lines.append(
-        f"{'TOTAL (gated)':<17}  {gated_lh_total:>9} / {gated_lf_total:<10}  "
-        f"{total_pct:>8.2f}%"
-    )
+    lines.append(f"{'TOTAL (gated)':<17}  {gated_lh_total:>9} / {gated_lf_total:<10}  {total_pct:>8.2f}%")
 
     if zeros:
         lines.append("")
@@ -314,9 +301,7 @@ def render_json(
     payload = {
         "areas": [],
         "gated_total": {"lines_found": 0, "lines_hit": 0, "coverage_pct": 0.0},
-        "zero_coverage_files": [
-            {"path": path, "lines_found": lf} for path, lf in zeros
-        ],
+        "zero_coverage_files": [{"path": path, "lines_found": lf} for path, lf in zeros],
     }
     gated_lf = 0
     gated_lh = 0
@@ -366,8 +351,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit per-area numbers + zero-coverage list as JSON instead "
-        "of the text report.",
+        help="Emit per-area numbers + zero-coverage list as JSON instead of the text report.",
     )
     args = parser.parse_args(argv)
 
@@ -382,8 +366,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if not records:
         print(
-            f"coverage_report: tracefile {args.tracefile} contained no "
-            "end_of_record blocks; nothing to report",
+            f"coverage_report: tracefile {args.tracefile} contained no end_of_record blocks; nothing to report",
             file=sys.stderr,
         )
         return 2

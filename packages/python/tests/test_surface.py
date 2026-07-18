@@ -66,9 +66,7 @@ class StructLayoutTests(unittest.TestCase):
     def test_struct_sizes(self) -> None:
         for name, expected in self.EXPECTED_SIZES.items():
             layout = getattr(S, name)
-            self.assertEqual(
-                layout.size, expected, f"{name} size drifted to {layout.size}"
-            )
+            self.assertEqual(layout.size, expected, f"{name} size drifted to {layout.size}")
 
     def test_pivot_cell_value_offset(self) -> None:
         self.assertEqual(S.PIVOT_CELL_VALUE_OFFSET, 8)
@@ -142,9 +140,7 @@ class DefinedNameTests(unittest.TestCase):
 
             # An empty formula removes the entry.
             wb.set_defined_name("MyRef", "")
-            self.assertNotIn(
-                "MyRef", {dn.name for dn in wb.iter_defined_names()}
-            )
+            self.assertNotIn("MyRef", {dn.name for dn in wb.iter_defined_names()})
 
     def test_scoped_defined_name_set_get_remove(self) -> None:
         with Workbook.create_empty() as wb:
@@ -216,9 +212,7 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
             wb.add_merge(0, MergeRange(0, 0, 1, 1))
             merges = wb.get_merges(0)
             self.assertEqual(len(merges), 1)
-            self.assertEqual(
-                (merges[0].first_row, merges[0].last_col), (0, 1)
-            )
+            self.assertEqual((merges[0].first_row, merges[0].last_col), (0, 1))
             wb.clear_merges(0)
             self.assertEqual(wb.get_merges(0), [])
 
@@ -336,9 +330,7 @@ class StyleTests(unittest.TestCase):
 
             # add_cell_xf validates indices against the parallel tables, so a
             # border must exist before it can be referenced.
-            border = wb.add_border(
-                {"left": {"style": 1, "color_argb": 0xFF000000}}
-            )
+            border = wb.add_border({"left": {"style": 1, "color_argb": 0xFF000000}})
 
             from formulon import CellXf
 
@@ -407,12 +399,8 @@ class PivotTests(unittest.TestCase):
             self.assertEqual(wb.pivot_cache_record_count(cache_id), 3)
 
             pivot = wb.pivot_create(0, "Pivot1", cache_id, 0, 4)
-            region_field = wb.pivot_field_add(
-                0, pivot, PivotFieldSpec(source_name="Region", axis=PivotAxis.ROW)
-            )
-            amount_field = wb.pivot_field_add(
-                0, pivot, PivotFieldSpec(source_name="Amount", axis=PivotAxis.VALUE)
-            )
+            region_field = wb.pivot_field_add(0, pivot, PivotFieldSpec(source_name="Region", axis=PivotAxis.ROW))
+            amount_field = wb.pivot_field_add(0, pivot, PivotFieldSpec(source_name="Amount", axis=PivotAxis.VALUE))
             self.assertEqual(region_field, 0)
             wb.pivot_data_field_add(
                 0,
@@ -426,11 +414,7 @@ class PivotTests(unittest.TestCase):
 
             layout = wb.pivot_layout(0, pivot)
             self.assertGreater(len(layout.cells), 0)
-            numbers = [
-                c.value.to_python()
-                for c in layout.cells
-                if c.value.kind == ValueKind.NUMBER
-            ]
+            numbers = [c.value.to_python() for c in layout.cells if c.value.kind == ValueKind.NUMBER]
             # The single grand total of 10 + 20 + 30 must appear.
             self.assertIn(60.0, numbers)
 
@@ -468,9 +452,7 @@ class FunctionCatalogTests(unittest.TestCase):
             "signature": "XLOOKUP(lookup_value, lookup_array, return_array)",
             "description": "Searches a range or an array.",
             "aliases": {"fr-FR": "RECHERCHEX"},
-            "localized": {
-                "fr-FR": {"signature": "RECHERCHEX(...)", "description": "Recherche."}
-            },
+            "localized": {"fr-FR": {"signature": "RECHERCHEX(...)", "description": "Recherche."}},
         }
 
         # Localized override wins for the matching locale.
@@ -509,65 +491,163 @@ class SurfaceParityTests(unittest.TestCase):
     """Every advertised method must exist on the Workbook class."""
 
     METHODS = [
-        "move_sheet", "remove_sheet", "rename_sheet", "set_defined_name",
-        "set_defined_name_scoped", "set_error",
-        "insert_rows", "delete_rows", "insert_cols", "delete_cols",
-        "calc_mode", "set_calc_mode", "excel_profile_id", "set_excel_profile_id",
-        "partial_recalc", "lambda_text_at", "evaluate_formula_array",
-        "add_merge", "remove_merge", "remove_merge_at", "clear_merges",
-        "get_merges", "merge_count",
-        "add_hyperlink", "remove_hyperlink", "remove_hyperlink_at",
-        "clear_hyperlinks", "get_hyperlinks", "hyperlink_count",
-        "get_comment", "set_comment",
-        "validation_count", "get_validation_at", "get_validations",
-        "add_validation", "remove_validation_at", "clear_validations",
-        "get_sheet_protection", "set_sheet_protection",
-        "get_sheet_view", "set_sheet_zoom", "set_sheet_freeze",
-        "set_sheet_tab_hidden", "set_sheet_show_grid_lines",
-        "set_sheet_show_row_col_headers", "set_sheet_show_zeros",
-        "set_sheet_right_to_left", "set_sheet_tab_selected", "set_sheet_view_mode",
-        "get_sheet_columns", "set_column_width",
-        "set_column_hidden", "set_column_outline", "get_sheet_row_overrides",
-        "set_row_height", "set_row_hidden", "set_row_outline",
-        "evaluate_cf_range", "cf_count", "get_conditional_format_at",
-        "get_conditional_formats", "add_conditional_format",
-        "remove_conditional_format_at", "clear_conditional_formats",
-        "get_cell_xf_index", "set_cell_xf_index", "get_cell_xf", "get_font",
-        "get_fill", "get_border", "get_num_fmt", "font_count", "fill_count",
-        "border_count", "cell_xf_count", "cell_style_count",
-        "cell_style_xf_count", "add_font", "add_fill", "add_border",
-        "add_num_fmt", "add_cell_xf", "get_cell_style", "get_cell_style_xf",
-        "pivot_count", "pivot_layout", "pivot_cache_count", "pivot_cache_id_at",
-        "pivot_cache_create", "pivot_cache_remove", "pivot_cache_field_count",
-        "pivot_cache_field_name", "pivot_cache_field_add",
-        "pivot_cache_field_clear", "pivot_cache_record_add",
-        "pivot_cache_record_set_number", "pivot_cache_record_set_text",
-        "pivot_create", "pivot_remove", "pivot_set_name", "pivot_set_anchor",
-        "pivot_set_grand_totals", "pivot_field_add", "pivot_field_set_axis",
-        "pivot_data_field_add", "pivot_data_field_set", "pivot_filter_add",
-        "pivot_set_row_field_order", "pivot_set_col_field_order",
-        "precedents", "dependents", "spill_info",
-        "function_count", "function_name_at", "function_metadata",
-        "localize_function_name", "canonicalize_function_name",
-        "external_link_count", "get_external_link_at", "get_external_links",
+        "move_sheet",
+        "remove_sheet",
+        "rename_sheet",
+        "set_defined_name",
+        "set_defined_name_scoped",
+        "set_error",
+        "insert_rows",
+        "delete_rows",
+        "insert_cols",
+        "delete_cols",
+        "calc_mode",
+        "set_calc_mode",
+        "excel_profile_id",
+        "set_excel_profile_id",
+        "partial_recalc",
+        "lambda_text_at",
+        "evaluate_formula_array",
+        "add_merge",
+        "remove_merge",
+        "remove_merge_at",
+        "clear_merges",
+        "get_merges",
+        "merge_count",
+        "add_hyperlink",
+        "remove_hyperlink",
+        "remove_hyperlink_at",
+        "clear_hyperlinks",
+        "get_hyperlinks",
+        "hyperlink_count",
+        "get_comment",
+        "set_comment",
+        "validation_count",
+        "get_validation_at",
+        "get_validations",
+        "add_validation",
+        "remove_validation_at",
+        "clear_validations",
+        "get_sheet_protection",
+        "set_sheet_protection",
+        "get_sheet_view",
+        "set_sheet_zoom",
+        "set_sheet_freeze",
+        "set_sheet_tab_hidden",
+        "set_sheet_show_grid_lines",
+        "set_sheet_show_row_col_headers",
+        "set_sheet_show_zeros",
+        "set_sheet_right_to_left",
+        "set_sheet_tab_selected",
+        "set_sheet_view_mode",
+        "get_sheet_columns",
+        "set_column_width",
+        "set_column_hidden",
+        "set_column_outline",
+        "get_sheet_row_overrides",
+        "set_row_height",
+        "set_row_hidden",
+        "set_row_outline",
+        "evaluate_cf_range",
+        "cf_count",
+        "get_conditional_format_at",
+        "get_conditional_formats",
+        "add_conditional_format",
+        "remove_conditional_format_at",
+        "clear_conditional_formats",
+        "get_cell_xf_index",
+        "set_cell_xf_index",
+        "get_cell_xf",
+        "get_font",
+        "get_fill",
+        "get_border",
+        "get_num_fmt",
+        "font_count",
+        "fill_count",
+        "border_count",
+        "cell_xf_count",
+        "cell_style_count",
+        "cell_style_xf_count",
+        "add_font",
+        "add_fill",
+        "add_border",
+        "add_num_fmt",
+        "add_cell_xf",
+        "get_cell_style",
+        "get_cell_style_xf",
+        "pivot_count",
+        "pivot_layout",
+        "pivot_cache_count",
+        "pivot_cache_id_at",
+        "pivot_cache_create",
+        "pivot_cache_remove",
+        "pivot_cache_field_count",
+        "pivot_cache_field_name",
+        "pivot_cache_field_add",
+        "pivot_cache_field_clear",
+        "pivot_cache_record_add",
+        "pivot_cache_record_set_number",
+        "pivot_cache_record_set_text",
+        "pivot_create",
+        "pivot_remove",
+        "pivot_set_name",
+        "pivot_set_anchor",
+        "pivot_set_grand_totals",
+        "pivot_field_add",
+        "pivot_field_set_axis",
+        "pivot_data_field_add",
+        "pivot_data_field_set",
+        "pivot_filter_add",
+        "pivot_set_row_field_order",
+        "pivot_set_col_field_order",
+        "precedents",
+        "dependents",
+        "spill_info",
+        "function_count",
+        "function_name_at",
+        "function_metadata",
+        "localize_function_name",
+        "canonicalize_function_name",
+        "external_link_count",
+        "get_external_link_at",
+        "get_external_links",
     ]
 
     def test_all_methods_present(self) -> None:
         for name in self.METHODS:
-            self.assertTrue(
-                hasattr(Workbook, name), f"Workbook missing method: {name}"
-            )
+            self.assertTrue(hasattr(Workbook, name), f"Workbook missing method: {name}")
 
     def test_public_types_exported(self) -> None:
         for name in (
-            "MergeRange", "Comment", "Hyperlink", "DataValidation",
-            "DataValidationInput", "SheetProtection", "SheetView",
-            "ConditionalFormat", "ConditionalFormatInput", "CfMatch",
-            "CfCellResult", "CellNode", "SpillInfo", "FunctionMetadata",
-            "CellXf", "FontRecord", "FillRecord", "CellStyle", "ExternalLink",
-            "PivotCell", "PivotLayout", "PivotFieldSpec", "PivotDataFieldSpec",
-            "PivotFilterSpec", "CalcMode", "PivotAxis", "PivotAggregation",
-            "MergedFunctionMetadata", "merge_function_metadata",
+            "MergeRange",
+            "Comment",
+            "Hyperlink",
+            "DataValidation",
+            "DataValidationInput",
+            "SheetProtection",
+            "SheetView",
+            "ConditionalFormat",
+            "ConditionalFormatInput",
+            "CfMatch",
+            "CfCellResult",
+            "CellNode",
+            "SpillInfo",
+            "FunctionMetadata",
+            "CellXf",
+            "FontRecord",
+            "FillRecord",
+            "CellStyle",
+            "ExternalLink",
+            "PivotCell",
+            "PivotLayout",
+            "PivotFieldSpec",
+            "PivotDataFieldSpec",
+            "PivotFilterSpec",
+            "CalcMode",
+            "PivotAxis",
+            "PivotAggregation",
+            "MergedFunctionMetadata",
+            "merge_function_metadata",
         ):
             self.assertTrue(hasattr(formulon, name), f"formulon missing: {name}")
 

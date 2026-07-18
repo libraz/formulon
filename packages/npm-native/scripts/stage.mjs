@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stages the Formulon N-API addon + JS shim into
@@ -16,8 +17,8 @@
 //
 // Run via `make node-package`. No npm dependencies; Node 18 stdlib only.
 
-import { access, copyFile, mkdir } from 'node:fs/promises';
 import { constants as FS } from 'node:fs';
+import { access, copyFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 

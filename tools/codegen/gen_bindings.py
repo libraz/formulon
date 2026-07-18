@@ -25,7 +25,6 @@ snapshots, so any drift in the generator is reviewable.
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import re
 import shutil
 import subprocess
@@ -93,9 +92,7 @@ def _load_manifest(path: Path) -> Tuple[int, List[dict]]:
             if field not in entry:
                 raise SystemExit(f"{path}: functions[{i}] missing required field `{field}`")
         if entry["body"] not in VALID_BODY_KINDS:
-            raise SystemExit(
-                f"{path}: functions[{i}].body={entry['body']!r} not in {sorted(VALID_BODY_KINDS)}"
-            )
+            raise SystemExit(f"{path}: functions[{i}].body={entry['body']!r} not in {sorted(VALID_BODY_KINDS)}")
     return int(version), funcs
 
 
@@ -134,9 +131,7 @@ def _check_header_coverage(entries: List[dict], header: Path) -> bool:
 # Shared header banner
 # ---------------------------------------------------------------------------
 
-_BANNER_LICENSE_APACHE = (
-    "// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0."
-)
+_BANNER_LICENSE_APACHE = "// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0."
 
 _GEN_BANNER = (
     "//\n"
@@ -198,16 +193,16 @@ def _file_header(license_banner: str, summary: str) -> str:
 #       }
 
 
-_CAPI_BODY_DIRECT_SIZE_T = '''\
+_CAPI_BODY_DIRECT_SIZE_T = """\
 extern "C" size_t {name}(const fm_workbook_t* wb) {{
   if (wb == nullptr) {{
     return 0;
   }}
   return {accessor};
 }}
-'''
+"""
 
-_CAPI_BODY_STATUS_U32_OUT = '''\
+_CAPI_BODY_STATUS_U32_OUT = """\
 extern "C" fm_status_t {name}(fm_workbook_t* wb, uint32_t* out_count) {{
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {{
@@ -217,9 +212,9 @@ extern "C" fm_status_t {name}(fm_workbook_t* wb, uint32_t* out_count) {{
   *out_count = static_cast<uint32_t>({accessor});
   return 0;
 }}
-'''
+"""
 
-_CAPI_BODY_STATUS_SIZE_WITH_SHEET = '''\
+_CAPI_BODY_STATUS_SIZE_WITH_SHEET = """\
 extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_t* out_count) {{
   clear_last_error();
   if (wb == nullptr || out_count == nullptr) {{
@@ -234,7 +229,7 @@ extern "C" fm_status_t {name}(const fm_workbook_t* wb, size_t sheet_index, size_
   *out_count = {accessor};
   return 0;
 }}
-'''
+"""
 
 
 def _emit_capi(entries: List[dict]) -> Dict[str, str]:
@@ -295,16 +290,16 @@ def _emit_capi_entry(e: dict) -> str:
 # the corresponding C ABI function. Bodies follow the project's existing
 # JsWorkbook pattern: NULL handle check first, then call the C ABI.
 
-_EMBIND_BODY_DIRECT_SIZE_T = '''\
+_EMBIND_BODY_DIRECT_SIZE_T = """\
 uint32_t JsWorkbook::{embind_cpp}() const {{
   if (handle_ == nullptr) {{
     return 0U;
   }}
   return static_cast<uint32_t>({capi}(handle_));
 }}
-'''
+"""
 
-_EMBIND_BODY_STATUS_U32_OUT = '''\
+_EMBIND_BODY_STATUS_U32_OUT = """\
 uint32_t JsWorkbook::{embind_cpp}() const {{
   if (handle_ == nullptr) {{
     return 0U;
@@ -315,9 +310,9 @@ uint32_t JsWorkbook::{embind_cpp}() const {{
   }}
   return n;
 }}
-'''
+"""
 
-_EMBIND_BODY_STATUS_SIZE_WITH_SHEET = '''\
+_EMBIND_BODY_STATUS_SIZE_WITH_SHEET = """\
 uint32_t JsWorkbook::{embind_cpp}(uint32_t sheet) const {{
   if (handle_ == nullptr) {{
     return 0U;
@@ -328,7 +323,7 @@ uint32_t JsWorkbook::{embind_cpp}(uint32_t sheet) const {{
   }}
   return static_cast<uint32_t>(count);
 }}
-'''
+"""
 
 
 def _emit_embind(entries: List[dict]) -> Dict[str, str]:
@@ -387,7 +382,7 @@ def _emit_embind_entry(e: dict) -> str:
 #   - NULL handle returns Napi::Number(0).
 #   - Direct passthroughs cast the size_t / uint32 result into a JS Number.
 
-_NODE_BODY_DIRECT_SIZE_T = '''\
+_NODE_BODY_DIRECT_SIZE_T = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
@@ -395,9 +390,9 @@ Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   }}
   return Napi::Number::New(env, static_cast<double>({capi}(handle_)));
 }}
-'''
+"""
 
-_NODE_BODY_STATUS_U32_OUT = '''\
+_NODE_BODY_STATUS_U32_OUT = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
@@ -409,9 +404,9 @@ Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   }}
   return Napi::Number::New(env, n);
 }}
-'''
+"""
 
-_NODE_BODY_STATUS_SIZE_WITH_SHEET = '''\
+_NODE_BODY_STATUS_SIZE_WITH_SHEET = """\
 Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {{
@@ -424,7 +419,7 @@ Napi::Value Workbook::{node_cpp}(const Napi::CallbackInfo& info) {{
   }}
   return Napi::Number::New(env, static_cast<double>(count));
 }}
-'''
+"""
 
 
 def _emit_node(entries: List[dict]) -> Dict[str, str]:
@@ -495,10 +490,7 @@ def _clang_format(content: str, path: Path) -> str:
         check=False,
     )
     if proc.returncode != 0:
-        sys.stderr.write(
-            f"clang-format failed on {path.name}: {proc.stderr}\n"
-            "falling back to raw codegen output\n"
-        )
+        sys.stderr.write(f"clang-format failed on {path.name}: {proc.stderr}\nfalling back to raw codegen output\n")
         return content
     return proc.stdout
 

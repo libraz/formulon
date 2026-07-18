@@ -147,9 +147,7 @@ def _autodetect_target(targets_doc: Dict[str, Any]) -> str:
     return _workbook_primary(targets_doc)
 
 
-def _resolve_target(
-    targets_doc: Dict[str, Any], name: Optional[str]
-) -> Dict[str, Any]:
+def _resolve_target(targets_doc: Dict[str, Any], name: Optional[str]) -> Dict[str, Any]:
     """Returns the target record for `name` (auto-detected when None)."""
 
     targets = targets_doc.get("targets") or {}
@@ -166,9 +164,7 @@ def _resolve_target(
     return record
 
 
-def _golden_dir_for_target(
-    targets_doc: Dict[str, Any], target: Dict[str, Any]
-) -> Path:
+def _golden_dir_for_target(targets_doc: Dict[str, Any], target: Dict[str, Any]) -> Path:
     """Returns the golden_wb directory for `target`.
 
     The workbook primary writes to `tests/oracle/golden_wb/`; any other
@@ -198,14 +194,7 @@ def _resolve_skips(
 
     skips = _load_divergence_skips(divergence_path, target["_name"])
     if target["_name"] != _workbook_primary(targets_doc):
-        variant_div = (
-            REPO_ROOT
-            / "tests"
-            / "oracle"
-            / "variants"
-            / target["_name"]
-            / "divergence.yaml"
-        )
+        variant_div = REPO_ROOT / "tests" / "oracle" / "variants" / target["_name"] / "divergence.yaml"
         if variant_div.exists():
             skips.update(_load_divergence_skips(variant_div, target["_name"]))
     return skips
@@ -312,10 +301,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--golden-dir",
         type=Path,
         default=None,
-        help=(
-            "Directory to write *.golden.json files to. Overrides the "
-            "per-target golden_wb path."
-        ),
+        help=("Directory to write *.golden.json files to. Overrides the per-target golden_wb path."),
     )
     parser.add_argument(
         "--divergence",
@@ -361,13 +347,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     if args.suite:
         wanted = set(args.suite)
-        suites = [
-            (p, d) for (p, d) in suites if _suite_name(d, p) in wanted
-        ]
+        suites = [(p, d) for (p, d) in suites if _suite_name(d, p) in wanted]
     if not suites:
-        print(
-            f"workbook-oracle-gen: no *.case.json suites found in {args.cases_dir}"
-        )
+        print(f"workbook-oracle-gen: no *.case.json suites found in {args.cases_dir}")
         return 0
 
     # Driver factory errors (wrong host OS, missing config) are fatal.
@@ -402,9 +384,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 skipped_here = 0
                 for case in raw_cases:
                     if not isinstance(case, dict):
-                        raise RuntimeError(
-                            f"{path}: case entry is not an object"
-                        )
+                        raise RuntimeError(f"{path}: case entry is not an object")
                     cid = case.get("id")
                     # A divergence.yaml skip-oracle entry excludes this
                     # case from Excel automation; the golden records the
@@ -433,10 +413,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         }
                     )
                 if skipped_here:
-                    print(
-                        f"  ! {skipped_here} case(s) skipped by divergence.yaml "
-                        "(see golden 'skipped' fields)"
-                    )
+                    print(f"  ! {skipped_here} case(s) skipped by divergence.yaml (see golden 'skipped' fields)")
                 out_path = golden_dir / f"{suite_name}.golden.json"
                 _write_golden(out_path, suite_name, env_json, out_cases)
                 print(f"  -> {out_path.relative_to(REPO_ROOT)}")

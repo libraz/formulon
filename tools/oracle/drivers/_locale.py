@@ -31,7 +31,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-
 # ``Application.International(xlCountryCode)`` returns a phone-style
 # country code rather than a locale identifier. The mapping below covers
 # every ``status: wanted`` slot in targets.yaml plus the most common
@@ -133,7 +132,6 @@ LOCALIZED_ERROR_TO_CANONICAL: Dict[str, str] = {
     "#NOME?": "#NAME?",
     "#NULO!": "#NULL!",
     "#NÚM!": "#NUM!",  # pt: NÚM!
-
     # ja-JP M365 dynamic-array / runtime error tokens. The classic seven
     # (#VALUE!, #DIV/0!, #REF!, #NAME?, #NUM!, #N/A, #NULL!) stay in
     # English on ja-JP Excel, but the M365 additions are translated.

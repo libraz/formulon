@@ -33,7 +33,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BEHAVIORS_PATH = REPO_ROOT / "tools" / "catalog" / "behaviors.yaml"
 CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
@@ -43,6 +42,7 @@ VALID_EXPECTED = ("impl", "diverged", "missing")
 
 
 # ---- ANSI helpers --------------------------------------------------------
+
 
 def _supports_color() -> bool:
     if os.environ.get("NO_COLOR"):
@@ -80,6 +80,7 @@ def dim(s: str) -> str:
 
 
 # ---- Data classes --------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class Behavior:
@@ -125,6 +126,7 @@ class Observation:
 
 # ---- Soft YAML import ----------------------------------------------------
 
+
 def _try_import_yaml():
     """Returns the `yaml` module or None. Mirrors the soft-import style of
     `tools/oracle/oracle_gen.py::_load_divergence_skips`: we would rather
@@ -139,6 +141,7 @@ def _try_import_yaml():
 
 
 # ---- Loaders -------------------------------------------------------------
+
 
 def load_behaviors(path: Path) -> List[Group]:
     """Parses `behaviors.yaml`. Raises FileNotFoundError if the file is
@@ -173,8 +176,7 @@ def load_behaviors(path: Path) -> List[Group]:
                 raise ValueError(f"behaviors.yaml: behaviour in {function!r} missing `name`")
             if (probe is None) == (probe_regex is None):
                 raise ValueError(
-                    f"behaviors.yaml: behaviour {name!r} must have exactly one of "
-                    "`probe` or `probe_regex`"
+                    f"behaviors.yaml: behaviour {name!r} must have exactly one of `probe` or `probe_regex`"
                 )
             if expected not in VALID_EXPECTED:
                 raise ValueError(
@@ -254,6 +256,7 @@ def load_oracle_cases(cases_dir: Path) -> List[Case]:
 
 # ---- Probing -------------------------------------------------------------
 
+
 def _match(behavior: Behavior, formula: str) -> bool:
     if behavior.probe is not None:
         return behavior.probe in formula
@@ -262,9 +265,7 @@ def _match(behavior: Behavior, formula: str) -> bool:
     return re.search(behavior.probe_regex, formula) is not None
 
 
-def observe(
-    behavior: Behavior, cases: Sequence[Case], divergence: Dict[str, str]
-) -> Observation:
+def observe(behavior: Behavior, cases: Sequence[Case], divergence: Dict[str, str]) -> Observation:
     """Counts how many cases match the behaviour's probe, how many of
     those are skip-oracle divergences, and derives the observed status:
 
@@ -304,6 +305,7 @@ def observe(
 
 
 # ---- Reporting -----------------------------------------------------------
+
 
 def _status_label(status: str) -> str:
     if status == "impl":
@@ -418,6 +420,7 @@ def check_drift(
 
 # ---- main ----------------------------------------------------------------
 
+
 def _compute_observations(
     groups: Sequence[Group], cases: Sequence[Case], divergence: Dict[str, str]
 ) -> Dict[Tuple[str, str], Observation]:
@@ -433,8 +436,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit 1 if declared expected drifts from observed status. "
-        "Used by the BehaviorDrift ctest entry.",
+        help="Exit 1 if declared expected drifts from observed status. Used by the BehaviorDrift ctest entry.",
     )
     parser.add_argument(
         "--missing",
@@ -444,8 +446,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument(
         "--report",
         action="store_true",
-        help="Print the grouped human-readable report (default when no "
-        "other mode is selected).",
+        help="Print the grouped human-readable report (default when no other mode is selected).",
     )
     parser.add_argument(
         "--expected",
@@ -462,8 +463,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # Soft-fail: keep CI green on hosts without PyYAML. The check mode
         # still exits 0 so ctest passes.
         print(
-            "behaviors.py: PyYAML not available; skipping drift check. "
-            "Install with `pip install pyyaml` to enable.",
+            "behaviors.py: PyYAML not available; skipping drift check. Install with `pip install pyyaml` to enable.",
             file=sys.stderr,
         )
         return 0

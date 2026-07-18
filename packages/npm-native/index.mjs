@@ -13,10 +13,10 @@
 //   1. dist/prebuilds/<platform>-<arch>/formulon.node  (shipped artifacts)
 //   2. dist/formulon.node                              (local dev fallback)
 
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require_ = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));

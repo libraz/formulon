@@ -74,6 +74,7 @@ from .workbook import (
     WorkbookFormat,
 )
 
+
 def _resolve_version() -> str:
     """Resolve the package version from its single source of truth.
 

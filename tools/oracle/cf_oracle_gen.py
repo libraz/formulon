@@ -80,8 +80,7 @@ DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden_cf"
 def _ensure_darwin() -> None:
     if platform.system() != "Darwin":
         raise RuntimeError(
-            "cf_oracle_gen is macOS-only (xlwings drives Excel.app). "
-            "Current platform: " + platform.system()
+            "cf_oracle_gen is macOS-only (xlwings drives Excel.app). Current platform: " + platform.system()
         )
 
 
@@ -247,8 +246,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
     descriptors: List[Dict[str, Any]] = []
     for block in case["cf_blocks"]:
         sqref_str = " ".join(
-            f"{_addr(r['first_row'], r['first_col'])}:{_addr(r['last_row'], r['last_col'])}"
-            for r in block["sqref"]
+            f"{_addr(r['first_row'], r['first_col'])}:{_addr(r['last_row'], r['last_col'])}" for r in block["sqref"]
         )
         sqref_blocks = [
             {
@@ -367,18 +365,14 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                     # but openpyxl will not supply it.
                     text = rule.get("text", "")
                     if not text:
-                        raise ValueError(
-                            f"{rtype} rule requires a `text` field"
-                        )
+                        raise ValueError(f"{rtype} rule requires a `text` field")
                     first_sqref = block["sqref"][0]
                     anchor = _addr(first_sqref["first_row"], first_sqref["first_col"])
                     text_escaped = text.replace('"', '""')
                     if rtype == "ContainsText":
                         op_str = "containsText"
                         type_str = "containsText"
-                        formula = [
-                            f'NOT(ISERROR(SEARCH("{text_escaped}",{anchor})))'
-                        ]
+                        formula = [f'NOT(ISERROR(SEARCH("{text_escaped}",{anchor})))']
                     elif rtype == "BeginsWith":
                         op_str = "beginsWith"
                         type_str = "beginsWith"
@@ -386,9 +380,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                     elif rtype == "EndsWith":
                         op_str = "endsWith"
                         type_str = "endsWith"
-                        formula = [
-                            f'RIGHT({anchor},{len(text)})="{text_escaped}"'
-                        ]
+                        formula = [f'RIGHT({anchor},{len(text)})="{text_escaped}"']
                     else:  # NotContainsText
                         op_str = "notContains"
                         type_str = "notContainsText"
@@ -432,9 +424,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                         stopIfTrue=False,
                     )
                 elif rtype in ("DuplicateValues", "UniqueValues"):
-                    type_str = (
-                        "duplicateValues" if rtype == "DuplicateValues" else "uniqueValues"
-                    )
+                    type_str = "duplicateValues" if rtype == "DuplicateValues" else "uniqueValues"
                     opx_rule = Rule(
                         type=type_str,
                         dxf=dxf,
@@ -444,9 +434,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                 else:  # Expression
                     formula1 = rule.get("formula1")
                     if not formula1:
-                        raise ValueError(
-                            "Expression rule requires `formula1`"
-                        )
+                        raise ValueError("Expression rule requires `formula1`")
                     opx_rule = Rule(
                         type="expression",
                         formula=[formula1],
@@ -478,9 +466,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                 }
                 ths_types = [type_map[t["type"]] for t in thresholds]
                 ths_vals: List[Optional[Any]] = [t.get("value") for t in thresholds]
-                colors_hex = [
-                    f"FF{c['r']:02X}{c['g']:02X}{c['b']:02X}" for c in colors
-                ]
+                colors_hex = [f"FF{c['r']:02X}{c['g']:02X}{c['b']:02X}" for c in colors]
                 if len(thresholds) == 3:
                     csr = ColorScaleRule(
                         start_type=ths_types[0],
@@ -503,9 +489,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                         end_color=colors_hex[1],
                     )
                 else:
-                    raise NotImplementedError(
-                        f"ColorScale with {len(thresholds)} stops not supported"
-                    )
+                    raise NotImplementedError(f"ColorScale with {len(thresholds)} stops not supported")
                 csr.priority = priority
                 ws.conditional_formatting.add(sqref_str, csr)
                 descriptors.append(
@@ -536,9 +520,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                     "Percentile": "percentile",
                     "Formula": "formula",
                 }
-                fill_hex = (
-                    f"FF{fill_color['r']:02X}{fill_color['g']:02X}{fill_color['b']:02X}"
-                )
+                fill_hex = f"FF{fill_color['r']:02X}{fill_color['g']:02X}{fill_color['b']:02X}"
                 dbr = DataBarRule(
                     start_type=type_map[min_t["type"]],
                     start_value=min_t.get("value"),
@@ -591,10 +573,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                 # the common Excel-emitted shape.
                 threshold_types = {t["type"] for t in threshold_specs}
                 if len(threshold_types) != 1:
-                    raise ValueError(
-                        "IconSet rule requires uniform threshold types "
-                        f"(got {sorted(threshold_types)})"
-                    )
+                    raise ValueError(f"IconSet rule requires uniform threshold types (got {sorted(threshold_types)})")
                 type_str_map = {
                     "Number": "num",
                     "Percent": "percent",
@@ -635,9 +614,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                     }
                 )
             else:
-                raise NotImplementedError(
-                    f"CF rule type not yet supported by oracle gen: {rtype}"
-                )
+                raise NotImplementedError(f"CF rule type not yet supported by oracle gen: {rtype}")
 
     wb.save(path)
     return descriptors
@@ -645,10 +622,7 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
 
 def _cell_in_block(row: int, col: int, sqref: List[Dict[str, int]]) -> bool:
     for r in sqref:
-        if (
-            r["first_row"] <= row <= r["last_row"]
-            and r["first_col"] <= col <= r["last_col"]
-        ):
+        if r["first_row"] <= row <= r["last_row"] and r["first_col"] <= col <= r["last_col"]:
             return True
     return False
 
@@ -710,9 +684,7 @@ def _resolve_threshold_value(
         if lower_index + 1 >= count:
             return population[-1]
         fraction = position - lower_index
-        return population[lower_index] + fraction * (
-            population[lower_index + 1] - population[lower_index]
-        )
+        return population[lower_index] + fraction * (population[lower_index + 1] - population[lower_index])
     return None
 
 
@@ -878,9 +850,7 @@ def _resolve_pattern(value: Any) -> Optional[str]:
     return str(value)
 
 
-def _classify_cell(
-    cell, row: int, col: int, descriptors: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def _classify_cell(cell, row: int, col: int, descriptors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Reads ``DisplayFormat.Interior`` for ``cell`` and emits one or
     more ``CFMatch``-shaped dicts.
 
@@ -942,9 +912,7 @@ def _classify_cell(
     return []
 
 
-def _capture_via_excel(
-    xlsx: Path, case: Dict[str, Any], descriptors: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def _capture_via_excel(xlsx: Path, case: Dict[str, Any], descriptors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Opens ``xlsx`` in a hidden Excel.app, recalculates, then walks
     every cell in ``case['range']`` and decodes the resolved
     ``DisplayFormat`` against ``descriptors``.
@@ -1012,10 +980,7 @@ def _process_suite(case_path: Path, golden_path: Path) -> None:
 
     out_doc = {
         "name": doc["name"],
-        "description": (
-            "Excel-actual golden captured by tools/oracle/cf_oracle_gen.py "
-            "(macOS + Excel 365, ja-JP)."
-        ),
+        "description": ("Excel-actual golden captured by tools/oracle/cf_oracle_gen.py (macOS + Excel 365, ja-JP)."),
         "cases": out_cases,
     }
     golden_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1033,8 +998,8 @@ def main() -> int:
         return 2
 
     try:
-        import xlwings  # noqa: F401
         import openpyxl  # noqa: F401
+        import xlwings  # noqa: F401
     except ImportError as exc:
         print(
             f"[cf-oracle-gen] missing dependency: {exc}; run `make oracle-setup`",

@@ -10,10 +10,10 @@
 //
 // Run via `make npm-test` (which runs `make npm-package` first).
 
-import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // fm_value_kind_t mirror (see src/c_api/formulon_c.h).

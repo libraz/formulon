@@ -176,10 +176,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--small-widen",
         type=float,
         default=DEFAULT_SMALL_WIDEN,
-        help=(
-            "Extra tolerance fraction added to sub-'--small-sec' micro-ops "
-            f"(default {DEFAULT_SMALL_WIDEN:.2f})."
-        ),
+        help=(f"Extra tolerance fraction added to sub-'--small-sec' micro-ops (default {DEFAULT_SMALL_WIDEN:.2f})."),
     )
     p.add_argument(
         "--regenerate-baseline",
@@ -281,8 +278,7 @@ def reduce_runs(runs: list[dict[str, dict[str, Sample]]]) -> dict[str, dict[str,
 def load_baseline(path: Path) -> dict[str, dict[str, float]]:
     if not path.exists():
         print(
-            "check_regression: baseline not found at "
-            f"{path}. Run with --regenerate-baseline to create it.",
+            f"check_regression: baseline not found at {path}. Run with --regenerate-baseline to create it.",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -331,8 +327,9 @@ def write_baseline(path: Path, results: dict[str, dict[str, Sample]]) -> None:
     print(f"check_regression: wrote baseline to {path}", flush=True)
 
 
-def effective_threshold(sample: Sample, base_threshold: float, err_mult: float,
-                        small_sec: float, small_widen: float) -> float:
+def effective_threshold(
+    sample: Sample, base_threshold: float, err_mult: float, small_sec: float, small_widen: float
+) -> float:
     """Per-scenario tolerance: the base threshold widened by nanobench's
     reported within-run error and, for micro-ops, by a fixed floor.
     """
@@ -342,9 +339,14 @@ def effective_threshold(sample: Sample, base_threshold: float, err_mult: float,
     return tol
 
 
-def diff(actual: dict[str, dict[str, Sample]], baseline: dict[str, dict[str, float]],
-         base_threshold: float, err_mult: float, small_sec: float,
-         small_widen: float) -> list[str]:
+def diff(
+    actual: dict[str, dict[str, Sample]],
+    baseline: dict[str, dict[str, float]],
+    base_threshold: float,
+    err_mult: float,
+    small_sec: float,
+    small_widen: float,
+) -> list[str]:
     """Returns a list of human-readable regression descriptions. Empty
     list means every measured scenario is within its effective tolerance.
     """

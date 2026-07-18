@@ -486,8 +486,7 @@ EXTERNAL_LINK_RECORD = Struct(
 CELL_STYLE_BUILTIN_ID_NONE = 0xFFFFFFFF
 
 
-def write_str_field(lib, struct_ptr: int, layout: Struct, field: str,
-                    value: Optional[str], owned: List[int]) -> None:
+def write_str_field(lib, struct_ptr: int, layout: Struct, field: str, value: Optional[str], owned: List[int]) -> None:
     """Encode ``value`` into WASM memory and store its pointer in a field.
 
     ``None`` / empty leaves the field as the NULL pointer (already zeroed

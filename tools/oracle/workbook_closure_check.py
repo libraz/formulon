@@ -156,9 +156,7 @@ def check_suite(suite: str, case_path: Path) -> Tuple[bool, Optional[bool], List
     golden_arg: Optional[Path] = golden_path if golden_path.exists() else None
 
     try:
-        case_ids, golden_ids = workbook_case_schema.validate_pair(
-            case_path, golden_arg
-        )
+        case_ids, golden_ids = workbook_case_schema.validate_pair(case_path, golden_arg)
     except workbook_case_schema.ValidationError as exc:
         msgs.append(_colour(f"  [FAIL] schema: {exc}", RED))
         return False, golden_arg is not None, msgs
@@ -170,8 +168,7 @@ def check_suite(suite: str, case_path: Path) -> Tuple[bool, Optional[bool], List
     if golden_ids is None:
         msgs.append(
             _colour(
-                "  [MISS] golden: not generated yet "
-                f"(expected tests/oracle/golden_wb/{suite}.golden.json)",
+                f"  [MISS] golden: not generated yet (expected tests/oracle/golden_wb/{suite}.golden.json)",
                 YELLOW,
             )
         )

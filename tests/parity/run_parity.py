@@ -33,7 +33,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # ---------------------------------------------------------------------------
 # Paths and configuration
@@ -324,19 +324,13 @@ class NpmChannel(Channel):
         # literal containing a file:// URL so Node's ESM loader resolves
         # the staged module unambiguously regardless of CWD.
         dist_url = json.dumps(self.dist_js.resolve().as_uri())
-        error_table = json.dumps(
-            {str(k): v for k, v in ERROR_CODE_TO_NAME.items()}
-        )
-        body = NPM_RUNNER_SCRIPT.format(
-            dist_url=dist_url, error_table=error_table
-        )
+        error_table = json.dumps({str(k): v for k, v in ERROR_CODE_TO_NAME.items()})
+        body = NPM_RUNNER_SCRIPT.format(dist_url=dist_url, error_table=error_table)
         # Write to a NamedTemporaryFile and keep it for the lifetime of
         # the channel. Node v25 cannot `--input-type=module --eval` on
         # macOS (the worker rejects it), so a real .mjs file is the only
         # portable invocation form.
-        tmp = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".mjs", delete=False, encoding="utf-8"
-        )
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".mjs", delete=False, encoding="utf-8")
         try:
             tmp.write(body)
         finally:
@@ -506,7 +500,6 @@ def records_match(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
 
 def run(fixtures: List[Dict[str, Any]], channels: List[Channel], verbose: bool) -> int:
     active = [c for c in channels if c.available()]
-    skipped = [c for c in channels if not c.available()]
 
     print(f"parity: {len(fixtures)} fixtures, {len(channels)} channels declared")
     for ch in channels:
@@ -602,9 +595,7 @@ def run(fixtures: List[Dict[str, Any]], channels: List[Channel], verbose: bool) 
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Cross-channel parity gate for Formulon (CLI/npm/python)."
-    )
+    parser = argparse.ArgumentParser(description="Cross-channel parity gate for Formulon (CLI/npm/python).")
     parser.add_argument(
         "--fixtures",
         type=Path,

@@ -60,19 +60,15 @@ def _read_failed(path: Path) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--failed", required=True, type=Path,
-                        help="path to a file listing failed test names")
-    parser.add_argument("--allowlist", required=True, type=Path,
-                        help="path to the expected-flake allowlist")
+    parser.add_argument("--failed", required=True, type=Path, help="path to a file listing failed test names")
+    parser.add_argument("--allowlist", required=True, type=Path, help="path to the expected-flake allowlist")
     args = parser.parse_args(argv)
 
     if not args.failed.is_file():
-        print(f"check_test_failures: --failed not found: {args.failed}",
-              file=sys.stderr)
+        print(f"check_test_failures: --failed not found: {args.failed}", file=sys.stderr)
         return 2
     if not args.allowlist.is_file():
-        print(f"check_test_failures: --allowlist not found: {args.allowlist}",
-              file=sys.stderr)
+        print(f"check_test_failures: --allowlist not found: {args.allowlist}", file=sys.stderr)
         return 2
 
     allowlist = _read_allowlist(args.allowlist)
@@ -90,8 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         for name in expected_hits:
             print(f"  - {name}")
     if unexpected:
-        print("check_test_failures: NEW failures (not in allowlist):",
-              file=sys.stderr)
+        print("check_test_failures: NEW failures (not in allowlist):", file=sys.stderr)
         for name in unexpected:
             print(f"  - {name}", file=sys.stderr)
         return 1

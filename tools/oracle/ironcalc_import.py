@@ -52,7 +52,6 @@ import datetime as _dt
 import json
 import logging
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -63,7 +62,6 @@ from openpyxl.formula.tokenizer import Tokenizer
 from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.utils.cell import coordinate_from_string
 from openpyxl.utils.datetime import to_excel as _datetime_to_excel_serial
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "fixtures"
@@ -93,25 +91,27 @@ MAX_CELLS_PER_RANGE = 4096
 # Known Excel error strings. Present here only so we can cheaply
 # distinguish error text (`"#DIV/0!"`) from user-entered text that
 # happens to start with `#`.
-EXCEL_ERROR_NAMES = frozenset([
-    "#NULL!",
-    "#DIV/0!",
-    "#VALUE!",
-    "#REF!",
-    "#NAME?",
-    "#NUM!",
-    "#N/A",
-    "#SPILL!",
-    "#CALC!",
-    "#FIELD!",
-    "#BLOCKED!",
-    "#CONNECT!",
-    "#EXTERNAL!",
-    "#BUSY!",
-    "#PYTHON!",
-    "#UNKNOWN!",
-    "#GETTING_DATA",  # transient Excel name; map to #N/A-ish? we skip
-])
+EXCEL_ERROR_NAMES = frozenset(
+    [
+        "#NULL!",
+        "#DIV/0!",
+        "#VALUE!",
+        "#REF!",
+        "#NAME?",
+        "#NUM!",
+        "#N/A",
+        "#SPILL!",
+        "#CALC!",
+        "#FIELD!",
+        "#BLOCKED!",
+        "#CONNECT!",
+        "#EXTERNAL!",
+        "#BUSY!",
+        "#PYTHON!",
+        "#UNKNOWN!",
+        "#GETTING_DATA",  # transient Excel name; map to #N/A-ish? we skip
+    ]
+)
 
 # Matches a sheet-qualified reference token: `SheetName!A1` or
 # `'Sheet 1'!A1`. Used to skip formulas that would require multi-sheet
@@ -126,9 +126,7 @@ CROSS_SHEET_RE = re.compile(r"(?:'[^']*'|[A-Za-z_][A-Za-z0-9_\.]*)!")
 # in the sheet — otherwise the test sees the dynamic target as `blank`
 # and produces a wrong (or erroring) result that the cached IronCalc
 # value never matched against.
-DYNAMIC_REF_RE = re.compile(
-    r"\b(?:_xlfn\.)?(?:OFFSET|INDIRECT)\s*\(", re.IGNORECASE
-)
+DYNAMIC_REF_RE = re.compile(r"\b(?:_xlfn\.)?(?:OFFSET|INDIRECT)\s*\(", re.IGNORECASE)
 
 # Characters we can't put in an output filename. openpyxl will happily
 # accept sheet names with slashes, spaces, etc.
@@ -191,9 +189,7 @@ def _load_divergence_skips(path: Path) -> Dict[str, str]:
         cid = entry.get("id")
         mode = entry.get("mode", "skip-oracle")
         if mode == "skip-oracle" and isinstance(cid, str):
-            out[cid] = str(
-                entry.get("reason", "ironcalc_divergence.yaml skip-oracle")
-            )
+            out[cid] = str(entry.get("reason", "ironcalc_divergence.yaml skip-oracle"))
     return out
 
 
@@ -388,9 +384,7 @@ def _referenced_cells(formula: str) -> List[str]:
         if item.type == "OPERAND" and item.subtype == "RANGE":
             expanded = _expand_reference(item.value)
             if not expanded:
-                raise UnboundedReference(
-                    f"cannot expand reference {item.value!r}"
-                )
+                raise UnboundedReference(f"cannot expand reference {item.value!r}")
             refs.extend(expanded)
     return refs
 
@@ -432,9 +426,7 @@ def _build_setup_for(
     for addr in value_closure:
         value = non_formula_cells[addr]
         try:
-            setup[addr] = _value_to_record(
-                value, where=f"setup[{addr}]"
-            )
+            setup[addr] = _value_to_record(value, where=f"setup[{addr}]")
         except ValueError:
             # Unsupported setup type (e.g. datetime) -> drop; Formulon
             # treats the address as blank, which is the safest default.
@@ -478,9 +470,7 @@ def _convert_sheet(
     # while iterating cases. The downstream `doc` reuses the same
     # value so the goldens and the skip map stay in sync.
     sheet_slug = _scrub_filename(sheet.title)
-    rel_dir = _scrub_filename(
-        str(Path(rel_source).parent).replace("/", "__")
-    )
+    rel_dir = _scrub_filename(str(Path(rel_source).parent).replace("/", "__"))
     if rel_dir in ("", "."):
         suite = f"ironcalc_{xlsx_stem}_{sheet_slug}"
     else:
@@ -534,7 +524,9 @@ def _convert_sheet(
             stats.skipped_over_cap = len(ordered_addrs) - ordered_addrs.index(addr)
             logger.info(
                 "cap reached: %s sheet=%r dropped=%d cells beyond #%d",
-                rel_source, sheet.title, stats.skipped_over_cap,
+                rel_source,
+                sheet.title,
+                stats.skipped_over_cap,
                 MAX_CASES_PER_SHEET,
             )
             break
@@ -543,7 +535,10 @@ def _convert_sheet(
             stats.skipped_cross_sheet += 1
             logger.info(
                 "skip cross-sheet: %s sheet=%r cell=%s formula=%s",
-                rel_source, sheet.title, addr, formula,
+                rel_source,
+                sheet.title,
+                addr,
+                formula,
             )
             continue
 
@@ -561,7 +556,10 @@ def _convert_sheet(
             stats.skipped_no_cached += 1
             logger.info(
                 "skip no-cached-value: %s sheet=%r cell=%s formula=%s",
-                rel_source, sheet.title, addr, formula,
+                rel_source,
+                sheet.title,
+                addr,
+                formula,
             )
             continue
 
@@ -577,41 +575,52 @@ def _convert_sheet(
                 # walk inside `_build_setup_for`, which can raise
                 # `UnboundedReference` for an unrelated whole-column
                 # formula and lose the entire case.
-                referenced = list(set(referenced)
-                                  | set(non_formula_cells.keys()))
+                referenced = list(set(referenced) | set(non_formula_cells.keys()))
             setup = _build_setup_for(
-                cached_cell, non_formula_cells, formula_cells,
+                cached_cell,
+                non_formula_cells,
+                formula_cells,
                 referenced=referenced,
             )
         except UnboundedReference as exc:
             stats.skipped_unbounded_ref += 1
             logger.info(
                 "skip unbounded-ref: %s sheet=%r cell=%s reason=%s",
-                rel_source, sheet.title, addr, exc,
+                rel_source,
+                sheet.title,
+                addr,
+                exc,
             )
             continue
 
         formula_text = formula if formula.startswith("=") else "=" + formula
         skip_key = f"{suite}.{addr}"
         if skip_key in skip_map:
-            cases.append({
-                "id": addr,
-                "formula": formula_text,
-                "setup": setup,
-                "skipped": skip_map[skip_key],
-            })
+            cases.append(
+                {
+                    "id": addr,
+                    "formula": formula_text,
+                    "setup": setup,
+                    "skipped": skip_map[skip_key],
+                }
+            )
             stats.skipped_divergence += 1
             logger.info(
                 "skip divergence: %s sheet=%r cell=%s reason=%s",
-                rel_source, sheet.title, addr, skip_map[skip_key],
+                rel_source,
+                sheet.title,
+                addr,
+                skip_map[skip_key],
             )
         else:
-            cases.append({
-                "id": addr,
-                "formula": formula_text,
-                "setup": setup,
-                "expect": expect,
-            })
+            cases.append(
+                {
+                    "id": addr,
+                    "formula": formula_text,
+                    "setup": setup,
+                    "expect": expect,
+                }
+            )
             stats.emitted_cases += 1
 
     if not cases:
@@ -619,10 +628,7 @@ def _convert_sheet(
 
     doc = {
         "suite": suite,
-        "description": (
-            f"Derived from IronCalc fixture {rel_source}, "
-            f"sheet {sheet.title!r}."
-        ),
+        "description": (f"Derived from IronCalc fixture {rel_source}, sheet {sheet.title!r}."),
         "environment": {
             "source": "ironcalc",
             "commit": commit,
@@ -644,10 +650,7 @@ def _convert_sheet(
 def _iter_xlsx(source_dir: Path) -> List[Path]:
     """All `.xlsx` files under `source_dir`, sorted, deterministic."""
 
-    files = sorted(
-        p for p in source_dir.rglob("*.xlsx")
-        if p.is_file() and not p.name.startswith(".")
-    )
+    files = sorted(p for p in source_dir.rglob("*.xlsx") if p.is_file() and not p.name.startswith("."))
     return files
 
 
@@ -693,6 +696,7 @@ def _write_golden_if_changed(path: Path, doc: Dict[str, Any]) -> bool:
         except (OSError, json.JSONDecodeError):
             existing = None
         if existing is not None:
+
             def _normalize(d: Dict[str, Any]) -> Dict[str, Any]:
                 norm = dict(d)
                 if isinstance(norm.get("environment"), dict):
@@ -700,6 +704,7 @@ def _write_golden_if_changed(path: Path, doc: Dict[str, Any]) -> bool:
                     env.pop("generated_at", None)
                     norm["environment"] = env
                 return norm
+
             if _normalize(existing) == _normalize(doc):
                 return False
     path.write_text(candidate_text, encoding="utf-8")
@@ -724,33 +729,38 @@ def _configure_logging(log_path: Path) -> None:
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
-        "--source", type=Path, default=DEFAULT_SOURCE_DIR,
+        "--source",
+        type=Path,
+        default=DEFAULT_SOURCE_DIR,
         help=f"IronCalc fixtures root (default {DEFAULT_SOURCE_DIR})",
     )
     ap.add_argument(
-        "--out", type=Path, default=DEFAULT_OUT_DIR,
+        "--out",
+        type=Path,
+        default=DEFAULT_OUT_DIR,
         help=f"Golden JSON output directory (default {DEFAULT_OUT_DIR})",
     )
     ap.add_argument(
-        "--log", type=Path, default=DEFAULT_LOG_PATH,
+        "--log",
+        type=Path,
+        default=DEFAULT_LOG_PATH,
         help="Where to tee per-skip reasons",
     )
     ap.add_argument(
-        "--divergence", type=Path, default=DEFAULT_DIVERGENCE,
-        help=(
-            "YAML listing IronCalc-vs-Mac divergences to mark as skipped "
-            f"(default {DEFAULT_DIVERGENCE})."
-        ),
+        "--divergence",
+        type=Path,
+        default=DEFAULT_DIVERGENCE,
+        help=(f"YAML listing IronCalc-vs-Mac divergences to mark as skipped (default {DEFAULT_DIVERGENCE})."),
     )
     ap.add_argument(
-        "--strict", action="store_true",
+        "--strict",
+        action="store_true",
         help="Treat any per-file exception as fatal (exit 1)",
     )
     args = ap.parse_args(argv)
 
     if not args.source.exists():
-        print(f"ironcalc_import: source not found: {args.source}",
-              file=sys.stderr)
+        print(f"ironcalc_import: source not found: {args.source}", file=sys.stderr)
         return 1
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -764,7 +774,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     if skip_map:
         logger.info(
             "loaded %d divergence skip(s) from %s",
-            len(skip_map), args.divergence,
+            len(skip_map),
+            args.divergence,
         )
 
     xlsx_files = _iter_xlsx(args.source)
@@ -795,10 +806,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         logger.info("== %s ==", rel_source)
         try:
             wb_formula = openpyxl.load_workbook(
-                xlsx_path, data_only=False, read_only=False,
+                xlsx_path,
+                data_only=False,
+                read_only=False,
             )
             wb_cached = openpyxl.load_workbook(
-                xlsx_path, data_only=True, read_only=False,
+                xlsx_path,
+                data_only=True,
+                read_only=False,
             )
         except Exception as exc:
             msg = f"load failed for {rel_source}: {exc}"
@@ -824,7 +839,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 sheet = wb_formula[sheet_name]
                 cached_sheet = wb_cached[sheet_name]
                 doc, stats = _convert_sheet(
-                    sheet, cached_sheet,
+                    sheet,
+                    cached_sheet,
                     rel_source=rel_source,
                     xlsx_stem=xlsx_stem,
                     abs_tol=abs_tol,
@@ -837,11 +853,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             except Exception as exc:
                 logger.info(
                     "convert failed for %s!%s: %s",
-                    rel_source, sheet_name, exc,
+                    rel_source,
+                    sheet_name,
+                    exc,
                 )
-                errored_files.append(
-                    (f"{rel_source}!{sheet_name}", str(exc))
-                )
+                errored_files.append((f"{rel_source}!{sheet_name}", str(exc)))
                 if args.strict:
                     print(f"convert failed: {exc}", file=sys.stderr)
                     return 1
@@ -874,11 +890,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     total_goldens_pruned = 0
     if args.out.exists():
         for existing in args.out.iterdir():
-            if (
-                existing.is_file()
-                and existing.name.endswith(".golden.json")
-                and existing.name not in produced_names
-            ):
+            if existing.is_file() and existing.name.endswith(".golden.json") and existing.name not in produced_names:
                 existing.unlink()
                 total_goldens_pruned += 1
 
@@ -898,8 +910,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         f"errors={len(errored_files)}"
     )
     if errored_files:
-        print("ironcalc_import: errored files (see log):",
-              file=sys.stderr)
+        print("ironcalc_import: errored files (see log):", file=sys.stderr)
         for path, err in errored_files[:10]:
             print(f"  {path}: {err}", file=sys.stderr)
     print(f"ironcalc_import: log -> {args.log}")

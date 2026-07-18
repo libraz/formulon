@@ -17,7 +17,6 @@ import unittest
 import formulon
 from formulon import FormulonError, Value, ValueKind, Workbook
 
-
 # Excel error code ordinals, mirrored from src/value.h ``ErrorCode``.
 ERROR_DIV0 = 1
 ERROR_VALUE = 2
@@ -187,9 +186,7 @@ class WorkbookSaveLoadTests(unittest.TestCase):
         err = ctx.exception
         self.assertIsInstance(err.status, int)
         self.assertNotEqual(err.status, 0)
-        self.assertGreater(
-            len(err.status_name), 0, "fm_status_string returned empty"
-        )
+        self.assertGreater(len(err.status_name), 0, "fm_status_string returned empty")
 
     def test_value_dataclass_is_frozen(self) -> None:
         v = Value(kind=ValueKind.NUMBER, number=1.0)

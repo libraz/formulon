@@ -39,28 +39,25 @@ import datetime as _dt
 import platform
 from typing import Any, Dict, List, Optional
 
+from ._locale import detect_locale_from_app, normalise_error_token
 from .base import (
+    _ERR_DISPLAY_NAMES,
     CaseResult,
     EnvironmentInfo,
     OracleDriver,
     _datetime_to_serial,
-    _ERR_DISPLAY_NAMES,
 )
-from ._locale import detect_locale_from_app, normalise_error_token
 
 try:
     import xlwings as xw  # type: ignore
 except ImportError as exc:  # pragma: no cover - handled in oracle_gen.py
-    raise RuntimeError(
-        "xlwings is not installed; run `make oracle-setup` first"
-    ) from exc
+    raise RuntimeError("xlwings is not installed; run `make oracle-setup` first") from exc
 
 
 def _ensure_darwin() -> None:
     if platform.system() != "Darwin":
         raise RuntimeError(
-            "oracle-gen is macOS-only (xlwings drives Excel.app). "
-            "Current platform: " + platform.system()
+            "oracle-gen is macOS-only (xlwings drives Excel.app). Current platform: " + platform.system()
         )
 
 
@@ -193,11 +190,7 @@ def _classify_value(cell) -> CaseResult:
         cols = 0
         if rows > 0 and isinstance(v[0], list):
             cols = len(v[0])
-            flat = [
-                _array_cell_from_scalar(_classify_python_scalar(item))
-                for row in v
-                for item in row
-            ]
+            flat = [_array_cell_from_scalar(_classify_python_scalar(item)) for row in v for item in row]
         else:
             cols = rows
             rows = 1
@@ -380,14 +373,9 @@ class ExcelOracle(OracleDriver):
 
         # Cross-sheet setup ("Sheet2!A1") must be isolated per case --
         # see the windows_excel.py counterpart for the rationale.
-        cross_sheet = any(
-            any("!" in addr for addr in (case.get("setup") or {}))
-            for case in cases
-        )
+        cross_sheet = any(any("!" in addr for addr in (case.get("setup") or {})) for case in cases)
         if cross_sheet:
-            return self._run_suite_per_case_workbook(
-                suite_name, cases, date1904=date1904, iterative=iterative
-            )
+            return self._run_suite_per_case_workbook(suite_name, cases, date1904=date1904, iterative=iterative)
 
         wb = self._app.books.add()
         try:
@@ -531,7 +519,6 @@ class ExcelOracle(OracleDriver):
             except Exception:
                 pass
 
-
     # -----------------------------------------------------------------------
     # Workbook oracle track (pivot tables) -- best-effort variant
     # -----------------------------------------------------------------------
@@ -575,9 +562,7 @@ class ExcelOracle(OracleDriver):
             f"(case {case.get('id')!r})"
         )
 
-    def _run_print_case(
-        self, case: Dict[str, Any], print_spec: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _run_print_case(self, case: Dict[str, Any], print_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Best-effort print build via the macOS xlwings `.api` bridge.
 
         Mac Excel does expose `PageSetup` and `HPageBreaks` /
@@ -595,8 +580,7 @@ class ExcelOracle(OracleDriver):
             raise
         except Exception as exc:
             raise RuntimeError(
-                f"print automation failed for case {case.get('id')!r}: "
-                f"{_format_mac_error(exc)}"
+                f"print automation failed for case {case.get('id')!r}: {_format_mac_error(exc)}"
             ) from exc
         finally:
             try:
@@ -639,7 +623,7 @@ def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
         return None, key
     bang = key.rfind("!")
     sheet_part = key[:bang]
-    addr_part = key[bang + 1:]
+    addr_part = key[bang + 1 :]
     if sheet_part.startswith("'") and sheet_part.endswith("'") and len(sheet_part) >= 2:
         sheet_part = sheet_part[1:-1].replace("''", "'")
     return sheet_part, addr_part
@@ -694,7 +678,7 @@ def _normalise_print_area(area: str) -> str:
             continue
         bang = token.rfind("!")
         if bang != -1:
-            token = token[bang + 1:]
+            token = token[bang + 1 :]
         token = token.replace("$", "")
         out_parts.append(token)
     return ",".join(out_parts)
@@ -773,10 +757,7 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
         for i in range(1, int(ws.VPageBreaks.Count) + 1):
             v_breaks.append(int(ws.VPageBreaks(i).Location.Column) - 1)
     except Exception as exc:
-        raise RuntimeError(
-            "macOS Excel could not read page-break collections: "
-            f"{_format_mac_error(exc)}"
-        ) from exc
+        raise RuntimeError(f"macOS Excel could not read page-break collections: {_format_mac_error(exc)}") from exc
     h_breaks.sort()
     v_breaks.sort()
 

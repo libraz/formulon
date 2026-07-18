@@ -889,9 +889,7 @@ class Workbook:
             OOXML archive.
         """
         if not isinstance(data, (bytes, bytearray, memoryview)):
-            raise TypeError(
-                f"Workbook.load: expected bytes-like, got {type(data).__name__}"
-            )
+            raise TypeError(f"Workbook.load: expected bytes-like, got {type(data).__name__}")
         buf = bytes(data)
         wb = cls()
         data_ptr = LIB.alloc_bytes(buf) if len(buf) > 0 else 0
@@ -1024,9 +1022,7 @@ class Workbook:
             LIB.free(value_ptr)
 
     # -- Ad-hoc array evaluation ------------------------------------------
-    def evaluate_formula_array(
-        self, sheet: int, row: int, col: int, formula: str
-    ) -> List[List[Value]]:
+    def evaluate_formula_array(self, sheet: int, row: int, col: int, formula: str) -> List[List[Value]]:
         """Evaluate ``formula`` as if entered at ``(sheet, row, col)`` and
         return the whole multi-cell result, without mutating the workbook.
 
@@ -1056,9 +1052,7 @@ class Workbook:
         rows_ptr = _alloc_out_ptr()
         cols_ptr = _alloc_out_ptr()
         try:
-            status = LIB.fm_workbook_evaluate_formula_array(
-                h, sheet, row, col, formula_ptr, rows_ptr, cols_ptr
-            )
+            status = LIB.fm_workbook_evaluate_formula_array(h, sheet, row, col, formula_ptr, rows_ptr, cols_ptr)
             _check(status, "fm_workbook_evaluate_formula_array")
             rows = LIB.read_u32(rows_ptr)
             cols = LIB.read_u32(cols_ptr)
@@ -1077,9 +1071,7 @@ class Workbook:
                 out_row: List[Value] = []
                 for c in range(cols):
                     index = r * cols + c
-                    status = LIB.fm_workbook_evaluate_formula_array_cell(
-                        h, index, value_ptr
-                    )
+                    status = LIB.fm_workbook_evaluate_formula_array_cell(h, index, value_ptr)
                     _check(status, "fm_workbook_evaluate_formula_array_cell")
                     out_row.append(Value._from_wasm(value_ptr))
                 grid.append(out_row)
@@ -1100,14 +1092,10 @@ class Workbook:
         status = LIB.fm_workbook_recalc(h)
         _check(status, "fm_workbook_recalc")
 
-    def set_iterative(
-        self, enabled: bool, max_iterations: int, max_change: float
-    ) -> None:
+    def set_iterative(self, enabled: bool, max_iterations: int, max_change: float) -> None:
         """Configure iterative calculation."""
         h = self._require()
-        status = LIB.fm_workbook_set_iterative(
-            h, 1 if enabled else 0, int(max_iterations), float(max_change)
-        )
+        status = LIB.fm_workbook_set_iterative(h, 1 if enabled else 0, int(max_iterations), float(max_change))
         _check(status, "fm_workbook_set_iterative")
 
     # -- Save --------------------------------------------------------------
@@ -1196,9 +1184,7 @@ class Workbook:
             LIB.write_bytes(col_ptr, b"\x00\x00\x00\x00")
             LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
             try:
-                status = LIB.fm_workbook_cell_at(
-                    h, sheet, i, row_ptr, col_ptr, formula_ptr, value_ptr
-                )
+                status = LIB.fm_workbook_cell_at(h, sheet, i, row_ptr, col_ptr, formula_ptr, value_ptr)
                 _check(status, "fm_workbook_cell_at")
                 row = LIB.read_u32(row_ptr)
                 col = LIB.read_u32(col_ptr)
@@ -1247,9 +1233,7 @@ class Workbook:
             for p in (name_ptr, display_ptr, ref_ptr, sheet_ptr):
                 LIB.write_bytes(p, b"\x00\x00\x00\x00")
             try:
-                status = LIB.fm_workbook_table_at(
-                    h, i, name_ptr, display_ptr, ref_ptr, sheet_ptr
-                )
+                status = LIB.fm_workbook_table_at(h, i, name_ptr, display_ptr, ref_ptr, sheet_ptr)
                 _check(status, "fm_workbook_table_at")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 display = LIB.read_cstr(LIB.read_u32(display_ptr))
@@ -1581,9 +1565,7 @@ class Workbook:
     def clear_hyperlinks(self, sheet: int) -> None:
         """Drop every hyperlink on ``sheet``."""
         h = self._require()
-        _check(
-            LIB.fm_sheet_clear_hyperlinks(h, int(sheet)), "fm_sheet_clear_hyperlinks"
-        )
+        _check(LIB.fm_sheet_clear_hyperlinks(h, int(sheet)), "fm_sheet_clear_hyperlinks")
 
     def hyperlink_count(self, sheet: int) -> int:
         """Return the number of hyperlinks on ``sheet``."""
@@ -1635,9 +1617,7 @@ class Workbook:
         finally:
             LIB.free(ptr)
 
-    def set_comment(
-        self, sheet: int, row: int, col: int, author: str, text: str
-    ) -> None:
+    def set_comment(self, sheet: int, row: int, col: int, author: str, text: str) -> None:
         """Set, replace, or (empty ``text``) remove a cell comment."""
         h = self._require()
         owned: List[int] = []
@@ -1645,9 +1625,7 @@ class Workbook:
         text_ptr = _opt_str_ptr(text, owned)
         try:
             _check(
-                LIB.fm_sheet_set_comment(
-                    h, int(sheet), int(row), int(col), author_ptr, text_ptr
-                ),
+                LIB.fm_sheet_set_comment(h, int(sheet), int(row), int(col), author_ptr, text_ptr),
                 "fm_sheet_set_comment",
             )
         finally:
@@ -1745,9 +1723,7 @@ class Workbook:
                 "prompt_title",
                 "prompt_message",
             ):
-                S.write_str_field(
-                    LIB, ptr, S.DATA_VALIDATION, fld, getattr(validation, fld), owned
-                )
+                S.write_str_field(LIB, ptr, S.DATA_VALIDATION, fld, getattr(validation, fld), owned)
             _check(
                 LIB.fm_sheet_add_validation(h, int(sheet), ptr),
                 "fm_sheet_add_validation",
@@ -1831,9 +1807,7 @@ class Workbook:
                 values[flag] = 1 if getattr(protection, flag) else 0
             S.SHEET_PROTECTION.pack(LIB, ptr, values)
             for fld in ("algorithm_name", "hash_value", "salt_value", "legacy_password"):
-                S.write_str_field(
-                    LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), owned
-                )
+                S.write_str_field(LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), owned)
             _check(
                 LIB.fm_sheet_set_protection(h, int(sheet), ptr),
                 "fm_sheet_set_protection",
@@ -1870,9 +1844,7 @@ class Workbook:
     def set_sheet_zoom(self, sheet: int, zoom_scale: int) -> None:
         """Set the sheet zoom percentage (clamped to ``[10, 400]``)."""
         h = self._require()
-        _check(
-            LIB.fm_sheet_set_zoom(h, int(sheet), int(zoom_scale)), "fm_sheet_set_zoom"
-        )
+        _check(LIB.fm_sheet_set_zoom(h, int(sheet), int(zoom_scale)), "fm_sheet_set_zoom")
 
     def set_sheet_freeze(self, sheet: int, freeze_rows: int, freeze_cols: int) -> None:
         """Set the frozen pane in ``(rows, cols)``."""
@@ -1979,9 +1951,7 @@ class Workbook:
         """Set the column width override on ``[first, last]``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_column_width(
-                h, int(sheet), int(first), int(last), float(width)
-            ),
+            LIB.fm_sheet_set_column_width(h, int(sheet), int(first), int(last), float(width)),
             "fm_sheet_set_column_width",
         )
 
@@ -1989,9 +1959,7 @@ class Workbook:
         """Set the column hidden flag on ``[first, last]``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_column_hidden(
-                h, int(sheet), int(first), int(last), 1 if hidden else 0
-            ),
+            LIB.fm_sheet_set_column_hidden(h, int(sheet), int(first), int(last), 1 if hidden else 0),
             "fm_sheet_set_column_hidden",
         )
 
@@ -1999,9 +1967,7 @@ class Workbook:
         """Set the column outline level on ``[first, last]``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_column_outline(
-                h, int(sheet), int(first), int(last), int(level)
-            ),
+            LIB.fm_sheet_set_column_outline(h, int(sheet), int(first), int(last), int(level)),
             "fm_sheet_set_column_outline",
         )
 
@@ -2206,9 +2172,7 @@ class Workbook:
         n = self.cf_count(sheet)
         return [self.get_conditional_format_at(sheet, i) for i in range(n)]
 
-    def add_conditional_format(
-        self, sheet: int, rule: ConditionalFormatInput
-    ) -> int:
+    def add_conditional_format(self, sheet: int, rule: ConditionalFormatInput) -> int:
         """Append a non-visual CF rule to ``sheet``; return its index."""
         h = self._require()
         owned: List[int] = []
@@ -2256,9 +2220,7 @@ class Workbook:
                     )
             ro = S.CF_RULE.offsets
             LIB.write_bytes(ptr + ro["sqref"][1], struct.pack("<I", sqref_ptr))
-            LIB.write_bytes(
-                ptr + ro["sqref_count"][1], struct.pack("<I", len(rule.sqref))
-            )
+            LIB.write_bytes(ptr + ro["sqref_count"][1], struct.pack("<I", len(rule.sqref)))
             S.write_str_field(LIB, ptr, S.CF_RULE, "id", rule.id, owned)
             S.write_str_field(LIB, ptr, S.CF_RULE, "formula1", rule.formula1, owned)
             S.write_str_field(LIB, ptr, S.CF_RULE, "formula2", rule.formula2, owned)
@@ -2340,9 +2302,7 @@ class Workbook:
         h = self._require()
         ptr = S.alloc_struct(LIB, S.FONT_RECORD)
         try:
-            _check(
-                LIB.fm_styles_get_font(h, int(font_index), ptr), "fm_styles_get_font"
-            )
+            _check(LIB.fm_styles_get_font(h, int(font_index), ptr), "fm_styles_get_font")
             d = S.FONT_RECORD.unpack(LIB, ptr)
             return FontRecord(
                 name=LIB.read_cstr(d["name"]),
@@ -2361,13 +2321,9 @@ class Workbook:
         h = self._require()
         ptr = S.alloc_struct(LIB, S.FILL_RECORD)
         try:
-            _check(
-                LIB.fm_styles_get_fill(h, int(fill_index), ptr), "fm_styles_get_fill"
-            )
+            _check(LIB.fm_styles_get_fill(h, int(fill_index), ptr), "fm_styles_get_fill")
             d = S.FILL_RECORD.unpack(LIB, ptr)
-            return FillRecord(
-                pattern=d["pattern"], fg_argb=d["fg_argb"], bg_argb=d["bg_argb"]
-            )
+            return FillRecord(pattern=d["pattern"], fg_argb=d["fg_argb"], bg_argb=d["bg_argb"])
         finally:
             LIB.free(ptr)
 
@@ -2525,9 +2481,7 @@ class Workbook:
         code_ptr, _ = LIB.alloc_utf8(format_code)
         out = _alloc_out_ptr()
         try:
-            _check(
-                LIB.fm_styles_add_num_fmt(h, code_ptr, out), "fm_styles_add_num_fmt"
-            )
+            _check(LIB.fm_styles_add_num_fmt(h, code_ptr, out), "fm_styles_add_num_fmt")
             return struct.unpack("<H", LIB.read_bytes(out, 2))[0]
         finally:
             LIB.free(code_ptr)
@@ -2724,9 +2678,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_field_name(
-                    h, int(cache_id), int(field_idx), out
-                ),
+                LIB.fm_workbook_pivot_cache_field_name(h, int(cache_id), int(field_idx), out),
                 "fm_workbook_pivot_cache_field_name",
             )
             return LIB.read_cstr(LIB.read_u32(out))
@@ -2766,79 +2718,55 @@ class Workbook:
             int(field_idx),
         )
 
-    def pivot_cache_field_add_shared_item_number(
-        self, cache_id: int, field_idx: int, value: float
-    ) -> None:
+    def pivot_cache_field_add_shared_item_number(self, cache_id: int, field_idx: int, value: float) -> None:
         """Append a numeric shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_number(
-                h, int(cache_id), int(field_idx), float(value)
-            ),
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_number(h, int(cache_id), int(field_idx), float(value)),
             "fm_workbook_pivot_cache_field_add_shared_item_number",
         )
 
-    def pivot_cache_field_add_shared_item_text(
-        self, cache_id: int, field_idx: int, value: str
-    ) -> None:
+    def pivot_cache_field_add_shared_item_text(self, cache_id: int, field_idx: int, value: str) -> None:
         """Append a text shared item to a cache field."""
         h = self._require()
         vp, _ = LIB.alloc_utf8(value)
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_field_add_shared_item_text(
-                    h, int(cache_id), int(field_idx), vp
-                ),
+                LIB.fm_workbook_pivot_cache_field_add_shared_item_text(h, int(cache_id), int(field_idx), vp),
                 "fm_workbook_pivot_cache_field_add_shared_item_text",
             )
         finally:
             LIB.free(vp)
 
-    def pivot_cache_field_add_shared_item_bool(
-        self, cache_id: int, field_idx: int, value: bool
-    ) -> None:
+    def pivot_cache_field_add_shared_item_bool(self, cache_id: int, field_idx: int, value: bool) -> None:
         """Append a boolean shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_bool(
-                h, int(cache_id), int(field_idx), 1 if value else 0
-            ),
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_bool(h, int(cache_id), int(field_idx), 1 if value else 0),
             "fm_workbook_pivot_cache_field_add_shared_item_bool",
         )
 
-    def pivot_cache_field_add_shared_item_blank(
-        self, cache_id: int, field_idx: int
-    ) -> None:
+    def pivot_cache_field_add_shared_item_blank(self, cache_id: int, field_idx: int) -> None:
         """Append a blank shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_blank(
-                h, int(cache_id), int(field_idx)
-            ),
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_blank(h, int(cache_id), int(field_idx)),
             "fm_workbook_pivot_cache_field_add_shared_item_blank",
         )
 
-    def pivot_cache_field_add_shared_item_error(
-        self, cache_id: int, field_idx: int, error_code: int
-    ) -> None:
+    def pivot_cache_field_add_shared_item_error(self, cache_id: int, field_idx: int, error_code: int) -> None:
         """Append an Excel error shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_error(
-                h, int(cache_id), int(field_idx), int(error_code)
-            ),
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_error(h, int(cache_id), int(field_idx), int(error_code)),
             "fm_workbook_pivot_cache_field_add_shared_item_error",
         )
 
-    def pivot_cache_field_clear_shared_items(
-        self, cache_id: int, field_idx: int
-    ) -> None:
+    def pivot_cache_field_clear_shared_items(self, cache_id: int, field_idx: int) -> None:
         """Drop every shared item from a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_clear_shared_items(
-                h, int(cache_id), int(field_idx)
-            ),
+            LIB.fm_workbook_pivot_cache_field_clear_shared_items(h, int(cache_id), int(field_idx)),
             "fm_workbook_pivot_cache_field_clear_shared_items",
         )
 
@@ -2868,9 +2796,7 @@ class Workbook:
             "fm_workbook_pivot_cache_record_clear",
         )
 
-    def pivot_cache_record_set_number(
-        self, cache_id: int, record_idx: int, field_idx: int, value: float
-    ) -> None:
+    def pivot_cache_record_set_number(self, cache_id: int, record_idx: int, field_idx: int, value: float) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to a number."""
         h = self._require()
         _check(
@@ -2880,25 +2806,19 @@ class Workbook:
             "fm_workbook_pivot_cache_record_set_number",
         )
 
-    def pivot_cache_record_set_text(
-        self, cache_id: int, record_idx: int, field_idx: int, value: str
-    ) -> None:
+    def pivot_cache_record_set_text(self, cache_id: int, record_idx: int, field_idx: int, value: str) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to text."""
         h = self._require()
         vp, _ = LIB.alloc_utf8(value)
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_record_set_text(
-                    h, int(cache_id), int(record_idx), int(field_idx), vp
-                ),
+                LIB.fm_workbook_pivot_cache_record_set_text(h, int(cache_id), int(record_idx), int(field_idx), vp),
                 "fm_workbook_pivot_cache_record_set_text",
             )
         finally:
             LIB.free(vp)
 
-    def pivot_cache_record_set_bool(
-        self, cache_id: int, record_idx: int, field_idx: int, value: bool
-    ) -> None:
+    def pivot_cache_record_set_bool(self, cache_id: int, record_idx: int, field_idx: int, value: bool) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to a boolean."""
         h = self._require()
         _check(
@@ -2908,21 +2828,15 @@ class Workbook:
             "fm_workbook_pivot_cache_record_set_bool",
         )
 
-    def pivot_cache_record_set_blank(
-        self, cache_id: int, record_idx: int, field_idx: int
-    ) -> None:
+    def pivot_cache_record_set_blank(self, cache_id: int, record_idx: int, field_idx: int) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to blank."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_set_blank(
-                h, int(cache_id), int(record_idx), int(field_idx)
-            ),
+            LIB.fm_workbook_pivot_cache_record_set_blank(h, int(cache_id), int(record_idx), int(field_idx)),
             "fm_workbook_pivot_cache_record_set_blank",
         )
 
-    def pivot_cache_record_set_error(
-        self, cache_id: int, record_idx: int, field_idx: int, error_code: int
-    ) -> None:
+    def pivot_cache_record_set_error(self, cache_id: int, record_idx: int, field_idx: int, error_code: int) -> None:
         """Set cache cell ``(record_idx, field_idx)`` to an Excel error."""
         h = self._require()
         _check(
@@ -2933,9 +2847,7 @@ class Workbook:
         )
 
     # -- Pivot tables ------------------------------------------------------
-    def pivot_create(
-        self, sheet: int, name: str, cache_id: int, anchor_row: int, anchor_col: int
-    ) -> int:
+    def pivot_create(self, sheet: int, name: str, cache_id: int, anchor_row: int, anchor_col: int) -> int:
         """Create a new empty pivot table; return its flat index."""
         h = self._require()
         name_ptr, _ = LIB.alloc_utf8(name)
@@ -2972,9 +2884,7 @@ class Workbook:
         name_ptr, _ = LIB.alloc_utf8(name)
         try:
             _check(
-                LIB.fm_workbook_pivot_set_name(
-                    h, int(sheet), int(pivot_index), name_ptr
-                ),
+                LIB.fm_workbook_pivot_set_name(h, int(sheet), int(pivot_index), name_ptr),
                 "fm_workbook_pivot_set_name",
             )
         finally:
@@ -3004,9 +2914,7 @@ class Workbook:
             "fm_workbook_pivot_set_anchor",
         )
 
-    def pivot_set_grand_totals(
-        self, sheet: int, pivot_index: int, rows_enabled: bool, cols_enabled: bool
-    ) -> None:
+    def pivot_set_grand_totals(self, sheet: int, pivot_index: int, rows_enabled: bool, cols_enabled: bool) -> None:
         """Toggle the row / column grand-total bands."""
         h = self._require()
         _check(
@@ -3023,13 +2931,9 @@ class Workbook:
     def pivot_field_count(self, sheet: int, pivot_index: int) -> int:
         """Return the number of fields configured on the pivot."""
         h = self._require()
-        return _read_count(
-            LIB.fm_workbook_pivot_field_count, h, int(sheet), int(pivot_index)
-        )
+        return _read_count(LIB.fm_workbook_pivot_field_count, h, int(sheet), int(pivot_index))
 
-    def pivot_field_add(
-        self, sheet: int, pivot_index: int, spec: PivotFieldSpec
-    ) -> int:
+    def pivot_field_add(self, sheet: int, pivot_index: int, spec: PivotFieldSpec) -> int:
         """Append a field to the pivot; return its index."""
         h = self._require()
         owned: List[int] = []
@@ -3044,12 +2948,8 @@ class Workbook:
                     "subtotal_top": 1 if spec.subtotal_top else 0,
                 },
             )
-            S.write_str_field(
-                LIB, ptr, S.PIVOT_FIELD_SPEC, "source_name", spec.source_name, owned
-            )
-            S.write_str_field(
-                LIB, ptr, S.PIVOT_FIELD_SPEC, "custom_name", spec.custom_name, owned
-            )
+            S.write_str_field(LIB, ptr, S.PIVOT_FIELD_SPEC, "source_name", spec.source_name, owned)
+            S.write_str_field(LIB, ptr, S.PIVOT_FIELD_SPEC, "custom_name", spec.custom_name, owned)
             S.write_str_field(
                 LIB,
                 ptr,
@@ -3059,9 +2959,7 @@ class Workbook:
                 owned,
             )
             _check(
-                LIB.fm_workbook_pivot_field_add(
-                    h, int(sheet), int(pivot_index), ptr, out
-                ),
+                LIB.fm_workbook_pivot_field_add(h, int(sheet), int(pivot_index), ptr, out),
                 "fm_workbook_pivot_field_add",
             )
             return LIB.read_u32(out)
@@ -3079,15 +2977,11 @@ class Workbook:
             "fm_workbook_pivot_field_clear",
         )
 
-    def pivot_field_set_axis(
-        self, sheet: int, pivot_index: int, field_idx: int, axis: int
-    ) -> None:
+    def pivot_field_set_axis(self, sheet: int, pivot_index: int, field_idx: int, axis: int) -> None:
         """Set the axis of pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_set_axis(
-                h, int(sheet), int(pivot_index), int(field_idx), int(axis)
-            ),
+            LIB.fm_workbook_pivot_field_set_axis(h, int(sheet), int(pivot_index), int(field_idx), int(axis)),
             "fm_workbook_pivot_field_set_axis",
         )
 
@@ -3119,9 +3013,7 @@ class Workbook:
             for p in owned:
                 LIB.free(p)
 
-    def pivot_field_set_subtotal_top(
-        self, sheet: int, pivot_index: int, field_idx: int, top: bool
-    ) -> None:
+    def pivot_field_set_subtotal_top(self, sheet: int, pivot_index: int, field_idx: int, top: bool) -> None:
         """Set the ``subtotal_top`` flag on pivot field ``field_idx``."""
         h = self._require()
         _check(
@@ -3131,33 +3023,23 @@ class Workbook:
             "fm_workbook_pivot_field_set_subtotal_top",
         )
 
-    def pivot_field_add_aggregation(
-        self, sheet: int, pivot_index: int, field_idx: int, agg: int
-    ) -> None:
+    def pivot_field_add_aggregation(self, sheet: int, pivot_index: int, field_idx: int, agg: int) -> None:
         """Append an aggregation to pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_add_aggregation(
-                h, int(sheet), int(pivot_index), int(field_idx), int(agg)
-            ),
+            LIB.fm_workbook_pivot_field_add_aggregation(h, int(sheet), int(pivot_index), int(field_idx), int(agg)),
             "fm_workbook_pivot_field_add_aggregation",
         )
 
-    def pivot_field_clear_aggregations(
-        self, sheet: int, pivot_index: int, field_idx: int
-    ) -> None:
+    def pivot_field_clear_aggregations(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Drop every aggregation from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_aggregations(
-                h, int(sheet), int(pivot_index), int(field_idx)
-            ),
+            LIB.fm_workbook_pivot_field_clear_aggregations(h, int(sheet), int(pivot_index), int(field_idx)),
             "fm_workbook_pivot_field_clear_aggregations",
         )
 
-    def pivot_field_add_item(
-        self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool
-    ) -> None:
+    def pivot_field_add_item(self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool) -> None:
         """Append a manual-filter item to pivot field ``field_idx``."""
         h = self._require()
         name_ptr, _ = LIB.alloc_utf8(name)
@@ -3176,15 +3058,11 @@ class Workbook:
         finally:
             LIB.free(name_ptr)
 
-    def pivot_field_clear_items(
-        self, sheet: int, pivot_index: int, field_idx: int
-    ) -> None:
+    def pivot_field_clear_items(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Drop every manual-filter item from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_items(
-                h, int(sheet), int(pivot_index), int(field_idx)
-            ),
+            LIB.fm_workbook_pivot_field_clear_items(h, int(sheet), int(pivot_index), int(field_idx)),
             "fm_workbook_pivot_field_clear_items",
         )
 
@@ -3210,27 +3088,19 @@ class Workbook:
             "fm_workbook_pivot_field_set_item_visible",
         )
 
-    def pivot_field_add_subtotal_fn(
-        self, sheet: int, pivot_index: int, field_idx: int, agg: int
-    ) -> None:
+    def pivot_field_add_subtotal_fn(self, sheet: int, pivot_index: int, field_idx: int, agg: int) -> None:
         """Append a subtotal-fn entry to pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_add_subtotal_fn(
-                h, int(sheet), int(pivot_index), int(field_idx), int(agg)
-            ),
+            LIB.fm_workbook_pivot_field_add_subtotal_fn(h, int(sheet), int(pivot_index), int(field_idx), int(agg)),
             "fm_workbook_pivot_field_add_subtotal_fn",
         )
 
-    def pivot_field_clear_subtotal_fns(
-        self, sheet: int, pivot_index: int, field_idx: int
-    ) -> None:
+    def pivot_field_clear_subtotal_fns(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Drop every subtotal-fn entry from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_subtotal_fns(
-                h, int(sheet), int(pivot_index), int(field_idx)
-            ),
+            LIB.fm_workbook_pivot_field_clear_subtotal_fns(h, int(sheet), int(pivot_index), int(field_idx)),
             "fm_workbook_pivot_field_clear_subtotal_fns",
         )
 
@@ -3260,53 +3130,35 @@ class Workbook:
             "fm_workbook_pivot_field_set_date_group",
         )
 
-    def pivot_field_clear_date_group(
-        self, sheet: int, pivot_index: int, field_idx: int
-    ) -> None:
+    def pivot_field_clear_date_group(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Remove the date-grouping config from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_date_group(
-                h, int(sheet), int(pivot_index), int(field_idx)
-            ),
+            LIB.fm_workbook_pivot_field_clear_date_group(h, int(sheet), int(pivot_index), int(field_idx)),
             "fm_workbook_pivot_field_clear_date_group",
         )
 
-    def pivot_field_set_number_format(
-        self, sheet: int, pivot_index: int, field_idx: int, fmt: str
-    ) -> None:
+    def pivot_field_set_number_format(self, sheet: int, pivot_index: int, field_idx: int, fmt: str) -> None:
         """Set the OOXML number-format string on pivot field ``field_idx``."""
         h = self._require()
         fmt_ptr, _ = LIB.alloc_utf8(fmt)
         try:
             _check(
-                LIB.fm_workbook_pivot_field_set_number_format(
-                    h, int(sheet), int(pivot_index), int(field_idx), fmt_ptr
-                ),
+                LIB.fm_workbook_pivot_field_set_number_format(h, int(sheet), int(pivot_index), int(field_idx), fmt_ptr),
                 "fm_workbook_pivot_field_set_number_format",
             )
         finally:
             LIB.free(fmt_ptr)
 
-    def pivot_set_row_field_order(
-        self, sheet: int, pivot_index: int, indices: Sequence[int]
-    ) -> None:
+    def pivot_set_row_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
         """Replace the row-axis field order with ``indices``."""
-        self._pivot_set_field_order(
-            LIB.fm_workbook_pivot_set_row_field_order, sheet, pivot_index, indices
-        )
+        self._pivot_set_field_order(LIB.fm_workbook_pivot_set_row_field_order, sheet, pivot_index, indices)
 
-    def pivot_set_col_field_order(
-        self, sheet: int, pivot_index: int, indices: Sequence[int]
-    ) -> None:
+    def pivot_set_col_field_order(self, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
         """Replace the column-axis field order with ``indices``."""
-        self._pivot_set_field_order(
-            LIB.fm_workbook_pivot_set_col_field_order, sheet, pivot_index, indices
-        )
+        self._pivot_set_field_order(LIB.fm_workbook_pivot_set_col_field_order, sheet, pivot_index, indices)
 
-    def _pivot_set_field_order(
-        self, fn, sheet: int, pivot_index: int, indices: Sequence[int]
-    ) -> None:
+    def _pivot_set_field_order(self, fn, sheet: int, pivot_index: int, indices: Sequence[int]) -> None:
         h = self._require()
         arr_ptr = 0
         try:
@@ -3325,13 +3177,9 @@ class Workbook:
     def pivot_data_field_count(self, sheet: int, pivot_index: int) -> int:
         """Return the number of ``<dataField>`` entries on the pivot."""
         h = self._require()
-        return _read_count(
-            LIB.fm_workbook_pivot_data_field_count, h, int(sheet), int(pivot_index)
-        )
+        return _read_count(LIB.fm_workbook_pivot_data_field_count, h, int(sheet), int(pivot_index))
 
-    def pivot_data_field_add(
-        self, sheet: int, pivot_index: int, spec: PivotDataFieldSpec
-    ) -> int:
+    def pivot_data_field_add(self, sheet: int, pivot_index: int, spec: PivotDataFieldSpec) -> int:
         """Append a data-field entry; return its index."""
         h = self._require()
         out = _alloc_out_ptr()
@@ -3339,9 +3187,7 @@ class Workbook:
         ptr = self._pack_data_field_spec(spec, owned)
         try:
             _check(
-                LIB.fm_workbook_pivot_data_field_add(
-                    h, int(sheet), int(pivot_index), ptr, out
-                ),
+                LIB.fm_workbook_pivot_data_field_add(h, int(sheet), int(pivot_index), ptr, out),
                 "fm_workbook_pivot_data_field_add",
             )
             return LIB.read_u32(out)
@@ -3364,9 +3210,7 @@ class Workbook:
         ptr = self._pack_data_field_spec(spec, owned)
         try:
             _check(
-                LIB.fm_workbook_pivot_data_field_set(
-                    h, int(sheet), int(pivot_index), int(data_field_idx), ptr
-                ),
+                LIB.fm_workbook_pivot_data_field_set(h, int(sheet), int(pivot_index), int(data_field_idx), ptr),
                 "fm_workbook_pivot_data_field_set",
             )
         finally:
@@ -3410,13 +3254,9 @@ class Workbook:
     def pivot_filter_count(self, sheet: int, pivot_index: int) -> int:
         """Return the number of active filters on the pivot."""
         h = self._require()
-        return _read_count(
-            LIB.fm_workbook_pivot_filter_count, h, int(sheet), int(pivot_index)
-        )
+        return _read_count(LIB.fm_workbook_pivot_filter_count, h, int(sheet), int(pivot_index))
 
-    def pivot_filter_add(
-        self, sheet: int, pivot_index: int, spec: PivotFilterSpec
-    ) -> None:
+    def pivot_filter_add(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> None:
         """Append an active filter to the pivot."""
         h = self._require()
         owned: List[int] = []
@@ -3436,12 +3276,8 @@ class Workbook:
                     "value_high_double": float(spec.value_high_double),
                 },
             )
-            S.write_str_field(
-                LIB, ptr, S.PIVOT_FILTER_SPEC, "field_name", spec.field_name, owned
-            )
-            S.write_str_field(
-                LIB, ptr, S.PIVOT_FILTER_SPEC, "value_text", spec.value_text, owned
-            )
+            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "field_name", spec.field_name, owned)
+            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_text", spec.value_text, owned)
             _check(
                 LIB.fm_workbook_pivot_filter_add(h, int(sheet), int(pivot_index), ptr),
                 "fm_workbook_pivot_filter_add",
@@ -3459,34 +3295,22 @@ class Workbook:
             "fm_workbook_pivot_filter_clear",
         )
 
-    def pivot_filter_remove_at(
-        self, sheet: int, pivot_index: int, filter_idx: int
-    ) -> None:
+    def pivot_filter_remove_at(self, sheet: int, pivot_index: int, filter_idx: int) -> None:
         """Remove the active filter at ``filter_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_filter_remove_at(
-                h, int(sheet), int(pivot_index), int(filter_idx)
-            ),
+            LIB.fm_workbook_pivot_filter_remove_at(h, int(sheet), int(pivot_index), int(filter_idx)),
             "fm_workbook_pivot_filter_remove_at",
         )
 
     # -- Dependency-graph trace --------------------------------------------
-    def precedents(
-        self, sheet: int, row: int, col: int, depth: int = 1
-    ) -> List[CellNode]:
+    def precedents(self, sheet: int, row: int, col: int, depth: int = 1) -> List[CellNode]:
         """Return the cells ``(sheet, row, col)`` reads (up to ``depth``)."""
-        return self._trace(
-            LIB.fm_workbook_precedents, sheet, row, col, depth
-        )
+        return self._trace(LIB.fm_workbook_precedents, sheet, row, col, depth)
 
-    def dependents(
-        self, sheet: int, row: int, col: int, depth: int = 1
-    ) -> List[CellNode]:
+    def dependents(self, sheet: int, row: int, col: int, depth: int = 1) -> List[CellNode]:
         """Return the cells that read ``(sheet, row, col)`` (up to ``depth``)."""
-        return self._trace(
-            LIB.fm_workbook_dependents, sheet, row, col, depth
-        )
+        return self._trace(LIB.fm_workbook_dependents, sheet, row, col, depth)
 
     def _trace(self, fn, sheet: int, row: int, col: int, depth: int) -> List[CellNode]:
         h = self._require()
@@ -3503,13 +3327,9 @@ class Workbook:
             for i in range(n):
                 nptr = S.alloc_struct(LIB, S.CELL_NODE)
                 try:
-                    _check(
-                        LIB.fm_cell_nodes_at(handle, i, nptr), "fm_cell_nodes_at"
-                    )
+                    _check(LIB.fm_cell_nodes_at(handle, i, nptr), "fm_cell_nodes_at")
                     d = S.CELL_NODE.unpack(LIB, nptr)
-                    nodes.append(
-                        CellNode(sheet=d["sheet"], row=d["row"], col=d["col"])
-                    )
+                    nodes.append(CellNode(sheet=d["sheet"], row=d["row"], col=d["col"]))
                 finally:
                     LIB.free(nptr)
             return nodes

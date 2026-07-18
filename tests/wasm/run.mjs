@@ -12,8 +12,8 @@
 // `npm install` step.
 
 import assert from 'node:assert/strict';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // fm_value_kind_t mirror (see src/c_api/formulon_c.h).
 const VAL = Object.freeze({
@@ -52,7 +52,7 @@ function crc32(bytes) {
     for (let i = 0; i < 256; i += 1) {
       let c = i;
       for (let j = 0; j < 8; j += 1) {
-        c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+        c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
       }
       crcTable[i] = c >>> 0;
     }
@@ -144,66 +144,84 @@ function buildPivotWorkbookBytes() {
     '</worksheet>\n';
 
   return zipStore([
-    ['[Content_Types].xml',
+    [
+      '[Content_Types].xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
-      '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
-      '  <Default Extension="xml" ContentType="application/xml"/>\n' +
-      '  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>\n' +
-      '  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n' +
-      '  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n' +
-      '  <Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/>\n' +
-      '  <Override PartName="/xl/pivotCache/pivotCacheRecords1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml"/>\n' +
-      '  <Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"/>\n' +
-      '</Types>\n'],
-    ['_rels/.rels',
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
+        '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
+        '  <Default Extension="xml" ContentType="application/xml"/>\n' +
+        '  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>\n' +
+        '  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n' +
+        '  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n' +
+        '  <Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml"/>\n' +
+        '  <Override PartName="/xl/pivotCache/pivotCacheRecords1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml"/>\n' +
+        '  <Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml"/>\n' +
+        '</Types>\n',
+    ],
+    [
+      '_rels/.rels',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
-      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>\n' +
-      '</Relationships>\n'],
-    ['xl/workbook.xml',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>\n' +
+        '</Relationships>\n',
+    ],
+    [
+      'xl/workbook.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">\n' +
-      '  <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="Sheet2" sheetId="2" r:id="rId2"/></sheets>\n' +
-      '  <pivotCaches><pivotCache cacheId="0" r:id="rId3"/></pivotCaches>\n' +
-      '</workbook>\n'],
-    ['xl/_rels/workbook.xml.rels',
+        '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">\n' +
+        '  <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/><sheet name="Sheet2" sheetId="2" r:id="rId2"/></sheets>\n' +
+        '  <pivotCaches><pivotCache cacheId="0" r:id="rId3"/></pivotCaches>\n' +
+        '</workbook>\n',
+    ],
+    [
+      'xl/_rels/workbook.xml.rels',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
-      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>\n' +
-      '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>\n' +
-      '  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition1.xml"/>\n' +
-      '</Relationships>\n'],
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>\n' +
+        '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>\n' +
+        '  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition1.xml"/>\n' +
+        '</Relationships>\n',
+    ],
     ['xl/worksheets/sheet1.xml', sheetXml],
     ['xl/worksheets/sheet2.xml', sheetXml],
-    ['xl/worksheets/_rels/sheet2.xml.rels',
+    [
+      'xl/worksheets/_rels/sheet2.xml.rels',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
-      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable" Target="../pivotTables/pivotTable1.xml"/>\n' +
-      '</Relationships>\n'],
-    ['xl/pivotCache/pivotCacheDefinition1.xml',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable" Target="../pivotTables/pivotTable1.xml"/>\n' +
+        '</Relationships>\n',
+    ],
+    [
+      'xl/pivotCache/pivotCacheDefinition1.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1" recordCount="3">\n' +
-      '  <cacheSource type="worksheet"/>\n' +
-      '  <cacheFields count="2"><cacheField name="Region"><sharedItems count="2"><s v="North"/><s v="South"/></sharedItems></cacheField><cacheField name="Amount"><sharedItems containsNumber="1"/></cacheField></cacheFields>\n' +
-      '</pivotCacheDefinition>\n'],
-    ['xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels',
+        '<pivotCacheDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1" recordCount="3">\n' +
+        '  <cacheSource type="worksheet"/>\n' +
+        '  <cacheFields count="2"><cacheField name="Region"><sharedItems count="2"><s v="North"/><s v="South"/></sharedItems></cacheField><cacheField name="Amount"><sharedItems containsNumber="1"/></cacheField></cacheFields>\n' +
+        '</pivotCacheDefinition>\n',
+    ],
+    [
+      'xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
-      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords" Target="pivotCacheRecords1.xml"/>\n' +
-      '</Relationships>\n'],
-    ['xl/pivotCache/pivotCacheRecords1.xml',
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotCacheRecords" Target="pivotCacheRecords1.xml"/>\n' +
+        '</Relationships>\n',
+    ],
+    [
+      'xl/pivotCache/pivotCacheRecords1.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3">\n' +
-      '  <r><x v="0"/><n v="100"/></r><r><x v="1"/><n v="200"/></r><r><x v="0"/><n v="300"/></r>\n' +
-      '</pivotCacheRecords>\n'],
-    ['xl/pivotTables/pivotTable1.xml',
+        '<pivotCacheRecords xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3">\n' +
+        '  <r><x v="0"/><n v="100"/></r><r><x v="1"/><n v="200"/></r><r><x v="0"/><n v="300"/></r>\n' +
+        '</pivotCacheRecords>\n',
+    ],
+    [
+      'xl/pivotTables/pivotTable1.xml',
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
-      '<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="PivotTable1" cacheId="0">\n' +
-      '  <location ref="D1:E5"/>\n' +
-      '  <pivotFields count="2"><pivotField axis="axisRow" name="Region"><items count="3"><item x="0"/><item x="1"/><item t="default"/></items></pivotField><pivotField dataField="1" name="Amount"/></pivotFields>\n' +
-      '  <rowFields count="1"><field x="0"/></rowFields><dataFields count="1"><dataField name="Sum of Amount" fld="1" subtotal="sum"/></dataFields>\n' +
-      '</pivotTableDefinition>\n'],
+        '<pivotTableDefinition xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" name="PivotTable1" cacheId="0">\n' +
+        '  <location ref="D1:E5"/>\n' +
+        '  <pivotFields count="2"><pivotField axis="axisRow" name="Region"><items count="3"><item x="0"/><item x="1"/><item t="default"/></items></pivotField><pivotField dataField="1" name="Amount"/></pivotFields>\n' +
+        '  <rowFields count="1"><field x="0"/></rowFields><dataFields count="1"><dataField name="Sum of Amount" fld="1" subtotal="sum"/></dataFields>\n' +
+        '</pivotTableDefinition>\n',
+    ],
   ]);
 }
 
@@ -467,7 +485,7 @@ async function run() {
       assert.ok(wb.setDefinedName('PI', '=3.14159').ok);
       assert.equal(wb.definedNameCount(), 1);
       const b = wb.definedNameAt(0);
-      assert.equal(b.name, 'Pi');  // authored case preserved
+      assert.equal(b.name, 'Pi'); // authored case preserved
       assert.equal(b.formula, '=3.14159');
 
       assert.ok(wb.setDefinedName('Pi', '').ok);
@@ -733,7 +751,7 @@ async function run() {
       assert.ok(wb.addMerge(0, b).ok);
       // removeMerge with an overlap that hits `a` only.
       assert.ok(wb.removeMerge(0, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }).ok);
-      let list = wb.getMerges(0);
+      const list = wb.getMerges(0);
       assert.equal(list.length, 1);
       assert.equal(list[0].firstRow, 4);
       // removeMergeAt drops the survivor by index.

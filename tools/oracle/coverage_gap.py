@@ -167,9 +167,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "implemented": sum(1 for r in rows if r["implemented"]),
             "with_oracle": sum(1 for r in rows if r["any_oracle"]),
             "pilot_candidates": [r["name"] for r in rows if r["pilot_candidate"]],
-            "missing_impl_no_oracle": [
-                r["name"] for r in rows if not r["implemented"] and not r["any_oracle"]
-            ],
+            "missing_impl_no_oracle": [r["name"] for r in rows if not r["implemented"] and not r["any_oracle"]],
             "rows": rows,
         }
         json.dump(summary, sys.stdout, indent=2, default=list)

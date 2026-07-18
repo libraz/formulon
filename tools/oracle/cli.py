@@ -121,14 +121,9 @@ def _select_targets(
             raise RuntimeError(f"unknown target: {name!r} (available: {avail})")
         return [(name, targets[name])]
     if all_targets:
-        chosen: List[Tuple[str, Dict[str, Any]]] = [
-            (n, t) for n, t in sorted(targets.items()) if _runs_on_current(t)
-        ]
+        chosen: List[Tuple[str, Dict[str, Any]]] = [(n, t) for n, t in sorted(targets.items()) if _runs_on_current(t)]
         if not chosen:
-            raise RuntimeError(
-                "no targets in targets.yaml declare runs_on: "
-                f"[{platform.system()}]"
-            )
+            raise RuntimeError(f"no targets in targets.yaml declare runs_on: [{platform.system()}]")
         return chosen
     primary = doc.get("primary")
     if not isinstance(primary, str) or primary not in targets:
@@ -230,8 +225,7 @@ def _check_xlwings_import(python_exe: Path) -> Tuple[str, str]:
     if not python_exe.exists():
         return (
             _STATUS_FAIL,
-            f"interpreter not found: {python_exe}\n"
-            "Hint: run `make oracle-setup` to create the venv.",
+            f"interpreter not found: {python_exe}\nHint: run `make oracle-setup` to create the venv.",
         )
     proc = subprocess.run(
         [str(python_exe), "-c", "import xlwings"],
@@ -242,7 +236,8 @@ def _check_xlwings_import(python_exe: Path) -> Tuple[str, str]:
         return (_STATUS_PASS, "")
     return (
         _STATUS_FAIL,
-        "xlwings import failed:\n" + (proc.stderr.strip() or proc.stdout.strip())
+        "xlwings import failed:\n"
+        + (proc.stderr.strip() or proc.stdout.strip())
         + "\nHint: cd tools/oracle && rye sync",
     )
 
@@ -268,7 +263,8 @@ def _check_excel_reachable(python_exe: Path) -> Tuple[str, str]:
         )
     return (
         _STATUS_FAIL,
-        "xlwings.apps lookup failed:\n" + (proc.stderr.strip() or proc.stdout.strip())
+        "xlwings.apps lookup failed:\n"
+        + (proc.stderr.strip() or proc.stdout.strip())
         + "\nHint: System Settings -> Privacy & Security -> Automation\n"
         "       -> (your terminal) -> Microsoft Excel (allow).",
     )
@@ -316,7 +312,7 @@ def _check_win_python_path(target: Dict[str, Any]) -> Tuple[str, str, Optional[P
                 "is not exported. Found:\n"
                 + "\n".join(f"        {p}" for p in candidates)
                 + "\n      Export the one you want to use:\n"
-                f"        export FORMULON_WIN_PYTHON=\"{candidates[0]}\""
+                f'        export FORMULON_WIN_PYTHON="{candidates[0]}"'
             )
         else:
             suggestion = (
@@ -326,8 +322,8 @@ def _check_win_python_path(target: Dict[str, Any]) -> Tuple[str, str, Optional[P
                 "      no per-machine path lands in targets.yaml) or, for a\n"
                 "      private fork, add a win_python: line under the target.\n"
                 "      Example:\n"
-                "        export FORMULON_WIN_PYTHON=\"/mnt/c/Users/<you>/AppData/"
-                "Local/Programs/Python/Python312/python.exe\""
+                '        export FORMULON_WIN_PYTHON="/mnt/c/Users/<you>/AppData/'
+                'Local/Programs/Python/Python312/python.exe"'
             )
         return (
             _STATUS_FAIL,
@@ -376,9 +372,7 @@ def _check_wslpath() -> Tuple[str, str]:
     """
 
     try:
-        proc = subprocess.run(
-            ["wslpath", "-w", "/tmp"], capture_output=True, text=True
-        )
+        proc = subprocess.run(["wslpath", "-w", "/tmp"], capture_output=True, text=True)
     except FileNotFoundError:
         return (
             _STATUS_FAIL,
@@ -390,8 +384,7 @@ def _check_wslpath() -> Tuple[str, str]:
         return (_STATUS_PASS, "")
     return (
         _STATUS_FAIL,
-        f"wslpath -w /tmp failed: rc={proc.returncode}\n"
-        + (proc.stderr.strip() or proc.stdout.strip()),
+        f"wslpath -w /tmp failed: rc={proc.returncode}\n" + (proc.stderr.strip() or proc.stdout.strip()),
     )
 
 
@@ -422,8 +415,7 @@ def _check_target(target_name: str, target: Dict[str, Any], host: str) -> bool:
                 target_name,
                 _STATUS_FAIL,
                 "host compatibility",
-                f"target requires Darwin, current host is {host}.\n"
-                f"runs_on={_runs_on_label(target)}",
+                f"target requires Darwin, current host is {host}.\nruns_on={_runs_on_label(target)}",
             )
             _print_check(target_name, _STATUS_SKIP, "xlwings import (host mismatch)")
             _print_check(target_name, _STATUS_SKIP, "Excel automation reachable (host mismatch)")
@@ -490,8 +482,7 @@ def _check_target(target_name: str, target: Dict[str, Any], host: str) -> bool:
             target_name,
             _STATUS_FAIL,
             "host compatibility",
-            f"target needs Windows or WSL2, current host is {host}.\n"
-            f"runs_on={_runs_on_label(target)}",
+            f"target needs Windows or WSL2, current host is {host}.\nruns_on={_runs_on_label(target)}",
         )
         _print_check(target_name, _STATUS_SKIP, "xlwings + win32com import (host mismatch)")
         _print_check(target_name, _STATUS_SKIP, "wslpath translation (host mismatch)")
@@ -534,8 +525,7 @@ def _check_target(target_name: str, target: Dict[str, Any], host: str) -> bool:
         target_name,
         _STATUS_FAIL,
         f"unknown driver: {driver_name!r}",
-        "Hint: targets.yaml driver must be one of "
-        "'macos_excel', 'windows_excel', 'wsl_bridge'.",
+        "Hint: targets.yaml driver must be one of 'macos_excel', 'windows_excel', 'wsl_bridge'.",
     )
     return False
 
@@ -717,9 +707,7 @@ def _committed_excel_version_for(record: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _print_unknown_target_help(
-    probe: Dict[str, Any], derived_name: str, targets: Dict[str, Any]
-) -> None:
+def _print_unknown_target_help(probe: Dict[str, Any], derived_name: str, targets: Dict[str, Any]) -> None:
     """Tells the contributor we don't track their locale yet.
 
     Prints to stderr -- the banner + this message together give a
@@ -740,8 +728,7 @@ def _print_unknown_target_help(
         "",
         "Two ways forward:",
         "  1) Open an issue so we can reserve the slot, then re-run:",
-        f"     https://github.com/libraz/formulon/issues/new"
-        f"?title=Oracle+target%3A+{derived_name}",
+        f"     https://github.com/libraz/formulon/issues/new?title=Oracle+target%3A+{derived_name}",
         "  2) Or pass --target=<existing-name> if you intend to map your",
         "     environment onto an already-tracked target.",
         "",
@@ -749,20 +736,13 @@ def _print_unknown_target_help(
     ]
     host = platform.system()
     compatible = sorted(
-        [
-            (n, t)
-            for n, t in targets.items()
-            if isinstance(t, dict) and host in (t.get("runs_on") or [])
-        ]
+        [(n, t) for n, t in targets.items() if isinstance(t, dict) and host in (t.get("runs_on") or [])]
     )
     if not compatible:
         msg_lines.append("  (none)")
     else:
         for n, t in compatible:
-            msg_lines.append(
-                f"  {n}  locale={t.get('locale', '?')}  "
-                f"status={t.get('status', '?')}"
-            )
+            msg_lines.append(f"  {n}  locale={t.get('locale', '?')}  status={t.get('status', '?')}")
     print("\n".join(msg_lines), file=sys.stderr)
 
 
@@ -783,26 +763,16 @@ def _print_already_current_thanks(
     print("========================================================================")
     print("  Thank you for trying to contribute oracle data!")
     print()
-    print(
-        f"  The repository already has goldens for `{target_name}` generated"
-    )
-    print(
-        f"  against Excel {committed_version} -- that's at or above your"
-    )
-    print(
-        f"  installed Excel {probed_version}, so there's nothing to refresh"
-    )
+    print(f"  The repository already has goldens for `{target_name}` generated")
+    print(f"  against Excel {committed_version} -- that's at or above your")
+    print(f"  installed Excel {probed_version}, so there's nothing to refresh")
     print("  right now. No PR is needed.")
     print()
     print("  When would a refresh help?")
     print("    * Your Excel updates and overtakes the committed version.")
-    print(
-        "    * A new oracle case is added to tests/oracle/cases/ that this"
-    )
+    print("    * A new oracle case is added to tests/oracle/cases/ that this")
     print("      target hasn't covered yet.")
-    print(
-        "    * A divergence report against this target lands and we ask for"
-    )
+    print("    * A divergence report against this target lands and we ask for")
     print("      a re-run.")
     print()
     print("  Either way -- thanks for showing up. Run again any time:")
@@ -840,16 +810,16 @@ def _git_changed_paths(prefixes: List[str]) -> List[str]:
     return sorted(set(paths))
 
 
-def _print_contribute_thanks(
-    target_name: str, record: Dict[str, Any], targets_file: Path
-) -> None:
+def _print_contribute_thanks(target_name: str, record: Dict[str, Any], targets_file: Path) -> None:
     """Prints the closing thank-you message and git/PR instructions."""
 
     today = _dt.date.today().isoformat()
     branch = f"oracle/{target_name}-{today}"
     output_dir = str(record.get("output_dir") or "")
     env_md = str(record.get("environment_md") or "")
-    targets_rel = str(targets_file.relative_to(REPO_ROOT)) if targets_file.is_relative_to(REPO_ROOT) else str(targets_file)
+    targets_rel = (
+        str(targets_file.relative_to(REPO_ROOT)) if targets_file.is_relative_to(REPO_ROOT) else str(targets_file)
+    )
 
     prefixes = [p for p in (output_dir, env_md, targets_rel) if p]
     changed = _git_changed_paths(prefixes)
@@ -887,10 +857,7 @@ def _print_contribute_thanks(
     print(f"    git push -u origin {branch}")
     print()
     print("  Then open a PR (oracle template auto-loads):")
-    print(
-        f"    https://github.com/libraz/formulon/compare/main...{branch}"
-        "?expand=1&template=oracle.md"
-    )
+    print(f"    https://github.com/libraz/formulon/compare/main...{branch}?expand=1&template=oracle.md")
     print()
     print("  Notes for reviewers and you:")
     print("    * Confirm ENVIRONMENT.md records the locale you intended.")
@@ -940,10 +907,7 @@ def _cmd_contribute(args: argparse.Namespace) -> int:
             return 2
         name, record = args.target, targets[args.target]
         if probe is not None and probe.get("version"):
-            print(
-                f"[contribute] detected Excel {probe['version']}"
-                f" (locale={probe.get('locale') or '?'})"
-            )
+            print(f"[contribute] detected Excel {probe['version']} (locale={probe.get('locale') or '?'})")
         print(f"[contribute] target: {name} (explicit)")
     else:
         if probe is None:
@@ -952,22 +916,19 @@ def _cmd_contribute(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             print(
-                "    The probe needs xlwings + a working Excel install."
-                " First-time setup:",
+                "    The probe needs xlwings + a working Excel install. First-time setup:",
                 file=sys.stderr,
             )
             print("      make oracle-setup", file=sys.stderr)
             print(
-                "    Already set up? Re-run with TARGET=<name>;"
-                " run `make oracle-contribute-list` to see the options.",
+                "    Already set up? Re-run with TARGET=<name>; run `make oracle-contribute-list` to see the options.",
                 file=sys.stderr,
             )
             return 2
         if not host_short or not probe.get("locale"):
             cc = probe.get("country_code")
             print(
-                f"[contribute] detected Excel {probe['version']}"
-                f" (country_code={cc}); locale could not be mapped.",
+                f"[contribute] detected Excel {probe['version']} (country_code={cc}); locale could not be mapped.",
                 file=sys.stderr,
             )
             print(
@@ -982,10 +943,7 @@ def _cmd_contribute(args: argparse.Namespace) -> int:
             _print_unknown_target_help(probe, derived, targets)
             return 2
         name, record = derived, targets[derived]
-        print(
-            f"[contribute] detected Excel {probe['version']}"
-            f" (locale={probe['locale']})"
-        )
+        print(f"[contribute] detected Excel {probe['version']} (locale={probe['locale']})")
         print(f"[contribute] target: {name} (auto-detected)")
 
     assert name is not None and record is not None  # for type-checkers
@@ -996,9 +954,7 @@ def _cmd_contribute(args: argparse.Namespace) -> int:
     if probe is not None and probe.get("version"):
         committed = _committed_excel_version_for(record)
         if committed and _version_tuple(committed) >= _version_tuple(probe["version"]):
-            _print_already_current_thanks(
-                name, record, committed, probe["version"]
-            )
+            _print_already_current_thanks(name, record, committed, probe["version"])
             return 0
 
     print()
@@ -1006,8 +962,7 @@ def _cmd_contribute(args: argparse.Namespace) -> int:
     if not _check_target(name, record, host_label):
         print()
         print(
-            "[contribute] preflight failed. Address the FAIL lines above"
-            " (the hints are copy-paste ready), then rerun:",
+            "[contribute] preflight failed. Address the FAIL lines above (the hints are copy-paste ready), then rerun:",
             file=sys.stderr,
         )
         print("    make oracle-contribute", file=sys.stderr)
@@ -1015,21 +970,17 @@ def _cmd_contribute(args: argparse.Namespace) -> int:
 
     print()
     print(f"[contribute] generating goldens for target={name}")
-    rc = oracle_gen.main(
-        ["--target", name, "--targets-file", str(args.targets_file)]
-    )
+    rc = oracle_gen.main(["--target", name, "--targets-file", str(args.targets_file)])
     if rc != 0:
         print()
         print(
-            f"[contribute] oracle_gen exited with code {rc}."
-            " See the log above; common fixes:",
+            f"[contribute] oracle_gen exited with code {rc}. See the log above; common fixes:",
             file=sys.stderr,
         )
         print("  * Quit Excel and rerun (the driver opens a fresh app).", file=sys.stderr)
         print("  * Confirm Excel is signed in and Office is activated.", file=sys.stderr)
         print(
-            "  * On macOS, re-grant Automation permission if it was reset"
-            " by an OS update.",
+            "  * On macOS, re-grant Automation permission if it was reset by an OS update.",
             file=sys.stderr,
         )
         return rc
@@ -1151,19 +1102,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_setup.add_argument(
         "--target",
         default=None,
-        help=(
-            "Verify just one target by name; defaults to every target whose "
-            "runs_on declares the current host."
-        ),
+        help=("Verify just one target by name; defaults to every target whose runs_on declares the current host."),
     )
     p_setup.set_defaults(func=_cmd_setup)
 
     p_contrib = sub.add_parser(
         "contribute",
-        help=(
-            "Contributor onramp: thank-you banner + preflight + gen + "
-            "push/PR instructions for one variant target."
-        ),
+        help=("Contributor onramp: thank-you banner + preflight + gen + push/PR instructions for one variant target."),
     )
     p_contrib.add_argument(
         "--target",

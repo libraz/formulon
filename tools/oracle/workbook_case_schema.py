@@ -37,7 +37,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, List, Optional, Set, Tuple
 
 # Local imports -- accept both `python3 tools/oracle/workbook_case_schema.py`
 # (no package) and `python3 -m tools.oracle.workbook_case_schema`.
@@ -85,14 +85,10 @@ def _validate_sheets(sheets: Any, where: str) -> None:
         if not isinstance(sheet_name, str) or not sheet_name:
             raise ValidationError(f"{where}: sheet name must be a non-empty string")
         if not isinstance(cells, dict):
-            raise ValidationError(
-                f"{where}/{sheet_name}: expected mapping of A1-address -> value"
-            )
+            raise ValidationError(f"{where}/{sheet_name}: expected mapping of A1-address -> value")
         for addr, value in cells.items():
             if not isinstance(addr, str) or not addr:
-                raise ValidationError(
-                    f"{where}/{sheet_name}: cell key must be a non-empty A1 address"
-                )
+                raise ValidationError(f"{where}/{sheet_name}: cell key must be a non-empty A1 address")
             # `_normalise_value` raises ValueError on a malformed record;
             # re-wrap it as a ValidationError so the CLI prints one shape.
             try:
@@ -116,13 +112,9 @@ def _validate_dimension_map(raw: Any, where: str, *, label: str) -> None:
         if not isinstance(key, str) or not key:
             raise ValidationError(f"{where}: {label} key must be a non-empty string")
         if isinstance(num, bool) or not isinstance(num, (int, float)):
-            raise ValidationError(
-                f"{where}/{key}: {label} value must be a number, got {num!r}"
-            )
+            raise ValidationError(f"{where}/{key}: {label} value must be a number, got {num!r}")
         if num <= 0:
-            raise ValidationError(
-                f"{where}/{key}: {label} value must be positive, got {num!r}"
-            )
+            raise ValidationError(f"{where}/{key}: {label} value must be positive, got {num!r}")
 
 
 def _validate_pivot_block(raw: Any, where: str) -> None:
@@ -182,9 +174,7 @@ def _validate_print_block(raw: Any, where: str) -> None:
         for axis in ("rows", "cols"):
             if axis in titles and titles[axis] is not None:
                 if not isinstance(titles[axis], str) or not titles[axis]:
-                    raise ValidationError(
-                        f"{where}/print_titles/{axis}: expected non-empty string"
-                    )
+                    raise ValidationError(f"{where}/print_titles/{axis}: expected non-empty string")
 
     if "page_setup" in raw and raw["page_setup"] is not None:
         setup = raw["page_setup"]
@@ -200,13 +190,9 @@ def _validate_print_block(raw: Any, where: str) -> None:
             if field in setup and setup[field] is not None:
                 num = setup[field]
                 if isinstance(num, bool) or not isinstance(num, (int, float)):
-                    raise ValidationError(
-                        f"{where}/page_setup/{field}: expected a number, got {num!r}"
-                    )
+                    raise ValidationError(f"{where}/page_setup/{field}: expected a number, got {num!r}")
                 if num < 0:
-                    raise ValidationError(
-                        f"{where}/page_setup/{field}: must be non-negative, got {num!r}"
-                    )
+                    raise ValidationError(f"{where}/page_setup/{field}: must be non-negative, got {num!r}")
 
     if "manual_breaks" in raw and raw["manual_breaks"] is not None:
         breaks = raw["manual_breaks"]
@@ -218,25 +204,16 @@ def _validate_print_block(raw: Any, where: str) -> None:
                 raise ValidationError(f"{where}/manual_breaks/rows: expected a list")
             for i, row in enumerate(rows):
                 if isinstance(row, bool) or not isinstance(row, (int, float)):
-                    raise ValidationError(
-                        f"{where}/manual_breaks/rows/{i}: expected a 1-based row "
-                        f"number, got {row!r}"
-                    )
+                    raise ValidationError(f"{where}/manual_breaks/rows/{i}: expected a 1-based row number, got {row!r}")
                 if row < 1:
-                    raise ValidationError(
-                        f"{where}/manual_breaks/rows/{i}: row number must be >= 1, "
-                        f"got {row!r}"
-                    )
+                    raise ValidationError(f"{where}/manual_breaks/rows/{i}: row number must be >= 1, got {row!r}")
         if "cols" in breaks and breaks["cols"] is not None:
             cols = breaks["cols"]
             if not isinstance(cols, list):
                 raise ValidationError(f"{where}/manual_breaks/cols: expected a list")
             for i, col in enumerate(cols):
                 if not isinstance(col, str) or not col:
-                    raise ValidationError(
-                        f"{where}/manual_breaks/cols/{i}: expected a column letter, "
-                        f"got {col!r}"
-                    )
+                    raise ValidationError(f"{where}/manual_breaks/cols/{i}: expected a column letter, got {col!r}")
 
 
 def _validate_case_entry(case: Any, where: str) -> str:
@@ -252,13 +229,9 @@ def _validate_case_entry(case: Any, where: str) -> str:
     _validate_sheets(case["sheets"], f"{where}/sheets")
 
     if "column_widths" in case and case["column_widths"] is not None:
-        _validate_dimension_map(
-            case["column_widths"], f"{where}/column_widths", label="column_widths"
-        )
+        _validate_dimension_map(case["column_widths"], f"{where}/column_widths", label="column_widths")
     if "row_heights" in case and case["row_heights"] is not None:
-        _validate_dimension_map(
-            case["row_heights"], f"{where}/row_heights", label="row_heights"
-        )
+        _validate_dimension_map(case["row_heights"], f"{where}/row_heights", label="row_heights")
     if "pivot" in case and case["pivot"] is not None:
         _validate_pivot_block(case["pivot"], f"{where}/pivot")
     if "print" in case and case["print"] is not None:
@@ -274,9 +247,7 @@ def validate_case_json(doc: Any) -> List[str]:
     if not isinstance(doc["suite"], str) or not doc["suite"]:
         raise ValidationError(f"{_at('suite')}: expected non-empty string")
     if doc["kind"] != _SUITE_KIND:
-        raise ValidationError(
-            f"{_at('kind')}: expected {_SUITE_KIND!r}, got {doc['kind']!r}"
-        )
+        raise ValidationError(f"{_at('kind')}: expected {_SUITE_KIND!r}, got {doc['kind']!r}")
     if "description" in doc and not isinstance(doc["description"], str):
         raise ValidationError(f"{_at('description')}: expected string")
     cases = doc["cases"]
@@ -301,9 +272,7 @@ def validate_golden_json(doc: Any) -> List[str]:
     if not isinstance(doc["suite"], str) or not doc["suite"]:
         raise ValidationError(f"{_at('suite')}: expected non-empty string")
     if doc["kind"] != _SUITE_KIND:
-        raise ValidationError(
-            f"{_at('kind')}: expected {_SUITE_KIND!r}, got {doc['kind']!r}"
-        )
+        raise ValidationError(f"{_at('kind')}: expected {_SUITE_KIND!r}, got {doc['kind']!r}")
     cases = doc["cases"]
     if not isinstance(cases, list) or not cases:
         raise ValidationError(f"{_at('cases')}: expected non-empty list")
@@ -343,9 +312,7 @@ def _load_json(path: Path) -> Any:
         return json.load(f)
 
 
-def validate_pair(
-    case_path: Path, golden_path: Optional[Path]
-) -> Tuple[List[str], Optional[List[str]]]:
+def validate_pair(case_path: Path, golden_path: Optional[Path]) -> Tuple[List[str], Optional[List[str]]]:
     """Validates the case file and (when present) the golden file.
 
     When `golden_path` is None or points at a missing file, only the case
@@ -368,15 +335,9 @@ def validate_pair(
     missing_in_golden = sorted(case_set - golden_set)
     missing_in_case = sorted(golden_set - case_set)
     if missing_in_golden:
-        raise ValidationError(
-            f"{golden_path}: missing case ids present in {case_path.name}: "
-            f"{missing_in_golden}"
-        )
+        raise ValidationError(f"{golden_path}: missing case ids present in {case_path.name}: {missing_in_golden}")
     if missing_in_case:
-        raise ValidationError(
-            f"{case_path}: missing case ids present in {golden_path.name}: "
-            f"{missing_in_case}"
-        )
+        raise ValidationError(f"{case_path}: missing case ids present in {golden_path.name}: {missing_in_case}")
     return case_ids, golden_ids
 
 
@@ -413,15 +374,9 @@ def main(argv: List[str]) -> int:
         print(f"JSON parse error: {exc}", file=sys.stderr)
         return 1
     if golden_ids is None:
-        print(
-            f"OK: {args.case_json} (no golden checked) "
-            f"({len(case_ids)} case(s): {', '.join(case_ids)})"
-        )
+        print(f"OK: {args.case_json} (no golden checked) ({len(case_ids)} case(s): {', '.join(case_ids)})")
     else:
-        print(
-            f"OK: {args.case_json} <-> {args.golden_json} "
-            f"({len(case_ids)} case(s): {', '.join(case_ids)})"
-        )
+        print(f"OK: {args.case_json} <-> {args.golden_json} ({len(case_ids)} case(s): {', '.join(case_ids)})")
     return 0
 
 

@@ -356,7 +356,9 @@ def _extract_c_typedef_enum(text: str, type_name: str) -> Optional[List[int]]:
 
 
 def _extract_cpp_enum_class(text: str, enum_name: str) -> Optional[List[int]]:
-    match = re.search(r"enum class\s+" + re.escape(enum_name) + r"\s*(?::\s*[\w:]+)?\s*\{([^}]*)\}\s*;", text, re.DOTALL)
+    match = re.search(
+        r"enum class\s+" + re.escape(enum_name) + r"\s*(?::\s*[\w:]+)?\s*\{([^}]*)\}\s*;", text, re.DOTALL
+    )
     if not match:
         return None
     return _parse_enum_body(match.group(1))
@@ -400,7 +402,9 @@ def check_dts_enums() -> List[str]:
     for ts_name, (source_path, source_enum, extractor) in sorted(_DTS_ENUM_SOURCES.items()):
         ts_values = _extract_ts_enum(dts_text, ts_name)
         if ts_values is None:
-            problems.append(f"dts-enums: could not find/parse `export enum {ts_name}` in {WASM_DTS.relative_to(REPO_ROOT)}")
+            problems.append(
+                f"dts-enums: could not find/parse `export enum {ts_name}` in {WASM_DTS.relative_to(REPO_ROOT)}"
+            )
             continue
 
         source_text = _read(source_path)

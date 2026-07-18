@@ -1226,13 +1226,7 @@ export interface Workbook {
   pivotFieldSetAxis(sheet: number, pivotIdx: number, fieldIdx: number, axis: number): Status;
   /** Sets the sort directive on pivot field `fieldIdx`. Pass an empty
    *  `byField` to clear the by-field key. */
-  pivotFieldSetSort(
-    sheet: number,
-    pivotIdx: number,
-    fieldIdx: number,
-    ascending: boolean,
-    byField: string,
-  ): Status;
+  pivotFieldSetSort(sheet: number, pivotIdx: number, fieldIdx: number, ascending: boolean, byField: string): Status;
   /** Sets the `subtotal_top` flag on pivot field `fieldIdx`. */
   pivotFieldSetSubtotalTop(sheet: number, pivotIdx: number, fieldIdx: number, top: boolean): Status;
   /** Appends an aggregation to pivot field `fieldIdx`. */
@@ -1240,13 +1234,7 @@ export interface Workbook {
   /** Drops every aggregation from pivot field `fieldIdx`. */
   pivotFieldClearAggregations(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Appends a manual-filter item to pivot field `fieldIdx`. */
-  pivotFieldAddItem(
-    sheet: number,
-    pivotIdx: number,
-    fieldIdx: number,
-    name: string,
-    visible: boolean,
-  ): Status;
+  pivotFieldAddItem(sheet: number, pivotIdx: number, fieldIdx: number, name: string, visible: boolean): Status;
   /** Drops every manual-filter item from pivot field `fieldIdx`. */
   pivotFieldClearItems(sheet: number, pivotIdx: number, fieldIdx: number): Status;
   /** Toggles the visibility of item `itemIdx` on field `fieldIdx`. */

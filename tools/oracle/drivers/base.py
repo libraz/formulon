@@ -25,7 +25,6 @@ import datetime as _dt
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-
 # Excel's error values come back from automation bridges as CVErr /
 # ErrorValue / str depending on Mac vs Windows and the property we read.
 # We centralise the recognition here so callers only see the tokenised
@@ -119,12 +118,10 @@ class OracleDriver(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __enter__(self) -> "OracleDriver":
-        ...
+    def __enter__(self) -> "OracleDriver": ...
 
     @abc.abstractmethod
-    def __exit__(self, exc_type, exc, tb) -> None:
-        ...
+    def __exit__(self, exc_type, exc, tb) -> None: ...
 
     @abc.abstractmethod
     def probe_environment(self) -> EnvironmentInfo:
@@ -216,6 +213,5 @@ class OracleDriver(abc.ABC):
         """
 
         raise NotImplementedError(
-            "run_workbook_case is not implemented yet; the pivot/print "
-            "driver lands in a later phase"
+            "run_workbook_case is not implemented yet; the pivot/print driver lands in a later phase"
         )

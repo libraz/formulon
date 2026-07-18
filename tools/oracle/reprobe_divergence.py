@@ -13,7 +13,6 @@ import argparse
 from pathlib import Path
 from typing import List, Optional
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 
@@ -52,11 +51,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         raise SystemExit(f"{args.input}: `entries` must be a list")
 
     allowed = set(args.allow_case)
-    kept = [
-        entry
-        for entry in entries
-        if not (isinstance(entry, dict) and entry.get("id") in allowed)
-    ]
+    kept = [entry for entry in entries if not (isinstance(entry, dict) and entry.get("id") in allowed)]
     removed = len(entries) - len(kept)
     doc["entries"] = kept
     args.output.parent.mkdir(parents=True, exist_ok=True)

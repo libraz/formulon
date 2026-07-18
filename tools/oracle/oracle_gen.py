@@ -70,10 +70,7 @@ class ProgressBar:
         filled = width if self.total == 0 else int(width * self.done / self.total)
         bar = "#" * filled + "-" * (width - filled)
         suffix = f" {label}" if label else ""
-        line = (
-            f"  [{bar}] {self.done}/{self.total} "
-            f"{pct:5.1f}% elapsed={elapsed:5.1f}s{suffix}"
-        )
+        line = f"  [{bar}] {self.done}/{self.total} {pct:5.1f}% elapsed={elapsed:5.1f}s{suffix}"
         if self.interactive:
             print("\r" + line, end="", file=sys.stderr, flush=True)
             if self.done >= self.total:
@@ -106,9 +103,7 @@ def _load_targets(path: Path) -> Dict[str, object]:
     return doc
 
 
-def _resolve_target(
-    targets_doc: Dict[str, object], name: Optional[str]
-) -> Dict[str, object]:
+def _resolve_target(targets_doc: Dict[str, object], name: Optional[str]) -> Dict[str, object]:
     """Returns the target record for `name` (or the primary if None)."""
 
     targets = targets_doc.get("targets") or {}
@@ -248,12 +243,9 @@ def _load_divergence_skips(path: Path, target_name: str) -> Dict[str, str]:
             continue
         if "applies_to" in entry and entry["applies_to"] is not None:
             applies = entry["applies_to"]
-            if not isinstance(applies, list) or not all(
-                isinstance(x, str) for x in applies
-            ):
+            if not isinstance(applies, list) or not all(isinstance(x, str) for x in applies):
                 raise RuntimeError(
-                    f"{path}: entry {cid!r} has invalid `applies_to`: "
-                    f"expected list of strings, got {applies!r}"
+                    f"{path}: entry {cid!r} has invalid `applies_to`: expected list of strings, got {applies!r}"
                 )
             if target_name not in applies:
                 continue
@@ -311,26 +303,31 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Path to targets.yaml (rarely needs overriding).",
     )
     parser.add_argument(
-        "--cases-dir", type=Path, default=DEFAULT_CASES_DIR,
+        "--cases-dir",
+        type=Path,
+        default=DEFAULT_CASES_DIR,
         help="Directory of *.yaml case files.",
     )
     parser.add_argument(
-        "--golden-dir", type=Path, default=None,
-        help=(
-            "Directory to write *.golden.json files to. Overrides the "
-            "selected target's `output_dir`."
-        ),
+        "--golden-dir",
+        type=Path,
+        default=None,
+        help=("Directory to write *.golden.json files to. Overrides the selected target's `output_dir`."),
     )
     parser.add_argument(
-        "--divergence", type=Path, default=DEFAULT_DIVERGENCE,
+        "--divergence",
+        type=Path,
+        default=DEFAULT_DIVERGENCE,
         help="YAML listing cases to skip / widen; see tests/divergence.yaml.",
     )
     parser.add_argument(
-        "--strict", action="store_true",
+        "--strict",
+        action="store_true",
         help="Abort on first suite failure instead of continuing.",
     )
     parser.add_argument(
-        "--visible", action="store_true",
+        "--visible",
+        action="store_true",
         help="Show the Excel window during generation (debug aid).",
     )
     parser.add_argument(
@@ -419,9 +416,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if isinstance(target_div, str) and target_div:
             variant_div_path = REPO_ROOT / target_div
             if variant_div_path.exists():
-                variant_skips = _load_divergence_skips(
-                    variant_div_path, target["_name"]
-                )
+                variant_skips = _load_divergence_skips(variant_div_path, target["_name"])
                 skips.update(variant_skips)
     except RuntimeError as exc:
         print(f"oracle-gen: {exc}", file=sys.stderr)
@@ -464,12 +459,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         #       silently fall back to declared so contributors aren't
         #       blocked while we wait to extend the country-code map.
         target_locale = target.get("locale")
-        if (
-            isinstance(target_locale, str)
-            and target_locale
-            and env.excel_locale
-            and env.excel_locale != target_locale
-        ):
+        if isinstance(target_locale, str) and target_locale and env.excel_locale and env.excel_locale != target_locale:
             print(
                 f"oracle-gen: warning: target {target['_name']!r} declares "
                 f"locale={target_locale!r} but Excel reports "
@@ -486,8 +476,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 iterative=env.iterative,
             )
 
-        env_json = _env_to_json(env, iso_now)
-
         exit_code = 0
         for path, suite in suites:
             print(f"[oracle-gen] {suite.name}  ({len(suite.cases)} cases)")
@@ -495,9 +483,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 # Carry divergence.yaml skips into the per-run map. The
                 # driver still gets the full case list so row numbering
                 # stays aligned; we'll drop the skipped ids on write.
-                runnable = [
-                    c for c in suite.cases if c.id not in skips
-                ]
+                runnable = [c for c in suite.cases if c.id not in skips]
                 case_inputs = [_case_input(c) for c in runnable]
                 env_copy = EnvironmentInfo(
                     excel_version=env.excel_version,
@@ -545,11 +531,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 # merge those into the divergence-derived skip set so
                 # the golden carries the actual reason rather than a
                 # generic "no result captured".
-                merged_skips: Dict[str, str] = {
-                    c.id: skips[c.id]
-                    for c in suite.cases
-                    if c.id in skips
-                }
+                merged_skips: Dict[str, str] = {c.id: skips[c.id] for c in suite.cases if c.id in skips}
                 runtime_results: List[CaseResult] = []
                 runtime_skipped = 0
                 for r in results:
@@ -562,10 +544,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     else:
                         runtime_results.append(r)
                 if runtime_skipped:
-                    print(
-                        f"  ! {runtime_skipped} case(s) skipped by driver "
-                        f"(see golden 'skipped' fields)"
-                    )
+                    print(f"  ! {runtime_skipped} case(s) skipped by driver (see golden 'skipped' fields)")
                 out_path = golden_dir / f"{suite.name}.golden.json"
                 _write_golden(
                     out_path,

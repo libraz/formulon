@@ -36,8 +36,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
-
+from typing import Any, List, Set, Tuple
 
 # Mirrors `enum class formulon::cf::RuleType` in src/cf/cf_types.h.
 _RULE_TYPES: Set[str] = {
@@ -108,9 +107,7 @@ def _validate_color(obj: Any, where: str) -> None:
     for ch in ("r", "g", "b", "a"):
         v = obj[ch]
         if not isinstance(v, int) or v < 0 or v > 255:
-            raise ValidationError(
-                f"{where}/{ch}: expected int in [0, 255], got {v!r}"
-            )
+            raise ValidationError(f"{where}/{ch}: expected int in [0, 255], got {v!r}")
 
 
 def _validate_range(obj: Any, where: str) -> None:
@@ -119,23 +116,16 @@ def _validate_range(obj: Any, where: str) -> None:
         if not isinstance(obj[k], int) or obj[k] < 0:
             raise ValidationError(f"{where}/{k}: expected non-negative int, got {obj[k]!r}")
     if obj["last_row"] < obj["first_row"] or obj["last_col"] < obj["first_col"]:
-        raise ValidationError(
-            f"{where}: last_row/last_col must be >= first_row/first_col"
-        )
+        raise ValidationError(f"{where}: last_row/last_col must be >= first_row/first_col")
 
 
 def _validate_rule(rule: Any, where: str) -> None:
     _require_keys(rule, ["type", "priority"], where)
     rtype = rule["type"]
     if rtype not in _RULE_TYPES:
-        raise ValidationError(
-            f"{where}/type: unknown rule type {rtype!r}; expected one of "
-            f"{sorted(_RULE_TYPES)}"
-        )
+        raise ValidationError(f"{where}/type: unknown rule type {rtype!r}; expected one of {sorted(_RULE_TYPES)}")
     if not isinstance(rule["priority"], int):
-        raise ValidationError(
-            f"{where}/priority: expected int, got {type(rule['priority']).__name__}"
-        )
+        raise ValidationError(f"{where}/priority: expected int, got {type(rule['priority']).__name__}")
 
     if "operator" in rule and rule["operator"] not in _CELL_IS_OPERATORS:
         raise ValidationError(
@@ -206,10 +196,7 @@ def _validate_sheet_cell(cell: Any, where: str) -> None:
         raise ValidationError(f"{where}/col: expected non-negative int")
     kind = cell["kind"]
     if kind not in _VALUE_KINDS:
-        raise ValidationError(
-            f"{where}/kind: unknown value kind {kind!r}; expected one of "
-            f"{sorted(_VALUE_KINDS)}"
-        )
+        raise ValidationError(f"{where}/kind: unknown value kind {kind!r}; expected one of {sorted(_VALUE_KINDS)}")
     if kind != "blank" and "value" not in cell:
         raise ValidationError(f"{where}: kind={kind!r} requires a 'value' field")
 
@@ -259,10 +246,7 @@ def _validate_match(match: Any, where: str) -> None:
     _require_keys(match, ["kind", "priority"], where)
     kind = match["kind"]
     if kind not in _MATCH_KINDS:
-        raise ValidationError(
-            f"{where}/kind: unknown match kind {kind!r}; expected one of "
-            f"{sorted(_MATCH_KINDS)}"
-        )
+        raise ValidationError(f"{where}/kind: unknown match kind {kind!r}; expected one of {sorted(_MATCH_KINDS)}")
     if not isinstance(match["priority"], int):
         raise ValidationError(f"{where}/priority: expected int")
 
@@ -350,15 +334,9 @@ def validate_pair(case_path: Path, golden_path: Path) -> Tuple[List[str], List[s
     missing_in_golden = sorted(case_set - golden_set)
     missing_in_case = sorted(golden_set - case_set)
     if missing_in_golden:
-        raise ValidationError(
-            f"{golden_path}: missing case ids present in {case_path.name}: "
-            f"{missing_in_golden}"
-        )
+        raise ValidationError(f"{golden_path}: missing case ids present in {case_path.name}: {missing_in_golden}")
     if missing_in_case:
-        raise ValidationError(
-            f"{case_path}: missing case ids present in {golden_path.name}: "
-            f"{missing_in_case}"
-        )
+        raise ValidationError(f"{case_path}: missing case ids present in {golden_path.name}: {missing_in_case}")
     return case_ids, golden_ids
 
 
@@ -389,10 +367,7 @@ def main(argv: List[str]) -> int:
     except json.JSONDecodeError as exc:
         print(f"JSON parse error: {exc}", file=sys.stderr)
         return 1
-    print(
-        f"OK: {args.case_json} <-> {args.golden_json} "
-        f"({len(case_ids)} case(s): {', '.join(case_ids)})"
-    )
+    print(f"OK: {args.case_json} <-> {args.golden_json} ({len(case_ids)} case(s): {', '.join(case_ids)})")
     return 0
 
 

@@ -94,9 +94,7 @@ def select_driver(target: Dict[str, Any], *, visible: bool = False) -> OracleDri
 
     if driver_name == "macos_excel":
         if host != "Darwin":
-            raise RuntimeError(
-                f"target driver 'macos_excel' requires Darwin host, got {host}"
-            )
+            raise RuntimeError(f"target driver 'macos_excel' requires Darwin host, got {host}")
         from .macos_excel import ExcelOracle as MacExcelOracle
 
         return MacExcelOracle(visible=visible)
@@ -113,9 +111,7 @@ def select_driver(target: Dict[str, Any], *, visible: bool = False) -> OracleDri
                 win_python=resolve_win_python(target),
                 visible=visible,
             )
-        raise RuntimeError(
-            f"target driver 'windows_excel' needs Windows or WSL2 host, got {host}"
-        )
+        raise RuntimeError(f"target driver 'windows_excel' needs Windows or WSL2 host, got {host}")
 
     if driver_name == "wsl_bridge":
         if not _is_wsl2():

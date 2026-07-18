@@ -61,21 +61,19 @@ import platform
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ._locale import detect_locale_from_app, normalise_error_token
 from .base import (
+    _ERR_DISPLAY_NAMES,
     CaseResult,
     EnvironmentInfo,
     OracleDriver,
     _datetime_to_serial,
-    _ERR_DISPLAY_NAMES,
 )
-from ._locale import detect_locale_from_app, normalise_error_token
 
 try:
     import xlwings as xw  # type: ignore
 except ImportError as exc:  # pragma: no cover - handled in oracle_gen.py
-    raise RuntimeError(
-        "xlwings is not installed; run `make oracle-setup` first"
-    ) from exc
+    raise RuntimeError("xlwings is not installed; run `make oracle-setup` first") from exc
 
 
 def _ensure_windows() -> None:
@@ -89,8 +87,7 @@ def _ensure_windows() -> None:
     if platform.system() != "Windows":
         raise RuntimeError(
             "windows_excel driver is Windows-only (uses COM automation). "
-            "Current platform: " + platform.system()
-            + ". Use wsl_bridge from WSL2, or macos_excel on Darwin."
+            "Current platform: " + platform.system() + ". Use wsl_bridge from WSL2, or macos_excel on Darwin."
         )
 
 
@@ -221,11 +218,7 @@ def _classify_value(cell) -> CaseResult:
         cols = 0
         if rows > 0 and isinstance(v[0], list):
             cols = len(v[0])
-            flat = [
-                _array_cell_from_scalar(_classify_python_scalar(item))
-                for row in v
-                for item in row
-            ]
+            flat = [_array_cell_from_scalar(_classify_python_scalar(item)) for row in v for item in row]
         else:
             cols = rows
             rows = 1
@@ -415,14 +408,9 @@ class WindowsExcelOracle(OracleDriver):
         # Detect that at the suite level and isolate each such case in
         # its own workbook. Suites without cross-sheet setup keep the
         # historical fast path: one shared workbook, one sheet per case.
-        cross_sheet = any(
-            any("!" in addr for addr in (case.get("setup") or {}))
-            for case in cases
-        )
+        cross_sheet = any(any("!" in addr for addr in (case.get("setup") or {})) for case in cases)
         if cross_sheet:
-            return self._run_suite_per_case_workbook(
-                suite_name, cases, date1904=date1904, iterative=iterative
-            )
+            return self._run_suite_per_case_workbook(suite_name, cases, date1904=date1904, iterative=iterative)
 
         wb = self._app.books.add()
         try:
@@ -510,22 +498,26 @@ class WindowsExcelOracle(OracleDriver):
             out: List[CaseResult] = []
             for case, sht in zip(cases, case_sheets):
                 if case["id"] in write_errors:
-                    out.append(CaseResult(
-                        id=case["id"],
-                        kind="skipped",
-                        value=write_errors[case["id"]],
-                    ))
+                    out.append(
+                        CaseResult(
+                            id=case["id"],
+                            kind="skipped",
+                            value=write_errors[case["id"]],
+                        )
+                    )
                     continue
                 try:
                     result = _classify_result_cell(sht)
                     result.id = case["id"]
                     out.append(result)
                 except Exception as exc:
-                    out.append(CaseResult(
-                        id=case["id"],
-                        kind="skipped",
-                        value=_format_com_error(exc),
-                    ))
+                    out.append(
+                        CaseResult(
+                            id=case["id"],
+                            kind="skipped",
+                            value=_format_com_error(exc),
+                        )
+                    )
             return out
         finally:
             try:
@@ -606,9 +598,13 @@ class WindowsExcelOracle(OracleDriver):
                         result.id = case["id"]
                         out.append(result)
                     except Exception as exc:
-                        out.append(CaseResult(
-                            id=case["id"], kind="skipped", value=_format_com_error(exc),
-                        ))
+                        out.append(
+                            CaseResult(
+                                id=case["id"],
+                                kind="skipped",
+                                value=_format_com_error(exc),
+                            )
+                        )
                 finally:
                     try:
                         wb.close()
@@ -659,9 +655,7 @@ class WindowsExcelOracle(OracleDriver):
         # rather than a per-case failure.
         return {}
 
-    def _run_pivot_case(
-        self, case: Dict[str, Any], pivot_spec: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _run_pivot_case(self, case: Dict[str, Any], pivot_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Builds and reads back a PivotTable case via COM."""
 
         wb = self._app.books.add()
@@ -679,8 +673,7 @@ class WindowsExcelOracle(OracleDriver):
             }
         except Exception as exc:
             raise RuntimeError(
-                f"pivot automation failed for case {case.get('id')!r}: "
-                f"{_format_com_error(exc)}"
+                f"pivot automation failed for case {case.get('id')!r}: {_format_com_error(exc)}"
             ) from exc
         finally:
             try:
@@ -688,9 +681,7 @@ class WindowsExcelOracle(OracleDriver):
             except Exception:
                 pass
 
-    def _run_print_case(
-        self, case: Dict[str, Any], print_spec: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _run_print_case(self, case: Dict[str, Any], print_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Applies print settings via COM and reads back the pagination.
 
         Excel computes automatic page breaks itself; this reads the
@@ -704,8 +695,7 @@ class WindowsExcelOracle(OracleDriver):
             return {"print": _apply_and_read_print(wb, print_spec)}
         except Exception as exc:
             raise RuntimeError(
-                f"print automation failed for case {case.get('id')!r}: "
-                f"{_format_com_error(exc)}"
+                f"print automation failed for case {case.get('id')!r}: {_format_com_error(exc)}"
             ) from exc
         finally:
             try:
@@ -758,7 +748,7 @@ def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":
         return None, key
     bang = key.rfind("!")
     sheet_part = key[:bang]
-    addr_part = key[bang + 1:]
+    addr_part = key[bang + 1 :]
     if sheet_part.startswith("'") and sheet_part.endswith("'") and len(sheet_part) >= 2:
         sheet_part = sheet_part[1:-1].replace("''", "'")
     return sheet_part, addr_part
@@ -874,13 +864,9 @@ def _build_pivot_table(wb, pivot_spec: Dict[str, Any]):
     src_sheet_name, src_addr = _split_sheet_qualified_addr(source)
     anchor_sheet_name, anchor_addr = _split_sheet_qualified_addr(anchor)
     if src_sheet_name is None:
-        raise RuntimeError(
-            f"pivot source must be sheet-qualified (e.g. 'Data!A1:C13'); got {source!r}"
-        )
+        raise RuntimeError(f"pivot source must be sheet-qualified (e.g. 'Data!A1:C13'); got {source!r}")
     if anchor_sheet_name is None:
-        raise RuntimeError(
-            f"pivot anchor must be sheet-qualified (e.g. 'Report!A1'); got {anchor!r}"
-        )
+        raise RuntimeError(f"pivot anchor must be sheet-qualified (e.g. 'Report!A1'); got {anchor!r}")
 
     def _find_sheet(name: str):
         for sht in wb.sheets:
@@ -891,13 +877,9 @@ def _build_pivot_table(wb, pivot_spec: Dict[str, Any]):
     src_sheet = _find_sheet(src_sheet_name)
     anchor_sheet = _find_sheet(anchor_sheet_name)
     if src_sheet is None:
-        raise RuntimeError(
-            f"pivot source references unknown sheet {src_sheet_name!r}"
-        )
+        raise RuntimeError(f"pivot source references unknown sheet {src_sheet_name!r}")
     if anchor_sheet is None:
-        raise RuntimeError(
-            f"pivot anchor references unknown sheet {anchor_sheet_name!r}"
-        )
+        raise RuntimeError(f"pivot anchor references unknown sheet {anchor_sheet_name!r}")
 
     source_range_api = src_sheet.range(src_addr).api
     anchor_range_api = anchor_sheet.range(anchor_addr).api
@@ -1199,11 +1181,7 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
             pages = int(page_setup.Pages.Count)
         except Exception:
             try:
-                pages = int(
-                    wb.app.api.ExecuteExcel4Macro(
-                        f"GET.DOCUMENT({_GET_DOCUMENT_PAGE_COUNT})"
-                    )
-                )
+                pages = int(wb.app.api.ExecuteExcel4Macro(f"GET.DOCUMENT({_GET_DOCUMENT_PAGE_COUNT})"))
             except Exception:
                 pages = 0
     finally:
@@ -1324,7 +1302,7 @@ def _normalise_print_area(area: str) -> str:
             continue
         bang = token.rfind("!")
         if bang != -1:
-            token = token[bang + 1:]
+            token = token[bang + 1 :]
         token = token.replace("$", "")
         out_parts.append(token)
     return ",".join(out_parts)
@@ -1575,14 +1553,10 @@ def _main(argv: Optional[List[str]] = None) -> int:
     import json
 
     parser = argparse.ArgumentParser(description="windows_excel wire driver")
-    parser.add_argument("--input", type=Path,
-                        help="single-shot mode: read one JSON command from this path")
-    parser.add_argument("--output", type=Path,
-                        help="single-shot mode: write one JSON response to this path")
-    parser.add_argument("--serve", action="store_true",
-                        help="long-lived mode: serve newline-delimited JSON over stdio")
-    parser.add_argument("--visible", action="store_true",
-                        help="show the Excel window (debug aid for --serve)")
+    parser.add_argument("--input", type=Path, help="single-shot mode: read one JSON command from this path")
+    parser.add_argument("--output", type=Path, help="single-shot mode: write one JSON response to this path")
+    parser.add_argument("--serve", action="store_true", help="long-lived mode: serve newline-delimited JSON over stdio")
+    parser.add_argument("--visible", action="store_true", help="show the Excel window (debug aid for --serve)")
     args = parser.parse_args(argv)
 
     if args.serve:

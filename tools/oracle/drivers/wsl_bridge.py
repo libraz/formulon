@@ -53,19 +53,13 @@ def _ensure_wsl2() -> None:
     """
 
     if platform.system() != "Linux":
-        raise RuntimeError(
-            f"WSL bridge requires Linux/WSL2 host, got {platform.system()}"
-        )
+        raise RuntimeError(f"WSL bridge requires Linux/WSL2 host, got {platform.system()}")
     try:
         proc = Path("/proc/version").read_text(encoding="utf-8").lower()
     except OSError as exc:
-        raise RuntimeError(
-            "cannot read /proc/version (WSL2 detection failed)"
-        ) from exc
+        raise RuntimeError("cannot read /proc/version (WSL2 detection failed)") from exc
     if "microsoft" not in proc:
-        raise RuntimeError(
-            "WSL bridge requires WSL2 (no 'microsoft' in /proc/version)"
-        )
+        raise RuntimeError("WSL bridge requires WSL2 (no 'microsoft' in /proc/version)")
 
 
 class WSLBridgeOracle(OracleDriver):
@@ -84,8 +78,7 @@ class WSLBridgeOracle(OracleDriver):
         _ensure_wsl2()
         if not win_python:
             raise RuntimeError(
-                "WSL bridge requires `win_python` in targets.yaml; "
-                "run `make oracle-setup` to discover it."
+                "WSL bridge requires `win_python` in targets.yaml; run `make oracle-setup` to discover it."
             )
         self._win_python = win_python
         self._visible = visible
@@ -118,8 +111,10 @@ class WSLBridgeOracle(OracleDriver):
         #     Windows locale.
         cmd = [
             self._win_python,
-            "-X", "utf8=1",
-            "-m", "tools.oracle.drivers.windows_excel",
+            "-X",
+            "utf8=1",
+            "-m",
+            "tools.oracle.drivers.windows_excel",
             "--serve",
         ]
         if self._visible:
@@ -136,9 +131,7 @@ class WSLBridgeOracle(OracleDriver):
         # Drain stderr in a background thread so a chatty subprocess
         # never blocks on a full pipe. The buffer is consulted only when
         # we surface an error.
-        self._stderr_thread = threading.Thread(
-            target=self._drain_stderr, daemon=True
-        )
+        self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
         self._stderr_thread.start()
 
         # Wait for the ready line. If the subprocess fails to start
@@ -146,9 +139,7 @@ class WSLBridgeOracle(OracleDriver):
         # _read_line raises with the captured stderr.
         ready = self._read_line()
         if ready.get("type") != "ready":
-            raise RuntimeError(
-                f"windows_excel did not announce ready: {ready!r}"
-            )
+            raise RuntimeError(f"windows_excel did not announce ready: {ready!r}")
         self._cached_env = ready.get("environment") or {}
         return self
 
@@ -189,8 +180,7 @@ class WSLBridgeOracle(OracleDriver):
         if not line:
             rc = self._proc.poll()
             raise RuntimeError(
-                f"windows_excel subprocess closed unexpectedly (rc={rc}):\n"
-                f"stderr: {self._stderr_dump()}"
+                f"windows_excel subprocess closed unexpectedly (rc={rc}):\nstderr: {self._stderr_dump()}"
             )
         return json.loads(line)
 
@@ -210,15 +200,11 @@ class WSLBridgeOracle(OracleDriver):
             self._proc.stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
             self._proc.stdin.flush()
         except (BrokenPipeError, OSError) as exc:
-            raise RuntimeError(
-                f"windows_excel bridge stdin closed: {exc}\n"
-                f"stderr: {self._stderr_dump()}"
-            ) from exc
+            raise RuntimeError(f"windows_excel bridge stdin closed: {exc}\nstderr: {self._stderr_dump()}") from exc
         resp = self._read_line()
         if resp.get("type") == "error":
             raise RuntimeError(
-                f"windows_excel server error: {resp.get('error', 'unknown')}\n"
-                f"stderr: {self._stderr_dump()}"
+                f"windows_excel server error: {resp.get('error', 'unknown')}\nstderr: {self._stderr_dump()}"
             )
         return resp
 
@@ -277,8 +263,5 @@ class WSLBridgeOracle(OracleDriver):
         )
         expect = out.get("expect")
         if not isinstance(expect, dict):
-            raise RuntimeError(
-                f"windows_excel bridge returned malformed run_workbook_case "
-                f"response: {out!r}"
-            )
+            raise RuntimeError(f"windows_excel bridge returned malformed run_workbook_case response: {out!r}")
         return expect

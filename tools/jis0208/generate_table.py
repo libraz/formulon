@@ -72,7 +72,7 @@ def main() -> None:
             // tests/oracle/cases/code_char_jp_probes.yaml on Mac Excel 16.108.1
             // ja-JP, 2026-04-27).
             //
-            // Mapped entries: {count_mapped} / {len(table)} slots ({len(table)*2} bytes raw).
+            // Mapped entries: {count_mapped} / {len(table)} slots ({len(table) * 2} bytes raw).
             //
             // @size-budget: 18 KB
 

@@ -15,13 +15,11 @@ switch over `kind`.
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
-
 
 # Recognised value kinds, mirroring src/value.h's ValueKind minus Array/Ref/
 # Lambda which the oracle pipeline doesn't exercise yet.
@@ -190,9 +188,7 @@ def load_suite(path: Path) -> Suite:
 
         formula = raw.get("formula")
         if not isinstance(formula, str) or not formula.startswith("="):
-            raise ValueError(
-                f"{path}: case '{cid}' 'formula' must start with '='"
-            )
+            raise ValueError(f"{path}: case '{cid}' 'formula' must start with '='")
 
         raw_setup = raw.get("setup") or {}
         if not isinstance(raw_setup, dict):
@@ -200,24 +196,16 @@ def load_suite(path: Path) -> Suite:
         setup: Dict[str, Dict[str, Any]] = {}
         for addr, value in raw_setup.items():
             if not isinstance(addr, str):
-                raise ValueError(
-                    f"{path}: case '{cid}' setup key must be a string A1 address"
-                )
-            setup[addr] = _normalise_value(
-                value, where=f"case '{cid}', setup[{addr}]"
-            )
+                raise ValueError(f"{path}: case '{cid}' setup key must be a string A1 address")
+            setup[addr] = _normalise_value(value, where=f"case '{cid}', setup[{addr}]")
 
-        case_tol = _load_tolerance(
-            raw.get("tolerance"), where=f"{path}: case '{cid}'"
-        )
+        case_tol = _load_tolerance(raw.get("tolerance"), where=f"{path}: case '{cid}'")
 
         compare_mode_raw = raw.get("compare_mode")
         compare_mode: Optional[str] = None
         if compare_mode_raw is not None:
             if not isinstance(compare_mode_raw, str):
-                raise ValueError(
-                    f"{path}: case '{cid}' 'compare_mode' must be a string"
-                )
+                raise ValueError(f"{path}: case '{cid}' 'compare_mode' must be a string")
             if compare_mode_raw not in COMPARE_MODES:
                 raise ValueError(
                     f"{path}: case '{cid}' has unknown compare_mode "
@@ -230,9 +218,7 @@ def load_suite(path: Path) -> Suite:
 
         author_expect: Optional[Dict[str, Any]] = None
         if "expect" in raw and raw["expect"] is not None:
-            author_expect = _normalise_value(
-                raw["expect"], where=f"case '{cid}', expect"
-            )
+            author_expect = _normalise_value(raw["expect"], where=f"case '{cid}', expect")
 
         cases.append(
             Case(

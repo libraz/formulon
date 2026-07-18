@@ -54,16 +54,13 @@ LAZY_ENTRY_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*&eval_')
 # `static constexpr const char* kNames[] = {"LET", nullptr};`. We scan the
 # file for every string literal inside a `kNames[] = { ... }` block so
 # future additions (LAMBDA, ...) are picked up without edits here.
-SPECIAL_FORMS_BLOCK_RE = re.compile(
-    r"kNames\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.DOTALL
-)
+SPECIAL_FORMS_BLOCK_RE = re.compile(r"kNames\s*\[\s*\]\s*=\s*\{([^}]*)\}", re.DOTALL)
 SPECIAL_FORMS_NAME_RE = re.compile(r'"([A-Z][A-Z0-9_.]*)"')
-C_API_AVAILABILITY_RE = re.compile(
-    r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*FM_FUNCTION_([A-Z_]+)\s*\}'
-)
+C_API_AVAILABILITY_RE = re.compile(r'\{\s*"([A-Z][A-Z0-9_.]*)"\s*,\s*FM_FUNCTION_([A-Z_]+)\s*\}')
 
 
 # ---- ANSI helpers --------------------------------------------------------
+
 
 def _supports_color() -> bool:
     if os.environ.get("NO_COLOR"):
@@ -97,6 +94,7 @@ def bold(s: str) -> str:
 
 
 # ---- Catalog parsing -----------------------------------------------------
+
 
 def load_catalog(path: Path) -> Tuple[List[Tuple[str, List[str]]], Set[str]]:
     """Parses `functions.txt`. Returns (sections, all_names).
@@ -202,6 +200,7 @@ def load_c_api_availability(path: Path) -> Dict[str, str]:
 
 # ---- Source scanning -----------------------------------------------------
 
+
 def scan_registered_names(eval_dir: Path) -> Set[str]:
     """Returns every name appearing inside a `FunctionDef{"NAME"` literal
     under `src/eval/` (recursively). Covers builtins + any host extensions
@@ -250,14 +249,11 @@ def scan_special_form_names(path: Path) -> Set[str]:
 def scan_implemented(repo_root: Path) -> Set[str]:
     eval_dir = repo_root / "src" / "eval"
     special_forms = eval_dir / "special_forms_catalog.cpp"
-    return (
-        scan_registered_names(eval_dir)
-        | scan_lazy_names(eval_dir)
-        | scan_special_form_names(special_forms)
-    )
+    return scan_registered_names(eval_dir) | scan_lazy_names(eval_dir) | scan_special_form_names(special_forms)
 
 
 # ---- Reporting -----------------------------------------------------------
+
 
 def _count_line(impl: int, total: int) -> str:
     pct = 0.0 if total == 0 else 100.0 * impl / total
@@ -373,13 +369,13 @@ def check_c_api_availability(statuses: Dict[str, str]) -> int:
 
 # ---- main ----------------------------------------------------------------
 
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--missing",
         action="store_true",
-        help="Print only names that are in the catalog but not implemented, "
-        "one per line.",
+        help="Print only names that are in the catalog but not implemented, one per line.",
     )
     parser.add_argument(
         "--orphans",
