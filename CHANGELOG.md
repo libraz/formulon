@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-07-19
+
+### Added
+
+- Full Excel 365 dynamic-array spill semantics. Bare ranges, arithmetic and
+  comparison operators, and `IF` conditions now spill to their argument
+  shape, matching Excel's implicit array evaluation; bare-range spills fill
+  blanks with `0`. Scalar functions also spill each range argument element-
+  wise instead of reducing to the top-left cell.
+
+### Fixed
+
+- Bounded every attacker-driven work path with a request-scoped budget across
+  evaluation, conditional formatting, pivot, and I/O, so a hostile workbook
+  can no longer force unbounded computation.
+- Rejected out-of-grid coordinates at the public C API and core entry points,
+  out-of-grid `Print_Titles` repeat spans, and out-of-range pivot-cache field
+  indices.
+- Hardened OOXML/XLSB part names, detected encrypted containers, and bounded
+  `BrtExternSheet` reservation to the available payload; validated row /
+  column / array bounds when decoding XLSB sheet records; cast the XLSB
+  `ExternSheet` reserve count to `size_t` for the 32-bit WASM build.
+- Hardened the parser against literal postfix-call, exponent overflow, and
+  out-of-memory name interning.
+- Aligned the VM's lexical scope with the tree-walker and made it fail closed
+  on invalid opcodes.
+- Recalc dependency correctness: rebuild the dependency graph on sheet
+  permutation and gate evaluation on a strict parse; rewrite cell references
+  on sheet rename and surface off-grid spills as `#SPILL!`; track direct
+  lambda-call body dependencies and invalidate on name retarget or
+  spill-phantom write; invalidate a memoized pivot layout when its source
+  cache mutates.
+- Reconciled the raw x14 conditional-format overlay when CF rules are removed.
+- Measured the sheet-name length limit in code units and validated it on add.
+- Canonicalized and localized every enumerated function through the C API.
+- `formulon_cli recalc` now writes its output atomically, so a failure no
+  longer destroys the original workbook; `eval --repeat` re-evaluates on each
+  pass instead of being a no-op.
+
+### Performance
+
+- Extract zip entries into a single caller-owned buffer.
+
+### Build / CI
+
+- Added a repo-wide formatter / linter (biome + ruff) with a `make format`
+  fan-out and a CI check-only counterpart.
+
+**Detailed Release Notes**: [GitHub Release](https://github.com/libraz/formulon/releases/tag/v0.9.6)
+
 ## [0.9.5] - 2026-07-04
 
 ### Added
@@ -219,7 +269,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.5...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.6...HEAD
+[0.9.6]: https://github.com/libraz/formulon/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/libraz/formulon/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/libraz/formulon/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/libraz/formulon/compare/v0.9.2...v0.9.3
