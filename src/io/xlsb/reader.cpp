@@ -696,6 +696,10 @@ Expected<CellHeaderInfo, Error> ReadCellHeader(ByteSpan& cursor) {
   if (!col_or) {
     return col_or.error();
   }
+  if (col_or.value() >= Sheet::kMaxCols) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb cell header column out of range",
+                      "context=xlsb_reader");
+  }
   // iStyleRef (3 bytes, little-endian) + fPhShow (1 byte) = 4 bytes.
   if (cursor.size < 4) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb cell header truncated (style/phonetic)",
@@ -734,6 +738,12 @@ Expected<void, Error> ApplyXfIndex(Workbook& wb, std::size_t sheet_index, std::u
 /// footprint have not been decoded yet) does not work.
 void RegisterArraySpills(Workbook& wb, std::size_t sheet_index, const std::vector<ArrayAnchor>& anchors) {
   for (const ArrayAnchor& a : anchors) {
+    // Reversed rects are rejected at decode time (`BrtArrFmla` case in
+    // `DecodeSheetBin`); guard again here so the size math below can
+    // never underflow-wrap.
+    if (a.last_row < a.row || a.last_col < a.col) {
+      continue;
+    }
     const std::uint32_t rows = a.last_row - a.row + 1U;
     const std::uint32_t cols = a.last_col - a.col + 1U;
     std::vector<Value> values;
@@ -782,6 +792,10 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         auto row_or = read_u32(p);
         if (!row_or) {
           return row_or.error();
+        }
+        if (row_or.value() >= Sheet::kMaxRows) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtRowHdr row out of range",
+                            "context=xlsb_reader");
         }
         state.current_row = row_or.value();
         state.row_seen = true;
@@ -1108,6 +1122,17 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         auto col_last_or = read_u32(p);
         if (!col_last_or) {
           return col_last_or.error();
+        }
+        // The RfX rect must lie inside the grid and be well-ordered on
+        // BOTH axes before any of it is used: the anchor guard below is
+        // an OR, so a rect reversed on only one axis would otherwise
+        // still be recorded and wrap the size math in
+        // `RegisterArraySpills`.
+        if (rw_first_or.value() >= Sheet::kMaxRows || rw_last_or.value() >= Sheet::kMaxRows ||
+            col_first_or.value() >= Sheet::kMaxCols || col_last_or.value() >= Sheet::kMaxCols ||
+            rw_last_or.value() < rw_first_or.value() || col_last_or.value() < col_first_or.value()) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtArrFmla range out of bounds",
+                            "context=xlsb_reader");
         }
         if (p.size < 1) {
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtArrFmla flag truncated",

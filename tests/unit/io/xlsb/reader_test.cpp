@@ -174,9 +174,10 @@ std::vector<std::uint8_t> WorkbookBin() {
   return body;
 }
 
-/// Builds a sheet with a single BrtCellReal at row 0, col 0 with value
-/// `cell_value`.
-std::vector<std::uint8_t> SheetBinReal(double cell_value) {
+/// Builds a sheet with a single BrtCellReal at (`row`, `col`) with value
+/// `cell_value`. `row` / `col` default to A1 but are overridable so the
+/// bounds-validation tests can inject out-of-range indices.
+std::vector<std::uint8_t> SheetBinReal(double cell_value, std::uint32_t row = 0, std::uint32_t col = 0) {
   std::vector<std::uint8_t> body;
   AppendRecord(body, 129, {});  // BrtBeginSheet
   AppendRecord(body, 145, {});  // BrtBeginSheetData
@@ -187,20 +188,55 @@ std::vector<std::uint8_t> SheetBinReal(double cell_value) {
   // because the rest of the BrtRowHdr payload is not consumed.
   {
     std::vector<std::uint8_t> p;
-    AppendU32(p, 0);  // row index
+    AppendU32(p, row);  // row index
     AppendRecord(body, 0, p);
   }
 
   // BrtCellReal (5): cell-header (col, style3, ph1) + 8-byte double.
   {
     std::vector<std::uint8_t> p;
-    AppendU32(p, 0);  // column
-    AppendU8(p, 0);   // style[0]
-    AppendU8(p, 0);   // style[1]
-    AppendU8(p, 0);   // style[2]
-    AppendU8(p, 0);   // fPhShow
+    AppendU32(p, col);  // column
+    AppendU8(p, 0);     // style[0]
+    AppendU8(p, 0);     // style[1]
+    AppendU8(p, 0);     // style[2]
+    AppendU8(p, 0);     // fPhShow
     AppendDouble(p, cell_value);
     AppendRecord(body, 5, p);
+  }
+
+  AppendRecord(body, 146, {});  // BrtEndSheetData
+  AppendRecord(body, 130, {});  // BrtEndSheet
+  return body;
+}
+
+/// Builds a sheet with a single BrtArrFmla whose RfX rect is
+/// (`rw_first`..`rw_last`, `col_first`..`col_last`) and whose
+/// CellParsedFormula rgce is `rgce` (cb = 0).
+std::vector<std::uint8_t> SheetBinArrFmla(std::uint32_t rw_first, std::uint32_t rw_last, std::uint32_t col_first,
+                                          std::uint32_t col_last, const std::vector<std::uint8_t>& rgce) {
+  std::vector<std::uint8_t> body;
+  AppendRecord(body, 129, {});  // BrtBeginSheet
+  AppendRecord(body, 145, {});  // BrtBeginSheetData
+
+  {
+    std::vector<std::uint8_t> p;
+    AppendU32(p, rw_first);
+    AppendRecord(body, 0, p);  // BrtRowHdr
+  }
+
+  // BrtArrFmla (426): RfX (4 x u32) + reserved byte + cce (u32) + rgce
+  // + cb (u32).
+  {
+    std::vector<std::uint8_t> p;
+    AppendU32(p, rw_first);
+    AppendU32(p, rw_last);
+    AppendU32(p, col_first);
+    AppendU32(p, col_last);
+    AppendU8(p, 0);  // reserved/flag
+    AppendU32(p, static_cast<std::uint32_t>(rgce.size()));
+    p.insert(p.end(), rgce.begin(), rgce.end());
+    AppendU32(p, 0);  // cb
+    AppendRecord(body, 426, p);
   }
 
   AppendRecord(body, 146, {});  // BrtEndSheetData
@@ -412,6 +448,82 @@ TEST(XlsbReader, UndecodableFormulaPreservesCachedValueWithoutFakeFormula) {
   // Cached value preserved so the cell still shows the right number.
   ASSERT_TRUE(c->cached_value.is_number());
   EXPECT_EQ(c->cached_value.as_number(), 42.0);
+}
+
+TEST(XlsbReader, OutOfRangeCellColumnIsRecordCorrupt) {
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  // Column index == kMaxCols is one past the last valid column (XFD).
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0, /*row=*/0, /*col=*/Sheet::kMaxCols)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
+TEST(XlsbReader, OutOfRangeRowHeaderIsRecordCorrupt) {
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  // Row index == kMaxRows is one past the last valid row.
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0, /*row=*/Sheet::kMaxRows, /*col=*/0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
+TEST(XlsbReader, ReversedArrayFormulaRectIsRecordCorrupt) {
+  // rw_last > rw_first but col_last < col_first: reversed on the column
+  // axis only. The anchor guard is an OR over the two axes, so without
+  // rect validation this anchor would be recorded and the spill size
+  // math would underflow-wrap.
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};  // PtgInt 5
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin",
+                   SheetBinArrFmla(/*rw_first=*/0, /*rw_last=*/1, /*col_first=*/2, /*col_last=*/1, rgce)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
+TEST(XlsbReader, InBoundsArrayFormulaRectStillDecodes) {
+  // A well-ordered in-bounds 2x1 rect anchored at A1 must keep decoding
+  // after the bounds validation: the anchor gets the decoded formula
+  // text and the read succeeds.
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};  // PtgInt 5
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin",
+                   SheetBinArrFmla(/*rw_first=*/0, /*rw_last=*/1, /*col_first=*/0, /*col_last=*/0, rgce)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  const Cell* c = result.value().workbook.sheet(0).cell_at(0, 0);
+  ASSERT_NE(c, nullptr);
+  EXPECT_EQ(c->formula_text, "=5");
 }
 
 TEST(XlsbReader, MissingContentTypesIsContentTypeInvalid) {
