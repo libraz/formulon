@@ -113,7 +113,19 @@ class Workbook {
   /// invalidated by subsequent `add_sheet` calls (which may reallocate the
   /// underlying vector). Duplicate names are not rejected at this layer;
   /// OOXML-level name validation lives at the I/O boundary.
+  ///
+  /// This unchecked overload is for trusted callers (the package reader,
+  /// which trusts names Excel already wrote, and internal setup). Public
+  /// API callers should use `add_sheet_validated`.
   Sheet& add_sheet(std::string name);
+
+  /// Appends a new sheet after validating `name` the same way
+  /// `rename_sheet` does: non-empty, at most 31 UTF-16 code units, no
+  /// forbidden character (`: \ / ? * [ ]`), and no case-insensitive
+  /// collision with an existing sheet. Returns a pointer to the new sheet
+  /// on success (owned by the Workbook, invalidated by later structural
+  /// mutations) or `kInvalidSheetName` on any violation.
+  Expected<Sheet*, Error> add_sheet_validated(std::string name);
 
   /// Renames the sheet at `index` to `new_name`.
   ///

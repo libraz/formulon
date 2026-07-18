@@ -19,6 +19,7 @@
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "eval/scheduler.h"
+#include "eval/utf8_length.h"
 #include "io/defined_names.h"
 #include "io/external_links.h"
 #include "io/format_detect.h"
@@ -44,6 +45,12 @@
 #include "value.h"
 
 namespace formulon {
+namespace {
+// Forward declaration; defined further below alongside the other
+// sheet-name helpers. Declared here so the early `add_sheet_validated`
+// definition can call it.
+Expected<void, Error> validate_sheet_name(std::string_view name);
+}  // namespace
 
 Workbook::Workbook() : engine_(std::make_unique<eval::RecalcEngine>()), kind_(io::WorkbookKind::kXlsx) {}
 Workbook::Workbook(Workbook&&) noexcept = default;
@@ -69,6 +76,18 @@ std::string_view Workbook::intern_text(std::string_view text) {
 Sheet& Workbook::add_sheet(std::string name) {
   sheets_.emplace_back(Sheet{std::move(name)});
   return sheets_.back();
+}
+
+Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
+  RETURN_IF_ERROR(validate_sheet_name(name));
+  for (const Sheet& existing : sheets_) {
+    if (strings::case_insensitive_eq(existing.name(), name)) {
+      return make_error(FormulonErrorCode::kInvalidSheetName, "add_sheet: name collides with an existing sheet",
+                        "name=\"" + name + "\"");
+    }
+  }
+  sheets_.emplace_back(Sheet{std::move(name)});
+  return &sheets_.back();
 }
 
 namespace {
@@ -180,10 +199,10 @@ void rewrite_cell_formulas_for_sheet_rename(std::vector<Sheet>& sheets,
 }
 
 // Excel's structural validation for sheet names: non-empty, ≤ 31
-// characters, no `: \ / ? * [ ]`. This is a byte-level check (the
-// forbidden set is ASCII), so it works correctly on UTF-8 sheet names
-// because none of the disallowed code units appear as continuation
-// bytes (all are < 0x80).
+// characters, no `: \ / ? * [ ]`. The forbidden-character scan is a
+// byte-level check (the forbidden set is ASCII), so it works correctly on
+// UTF-8 sheet names because none of the disallowed code units appear as
+// continuation bytes (all are < 0x80).
 bool is_valid_sheet_name_chars(std::string_view name) noexcept {
   for (char byte : name) {
     switch (byte) {
@@ -200,6 +219,34 @@ bool is_valid_sheet_name_chars(std::string_view name) noexcept {
     }
   }
   return true;
+}
+
+// Excel measures the 31-"character" sheet-name limit in UTF-16 code units
+// (its internal string representation), not UTF-8 bytes. Counting bytes
+// wrongly rejects a 31-character Japanese name (up to 93 bytes) far short
+// of the real limit; counting code units matches Excel and treats a
+// supplementary-plane emoji as the two units Excel charges for it.
+constexpr std::uint32_t kMaxSheetNameUnits = 31U;
+
+// Shared structural validator for a sheet name across every mutation
+// surface (add / rename / any future import-side check). Verifies the
+// name is non-empty, within the code-unit length limit, and free of
+// forbidden characters. Duplicate/case-folding collision is caller-scoped
+// (it needs the target index) and handled at each call site.
+Expected<void, Error> validate_sheet_name(std::string_view name) {
+  if (name.empty()) {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name must not be empty", "name=\"\"");
+  }
+  if (eval::utf16_units_in(name) > kMaxSheetNameUnits) {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name exceeds 31 characters",
+                      "name=\"" + std::string(name) + "\"");
+  }
+  if (!is_valid_sheet_name_chars(name)) {
+    return make_error(FormulonErrorCode::kInvalidSheetName,
+                      "sheet name contains a forbidden character (: \\ / ? * [ ])",
+                      "name=\"" + std::string(name) + "\"");
+  }
+  return Expected<void, Error>::Ok();
 }
 
 // Quotes `sheet` for use in a formula reference. Excel quotes a sheet
@@ -323,13 +370,9 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
     return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "rename_sheet: index out of range",
                       "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
   }
-  // Validate the new name. Excel rejects empty, > 31 chars, or any of
-  // the forbidden ASCII separators.
-  constexpr std::size_t kMaxSheetNameLength = 31U;
-  if (new_name.empty() || new_name.size() > kMaxSheetNameLength || !is_valid_sheet_name_chars(new_name)) {
-    return make_error(FormulonErrorCode::kInvalidSheetName, "rename_sheet: invalid sheet name",
-                      "name=\"" + new_name + "\"");
-  }
+  // Validate the new name (non-empty, ≤ 31 code units, no forbidden
+  // characters) via the shared validator so add / rename agree.
+  RETURN_IF_ERROR(validate_sheet_name(new_name));
   // Collision check (case-insensitive). A no-op rename — same case-fold
   // as the current name — bypasses the collision check so callers can
   // change only the casing.

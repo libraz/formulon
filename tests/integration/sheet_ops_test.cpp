@@ -92,6 +92,80 @@ TEST(WorkbookSheetOps, RenameRejectsOutOfRange) {
   EXPECT_EQ(r.error().code, FormulonErrorCode::kSheetIndexOutOfRange);
 }
 
+TEST(WorkbookSheetOps, RenameAccepts31JapaneseCharacters) {
+  Workbook wb = ThreeSheetWorkbook();
+  // 31 copies of "あ" (U+3042, 3 bytes each = 93 bytes) is exactly at the
+  // 31-character limit; a byte-count check would wrongly reject it.
+  std::string name;
+  for (int i = 0; i < 31; ++i) {
+    name += "\xE3\x81\x82";  // "あ"
+  }
+  auto r = wb.rename_sheet(0, name);
+  ASSERT_TRUE(static_cast<bool>(r)) << "31 Japanese characters must be within the limit";
+  EXPECT_EQ(wb.sheet(0).name(), name);
+}
+
+TEST(WorkbookSheetOps, RenameRejects32JapaneseCharacters) {
+  Workbook wb = ThreeSheetWorkbook();
+  std::string name;
+  for (int i = 0; i < 32; ++i) {
+    name += "\xE3\x81\x82";  // "あ"
+  }
+  auto r = wb.rename_sheet(0, name);
+  ASSERT_FALSE(static_cast<bool>(r));
+  EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(wb.sheet(0).name(), "Alpha");
+}
+
+TEST(WorkbookSheetOps, RenameCountsEmojiAsTwoUnits) {
+  Workbook wb = ThreeSheetWorkbook();
+  // "😀" (U+1F600) is a supplementary-plane codepoint: two UTF-16 units.
+  // 16 emoji = 32 units, one over the limit.
+  std::string name;
+  for (int i = 0; i < 16; ++i) {
+    name += "\xF0\x9F\x98\x80";  // "😀"
+  }
+  auto r = wb.rename_sheet(0, name);
+  ASSERT_FALSE(static_cast<bool>(r));
+  EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
+}
+
+TEST(WorkbookSheetOps, AddSheetValidatedAppendsAndReturnsPointer) {
+  Workbook wb = ThreeSheetWorkbook();
+  auto r = wb.add_sheet_validated("Delta");
+  ASSERT_TRUE(static_cast<bool>(r));
+  ASSERT_NE(r.value(), nullptr);
+  EXPECT_EQ(r.value()->name(), "Delta");
+  EXPECT_EQ(wb.sheet_count(), 4U);
+}
+
+TEST(WorkbookSheetOps, AddSheetValidatedRejectsDuplicateCaseInsensitively) {
+  Workbook wb = ThreeSheetWorkbook();
+  auto r = wb.add_sheet_validated("beta");  // collides with "Beta"
+  ASSERT_FALSE(static_cast<bool>(r));
+  EXPECT_EQ(r.error().code, FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(wb.sheet_count(), 3U);
+}
+
+TEST(WorkbookSheetOps, AddSheetValidatedRejectsEmptyForbiddenAndTooLong) {
+  Workbook wb = ThreeSheetWorkbook();
+  EXPECT_FALSE(static_cast<bool>(wb.add_sheet_validated("")));
+  EXPECT_FALSE(static_cast<bool>(wb.add_sheet_validated("a/b")));
+  EXPECT_FALSE(static_cast<bool>(wb.add_sheet_validated(std::string(32U, 'a'))));
+  EXPECT_EQ(wb.sheet_count(), 3U);
+}
+
+TEST(WorkbookSheetOps, AddSheetValidatedAccepts31JapaneseCharacters) {
+  Workbook wb = ThreeSheetWorkbook();
+  std::string name;
+  for (int i = 0; i < 31; ++i) {
+    name += "\xE3\x81\x82";  // "あ"
+  }
+  auto r = wb.add_sheet_validated(name);
+  ASSERT_TRUE(static_cast<bool>(r));
+  EXPECT_EQ(wb.sheet_count(), 4U);
+}
+
 TEST(WorkbookSheetOps, RenameUpdatesWorkbookScopedDefinedNames) {
   Workbook wb = ThreeSheetWorkbook();
   // Pre-populate two defined names: one workbook-scoped that mentions

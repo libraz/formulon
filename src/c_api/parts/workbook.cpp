@@ -187,7 +187,10 @@ extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8
   if (wb == nullptr || utf8_name == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_add_sheet: NULL argument");
   }
-  wb->workbook().add_sheet(std::string(utf8_name));
+  auto r = wb->workbook().add_sheet_validated(std::string(utf8_name));
+  if (!r) {
+    return set_last_error(r.error());
+  }
   return 0;
 }
 
