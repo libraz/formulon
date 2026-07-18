@@ -202,6 +202,15 @@ TEST(PrintTitlesTest, MalformedTokenReturnsInvalidArea) {
   EXPECT_EQ(result.error().code, FormulonErrorCode::kPrintInvalidArea);
 }
 
+TEST(PrintTitlesTest, OutOfGridRepeatRowSpanReturnsInvalidArea) {
+  // `1:4294967295` would otherwise drive pagination through a
+  // multi-billion-row loop; the span must be rejected up front.
+  Workbook wb = MakeWorkbook({SheetScoped("_xlnm.Print_Titles", "Sheet1!$1:$4294967295", 0)});
+  auto result = resolve_print_titles(wb, 0);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kPrintInvalidArea);
+}
+
 }  // namespace
 }  // namespace print
 }  // namespace formulon

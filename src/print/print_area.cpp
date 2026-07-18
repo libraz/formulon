@@ -245,6 +245,12 @@ bool ParseTitleToken(std::string_view token, PrintTitles* out_titles) {
     }
     const std::uint32_t lo = std::min(r1, r2) - 1U;
     const std::uint32_t hi = std::max(r1, r2) - 1U;
+    // A crafted `Print_Titles` such as `1:4294967295` would otherwise
+    // drive pagination through a multi-billion-row loop. Reject any span
+    // whose far edge leaves the Excel grid.
+    if (hi >= Sheet::kMaxRows) {
+      return false;
+    }
     out_titles->repeat_rows = std::make_pair(lo, hi);
     return true;
   }
@@ -262,6 +268,9 @@ bool ParseTitleToken(std::string_view token, PrintTitles* out_titles) {
   }
   const std::uint32_t lo = std::min(c1, c2) - 1U;
   const std::uint32_t hi = std::max(c1, c2) - 1U;
+  if (hi >= Sheet::kMaxCols) {
+    return false;
+  }
   out_titles->repeat_cols = std::make_pair(lo, hi);
   return true;
 }
