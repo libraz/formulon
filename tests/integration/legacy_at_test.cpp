@@ -149,14 +149,8 @@ TEST(LegacyAt, AtPrefixOn2DRangeReturnsValueError) {
 
 TEST(LegacyAt, BareColumnRangeSpillsAtTopLeftOutsideRange) {
   // F1 = =A1:A5 -- a column range typed in a cell OUTSIDE the column.
-  // Excel 365 spills the array; Formulon's behaviour:
-  //   * Out-of-range formula cell (col F, row 1) -> top-left fallback
-  //     A1 == 1.
-  //   * The Array result returned by the RangeOp top-left case is a
-  //     single scalar value (no Value::Array), so no spill is committed
-  //     -- this branch hits the scalar resolve_ref path directly.
-  // This test locks in current behaviour; future spill-engine refactor
-  // may convert this into a true 5-row spill.
+  // Excel 365 spills the array; the anchor (F1) holds the top-left
+  // element A1 == 1.
   Workbook wb = Workbook::create();
   wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   FillA1ToA5(wb);
@@ -166,18 +160,17 @@ TEST(LegacyAt, BareColumnRangeSpillsAtTopLeftOutsideRange) {
 
   const Value f1 = StoredValue(wb, 0U, 0U, 5U);
   ASSERT_TRUE(f1.is_number()) << "kind=" << static_cast<int>(f1.kind());
-  // F1's row (0) IS in [0..4] -- the row/col-alignment branch fires
-  // first, projecting onto A1 (first row of the column). Both branches
-  // happen to return the same value here (1.0).
   EXPECT_DOUBLE_EQ(f1.as_number(), 1.0);
-  // Phantom column F2..F5 should NOT carry spilled values; only F1 is
-  // touched.
+  // StoredValue reads through cell_at(), which sees only the anchor's
+  // stored record and not the phantom spill cells; F2 therefore reads
+  // back blank here even though the spilled region logically covers it.
   EXPECT_TRUE(StoredValue(wb, 0U, 1U, 5U).is_blank());
 }
 
-TEST(LegacyAt, BareColumnRangeAlignedReturnsAlignedCell) {
-  // F3 = =A1:A5 -- formula row 3 (0-based 2) IS in [0..4], so the
-  // RangeOp branch returns the row/col-aligned cell A3 == 3.
+TEST(LegacyAt, BareColumnRangeSpillsAtTopLeftEvenWhenRowAligned) {
+  // F3 = =A1:A5 -- Excel 365 spills a bare range regardless of whether
+  // the formula cell's row falls inside the range. The anchor (F3) holds
+  // the top-left element A1 == 1; it is NOT the row-aligned cell A3.
   Workbook wb = Workbook::create();
   wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   FillA1ToA5(wb);
@@ -187,7 +180,7 @@ TEST(LegacyAt, BareColumnRangeAlignedReturnsAlignedCell) {
 
   const Value f3 = StoredValue(wb, 0U, 2U, 5U);
   ASSERT_TRUE(f3.is_number());
-  EXPECT_DOUBLE_EQ(f3.as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(f3.as_number(), 1.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -337,13 +330,12 @@ TEST(LegacyAt, BareRangeBinaryOpMultipliesElementWise) {
   EXPECT_DOUBLE_EQ(c1.as_number(), 10.0);
 }
 
-TEST(LegacyAt, AtPrefixBeforeBinaryOpAppliesToWholeExpression) {
+TEST(LegacyAt, AtPrefixBeforeBinaryOpTakesTopLeftOfComputedArray) {
   // C3 = =@(A1:A5*2) -- the `@` binds the whole parenthesised
-  // expression. Engine behaviour: the operand of the
-  // ImplicitIntersection node is a BinaryOp, which falls into the
-  // "non-range operand" passthrough branch. The BinaryOp then evaluates
-  // its left operand (A1:A5) under the same scalar context -- formula
-  // row 2 IS in [0..4], so A3 = 3 is selected, multiplied by 2 = 6.
+  // expression, whose operand is a BinaryOp producing the computed array
+  // {2,4,6,8,10}. Implicit-intersection row/column alignment only applies
+  // to a direct range/reference operand; on a computed array `@` takes
+  // the top-left element -- A1*2 == 2, not the row-aligned A3*2.
   Workbook wb = Workbook::create();
   wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   FillA1ToA5(wb);
@@ -353,7 +345,7 @@ TEST(LegacyAt, AtPrefixBeforeBinaryOpAppliesToWholeExpression) {
 
   const Value c3 = StoredValue(wb, 0U, 2U, 2U);
   ASSERT_TRUE(c3.is_number()) << "kind=" << static_cast<int>(c3.kind());
-  EXPECT_DOUBLE_EQ(c3.as_number(), 6.0);
+  EXPECT_DOUBLE_EQ(c3.as_number(), 2.0);
 }
 
 }  // namespace
