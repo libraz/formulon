@@ -57,11 +57,15 @@ These are **permanent** non-goals, not "not yet." The scope is finite on purpose
 
 **All 522 catalogued Excel functions are recognized**, but recognition is not the same as full Excel-compatible execution. The function catalog exposes availability explicitly; `make function-status` reports the current split.
 
+The two top-level rows are exclusive and sum to the full 522; the
+environment-bound row is a **subset of the 507 real implementations**, called
+out separately because a fixed golden cannot fully describe it — it is not an
+additional category (507 + 15 = 522, not 524).
+
 | Availability | Count | Meaning | Examples |
 |--------------|-------|---------|----------|
 | Real implementation | 507 | Evaluates inside the normal calculation engine and is covered by unit and/or oracle tests. | Math, statistics, lookup, text, dynamic arrays |
-| Implemented, verification ongoing | 0 | Implemented, but still waiting for additional oracle confirmation on Excel edge cases. | None currently |
-| Environment-bound | 2 | Depends on host or workbook state, so a fixed golden cannot fully describe it. | `INFO`, `CELL` |
+| &nbsp;&nbsp;↳ of which environment-bound | 2 | A real implementation whose result depends on host or workbook state, so a fixed golden cannot fully describe it. Counted within the 507 above. | `INFO`, `CELL` |
 | Unavailable stub | 15 | Requires external services, network I/O, COM providers, or OLAP connections that Formulon does not embed; returns a fixed unavailable error surface. | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
 **92 oracle categories** are defined and regenerated from Mac Excel 365 ja-JP, with Windows Excel 365 ja-JP covered by the `win-365-ja_JP` variant goldens. Current local verification is `14342/14342` fast tests passing, `4026/4026` primary formula oracle cases passing with `166` documented skips. Every remaining skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 522 catalogued functions, `515` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `7` (`FILTERXML`, `ARRAYTOTEXT`, `CONCAT`, `CHAR`, `TRUE`, `GETPIVOTDATA`, `PHONETIC`) are blocked on oracle metadata gaps — missing goldens or under-specified behavior taxonomies — rather than implementation gaps.
