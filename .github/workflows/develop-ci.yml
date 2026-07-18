@@ -3,7 +3,8 @@
 # Develop-branch checks layered on top of ci.yml so iteration on `main`
 # stays fast. Currently a single job:
 #
-#   - format : clang-format dry-run. Hard gate (binary check).
+#   - format : `make format-check` — clang-format (C++), ruff (Python),
+#     and biome (.mjs / .d.ts) dry-runs. Hard gate (binary check).
 #
 # Pattern mirrored from ../mygram-db's develop-ci.yml: develop-only
 # checks live here, main keeps the minimal build+test signal in ci.yml.
@@ -33,7 +34,7 @@ concurrency:
 
 jobs:
   format:
-    name: clang-format check
+    name: format check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,5 +45,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends clang-format
 
-      - name: clang-format check
+      # `make format-check` fans out to ruff (Python) via `uvx` and biome
+      # (.mjs / .d.ts) via `npx`, so uv and Node must be on PATH alongside
+      # clang-format.
+      - name: Set up uv (ruff)
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Node.js (biome)
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: format check
         run: make format-check
