@@ -474,7 +474,13 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
     if (!count_or) {
       return count_or.error();
     }
-    ranges.reserve(count_or.value());
+    // Each entry consumes three u32s. Never reserve beyond what the
+    // remaining payload can actually hold, so an attacker-controlled
+    // count (up to 4 billion) cannot force a multi-GB reservation before
+    // the per-entry reads run out of bytes and fail.
+    constexpr std::size_t kExternSheetEntryBytes = 12U;
+    const std::size_t reservable = std::min<std::uint64_t>(count_or.value(), p.size / kExternSheetEntryBytes);
+    ranges.reserve(reservable);
     for (std::uint32_t i = 0; i < count_or.value(); ++i) {
       auto sup_book_or = read_u32(p);
       if (!sup_book_or) {
