@@ -480,6 +480,17 @@ formulon::pivot::PivotCacheRecord* lookup_record_mut(fm_workbook_t* wb, std::uin
                       "record_idx=" + std::to_string(record_idx));
     return nullptr;
   }
+  // A record's cell arity is bounded by the cache's declared field count (the
+  // reader builds records with `cells.assign(field_count, ...)`). Reject any
+  // `field_idx` at or beyond that count before it reaches `grow_record_cells`,
+  // where `field_idx + 1` would otherwise wrap on `SIZE_MAX` and drive an
+  // out-of-bounds write / runaway resize.
+  if (field_idx >= cache->fields().size()) {
+    set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, (std::string(fn) + ": field_idx out of range").c_str(),
+        "field_idx=" + std::to_string(field_idx) + " field_count=" + std::to_string(cache->fields().size()));
+    return nullptr;
+  }
   formulon::pivot::PivotCacheRecord* rec = &cache->mutable_records()[record_idx];
   grow_record_cells(*rec, field_idx);
   if (out_cache != nullptr) {

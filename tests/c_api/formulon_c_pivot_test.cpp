@@ -559,6 +559,34 @@ TEST(FormulonCApiPivot, PivotCacheErrorSettersRejectInvalidErrorCodes) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
+TEST(FormulonCApiPivot, PivotCacheRecordSettersRejectOutOfRangeFieldIndex) {
+  // BuildScratchPivot declares two cache fields (Region=0, Amount=1), so
+  // field_idx 2 is the first out-of-range value. A large / wrapping field_idx
+  // must be rejected before `grow_record_cells` resizes `field_idx + 1`
+  // cells — otherwise SIZE_MAX wraps to 0 and the subsequent cell write lands
+  // out of bounds.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  const auto kInvalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  const std::size_t kFieldCount = 2;
+  const std::size_t kMax = static_cast<std::size_t>(-1);
+
+  // In-range write still succeeds (guards against an over-tight bound).
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, kFieldCount - 1, 1.0), 0);
+
+  // field_idx == field_count and beyond are rejected on every setter.
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, kFieldCount, 1.0), kInvalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, kMax, 1.0), kInvalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_text(wb.handle, cache_id, 0, kMax, "x"), kInvalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_bool(wb.handle, cache_id, 0, kMax, 1), kInvalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_blank(wb.handle, cache_id, 0, kMax), kInvalid);
+  EXPECT_EQ(fm_workbook_pivot_cache_record_set_error(wb.handle, cache_id, 0, kMax, 0), kInvalid);
+}
+
 TEST(FormulonCApiPivot, MutateExistingPivotFilter) {
   // Build a scratch pivot — the OOXML reader populates only `custom_name`
   // from `<pivotField name="...">`, while the filter resolver matches on
