@@ -36,18 +36,7 @@
 
 namespace formulon {
 namespace eval {
-namespace {
 
-struct ArrayView {
-  std::uint32_t rows;
-  std::uint32_t cols;
-  const Value* cells;
-};
-
-// Resolves `v` to an ArrayView. For an Array the view aliases the existing
-// cells buffer (no copy). For a scalar the caller-supplied 1-element backing
-// slot `scalar_slot` is populated and aliased. Lifetime: the view is valid
-// as long as either the source Array or `scalar_slot` outlives it.
 ArrayView as_array_view(const Value& v, Value* scalar_slot) {
   if (v.is_array()) {
     const ArrayValue* a = v.as_array();
@@ -57,11 +46,6 @@ ArrayView as_array_view(const Value& v, Value* scalar_slot) {
   return {1U, 1U, scalar_slot};
 }
 
-// Fetches the operand cell contributing to output position `(r, c)` under
-// Excel broadcasting, or `nullptr` when the operand cannot supply that
-// position (the axis is larger than this operand's non-1 extent -> `#N/A`).
-// A size-1 axis always reads index 0 (broadcast); a size-N axis reads its own
-// index when in range.
 const Value* broadcast_cell(const ArrayView& v, std::uint32_t r, std::uint32_t c) {
   const std::uint32_t ri = v.rows == 1U ? 0U : r;
   const std::uint32_t ci = v.cols == 1U ? 0U : c;
@@ -70,8 +54,6 @@ const Value* broadcast_cell(const ArrayView& v, std::uint32_t r, std::uint32_t c
   }
   return &v.cells[static_cast<std::size_t>(ri) * v.cols + ci];
 }
-
-}  // namespace
 
 Value apply_binop_per_cell(parser::BinOp op, const Value& lhs, const Value& rhs, Arena& arena) {
   if (lhs.is_error()) {

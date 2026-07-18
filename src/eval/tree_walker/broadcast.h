@@ -24,12 +24,35 @@
 #ifndef FORMULON_EVAL_TREE_WALKER_BROADCAST_H_
 #define FORMULON_EVAL_TREE_WALKER_BROADCAST_H_
 
+#include <cstdint>
+
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
+
+// A non-owning shape + cell view over a `Value`, used by the broadcast
+// helpers. For an Array it aliases the existing cells buffer (no copy);
+// for a scalar it aliases a caller-supplied 1-element backing slot.
+struct ArrayView {
+  std::uint32_t rows;
+  std::uint32_t cols;
+  const Value* cells;
+};
+
+// Resolves `v` to an `ArrayView`. For an Array the view aliases the
+// existing cells buffer; for a scalar the caller-supplied 1-element
+// backing slot `scalar_slot` is populated and aliased. Lifetime: the view
+// is valid as long as either the source Array or `scalar_slot` outlives it.
+ArrayView as_array_view(const Value& v, Value* scalar_slot);
+
+// Fetches the operand cell contributing to output position `(r, c)` under
+// Excel broadcasting, or `nullptr` when the operand cannot supply that
+// position (a non-1 axis shorter than the output -> `#N/A`). A size-1 axis
+// always reads index 0 (broadcast stretch).
+const Value* broadcast_cell(const ArrayView& v, std::uint32_t r, std::uint32_t c);
 
 // Scalar per-cell binary-operator application. Errors propagate
 // left-to-right; numeric arithmetic coerces both operands through

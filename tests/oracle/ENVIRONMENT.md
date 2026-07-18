@@ -4,8 +4,8 @@ This file records the Excel version and locale last used to
 regenerate `tests/oracle/golden/`. Reviewers should watch this
 file on oracle-gen PRs to catch version-driven divergences early.
 
-- **Excel version**: `16.110.1`
+- **Excel version**: `16.111`
 - **Excel locale**: `ja-JP`
 - **date1904**: `False`
 - **iterative**: `False`
-- **generated_at**: `2026-06-26T07:15:51Z`
+- **generated_at**: `2026-07-18T14:01:04Z`

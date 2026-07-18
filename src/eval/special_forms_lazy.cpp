@@ -8,6 +8,7 @@
 
 #include "eval/special_forms_lazy.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <string_view>
@@ -20,6 +21,7 @@
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
+#include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/strings.h"
@@ -211,11 +213,74 @@ Value eval_and_or_lazy(const parser::AstNode& call, Arena& arena, const Function
   return Value::boolean(result);
 }
 
+// IF over an Array condition (Excel 365 dynamic-array spill). Unlike the
+// scalar path there is NO short-circuit: Excel evaluates BOTH branches,
+// broadcasts cond / then / else to the common `max` shape using the same
+// rules as the binary operators (shared `ArrayView` helpers from
+// `tree_walker/broadcast.h`), and per output cell coerces the condition
+// cell to bool and picks the matching branch cell. Errors (a condition cell
+// that is or coerces to an error, or a picked branch cell holding an error)
+// land in that output cell only; a position an operand cannot supply is
+// `#N/A`, exactly as `broadcast_binop` fills it.
+Value eval_if_array(const parser::AstNode& call, const Value& cond, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx) {
+  const Value then_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  const Value else_val =
+      call.as_call_arity() == 3 ? eval_node(call.as_call_arg(2), arena, registry, ctx) : Value::boolean(false);
+  Value cond_slot = Value::blank();
+  Value then_slot = Value::blank();
+  Value else_slot = Value::blank();
+  const ArrayView cv = as_array_view(cond, &cond_slot);
+  const ArrayView tv = as_array_view(then_val, &then_slot);
+  const ArrayView ev = as_array_view(else_val, &else_slot);
+
+  std::uint32_t out_rows = cv.rows > tv.rows ? cv.rows : tv.rows;
+  out_rows = out_rows > ev.rows ? out_rows : ev.rows;
+  std::uint32_t out_cols = cv.cols > tv.cols ? cv.cols : tv.cols;
+  out_cols = out_cols > ev.cols ? out_cols : ev.cols;
+
+  const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* buf = arena.create_array<Value>(n);
+  if (buf == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::size_t i = 0;
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c, ++i) {
+      const Value* cc = broadcast_cell(cv, r, c);
+      if (cc == nullptr) {
+        buf[i] = Value::error(ErrorCode::NA);
+        continue;
+      }
+      if (cc->is_error()) {
+        buf[i] = *cc;
+        continue;
+      }
+      auto b = coerce_to_bool(*cc);
+      if (!b) {
+        buf[i] = Value::error(b.error());
+        continue;
+      }
+      const Value* pick = b.value() ? broadcast_cell(tv, r, c) : broadcast_cell(ev, r, c);
+      buf[i] = pick == nullptr ? Value::error(ErrorCode::NA) : *pick;
+    }
+  }
+  ArrayValue* out = arena.create<ArrayValue>();
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  out->rows = out_rows;
+  out->cols = out_cols;
+  out->cells = buf;
+  return Value::array(out);
+}
+
 }  // namespace
 
 // IF(cond, then, else?) - then is evaluated iff cond coerces to true; else
 // is evaluated iff cond coerces to false. When the third argument is
-// omitted Excel returns the boolean `FALSE` for the falsey path.
+// omitted Excel returns the boolean `FALSE` for the falsey path. An Array
+// condition instead spills element-wise via `eval_if_array` above.
 Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                    const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -225,6 +290,9 @@ Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegi
   const Value cond = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (cond.is_error()) {
     return cond;
+  }
+  if (cond.is_array()) {
+    return eval_if_array(call, cond, arena, registry, ctx);
   }
   auto coerced = coerce_to_bool(cond);
   if (!coerced) {
