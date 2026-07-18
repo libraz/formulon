@@ -37,6 +37,19 @@ Value SpillCommitter::commit(Value v) const {
     return Value::error(ErrorCode::Value);
   }
 
+  // A spill whose footprint would extend past the grid edge cannot be
+  // placed. `commit_spill` returns false without touching the anchor in
+  // this case, which would leave a stale value (or a prior spill region)
+  // in place. Detect it here — the anchor is in-grid, so `kMaxRows - row_`
+  // and `kMaxCols - col_` are >= 1 and the comparison cannot wrap — clear
+  // any region already anchored here, and surface the deterministic
+  // `#SPILL!` Excel returns when a dynamic array runs off the sheet.
+  if (rows > Sheet::kMaxRows - row_ || cols > Sheet::kMaxCols - col_) {
+    sheet_->clear_spill(row_, col_);
+    sheet_->set_cell_cached_value(row_, col_, Value::error(ErrorCode::Spill));
+    return Value::error(ErrorCode::Spill);
+  }
+
   // Deep-copy the row-major cells into an owned vector. Text payloads in
   // `cells` are still string_views into the source arena; that's fine —
   // `Sheet::commit_spill` re-interns Text bytes into its own owned_strings

@@ -118,6 +118,67 @@ void reindex_all_formulas(const std::vector<Sheet>& sheets, const eval::RecalcEn
   }
 }
 
+// Forward declaration: the text-level sheet-rename rewriter lives further
+// down in this anonymous namespace but is needed by the cell rewriter.
+std::string replace_sheet_in_formula(std::string_view formula, std::string_view old_name, std::string_view new_name);
+bool formula_references_sheet(std::string_view formula, std::string_view sheet_name) noexcept;
+
+// Rewrites every cell formula that references `old_name` to `new_name`
+// after a sheet rename. Cell formulas store sheet qualifiers by name and
+// resolve them at evaluation time, so without this rewrite a renamed
+// sheet's dependents keep the stale name and surface `#REF!` / `#NAME?` on
+// the next recalc. Each rewritten cell is re-registered (its
+// `CellNodeId.sheet_id` is unchanged by a rename, but re-registration
+// keeps the graph in lockstep with the new text) and marked dirty so the
+// blanked cached value is restored by the next recalc.
+//
+// Precondition: the caller holds the engine mutex for the lifetime of the
+// `LockedMutator&`.
+void rewrite_cell_formulas_for_sheet_rename(std::vector<Sheet>& sheets,
+                                            const eval::RecalcEngine::LockedMutator& mutator, const Workbook& workbook,
+                                            std::string_view old_name, std::string_view new_name) {
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    Sheet& sheet = sheets[sheet_idx];
+    std::vector<std::uint32_t> row_keys;
+    row_keys.reserve(sheet.rows().size());
+    for (const auto& kv : sheet.rows()) {
+      row_keys.push_back(kv.first);
+    }
+    for (std::uint32_t row : row_keys) {
+      const auto it = sheet.rows().find(row);
+      if (it == sheet.rows().end()) {
+        continue;
+      }
+      const std::size_t col_count = it->second.size();
+      for (std::size_t col = 0; col < col_count; ++col) {
+        const Cell& cell = sheet.rows().at(row)[col];
+        if (cell.formula_text.empty() || !formula_references_sheet(cell.formula_text, old_name)) {
+          continue;
+        }
+        std::string rewritten = replace_sheet_in_formula(cell.formula_text, old_name, new_name);
+        if (rewritten == cell.formula_text) {
+          continue;  // Name matched a substring only; nothing to rewrite.
+        }
+        sheet.set_cell_formula(row, static_cast<std::uint32_t>(col), std::move(rewritten));
+
+        const eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
+        std::string_view body = sheet.rows().at(row)[col].formula_text;
+        if (!body.empty() && body.front() == '=') {
+          body.remove_prefix(1);
+        }
+        if (!body.empty()) {
+          Arena arena;
+          parser::AstNode* root = parser::parse_strict(body, arena);
+          if (root != nullptr) {
+            mutator.register_formula(node, *root, workbook);
+          }
+        }
+        mutator.mark_dirty(node);
+      }
+    }
+  }
+}
+
 // Excel's structural validation for sheet names: non-empty, ≤ 31
 // characters, no `: \ / ? * [ ]`. This is a byte-level check (the
 // forbidden set is ASCII), so it works correctly on UTF-8 sheet names
@@ -296,9 +357,20 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
       entry.formula = replace_sheet_in_formula(entry.formula, old_name, new_name);
     }
   }
-  // Move the rename into the sheet last so the loop above still has the
-  // pre-move `new_name` value to read from.
-  sheets_[index].set_name(std::move(new_name));
+
+  // Rewrite cell formulas that reference the renamed sheet, and apply the
+  // sheet rename, under a single hold of the engine mutex so a concurrent
+  // `recalc_parallel` never observes a half-renamed state (some formulas
+  // still naming the old sheet while the sheet already carries the new
+  // name). See `set_cell_value` for the full rationale.
+  {
+    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    rewrite_cell_formulas_for_sheet_rename(sheets_, mutator, *this, old_name, new_name);
+    // Move the rename into the sheet last so the rewriter above still has
+    // the pre-move name state to read from.
+    sheets_[index].set_name(std::move(new_name));
+  }
   return Expected<void, Error>::Ok();
 }
 

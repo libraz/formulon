@@ -194,6 +194,28 @@ TEST(WorkbookSheetOps, RenameDoesNotMatchIdentifierSubstrings) {
   EXPECT_EQ(wb.defined_names()[0].formula, "OtherSheet1!$A$1");
 }
 
+// Renaming a sheet must rewrite cell formulas that reference it by name,
+// not just defined names. A dependent that keeps the stale name resolves
+// to #REF!/#NAME? on the next recalc.
+TEST(WorkbookSheetOps, RenameRewritesReferencingCellFormulas) {
+  Workbook wb = ThreeSheetWorkbook();                                                // Alpha(0), Beta(1), Gamma(2)
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(2, 0, 0, Value::number(100.0))));  // Gamma!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=Gamma!A1")));         // Alpha!A1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 100.0);
+
+  // Rename Gamma -> Delta. The Alpha!A1 formula text must follow.
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(2, "Delta")));
+  ASSERT_NE(wb.sheet(0).cell_at(0, 0), nullptr);
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->formula_text, "=Delta!A1");
+
+  // And it still resolves after recalc (not #REF!/#NAME?).
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value a1 = wb.sheet(0).cell_at(0, 0)->cached_value;
+  ASSERT_TRUE(a1.is_number()) << "renamed cross-sheet ref failed to resolve";
+  EXPECT_EQ(a1.as_number(), 100.0);
+}
+
 TEST(WorkbookSheetOps, RemoveDropsSheet) {
   Workbook wb = ThreeSheetWorkbook();
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));

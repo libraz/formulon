@@ -162,5 +162,23 @@ TEST(WorkbookRecalc, SpillCollisionSurfacesSpillError) {
   EXPECT_DOUBLE_EQ(b1.as_number(), 99.0);
 }
 
+TEST(WorkbookRecalc, SpillOffGridEdgeSurfacesSpillError) {
+  // A dynamic array anchored near the last row cannot fit its footprint on
+  // the sheet; Excel surfaces #SPILL!. The committer must set that error
+  // deterministically rather than leave the anchor's prior value in place.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  // Anchor on the final row: =SEQUENCE(3,1) would spill down into two rows
+  // that do not exist.
+  const std::uint32_t last_row = Sheet::kMaxRows - 1U;
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, last_row, 0U, "=SEQUENCE(3,1)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  Value anchor = wb.sheet(0).resolve_cell_value(last_row, 0U);
+  ASSERT_TRUE(anchor.is_error()) << "off-grid spill expected to be #SPILL!";
+  EXPECT_EQ(anchor.as_error(), ErrorCode::Spill);
+}
+
 }  // namespace
 }  // namespace formulon
