@@ -98,7 +98,11 @@ jobs:
         run: cmake --preset debug
 
       - name: Build
-        run: cmake --build build --parallel
+        # Cap parallelism at 2 (the runner's physical core count).
+        # Bare `--parallel` fans out to all logical CPUs and links the
+        # heavy Debug test/bench binaries concurrently, which exhausts the
+        # 7 GB runner and gets the compilers OOM-killed (SIGTERM / 143).
+        run: cmake --build build --parallel 2
 
       - name: Run fast tests
         id: ctest
