@@ -48,6 +48,12 @@ const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, s
 // recomputes. Called after every mutation that could affect projection.
 void invalidate_pivot_result(formulon::pivot::PivotTable& table);
 
+// Invalidates `last_result_` on every pivot table (across all sheets)
+// that draws from `cache_id`. Called after any pivot-cache mutation so a
+// subsequent layout recomputes against the changed cache instead of
+// returning a stale memoised projection.
+void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id);
+
 // Interns `utf8` in the cache's text storage and returns a Value::text
 // referencing the stable backing string.
 formulon::Value intern_cache_text(formulon::pivot::PivotCache& cache, std::string_view utf8);

@@ -459,6 +459,45 @@ TEST(FormulonCApiPivot, CreatePivotFromScratch) {
   EXPECT_TRUE(saw_grand);
 }
 
+TEST(FormulonCApiPivot, PivotCacheMutationInvalidatesMemoisedLayout) {
+  // fm_workbook_pivot_layout memoises the pivot's evaluated result. A cache
+  // mutation must invalidate that memo so a re-layout reflects the change
+  // instead of returning the stale projection.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  auto has_data_value = [](fm_pivot_cells_t* handle, double want) -> bool {
+    for (const fm_pivot_cell_t& c : CollectCells(handle)) {
+      if (c.kind == FM_PIVOT_CELL_DATA && c.value.kind == FM_VAL_NUMBER && c.value.u.number == want) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Baseline: North (records 0, 2 = 100 + 300) sums to 400.
+  {
+    PivotCellsGuard projected;
+    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+    EXPECT_TRUE(has_data_value(projected.handle, 400.0));
+  }
+
+  // Bump record 0's amount (field index 1) from 100 to 1100 (+1000).
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, 1, 1100.0), 0) << fm_last_error_message();
+
+  // Re-layout must reflect the mutated cache: North is now 1100 + 300 = 1400,
+  // and the stale 400 must be gone.
+  {
+    PivotCellsGuard projected;
+    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+    EXPECT_TRUE(has_data_value(projected.handle, 1400.0)) << "layout returned a stale memoised projection";
+    EXPECT_FALSE(has_data_value(projected.handle, 400.0)) << "stale North value survived the cache mutation";
+  }
+}
+
 TEST(FormulonCApiPivot, PivotCacheSharedItemsAcceptErrorValues) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

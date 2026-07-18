@@ -27,6 +27,7 @@ using formulon::c_api::parts::find_cache;
 using formulon::c_api::parts::find_cache_mut;
 using formulon::c_api::parts::grow_record_cells;
 using formulon::c_api::parts::intern_cache_text;
+using formulon::c_api::parts::invalidate_pivot_results_for_cache;
 using formulon::c_api::parts::mutable_pivot_caches;
 using formulon::c_api::parts::set_binding_error;
 
@@ -178,12 +179,14 @@ extern "C" fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_
   formulon::pivot::WorksheetSource& src = cache->mutable_worksheet_source();
   if (present == 0) {
     src = formulon::pivot::WorksheetSource{};
+    invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
     return 0;
   }
   src.present = true;
   src.ref = ref != nullptr ? ref : "";
   src.sheet = sheet != nullptr ? sheet : "";
   src.name = name != nullptr ? name : "";
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }
 
@@ -247,6 +250,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add(fm_workbook_t* wb, std:
   field.name = utf8_name;
   cache->mutable_fields().push_back(std::move(field));
   *out_field_idx = cache->fields().size() - 1U;
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }
 
@@ -264,6 +268,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_clear(fm_workbook_t* wb, st
   }
   cache->mutable_fields().clear();
   cache->mutable_records().clear();
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }
 
@@ -311,6 +316,9 @@ formulon::pivot::PivotCacheField* lookup_cache_field_mut(fm_workbook_t* wb, std:
                       (std::string(fn) + ": field_idx out of range").c_str(), "field_idx=" + std::to_string(field_idx));
     return nullptr;
   }
+  // The shared-item mutators all resolve their field through here, so
+  // invalidate dependent layout caches once at the shared choke point.
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return &cache->mutable_fields()[field_idx];
 }
 
@@ -350,6 +358,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_field_add_shared_item_text(fm_wor
                              "field_idx=" + std::to_string(field_idx));
   }
   cache->mutable_fields()[field_idx].shared_items.push_back(intern_cache_text(*cache, std::string_view(utf8)));
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }
 
@@ -437,6 +446,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_add(fm_workbook_t* wb, std
   }
   cache->mutable_records().emplace_back();
   *out_record_idx = cache->records().size() - 1U;
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }
 
@@ -453,6 +463,7 @@ extern "C" fm_status_t fm_workbook_pivot_cache_record_clear(fm_workbook_t* wb, s
                              "cache_id=" + std::to_string(cache_id));
   }
   cache->mutable_records().clear();
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return 0;
 }
 
@@ -496,6 +507,10 @@ formulon::pivot::PivotCacheRecord* lookup_record_mut(fm_workbook_t* wb, std::uin
   if (out_cache != nullptr) {
     *out_cache = cache;
   }
+  // Every record setter routes through here, so invalidating the layout
+  // cache of tables drawing from this cache in one place keeps a stale
+  // projection from surviving a record edit.
+  invalidate_pivot_results_for_cache(wb->workbook(), cache_id);
   return rec;
 }
 

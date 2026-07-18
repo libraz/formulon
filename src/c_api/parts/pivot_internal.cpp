@@ -91,6 +91,16 @@ void invalidate_pivot_result(formulon::pivot::PivotTable& table) {
   table.mutable_last_result().reset();
 }
 
+void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id) {
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
+      if (table != nullptr && table->pivot_cache_id() == cache_id) {
+        table->mutable_last_result().reset();
+      }
+    }
+  }
+}
+
 formulon::Value intern_cache_text(formulon::pivot::PivotCache& cache, std::string_view utf8) {
   cache.mutable_text_storage().emplace_back(utf8.data(), utf8.size());
   return formulon::Value::text(std::string_view(cache.mutable_text_storage().back()));
