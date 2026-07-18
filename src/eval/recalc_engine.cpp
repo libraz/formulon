@@ -29,6 +29,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/rect_iterator.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -428,6 +429,19 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
     return stats;
   }
 
+  // Oversized viewport: the seed loop below visits every coordinate in the
+  // rectangle, so a full-grid viewport would enumerate
+  // `Sheet::kMaxRows * Sheet::kMaxCols` (~17e9) coordinates before any
+  // dependency work starts. A viewport is a UI redraw region and never
+  // approaches `kMaxRecalcViewportCells`; treat a larger rectangle like the
+  // other invalid-viewport shapes above (no-op, dirty set preserved) so
+  // callers fall back to a full `recalc()`.
+  const utils::RectRange viewport_rect(viewport.first_row, viewport.first_col, viewport.last_row, viewport.last_col);
+  ResourceBudget seed_budget(kMaxRecalcViewportCells);
+  if (seed_budget.would_exceed(viewport_rect.size())) {
+    return stats;
+  }
+
   // ---- Phase 1: enumerate the viewport's seed cells. ----
   // Walk the requested rectangle and pull every populated cell into the
   // seed set. Cells outside the sheet's stored extent are silently
@@ -438,8 +452,7 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   const Sheet& view_sheet = workbook.sheet(viewport.sheet_id);
   std::vector<CellNodeId> seeds;
   seeds.reserve(static_cast<std::size_t>(viewport.last_row - viewport.first_row + 1U));
-  for (auto [row, col] :
-       utils::RectRange(viewport.first_row, viewport.first_col, viewport.last_row, viewport.last_col)) {
+  for (auto [row, col] : viewport_rect) {
     // We seed every coordinate inside the viewport regardless of
     // whether it currently holds a stored cell: a viewport coordinate
     // that is presently blank may still have inbound dep-graph

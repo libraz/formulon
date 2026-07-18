@@ -40,6 +40,7 @@
 #include "utils/checked_mul.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -154,6 +155,25 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   const std::size_t col_leaf_count = col_levels.empty() ? 1 : col_leaves.size();
   const std::size_t data_field_count = table.data_fields().size();
 
+  // Guards on the dense (row_leaf x col_leaf) matrices, evaluated BEFORE
+  // the first dense allocation so a pathological high-cardinality cache
+  // cannot commit a huge allocation first:
+  //   * checked multiplication — on 32-bit `size_t` (WASM) the product can
+  //     wrap, leaving the nested vectors inconsistent and downstream code
+  //     indexing past their end;
+  //   * result-cell budget — even a non-wrapping product can describe a
+  //     matrix far past anything a real pivot produces.
+  // Both surface `kFnOverflow` so the caller keeps one recoverable path.
+  auto value_count_or = checked_mul_size_t(row_leaf_count, col_leaf_count);
+  if (!value_count_or) {
+    return value_count_or.error();
+  }
+  ResourceBudget result_cell_budget(kMaxPivotResultCells, FormulonErrorCode::kFnOverflow);
+  auto budget_ok = result_cell_budget.consume(static_cast<std::uint64_t>(value_count_or.value()));
+  if (!budget_ok) {
+    return budget_ok.error();
+  }
+
   // Bucket surviving record indices by (row_leaf, col_leaf).
   // `[row_leaf][col_leaf]` -> indices into `cache.records()`.
   RecordBuckets buckets(row_leaf_count, std::vector<std::vector<std::size_t>>(col_leaf_count));
@@ -164,18 +184,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     buckets[r][c].push_back(surviving[i]);
   }
 
-  // 4. Aggregate per (row_leaf, col_leaf, data_field).
-  //
-  // Defensive overflow guard: on 32-bit `size_t` (WASM) a pathological
-  // pivot configuration with very large axis cardinalities could wrap
-  // `row_leaf_count * col_leaf_count`, leaving the nested vector
-  // inconsistent. Checked multiplication keeps the failure recoverable
-  // (caller surfaces `kFnOverflow`) rather than silently corrupting the
-  // result matrix.
-  auto value_count_or = checked_mul_size_t(row_leaf_count, col_leaf_count);
-  if (!value_count_or) {
-    return value_count_or.error();
-  }
+  // 4. Aggregate per (row_leaf, col_leaf, data_field). The dense-matrix
+  // guards above already validated `row_leaf_count * col_leaf_count`.
   result.values.assign(row_leaf_count, std::vector<std::vector<Value>>(col_leaf_count));
   for (std::size_t r = 0; r < row_leaf_count; ++r) {
     for (std::size_t c = 0; c < col_leaf_count; ++c) {

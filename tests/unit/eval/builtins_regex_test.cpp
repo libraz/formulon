@@ -569,6 +569,22 @@ TEST(RegexArity, RegexreplaceTwoArgsIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// A substitution whose result exceeds Excel's 32,767-character text cell
+// limit surfaces #VALUE! instead of growing an unbounded output buffer.
+TEST(RegexReplace, OutputPastTextCapIsValueError) {
+  // 17,000 'a's, each replaced by "bb" -> 34,000 chars, past the 32,767 cap.
+  const Value v = EvalSource("=REGEXREPLACE(REPT(\"a\", 17000), \"a\", \"bb\")");
+  ASSERT_TRUE(v.is_error()) << "expected #VALUE! for over-cap output";
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// A substitution that stays within the cap is unaffected.
+TEST(RegexReplace, OutputWithinTextCapSucceeds) {
+  const Value v = EvalSource("=REGEXREPLACE(\"aaa\", \"a\", \"bb\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "bbbbbb");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

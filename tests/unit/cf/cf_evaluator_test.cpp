@@ -10,7 +10,10 @@
 
 #include "cf/cf_evaluator.h"
 
+#include <vector>
+
 #include "cell.h"
+#include "cf/cf_helpers.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
 #include "eval/date_time.h"
@@ -2372,6 +2375,38 @@ TEST(CFEvaluator, EvaluateCfForRangeCachedPathPreservesTop10Behavior) {
     const bool expected = row >= 3;
     EXPECT_EQ(per_cell.size(), expected ? 1u : 0u) << "row=" << row;
   }
+}
+
+// A rule whose sqref is an explicit multi-million-cell rectangle (not
+// whole-column / whole-row notation) must be clamped to the populated
+// extent before scanning, so the scan stays bounded and still returns the
+// same match/numeric results as the tight rectangle would.
+TEST(CFHelpers, ExplicitGiantSqrefIsClampedToPopulatedExtent) {
+  Sheet sheet("S");
+  sheet.set_cell_cached_value(0, 0, Value::number(5.0));
+  sheet.set_cell_cached_value(50, 5, Value::number(5.0));
+  sheet.set_cell_cached_value(100, 3, Value::number(5.0));
+  sheet.set_cell_cached_value(100, 10, Value::number(9.0));  // populated, non-matching
+
+  // Explicit rectangle far larger than the ~65k clamp threshold, yet not
+  // full-column (last.row != kCfMaxRows-1) nor full-row (last.col !=
+  // kCfMaxCols-1) — the case the old code walked cell-by-cell.
+  CFCellRange giant;
+  giant.first = CellAddress{0, 0};
+  giant.last = CellAddress{400000, 4000};
+  ASSERT_FALSE(giant.is_full_col());
+  ASSERT_FALSE(giant.is_full_row());
+  const std::vector<CFCellRange> sqref{giant};
+
+  EXPECT_EQ(helpers::count_matches_in_sqref(Value::number(5.0), sqref, sheet), 3u);
+
+  const std::vector<double> numbers = helpers::collect_numeric_values(sqref, sheet);
+  EXPECT_EQ(numbers.size(), 4u);  // three 5s + one 9
+  double sum = 0.0;
+  for (double n : numbers) {
+    sum += n;
+  }
+  EXPECT_DOUBLE_EQ(sum, 24.0);
 }
 
 }  // namespace

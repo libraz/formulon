@@ -38,6 +38,7 @@
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/shape_ops_lazy.h"
+#include "eval/utf8_length.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -52,6 +53,15 @@ namespace {
 // patterns, but Excel's REGEX argument cannot in practice exceed this,
 // and capping early gives a clean #VALUE! instead of a slow compile.
 constexpr std::size_t kMaxPatternBytes = 32767U;
+
+// Excel caps a text cell at 32,767 UTF-16 units. REGEXREPLACE output past
+// the cap surfaces #VALUE! instead of growing an unbounded buffer.
+constexpr std::uint64_t kExcelTextCapUnits = 32767U;
+
+// Conservative byte bound for the cap: a UTF-16 unit never needs more than
+// 4 UTF-8 bytes, so a required substitution output beyond this many bytes
+// always exceeds the cap and can be rejected before any buffer growth.
+constexpr std::size_t kMaxSubstituteOutputBytes = static_cast<std::size_t>(kExcelTextCapUnits) * 4U;
 
 // The match limit bounds backtracking iterations; the depth limit bounds
 // recursion in the regex VM. Both are checked by pcre2_match itself; on
@@ -552,7 +562,15 @@ Value substitute_with_flags(std::string_view subject, std::string_view pattern, 
                             reinterpret_cast<PCRE2_SPTR>(replacement.data()),
                             static_cast<PCRE2_SIZE>(replacement.size()), buffer.data(), &outlen);
   if (rc == PCRE2_ERROR_NOMEMORY) {
-    // outlen now contains the required size; reallocate and retry.
+    // outlen now contains the required size. A required size past the Excel
+    // text cap can never yield a legal cell value, so reject it before
+    // growing the buffer instead of allocating an unbounded amount.
+    if (outlen > kMaxSubstituteOutputBytes) {
+      pcre2_match_context_free(mctx);
+      pcre2_code_free(code);
+      return Value::error(ErrorCode::Value);
+    }
+    // Reallocate to the required size and retry.
     buffer.resize(outlen);
     bufsize = outlen;
     outlen = bufsize;
@@ -574,6 +592,11 @@ Value substitute_with_flags(std::string_view subject, std::string_view pattern, 
   }
   // rc == 0 means no matches were found — return original text unchanged.
   std::string_view out_view(reinterpret_cast<const char*>(buffer.data()), static_cast<std::size_t>(outlen));
+  // Exact cap check: the byte pre-check above is conservative, so an output
+  // that fit the buffer may still exceed 32,767 UTF-16 units.
+  if (static_cast<std::uint64_t>(utf16_units_in(out_view)) > kExcelTextCapUnits) {
+    return Value::error(ErrorCode::Value);
+  }
   return Value::text(arena.intern(out_view));
 }
 

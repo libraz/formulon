@@ -68,6 +68,32 @@ TEST(PartialRecalc, EmptyViewportIsNoop) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(PartialRecalc, OversizedViewportIsNoop) {
+  // A near-full-grid viewport would seed billions of coordinates before
+  // any dependency work. The engine treats it like the other invalid
+  // shapes: no-op, dirty set preserved, so callers fall back to recalc().
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=A1+1")));
+
+  SheetCellRange full_grid;
+  full_grid.sheet_id = 0;
+  full_grid.first_row = 0;
+  full_grid.last_row = Sheet::kMaxRows - 1U;
+  full_grid.first_col = 0;
+  full_grid.last_col = Sheet::kMaxCols - 1U;
+
+  auto stats = wb.partial_recalc(default_registry(), full_grid);
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 0u);
+  // A2 was never evaluated and stays dirty for the fallback full recalc.
+  EXPECT_TRUE(CellValue(wb, 0U, 1U, 0U).is_blank());
+  auto full = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(full));
+  EXPECT_EQ(full.value().cells_evaluated, 1u);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 2.0);
+}
+
 TEST(PartialRecalc, SingleCellViewportRecomputesAncestorsOnly) {
   // A1 = 10, B1 = =A1+1 (not in viewport), C1 = =A1*2 (not in
   // viewport). Viewport asks for B1 only — only A1 (literal) and B1

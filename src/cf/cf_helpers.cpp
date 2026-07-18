@@ -284,6 +284,8 @@ bool cf_cell_has_content(const Cell& cell) {
 }
 
 // Largest 0-based row holding content within columns [col_lo, col_hi].
+// Spill phantoms count as content: they live solely in the spill table
+// (absent from `rows()`) yet resolve to real values.
 bool cf_max_row_in_cols(const Sheet& sheet, std::uint32_t col_lo, std::uint32_t col_hi, std::uint32_t* out_max_row) {
   bool any = false;
   std::uint32_t max_row = 0;
@@ -300,6 +302,15 @@ bool cf_max_row_in_cols(const Sheet& sheet, std::uint32_t col_lo, std::uint32_t 
       break;
     }
   }
+  for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
+    if (phantom.col < col_lo || phantom.col > col_hi) {
+      continue;
+    }
+    if (!any || phantom.row > max_row) {
+      max_row = phantom.row;
+      any = true;
+    }
+  }
   if (!any) {
     return false;
   }
@@ -308,6 +319,7 @@ bool cf_max_row_in_cols(const Sheet& sheet, std::uint32_t col_lo, std::uint32_t 
 }
 
 // Largest 0-based column holding content within rows [row_lo, row_hi].
+// Spill phantoms count as content (see `cf_max_row_in_cols`).
 bool cf_max_col_in_rows(const Sheet& sheet, std::uint32_t row_lo, std::uint32_t row_hi, std::uint32_t* out_max_col) {
   bool any = false;
   std::uint32_t max_col = 0;
@@ -327,6 +339,15 @@ bool cf_max_col_in_rows(const Sheet& sheet, std::uint32_t row_lo, std::uint32_t 
       break;
     }
   }
+  for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
+    if (phantom.row < row_lo || phantom.row > row_hi) {
+      continue;
+    }
+    if (!any || phantom.col > max_col) {
+      max_col = phantom.col;
+      any = true;
+    }
+  }
   if (!any) {
     return false;
   }
@@ -334,32 +355,44 @@ bool cf_max_col_in_rows(const Sheet& sheet, std::uint32_t row_lo, std::uint32_t 
   return true;
 }
 
-// Resolves a sqref range to concrete inclusive iteration bounds, clamping a
-// whole-column / whole-row range to the sheet's populated extent so a full
-// column never walks all `Sheet::kMaxRows` rows. Returns false when the
-// clamped range is empty (no content in range).
+// Rectangles at or below this cell count are iterated as-is; larger ones are
+// clamped to the sheet's populated extent first. The threshold keeps the
+// per-call extent scan (O(populated rows)) off the hot path for the small
+// rects that dominate real workbooks while still catching every oversized
+// sqref — a whole column alone is `Sheet::kMaxRows` cells, far above it.
+constexpr std::uint64_t kSqrefClampThresholdCells = 65536U;
+
+// Resolves a sqref range to concrete inclusive iteration bounds, clamping
+// every oversized rectangle — whole-column / whole-row sqrefs as well as
+// explicit coordinate-form giants such as `A1:XFD1048576` — to the sheet's
+// populated extent so no scan ever walks the full
+// `Sheet::kMaxRows * Sheet::kMaxCols` grid. Cells beyond the populated
+// extent resolve to blank and can neither match a target value nor
+// contribute a numeric sample, so the clamp preserves scan results.
+// Returns false when the clamped range is empty (no content in range).
 bool resolve_sqref_rect(const CFCellRange& range, const Sheet& sheet, std::uint32_t* r0, std::uint32_t* c0,
                         std::uint32_t* r1, std::uint32_t* c1) {
   *r0 = range.first.row;
   *c0 = range.first.col;
   *r1 = range.last.row;
   *c1 = range.last.col;
-  if (range.is_full_col()) {
-    std::uint32_t max_row = 0;
-    if (!cf_max_row_in_cols(sheet, range.first.col, range.last.col, &max_row)) {
-      return false;
-    }
-    *r0 = 0;
-    *r1 = max_row;
-  } else if (range.is_full_row()) {
-    std::uint32_t max_col = 0;
-    if (!cf_max_col_in_rows(sheet, range.first.row, range.last.row, &max_col)) {
-      return false;
-    }
-    *c0 = 0;
-    *c1 = max_col;
+  if (utils::RectRange(*r0, *c0, *r1, *c1).size() <= kSqrefClampThresholdCells) {
+    return true;
   }
-  return true;
+  std::uint32_t max_row = 0;
+  if (!cf_max_row_in_cols(sheet, *c0, *c1, &max_row)) {
+    return false;
+  }
+  *r1 = std::min(*r1, max_row);
+  if (*r0 > *r1) {
+    return false;
+  }
+  std::uint32_t max_col = 0;
+  if (!cf_max_col_in_rows(sheet, *r0, *r1, &max_col)) {
+    return false;
+  }
+  *c1 = std::min(*c1, max_col);
+  return *c0 <= *c1;
 }
 
 // Keep the lightweight grid constants in `cf_types.h` in sync with the
