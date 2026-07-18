@@ -2,6 +2,7 @@
 //
 // Stable C ABI function-catalog metadata tests.
 
+#include <cctype>
 #include <cstring>
 #include <string>
 #include <unordered_set>
@@ -129,4 +130,48 @@ TEST(FormulonCApiFunctionMetadata, LazyFormLookupIsCaseInsensitive) {
   fm_function_metadata_t md{};
   ASSERT_EQ(fm_function_metadata("xlookup", FM_LOCALE_EN_US, &md), 0);
   EXPECT_STREQ(md.canonical_name, "XLOOKUP");
+}
+
+// Every enumerated name — eager, lazy, and special form alike — must
+// resolve through the same catalog APIs. Regression guard for the
+// membership split where localize / canonicalize consulted only the eager
+// registry and rejected XLOOKUP / LET / SUMIFS despite enumerating them.
+TEST(FormulonCApiFunctionMetadata, EveryEnumeratedNameRoundTripsAcrossAllCatalogApis) {
+  const std::size_t count = fm_function_count();
+  ASSERT_GT(count, 0U);
+  for (std::size_t i = 0; i < count; ++i) {
+    const char* name = nullptr;
+    ASSERT_EQ(fm_function_name_at(i, &name), 0);
+    ASSERT_NE(name, nullptr);
+
+    // metadata
+    fm_function_metadata_t md{};
+    EXPECT_EQ(fm_function_metadata(name, FM_LOCALE_EN_US, &md), 0) << name << " has no metadata";
+
+    // canonicalize: an enumerated name is already canonical, so it maps to
+    // itself.
+    const char* canonical = nullptr;
+    ASSERT_EQ(fm_function_canonicalize(name, FM_LOCALE_EN_US, &canonical), 0) << name << " did not canonicalize";
+    ASSERT_NE(canonical, nullptr);
+    EXPECT_STREQ(canonical, name);
+
+    // localize: with no alias table it falls through to the canonical name.
+    const char* localized = nullptr;
+    ASSERT_EQ(fm_function_localize(name, FM_LOCALE_EN_US, &localized), 0) << name << " did not localize";
+    ASSERT_NE(localized, nullptr);
+    EXPECT_STREQ(localized, name);
+  }
+}
+
+TEST(FormulonCApiFunctionMetadata, LazyAndSpecialFormsCanonicalizeCaseInsensitively) {
+  for (const char* fn : {"xlookup", "sumifs", "let", "lambda", "filter"}) {
+    const char* canonical = nullptr;
+    ASSERT_EQ(fm_function_canonicalize(fn, FM_LOCALE_EN_US, &canonical), 0) << fn << " did not canonicalize";
+    ASSERT_NE(canonical, nullptr);
+    std::string upper(fn);
+    for (char& c : upper) {
+      c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    }
+    EXPECT_EQ(std::string(canonical), upper);
+  }
 }

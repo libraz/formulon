@@ -106,6 +106,19 @@ const char* lookup_lazy_or_special(std::string_view name) {
   return nullptr;
 }
 
+// Resolves `name` to its canonical static-storage name pointer across the
+// same three sources the enumeration draws from: the eager
+// `FunctionRegistry` first, then the lazy-dispatch and parser
+// special-form tables. Returns nullptr when the name is recognised by
+// none. Used so canonicalize / localize accept every enumerated function
+// (XLOOKUP / SUMIFS / LET / LAMBDA / ...), not just the eager subset.
+const char* resolve_canonical_name(std::string_view name) {
+  if (const auto* def = formulon::eval::default_registry().lookup(name); def != nullptr) {
+    return def->canonical_name.data();
+  }
+  return lookup_lazy_or_special(name);
+}
+
 const std::vector<std::string>& sorted_function_names() {
   static const std::vector<std::string> names = []() {
     std::vector<std::string> out;
@@ -193,15 +206,15 @@ extern "C" fm_status_t fm_function_localize(const char* canonical_name, fm_local
   if (canonical_name == nullptr || out_localized == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_localize: NULL argument");
   }
-  const auto* def = formulon::eval::default_registry().lookup(std::string_view(canonical_name));
-  if (def == nullptr) {
+  const char* canonical = resolve_canonical_name(std::string_view(canonical_name));
+  if (canonical == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_localize: unknown function",
                              std::string("canonical_name=") + canonical_name);
   }
   // Locale alias table not yet populated - fall through to the canonical
   // name. Once `data/function_names_<locale>.csv` lands, this lookup
   // will branch on `locale` and consult the alias table first.
-  *out_localized = def->canonical_name.data();
+  *out_localized = canonical;
   return 0;
 }
 
@@ -213,13 +226,14 @@ extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, fm_l
                              "fm_function_canonicalize: NULL argument");
   }
   // Alias table not yet populated - fall through to a case-insensitive
-  // canonical-name match.
-  const auto* def = formulon::eval::default_registry().lookup(std::string_view(localized_name));
-  if (def == nullptr) {
+  // canonical-name match across the registry, lazy, and special-form
+  // tables so every enumerated function canonicalizes.
+  const char* canonical = resolve_canonical_name(std::string_view(localized_name));
+  if (canonical == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_function_canonicalize: unknown function",
                              std::string("localized_name=") + localized_name);
   }
-  *out_canonical = def->canonical_name.data();
+  *out_canonical = canonical;
   return 0;
 }
