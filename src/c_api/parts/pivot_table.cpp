@@ -83,6 +83,11 @@ extern "C" fm_status_t fm_workbook_pivot_create(fm_workbook_t* wb, std::size_t s
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              "fm_workbook_pivot_create: cache_id not found", "cache_id=" + std::to_string(cache_id));
   }
+  if (!formulon::Sheet::coord_in_grid(anchor_row, anchor_col)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_create: anchor out of grid",
+                             "row=" + std::to_string(anchor_row) + " col=" + std::to_string(anchor_col));
+  }
   auto table = std::make_unique<formulon::pivot::PivotTable>();
   table->set_name(utf8_name);
   table->set_pivot_cache_id(cache_id);
@@ -138,6 +143,18 @@ extern "C" fm_status_t fm_workbook_pivot_set_anchor(fm_workbook_t* wb, std::size
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_set_anchor");
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  // A span must be at least 1x1 and its far corner must stay inside the
+  // grid; reject before `set_anchor` so downstream layout never iterates
+  // an out-of-grid or wrapped rectangle. 64-bit arithmetic avoids the
+  // `anchor + span` wrap the audit flagged.
+  if (span_rows == 0U || span_cols == 0U ||
+      static_cast<std::uint64_t>(anchor_row) + span_rows > formulon::Sheet::kMaxRows ||
+      static_cast<std::uint64_t>(anchor_col) + span_cols > formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_set_anchor: span out of grid",
+                             "row=" + std::to_string(anchor_row) + " col=" + std::to_string(anchor_col) +
+                                 " span_rows=" + std::to_string(span_rows) + " span_cols=" + std::to_string(span_cols));
   }
   table->set_anchor(anchor_row, anchor_col, span_rows, span_cols);
   invalidate_pivot_result(*table);

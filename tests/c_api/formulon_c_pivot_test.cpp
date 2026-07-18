@@ -810,3 +810,35 @@ TEST(FormulonCApiPivot, NullPointerArgumentsRejected) {
   EXPECT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, 0, &bad_filter),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
 }
+
+TEST(FormulonCApiPivot, OutOfGridAnchorRejected) {
+  // Excel grid ceilings; kept as literals so this test needs no core
+  // header. Mirrors Sheet::kMaxRows / kMaxCols.
+  constexpr std::uint32_t kMaxRows = 1'048'576U;
+  constexpr std::uint32_t kMaxCols = 16'384U;
+
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_create(wb.handle, 0, &cache_id), 0);
+  std::size_t field_idx = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add(wb.handle, cache_id, "F", &field_idx), 0);
+
+  // create() with an anchor past the grid must be rejected, not stored.
+  std::size_t pivot_idx = 99;
+  EXPECT_EQ(fm_workbook_pivot_create(wb.handle, 0, "PT", cache_id, kMaxRows, 0U, &pivot_idx),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_pivot_create(wb.handle, 0, "PT", cache_id, 0U, kMaxCols, &pivot_idx),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  // A valid create succeeds, then set_anchor must reject a span whose far
+  // corner leaves the grid (the wrap the audit flagged) and a zero span.
+  ASSERT_EQ(fm_workbook_pivot_create(wb.handle, 0, "PT", cache_id, 0U, 0U, &pivot_idx), 0);
+  EXPECT_EQ(
+      fm_workbook_pivot_set_anchor(wb.handle, 0, pivot_idx, kMaxRows - 1U, 0U, /*span_rows=*/2U, /*span_cols=*/1U),
+      static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_pivot_set_anchor(wb.handle, 0, pivot_idx, 0U, 0U, /*span_rows=*/0U, /*span_cols=*/1U),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  // An in-grid span still succeeds.
+  EXPECT_EQ(fm_workbook_pivot_set_anchor(wb.handle, 0, pivot_idx, 0U, 0U, /*span_rows=*/3U, /*span_cols=*/2U), 0);
+}

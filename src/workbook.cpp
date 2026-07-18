@@ -645,6 +645,10 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
     return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_value: sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
   }
+  if (!Sheet::coord_in_grid(row, col)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_value: coordinate out of grid",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);
 
@@ -683,6 +687,10 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   if (sheet_index >= sheets_.size()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_formula: sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  if (!Sheet::coord_in_grid(row, col)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_formula: coordinate out of grid",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
 
   // Normalize Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
@@ -1089,6 +1097,10 @@ Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::
   if (sheet_index >= sheets_.size()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_xf_index: sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  if (!Sheet::coord_in_grid(row, col)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_xf_index: coordinate out of grid",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
   Sheet& sheet = sheets_[sheet_index];
   if (sheet.cell_at(row, col) == nullptr) {

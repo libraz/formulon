@@ -249,6 +249,20 @@ TEST(FormulonCApiCf, OutOfRangeSheetIndexReturnsInvalidArgument) {
   EXPECT_EQ(out, nullptr);
 }
 
+TEST(FormulonCApiCf, OutOfGridOrReversedRectReturnsInvalidArgument) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_results_t* out = nullptr;
+  // A reversed rectangle (last < first) would wrap the iteration span.
+  EXPECT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 5, 5, 0, 0, std::nan(""), &out),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(out, nullptr);
+  // A corner past the grid ceiling would materialize billions of cells.
+  EXPECT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 0, formulon::Sheet::kMaxRows, 0, std::nan(""), &out),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(out, nullptr);
+}
+
 TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

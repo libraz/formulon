@@ -431,6 +431,23 @@ class Sheet {
   /// 0..kMaxCols-1, mapping to A..XFD).
   static constexpr std::uint32_t kMaxCols = 16384U;
 
+  /// True when `(row, col)` addresses a cell inside the Excel grid.
+  /// The single predicate every public coordinate entry point (C ABI
+  /// setters, pivot/CF mutators) checks before handing an
+  /// attacker-controlled `std::uint32_t` to the storage layer, whose own
+  /// bounds checks are debug-only asserts.
+  static constexpr bool coord_in_grid(std::uint32_t row, std::uint32_t col) noexcept {
+    return row < kMaxRows && col < kMaxCols;
+  }
+
+  /// True when `[first_row..last_row] x [first_col..last_col]` is a
+  /// well-ordered rectangle fully inside the Excel grid (both axes
+  /// non-inverted and both corners in-grid).
+  static constexpr bool rect_in_grid(std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,
+                                     std::uint32_t last_col) noexcept {
+    return first_row <= last_row && first_col <= last_col && coord_in_grid(last_row, last_col);
+  }
+
   /// Builds a sheet with the given display name. The name is adopted
   /// verbatim; callers are expected to supply a valid Excel sheet name
   /// (name validation will live in the workbook layer once it is wired up).

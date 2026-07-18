@@ -214,6 +214,30 @@ TEST(FormulonCApi, OutOfRangeSheetIndex) {
   EXPECT_NE(ctx.find("sheet_index"), std::string::npos) << "context=" << ctx;
 }
 
+TEST(FormulonCApi, OutOfGridCoordinateIsRejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  // A column near the top of the u32 range would otherwise resize a row
+  // vector to billions of cells. It must be rejected before the storage
+  // layer, not turned into a multi-GB allocation.
+  const std::uint32_t kBadCol = 4'000'000'000U;
+  fm_status_t rc = fm_workbook_set_number(wb.handle, 0, 0, kBadCol, 1.0);
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  std::string ctx = fm_last_error_context();
+  EXPECT_NE(ctx.find("col"), std::string::npos) << "context=" << ctx;
+
+  // Row at the Excel ceiling (kMaxRows) is one past the last addressable
+  // row and must also be rejected.
+  EXPECT_EQ(fm_workbook_set_formula(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "=1"),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(fm_workbook_set_blank(wb.handle, 0, 0, formulon::Sheet::kMaxCols),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  // The last in-grid cell still round-trips.
+  EXPECT_EQ(fm_workbook_set_number(wb.handle, 0, formulon::Sheet::kMaxRows - 1U, formulon::Sheet::kMaxCols - 1U, 3.0),
+            0);
+}
+
 TEST(FormulonCApi, SuccessClearsPreviousLastError) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

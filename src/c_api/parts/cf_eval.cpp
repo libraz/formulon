@@ -118,6 +118,12 @@ extern "C" fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, si
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_cf_evaluate_range"); rc != 0) {
     return rc;
   }
+  if (!formulon::Sheet::rect_in_grid(first_row, first_col, last_row, last_col)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_cf_evaluate_range: rect out of grid",
+                             "first=(" + std::to_string(first_row) + "," + std::to_string(first_col) + ") last=(" +
+                                 std::to_string(last_row) + "," + std::to_string(last_col) + ")");
+  }
   // Stack-allocated arena and eval context: the CF walker is purely
   // synchronous and the engine consumes both before returning. Binding
   // them here keeps the C ABI free of long-lived per-handle CF state.
