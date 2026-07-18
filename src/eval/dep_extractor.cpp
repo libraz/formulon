@@ -167,10 +167,9 @@ void expand_defined_name(const io::DefinedName& def, WalkState& state) {
     return;
   }
 
-  parser::Parser parser(src, *state.name_arena);
-  parser::AstNode* root = parser.parse();
+  parser::AstNode* root = parser::parse_strict(src, *state.name_arena);
   if (root == nullptr) {
-    return;  // Unparseable formula: skip silently.
+    return;  // Unparseable (or valid-prefix-plus-garbage) formula: skip.
   }
 
   state.name_stack.push_back(std::move(lowered));

@@ -67,6 +67,31 @@ TEST(WorkbookRecalc, SmallChainEndToEnd) {
   EXPECT_DOUBLE_EQ(a3.as_number(), 45.0);
 }
 
+TEST(WorkbookRecalc, ValidPrefixWithTrailingGarbageIsNameError) {
+  // A formula that parses to a valid prefix but leaves unconsumed trailing
+  // tokens must NOT evaluate as the prefix — that would silently change the
+  // cell's value and dependency set from what was entered. The strict parse
+  // gate surfaces #NAME? and registers no dependency on the prefix's refs.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0))));  // A1 = 5
+  // "=A1 3" parses to the prefix `A1` with a trailing `3` the parser cannot
+  // consume. Pre-fix this evaluated to 5 (the prefix) and wired a dep on A1.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1 3")));  // B1
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  Value b1 = StoredValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(b1.is_error()) << "expected #NAME?, got a non-error value from a recovered prefix";
+  EXPECT_EQ(b1.as_error(), ErrorCode::Name);
+
+  // No stale dependency: mutating A1 must not resurrect the prefix value.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(99.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  b1 = StoredValue(wb, 0U, 0U, 1U);
+  EXPECT_TRUE(b1.is_error()) << "trailing-garbage formula must stay #NAME? after upstream edit";
+}
+
 TEST(WorkbookRecalc, SumAcrossRange) {
   // B1 = =SUM(A1:A3) — exercises the range-flattening path in the dep
   // extractor. Filling A1..A3 with 1..3 should produce B1 == 6.

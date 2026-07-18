@@ -231,6 +231,22 @@ class Parser {
   std::vector<std::pair<std::uint32_t, std::uint32_t>> struct_ref_byte_spans_;
 };
 
+/// Strict single-shot parse for the value / dependency pipeline.
+///
+/// `Parser::parse()` keeps a valid *prefix* and reports the rest via
+/// `errors()` (panic-mode recovery) so an editor can show diagnostics for a
+/// half-typed formula. Evaluation, dependency extraction, and persistence
+/// must NOT treat that recovered prefix as the user's formula — doing so
+/// silently changes the cell's value and dependency set from what was
+/// entered. This helper returns the root only when the parse consumed the
+/// whole input cleanly (`root != nullptr && errors().empty()`); otherwise it
+/// returns `nullptr`, which every caller maps to its usual hard-parse-failure
+/// outcome (`#NAME?` for evaluation, "skip" for dependency extraction).
+///
+/// `src` must already have any leading `=` stripped. `arena` owns the
+/// returned AST.
+AstNode* parse_strict(std::string_view src, Arena& arena);
+
 }  // namespace parser
 }  // namespace formulon
 

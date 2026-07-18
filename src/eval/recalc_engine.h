@@ -181,6 +181,11 @@ class RecalcEngine {
     void unregister_formula(CellNodeId cell) const;
     void clear_cell_dependencies(CellNodeId cell) const;
     void mark_dirty(CellNodeId cell) const;
+    /// Drops the entire dependency graph, volatile set, and dirty set.
+    /// Used by `Workbook`'s sheet-permutation entry points, which
+    /// invalidate every `CellNodeId.sheet_id` at once and must re-register
+    /// every formula from scratch rather than patch individual edges.
+    void reset_graph() const;
     const DepGraph& dep_graph() const noexcept;
 
    private:
@@ -349,6 +354,7 @@ class RecalcEngine {
   void unregister_formula_locked(CellNodeId cell);
   void clear_cell_dependencies_locked(CellNodeId cell);
   void mark_dirty_locked(CellNodeId cell);
+  void reset_graph_locked();
   Expected<RecalcStats, Error> recalc_locked(Workbook& workbook, const FunctionRegistry& registry);
   Expected<RecalcStats, Error> partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,
                                                      const SheetCellRange& viewport);

@@ -34,11 +34,11 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   // helper keeps this strip in lockstep across every recalc entry.
   const std::string_view src = strip_formula_prefix(cell_data.formula_text);
 
-  parser::Parser parser(src, arena);
-  parser::AstNode* root = parser.parse();
+  parser::AstNode* root = parser::parse_strict(src, arena);
   if (root == nullptr) {
-    // Parser failure beyond panic-mode recovery (typically empty input or
-    // arena exhaustion). #NAME? matches the existing recursive resolver
+    // Hard parse failure, or a valid prefix followed by unparseable trailing
+    // tokens. Either way we refuse to evaluate a recovered prefix as if it
+    // were the whole formula. #NAME? matches the existing recursive resolver
     // behaviour in `EvalContext::resolve_ref`.
     return Value::error(ErrorCode::Name);
   }

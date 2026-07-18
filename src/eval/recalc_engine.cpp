@@ -81,6 +81,10 @@ void RecalcEngine::LockedMutator::mark_dirty(CellNodeId cell) const {
   engine_.mark_dirty_locked(cell);
 }
 
+void RecalcEngine::LockedMutator::reset_graph() const {
+  engine_.reset_graph_locked();
+}
+
 const DepGraph& RecalcEngine::LockedMutator::dep_graph() const noexcept {
   return engine_.graph_;
 }
@@ -141,6 +145,12 @@ void RecalcEngine::mark_dirty(CellNodeId cell) {
 
 void RecalcEngine::mark_dirty_locked(CellNodeId cell) {
   dirty_.mark(cell);
+}
+
+void RecalcEngine::reset_graph_locked() {
+  graph_ = DepGraph{};
+  volatiles_.clear();
+  dirty_.clear();
 }
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {

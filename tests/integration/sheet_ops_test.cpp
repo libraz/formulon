@@ -329,6 +329,56 @@ TEST(WorkbookSheetOps, MoveAdjustsSheetScopedLocalIds) {
   EXPECT_EQ(wb.defined_names()[2].local_sheet_id, 1);  // C (Gamma)
 }
 
+// Removing a middle sheet renumbers every later sheet's workbook-relative
+// index. The dependency graph is keyed by that index, so a cross-sheet
+// formula's edge must be re-pointed at the survivor's new position;
+// otherwise a later edit to the survivor never dirties the dependent and
+// the stale cached value persists.
+TEST(WorkbookSheetOps, RemoveMiddleSheetRepointsCrossSheetDependencies) {
+  Workbook wb = ThreeSheetWorkbook();                                                // Alpha(0), Beta(1), Gamma(2)
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(2, 0, 0, Value::number(100.0))));  // Gamma!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=Gamma!A1")));         // Alpha!A1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 100.0);
+
+  // Remove Beta (index 1); Gamma slides to index 1.
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+  EXPECT_EQ(wb.sheet(1).name(), "Gamma");
+  // Recalc after the structural change re-reads Gamma at its new index.
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 100.0);
+
+  // Edit Gamma (now index 1); the dependent Alpha!A1 must re-evaluate.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 0, Value::number(300.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 300.0)
+      << "cross-sheet dependent stale after removing a preceding sheet";
+}
+
+// Moving a sheet renumbers the whole [min..max] window. A cross-sheet
+// dependency edge that spans the window must survive the renumbering so
+// downstream edits still propagate.
+TEST(WorkbookSheetOps, MoveSheetRepointsCrossSheetDependencies) {
+  Workbook wb = ThreeSheetWorkbook();                                               // Alpha(0), Beta(1), Gamma(2)
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(2, 0, 0, Value::number(10.0))));  // Gamma!A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 0, "=Gamma!A1")));        // Alpha!A1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0)->cached_value.as_number(), 10.0);
+
+  // Move Alpha (0) to the end: layout becomes [Beta, Gamma, Alpha].
+  ASSERT_TRUE(static_cast<bool>(wb.move_sheet(0, 2)));
+  EXPECT_EQ(wb.sheet(1).name(), "Gamma");
+  EXPECT_EQ(wb.sheet(2).name(), "Alpha");
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(2).cell_at(0, 0)->cached_value.as_number(), 10.0);
+
+  // Edit Gamma (now index 1); Alpha (now index 2) must re-evaluate.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 0, Value::number(42.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(2).cell_at(0, 0)->cached_value.as_number(), 42.0)
+      << "cross-sheet dependent stale after moving a sheet";
+}
+
 TEST(WorkbookSheetOps, SetDefinedNameAddsEntry) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Pi", "=3.14159")));

@@ -556,6 +556,15 @@ AstNode* Parser::parse() {
   return root_;
 }
 
+AstNode* parse_strict(std::string_view src, Arena& arena) {
+  Parser parser(src, arena);
+  AstNode* root = parser.parse();
+  if (root == nullptr || !parser.errors().empty()) {
+    return nullptr;
+  }
+  return root;
+}
+
 // ---------------------------------------------------------------------------
 // Pratt expression loop
 // ---------------------------------------------------------------------------

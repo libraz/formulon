@@ -73,6 +73,51 @@ Sheet& Workbook::add_sheet(std::string name) {
 
 namespace {
 
+// Rebuilds the dependency graph from scratch after a sheet permutation.
+//
+// A `CellNodeId.sheet_id` is the workbook-relative sheet index, so
+// removing or moving a sheet invalidates the `sheet_id` of every node on
+// every shifted sheet at once. Patching individual edges is error-prone
+// (the pre-move ids no longer name the right sheet once the vector has
+// been reordered), so the safe baseline is to drop the whole graph and
+// re-register each formula against its current position. Every formula
+// cell is then marked dirty so the next recalc re-evaluates against the
+// rearranged workbook — matching Excel's post-rearrange recalculation.
+//
+// Precondition: the caller holds the engine mutex for the lifetime of the
+// `LockedMutator&`, and `sheets` is already in its final post-permutation
+// order.
+void reindex_all_formulas(const std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+                          const Workbook& workbook) {
+  mutator.reset_graph();
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    const Sheet& sheet = sheets[sheet_idx];
+    for (const auto& [row, cells] : sheet.rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        const Cell& cell = cells[col];
+        if (cell.formula_text.empty()) {
+          continue;
+        }
+        std::string_view body = cell.formula_text;
+        if (!body.empty() && body.front() == '=') {
+          body.remove_prefix(1);
+        }
+        const eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
+        if (!body.empty()) {
+          Arena arena;
+          parser::AstNode* root = parser::parse_strict(body, arena);
+          if (root != nullptr) {
+            mutator.register_formula(node, *root, workbook);
+          }
+        }
+        // Every formula cell recomputes after a rearrangement, regardless
+        // of whether its refs changed.
+        mutator.mark_dirty(node);
+      }
+    }
+  }
+}
+
 // Excel's structural validation for sheet names: non-empty, ≤ 31
 // characters, no `: \ / ? * [ ]`. This is a byte-level check (the
 // forbidden set is ASCII), so it works correctly on UTF-8 sheet names
@@ -269,28 +314,19 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
 
   const std::string removed_name = sheets_[index].name();
 
-  // Drop dep-graph nodes for every populated cell on the removed sheet,
-  // then erase the sheet itself. Both halves run under a single hold of
-  // the engine mutex so a concurrent `recalc_parallel` either sees the
-  // sheet (and its graph nodes) fully present or fully gone, never a
-  // half-erased intermediate where the graph still names a cell whose
-  // sheet vector has already shifted.
-  //
-  // The graph stores reverse edges, so other sheets' formulas that read
-  // into the removed sheet keep their edges — but those edges are now
-  // dangling. The next recalc catches them naturally because the source
-  // cell is gone.
+  // Erase the sheet, then rebuild the dependency graph from scratch. A
+  // remove shifts the workbook-relative index of every sheet after the
+  // removed one, so their `CellNodeId.sheet_id`s — and the graph edges
+  // keyed by them — are all invalidated at once; a full re-registration
+  // is the safe baseline. Both halves run under a single hold of the
+  // engine mutex so a concurrent `recalc_parallel` either sees the sheet
+  // (and its graph nodes) fully present or fully gone, never a
+  // half-erased intermediate.
   {
     std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    const Sheet& removed = sheets_[index];
-    for (const auto& [row, cells] : removed.rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        eval::CellNodeId node{static_cast<std::uint16_t>(index), row, static_cast<std::uint32_t>(col)};
-        mutator.unregister_formula(node);
-      }
-    }
     sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
+    reindex_all_formulas(sheets_, mutator, *this);
   }
 
   // Drop defined names that target the removed sheet. We compare against
@@ -366,23 +402,13 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
   }
 
   // The recalc engine's `CellNodeId.sheet_id` is the workbook-relative
-  // index, so a move invalidates every dep-graph edge whose endpoint
-  // sits on a moved sheet. Rather than rebuild the graph we conservatively
-  // mark every cell on every affected sheet (the whole `[min..max]`
-  // window) dirty so the next `recalc()` re-registers their edges.
-  // Cells outside the window are unaffected. This mirrors Excel's
-  // post-rearrange behaviour where downstream formulas re-evaluate.
-  const std::uint32_t window_lo = std::min(from_index, to_index);
-  const std::uint32_t window_hi = std::max(from_index, to_index);
-  for (std::uint32_t sheet_idx = window_lo; sheet_idx <= window_hi; ++sheet_idx) {
-    const Sheet& target = sheets_[sheet_idx];
-    for (const auto& [row, cells] : target.rows()) {
-      for (std::size_t col = 0; col < cells.size(); ++col) {
-        eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
-        mutator.mark_dirty(node);
-      }
-    }
-  }
+  // index, so a move renumbers every sheet in the `[min..max]` window and
+  // invalidates the graph nodes/edges keyed by their old ids. Rebuild the
+  // graph from scratch against the reordered sheet vector; every re-keyed
+  // formula is marked dirty so the next `recalc()` re-evaluates it. This
+  // mirrors Excel's post-rearrange behaviour where downstream formulas
+  // re-evaluate.
+  reindex_all_formulas(sheets_, mutator, *this);
   return Expected<void, Error>::Ok();
 }
 
@@ -580,8 +606,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
   }
 
   Arena tmp_arena;
-  parser::Parser parser(src, tmp_arena);
-  parser::AstNode* root = parser.parse();
+  parser::AstNode* root = parser::parse_strict(src, tmp_arena);
 
   // The compound mutation runs under a single hold of the engine mutex
   // so a concurrent `recalc_parallel` does not see a half-applied
@@ -597,9 +622,10 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
     if (root != nullptr) {
       mutator.register_formula(node, *root, *this);
     } else {
-      // Parser failed beyond recovery (typically empty input). Drop any
-      // stale edges so we do not retain spurious dependencies; the cell
-      // will surface `#NAME?` at the next recalc.
+      // Hard parse failure, or a valid prefix trailed by unparseable
+      // tokens. Drop any stale edges rather than register dependencies for
+      // a recovered prefix that is not the whole formula; the cell surfaces
+      // `#NAME?` at the next recalc (via the strict gate in cell_evaluator).
       mutator.unregister_formula(node);
     }
 

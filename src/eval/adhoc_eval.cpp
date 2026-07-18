@@ -65,8 +65,7 @@ Value parse_and_evaluate(const Workbook& workbook, const Sheet& sheet, std::uint
   // matching the recalc path's use of `strip_formula_prefix`.
   const std::string_view src = strip_formula_prefix(formula);
 
-  parser::Parser parser(src, arena);
-  parser::AstNode* root = parser.parse();
+  parser::AstNode* root = parser::parse_strict(src, arena);
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }
@@ -93,9 +92,8 @@ bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint
                          const FunctionRegistry& registry) {
   const std::string_view src = strip_formula_prefix(formula);
 
-  parser::Parser parser(src, arena);
-  parser::AstNode* root = parser.parse();
-  if (root == nullptr || !parser.errors().empty()) {
+  parser::AstNode* root = parser::parse_strict(src, arena);
+  if (root == nullptr) {
     // A malformed rule formula does not fire (coerces to false).
     return false;
   }

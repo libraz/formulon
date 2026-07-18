@@ -254,14 +254,13 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
   // so it may carry the leading `=` from external readers or hand-written
   // callers. Strip it through the shared helper so this resolver agrees
   // bit-for-bit with `recalc_engine.cpp` / `scheduler.cpp`.
-  parser::Parser parser(strip_formula_prefix(prefix.cell->formula_text), arena);
-  parser::AstNode* root = parser.parse();
+  parser::AstNode* root = parser::parse_strict(strip_formula_prefix(prefix.cell->formula_text), arena);
 
   Value result = Value::blank();
   if (root == nullptr) {
-    // Parser failed beyond recovery (e.g. empty input or arena exhaustion).
-    // Malformed-but-recoverable inputs already become #NAME? via the
-    // evaluator's handling of `ErrorPlaceholder`, so both paths agree.
+    // Hard parse failure, or a valid prefix trailed by unparseable tokens.
+    // We refuse to resolve a recovered prefix as the referenced cell's
+    // value; #NAME? matches the recursive-resolver failure contract.
     result = Value::error(ErrorCode::Name);
   } else {
     // Anchor the recursive evaluation at the target cell so ROW() / COLUMN()
