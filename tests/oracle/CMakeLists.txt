@@ -255,11 +255,12 @@ endif()
 # Conditional-formatting (CF) oracle target
 #
 # Pins Formulon's CF evaluator output for hand-authored scenarios. The
-# binary is paired with on-disk artefacts (cases_cf/<suite>.yaml +
-# cases_cf/<suite>.case.json + golden_cf/<suite>.golden.json) but does
-# not read them — cases are hardcoded as gtest fixtures so the binary
-# needs neither YAML nor JSON. The Python validator
-# `tools/oracle/cf_case_schema.py` keeps the on-disk pair in shape.
+# scenario inputs are built programmatically in the fixtures, but the
+# expected match outputs are read from the checked-in golden
+# (golden_cf/<suite>.golden.json) so the golden is the single source of
+# truth. The paired input artefacts (cases_cf/<suite>.yaml +
+# cases_cf/<suite>.case.json) are kept in shape by the Python validator
+# `tools/oracle/cf_case_schema.py`.
 #
 # Registered separately from `formulon_oracle_tests` because the CF
 # match data model (DifferentialFormat / ColorScale / DataBar /
@@ -267,7 +268,10 @@ endif()
 # schema the function oracle uses.
 # ---------------------------------------------------------------------------
 
-add_executable(formulon_cf_oracle_tests cf_oracle_test.cpp)
+add_executable(formulon_cf_oracle_tests
+  cf_oracle_test.cpp
+  json_reader.cpp
+)
 
 target_link_libraries(formulon_cf_oracle_tests
   PRIVATE
@@ -279,6 +283,11 @@ target_include_directories(formulon_cf_oracle_tests
   PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}
+)
+
+target_compile_definitions(formulon_cf_oracle_tests
+  PRIVATE
+    FORMULON_CF_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden_cf"
 )
 
 formulon_apply_warnings(formulon_cf_oracle_tests)
