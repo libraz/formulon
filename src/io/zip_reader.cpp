@@ -250,28 +250,29 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
                       "ZipReader::read_entry: cumulative extracted bytes would exceed cap", std::move(ctx));
   }
 
-  std::size_t extracted_size = 0;
-  void* extracted = mz_zip_reader_extract_to_heap(&impl_->archive, static_cast<mz_uint>(located), &extracted_size,
-                                                  /*flags=*/0);
-  if (extracted == nullptr) {
-    const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
-    std::string ctx("context=zip_reader entry=");
-    ctx.append(c_name);
-    ctx.append(" miniz_error=");
-    ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: extraction failed", std::move(ctx));
-  }
-
+  // Extract straight into the caller-owned vector. `advertised` is the
+  // stat's `m_uncomp_size`, already validated against the per-entry,
+  // ratio, and cumulative caps above. Sizing the destination once and
+  // decompressing into it avoids the second full-size buffer that
+  // `extract_to_heap` + `memcpy` + `mz_free` would hold simultaneously,
+  // halving the extraction's peak footprint.
   std::vector<std::uint8_t> bytes;
-  bytes.resize(extracted_size);
-  if (extracted_size > 0) {
-    std::memcpy(bytes.data(), extracted, extracted_size);
+  bytes.resize(advertised);
+  if (advertised > 0) {
+    if (mz_zip_reader_extract_to_mem(&impl_->archive, static_cast<mz_uint>(located), bytes.data(), bytes.size(),
+                                     /*flags=*/0) == MZ_FALSE) {
+      const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
+      std::string ctx("context=zip_reader entry=");
+      ctx.append(c_name);
+      ctx.append(" miniz_error=");
+      ctx.append(std::to_string(static_cast<int>(err)));
+      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: extraction failed", std::move(ctx));
+    }
   }
-  mz_free(extracted);
-  // Account for the actual extracted size (which may differ from the
-  // advertised `m_uncomp_size` if miniz had to truncate); the next call
-  // sees the updated cumulative footprint when checking the total cap.
-  impl_->total_extracted_bytes += extracted_size;
+  // miniz decompressed exactly `advertised` bytes into the buffer (the
+  // stat size is authoritative for a well-formed entry); account for it
+  // so the next call sees the updated cumulative footprint.
+  impl_->total_extracted_bytes += advertised;
   return bytes;
 }
 
