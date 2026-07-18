@@ -44,6 +44,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -97,18 +98,24 @@ LazyKind classify_lazy(std::string_view name) noexcept {
   return LazyKind::None;
 }
 
-/// LET binding scope: stack of `(name, slot)` pairs. Innermost binding
-/// wins on lookup (Excel allows shadowing).
-struct LetScope {
-  std::vector<std::string_view> names;
-  std::vector<std::uint32_t> slots;
+/// One lexical binding kind. `Let` slots index the LET slot array via
+/// `LoadLet`; `LambdaArg` slots index the active lambda frame's arguments
+/// via `LoadLambdaArg`.
+enum class LexicalKind : std::uint8_t {
+  Let,
+  LambdaArg,
 };
 
-/// Lambda parameter scope: declared parameters bind to argument slots
-/// in declaration order. Like `LetScope`, innermost wins on lookup.
-struct LambdaScope {
-  std::vector<std::string_view> names;
-  std::vector<std::uint32_t> slots;
+/// A single entry in the unified lexical scope stack: a bound name, whether
+/// it is a LET binding or a lambda parameter, and its slot. LET and lambda
+/// bindings share ONE ordered stack so lookup honours actual lexical
+/// nesting — the innermost binding shadows outer ones regardless of kind.
+/// A split let-first / lambda-second search would wrongly let a LET binding
+/// shadow a more deeply nested lambda parameter of the same name.
+struct LexicalEntry {
+  std::string_view name;
+  LexicalKind kind;
+  std::uint32_t slot;
 };
 
 /// Mutable per-body compilation state. One instance is created for the
@@ -117,8 +124,7 @@ struct LambdaScope {
 struct BodyState {
   ByteCode* out = nullptr;
   std::uint32_t next_let_slot = 0;
-  LetScope let_scope;
-  LambdaScope lambda_scope;
+  std::vector<LexicalEntry> lexical_scope;
 };
 
 /// Top-level compiler context. Owns scratch storage that persists across
@@ -147,14 +153,17 @@ Expected<std::uint32_t, Error> emit(BodyState& bs, const parser::AstNode& src, O
                                     std::uint32_t b);
 
 LexicalBinding lookup_lexical_binding(const BodyState& bs, std::string_view name) noexcept {
-  for (std::size_t i = bs.let_scope.names.size(); i > 0; --i) {
-    if (bs.let_scope.names[i - 1] == name) {
-      return LexicalBinding{LexicalBinding::Kind::Let, bs.let_scope.slots[i - 1]};
-    }
-  }
-  for (std::size_t i = bs.lambda_scope.names.size(); i > 0; --i) {
-    if (bs.lambda_scope.names[i - 1] == name) {
-      return LexicalBinding{LexicalBinding::Kind::LambdaArg, bs.lambda_scope.slots[i - 1]};
+  // Walk the unified scope stack from innermost (back) to outermost so the
+  // most recent binding shadows earlier ones, and match case-insensitively
+  // to mirror the tree-walker's `NameEnv` (Excel folds ASCII case on name
+  // resolution). Splitting the search by kind or comparing case-sensitively
+  // would diverge from the tree evaluator the VM is meant to verify.
+  for (std::size_t i = bs.lexical_scope.size(); i > 0; --i) {
+    const LexicalEntry& entry = bs.lexical_scope[i - 1];
+    if (strings::case_insensitive_eq(entry.name, name)) {
+      const LexicalBinding::Kind kind =
+          entry.kind == LexicalKind::Let ? LexicalBinding::Kind::Let : LexicalBinding::Kind::LambdaArg;
+      return LexicalBinding{kind, entry.slot};
     }
   }
   return {};
@@ -493,8 +502,8 @@ Expected<void, Error> compile_array_literal(BodyState& bs, const parser::AstNode
 
 Expected<void, Error> compile_let(BodyState& bs, const parser::AstNode& node) {
   const std::uint32_t bindings = node.as_let_binding_count();
-  // Snapshot the LET scope so we can pop our slots when the body is done.
-  const std::size_t saved = bs.let_scope.names.size();
+  // Snapshot the scope depth so we can pop our bindings when the body is done.
+  const std::size_t saved = bs.lexical_scope.size();
   for (std::uint32_t i = 0; i < bindings; ++i) {
     RETURN_IF_ERROR(compile_node(bs, node.as_let_binding_expr(i)));
     if (bs.next_let_slot > Instruction::kMaxA) {
@@ -502,13 +511,13 @@ Expected<void, Error> compile_let(BodyState& bs, const parser::AstNode& node) {
     }
     const std::uint32_t slot = bs.next_let_slot++;
     RETURN_IF_ERROR(emit(bs, node, OpCode::StoreLet, slot));
-    bs.let_scope.names.push_back(node.as_let_binding_name(i));
-    bs.let_scope.slots.push_back(slot);
+    // Push after compiling the initialiser so a binding's own initialiser
+    // reads the OUTER same-named binding (LET(x,1,x,x+10,x) -> 11).
+    bs.lexical_scope.push_back(LexicalEntry{node.as_let_binding_name(i), LexicalKind::Let, slot});
   }
   RETURN_IF_ERROR(compile_node(bs, node.as_let_body()));
   // Pop the bindings we added (later siblings should not see them).
-  bs.let_scope.names.resize(saved);
-  bs.let_scope.slots.resize(saved);
+  bs.lexical_scope.resize(saved);
   return {};
 }
 
@@ -520,11 +529,11 @@ Expected<void, Error> compile_lambda(BodyState& bs, const parser::AstNode& node)
                               "lambda parameter count exceeds 16-bit budget");
   }
   // Push parameter names so a NameRef inside the body resolves to a
-  // LoadLambdaArg. Slots are 0..param_count-1.
-  const std::size_t saved = bs.lambda_scope.names.size();
+  // LoadLambdaArg. Slots are 0..param_count-1. They share the unified scope
+  // stack with LET bindings so nesting order — not kind — decides shadowing.
+  const std::size_t saved = bs.lexical_scope.size();
   for (std::uint32_t i = 0; i < param_count; ++i) {
-    bs.lambda_scope.names.push_back(node.as_lambda_param(i));
-    bs.lambda_scope.slots.push_back(i);
+    bs.lexical_scope.push_back(LexicalEntry{node.as_lambda_param(i), LexicalKind::LambdaArg, i});
   }
   // Stash the param-array start index in the names pool so the VM can read
   // the parameter names back out (useful for error messages and TCO arg
@@ -559,8 +568,7 @@ Expected<void, Error> compile_lambda(BodyState& bs, const parser::AstNode& node)
   bs.out->code[jmp_pc].a = static_cast<std::uint32_t>(bs.out->code.size());
 
   // Pop the params we pushed.
-  bs.lambda_scope.names.resize(saved);
-  bs.lambda_scope.slots.resize(saved);
+  bs.lexical_scope.resize(saved);
   return {};
 }
 

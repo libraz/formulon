@@ -1139,6 +1139,12 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         }
         return s.stack.back();
       }
+
+      default:
+        // Every real opcode advances `pc` itself; an unrecognised opcode
+        // would otherwise leave `pc` unchanged and spin the dispatch loop
+        // forever. Fail fast instead of hanging.
+        return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "unknown opcode in instruction stream");
     }
   }
   return make_vm_error(FormulonErrorCode::kVmInvalidOpcode, "fell off the end of the instruction stream");

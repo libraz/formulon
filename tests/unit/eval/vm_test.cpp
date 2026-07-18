@@ -416,6 +416,34 @@ TEST(Vm, LetShadowing) {
   EXPECT_DOUBLE_EQ(v.as_number(), 11.0);
 }
 
+TEST(Vm, LetLookupIsCaseInsensitive) {
+  // The body references `X` (uppercase) but binds `x`; Excel folds ASCII
+  // case on name resolution, so this must resolve rather than surface
+  // `#NAME?`. Mirrors the tree-walker's case-insensitive NameEnv.
+  Arena a;
+  const Value v = RunVmOrDie("=LET(x, 10, X+5)", a);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 15.0);
+}
+
+TEST(Vm, LambdaParamShadowsOuterLetByNesting) {
+  // The inner lambda parameter `x` shadows the outer LET `x` inside the
+  // lambda body, so calling with 5 yields 5+100=105. A kind-split lookup
+  // that always resolves LET before lambda params would wrongly read the
+  // outer LET value (1) and return 101.
+  Arena a;
+  const Value v = RunVmOrDie("=LET(x, 1, LAMBDA(x, x+100)(5))", a);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 105.0);
+}
+
+TEST(Vm, LambdaParamLookupIsCaseInsensitive) {
+  Arena a;
+  const Value v = RunVmOrDie("=LAMBDA(x, X+1)(5)", a);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
 TEST(Vm, LambdaIife) {
   Arena a;
   const Value v = RunVmOrDie("=LAMBDA(x, x+1)(5)", a);
@@ -663,6 +691,22 @@ TEST(Vm, StackUnderflowReturnsError) {
   auto out = execute(bc, a, default_registry(), test::mac_context());
   ASSERT_FALSE(out.has_value());
   EXPECT_EQ(out.error().code, FormulonErrorCode::kVmStackUnderflow);
+}
+
+TEST(Vm, UnknownOpcodeReturnsErrorInsteadOfHanging) {
+  // A real opcode always advances `pc` itself; an unrecognised opcode would
+  // leave `pc` unchanged and spin the dispatch loop forever. The default
+  // switch arm must fail fast instead. Hand-roll a body whose sole
+  // instruction carries an out-of-range opcode value.
+  ByteCode bc;
+  Instruction bad{};
+  bad.op = static_cast<OpCode>(0xFEU);  // not a defined OpCode
+  bc.code.push_back(bad);
+  bc.source_pos.push_back(0U);
+  Arena a;
+  auto out = execute(bc, a, default_registry(), test::mac_context());
+  ASSERT_FALSE(out.has_value());
+  EXPECT_EQ(out.error().code, FormulonErrorCode::kVmInvalidOpcode);
 }
 
 TEST(Vm, BinaryOpUnderflowReturnsError) {

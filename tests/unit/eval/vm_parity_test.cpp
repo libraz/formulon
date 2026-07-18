@@ -63,7 +63,19 @@ bool ValuesAgree(const Value& a, const Value& b) {
     case ValueKind::Array: {
       const ArrayValue* la = a.as_array();
       const ArrayValue* ra = b.as_array();
-      return la->rows == ra->rows && la->cols == ra->cols;
+      if (la->rows != ra->rows || la->cols != ra->cols) {
+        return false;
+      }
+      // Deep compare: two arrays of the same shape can still hold different
+      // elements. Comparing only the dimensions lets a same-shape /
+      // wrong-value divergence slip through the parity check.
+      const std::uint64_t count = static_cast<std::uint64_t>(la->rows) * la->cols;
+      for (std::uint64_t i = 0; i < count; ++i) {
+        if (!ValuesAgree(la->cells[i], ra->cells[i])) {
+          return false;
+        }
+      }
+      return true;
     }
     default:
       return false;
@@ -216,6 +228,36 @@ TEST_P(ParitySweep, ResultsAgree) {
 
   EXPECT_TRUE(ValuesAgree(tree_v, vm_v)) << "parity divergence for: " << src << " tree=" << tree_v.debug_to_string()
                                          << " vm=" << vm_v.debug_to_string();
+}
+
+// Guards the parity comparator itself: two arrays of identical shape but
+// differing elements must NOT agree. Comparing only rows/cols would let a
+// same-shape / wrong-value VM divergence pass silently.
+TEST(VmParity, ValuesAgreeDeepComparesArrayElements) {
+  Arena arena;
+  Value* a_cells = arena.create_array<Value>(2);
+  Value* b_cells = arena.create_array<Value>(2);
+  ASSERT_NE(a_cells, nullptr);
+  ASSERT_NE(b_cells, nullptr);
+  a_cells[0] = Value::number(1.0);
+  a_cells[1] = Value::number(2.0);
+  b_cells[0] = Value::number(1.0);
+  b_cells[1] = Value::number(2.0);
+
+  auto* av = arena.create<ArrayValue>();
+  auto* bv = arena.create<ArrayValue>();
+  ASSERT_NE(av, nullptr);
+  ASSERT_NE(bv, nullptr);
+  *av = ArrayValue{1U, 2U, a_cells};
+  *bv = ArrayValue{1U, 2U, b_cells};
+
+  const Value a = Value::array(av);
+  Value b = Value::array(bv);
+  EXPECT_TRUE(ValuesAgree(a, b)) << "identical arrays must agree";
+
+  // Perturb one element: same shape, different value -> must disagree.
+  b_cells[1] = Value::number(999.0);
+  EXPECT_FALSE(ValuesAgree(a, b)) << "same-shape arrays with a differing element must not agree";
 }
 
 INSTANTIATE_TEST_SUITE_P(VmParity, ParitySweep,
