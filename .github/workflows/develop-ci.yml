@@ -71,7 +71,11 @@ jobs:
   native-fast:
     name: Build and fast test (native, Linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 60 to match ci.yml's native job. The first run on an empty build
+    # cache does a full cold Debug compile of the whole test suite on the
+    # 2-core runner, which is slow; subsequent runs reuse the cached
+    # build/ dir and only recompile changed TUs.
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
