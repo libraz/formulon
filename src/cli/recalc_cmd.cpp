@@ -121,16 +121,48 @@ fm_workbook_format_t format_from_extension(const std::string& path) {
   return ext == "xlsb" ? FM_WORKBOOK_FORMAT_XLSB : FM_WORKBOOK_FORMAT_XLSX;
 }
 
-// Writes `bytes` to `path` in binary mode. Returns `kCliOutputFailed`
-// on any open or write error.
+// Writes `bytes` to `path` atomically: the full payload is written to a
+// sibling temp file, flushed, and closed successfully before the temp
+// replaces the target. A serialize/write failure (disk full, permission,
+// short write) therefore leaves any pre-existing output file untouched —
+// critical when input and output are the same path, where a naive
+// truncate-then-write would destroy the original on partial failure.
+//
+// The temp file lives in the target's own directory (same suffix on the
+// full path) so the final rename stays within one filesystem, keeping it
+// atomic on POSIX. Returns `kCliOutputFailed` on any open / write / rename
+// error, removing the temp file on the failure paths.
 fm_status_t write_all(const std::string& path, const std::uint8_t* bytes, std::size_t len) {
-  std::ofstream out(path, std::ios::binary | std::ios::trunc);
-  if (!out) {
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
-  }
-  if (len > 0) {
-    out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
+  const std::string tmp_path = path + ".formulon-tmp";
+  {
+    std::ofstream out(tmp_path, std::ios::binary | std::ios::trunc);
     if (!out) {
+      return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
+    }
+    if (len > 0) {
+      out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
+    }
+    out.flush();
+    if (!out) {
+      out.close();
+      std::remove(tmp_path.c_str());
+      return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
+    }
+    out.close();
+    if (out.fail()) {
+      std::remove(tmp_path.c_str());
+      return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
+    }
+  }
+
+  // Promote the temp file into place. `std::rename` replaces an existing
+  // target atomically on POSIX; on platforms whose `rename` refuses to
+  // overwrite, fall back to removing the target first (a small non-atomic
+  // window, but the freshly written bytes are already safe on disk).
+  if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {
+    std::remove(path.c_str());
+    if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {
+      std::remove(tmp_path.c_str());
       return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
     }
   }

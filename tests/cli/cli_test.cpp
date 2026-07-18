@@ -306,6 +306,46 @@ TEST(FormulonCli, RecalcRoundTripsFormulae) {
   fm_workbook_destroy(wb);
 }
 
+TEST(FormulonCli, RecalcInPlaceOverwritesSamePathAndLeavesNoTemp) {
+  // Input and output are the same path: the atomic write must serialize the
+  // recalculated workbook fully before replacing the original, and must not
+  // leave its sibling temp file behind on success.
+  std::string path = "/tmp/fm_cli_inplace.xlsx";
+  std::string tmp_sidecar = path + ".formulon-tmp";
+  PathGuard g_path(path);
+  PathGuard g_tmp(tmp_sidecar);
+  ASSERT_TRUE(write_fixture_workbook(path));
+
+  CliRun r = run_cli({"recalc", path, "-o", path, "--quiet"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+
+  // The temp sidecar must be gone (renamed into place).
+  {
+    std::ifstream leftover(tmp_sidecar, std::ios::binary);
+    EXPECT_FALSE(leftover.good()) << "temp sidecar left behind after in-place recalc";
+  }
+
+  // The overwritten file still loads and recalculates correctly.
+  std::ifstream f(path, std::ios::binary);
+  ASSERT_TRUE(f);
+  f.seekg(0, std::ios::end);
+  const std::streamsize size = f.tellg();
+  ASSERT_GT(size, 0);
+  f.seekg(0, std::ios::beg);
+  std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
+  f.read(reinterpret_cast<char*>(bytes.data()), size);
+  ASSERT_TRUE(f);
+
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb), 0);
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb, 0, 0, 1, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(v.u.number, 8.0);
+  fm_workbook_destroy(wb);
+}
+
 TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
   // `-o out.xlsb` must select the MS-XLSB writer, not silently emit an
   // OOXML package under an `.xlsb` name.
