@@ -1407,6 +1407,12 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (consumed_parts.find(part_name) != consumed_parts.end()) {
       continue;
     }
+    // Refuse a traversal-shaped passthrough name so a round-tripped .xlsb
+    // never hands a downstream extractor a zip-slip primitive.
+    if (!ooxml::is_safe_part_name(part_name)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "Override part name escapes package root; refusing to load",
+                        "context=xlsb_reader part=" + part_name);
+    }
     if (!zip.has_entry(part_name)) {
       continue;
     }

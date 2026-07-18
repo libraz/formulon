@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <memory>
 #include <string>
@@ -291,6 +292,20 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   return Expected<void, Error>::Ok();
 }
 
+// Encrypted OOXML packages (password-protected .xlsx/.xlsb produced by Excel)
+// are wrapped in an OLE/CDFV2 compound-file container, not a ZIP. The container
+// begins with the fixed 8-byte signature `D0 CF 11 E0 A1 B1 1A E1`. Without this
+// check the bytes reach `ZipReader::open`, which fails with a generic
+// "corrupt zip" diagnostic that misleads callers into thinking the file is
+// damaged rather than encrypted.
+bool IsCdfv2Container(ByteSpan bytes) noexcept {
+  static constexpr std::uint8_t kCdfv2Magic[8] = {0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1};
+  if (bytes.data == nullptr || bytes.size < sizeof(kCdfv2Magic)) {
+    return false;
+  }
+  return std::memcmp(bytes.data, kCdfv2Magic, sizeof(kCdfv2Magic)) == 0;
+}
+
 }  // namespace
 
 namespace internal {
@@ -307,6 +322,12 @@ Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base
 // pugixml DOM; production passes `kSaxThresholdBytes`, tests pass a tiny
 // value to force the SAX branch on ordinary-size sheets.
 static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, std::size_t sax_threshold) {
+  // Surface a precise "encrypted" diagnostic before the ZIP layer reports the
+  // CDFV2 container as a corrupt archive.
+  if (IsCdfv2Container(bytes)) {
+    return make_error(FormulonErrorCode::kIoZipEncrypted,
+                      "package is an encrypted OLE/CDFV2 container; decrypt before loading", "context=ooxml_reader");
+  }
   ZipReader zip;
   {
     auto open_result = zip.open(bytes);
@@ -990,6 +1011,13 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if (consumed_parts.find(entry.part_name) != consumed_parts.end()) {
       continue;
     }
+    // Refuse to carry a hostile part name through passthrough: re-emitting
+    // a `../` or absolute-shaped name would hand a downstream extractor a
+    // zip-slip primitive on the round-tripped package.
+    if (!ooxml::is_safe_part_name(entry.part_name)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "Override part name escapes package root; refusing to load",
+                        "context=ooxml_reader part=" + entry.part_name);
+    }
     // Read the bytes once. Failures here are propagated as ZIP errors;
     // the part was advertised in `[Content_Types].xml`, so if miniz
     // cannot extract it the package itself is corrupt.
@@ -1036,6 +1064,12 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       // Directory markers and empty names are not parts.
       if (name.empty() || name.back() == '/') {
         continue;
+      }
+      // Same zip-slip guard as the Override sweep: a Default-typed archive
+      // entry with a traversal-shaped name must not be round-tripped.
+      if (!ooxml::is_safe_part_name(name)) {
+        return make_error(FormulonErrorCode::kIoZipSlip, "archive entry name escapes package root; refusing to load",
+                          "context=ooxml_reader part=" + name);
       }
       if (consumed_parts.find(name) != consumed_parts.end()) {
         continue;

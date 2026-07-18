@@ -87,6 +87,16 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
 /// surface `kIoZipSlip`.
 Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, std::string_view target);
 
+/// Returns true when `part_name` is a safe, canonical OPC part name that
+/// may be carried through passthrough and re-emitted verbatim. Rejects
+/// anything a downstream extractor could interpret as an escape from the
+/// package root: absolute paths (leading `/`), backslash separators,
+/// drive-letter / scheme colons, `.`/`..` path segments, and empty
+/// segments (`//`). OPC §9.1.1 requires part names to be `/`-rooted with
+/// no `.`/`..` segments, so a well-formed Excel package never trips this;
+/// the guard exists purely to refuse hostile archives.
+bool is_safe_part_name(std::string_view part_name) noexcept;
+
 /// Returns the directory portion of `path` (everything up to the last
 /// `/`, exclusive). Empty for top-level paths like `_rels/.rels`.
 std::string dir_of(std::string_view path);

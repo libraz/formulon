@@ -34,6 +34,7 @@
 #include "io/comments_writer.h"
 #include "io/external_links.h"
 #include "io/ooxml/emission_plan.h"
+#include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/sheet_xml_builder.h"
 #include "io/ooxml/workbook_xml_builder.h"
@@ -367,6 +368,12 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   // verbatim. Their `<Override>` registration was already emitted in
   // step 1 (when content_type was non-empty).
   for (const PassthroughPart* part : plan.passthrough_kept) {
+    // Never emit a traversal-shaped part name, even if one reached the model
+    // through a path other than the reader (which already rejects them).
+    if (!ooxml::is_safe_part_name(part->path)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
+                        "context=write_ooxml part=" + part->path);
+    }
     auto result = AddPartBytes(writer.get(), part->path, part->bytes);
     if (!result) {
       return result.error();

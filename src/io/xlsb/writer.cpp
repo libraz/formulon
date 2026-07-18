@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/ooxml/package_validator.h"
 #include "io/passthrough_part.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
@@ -767,6 +768,12 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
   }
   // 7. Passthrough parts.
   for (const PassthroughPart* part : plan.passthrough_kept) {
+    // Never emit a traversal-shaped part name, even if one reached the model
+    // through a path other than the reader (which already rejects them).
+    if (!ooxml::is_safe_part_name(part->path)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
+                        "context=write_xlsb part=" + part->path);
+    }
     if (auto r = AddPartBytes(writer.get(), part->path, part->bytes); !r) {
       return r.error();
     }

@@ -281,6 +281,38 @@ Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, st
   return out;
 }
 
+bool is_safe_part_name(std::string_view part_name) noexcept {
+  // Passthrough part names are stored package-relative with the leading
+  // slash already stripped, so a residual leading '/' means the raw name
+  // was package-absolute (or, worse, filesystem-absolute).
+  if (part_name.empty() || part_name.front() == '/') {
+    return false;
+  }
+  // Reject any character that lets a name masquerade as a different path
+  // shape once written to disk: backslash separators and drive/scheme
+  // colons. Control bytes and NUL are likewise never valid part names.
+  for (const char c : part_name) {
+    const auto uc = static_cast<unsigned char>(c);
+    if (c == '\\' || c == ':' || uc < 0x20) {
+      return false;
+    }
+  }
+  // Walk '/'-separated segments and refuse `.`, `..`, and empty segments
+  // (the latter come from `//`, a leading slash we already caught, or a
+  // trailing slash — none of which name a real part).
+  std::size_t start = 0;
+  for (std::size_t i = 0; i <= part_name.size(); ++i) {
+    if (i == part_name.size() || part_name[i] == '/') {
+      const std::string_view seg = part_name.substr(start, i - start);
+      if (seg.empty() || seg == "." || seg == "..") {
+        return false;
+      }
+      start = i + 1;
+    }
+  }
+  return true;
+}
+
 std::string dir_of(std::string_view path) {
   const std::size_t pos = path.find_last_of('/');
   if (pos == std::string_view::npos) {

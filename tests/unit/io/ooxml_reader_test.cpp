@@ -15,6 +15,7 @@
 
 #include "cell.h"
 #include "gtest/gtest.h"
+#include "io/ooxml/package_validator.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
 #include "utils/error.h"
@@ -317,6 +318,85 @@ TEST(OoxmlReader, RejectsArchiveWithEscapingRelsTarget) {
   auto result_or = read_ooxml(SpanOf(mutated));
   ASSERT_FALSE(static_cast<bool>(result_or));
   EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoZipSlip);
+}
+
+TEST(OoxmlReader, IsSafePartNameAcceptsCanonicalNames) {
+  EXPECT_TRUE(ooxml::is_safe_part_name("xl/workbook.xml"));
+  EXPECT_TRUE(ooxml::is_safe_part_name("xl/media/image1.png"));
+  EXPECT_TRUE(ooxml::is_safe_part_name("[Content_Types].xml"));
+}
+
+TEST(OoxmlReader, IsSafePartNameRejectsTraversalAndAbsoluteShapes) {
+  EXPECT_FALSE(ooxml::is_safe_part_name(""));
+  EXPECT_FALSE(ooxml::is_safe_part_name("/etc/passwd"));            // package-absolute
+  EXPECT_FALSE(ooxml::is_safe_part_name("../../etc/passwd"));       // parent traversal
+  EXPECT_FALSE(ooxml::is_safe_part_name("xl/../../../etc/x"));      // embedded traversal
+  EXPECT_FALSE(ooxml::is_safe_part_name("xl\\worksheets\\a.xml"));  // backslash separator
+  EXPECT_FALSE(ooxml::is_safe_part_name("C:/Windows/system32"));    // drive-letter colon
+  EXPECT_FALSE(ooxml::is_safe_part_name("xl//workbook.xml"));       // empty segment
+  EXPECT_FALSE(ooxml::is_safe_part_name("xl/./workbook.xml"));      // dot segment
+}
+
+/// Rebuilds a valid archive with one extra archive entry whose name
+/// escapes the package root (`../evil.bin`). The reader's Default-typed
+/// sweep must refuse to carry it through passthrough.
+std::vector<std::uint8_t> RebuildArchiveWithMaliciousExtraEntry(const std::vector<std::uint8_t>& src) {
+  mz_zip_archive reader{};
+  EXPECT_NE(mz_zip_reader_init_mem(&reader, src.data(), src.size(), 0), MZ_FALSE);
+  const mz_uint count = mz_zip_reader_get_num_files(&reader);
+
+  mz_zip_archive writer{};
+  EXPECT_NE(mz_zip_writer_init_heap(&writer, 0, 4096), MZ_FALSE);
+
+  for (mz_uint i = 0; i < count; ++i) {
+    char name_buf[256] = {};
+    const mz_uint name_len = mz_zip_reader_get_filename(&reader, i, name_buf, sizeof(name_buf));
+    EXPECT_GT(name_len, 0u);
+    std::size_t extracted_size = 0;
+    void* extracted = mz_zip_reader_extract_to_heap(&reader, i, &extracted_size, 0);
+    EXPECT_NE(extracted, nullptr);
+    EXPECT_NE(mz_zip_writer_add_mem(&writer, name_buf, extracted, extracted_size,
+                                    static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+              MZ_FALSE);
+    mz_free(extracted);
+  }
+  mz_zip_reader_end(&reader);
+
+  static constexpr std::string_view kEvil = "malicious";
+  EXPECT_NE(mz_zip_writer_add_mem(&writer, "../evil.bin", kEvil.data(), kEvil.size(),
+                                  static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+            MZ_FALSE);
+
+  void* archive_ptr = nullptr;
+  std::size_t archive_size = 0;
+  EXPECT_NE(mz_zip_writer_finalize_heap_archive(&writer, &archive_ptr, &archive_size), MZ_FALSE);
+  EXPECT_NE(mz_zip_writer_end(&writer), MZ_FALSE);
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive_ptr),
+                                static_cast<const std::uint8_t*>(archive_ptr) + archive_size);
+  mz_free(archive_ptr);
+  return out;
+}
+
+TEST(OoxmlReader, RejectsArchiveWithTraversalShapedPartName) {
+  Workbook wb = Workbook::create();
+  const std::vector<std::uint8_t> ok_bytes = SaveOrDie(wb);
+  const std::vector<std::uint8_t> mutated = RebuildArchiveWithMaliciousExtraEntry(ok_bytes);
+
+  auto result_or = read_ooxml(SpanOf(mutated));
+  ASSERT_FALSE(static_cast<bool>(result_or));
+  EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoZipSlip);
+}
+
+TEST(OoxmlReader, RejectsEncryptedCdfv2ContainerWithEncryptedDiagnostic) {
+  // OLE/CDFV2 compound-file signature that wraps a password-protected
+  // .xlsx/.xlsb, followed by arbitrary filler. This must surface an
+  // "encrypted" diagnostic rather than a generic "corrupt zip".
+  std::vector<std::uint8_t> encrypted = {0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1};
+  encrypted.resize(512, 0x00);
+
+  auto result_or = read_ooxml(SpanOf(encrypted));
+  ASSERT_FALSE(static_cast<bool>(result_or));
+  EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoZipEncrypted);
 }
 
 TEST(OoxmlReader, EmptyWorkbookFactoryProducesZeroSheets) {
