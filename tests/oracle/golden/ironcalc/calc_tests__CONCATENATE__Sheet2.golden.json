@@ -52,10 +52,7 @@
           "value": "Hello"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": " !"
-      }
+      "skipped": "=CONCATENATE over a range argument -> IronCalc IIE picks the position-aligned element; Excel 365 spills, anchor=f(top-left). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
     },
     {
       "id": "B3",

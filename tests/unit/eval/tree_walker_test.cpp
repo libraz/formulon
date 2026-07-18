@@ -765,16 +765,25 @@ TEST(TreeWalkerRanges, ReversedRangeSameResult) {
   EXPECT_EQ(reversed.as_number(), forward.as_number());
 }
 
-TEST(TreeWalkerRanges, RangeInNonAggregatorSpillsTopLeft) {
+TEST(TreeWalkerRanges, RangeInNonAggregatorSpills) {
   Sheet sheet("Sheet1");
   sheet.set_cell_value(0, 0, Value::number(1.0));
   sheet.set_cell_value(1, 0, Value::number(2.0));
-  // LEN is not range-aware: under Excel 365 dynamic-array spill semantics
-  // the bare RangeOp argument resolves to the top-left endpoint (A1=1),
-  // and LEN("1") = 1.
+  // A3 is left blank. LEN is not range-aware: under Excel 365 dynamic-array
+  // semantics the bare RangeOp argument spills the scalar impl element-wise
+  // over A1:A3, producing a 3x1 array whose anchor (top-left) is LEN("1")=1.
+  // LEN of the blank A3 coerces to "" -> 0.
   const Value v = EvalInSheet(sheet, "=LEN(A1:A3)");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  ASSERT_EQ(arr->rows, 3u);
+  ASSERT_EQ(arr->cols, 1u);
+  ASSERT_TRUE(arr->cells[0].is_number());
+  EXPECT_EQ(arr->cells[0].as_number(), 1.0);
+  ASSERT_TRUE(arr->cells[1].is_number());
+  EXPECT_EQ(arr->cells[1].as_number(), 1.0);
+  ASSERT_TRUE(arr->cells[2].is_number());
+  EXPECT_EQ(arr->cells[2].as_number(), 0.0);
 }
 
 TEST(TreeWalkerRanges, CycleViaAggregator_ReturnsRef) {

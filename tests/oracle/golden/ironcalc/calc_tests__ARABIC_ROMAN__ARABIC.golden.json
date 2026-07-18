@@ -624,10 +624,7 @@
           "value": "I"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 10.0
-      }
+      "skipped": "=ARABIC(E39:E42) at row 41 -> IronCalc IIE picks E41=10; Excel 365 spills, anchor=ARABIC(E39)=1. Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
     },
     {
       "id": "A42",

@@ -196,10 +196,7 @@
           "value": 1.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.75
-      }
+      "skipped": "=ROUND(J2:J7,2) at row 4 -> IronCalc IIE picks J4=1.75; Excel 365 spills, anchor=ROUND(J2,2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
     },
     {
       "id": "M4",
@@ -222,10 +219,7 @@
           "value": 1.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.75
-      }
+      "skipped": "=ROUNDUP(J2:J7,2) at row 4 -> IronCalc IIE picks J4=1.75; Excel 365 spills, anchor=ROUNDUP(J2,2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
     },
     {
       "id": "N4",
@@ -248,10 +242,7 @@
           "value": 1.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.74
-      }
+      "skipped": "=ROUNDDOWN(J2:J7,2) at row 4 -> IronCalc IIE picks the row-4 element; Excel 365 spills, anchor=f(J2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
     },
     {
       "id": "T4",
@@ -274,10 +265,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.75
-      }
+      "skipped": "=ROUND(1.745,R2:R7) at row 4 -> IronCalc IIE picks R4 as the digit count; Excel 365 spills the digit range, anchor=ROUND(1.745,R2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
     },
     {
       "id": "U4",
@@ -300,10 +288,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.75
-      }
+      "skipped": "=ROUNDUP(1.745,R2:R7) at row 4 -> IronCalc IIE picks R4 as the digit count; Excel 365 spills, anchor=ROUNDUP(1.745,R2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
     },
     {
       "id": "V4",
@@ -326,10 +311,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 1.74
-      }
+      "skipped": "=ROUNDDOWN(1.745,R2:R7) at row 4 -> IronCalc IIE picks R4 as the digit count; Excel 365 spills, anchor=ROUNDDOWN(1.745,R2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
     },
     {
       "id": "C5",

@@ -795,10 +795,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 6.0
-      }
+      "skipped": "=COMBIN(range,...) at a row inside the range span -> IronCalc IIE picks the row-aligned element; Excel 365 spills, anchor=f(top-left). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
     },
     {
       "id": "D24",

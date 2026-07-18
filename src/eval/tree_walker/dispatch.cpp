@@ -176,6 +176,94 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   return eval_node(*lv->body, arena, registry, body_ctx);
 }
 
+namespace {
+
+// One argument slot for element-wise broadcasting of a scalar function
+// over array-shaped arguments: either a scalar (`scalar != nullptr`) or
+// an ArrayValue (`array != nullptr`).
+struct BroadcastArg {
+  const Value* scalar;
+  const ArrayValue* array;
+  std::uint32_t rows;
+  std::uint32_t cols;
+};
+
+// Element of `arg` at output position (r, c) under Excel's 1xN / Nx1
+// broadcast rules. A scalar supplies every position; an array whose
+// non-1 extent is smaller than the output cannot supply the position and
+// yields `#N/A`, matching Excel's ragged-broadcast fill.
+Value broadcast_element(const BroadcastArg& arg, std::uint32_t r, std::uint32_t c) {
+  if (arg.scalar != nullptr) {
+    return *arg.scalar;
+  }
+  const std::uint32_t ri = arg.rows == 1U ? 0U : r;
+  const std::uint32_t ci = arg.cols == 1U ? 0U : c;
+  if (ri >= arg.rows || ci >= arg.cols) {
+    return Value::error(ErrorCode::NA);
+  }
+  return arg.array->cells[static_cast<std::size_t>(ri) * arg.cols + ci];
+}
+
+// Evaluates a scalar (non-range-aware) function element-wise across the
+// broadcast rectangle of its already-collected arguments and returns a
+// spilled `Value::Array`. `out_rows` / `out_cols` are the max extents
+// over the array arguments; scalars broadcast to every cell. A 1x1
+// result unwraps to a plain scalar so a single-cell range argument does
+// not spill. Per-cell error propagation mirrors the scalar dispatch
+// path: with `propagate_errors`, the first error argument short-circuits
+// that cell before the impl runs.
+Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& args, std::uint32_t out_rows,
+                            std::uint32_t out_cols, Arena& arena) {
+  std::vector<BroadcastArg> views;
+  views.reserve(args.size());
+  for (const Value& v : args) {
+    if (v.is_array()) {
+      const ArrayValue* a = v.as_array();
+      views.push_back({nullptr, a, a->rows, a->cols});
+    } else {
+      views.push_back({&v, nullptr, 1U, 1U});
+    }
+  }
+  const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
+  Value* cells = arena.create_array<Value>(n);
+  if (cells == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  std::vector<Value> cell_args(views.size(), Value::blank());
+  std::size_t idx = 0;
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c, ++idx) {
+      Value result = Value::blank();
+      bool short_circuited = false;
+      for (std::size_t a = 0; a < views.size(); ++a) {
+        cell_args[a] = broadcast_element(views[a], r, c);
+        if (def.propagate_errors && cell_args[a].is_error()) {
+          result = cell_args[a];
+          short_circuited = true;
+          break;
+        }
+      }
+      if (!short_circuited) {
+        result = def.impl(cell_args.data(), static_cast<std::uint32_t>(cell_args.size()), arena);
+      }
+      cells[idx] = result;
+    }
+  }
+  if (n == 1) {
+    return cells[0];
+  }
+  ArrayValue* arr = arena.create<ArrayValue>();
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  arr->rows = out_rows;
+  arr->cols = out_cols;
+  arr->cells = cells;
+  return Value::array(arr);
+}
+
+}  // namespace
+
 Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
   const std::string_view name = strip_future_prefix(node.as_call_name());
@@ -480,6 +568,85 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       continue;
     }
+    // Scalar (non-range-aware) function receiving a bounded `A1:B2`
+    // RangeOp: Excel 365 evaluates the function element-wise over the
+    // rectangle and spills the result rather than collapsing the range
+    // to its implicit-intersection anchor. Materialise the rectangle as a
+    // `Value::Array` here; the post-loop broadcast step then lifts the
+    // scalar impl over it. Whole-column / whole-row endpoints (`A:A`,
+    // `1:1`) keep the legacy anchor projection (they fall through to the
+    // scalar `eval_node` path below) to avoid spilling an unbounded
+    // rectangle through a scalar function. `@` / SINGLE-wrapped args are
+    // Call nodes, not RangeOp, so they never reach this branch and retain
+    // implicit-intersection semantics.
+    if (!def->accepts_ranges && arg_node.kind() == parser::NodeKind::RangeOp) {
+      const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
+      const parser::AstNode& rhs_ast = arg_node.as_range_rhs();
+      const bool whole =
+          (lhs_ast.kind() == parser::NodeKind::Ref && (lhs_ast.as_ref().is_full_col || lhs_ast.as_ref().is_full_row)) ||
+          (rhs_ast.kind() == parser::NodeKind::Ref && (rhs_ast.as_ref().is_full_col || rhs_ast.as_ref().is_full_row));
+      if (!whole) {
+        std::string_view lhs_sheet;
+        std::string_view rhs_sheet;
+        std::uint32_t lhs_top = 0;
+        std::uint32_t lhs_left = 0;
+        std::uint32_t lhs_bottom = 0;
+        std::uint32_t lhs_right = 0;
+        std::uint32_t rhs_top = 0;
+        std::uint32_t rhs_left = 0;
+        std::uint32_t rhs_bottom = 0;
+        std::uint32_t rhs_right = 0;
+        ErrorCode endpoint_err = ErrorCode::Ref;
+        if (!resolve_range_endpoint(lhs_ast, arena, registry, ctx, &lhs_sheet, &lhs_top, &lhs_left, &lhs_bottom,
+                                    &lhs_right, &endpoint_err) ||
+            !resolve_range_endpoint(rhs_ast, arena, registry, ctx, &rhs_sheet, &rhs_top, &rhs_left, &rhs_bottom,
+                                    &rhs_right, &endpoint_err)) {
+          const Value err = Value::error(endpoint_err);
+          if (def->propagate_errors) {
+            return err;
+          }
+          values.push_back(err);
+          continue;
+        }
+        parser::Reference union_lhs{};
+        parser::Reference union_rhs{};
+        union_lhs.sheet = lhs_sheet;
+        union_lhs.row = std::min(lhs_top, rhs_top);
+        union_lhs.col = std::min(lhs_left, rhs_left);
+        union_rhs.sheet = rhs_sheet;
+        union_rhs.row = std::max(lhs_bottom, rhs_bottom);
+        union_rhs.col = std::max(lhs_right, rhs_right);
+        auto expanded = ctx.expand_range(union_lhs, union_rhs, arena, registry);
+        if (!expanded) {
+          const Value err = Value::error(expanded.error());
+          if (def->propagate_errors) {
+            return err;
+          }
+          values.push_back(err);
+          continue;
+        }
+        const std::uint32_t rrows = union_rhs.row - union_lhs.row + 1u;
+        const std::uint32_t rcols = union_rhs.col - union_lhs.col + 1u;
+        const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
+        Value* buffer = arena.create_array<Value>(total);
+        if (buffer == nullptr) {
+          return Value::error(ErrorCode::Num);
+        }
+        const std::vector<Value>& ev = expanded.value();
+        for (std::size_t k = 0; k < total; ++k) {
+          buffer[k] = k < ev.size() ? ev[k] : Value::blank();
+        }
+        ArrayValue* arr = arena.create<ArrayValue>();
+        if (arr == nullptr) {
+          return Value::error(ErrorCode::Num);
+        }
+        arr->rows = rrows;
+        arr->cols = rcols;
+        arr->cells = buffer;
+        values.push_back(Value::array(arr));
+        continue;
+      }
+    }
     // Intersection operator as a range-aware function argument: Excel's
     // space operator (`A1:C3 B1:B5`) yields the overlapping rectangle,
     // and an aggregator must see every cell of that rectangle rather
@@ -773,6 +940,28 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
   if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAnyScalar && any_scalar_blank_for_reject_any &&
       !had_range_shaped_arg) {
     return Value::error(def->blank_scalar_error);
+  }
+  // Dynamic-array spill for scalar (non-range-aware) functions: when any
+  // collected argument is an Array — a bounded range materialised above,
+  // or a nested array-returning call (`=ROUND(SEQUENCE(3),0)`) — Excel 365
+  // evaluates the function element-wise over the broadcast rectangle and
+  // spills the result. Range-aware aggregators already flattened their
+  // array arguments into `values`, so they never take this path.
+  if (!def->accepts_ranges) {
+    std::uint32_t out_rows = 1;
+    std::uint32_t out_cols = 1;
+    bool any_array = false;
+    for (const Value& v : values) {
+      if (v.is_array()) {
+        any_array = true;
+        const ArrayValue* a = v.as_array();
+        out_rows = std::max(out_rows, a->rows);
+        out_cols = std::max(out_cols, a->cols);
+      }
+    }
+    if (any_array) {
+      return broadcast_scalar_call(*def, values, out_rows, out_cols, arena);
+    }
   }
   // Hand the post-expansion size to the impl; aggregator bodies walk the
   // flattened vector directly.

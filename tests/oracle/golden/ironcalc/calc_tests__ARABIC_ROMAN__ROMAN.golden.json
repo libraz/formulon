@@ -5427,10 +5427,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "IV"
-      }
+      "skipped": "=ROMAN(H34:H37) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
     },
     {
       "id": "C36",
@@ -5453,10 +5450,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "IV"
-      }
+      "skipped": "=ROMAN(H34:H37,1) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
     },
     {
       "id": "D36",
@@ -5479,10 +5473,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "IV"
-      }
+      "skipped": "=ROMAN(H34:H37,2) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
     },
     {
       "id": "E36",
@@ -5505,10 +5496,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "IV"
-      }
+      "skipped": "=ROMAN(H34:H37,3) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
     },
     {
       "id": "F36",
@@ -5531,10 +5519,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "IV"
-      }
+      "skipped": "=ROMAN(H34:H37,4) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
     },
     {
       "id": "A37",

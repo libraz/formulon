@@ -662,3 +662,96 @@ entries:
     prefer: mac
     first_noted: 2026-05-02
 
+  # -- Range argument to a scalar function: 365 spill vs legacy IIE -------
+  # These fixtures store `=FN(range)` where the formula cell's row (or
+  # column) falls INSIDE the range span, so IronCalc's imported legacy
+  # workbook resolves the argument by implicit intersection aligned to the
+  # formula cell — e.g. =ROMAN(H34:H37) at row 36 picks H36=4 -> "IV".
+  # Excel 365 (Formulon's target profile) instead spills the function
+  # element-wise and the anchor value is f(top-left) — ROMAN(H34=2) ->
+  # "II". Mac Excel 365 confirms the spill semantics: the primary
+  # implicit_intersection suite's function-arg cases read back the spill
+  # anchor, never the row-aligned element. Formulon matches Mac 365.
+  # Probe: tests/oracle/golden/implicit_intersection.golden.json
+  #        (round_col_range_row_excluded / round_row_range_col_excluded).
+  - id: ironcalc_calc_tests_ARABIC_ROMAN_ARABIC.B41
+    reason: "=ARABIC(E39:E42) at row 41 -> IronCalc IIE picks E41=10; Excel 365 spills, anchor=ARABIC(E39)=1. Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ARABIC_ROMAN_ROMAN.B36
+    reason: "=ROMAN(H34:H37) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ARABIC_ROMAN_ROMAN.C36
+    reason: "=ROMAN(H34:H37,1) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ARABIC_ROMAN_ROMAN.D36
+    reason: "=ROMAN(H34:H37,2) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ARABIC_ROMAN_ROMAN.E36
+    reason: "=ROMAN(H34:H37,3) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ARABIC_ROMAN_ROMAN.F36
+    reason: "=ROMAN(H34:H37,4) at row 36 -> IronCalc IIE picks H36=4 (\"IV\"); Excel 365 spills, anchor=ROMAN(H34=2)=\"II\". Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_COMBIN_COMBINA_COMBIN_COMBINA.C24
+    reason: "=COMBIN(range,...) at a row inside the range span -> IronCalc IIE picks the row-aligned element; Excel 365 spills, anchor=f(top-left). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_CONCATENATE_Sheet2.B2
+    reason: "=CONCATENATE over a range argument -> IronCalc IIE picks the position-aligned element; Excel 365 spills, anchor=f(top-left). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_FLOOR_CEILING_FLOOR.AG3
+    reason: "=FLOOR($A3,$AD$47:$AH$47) at column AG -> IronCalc IIE picks AG47 (column-aligned); Excel 365 spills the row range, anchor=FLOOR($A3,AD47). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_row_range_col_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_FLOOR_CEILING_FLOOR.AG4
+    reason: "=FLOOR($A4,$AD$47:$AH$47) at column AG -> IronCalc IIE picks AG47 (column-aligned); Excel 365 spills the row range, anchor=FLOOR($A4,AD47). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_row_range_col_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_FLOOR_CEILING_FLOOR.AG5
+    reason: "=FLOOR($A5,$AD$47:$AH$47) at column AG -> IronCalc IIE picks AG47 (column-aligned); Excel 365 spills the row range, anchor=FLOOR($A5,AD47). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_row_range_col_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_FLOOR_CEILING_FLOOR.AG6
+    reason: "=FLOOR($A6,$AD$47:$AH$47) at column AG -> IronCalc IIE picks AG47 (column-aligned); Excel 365 spills the row range, anchor=FLOOR($A6,AD47). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_row_range_col_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_FLOOR_CEILING_FLOOR.AG10
+    reason: "=FLOOR($A10,$AD$47:$AH$47) at column AG -> IronCalc IIE picks AG47 (column-aligned); Excel 365 spills the row range, anchor=FLOOR($A10,AD47). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_row_range_col_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_FLOOR_CEILING_FLOOR.AG12
+    reason: "=FLOOR($A12,$AD$47:$AH$47) at column AG -> IronCalc IIE picks AG47 (column-aligned); Excel 365 spills the row range, anchor=FLOOR($A12,AD47). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_row_range_col_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ROUND_Sheet1.L4
+    reason: "=ROUND(J2:J7,2) at row 4 -> IronCalc IIE picks J4=1.75; Excel 365 spills, anchor=ROUND(J2,2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ROUND_Sheet1.M4
+    reason: "=ROUNDUP(J2:J7,2) at row 4 -> IronCalc IIE picks J4=1.75; Excel 365 spills, anchor=ROUNDUP(J2,2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ROUND_Sheet1.N4
+    reason: "=ROUNDDOWN(J2:J7,2) at row 4 -> IronCalc IIE picks the row-4 element; Excel 365 spills, anchor=f(J2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ROUND_Sheet1.T4
+    reason: "=ROUND(1.745,R2:R7) at row 4 -> IronCalc IIE picks R4 as the digit count; Excel 365 spills the digit range, anchor=ROUND(1.745,R2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ROUND_Sheet1.U4
+    reason: "=ROUNDUP(1.745,R2:R7) at row 4 -> IronCalc IIE picks R4 as the digit count; Excel 365 spills, anchor=ROUNDUP(1.745,R2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+  - id: ironcalc_calc_tests_ROUND_Sheet1.V4
+    reason: "=ROUNDDOWN(1.745,R2:R7) at row 4 -> IronCalc IIE picks R4 as the digit count; Excel 365 spills, anchor=ROUNDDOWN(1.745,R2). Formulon matches Mac 365 spill. Probe: implicit_intersection.golden.json (round_col_range_row_excluded)."
+    prefer: mac
+    first_noted: 2026-07-18
+
