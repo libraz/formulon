@@ -10,8 +10,10 @@
 // `FM_VAL_ERROR`, and we print its display name. Only structural
 // failures (NULL handle, parser refusal, save/load) bubble out.
 //
-// `--repeat N` exercises the recalc path repeatedly: it runs the eval `N`
-// times and reports timing on stderr without changing the stdout payload.
+// `--repeat N` re-evaluates the same formula `N` times — each pass
+// re-sets A1 (marking it dirty) and recalcs, so every iteration performs a
+// full parse-and-evaluate rather than a no-op clean recalc. Timing is
+// reported on stderr without changing the stdout payload.
 
 #include <chrono>
 #include <cstdint>
@@ -141,16 +143,27 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     emit_last_error(err, "eval");
     return rc;
   }
-  // Strip an optional leading `=` so users can pass either form.
+  // Strip an optional leading `=` so users can pass either form. Set once
+  // up front so a parser refusal surfaces before the timed loop begins.
   std::string formula_str(formula);
   if (auto rc = fm_workbook_set_formula(wb.handle, 0, 0, 0, formula_str.c_str()); rc != 0) {
     emit_last_error(err, "eval");
     return rc;
   }
 
+  // `--repeat N` means "evaluate the same formula N times". A bare
+  // recalc after the first pass is a near no-op: A1 is already clean, so
+  // the engine has nothing to do and the timing would understate the real
+  // per-evaluation cost. Re-setting the formula each iteration marks A1
+  // dirty again so every pass performs a full parse-and-evaluate — the
+  // work the timing is meant to represent.
   using Clock = std::chrono::steady_clock;
   const auto t0 = Clock::now();
   for (long i = 0; i < repeat; ++i) {
+    if (auto rc = fm_workbook_set_formula(wb.handle, 0, 0, 0, formula_str.c_str()); rc != 0) {
+      emit_last_error(err, "eval");
+      return rc;
+    }
     if (auto rc = fm_workbook_recalc(wb.handle); rc != 0) {
       emit_last_error(err, "eval");
       return rc;

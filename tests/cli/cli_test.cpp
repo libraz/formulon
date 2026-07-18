@@ -268,6 +268,16 @@ TEST(FormulonCli, EvalRepeatRunsMultipleTimes) {
   EXPECT_NE(r.stderr_text.find("3 iterations"), std::string::npos);
 }
 
+// Each --repeat pass re-sets the formula (marking A1 dirty) and recalcs,
+// so a high repeat count still yields the correct result — the re-set must
+// not corrupt the cell between iterations.
+TEST(FormulonCli, EvalRepeatHighCountStillCorrect) {
+  CliRun r = run_cli({"eval", "--repeat", "100", "=SUM(1,2,3)"});
+  EXPECT_EQ(r.exit_code, 0);
+  EXPECT_EQ(r.stdout_text, "6\n");
+  EXPECT_NE(r.stderr_text.find("100 iterations"), std::string::npos);
+}
+
 // ---------------------------------------------------------------------------
 // recalc
 // ---------------------------------------------------------------------------
