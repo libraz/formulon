@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook lifecycle, sheet management, recalc / calc-mode plumbing,
 // and the iterative-progress callback bridge. The split is by API
@@ -74,7 +73,7 @@ JsWorkbook* JsWorkbook::loadBytes(emscripten::val bytes) {
 JsSaveResult JsWorkbook::save() const {
   JsSaveResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(/*kBindingNullPointer=*/7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   uint8_t* out = nullptr;
@@ -93,7 +92,7 @@ JsSaveResult JsWorkbook::save() const {
 JsSaveResult JsWorkbook::saveEx(int32_t format) const {
   JsSaveResult r;
   if (handle_ == nullptr) {
-    r.status = error_status(/*kBindingNullPointer=*/7000);
+    r.status = error_status(kBindingInvalidHandle);
     return r;
   }
   uint8_t* out = nullptr;
@@ -331,25 +330,19 @@ JsStatus JsWorkbook::setIterativeProgress(emscripten::val cb) {
 JsEvalResult eval_formula(const std::string& formula) {
   JsEvalResult r;
   fm_workbook_t* wb = nullptr;
-  fm_status_t rc = fm_workbook_create(&wb);
+  fm_status_t rc = fm_workbook_create_empty(&wb);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
   }
-  rc = fm_workbook_set_formula(wb, 0, 0, 0, formula.c_str());
-  if (rc != 0) {
-    r.status = error_status(rc);
-    fm_workbook_destroy(wb);
-    return r;
-  }
-  rc = fm_workbook_recalc(wb);
+  rc = fm_workbook_add_sheet(wb, "Sheet1");
   if (rc != 0) {
     r.status = error_status(rc);
     fm_workbook_destroy(wb);
     return r;
   }
   fm_value_t v{};
-  rc = fm_workbook_get_value(wb, 0, 0, 0, &v);
+  rc = fm_workbook_evaluate_formula(wb, 0, 0, 0, formula.c_str(), &v);
   if (rc != 0) {
     r.status = error_status(rc);
     fm_workbook_destroy(wb);

@@ -39,6 +39,7 @@ Stdlib only; no build artifacts or network access required.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -62,6 +63,7 @@ VALUE_H = REPO_ROOT / "src" / "value.h"
 CF_MATCH_H = REPO_ROOT / "src" / "cf" / "cf_match.h"
 CALC_MODE_H = REPO_ROOT / "src" / "io" / "calc_mode.h"
 EXTERNAL_LINKS_H = REPO_ROOT / "src" / "io" / "external_links.h"
+PYTHON_STRUCTS = PYTHON_PKG_DIR / "_structs.py"
 
 # embind auto-adds a `delete()` finaliser to every `class_<T>` -- it has no
 # corresponding `.function(...)` registration, so it must be excluded before
@@ -173,6 +175,117 @@ def check_python_exports() -> List[str]:
             f"{CAPI_HEADER.relative_to(REPO_ROOT)}: {sorted(exports_not_in_header)}"
         )
 
+    return problems
+
+
+# ---------------------------------------------------------------------------
+# Check 1b: Python WASM32 POD layouts <-> C ABI header.
+# ---------------------------------------------------------------------------
+
+
+def _wasm32_layout(fields: List[tuple[str, int, int]]) -> tuple[dict[str, int], int]:
+    offsets: dict[str, int] = {}
+    offset = 0
+    max_align = 1
+    for name, size, align in fields:
+        offset = (offset + align - 1) // align * align
+        offsets[name] = offset
+        offset += size
+        max_align = max(max_align, align)
+    return offsets, (offset + max_align - 1) // max_align * max_align
+
+
+def check_python_struct_layouts() -> List[str]:
+    """Verify Python's hand-written WASM32 structs against the C header.
+
+    This intentionally parses the authoritative C declarations rather than
+    repeating sizes in a Python table. It covers every ``Struct`` exported by
+    ``_structs.py`` and reports field order, offsets, and final size.
+    """
+    header = re.sub(r"/\*.*?\*/", "", _read(CAPI_HEADER), flags=re.S)
+    blocks = {
+        name: body for body, name in re.findall(r"typedef\s+struct\s*\{(.*?)\}\s*(fm_[A-Za-z0-9_]+)\s*;", header, re.S)
+    }
+    spec = importlib.util.spec_from_file_location("formulon_struct_layouts", PYTHON_STRUCTS)
+    if spec is None or spec.loader is None:
+        return ["python-struct-layout: could not load packages/python/formulon/_structs.py"]
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    primitive = {
+        "uint8_t": (1, 1),
+        "uint16_t": (2, 2),
+        "uint32_t": (4, 4),
+        "int32_t": (4, 4),
+        "double": (8, 8),
+        "size_t": (4, 4),
+        "fm_value_kind_t": (4, 4),
+        "fm_function_availability_t": (4, 4),
+        "fm_cf_match_kind_t": (4, 4),
+        "fm_pivot_cell_kind_t": (4, 4),
+        "fm_pivot_axis_t": (4, 4),
+        "fm_pivot_aggregation_t": (4, 4),
+        "fm_pivot_show_as_t": (4, 4),
+        "fm_pivot_filter_type_t": (4, 4),
+        "fm_pivot_filter_value_kind_t": (4, 4),
+        "fm_calc_mode_t": (4, 4),
+        "fm_value_t": (16, 8),
+        "fm_cfvo_t": (12, 4),
+        "fm_cf_color_t": (4, 1),
+    }
+    problems: List[str] = []
+    for layout in (value for value in vars(module).values() if isinstance(value, module.Struct)):
+        body = blocks.get(layout.name)
+        if body is None:
+            problems.append(f"python-struct-layout: {layout.name} missing from C header")
+            continue
+        c_fields: List[tuple[str, int, int]] = []
+        py_field_names = {name for name, _ in layout.fields}
+        for declaration in body.split(";"):
+            declaration = " ".join(declaration.split())
+            if not declaration:
+                continue
+            match = re.fullmatch(r"(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\[(\d+)\])?", declaration)
+            if not match:
+                problems.append(f"python-struct-layout: cannot parse {layout.name}: {declaration!r}")
+                continue
+            ctype, name, count_text = match.groups()
+            count = int(count_text or "1")
+            if "*" in ctype:
+                size, align = 4, 4
+            else:
+                ctype = ctype.replace("const ", "").strip()
+                if ctype == "fm_cf_color_t":
+                    if name in py_field_names:
+                        c_fields.append((name, 4, 1))
+                    else:
+                        c_fields.extend((f"{name}_{channel}", 1, 1) for channel in ("r", "g", "b", "a"))
+                    continue
+                if ctype == "fm_border_side":
+                    c_fields.extend(((f"{name}_style", 1, 1), (f"{name}_color_argb", 4, 4)))
+                    continue
+                if ctype not in primitive:
+                    problems.append(f"python-struct-layout: unknown {layout.name} field type {ctype!r}")
+                    continue
+                size, align = primitive[ctype]
+            # Explicit C padding need not be represented in Struct: its
+            # alignment effect is reproduced by the following semantic field.
+            if not name.startswith("_pad"):
+                c_fields.append((name, size * count, align))
+            else:
+                c_fields.append((name, size * count, align))
+        c_offsets, c_size = _wasm32_layout(c_fields)
+        semantic_names = [name for name, _, _ in c_fields if not name.startswith("_pad")]
+        py_names = [name for name, _ in layout.fields if not name.startswith("_pad")]
+        if py_names != semantic_names:
+            problems.append(f"python-struct-layout: {layout.name} fields differ: C={semantic_names}, Python={py_names}")
+        for name in py_names:
+            if name in c_offsets and layout.offsets[name][1] != c_offsets[name]:
+                problems.append(
+                    f"python-struct-layout: {layout.name}.{name} offset C={c_offsets[name]} Python={layout.offsets[name][1]}"
+                )
+        if layout.size != c_size:
+            problems.append(f"python-struct-layout: {layout.name} size C={c_size} Python={layout.size}")
     return problems
 
 
@@ -427,6 +540,7 @@ def check_dts_enums() -> List[str]:
 
 CHECKS = {
     "python-exports": check_python_exports,
+    "python-struct-layouts": check_python_struct_layouts,
     "dts-wasm": check_dts_wasm,
     "dts-node": check_dts_node,
     "readme-counts": check_readme_counts,

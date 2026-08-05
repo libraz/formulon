@@ -80,7 +80,7 @@ Napi::Value Workbook::CreateDefault(const Napi::CallbackInfo& info) {
   if (rc != 0) {
     // Even on failure return the wrapper; the caller can inspect
     // `lastErrorMessage()` and the next operation will fail with
-    // `kBindingNullPointer`. This matches embind's behaviour.
+    // `kBindingInvalidHandle`. This matches embind's behaviour.
     wb->handle_ = nullptr;
   }
   return jsobj;
@@ -178,6 +178,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::GetCellXf>("getCellXf"),
           InstanceMethod<&Workbook::GetCellXfIndex>("getCellXfIndex"),
           InstanceMethod<&Workbook::GetComment>("getComment"),
+          InstanceMethod<&Workbook::GetCommentResult>("getCommentResult"),
           InstanceMethod<&Workbook::GetComments>("getComments"),
           InstanceMethod<&Workbook::GetConditionalFormats>("getConditionalFormats"),
           InstanceMethod<&Workbook::GetDxf>("getDxf"),

@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Surface tests for the expanded Formulon Python Workbook API.
 
 These exercise a representative sample of every method group added on top
@@ -13,7 +12,9 @@ Run via ``make python-test`` (or ``python -m unittest`` with
 
 from __future__ import annotations
 
+import subprocess
 import unittest
+from pathlib import Path
 
 import formulon
 from formulon import (
@@ -70,6 +71,17 @@ class StructLayoutTests(unittest.TestCase):
 
     def test_pivot_cell_value_offset(self) -> None:
         self.assertEqual(S.PIVOT_CELL_VALUE_OFFSET, 8)
+
+    def test_layouts_match_c_header(self) -> None:
+        root = Path(__file__).resolve().parents[3]
+        result = subprocess.run(
+            ["python3", str(root / "tools" / "dev" / "check_binding_drift.py"), "python-struct-layouts"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class SheetStructureTests(unittest.TestCase):
@@ -224,6 +236,12 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
             self.assertIsNotNone(c)
             self.assertEqual(c.author, "alice")
             self.assertEqual(c.text, "see note")
+
+    def test_comment_invalid_sheet_raises_instead_of_looking_absent(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(formulon.FormulonError) as ctx:
+                wb.get_comment(99, 0, 0)
+            self.assertEqual(ctx.exception.status, 2)  # kInvalidArgument
 
     def test_hyperlink_roundtrip(self) -> None:
         with Workbook.create_default() as wb:

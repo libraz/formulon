@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Pythonic wrapper around the Formulon C ABI (WASM transport).
 
 Public surface:
@@ -77,6 +76,10 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Error type
 # ---------------------------------------------------------------------------
+
+# `formulon::FormulonErrorCode::kNotFound`. The C ABI intentionally exposes
+# status codes as integers, so bindings retain this matching stable ordinal.
+_STATUS_NOT_FOUND = 6
 
 
 class FormulonError(Exception):
@@ -1606,9 +1609,9 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.COMMENT)
         try:
             status = LIB.fm_sheet_get_comment_at(h, int(sheet), int(row), int(col), ptr)
-            if status != 0:
-                # kInvalidArgument is the "no comment anchored here" signal.
+            if status == _STATUS_NOT_FOUND:
                 return None
+            _check(status, "fm_sheet_get_comment_at")
             d = S.COMMENT.unpack(LIB, ptr)
             return Comment(
                 author=LIB.read_cstr(d["author"]),

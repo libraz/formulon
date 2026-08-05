@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared types and helpers for the Emscripten binding TUs under
 // `src/wasm/parts/`. The whole bundle is compiled only when
@@ -40,6 +39,11 @@
 namespace formulon {
 namespace wasm {
 namespace parts {
+
+/// A JS wrapper was used after its workbook handle was destroyed. This is
+/// the binding-layer `kBindingInvalidHandle` code, not the C ABI's 7001
+/// `kBindingNullPointer` argument-validation error.
+constexpr int32_t kBindingInvalidHandle = 7000;
 
 // ---- Value-object mirrors -----------------------------------------------
 //

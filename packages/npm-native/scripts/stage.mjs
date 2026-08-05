@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stages the Formulon N-API addon + JS shim into
 // packages/npm-native/dist/ for publication.

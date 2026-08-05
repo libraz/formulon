@@ -1,8 +1,9 @@
 # @libraz/formulon
 
 Excel 365 calculation engine, compiled to WebAssembly. Evaluates formulas,
-loads and saves `.xlsx` workbooks, and aims for 1-bit compatibility with
-Mac Excel 365 (ja-JP locale).
+loads and saves `.xlsx` workbooks, and defaults to the `win-365-ja_JP`
+behavior profile. Hosts can select the separately supported
+`mac-365-ja_JP` profile when required.
 
 ## Install
 

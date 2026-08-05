@@ -45,12 +45,11 @@
 
 namespace formulon_node {
 
-/// `kBindingNullPointer` ordinal mirrors `formulon::FormulonErrorCode`
+/// `kBindingInvalidHandle` ordinal mirrors `formulon::FormulonErrorCode`
 /// in the 7000-7999 range allocated to bindings (see CLAUDE.md error
-/// code table). The C ABI itself returns this code when a NULL pointer
-/// crosses the boundary; we emit the same code from the JS side when
-/// the wrapper is asked to operate on a destroyed handle.
-constexpr fm_status_t kBindingNullPointer = 7000;
+/// code table). The C ABI itself uses 7001 for a NULL pointer; 7000
+/// identifies a wrapper whose handle was already destroyed.
+constexpr fm_status_t kBindingInvalidHandle = 7000;
 
 // ---------------------------------------------------------------------
 // Status / Value envelope builders

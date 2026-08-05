@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Smoke tests for the staged @libraz/formulon-native npm package.
 //
@@ -483,6 +482,23 @@ test('comments round-trip: setComment + getComment', async () => {
   // Removing surfaces null on the next read.
   assert.ok(wb.setComment(0, 1, 1, '', '').ok);
   assert.equal(wb.getComment(0, 1, 1), null);
+});
+
+test('getCommentResult distinguishes absence from an invalid sheet', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const missing = wb.getCommentResult(0, 1, 1);
+  assert.equal(missing.status.ok, false);
+  assert.equal(missing.comment, null);
+  const invalid = wb.getCommentResult(99, 1, 1);
+  assert.equal(invalid.status.ok, false);
+  assert.equal(invalid.comment, null);
+  assert.notEqual(missing.status.status, invalid.status.status);
+  assert.ok(wb.setComment(0, 1, 1, 'libraz', 'hello').ok);
+  const found = wb.getCommentResult(0, 1, 1);
+  assert.equal(found.status.ok, true);
+  assert.equal(found.comment.author, 'libraz');
+  assert.equal(found.comment.text, 'hello');
 });
 
 test('cellCount + cellAt enumerate stored cells', async () => {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Single `EMSCRIPTEN_BINDINGS(formulon)` registration block: every
 // value-object, the `Workbook` class chain, and the free-function
@@ -218,7 +217,9 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getCellStyleXf", &JsWorkbook::getCellStyleXf)
       .function("getCellXf", &JsWorkbook::getCellXf)
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
+      .function("getCellPhonetic", &JsWorkbook::getCellPhonetic)
       .function("getComment", &JsWorkbook::getComment)
+      .function("getCommentResult", &JsWorkbook::getCommentResult)
       .function("getComments", &JsWorkbook::getComments)
       .function("getConditionalFormats", &JsWorkbook::getConditionalFormats)
       .function("getDxf", &JsWorkbook::getDxf)
@@ -319,6 +320,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setBool", &JsWorkbook::setBool)
       .function("setCalcMode", &JsWorkbook::setCalcMode)
       .function("setCellXfIndex", &JsWorkbook::setCellXfIndex)
+      .function("setCellPhonetic", &JsWorkbook::setCellPhonetic)
       .function("setColumnHidden", &JsWorkbook::setColumnHidden)
       .function("setColumnOutline", &JsWorkbook::setColumnOutline)
       .function("setColumnWidth", &JsWorkbook::setColumnWidth)

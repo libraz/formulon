@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook cell-value mutators / readers and iteration accessors:
 // `setNumber` / `setBool` / `setText` / `setBlank` / `setFormula` /
@@ -53,6 +52,14 @@ JsStatus JsWorkbook::setText(uint32_t sheet, uint32_t row, uint32_t col, const s
   return status_from_rc(rc);
 }
 
+JsStatus JsWorkbook::setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col, const std::string& phonetic) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_status_t rc = fm_workbook_set_cell_phonetic(handle_, sheet, row, col, phonetic.c_str());
+  return status_from_rc(rc);
+}
+
 JsStatus JsWorkbook::setBlank(uint32_t sheet, uint32_t row, uint32_t col) {
   if (handle_ == nullptr) {
     return error_status(7000);
@@ -84,6 +91,25 @@ JsCellResult JsWorkbook::getValue(uint32_t sheet, uint32_t row, uint32_t col) co
   r.value = translate_value(v);
   r.status = ok_status();
   return r;
+}
+
+emscripten::val JsWorkbook::getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const {
+  emscripten::val o = emscripten::val::object();
+  if (handle_ == nullptr) {
+    o.set("status", error_status(7000));
+    o.set("value", std::string());
+    return o;
+  }
+  const char* text = nullptr;
+  fm_status_t rc = fm_workbook_get_cell_phonetic(handle_, sheet, row, col, &text);
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    o.set("value", std::string());
+    return o;
+  }
+  o.set("status", ok_status());
+  o.set("value", std::string(text != nullptr ? text : ""));
+  return o;
 }
 
 JsEvalResult JsWorkbook::evaluateFormulaText(uint32_t sheet, uint32_t row, uint32_t col,

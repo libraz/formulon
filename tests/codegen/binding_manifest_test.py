@@ -25,7 +25,10 @@ import sys
 import unittest
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:  # pragma: no cover - exercised with `python -S` below.
+    yaml = None
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GEN_SCRIPT = REPO_ROOT / "tools" / "codegen" / "gen_bindings.py"
@@ -60,6 +63,11 @@ class BindingManifestTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        if yaml is None:
+            raise unittest.SkipTest(
+                "PyYAML is not available; skipping binding codegen drift check. "
+                "Install with `pip install pyyaml` to enable."
+            )
         cls.entries = cls._load_manifest_entries()
 
     @staticmethod

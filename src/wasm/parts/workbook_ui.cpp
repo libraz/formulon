@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook UI-feature surface: merges, hyperlinks, comments, and
 // data-validation rules. Each accessor returns a JS-friendly value
@@ -98,6 +97,28 @@ emscripten::val JsWorkbook::getComment(uint32_t sheet, uint32_t row, uint32_t co
   o.set("author", c.author != nullptr ? std::string(c.author) : std::string());
   o.set("text", c.text != nullptr ? std::string(c.text) : std::string());
   return o;
+}
+
+emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint32_t col) const {
+  emscripten::val out = emscripten::val::object();
+  if (handle_ == nullptr) {
+    out.set("status", error_status(7000));
+    out.set("comment", emscripten::val::null());
+    return out;
+  }
+  fm_comment c{};
+  const fm_status_t rc = fm_sheet_get_comment_at(handle_, sheet, row, col, &c);
+  if (rc != 0) {
+    out.set("status", status_from_rc(rc));
+    out.set("comment", emscripten::val::null());
+    return out;
+  }
+  emscripten::val comment = emscripten::val::object();
+  comment.set("author", c.author != nullptr ? std::string(c.author) : std::string());
+  comment.set("text", c.text != nullptr ? std::string(c.text) : std::string());
+  out.set("status", ok_status());
+  out.set("comment", comment);
+  return out;
 }
 
 emscripten::val JsWorkbook::getComments(uint32_t sheet) const {

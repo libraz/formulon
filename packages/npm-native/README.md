@@ -3,6 +3,10 @@
 Native N-API binding for [Formulon](https://github.com/libraz/formulon),
 the Excel 365 calculation engine.
 
+Formula evaluation uses Formulon's default `win-365-ja_JP` profile. Call
+`setExcelProfileId()` when a workbook must use the separately supported
+`mac-365-ja_JP` profile.
+
 ## What this is
 
 `@libraz/formulon-native` is a Node.js addon (`.node`) built directly
@@ -21,12 +25,13 @@ Why prefer the native build:
 ## Surface parity
 
 This package exposes the full `Workbook` surface of the WASM-backed
-`@libraz/formulon` package — the same 175 instance methods plus the
+`@libraz/formulon` package — the same 176 instance methods plus the
 three static factories, all marshalling to the identical C-ABI
-functions. JS callers can swap between the two packages without code
-changes; the `{ status, value }` envelopes and result shapes are
-byte-identical. The native-only differences are operational (native
-threads, no V8 ↔ WASM heap copies, no 4 GiB ceiling), not API-shaped.
+functions. The `Workbook` methods use the same `{ status, value }`
+envelopes and result shapes; switching packages still requires updating the
+module import and validating the target platform's native prebuild. The
+native-only differences are operational (native threads, no V8 ↔ WASM heap
+copies, no 4 GiB ceiling), not API-shaped.
 
 The TypeScript declarations in `dist/index.d.ts` are the authoritative
 method list; the categories below summarise what is registered on the
@@ -125,9 +130,10 @@ if (r.status.ok && r.value.kind === ValueKind.Number) {
 }
 ```
 
-The `{ status, value }` envelope mirrors the WASM package's contract.
-There is no exception path: every fallible method returns
-`{ ok: false, status, message, context }` on failure.
+The `{ status, value }` envelope mirrors the WASM package's contract for
+engine operations. Module loading can throw when the native prebuild is not
+available; after the module loads, fallible engine operations return
+`{ ok: false, status, message, context }`.
 
 ## License
 

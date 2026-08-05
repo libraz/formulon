@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Smoke tests for the staged @libraz/formulon npm package.
 //
@@ -94,6 +93,14 @@ test('evalFormula(=1/0) surfaces Excel error as a value (not failed status)', as
   const r = Module.evalFormula('=1/0');
   assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
   assert.equal(r.value.kind, VAL.ERROR);
+});
+
+test('evalFormula uses read-only evaluation for the intersection operator', async () => {
+  const Module = await getModule();
+  const r = Module.evalFormula('=A1 B1');
+  assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
+  assert.equal(r.value.kind, VAL.ERROR);
+  assert.equal(r.value.errorCode, 0); // ErrorCode::Null / #NULL!
 });
 
 test('Workbook.createDefault produces a valid single-sheet workbook', async () => {

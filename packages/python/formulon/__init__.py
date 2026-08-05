@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Formulon -- Excel 365 calculation engine, Python binding.
 
 Public API:
@@ -196,8 +195,8 @@ version_string = library_version
 def eval_formula(formula: str) -> Value:
     """Evaluate a single formula against a fresh, default workbook.
 
-    The formula is written to ``Sheet1!A1``, the workbook is recalculated,
-    and the resulting cell value is returned.
+    The formula is evaluated read-only as if entered at ``Sheet1!A1``;
+    the temporary workbook is not mutated or recalculated.
 
     Cell-level Excel errors (``#DIV/0!``, ``#VALUE!``, etc.) surface as a
     :class:`Value` with ``kind == ValueKind.ERROR``; only host-side
@@ -207,9 +206,7 @@ def eval_formula(formula: str) -> Value:
       formula: the formula text, with or without a leading ``=``.
 
     Returns:
-      The :class:`Value` cached at ``Sheet1!A1`` after recalc.
+      The scalar :class:`Value` at the formula's top-left result cell.
     """
     with Workbook.create_default() as wb:
-        wb.set_formula(0, 0, 0, formula)
-        wb.recalc()
-        return wb.get_value(0, 0, 0)
+        return wb.evaluate_formula_array(0, 0, 0, formula)[0][0]

@@ -332,7 +332,7 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
     return MakeStatus(env, rc);
   }
   if (!info[0].IsFunction()) {
-    return MakeErrorStatus(env, kBindingNullPointer);
+    return MakeErrorStatus(env, kBindingInvalidHandle);
   }
   // Persist the JS function in the module-global slot. A FunctionReference
   // with refcount=1 keeps the function alive against GC for as long as

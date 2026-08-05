@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `JsWorkbook` is the move-only RAII wrapper around `fm_workbook_t*`
 // that backs the JS-facing `Workbook` class. Its method bodies are
@@ -76,10 +75,12 @@ class JsWorkbook {
   JsStatus setBool(uint32_t sheet, uint32_t row, uint32_t col, bool value);
   JsStatus setError(uint32_t sheet, uint32_t row, uint32_t col, int32_t errorCode);
   JsStatus setText(uint32_t sheet, uint32_t row, uint32_t col, const std::string& text);
+  JsStatus setCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col, const std::string& phonetic);
   JsStatus setBlank(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus setFormula(uint32_t sheet, uint32_t row, uint32_t col, const std::string& formula);
 
   JsCellResult getValue(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getCellPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns a
@@ -198,6 +199,7 @@ class JsWorkbook {
   JsStatus clearMerges(uint32_t sheet);
 
   emscripten::val getComment(uint32_t sheet, uint32_t row, uint32_t col) const;
+  emscripten::val getCommentResult(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getComments(uint32_t sheet) const;
   JsStatus setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text);
 

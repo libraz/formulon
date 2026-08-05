@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Smoke tests for the Formulon Python wheel.
 
 These tests exercise the public surface only -- ``formulon.eval_formula``,
@@ -64,6 +63,11 @@ class EvalFormulaTests(unittest.TestCase):
         # the error_code rather than catching an exception.
         self.assertIs(v.to_python(), v)
         self.assertIsNotNone(v.error_code)
+
+    def test_intersection_uses_read_only_evaluation(self) -> None:
+        v = formulon.eval_formula("=A1 B1")
+        self.assertEqual(v.kind, ValueKind.ERROR)
+        self.assertEqual(v.error_code, 0)  # ErrorCode::Null / #NULL!
 
     def test_text_concat(self) -> None:
         v = formulon.eval_formula('="hello "&"world"')

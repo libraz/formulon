@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Hand-written TypeScript declarations for the Formulon WASM bindings.
 //
@@ -568,6 +567,12 @@ export interface CommentEntry {
   text: string;
 }
 
+/** Status-bearing comment lookup returned by `getCommentResult`. */
+export interface CommentResult {
+  status: Status;
+  comment: CommentEntry | null;
+}
+
 /** Sheet-wide comment entry returned by `getComments(sheet)`. Extends
  *  `CommentEntry` with the anchor cell so comments on otherwise-empty
  *  cells can be discovered without already knowing their `(row, col)`. */
@@ -884,6 +889,8 @@ export interface FontRecord {
   strike: boolean;
   /** 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting. */
   underline: number;
+  /** 0=baseline, 1=superscript, 2=subscript. */
+  vertAlign: number;
   /** AARRGGBB packed colour. */
   colorArgb: number;
 }
@@ -1098,6 +1105,8 @@ export interface Workbook {
   /** Stores a static Excel error literal; `errorCode` is an ErrorCode ordinal. */
   setError(sheet: number, row: number, col: number, errorCode: number): Status;
   setText(sheet: number, row: number, col: number, text: string): Status;
+  /** Stores (or, when empty, clears) the cell's OOXML phonetic guide (`<rPh>`). */
+  setCellPhonetic(sheet: number, row: number, col: number, phonetic: string): Status;
   setBlank(sheet: number, row: number, col: number): Status;
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
@@ -1140,6 +1149,8 @@ export interface Workbook {
    *  formula text. Returns `kInvalidArgument` when the cell is absent
    *  or its cached value is not a lambda. */
   getLambdaText(sheet: number, row: number, col: number): LambdaTextResult;
+  /** Returns the cell's OOXML phonetic guide (`<rPh>`), or an empty string. */
+  getCellPhonetic(sheet: number, row: number, col: number): StringResult;
 
   recalc(): Status;
   /** Recalculates only cells touched by the supplied viewport. */
@@ -1504,6 +1515,8 @@ export interface Workbook {
 
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): CommentEntry | null;
+  /** Returns a comment lookup result that distinguishes absence from an invalid sheet or handle. */
+  getCommentResult(sheet: number, row: number, col: number): CommentResult;
   /** Returns every comment on `sheet`, including comments anchored on
    *  cells that carry no value. */
   getComments(sheet: number): ReadonlyArray<SheetCommentEntry>;

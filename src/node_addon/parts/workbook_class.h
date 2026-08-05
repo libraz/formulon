@@ -239,6 +239,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ClearMerges(const Napi::CallbackInfo& info);
   Napi::Value GetMerges(const Napi::CallbackInfo& info);
   Napi::Value GetComment(const Napi::CallbackInfo& info);
+  Napi::Value GetCommentResult(const Napi::CallbackInfo& info);
   Napi::Value GetComments(const Napi::CallbackInfo& info);
   Napi::Value SetComment(const Napi::CallbackInfo& info);
   Napi::Value AddHyperlink(const Napi::CallbackInfo& info);
@@ -265,7 +266,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   /// Builds an error-Status envelope when the wrapper has been
   /// finalized / destroyed but JS still holds a reference.
-  Napi::Object NullHandleError(Napi::Env env) const { return MakeErrorStatus(env, kBindingNullPointer); }
+  Napi::Object NullHandleError(Napi::Env env) const { return MakeErrorStatus(env, kBindingInvalidHandle); }
 
  private:
   fm_workbook_t* handle_ = nullptr;

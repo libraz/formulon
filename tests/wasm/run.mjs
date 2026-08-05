@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Node-based smoke tests for the Formulon WASM bundle.
 //
@@ -271,6 +270,13 @@ async function run() {
     assert.equal(r.value.number, 1);
   });
 
+  test('evalFormula evaluates intersection read-only and returns #NULL!', () => {
+    const r = Module.evalFormula('=A1 B1');
+    assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
+    assert.equal(r.value.kind, VAL.ERROR);
+    assert.equal(r.value.errorCode, 0); // ErrorCode::Null / #NULL!
+  });
+
   test('evalFormula(=CONCAT) returns TEXT "hello world"', () => {
     const r = Module.evalFormula('=CONCAT("hello"," ","world")');
     assert.ok(r.status.ok);
@@ -327,6 +333,26 @@ async function run() {
 
       const a3 = wb.getValue(0, 2, 0);
       assert.equal(a3.value.kind, VAL.BLANK);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('setCellPhonetic / getCellPhonetic preserve and clear a Japanese guide', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setText(0, 0, 0, '漢字').ok);
+      assert.ok(wb.setCellPhonetic(0, 0, 0, 'かんじ').ok);
+      const phonetic = wb.getCellPhonetic(0, 0, 0);
+      assert.ok(phonetic.status.ok);
+      assert.equal(phonetic.value, 'かんじ');
+
+      assert.ok(wb.setCellPhonetic(0, 0, 0, '').ok);
+      assert.equal(wb.getCellPhonetic(0, 0, 0).value, '');
+
+      assert.ok(wb.setCellPhonetic(0, 0, 0, 'かんじ').ok);
+      assert.ok(wb.setText(0, 0, 0, '文字列').ok);
+      assert.equal(wb.getCellPhonetic(0, 0, 0).value, '');
     } finally {
       wb.delete();
     }
@@ -548,29 +574,29 @@ async function run() {
       assert.ok(layout.status.ok, `status=${JSON.stringify(layout.status)}`);
       assert.equal(layout.top, 0);
       assert.equal(layout.left, 3);
-      assert.equal(layout.rows, 5);
-      assert.equal(layout.cols, 3);
+      assert.equal(layout.rows, 4);
+      assert.equal(layout.cols, 2);
       assert.ok(layout.cells.length > 0);
 
-      const region = findPivotCell(layout, 1, 3);
-      assert.ok(region);
-      assert.equal(region.kind, PIVOT.HEADER);
-      assert.equal(region.value.kind, VAL.TEXT);
-      assert.equal(region.value.text, 'Region');
+      const rowLabels = findPivotCell(layout, 0, 3);
+      assert.ok(rowLabels);
+      assert.equal(rowLabels.kind, PIVOT.HEADER);
+      assert.equal(rowLabels.value.kind, VAL.TEXT);
+      assert.equal(rowLabels.value.text, '行ラベル');
 
-      const northLabel = findPivotCell(layout, 2, 3);
+      const northLabel = findPivotCell(layout, 1, 3);
       assert.ok(northLabel);
       assert.equal(northLabel.kind, PIVOT.ROW_LABEL);
       assert.equal(northLabel.value.text, 'North');
 
-      const northSum = findPivotCell(layout, 2, 4);
+      const northSum = findPivotCell(layout, 1, 4);
       assert.ok(northSum);
       assert.equal(northSum.kind, PIVOT.DATA);
       assert.equal(northSum.value.kind, VAL.NUMBER);
       assert.equal(northSum.value.number, 400);
       assert.equal(northSum.fieldName, 'Sum of Amount');
 
-      const grandTotal = findPivotCell(layout, 4, 5);
+      const grandTotal = findPivotCell(layout, 3, 4);
       assert.ok(grandTotal);
       assert.equal(grandTotal.kind, PIVOT.GRAND_TOTAL);
       assert.equal(grandTotal.value.kind, VAL.NUMBER);
@@ -711,6 +737,22 @@ async function run() {
     }
   });
 
+  test('addFont / getFont preserve superscript and subscript', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1 });
+      assert.ok(superscript.status.ok);
+      assert.equal(wb.getFont(superscript.index).vertAlign, 1);
+
+      const subscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 2 });
+      assert.ok(subscript.status.ok);
+      assert.notEqual(subscript.index, superscript.index);
+      assert.equal(wb.getFont(subscript.index).vertAlign, 2);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('addXf rejects out-of-range font_index', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -836,6 +878,26 @@ async function run() {
       assert.ok(wb.setComment(0, 1, 1, '', '').ok);
       const after = wb.getComment(0, 1, 1);
       assert.equal(after, null);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('getCommentResult distinguishes absence from an invalid sheet', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const missing = wb.getCommentResult(0, 1, 1);
+      assert.equal(missing.status.ok, false);
+      assert.equal(missing.comment, null);
+      const invalid = wb.getCommentResult(99, 1, 1);
+      assert.equal(invalid.status.ok, false);
+      assert.equal(invalid.comment, null);
+      assert.notEqual(missing.status.status, invalid.status.status);
+      assert.ok(wb.setComment(0, 1, 1, 'libraz', 'hello').ok);
+      const found = wb.getCommentResult(0, 1, 1);
+      assert.equal(found.status.ok, true);
+      assert.equal(found.comment.author, 'libraz');
+      assert.equal(found.comment.text, 'hello');
     } finally {
       wb.delete();
     }

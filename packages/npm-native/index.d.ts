@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Hand-written TypeScript declarations for @libraz/formulon-native.
 //
@@ -559,6 +558,12 @@ export interface HyperlinkEntry {
 export interface CommentEntry {
   author: string;
   text: string;
+}
+
+/** Status-bearing comment lookup returned by `getCommentResult`. */
+export interface CommentResult {
+  status: Status;
+  comment: CommentEntry | null;
 }
 
 /** Sheet-wide comment entry returned by `getComments(sheet)`. Extends
@@ -1433,6 +1438,8 @@ export interface Workbook {
   getMerges(sheet: number): ReadonlyArray<MergeRange>;
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): CommentEntry | null;
+  /** Returns a comment lookup result that distinguishes absence from an invalid sheet or handle. */
+  getCommentResult(sheet: number, row: number, col: number): CommentResult;
   /** Returns every comment on `sheet`, including comments anchored on
    *  cells that carry no value. */
   getComments(sheet: number): ReadonlyArray<SheetCommentEntry>;
@@ -1528,7 +1535,7 @@ export interface WorkbookCtor {
   /** Workbook with no sheets. */
   createEmpty(): Workbook;
   /** Loads from an in-memory `.xlsx` byte buffer. The returned wrapper
-   *  may be unusable (subsequent calls return `kBindingNullPointer`)
+   *  may be unusable (subsequent calls return `kBindingInvalidHandle`)
    *  on failure; consult `lastErrorMessage()` for diagnostics. */
   loadBytes(bytes: Uint8Array): Workbook;
 }
