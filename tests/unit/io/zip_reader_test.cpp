@@ -357,16 +357,10 @@ TEST(ZipReader, ReadEntryRejectsHighRatioEntry) {
   EXPECT_NE(result.error().context.find("entry=zeros.bin"), std::string::npos);
 }
 
-TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
-  // Six 50 MiB entries: each individually under the per-entry 100 MiB
-  // cap, but together they cross the 256 MiB cumulative cap on the sixth
-  // read. Compress the archive at default level so the on-disk archive
-  // bytes stay small (~50 KiB) while the advertised uncompressed sizes
-  // still drive the cumulative-total check; the ratio cap (1024) is
-  // satisfied by 50 MiB / 50 KiB ~= 1024 only when we use uniform-fill
-  // data, so we use a non-uniform pattern that compresses to ~5 MiB
-  // (ratio ~10) — comfortably under the ratio cap and still light on
-  // build-time memory.
+TEST(ZipReader, ReadEntryAllowsCumulativePartsWithinPerEntryPolicy) {
+  // Six 50 MiB entries remain valid: each extraction is bounded by the
+  // per-entry and ratio policies, and returned buffers belong to the caller
+  // rather than being retained by ZipReader.
   constexpr std::size_t kPayloadBytes = 50ULL * 1024ULL * 1024ULL;
   std::vector<std::uint8_t> payload(kPayloadBytes, 0u);
   // Fill with a low-entropy but non-uniform pattern: ratio ~10 with the
@@ -381,26 +375,12 @@ TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
   ASSERT_EQ(zip.entry_count(), 6U);
 
-  // First five reads succeed: 5 * 50 MiB == 250 MiB <= 256 MiB cap.
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i < 6; ++i) {
     const std::string name = "blob_" + std::to_string(i) + ".bin";
     auto ok = zip.read_entry(name);
     ASSERT_TRUE(static_cast<bool>(ok)) << "read_entry failed at i=" << i << ": " << ok.error().message;
     EXPECT_EQ(ok.value().size(), kPayloadBytes);
   }
-
-  // Sixth read would push cumulative past 256 MiB: 250 MiB + 50 MiB.
-  auto refused = zip.read_entry("blob_5.bin");
-  ASSERT_FALSE(static_cast<bool>(refused));
-  EXPECT_EQ(refused.error().code, FormulonErrorCode::kIoZipBomb);
-  EXPECT_NE(refused.error().context.find("limit=total"), std::string::npos);
-
-  // Re-opening the same reader resets the running total so a fresh
-  // archive is not penalised by a previous run's history.
-  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
-  auto reopened = zip.read_entry("blob_0.bin");
-  ASSERT_TRUE(static_cast<bool>(reopened)) << "post-reopen read_entry failed: " << reopened.error().message;
-  EXPECT_EQ(reopened.value().size(), kPayloadBytes);
 }
 
 TEST(ZipReader, IdempotentReopen) {
