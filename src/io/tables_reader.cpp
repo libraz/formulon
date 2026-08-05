@@ -21,25 +21,6 @@ namespace formulon {
 namespace io {
 namespace {
 
-/// Serialises a pugixml node to a raw (unindented) XML string. Local to
-/// this TU; used to capture `<tableStyleInfo>` verbatim.
-struct StringXmlWriter final : pugi::xml_writer {
-  std::string* dst = nullptr;
-  void write(const void* data, std::size_t size) override {
-    if (dst != nullptr) {
-      dst->append(static_cast<const char*>(data), size);
-    }
-  }
-};
-
-std::string RawXml(const pugi::xml_node& node) {
-  std::string out;
-  StringXmlWriter sink;
-  sink.dst = &out;
-  node.print(sink, /*indent=*/"", pugi::format_raw);
-  return out;
-}
-
 void AppendEscapedAttributeValue(std::string& out, std::string_view value) {
   for (char c : value) {
     switch (c) {
@@ -141,16 +122,16 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
   // `<tableColumns>`. Captured verbatim; the engine does not model table
   // styles but must not drop them on save.
   if (pugi::xml_node style_info = root.child("tableStyleInfo"); style_info) {
-    table.table_style_info_xml = RawXml(style_info);
+    table.table_style_info_xml = raw_xml(style_info);
   }
   if (pugi::xml_node auto_filter = root.child("autoFilter"); auto_filter) {
-    table.auto_filter_xml = RawXml(auto_filter);
+    table.auto_filter_xml = raw_xml(auto_filter);
   }
   if (pugi::xml_node sort_state = root.child("sortState"); sort_state) {
-    table.sort_state_xml = RawXml(sort_state);
+    table.sort_state_xml = raw_xml(sort_state);
   }
   if (pugi::xml_node ext_lst = root.child("extLst"); ext_lst) {
-    table.ext_lst_xml = RawXml(ext_lst);
+    table.ext_lst_xml = raw_xml(ext_lst);
   }
 
   return table;

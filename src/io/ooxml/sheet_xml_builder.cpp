@@ -40,16 +40,6 @@ std::string BuildColsXml(const SheetLayout& layout);
 std::string BuildSheetProtectionXml(const SheetProtection& p);
 std::string BuildDimensionXml(const Sheet& sheet);
 
-struct StringXmlWriter final : pugi::xml_writer {
-  std::string* dst = nullptr;
-
-  void write(const void* data, size_t size) override {
-    if (dst != nullptr) {
-      dst->append(static_cast<const char*>(data), size);
-    }
-  }
-};
-
 // Sheet visibility is owned by xl/workbook.xml's <sheet state="...">
 // attribute.  Older producers also put tabHidden on the worksheet's raw
 // <sheetPr>; preserving that stale flag would make a sheet hidden again after
@@ -77,11 +67,7 @@ std::string BuildNormalizedSheetPrXml(std::string_view raw_sheet_pr) {
     child = next;
   }
 
-  std::string out;
-  StringXmlWriter sink;
-  sink.dst = &out;
-  sheet_pr.print(sink, /*indent=*/"", pugi::format_raw);
-  return out;
+  return raw_xml(sheet_pr);
 }
 
 std::string BuildMergeCellsBlock(const Sheet& sheet) {

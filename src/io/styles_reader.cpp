@@ -481,20 +481,6 @@ void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
-/// Serialises `node` (element + subtree) to a raw XML string with no
-/// indentation, for verbatim round-trip of unmodelled dxf children.
-std::string CaptureRawXml(const pugi::xml_node& node) {
-  struct RawSink : pugi::xml_writer {
-    std::string* dst;
-    void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
-  };
-  std::string out;
-  RawSink sink{};
-  sink.dst = &out;
-  node.print(sink, /*indent=*/"", pugi::format_raw);
-  return out;
-}
-
 std::string EscapeXmlAttribute(std::string_view value) {
   std::string out;
   out.reserve(value.size());
@@ -560,10 +546,10 @@ void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
     // `<alignment>` / `<protection>` are not modelled structurally on a
     // dxf; capture them verbatim so they round-trip.
     if (pugi::xml_node alignment = dxf.child("alignment")) {
-      rec.alignment_xml = CaptureRawXml(alignment);
+      rec.alignment_xml = raw_xml(alignment);
     }
     if (pugi::xml_node protection = dxf.child("protection")) {
-      rec.protection_xml = CaptureRawXml(protection);
+      rec.protection_xml = raw_xml(protection);
     }
     table.dxfs.push_back(std::move(rec));
   }
@@ -591,23 +577,18 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
   ReadDxfs(root, table);
   table.root_extra_attrs = CaptureRootExtraAttrs(root);
   if (pugi::xml_node colors = root.child("colors")) {
-    table.colors_xml = CaptureRawXml(colors);
+    table.colors_xml = raw_xml(colors);
   }
   if (pugi::xml_node table_styles = root.child("tableStyles")) {
-    table.table_styles_xml = CaptureRawXml(table_styles);
+    table.table_styles_xml = raw_xml(table_styles);
   }
   if (pugi::xml_node ext_lst = root.child("extLst")) {
-    table.ext_lst_xml = CaptureRawXml(ext_lst);
+    table.ext_lst_xml = raw_xml(ext_lst);
   }
-  for (pugi::xml_node child = root.first_child(); child; child = child.next_sibling()) {
-    const std::string_view name(child.name());
-    if (child.type() != pugi::node_element || name == "numFmts" || name == "fonts" || name == "fills" ||
-        name == "borders" || name == "cellStyleXfs" || name == "cellXfs" || name == "cellStyles" || name == "dxfs" ||
-        name == "colors" || name == "tableStyles" || name == "extLst") {
-      continue;
-    }
-    table.unknown_top_level_xml.push_back(CaptureRawXml(child));
-  }
+  capture_unknown_children(root,
+                           {"numFmts", "fonts", "fills", "borders", "cellStyleXfs", "cellXfs", "cellStyles", "dxfs",
+                            "colors", "tableStyles", "extLst"},
+                           table.unknown_top_level_xml);
   return table;
 }
 

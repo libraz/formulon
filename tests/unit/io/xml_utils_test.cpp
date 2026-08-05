@@ -8,7 +8,9 @@
 #include "io/xml_utils.h"
 
 #include <cstdint>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "gtest/gtest.h"
 #include "pugixml.hpp"
@@ -134,6 +136,83 @@ TEST(XmlUtilsAttr, RootExtraAttributesEscapeValuesForReEmission) {
 
   EXPECT_EQ(capture_root_extra_ns_attrs(doc.document_element()),
             " custom=\"one &amp; two &quot;three&quot; &lt;four&gt;\"");
+}
+
+// ---------------------------------------------------------------------------
+// Element-level passthrough
+// ---------------------------------------------------------------------------
+//
+// A part the reader consumes drops out of the unknown-part sweep, so anything
+// in it the model does not represent survives a save only if it was retained
+// verbatim. These pin the retention format the writers re-emit.
+
+TEST(XmlUtilsRawXml, SerialisesElementAndSubtreeWithoutIndentation) {
+  pugi::xml_document doc = Load(R"(<ext uri="{X}">
+      <inner a="1"><leaf/></inner>
+    </ext>)");
+  // No indentation and no added whitespace: the blob is re-emitted inside a
+  // generated part, where pretty-printing would change the bytes Excel sees.
+  EXPECT_EQ(raw_xml(doc.child("ext")), R"(<ext uri="{X}"><inner a="1"><leaf/></inner></ext>)");
+}
+
+TEST(XmlUtilsRawXml, EscapesMarkupInTextAndAttributes) {
+  pugi::xml_document doc = Load(R"(<n v="a &amp; b">x &lt; y</n>)");
+  EXPECT_EQ(raw_xml(doc.child("n")), R"(<n v="a &amp; b">x &lt; y</n>)");
+}
+
+TEST(XmlUtilsRawXml, AppendVariantDoesNotClearTheTarget) {
+  pugi::xml_document doc = Load(R"(<a/>)");
+  std::string out = "<pre/>";
+  append_raw_xml(out, doc.child("a"));
+  EXPECT_EQ(out, "<pre/><a/>");
+}
+
+TEST(XmlUtilsRawXml, EmptyNodeAppendsNothing) {
+  pugi::xml_node empty;
+  std::string out;
+  append_raw_xml(out, empty);
+  EXPECT_TRUE(out.empty());
+}
+
+TEST(XmlUtilsUnknownChildren, RetainsUnmodelledChildrenInDocumentOrder) {
+  pugi::xml_document doc = Load(R"(<ws><known/><alpha a="1"/><other/><beta/></ws>)");
+  std::string out;
+  capture_unknown_children(doc.child("ws"), {"known", "other"}, out);
+  // Document order matters: OOXML content models are ordered sequences, so
+  // the blob is only valid re-emitted at the position it was read from.
+  EXPECT_EQ(out, R"(<alpha a="1"/><beta/>)");
+}
+
+TEST(XmlUtilsUnknownChildren, SkipsTextCommentAndProcessingInstructionChildren) {
+  pugi::xml_document doc = Load("<ws>text<!--c--><?pi?><alpha/></ws>");
+  std::string out;
+  capture_unknown_children(doc.child("ws"), {}, out);
+  EXPECT_EQ(out, "<alpha/>");
+}
+
+TEST(XmlUtilsUnknownChildren, EverythingKnownProducesNothing) {
+  pugi::xml_document doc = Load(R"(<ws><a/><b/></ws>)");
+  std::string out;
+  capture_unknown_children(doc.child("ws"), {"a", "b"}, out);
+  EXPECT_TRUE(out.empty());
+}
+
+TEST(XmlUtilsUnknownChildren, VectorOverloadKeepsPerChildBoundaries) {
+  pugi::xml_document doc = Load(R"(<styleSheet><fonts/><alpha/><beta><g/></beta></styleSheet>)");
+  std::vector<std::string> out;
+  capture_unknown_children(doc.child("styleSheet"), {"fonts"}, out);
+  ASSERT_EQ(out.size(), 2U);
+  EXPECT_EQ(out[0], "<alpha/>");
+  EXPECT_EQ(out[1], "<beta><g/></beta>");
+}
+
+TEST(XmlUtilsUnknownChildren, VectorOverloadAppendsToExistingContent) {
+  pugi::xml_document doc = Load(R"(<ws><alpha/></ws>)");
+  std::vector<std::string> out{"<kept/>"};
+  capture_unknown_children(doc.child("ws"), {}, out);
+  ASSERT_EQ(out.size(), 2U);
+  EXPECT_EQ(out[0], "<kept/>");
+  EXPECT_EQ(out[1], "<alpha/>");
 }
 
 }  // namespace

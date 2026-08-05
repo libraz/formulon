@@ -290,13 +290,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       // Capture any `<fieldGroup>` verbatim so a grouped field round-trips
       // even though the grouping structure is not modelled.
       if (pugi::xml_node group = f.child("fieldGroup"); group) {
-        struct RawSink : pugi::xml_writer {
-          std::string* dst;
-          void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
-        };
-        RawSink sink{};
-        sink.dst = &field.field_group_xml;
-        group.print(sink, /*indent=*/"", pugi::format_raw);
+        append_raw_xml(field.field_group_xml, group);
       }
 
       // Walk `<sharedItems>` children. Any typed value child marks this

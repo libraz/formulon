@@ -518,27 +518,6 @@ void ReadIconSet(const pugi::xml_node& iset, cf::IconSetSpec* out) {
   }
 }
 
-/// Serialises a pugixml node to a raw (unindented) XML string. Used to
-/// capture `<extLst>` verbatim for round-trip (see `CFRule::ext_lst_raw`
-/// / `ConditionalFormat::ext_lst_raw`) rather than interpreting its
-/// contents.
-struct StringXmlWriter final : pugi::xml_writer {
-  std::string* dst = nullptr;
-  void write(const void* data, std::size_t size) override {
-    if (dst != nullptr) {
-      dst->append(static_cast<const char*>(data), size);
-    }
-  }
-};
-
-std::string RawXml(const pugi::xml_node& node) {
-  std::string out;
-  StringXmlWriter sink;
-  sink.dst = &out;
-  node.print(sink, /*indent=*/"", pugi::format_raw);
-  return out;
-}
-
 cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   cf::CFRule out;
   out.type = ParseRuleType(attr_str(rule, "type"));
@@ -608,7 +587,7 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   // `CT_CfRule`'s schema-trailing `extLst?`: capture verbatim rather than
   // interpreting it (see `CFRule::ext_lst_raw`).
   if (const pugi::xml_node ext_lst = rule.child("extLst"); ext_lst) {
-    out.ext_lst_raw = RawXml(ext_lst);
+    out.ext_lst_raw = raw_xml(ext_lst);
   }
 
   return out;
@@ -660,7 +639,7 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
     // the block's `<cfRule>` children, captured verbatim (see
     // `ConditionalFormat::ext_lst_raw`).
     if (const pugi::xml_node ext_lst = block.child("extLst"); ext_lst) {
-      cfmt.ext_lst_raw = RawXml(ext_lst);
+      cfmt.ext_lst_raw = raw_xml(ext_lst);
     }
     out.push_back(std::move(cfmt));
   }

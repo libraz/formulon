@@ -120,23 +120,6 @@ Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const s
 constexpr std::string_view kCtPrinterSettings =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
 
-struct StringXmlWriter final : pugi::xml_writer {
-  std::string* dst = nullptr;
-  void write(const void* data, size_t size) override {
-    if (dst != nullptr) {
-      dst->append(static_cast<const char*>(data), size);
-    }
-  }
-};
-
-std::string RawXml(const pugi::xml_node& node) {
-  std::string out;
-  StringXmlWriter sink;
-  sink.dst = &out;
-  node.print(sink, /*indent=*/"", pugi::format_raw);
-  return out;
-}
-
 /// Populates the structured `PageSetup` fields from a `<pageSetup>` node.
 /// The raw XML string remains the writer's source of truth; this is an
 /// additive parse for consumers that need typed access. Missing
@@ -286,7 +269,7 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   WorksheetRawExtensions& raw_extensions = wb.sheet(i).mutable_raw_extensions();
   auto capture_raw_extension = [&worksheet](const char* name) -> std::string {
     if (const pugi::xml_node node = worksheet.child(name)) {
-      return RawXml(node);
+      return raw_xml(node);
     }
     return {};
   };
@@ -307,28 +290,28 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
     // `<pageSetUpPr>` child, and gating on that child dropped such sheets'
     // `<sheetPr>` entirely on save. The structured `fit_to_page` view is
     // populated additionally when `<pageSetUpPr>` is present.
-    print.sheet_pr_xml = RawXml(sheet_pr);
+    print.sheet_pr_xml = raw_xml(sheet_pr);
     if (pugi::xml_node page_setup_pr = sheet_pr.child("pageSetUpPr"); page_setup_pr) {
       print.page_setup.fit_to_page = page_setup_pr.attribute("fitToPage").as_bool(false);
     }
   }
   if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
-    print.page_margins_xml = RawXml(page_margins);
+    print.page_margins_xml = raw_xml(page_margins);
     ApplyStructuredPageMargins(page_margins, print.page_margins);
   }
   if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
-    print.page_setup_xml = RawXml(page_setup);
+    print.page_setup_xml = raw_xml(page_setup);
     print.printer_settings_rid = ooxml::relationship_ref_id(page_setup);
     ApplyStructuredPageSetup(page_setup, print.page_setup);
   }
   if (pugi::xml_node print_options = worksheet.child("printOptions")) {
-    print.print_options_xml = RawXml(print_options);
+    print.print_options_xml = raw_xml(print_options);
   }
   if (pugi::xml_node header_footer = worksheet.child("headerFooter")) {
-    print.header_footer_xml = RawXml(header_footer);
+    print.header_footer_xml = raw_xml(header_footer);
   }
   if (pugi::xml_node auto_filter = worksheet.child("autoFilter")) {
-    wb.sheet(i).set_auto_filter_xml(RawXml(auto_filter));
+    wb.sheet(i).set_auto_filter_xml(raw_xml(auto_filter));
   }
   // Worksheet-level `<extLst>` holds the *data* for 2010+ extensions —
   // notably `x14:conditionalFormattings` (DataBar negative-fill / axis /
@@ -339,7 +322,7 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   // survives a save cycle unchanged. Living in this shared helper means
   // the SAX path recovers it too, via the metadata shell.
   if (pugi::xml_node ext_lst = worksheet.child("extLst")) {
-    wb.sheet(i).set_ext_lst_xml(RawXml(ext_lst));
+    wb.sheet(i).set_ext_lst_xml(raw_xml(ext_lst));
   }
   // Capture the worksheet root's extra namespace declarations so any
   // prefixed attribute carried inside a raw capture above resolves when
@@ -599,13 +582,13 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // state, and workbook protection. `<workbookPr date1904>` additionally
   // seeds the model-level `date1904` flag the date-serial conversions read.
   if (pugi::xml_node file_version = wb_root.child("fileVersion"); file_version) {
-    wb.set_file_version_xml(RawXml(file_version));
+    wb.set_file_version_xml(raw_xml(file_version));
   }
   if (pugi::xml_node file_sharing = wb_root.child("fileSharing"); file_sharing) {
-    wb.set_file_sharing_xml(RawXml(file_sharing));
+    wb.set_file_sharing_xml(raw_xml(file_sharing));
   }
   if (pugi::xml_node workbook_pr = wb_root.child("workbookPr"); workbook_pr) {
-    wb.set_workbook_pr_xml(RawXml(workbook_pr));
+    wb.set_workbook_pr_xml(raw_xml(workbook_pr));
     // Excel emits the attribute as `date1904`; some legacy producers use
     // the bare `1904` spelling. Both default to false when absent.
     const bool from_date1904 = read_xsd_bool(workbook_pr, "date1904", false);
@@ -613,13 +596,13 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     wb.set_date1904(from_date1904 || from_legacy);
   }
   if (pugi::xml_node workbook_protection = wb_root.child("workbookProtection"); workbook_protection) {
-    wb.set_workbook_protection_xml(RawXml(workbook_protection));
+    wb.set_workbook_protection_xml(raw_xml(workbook_protection));
   }
   if (pugi::xml_node book_views = wb_root.child("bookViews"); book_views) {
-    wb.set_book_views_xml(RawXml(book_views));
+    wb.set_book_views_xml(raw_xml(book_views));
   }
   if (pugi::xml_node ext_lst = wb_root.child("extLst"); ext_lst) {
-    wb.set_workbook_ext_lst_xml(RawXml(ext_lst));
+    wb.set_workbook_ext_lst_xml(raw_xml(ext_lst));
   }
 
   // The workbook owns the text-storage deque; readers append directly

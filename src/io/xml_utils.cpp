@@ -163,6 +163,68 @@ void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std
   }
 }
 
+namespace {
+
+/// pugixml writer sink that appends straight into a caller-owned string.
+struct StringXmlWriter : pugi::xml_writer {
+  std::string* dst = nullptr;
+  void write(const void* data, std::size_t size) override {
+    if (dst != nullptr) {
+      dst->append(static_cast<const char*>(data), size);
+    }
+  }
+};
+
+}  // namespace
+
+void append_raw_xml(std::string& out, const pugi::xml_node& node) {
+  StringXmlWriter sink;
+  sink.dst = &out;
+  node.print(sink, /*indent=*/"", pugi::format_raw);
+}
+
+std::string raw_xml(const pugi::xml_node& node) {
+  std::string out;
+  append_raw_xml(out, node);
+  return out;
+}
+
+namespace {
+
+/// True when `node` is an element whose name is absent from `known`.
+bool IsUnknownElementChild(const pugi::xml_node& node, std::initializer_list<std::string_view> known) {
+  if (node.type() != pugi::node_element) {
+    return false;
+  }
+  const std::string_view name = node.name();
+  for (const std::string_view k : known) {
+    if (k == name) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+void capture_unknown_children(const pugi::xml_node& parent, std::initializer_list<std::string_view> known,
+                              std::string& out) {
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (IsUnknownElementChild(child, known)) {
+      append_raw_xml(out, child);
+    }
+  }
+}
+
+void capture_unknown_children(const pugi::xml_node& parent, std::initializer_list<std::string_view> known,
+                              std::vector<std::string>& out) {
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (IsUnknownElementChild(child, known)) {
+      out.push_back(raw_xml(child));
+    }
+  }
+}
+
 void append_raw_attrs(std::string& out, const std::vector<std::pair<std::string, std::string>>& attrs) {
   for (const auto& [name, value] : attrs) {
     out.push_back(' ');

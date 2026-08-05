@@ -437,10 +437,6 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // `<calculatedFields>`, `<calculatedItems>`, `<pivotTableStyleInfo>`,
   // `<extLst>`, ...) belongs after `<dataFields>` and goes to the tail
   // buffer. Relative order within each bin follows document order.
-  struct StringXmlWriter : pugi::xml_writer {
-    std::string* dst;
-    void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
-  };
   static const std::string_view kRecognized[] = {"location", "pivotFields", "rowFields", "colFields", "dataFields"};
   for (pugi::xml_node child = root.first_child(); child; child = child.next_sibling()) {
     if (child.type() != pugi::node_element) {
@@ -465,9 +461,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     } else {
       bucket = &table.mutable_raw_passthrough_xml();
     }
-    StringXmlWriter sink{};
-    sink.dst = bucket;
-    child.print(sink, /*indent=*/"", pugi::format_raw);
+    append_raw_xml(*bucket, child);
   }
 
   return table;

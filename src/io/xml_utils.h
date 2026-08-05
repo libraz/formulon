@@ -157,6 +157,39 @@ void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std
 /// for XML attribute context. Inverse of `capture_unknown_attrs`.
 void append_raw_attrs(std::string& out, const std::vector<std::pair<std::string, std::string>>& attrs);
 
+/// Appends `node` — the element itself plus its whole subtree — to `out` as
+/// unindented XML.
+///
+/// This is the element-level counterpart of `capture_unknown_attrs`: a part
+/// the reader consumes drops out of the unknown-part passthrough sweep, so
+/// anything in it the model does not represent is lost on the next save
+/// unless it is retained verbatim. Retaining the exact bytes (rather than
+/// re-serialising from a partial model) is what makes the round-trip
+/// non-destructive for OOXML the reader does not understand.
+void append_raw_xml(std::string& out, const pugi::xml_node& node);
+
+/// `append_raw_xml` into a fresh string.
+std::string raw_xml(const pugi::xml_node& node);
+
+/// Appends every *element* child of `parent` whose name is NOT in `known`,
+/// in document order, to `out` as raw XML. Text, comment and PI children are
+/// skipped — only element content carries schema payload.
+///
+/// The caller re-emits `out` at the schema position those children occupied.
+/// OOXML content models are ordered sequences, so a retained blob is only
+/// valid where it was found; a writer that has more than one such position
+/// (children before and after a modelled element, say) needs one bucket per
+/// position rather than one for the whole parent.
+void capture_unknown_children(const pugi::xml_node& parent, std::initializer_list<std::string_view> known,
+                              std::string& out);
+
+/// As above, but appends one string per retained child instead of one blob.
+/// Use this when the writer re-emits the children individually (interleaved
+/// with generated content, or filtered further); use the `std::string`
+/// overload when they are re-emitted as a contiguous run.
+void capture_unknown_children(const pugi::xml_node& parent, std::initializer_list<std::string_view> known,
+                              std::vector<std::string>& out);
+
 /// Parses a UTF-8 OOXML part body into `doc`. On failure returns a
 /// `kIoXmlParse` error whose context records `<reader_module>` and
 /// `<part_name>` and includes pugixml's description. The standard
