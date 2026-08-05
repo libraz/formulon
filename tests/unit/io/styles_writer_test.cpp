@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::write_styles`. The writer is the
 // symmetric counterpart of `read_styles`; the integration round-trip
@@ -26,6 +25,62 @@ TEST(StylesWriter, EmitsMinimalStyleSheetForEmptyTable) {
   EXPECT_NE(xml.find("<fills count=\"1\""), std::string::npos);
   EXPECT_NE(xml.find("<borders count=\"1\""), std::string::npos);
   EXPECT_NE(xml.find("<cellXfs count=\"1\""), std::string::npos);
+}
+
+TEST(StylesWriter, RetainsUnmodelledTopLevelStyleSections) {
+  const std::string source =
+      "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:x14=\"urn:test:x14\" mc:Ignorable=\"x14\" "
+      "xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\">"
+      "<colors><indexedColors><rgbColor rgb=\"FF112233\"/></indexedColors></colors>"
+      "<tableStyles count=\"1\" defaultTableStyle=\"TableStyleMedium2\" defaultPivotStyle=\"PivotStyleLight16\"/>"
+      "<futureStyles vendor=\"example\"><futureStyle id=\"7\"/></futureStyles>"
+      "<extLst><ext uri=\"urn:test\"><x14:future/></ext></extLst>"
+      "</styleSheet>";
+  auto read_or = read_styles(std::vector<std::uint8_t>(source.begin(), source.end()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+
+  const std::string xml = write_styles(read_or.value());
+  EXPECT_NE(xml.find("xmlns:x14=\"urn:test:x14\""), std::string::npos);
+  EXPECT_NE(xml.find("mc:Ignorable=\"x14\""), std::string::npos);
+  EXPECT_NE(xml.find("<colors><indexedColors><rgbColor rgb=\"FF112233\"/></indexedColors></colors>"),
+            std::string::npos);
+  EXPECT_NE(xml.find("<tableStyles count=\"1\""), std::string::npos);
+  EXPECT_NE(xml.find("<futureStyles vendor=\"example\"><futureStyle id=\"7\"/></futureStyles>"), std::string::npos);
+  EXPECT_NE(xml.find("<extLst><ext uri=\"urn:test\"><x14:future/></ext></extLst>"), std::string::npos);
+
+  auto round_or = read_styles(std::vector<std::uint8_t>(xml.begin(), xml.end()));
+  ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
+  EXPECT_EQ(round_or.value().colors_xml, read_or.value().colors_xml);
+  EXPECT_EQ(round_or.value().table_styles_xml, read_or.value().table_styles_xml);
+  EXPECT_EQ(round_or.value().ext_lst_xml, read_or.value().ext_lst_xml);
+  EXPECT_EQ(round_or.value().unknown_top_level_xml, read_or.value().unknown_top_level_xml);
+}
+
+TEST(StylesWriter, EmitsExplicitFalseFontTogglesForDifferentialFormat) {
+  StylesTable table;
+  DifferentialFormat dxf;
+  dxf.has_font = true;
+  dxf.font.has_bold = true;
+  dxf.font.has_italic = true;
+  dxf.font.has_strike = true;
+  table.dxfs.push_back(dxf);
+
+  const std::string xml = write_styles(table);
+  EXPECT_NE(xml.find("<b val=\"0\"/>"), std::string::npos);
+  EXPECT_NE(xml.find("<i val=\"0\"/>"), std::string::npos);
+  EXPECT_NE(xml.find("<strike val=\"0\"/>"), std::string::npos);
+
+  std::vector<std::uint8_t> bytes(xml.begin(), xml.end());
+  auto read_or = read_styles(bytes);
+  ASSERT_TRUE(static_cast<bool>(read_or));
+  const FontRecord& font = read_or.value().dxfs[0].font;
+  EXPECT_TRUE(font.has_bold);
+  EXPECT_FALSE(font.bold);
+  EXPECT_TRUE(font.has_italic);
+  EXPECT_FALSE(font.italic);
+  EXPECT_TRUE(font.has_strike);
+  EXPECT_FALSE(font.strike);
 }
 
 TEST(StylesWriter, SkipsBuiltinNumFmts) {

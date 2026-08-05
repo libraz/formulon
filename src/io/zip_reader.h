@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Read-only ZIP archive accessor. The OOXML reader pipeline opens an
 // `.xlsx` package by handing the raw bytes to a `ZipReader`, then
@@ -111,9 +110,10 @@ class ZipReader {
 
   /// Reads the entire decompressed contents of `name` into a freshly
   /// allocated buffer. Returns `kIoFileNotFound` when the entry is
-  /// absent and `kIoZipCorrupt` on miniz extraction failure (e.g.
-  /// stored size disagrees with central directory). The returned buffer
-  /// is independent of the underlying ZIP bytes.
+  /// absent, `kIoZipEncrypted` for an encrypted entry, and
+  /// `kIoZipCorrupt` on other miniz extraction failures (e.g. stored
+  /// size disagrees with central directory). The returned buffer is
+  /// independent of the underlying ZIP bytes.
   Expected<std::vector<std::uint8_t>, Error> read_entry(std::string_view name) const;
 
   /// Returns every entry name in archive order. Convenience wrapper

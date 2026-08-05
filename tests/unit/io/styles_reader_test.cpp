@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::read_styles`. The reader builds a flat
 // `StylesTable` carrying every record kind needed for round-trip
@@ -273,6 +272,23 @@ TEST(StylesReader, ReadsDifferentialFormats) {
   EXPECT_EQ(dxf.fill.fg_argb, 0xFFFFFF00U);
   ASSERT_TRUE(dxf.has_border);
   EXPECT_EQ(dxf.border.left.style, 1U);
+}
+
+TEST(StylesReader, PreservesExplicitFalseFontTogglesInDifferentialFormat) {
+  const std::string xml =
+      "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<dxfs count=\"1\"><dxf><font><b val=\"0\"/><i val=\"0\"/><strike val=\"0\"/></font></dxf></dxfs>"
+      "</styleSheet>";
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or));
+  ASSERT_EQ(result_or.value().dxfs.size(), 1U);
+  const FontRecord& font = result_or.value().dxfs[0].font;
+  EXPECT_TRUE(font.has_bold);
+  EXPECT_FALSE(font.bold);
+  EXPECT_TRUE(font.has_italic);
+  EXPECT_FALSE(font.italic);
+  EXPECT_TRUE(font.has_strike);
+  EXPECT_FALSE(font.strike);
 }
 
 TEST(BuiltinNumFmt, ResolvesKnownIds) {

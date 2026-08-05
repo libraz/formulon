@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `<sheetData>` walker. See sheet_reader.h for the public contract.
 //
@@ -85,9 +84,10 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
 
 /// Records a dynamic-array anchor for a `<f t="array" ref="...">` whose
 /// `ref` spans more than the anchor cell. Single-cell refs (legacy CSE
-/// scalars) and unparseable refs are ignored. `(anchor_row, anchor_col)`
-/// is the anchor; the footprint origin is the anchor and its extent is the
-/// `ref` rectangle's bottom-right corner.
+/// scalars) and unparseable refs are ignored. The OOXML ref must be an
+/// ordered rectangle whose top-left corner is the formula cell. This keeps
+/// the stored extent anchored at its origin and prevents unsigned underflow
+/// when the spill region is registered below.
 void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_t anchor_row,
                        std::uint32_t anchor_col) {
   const std::size_t colon = ref.find(':');
@@ -99,9 +99,14 @@ void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_
   if (!a || !b) {
     return;
   }
-  const std::uint32_t last_row = std::max(a.value().first, b.value().first);
-  const std::uint32_t last_col = std::max(a.value().second, b.value().second);
-  if (last_row <= anchor_row && last_col <= anchor_col) {
+  const std::uint32_t first_row = a.value().first;
+  const std::uint32_t first_col = a.value().second;
+  const std::uint32_t last_row = b.value().first;
+  const std::uint32_t last_col = b.value().second;
+  if (last_row < first_row || last_col < first_col || anchor_row != first_row || anchor_col != first_col) {
+    return;
+  }
+  if (last_row == anchor_row && last_col == anchor_col) {
     return;  // degenerate single-cell footprint.
   }
   ctx.array_anchors.push_back(ArrayAnchor{anchor_row, anchor_col, last_row, last_col});
@@ -116,6 +121,11 @@ void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_
 /// footprint freely.
 void RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
   for (const ArrayAnchor& a : anchors) {
+    // Keep this defensive check here as well as in RecordArrayAnchor: this
+    // helper performs unsigned extent arithmetic and may gain other callers.
+    if (a.last_row < a.row || a.last_col < a.col) {
+      continue;
+    }
     const std::uint32_t rows = a.last_row - a.row + 1U;
     const std::uint32_t cols = a.last_col - a.col + 1U;
     if (static_cast<std::uint64_t>(rows) * cols <= 1U) {
@@ -226,6 +236,13 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     auto wf = workbook.set_cell_formula(sheet_index, parsed.row, parsed.col, std::move(with_eq));
     if (!wf) {
       return wf.error();
+    }
+    // Preserve Excel's cached result until a caller explicitly recalculates.
+    // This is essential when a workbook uses functions Formulon does not yet
+    // implement: eagerly replacing a valid loaded cache with #NAME? makes a
+    // read-only inspection or save/load round-trip lose useful data.
+    if (!parsed.value.is_blank() && !parsed.is_sst_index) {
+      workbook.sheet(sheet_index).set_cell_cached_value(parsed.row, parsed.col, parsed.value);
     }
   } else if (parsed.value.is_blank()) {
     // Skip blank-blank cells to keep the row map sparse, unless a style

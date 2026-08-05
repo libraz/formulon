@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test: worksheet-level elements and attributes that the
 // writer previously dropped must round-trip through a load->save cycle:
@@ -365,14 +364,18 @@ TEST(OoxmlSheetFeaturesBatch, TableStyleInfoRoundTrips) {
       "</Relationships>\n";
   const std::string_view table_xml =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
-      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"1\" name=\"Sales\" "
-      "displayName=\"Sales\" ref=\"A1:B2\">\n"
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:xr=\"urn:test:xr\" "
+      "id=\"1\" name=\"Sales\" displayName=\"Sales\" ref=\"A1:B2\" xr:uid=\"{T1}\">\n"
       "  <tableColumns count=\"2\">\n"
-      "    <tableColumn id=\"1\" name=\"A\"/>\n"
-      "    <tableColumn id=\"2\" name=\"B\"/>\n"
+      "    <tableColumn id=\"1\" name=\"A\" dataDxfId=\"4\"/>\n"
+      "    <tableColumn id=\"2\" name=\"B\" totalsRowDxfId=\"7\"/>\n"
       "  </tableColumns>\n"
+      "  <autoFilter ref=\"A1:B2\"><filterColumn colId=\"0\"><filters><filter "
+      "val=\"north\"/></filters></filterColumn></autoFilter>\n"
+      "  <sortState ref=\"A2:B2\"><sortCondition ref=\"B2:B2\" descending=\"1\"/></sortState>\n"
       "  <tableStyleInfo name=\"TableStyleMedium2\" showFirstColumn=\"0\" showLastColumn=\"0\" "
       "showRowStripes=\"1\" showColumnStripes=\"0\"/>\n"
+      "  <extLst><ext uri=\"urn:test:table-extension\"/></extLst>\n"
       "</table>\n";
   const std::vector<std::uint8_t> source = BuildZip({
       {"[Content_Types].xml", content_types},
@@ -388,6 +391,10 @@ TEST(OoxmlSheetFeaturesBatch, TableStyleInfoRoundTrips) {
   ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
   ASSERT_EQ(load_or.value().workbook.tables().size(), 1U);
   EXPECT_NE(load_or.value().workbook.tables()[0].table_style_info_xml.find("TableStyleMedium2"), std::string::npos);
+  EXPECT_NE(load_or.value().workbook.tables()[0].auto_filter_xml.find("north"), std::string::npos);
+  EXPECT_NE(load_or.value().workbook.tables()[0].sort_state_xml.find("descending=\"1\""), std::string::npos);
+  EXPECT_NE(load_or.value().workbook.tables()[0].ext_lst_xml.find("urn:test:table-extension"), std::string::npos);
+  EXPECT_NE(load_or.value().workbook.tables()[0].columns[0].extra_attrs.find("dataDxfId=\"4\""), std::string::npos);
 
   auto save_or = load_or.value().workbook.save();
   ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
@@ -400,6 +407,25 @@ TEST(OoxmlSheetFeaturesBatch, TableStyleInfoRoundTrips) {
   ASSERT_TRUE(style) << "tableStyleInfo dropped on save";
   EXPECT_STREQ(style.attribute("name").value(), "TableStyleMedium2");
   EXPECT_STREQ(style.attribute("showRowStripes").value(), "1");
+  EXPECT_STREQ(doc.child("table").attribute("xr:uid").value(), "{T1}");
+  EXPECT_STREQ(doc.child("table").child("tableColumns").child("tableColumn").attribute("dataDxfId").value(), "4");
+  EXPECT_STREQ(doc.child("table")
+                   .child("tableColumns")
+                   .child("tableColumn")
+                   .next_sibling("tableColumn")
+                   .attribute("totalsRowDxfId")
+                   .value(),
+               "7");
+  EXPECT_STREQ(doc.child("table")
+                   .child("autoFilter")
+                   .child("filterColumn")
+                   .child("filters")
+                   .child("filter")
+                   .attribute("val")
+                   .value(),
+               "north");
+  EXPECT_STREQ(doc.child("table").child("sortState").child("sortCondition").attribute("descending").value(), "1");
+  EXPECT_STREQ(doc.child("table").child("extLst").child("ext").attribute("uri").value(), "urn:test:table-extension");
 }
 
 }  // namespace

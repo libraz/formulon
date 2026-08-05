@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the typed node-attribute accessors in `io/xml_utils.h`.
 // The legacy `parse_xml_*_attr` helpers (which take a `pugi::xml_attribute`
@@ -127,6 +126,14 @@ TEST(XmlUtilsAttr, EmptyNodeReturnsDefaults) {
   EXPECT_DOUBLE_EQ(attr_f64(empty, "x", 2.5), 2.5);
   EXPECT_TRUE(attr_bool(empty, "x", true));
   EXPECT_FALSE(attr_bool(empty, "x", false));
+}
+
+TEST(XmlUtilsAttr, RootExtraAttributesEscapeValuesForReEmission) {
+  pugi::xml_document doc =
+      Load(R"(<worksheet xmlns="urn:main" xmlns:r="urn:rel" custom="one &amp; two &quot;three&quot; &lt;four&gt;"/>)");
+
+  EXPECT_EQ(capture_root_extra_ns_attrs(doc.document_element()),
+            " custom=\"one &amp; two &quot;three&quot; &lt;four&gt;\"");
 }
 
 }  // namespace

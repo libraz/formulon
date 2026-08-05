@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test: workbook-level `<Relationship>` entries whose Type
 // URI the reader does not recognise (theme, calcChain, vbaProject,
@@ -128,6 +127,105 @@ std::vector<std::uint8_t> BuildPackageWithThemeAndCalcChain() {
   });
 }
 
+/// A worksheet whose rels contain an extension relationship which no
+/// Formulon sheet feature consumes. Its target must remain reachable after
+/// save even though the sheet itself is rebuilt.
+std::vector<std::uint8_t> BuildPackageWithUnknownSheetRelationship() {
+  const std::string_view content_types =
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+      "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+      "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+      "<Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+      "<Override PartName=\"/xl/controls/control1.xml\" ContentType=\"application/vnd.example.control+xml\"/>"
+      "</Types>";
+  const std::string_view package_rels =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/>"
+      "</Relationships>";
+  const std::string_view workbook_xml =
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>";
+  const std::string_view workbook_rels =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>"
+      "</Relationships>";
+  const std::string_view sheet_xml =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheetData/><controls><control shapeId=\"1\" r:id=\"rId9\"/></controls></worksheet>";
+  const std::string_view sheet_rels =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId9\" Type=\"urn:example:relationships/control\" Target=\"../controls/control1.xml\"/>"
+      "</Relationships>";
+  return BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet_xml},
+      {"xl/worksheets/_rels/sheet1.xml.rels", sheet_rels},
+      {"xl/controls/control1.xml", "<control id=\"1\"/>"},
+  });
+}
+
+/// A worksheet next to a chartsheet. Chartsheets appear in workbook.xml's
+/// ordinary `<sheets>` sequence but cannot be parsed by the worksheet
+/// reader, so this is the minimal regression shape for opaque sheets.
+std::vector<std::uint8_t> BuildPackageWithChartSheet() {
+  const std::string_view content_types =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+      "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+      "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+      "<Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+      "<Override PartName=\"/xl/chartsheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml\"/>"
+      "</Types>";
+  const std::string_view package_rels =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/>"
+      "</Relationships>";
+  const std::string_view workbook_xml =
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheets><sheet name=\"Data\" sheetId=\"1\" r:id=\"rId1\"/>"
+      "<sheet name=\"Chart\" sheetId=\"2\" state=\"hidden\" r:id=\"rId2\"/></sheets></workbook>";
+  const std::string_view workbook_rels =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>"
+      "<Relationship Id=\"rId2\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet\" "
+      "Target=\"chartsheets/sheet1.xml\"/>"
+      "</Relationships>";
+  const std::string_view sheet_xml =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData/></worksheet>";
+  const std::string_view chart_sheet_xml =
+      "<chartsheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetViews/></chartsheet>";
+  return BuildZip({
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet_xml},
+      {"xl/chartsheets/sheet1.xml", chart_sheet_xml},
+  });
+}
+
 TEST(OoxmlPassthroughRels, UnknownWorkbookRelsAreCaptured) {
   const std::vector<std::uint8_t> bytes = BuildPackageWithThemeAndCalcChain();
   auto load_or = io::read_ooxml(SpanOf(bytes));
@@ -151,6 +249,66 @@ TEST(OoxmlPassthroughRels, UnknownWorkbookRelsAreCaptured) {
   }
   EXPECT_TRUE(saw_theme);
   EXPECT_TRUE(saw_calc_chain);
+}
+
+TEST(OoxmlPassthroughRels, UnknownSheetRelationshipsAndTargetsRoundTrip) {
+  auto load_or = io::read_ooxml(SpanOf(BuildPackageWithUnknownSheetRelationship()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+  ASSERT_EQ(load_or.value().workbook.sheet(0).unknown_relationships().size(), 1U);
+  const io::UnknownRelationship& relationship = load_or.value().workbook.sheet(0).unknown_relationships().front();
+  EXPECT_EQ(relationship.id, "rId9");
+  EXPECT_EQ(relationship.type, "urn:example:relationships/control");
+  EXPECT_EQ(relationship.target, "xl/controls/control1.xml");
+  EXPECT_NE(load_or.value().workbook.sheet(0).raw_extensions().controls_xml.find("r:id=\"rId9\""), std::string::npos);
+
+  auto save_or = load_or.value().workbook.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  ASSERT_TRUE(zip.has_entry("xl/controls/control1.xml"));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const std::string sheet_xml(sheet_or.value().begin(), sheet_or.value().end());
+  EXPECT_NE(sheet_xml.find("<controls><control shapeId=\"1\" r:id=\"rId9\"/></controls>"), std::string::npos);
+  auto rels_or = zip.read_entry("xl/worksheets/_rels/sheet1.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  const std::string rels(rels_or.value().begin(), rels_or.value().end());
+  EXPECT_NE(rels.find("Id=\"rId9\" Type=\"urn:example:relationships/control\" Target=\"../controls/control1.xml\""),
+            std::string::npos);
+}
+
+TEST(OoxmlPassthroughRels, ChartSheetIsAcceptedAndRoundTripsAsOpaqueSheet) {
+  const std::vector<std::uint8_t> source_bytes = BuildPackageWithChartSheet();
+  auto load_or = io::read_ooxml(SpanOf(source_bytes));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+  const Workbook& wb = load_or.value().workbook;
+  ASSERT_EQ(wb.sheet_count(), 2U);
+  EXPECT_EQ(wb.sheet(0).name(), "Data");
+  EXPECT_EQ(wb.sheet(1).name(), "Chart");
+  EXPECT_TRUE(wb.sheet(1).is_opaque_ooxml_sheet());
+  EXPECT_TRUE(wb.sheet(1).view().tab_hidden);
+  EXPECT_EQ(wb.sheet(1).opaque_ooxml_part_path(), "xl/chartsheets/sheet1.xml");
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  ASSERT_TRUE(zip.has_entry("xl/chartsheets/sheet1.xml"));
+  auto chart_or = zip.read_entry("xl/chartsheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(chart_or));
+  EXPECT_EQ(
+      std::string(chart_or.value().begin(), chart_or.value().end()),
+      "<chartsheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetViews/></chartsheet>");
+
+  auto rels_or = zip.read_entry("xl/_rels/workbook.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  const std::string rels(rels_or.value().begin(), rels_or.value().end());
+  EXPECT_NE(rels.find("relationships/chartsheet\" Target=\"chartsheets/sheet1.xml\""), std::string::npos);
+
+  auto roundtrip_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(roundtrip_or)) << "second read failed: " << roundtrip_or.error().message;
+  ASSERT_EQ(roundtrip_or.value().workbook.sheet_count(), 2U);
+  EXPECT_TRUE(roundtrip_or.value().workbook.sheet(1).is_opaque_ooxml_sheet());
 }
 
 TEST(OoxmlPassthroughRels, UnknownWorkbookRelsRoundTrip) {

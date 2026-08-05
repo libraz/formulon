@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the styles writer plus the single owning copy of
 // the built-in number-format table. `builtin_num_fmt(id)` is exported
@@ -456,6 +455,18 @@ void AppendBorderSide(std::string& out, const char* tag, const BorderSide& side)
 // them; defined below alongside the other fragment emitters.
 void AppendFillFragment(std::string& out, const FillRecord& fill);
 
+void AppendFontToggle(std::string& out, std::string_view name, bool was_explicit, bool value) {
+  if (!was_explicit && !value) {
+    return;
+  }
+  out.push_back('<');
+  out.append(name);
+  if (!value) {
+    out.append(" val=\"0\"");
+  }
+  out.append("/>");
+}
+
 void AppendNumFmts(std::string& out, const StylesTable& table) {
   // Count emitted entries: only custom ids (>= 164) survive. Excel
   // rejects packages that redeclare built-in ids.
@@ -498,15 +509,9 @@ void AppendFonts(std::string& out, const StylesTable& table) {
   } else {
     for (const FontRecord& f : table.fonts) {
       out.append("    <font>");
-      if (f.bold) {
-        out.append("<b/>");
-      }
-      if (f.italic) {
-        out.append("<i/>");
-      }
-      if (f.strike) {
-        out.append("<strike/>");
-      }
+      AppendFontToggle(out, "b", f.has_bold, f.bold);
+      AppendFontToggle(out, "i", f.has_italic, f.italic);
+      AppendFontToggle(out, "strike", f.has_strike, f.strike);
       if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
         out.append("<u val=\"");
         out.append(uname);
@@ -587,8 +592,24 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
   AppendUint(out, xf.border_index);
   out.append("\"");
   if (emit_xf_id) {
-    out.append(" xfId=\"0\"");
+    out.append(" xfId=\"");
+    AppendUint(out, xf.xf_id);
+    out.append("\"");
   }
+  auto append_apply = [&out](const char* name, bool value) {
+    if (value) {
+      out.append(" ");
+      out.append(name);
+      out.append("=\"1\"");
+    }
+  };
+  append_apply("applyNumberFormat", xf.apply_number_format);
+  append_apply("applyFont", xf.apply_font);
+  append_apply("applyFill", xf.apply_fill);
+  append_apply("applyBorder", xf.apply_border);
+  append_apply("applyAlignment", xf.apply_alignment);
+  append_apply("applyProtection", xf.apply_protection);
+  append_apply("quotePrefix", xf.quote_prefix);
   const char* halign = HorizontalAlignName(xf.horizontal_align);
   const char* valign = VerticalAlignName(xf.vertical_align);
   const bool has_alignment = halign != nullptr || valign != nullptr || xf.wrap_text;
@@ -691,15 +712,9 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
 
 void AppendFontFragment(std::string& out, const FontRecord& f) {
   out.append("<font>");
-  if (f.bold) {
-    out.append("<b/>");
-  }
-  if (f.italic) {
-    out.append("<i/>");
-  }
-  if (f.strike) {
-    out.append("<strike/>");
-  }
+  AppendFontToggle(out, "b", f.has_bold, f.bold);
+  AppendFontToggle(out, "i", f.has_italic, f.italic);
+  AppendFontToggle(out, "strike", f.has_strike, f.strike);
   if (const char* uname = UnderlineName(f.underline); uname != nullptr) {
     out.append("<u val=\"");
     out.append(uname);
@@ -807,7 +822,9 @@ std::string write_styles(const StylesTable& table) {
   out.append(kXmlDecl);
   out.append("<styleSheet xmlns=\"");
   out.append(kXmlNs);
-  out.append("\">\n");
+  out.append("\"");
+  out.append(table.root_extra_attrs);
+  out.append(">\n");
   AppendNumFmts(out, table);
   AppendFonts(out, table);
   AppendFills(out, table);
@@ -816,6 +833,26 @@ std::string write_styles(const StylesTable& table) {
   AppendCellXfs(out, table);
   AppendCellStyles(out, table);
   AppendDxfs(out, table);
+  if (!table.table_styles_xml.empty()) {
+    out.append("  ");
+    out.append(table.table_styles_xml);
+    out.push_back('\n');
+  }
+  if (!table.colors_xml.empty()) {
+    out.append("  ");
+    out.append(table.colors_xml);
+    out.push_back('\n');
+  }
+  for (const std::string& raw : table.unknown_top_level_xml) {
+    out.append("  ");
+    out.append(raw);
+    out.push_back('\n');
+  }
+  if (!table.ext_lst_xml.empty()) {
+    out.append("  ");
+    out.append(table.ext_lst_xml);
+    out.push_back('\n');
+  }
   out.append("</styleSheet>\n");
   return out;
 }

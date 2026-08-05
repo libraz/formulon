@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::ZipReader`. Each test produces an
 // in-memory `.xlsx` via the existing `Workbook::save()` writer and then
@@ -34,6 +33,22 @@ std::vector<std::uint8_t> MakeMinimalXlsx() {
 
 ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
   return ByteSpan{bytes.data(), bytes.size()};
+}
+
+/// Marks every local and central header in an otherwise valid ZIP as
+/// encrypted. miniz deliberately does not decrypt such an entry, which
+/// gives the error-mapping test a small deterministic fixture without a
+/// password-capable ZIP writer.
+void MarkZipEntriesEncrypted(std::vector<std::uint8_t>& bytes) {
+  for (std::size_t i = 0; i + 8U <= bytes.size(); ++i) {
+    const bool local = bytes[i] == 'P' && bytes[i + 1U] == 'K' && bytes[i + 2U] == 3U && bytes[i + 3U] == 4U;
+    const bool central = bytes[i] == 'P' && bytes[i + 1U] == 'K' && bytes[i + 2U] == 1U && bytes[i + 3U] == 2U;
+    if (!local && !central) {
+      continue;
+    }
+    const std::size_t flag_offset = i + (local ? 6U : 8U);
+    bytes[flag_offset] = static_cast<std::uint8_t>(bytes[flag_offset] | 0x01U);
+  }
 }
 
 TEST(ZipReader, OpenSucceedsOnWriterOutput) {
@@ -99,6 +114,18 @@ TEST(ZipReader, ReadEntryReportsMissingPart) {
   auto missing = zip.read_entry("nope.xml");
   ASSERT_FALSE(static_cast<bool>(missing));
   EXPECT_EQ(missing.error().code, FormulonErrorCode::kIoFileNotFound);
+}
+
+TEST(ZipReader, ReadEntryReportsEncryptedPartDistinctly) {
+  std::vector<std::uint8_t> bytes = MakeMinimalXlsx();
+  MarkZipEntriesEncrypted(bytes);
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  auto result = zip.read_entry("xl/workbook.xml");
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipEncrypted);
+  EXPECT_NE(result.error().context.find("entry=xl/workbook.xml"), std::string::npos);
 }
 
 TEST(ZipReader, OpenRejectsNonZipBuffer) {

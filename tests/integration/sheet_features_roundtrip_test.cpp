@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test for sheet-level UI features (merges, hyperlinks,
 // comments, data validations). The flow is the same for all four:
@@ -12,6 +11,7 @@
 // "save -> load -> save" stability invariant: the second save must
 // produce byte-for-byte identical output.
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -123,6 +123,43 @@ TEST(SheetFeaturesRoundTrip, Comments) {
   EXPECT_EQ(loaded.comments()[0].text, "First comment");
   EXPECT_EQ(loaded.comments()[1].author, "Bob");
   EXPECT_EQ(loaded.comments()[2].text, "Third (Alice again)");
+}
+
+TEST(SheetFeaturesRoundTrip, CommentsKeepVmlAfterEarlierCommentSheetIsRemoved) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).mutable_comments() = {CellComment{0, 0, "Alice", "first"}};
+  Sheet& second = wb.add_sheet("Second");
+  second.mutable_comments() = {CellComment{1, 1, "Bob", "second"}};
+  auto first_save = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(first_save));
+
+  auto loaded = io::read_ooxml(SpanOf(first_save.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded));
+  Workbook& restored = loaded.value().workbook;
+  ASSERT_EQ(restored.sheet(1).comment_vml_path(), "xl/drawings/vmlDrawing2.vml");
+
+  // Give the surviving sheet's VML distinctive bytes. A planner that looks
+  // up the newly-renumbered vmlDrawing1.vml would miss these and emit a stub.
+  std::vector<io::PassthroughPart> parts = restored.passthrough_parts();
+  auto vml = std::find_if(parts.begin(), parts.end(),
+                          [](const io::PassthroughPart& part) { return part.path == "xl/drawings/vmlDrawing2.vml"; });
+  ASSERT_NE(vml, parts.end());
+  const std::string expected_vml = "<xml xmlns:v=\"urn:schemas-microsoft-com:vml\"><v:shape id=\"survivor\"/></xml>\n";
+  vml->bytes.assign(expected_vml.begin(), expected_vml.end());
+  restored.set_passthrough_parts(std::move(parts));
+
+  ASSERT_TRUE(static_cast<bool>(restored.remove_sheet(0)));
+  auto saved = io::write_ooxml(restored);
+  ASSERT_TRUE(static_cast<bool>(saved));
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(saved.value()))));
+  auto vml_bytes = zip.read_entry("xl/drawings/vmlDrawing1.vml");
+  ASSERT_TRUE(static_cast<bool>(vml_bytes));
+  EXPECT_EQ(std::string(vml_bytes.value().begin(), vml_bytes.value().end()), expected_vml);
+  auto sheet_xml = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(sheet_xml));
+  const std::string xml(sheet_xml.value().begin(), sheet_xml.value().end());
+  EXPECT_NE(xml.find("<legacyDrawing r:id=\"rId2\"/>"), std::string::npos);
 }
 
 TEST(SheetFeaturesRoundTrip, DataValidations) {

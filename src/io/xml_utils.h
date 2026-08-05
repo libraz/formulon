@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tiny shared helper for OOXML rich-text traversal. The `<si>`, `<is>`,
 // and `<text>` elements that appear in `xl/sharedStrings.xml`,
@@ -78,8 +77,8 @@ bool parse_xml_bool(std::string_view value);
 /// `<workbookView>`, or `x14ac:*` inside a captured `<sheetPr>` — bound to
 /// a declared prefix. Without them the re-emitted fragment is malformed
 /// XML (undeclared prefix) and real Excel refuses to open the file.
-/// Attribute values are namespace URIs / `mc:Ignorable` token lists, which
-/// carry no XML-critical characters, so they are copied verbatim.
+/// Attribute values are escaped before output. This also covers custom
+/// compatibility attributes whose values may contain XML-critical characters.
 std::string capture_root_extra_ns_attrs(const pugi::xml_node& root);
 
 // ---------------------------------------------------------------------------

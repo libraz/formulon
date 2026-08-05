@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `<c>` element parser. See cell_parser.h for the public contract.
 //
@@ -344,7 +343,11 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
     return out;
   }
   // Default / t == "n".
-  if (!value_present) {
+  // Excel and several third-party producers use an empty <v/> for a
+  // cached blank numeric cell. Treat it exactly like an absent <v>; this
+  // keeps the DOM reader aligned with the streaming reader, which has no
+  // payload to distinguish in either form.
+  if (!value_present || v_text.empty()) {
     out.value = Value::blank();
     return out;
   }

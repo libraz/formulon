@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for the OOXML writer empty-workbook slice. Each test
 // round-trips the byte stream produced by `Workbook::save()` through miniz
@@ -17,6 +16,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
 #include "miniz.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -25,6 +25,10 @@
 
 namespace formulon {
 namespace {
+
+io::ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
+  return io::ByteSpan{bytes.data(), bytes.size()};
+}
 
 /// Extracts the entry at `name` from the ZIP in `archive_bytes`. Returns the
 /// extracted bytes as a `std::string` (binary-safe) and asserts the entry
@@ -254,6 +258,29 @@ TEST(SpillRoundTrip, PhantomCellsAbsent) {
   EXPECT_EQ(body.find("r=\"B1\""), std::string::npos) << body;
   EXPECT_EQ(body.find("r=\"A2\""), std::string::npos) << body;
   EXPECT_EQ(body.find("r=\"B2\""), std::string::npos) << body;
+}
+
+TEST(SpillRoundTrip, ScalarReplacementRemovesArrayMarkupAndUnmasksCells) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_formula(0U, 0U, "=SEQUENCE(3)");
+  ASSERT_TRUE(wb.sheet(0).commit_spill(0U, 0U, 3U, 1U,
+                                       std::vector<Value>{Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
+
+  // This is the user-visible transition: the formula becomes scalar, then
+  // a real value is entered into a cell from its former spill footprint.
+  wb.sheet(0).set_cell_value(0U, 0U, Value::number(9.0));
+  wb.sheet(0).set_cell_value(1U, 0U, Value::number(7.0));
+  auto saved_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved_or));
+
+  const std::string body = ExtractEntry(saved_or.value(), "xl/worksheets/sheet1.xml");
+  EXPECT_EQ(body.find("t=\"array\""), std::string::npos) << body;
+
+  auto loaded_or = io::read_ooxml(SpanOf(saved_or.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
+  const Cell* a2 = loaded_or.value().workbook.sheet(0).cell_at(1U, 0U);
+  ASSERT_NE(a2, nullptr);
+  EXPECT_EQ(a2->cached_value, Value::number(7.0));
 }
 
 }  // namespace

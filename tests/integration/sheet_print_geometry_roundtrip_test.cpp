@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Round-trip integration tests for the print-geometry surface added to
 // the sheet model: `<sheetFormatPr>` defaults, manual `<rowBreaks>` /
@@ -171,6 +170,26 @@ TEST(SheetPrintGeometry, SheetFormatPrPartialElementSetsOnlyPresentFlags) {
   EXPECT_TRUE(defaults.has_default_row_height);
   EXPECT_DOUBLE_EQ(defaults.default_row_height, 15.0);
   EXPECT_DOUBLE_EQ(defaults.base_col_width, 8.0);
+}
+
+TEST(SheetPrintGeometry, SheetFormatPrDefaultsSurviveWriteReadCycle) {
+  Workbook src = Workbook::create();
+  SheetFormatDefaults& defaults = src.sheet(0).mutable_format_defaults();
+  defaults.base_col_width = 10.0;
+  defaults.default_col_width = 12.5;
+  defaults.default_row_height = 18.75;
+  defaults.has_default_col_width = true;
+  defaults.has_default_row_height = true;
+
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+  auto result_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
+  const SheetFormatDefaults& loaded = result_or.value().workbook.sheet(0).format_defaults();
+  EXPECT_DOUBLE_EQ(loaded.base_col_width, 10.0);
+  EXPECT_TRUE(loaded.has_default_col_width);
+  EXPECT_DOUBLE_EQ(loaded.default_col_width, 12.5);
+  EXPECT_TRUE(loaded.has_default_row_height);
+  EXPECT_DOUBLE_EQ(loaded.default_row_height, 18.75);
 }
 
 // ---------------------------------------------------------------------------

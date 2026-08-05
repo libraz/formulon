@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `ZipReader` implementation. Wraps the miniz `mz_zip_reader_*` API in a
 // PIMPL so the header is miniz-free. All methods are non-throwing and
@@ -21,6 +20,14 @@
 
 namespace formulon {
 namespace io {
+
+namespace {
+
+FormulonErrorCode ErrorCodeForMiniz(mz_zip_error error) {
+  return error == MZ_ZIP_UNSUPPORTED_ENCRYPTION ? FormulonErrorCode::kIoZipEncrypted : FormulonErrorCode::kIoZipCorrupt;
+}
+
+}  // namespace
 
 struct ZipReader::Impl {
   mz_zip_archive archive{};
@@ -87,8 +94,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes) {
     const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
     std::string ctx("context=zip_reader miniz_error=");
     ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: mz_zip_reader_init_mem failed",
-                      std::move(ctx));
+    return make_error(ErrorCodeForMiniz(err), "ZipReader::open: mz_zip_reader_init_mem failed", std::move(ctx));
   }
 
   // Reject archives whose central directory advertises an unreasonable
@@ -196,7 +202,13 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     ctx.append(c_name);
     ctx.append(" miniz_error=");
     ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: stat failed", std::move(ctx));
+    return make_error(ErrorCodeForMiniz(err), "ZipReader::read_entry: stat failed", std::move(ctx));
+  }
+  if (stat.m_is_encrypted) {
+    std::string ctx("context=zip_reader entry=");
+    ctx.append(c_name);
+    return make_error(FormulonErrorCode::kIoZipEncrypted, "ZipReader::read_entry: encrypted entry is unsupported",
+                      std::move(ctx));
   }
   if (stat.m_uncomp_size > static_cast<mz_uint64>(kMaxExtractedBytesPerEntry)) {
     std::string ctx("context=zip_reader limit=entry entry=");
@@ -266,7 +278,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
       ctx.append(c_name);
       ctx.append(" miniz_error=");
       ctx.append(std::to_string(static_cast<int>(err)));
-      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: extraction failed", std::move(ctx));
+      return make_error(ErrorCodeForMiniz(err), "ZipReader::read_entry: extraction failed", std::move(ctx));
     }
   }
   // miniz decompressed exactly `advertised` bytes into the buffer (the

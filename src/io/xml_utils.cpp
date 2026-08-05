@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `append_rich_text`. See header for the contract.
 
@@ -241,11 +240,7 @@ std::string capture_root_extra_ns_attrs(const pugi::xml_node& root) {
     if (name == "xmlns" || name == "xmlns:r") {
       continue;  // the writer always emits these two itself.
     }
-    out.push_back(' ');
-    out.append(name.data(), name.size());
-    out.append("=\"");
-    out.append(attr.value());
-    out.push_back('"');
+    append_xml_attr(out, name, attr.value());
   }
   return out;
 }

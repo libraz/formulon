@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for Bundle 2.4 metadata (defined names + tables).
 // We assemble synthetic in-memory `.xlsx` packages via miniz and feed
@@ -491,6 +490,7 @@ TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
   };
   add_part("docProps/core.xml", "application/vnd.openxmlformats-package.core-properties+xml", "<core/>");
   add_part("docProps/app.xml", "application/vnd.openxmlformats-officedocument.extended-properties+xml", "<app/>");
+  add_part("docProps/custom.xml", "application/vnd.openxmlformats-officedocument.custom-properties+xml", "<custom/>");
   add_part("xl/calcChain.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml",
            "<calcChain/>");
   add_part("xl/sharedStrings.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml",
@@ -503,12 +503,39 @@ TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
   EXPECT_NE(package_rels.find("Target=\"docProps/core.xml\""), std::string::npos) << package_rels;
   EXPECT_NE(package_rels.find("extended-properties"), std::string::npos) << package_rels;
   EXPECT_NE(package_rels.find("Target=\"docProps/app.xml\""), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("custom-properties"), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("Target=\"docProps/custom.xml\""), std::string::npos) << package_rels;
 
   const std::string workbook_rels = ExtractEntry(bytes, "xl/_rels/workbook.xml.rels");
   EXPECT_NE(workbook_rels.find("relationships/calcChain"), std::string::npos) << workbook_rels;
   EXPECT_NE(workbook_rels.find("Target=\"calcChain.xml\""), std::string::npos) << workbook_rels;
   EXPECT_NE(workbook_rels.find("relationships/sharedStrings"), std::string::npos) << workbook_rels;
   EXPECT_NE(workbook_rels.find("Target=\"sharedStrings.xml\""), std::string::npos) << workbook_rels;
+}
+
+TEST(OoxmlMetadata, PackageLevelPassthroughRelationshipsSurviveReadWrite) {
+  Workbook wb = Workbook::create();
+  io::PassthroughPart thumbnail;
+  thumbnail.path = "docProps/thumbnail.jpeg";
+  thumbnail.content_type = "image/jpeg";
+  thumbnail.bytes = {0xffU, 0xd8U, 0xffU, 0xd9U};
+  wb.set_passthrough_parts({thumbnail});
+  wb.set_unknown_package_rels({io::UnknownRelationship{
+      "rId9", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
+      "docProps/thumbnail.jpeg", false}});
+
+  const std::vector<std::uint8_t> first = SaveOrDie(wb);
+  auto read_or = io::read_ooxml(SpanOf(first));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const Workbook& read = read_or.value().workbook;
+  ASSERT_EQ(read.unknown_package_rels().size(), 1U);
+  EXPECT_EQ(read.unknown_package_rels()[0].target, "docProps/thumbnail.jpeg");
+
+  const std::vector<std::uint8_t> second = SaveOrDie(read);
+  const std::string package_rels = ExtractEntry(second, "_rels/.rels");
+  EXPECT_NE(package_rels.find("relationships/metadata/thumbnail"), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("Target=\"docProps/thumbnail.jpeg\""), std::string::npos) << package_rels;
+  EXPECT_EQ(ExtractEntry(second, "docProps/thumbnail.jpeg"), std::string("\xff\xd8\xff\xd9", 4));
 }
 
 TEST(OoxmlMetadata, WorksheetPrintSettingsRoundTrip) {

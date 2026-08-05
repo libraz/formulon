@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "io/ooxml/workbook_rels_reader.h"
 
@@ -37,7 +36,14 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
         if (target.empty()) {
           return Expected<void, Error>::Ok();
         }
-        if (type == kRelWorksheet) {
+        // The workbook `<sheets>` list can point at worksheets as well as
+        // chart/dialog/macro (and future extension) sheet types. Every
+        // in-package relationship whose type ends in "sheet" is retained
+        // here; the orchestrator parses worksheets and preserves all other
+        // types as opaque sheet entries instead of rejecting the workbook.
+        const bool is_sheet_type =
+            type == kRelWorksheet || (type.size() >= 5U && type.substr(type.size() - 5U) == "sheet");
+        if (is_sheet_type) {
           const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {
             return Expected<void, Error>::Ok();
@@ -46,7 +52,10 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
           if (!resolved) {
             return resolved.error();
           }
-          rels.sheet_targets.emplace(id, std::move(resolved).value());
+          WorkbookRels::SheetTarget sheet_target;
+          sheet_target.path = std::move(resolved).value();
+          sheet_target.relationship_type.assign(type);
+          rels.sheet_targets.emplace(id, std::move(sheet_target));
         } else if (type == kRelSharedStrings) {
           // Last writer wins on duplicates (Excel never emits more than one,
           // but defending against malformed inputs costs almost nothing).

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `xl/styles.xml` reader. Decodes the OOXML styles part into a flat
 // in-memory `StylesTable` carrying every record kind the engine needs
@@ -58,8 +57,13 @@ struct ColorSpec {
 struct FontRecord {
   std::string name;
   double size = 11.0;
+  /// Presence bits preserve an explicit `val="0"` in differential fonts,
+  /// where absence means "leave the source formatting unchanged".
+  bool has_bold = false;
   bool bold = false;
+  bool has_italic = false;
   bool italic = false;
+  bool has_strike = false;
   bool strike = false;
   /// 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting.
   std::uint8_t underline = 0;
@@ -134,6 +138,15 @@ struct CellXf {
   std::uint32_t fill_index = 0;
   std::uint32_t border_index = 0;
   std::uint16_t num_fmt_id = 0;
+  /// Parent named-style record in `<cellStyleXfs>` for a `<cellXfs>` entry.
+  std::uint32_t xf_id = 0;
+  bool apply_number_format = false;
+  bool apply_font = false;
+  bool apply_fill = false;
+  bool apply_border = false;
+  bool apply_alignment = false;
+  bool apply_protection = false;
+  bool quote_prefix = false;
   /// 0=general, 1=left, 2=center, 3=right, 4=fill, 5=justify,
   /// 6=centerContinuous, 7=distributed.
   std::uint8_t horizontal_align = 0;
@@ -223,6 +236,19 @@ struct StylesTable {
   std::vector<CellStyleRecord> cell_styles;
   /// `<dxfs>` records referenced by conditional-format `dxfId`.
   std::vector<DifferentialFormat> dxfs;
+  /// Namespace declarations and compatibility attributes from the
+  /// `<styleSheet>` root that raw extension fragments depend on.
+  std::string root_extra_attrs;
+  /// Unmodelled top-level style sections retained verbatim. Their schema
+  /// positions are fixed by `write_styles`, so a style-table edit does not
+  /// discard custom palettes, table/pivot style defaults, or extensions.
+  std::string colors_xml;
+  std::string table_styles_xml;
+  std::string ext_lst_xml;
+  /// Complete top-level `<styleSheet>` children which the style model does
+  /// not recognise. Preserved in source order to avoid silent deletion of
+  /// extension data during a read-modify-write cycle.
+  std::vector<std::string> unknown_top_level_xml;
 };
 
 /// Parses an OOXML styles part.
@@ -233,10 +259,8 @@ struct StylesTable {
 ///     entry so `xf_index = 0` is always resolvable.
 ///   * Sections present but empty (`<fonts count="0"/>`) similarly fall
 ///     back to the single-default-record shape.
-///   * Children other than the recognised set (`numFmts`, `fonts`,
-///     `fills`, `borders`, `cellStyleXfs`, `cellXfs`, `cellStyles`,
-///     `dxfs`) are accepted but ignored — forward compatibility for
-///     `<tableStyles>`, `<extLst>`, and so on.
+///   * `<colors>`, `<tableStyles>`, and `<extLst>` are retained as raw XML;
+///     other unrecognised children are accepted but ignored.
 ///   * Unknown attributes inside a recognised element are ignored.
 ///
 /// Errors:

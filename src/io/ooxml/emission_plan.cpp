@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the OOXML writer's emission plan. Determines part
 // paths, numeric ids, and resolves collisions between writer-generated
@@ -63,7 +62,9 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   paths.insert("xl/_rels/workbook.xml.rels");
   paths.insert("xl/styles.xml");
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    paths.insert("xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
+    if (!wb.sheet(i).is_opaque_ooxml_sheet()) {
+      paths.insert("xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
+    }
   }
   for (const EmissionPlan::PerSheetTable& t : flat_tables) {
     paths.insert(t.path);
@@ -206,12 +207,12 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
     entry.numeric_id = next_comments_id++;
     entry.comments_path = NumberedPartPath("xl/comments", entry.numeric_id, ".xml");
     entry.vml_path = NumberedPartPath("xl/drawings/vmlDrawing", entry.numeric_id, ".vml");
-    // Detect whether the workbook still carries the original VML bytes
-    // via passthrough. If so, prefer those bytes over the writer's
-    // stub so the round-trip stays byte-identical for unmodified
-    // sheets.
+    // Detect whether this sheet still carries its original VML bytes. Do
+    // not infer the source from a newly assigned output number: removing a
+    // preceding commented sheet renumbers output parts but must not discard
+    // the surviving sheet's shape geometry.
     for (const PassthroughPart& part : wb.passthrough_parts()) {
-      if (part.path == entry.vml_path) {
+      if (!wb.sheet(s).comment_vml_path().empty() && part.path == wb.sheet(s).comment_vml_path()) {
         entry.vml_source = &part;
         break;
       }
@@ -241,6 +242,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
   // Sheet rels for sheets that own tables, pivot tables, hyperlinks,
   // comments/VML, or printer settings are also generated.
   for (std::size_t i = 0; i < plan.tables_by_sheet.size(); ++i) {
+    if (i < wb.sheet_count() && wb.sheet(i).is_opaque_ooxml_sheet()) {
+      continue;
+    }
     const bool has_tables = !plan.tables_by_sheet[i].empty();
     const bool has_pivots = i < plan.pivot_tables_by_sheet.size() && !plan.pivot_tables_by_sheet[i].empty();
     const bool has_hyperlinks = i < wb.sheet_count() && !wb.sheet(i).hyperlinks().empty();
