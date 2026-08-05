@@ -974,6 +974,21 @@ entries:
     first_noted: 2026-07-02
     last_verified_excel_version: "Excel 365 (Mac, ja-JP, 2026-07)"
 
+  # -- XLSB external-workbook defined names --------------------------------
+  # PtgNameX resolves through the external-supporting-book and external-name
+  # tables. Formulon deliberately does not invent an internal NameRef when
+  # those tables are absent: it retains Excel's cached result and exposes the
+  # unsupported-formula diagnostic instead. Decoding those binary tables is
+  # deferred XLSB work.
+  - id: xlsb_ptg_namex_external_name_deferred
+    mode: skip-oracle
+    scope: deferred-feature
+    evidence: [tests/unit/io/xlsb/ptg_test.cpp, tests/unit/io/xlsb/writer_test.cpp]
+    reason: "XLSB PtgNameX external-workbook defined names require BrtSupBookSrc and BrtSupNameStart table decoding, which is not implemented. The reader keeps the cached cell value and reports the unsupported Ptg instead of fabricating an incorrect internal defined-name reference."
+    prefer: mac-excel-365
+    first_noted: 2026-08-05
+    last_verified_excel_version: "Excel 365 (Mac, ja-JP, 16.111.2)"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

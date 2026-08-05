@@ -74,12 +74,14 @@ add_test(
 set_tests_properties(FuzzXlsxSmoke PROPERTIES LABELS "SLOW")
 
 # The real XLSB fixture exercises the P1-8 Ptg/function coverage from the
-# first run. P1-18's deep-Ptg reproducer is currently a unit-built stream,
-# not a portable file fixture, so it remains tracked in the audit until a
-# serialised corpus seed is added.
+# first run. `seeds/` carries committed starting inputs — including a portable
+# deep-Ptg stream whose explicit textual prefix routes it straight to the Ptg
+# decoder — as opposed to `corpus/`, which holds locally grown corpora and is
+# not tracked.
 add_test(
   NAME FuzzXlsbSmoke
   COMMAND xlsb_fuzz -runs=1000 -timeout=10
           ${CMAKE_SOURCE_DIR}/tests/fixtures/excel/xlsb_fidelity_base.xlsb
+          ${CMAKE_CURRENT_SOURCE_DIR}/seeds/xlsb
 )
 set_tests_properties(FuzzXlsbSmoke PROPERTIES LABELS "SLOW")

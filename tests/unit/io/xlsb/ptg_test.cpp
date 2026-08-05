@@ -72,6 +72,15 @@ TEST(XlsbPtg, LookupRecognisesExtensionPtgIfError) {
   EXPECT_FALSE(is_class_marked(p->kind));
 }
 
+TEST(XlsbPtg, ExternalWorkbookDefinedNamesRemainExplicitlyUnsupported) {
+  // PtgNameX must not be mistaken for an internal PtgName: resolving it
+  // requires the XLSB external-supporting-book and external-name tables.
+  const PtgInfo* p = lookup_ptg_from_wire(0x39);
+  ASSERT_NE(p, nullptr);
+  EXPECT_EQ(p->kind, PtgKind::NameX);
+  EXPECT_EQ(p->status, PtgStatus::Unsupported);
+}
+
 TEST(XlsbPtg, LookupReturnsNullForUnknownByte) {
   EXPECT_EQ(lookup_ptg(0x00), nullptr);
   EXPECT_EQ(lookup_ptg(0x1A), nullptr);  // reserved
