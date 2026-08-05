@@ -44,6 +44,12 @@ TEST(BuiltinsMatch, ExactNumericFirstHit) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsMatch, ExactMatchArrayLiteralUsesSharedRangeMaterialization) {
+  const Value v = EvalSource("=MATCH(20,{10;20;30},0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
 TEST(BuiltinsMatch, ExactZeroDoesNotMatchBlankCell) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
@@ -275,6 +281,12 @@ TEST(BuiltinsIndex, TwoDimensionalRowAndColumn) {
   const Value v = EvalSourceIn("=INDEX(A1:C3, 2, 3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 6.0);  // row 2, col 3 -> cell (1,2) -> 1*3+2+1 = 6
+}
+
+TEST(BuiltinsIndex, ArrayLiteralUsesSharedRangeMaterialization) {
+  const Value v = EvalSource("=INDEX({1,2;3,4},2,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
 TEST(BuiltinsIndex, OutOfBoundsRowIsRefError) {

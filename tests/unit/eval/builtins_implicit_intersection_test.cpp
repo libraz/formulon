@@ -247,6 +247,19 @@ TEST(ImplicitIntersection, DynamicArrayCallCollapsesToTopLeft) {
   EXPECT_EQ(single.as_number(), 1.0);
 }
 
+TEST(ImplicitIntersection, ArrayLiteralCollapsesToTopLeft) {
+  Workbook wb = Workbook::create();
+  const Value value = EvalSourceAt("=@{1,2;3,4}", wb, wb.sheet(0), 0U, 0U);
+  ASSERT_TRUE(value.is_number());
+  EXPECT_DOUBLE_EQ(value.as_number(), 1.0);
+}
+
+TEST(ImplicitIntersection, ArrayLiteralSpillsAndBroadcastsOutsideAt) {
+  Workbook wb = Workbook::create();
+  const Value value = EvalSourceIn("={1,2;3,4}+10", wb, wb.sheet(0));
+  ExpectNumberArray(value, 2U, 2U, {11.0, 12.0, 13.0, 14.0});
+}
+
 TEST(ImplicitIntersection, SingleMatchesAtForTwoDimensionalRange) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 1, Value::number(22.0));  // B2

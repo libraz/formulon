@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -100,32 +101,30 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- Build groups --------------------------------------------------------
-  // Walk filtered data rows in input order; for each row, look up its group
-  // key against the existing list of unique keys (linear scan via
-  // `group_key_equal`). New keys append; matching keys add the row index to
-  // their bucket. This preserves first-occurrence ordering for sort_order=0
-  // for free.
+  // Walk filtered data rows in input order. The canonical key folds each
+  // text cell once and indexes the composite key, preserving first-occurrence
+  // ordering while avoiding a linear scan of existing groups.
   //
   // Group representatives are stored as row indices (into `row_fields`) so
   // that subsequent equality checks can re-use the same column-walk path.
   std::vector<std::uint32_t> group_repr;               // row index of representative
   std::vector<std::vector<std::uint32_t>> group_rows;  // row indices in each group
   std::vector<bool> group_is_error;
+  std::unordered_map<std::string, std::size_t> group_index;
+  group_index.reserve(data_row_count);
 
   for (std::uint32_t i = 0; i < data_row_count; ++i) {
     if (!include_row[i]) {
       continue;
     }
     const std::uint32_t row = data_start_row + i;
-    bool matched = false;
-    for (std::size_t g = 0; g < group_repr.size(); ++g) {
-      if (group_key_equal(*row_fields, row, group_repr[g])) {
-        group_rows[g].push_back(row);
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) {
+    const std::string key = normalized_group_key(*row_fields, row);
+    const auto existing = group_index.find(key);
+    if (existing != group_index.end()) {
+      group_rows[existing->second].push_back(row);
+    } else {
+      const std::size_t group = group_repr.size();
+      group_index.emplace(key, group);
       group_repr.push_back(row);
       group_rows.push_back(std::vector<std::uint32_t>{row});
       group_is_error.push_back(row_key_is_error(*row_fields, row));

@@ -7,12 +7,11 @@
 //   1. The set of *cell* references the formula reads, expressed as
 //      `CellNodeId`s. Plain `NodeKind::Ref` nodes contribute one cell each;
 //      `NodeKind::RangeOp` rectangles are flattened into the cells they
-//      cover. Whole-column / whole-row references are NOT flattened (the
-//      sheet-wide expansion would explode to ~16M cells); instead the
-//      tracker promotes the formula to a volatile-ish status so dependents
-//      always recompute on a sheet change. Sheet qualifiers are resolved
-//      against the bound `Workbook` so cross-sheet references land on the
-//      correct `sheet_id`.
+//      cover. Whole-column / whole-row references are represented as compact
+//      rectangles, so mutations within their bounds dirty the formula without
+//      turning it into an Excel-volatile formula. Sheet qualifiers are
+//      resolved against the bound `Workbook` so cross-sheet references land
+//      on the correct `sheet_id`.
 //   2. Whether any function call in the tree is one of the nine Excel
 //      Volatile functions (per `VolatileTracker::is_volatile_function`).
 //      The recalc engine uses this to add the formula's cell to the
@@ -71,10 +70,26 @@ namespace eval {
 ///
 /// `cell_deps` is the deduplicated list of cells the formula reads. Order is
 /// not guaranteed; callers that need a stable order must sort externally.
-/// `is_volatile` is true when any function-call node in the AST names one
-/// of the nine Excel Volatile functions, OR when the formula touches a
-/// whole-column / whole-row reference (those are conservatively treated as
-/// volatile because we cannot enumerate every cell on the sheet).
+/// A compact, inclusive rectangle dependency. It is used for whole-column /
+/// whole-row references, whose individual cells must not be materialised in
+/// the graph. `dependent` is added by the recalc engine when it registers a
+/// formula; extraction only supplies the referenced rectangle.
+struct CellRangeDependency {
+  std::uint16_t sheet_id = 0;
+  std::uint32_t row_first = 0;
+  std::uint32_t row_last = 0;
+  std::uint32_t col_first = 0;
+  std::uint32_t col_last = 0;
+
+  bool contains(CellNodeId cell) const noexcept {
+    return cell.sheet_id == sheet_id && cell.row >= row_first && cell.row <= row_last && cell.col >= col_first &&
+           cell.col <= col_last;
+  }
+};
+
+/// `is_volatile` is true only when any function-call node in the AST names
+/// one of the nine Excel Volatile functions. Full-row / full-column refs use
+/// `range_deps` instead.
 /// `external_book_ids` is the deduplicated list of external workbook ids
 /// (`[N]Book!Sheet!A1`) the formula references. Order matches first
 /// encounter during the walk. The recalc engine consumes this list to
@@ -83,6 +98,7 @@ namespace eval {
 /// forward-compatible plumbing.
 struct ExtractedDeps {
   std::vector<CellNodeId> cell_deps;
+  std::vector<CellRangeDependency> range_deps;
   bool is_volatile = false;
   std::vector<std::uint32_t> external_book_ids;
 };
@@ -98,8 +114,8 @@ struct ExtractedDeps {
 /// `workbook`.
 ///
 /// `RangeOp` rectangles are flattened cell-by-cell unless an endpoint is a
-/// whole-column / whole-row reference, in which case the range is omitted
-/// from `cell_deps` and `is_volatile` is set to true. Endpoints that are
+/// whole-column / whole-row reference, in which case the range is retained
+/// in `range_deps` without enumerating its cells. Endpoints that are
 /// not plain `Ref` nodes (e.g. OFFSET / INDIRECT call results) are ignored;
 /// dynamic ranges are out of scope for static dependency analysis.
 ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sheet_id, const Workbook& workbook);

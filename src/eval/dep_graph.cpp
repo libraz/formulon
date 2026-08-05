@@ -168,6 +168,16 @@ bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGrap
 }
 
 std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
+  return tarjan_scc_impl(nullptr);
+}
+
+std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_subset(
+    const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) const {
+  return tarjan_scc_impl(&nodes);
+}
+
+std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
+    const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const {
   // Iterative Tarjan to avoid blowing the WASM stack on deep dependency
   // chains. Algorithm summary:
   //
@@ -188,17 +198,24 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
 
   // Collect every distinct node so the outer loop is well-defined.
   std::vector<CellNodeId> all_nodes;
-  all_nodes.reserve(forward_.size() + reverse_.size());
-  std::unordered_map<CellNodeId, char, CellNodeIdHash> seen;
-  seen.reserve(forward_.size() + reverse_.size());
-  for (const auto& entry : forward_) {
-    if (seen.emplace(entry.first, 1).second) {
-      all_nodes.push_back(entry.first);
+  if (nodes != nullptr) {
+    all_nodes.reserve(nodes->size());
+    for (CellNodeId node : *nodes) {
+      all_nodes.push_back(node);
     }
-  }
-  for (const auto& entry : reverse_) {
-    if (seen.emplace(entry.first, 1).second) {
-      all_nodes.push_back(entry.first);
+  } else {
+    all_nodes.reserve(forward_.size() + reverse_.size());
+    std::unordered_map<CellNodeId, char, CellNodeIdHash> seen;
+    seen.reserve(forward_.size() + reverse_.size());
+    for (const auto& entry : forward_) {
+      if (seen.emplace(entry.first, 1).second) {
+        all_nodes.push_back(entry.first);
+      }
+    }
+    for (const auto& entry : reverse_) {
+      if (seen.emplace(entry.first, 1).second) {
+        all_nodes.push_back(entry.first);
+      }
     }
   }
 
@@ -229,7 +246,10 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
 
   auto neighbors_of = [&](CellNodeId node) -> const std::vector<CellNodeId>& {
     auto pos = forward_.find(node);
-    return pos == forward_.end() ? kEmptyNeighbors : pos->second;
+    if (pos == forward_.end()) {
+      return kEmptyNeighbors;
+    }
+    return pos->second;
   };
 
   for (CellNodeId root : all_nodes) {
@@ -250,6 +270,9 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
       const std::vector<CellNodeId>& adj = neighbors_of(top.node);
       if (top.neighbor_idx < adj.size()) {
         CellNodeId neighbor = adj[top.neighbor_idx++];
+        if (nodes != nullptr && nodes->count(neighbor) == 0U) {
+          continue;
+        }
         if (index_of.count(neighbor) == 0U) {
           // Tree edge: descend.
           index_of[neighbor] = next_index;

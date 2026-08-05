@@ -466,17 +466,7 @@ Expected<RangeResult, ErrorCode> resolve_array_arg_na(const parser::AstNode& arg
     return std::move(resolved.value());
   }
   if (k == parser::NodeKind::ArrayLiteral) {
-    RangeResult out;
-    out.rows = arg_node.as_array_rows();
-    out.cols = arg_node.as_array_cols();
-    const std::size_t total = static_cast<std::size_t>(out.rows) * out.cols;
-    out.cells.reserve(total);
-    for (std::uint32_t r = 0; r < out.rows; ++r) {
-      for (std::uint32_t c = 0; c < out.cols; ++c) {
-        out.cells.push_back(eval_node(arg_node.as_array_element(r, c), arena, registry, ctx));
-      }
-    }
-    return out;
+    return resolve_range_arg(arg_node, arena, registry, ctx);
   }
   // Scalar / arithmetic / Call subtree. Evaluate so any pre-existing
   // error propagates with its real code; otherwise reject with `#N/A`.

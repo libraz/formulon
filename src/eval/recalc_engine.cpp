@@ -4,6 +4,7 @@
 
 #include "eval/recalc_engine.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -63,6 +64,10 @@ void RecalcEngine::LockedMutator::mark_dirty(CellNodeId cell) const {
   engine_.mark_dirty_locked(cell);
 }
 
+void RecalcEngine::LockedMutator::mark_range_dependents_dirty(CellNodeId cell) const {
+  engine_.mark_range_dependents_dirty_locked(cell);
+}
+
 void RecalcEngine::LockedMutator::reset_graph() const {
   engine_.reset_graph_locked();
 }
@@ -87,6 +92,10 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   // Drop the cell's previous outgoing edges so re-registration is a clean
   // rewrite (the new dependency set may differ from the old one).
   graph_.clear_dependencies_of(cell);
+  range_dependencies_.erase(
+      std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
+                     [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
+      range_dependencies_.end());
   // Same for the volatile flag — only re-register if the new AST is still
   // volatile.
   volatiles_.unregister_cell(cell);
@@ -94,6 +103,40 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   const ExtractedDeps deps = extract_deps(ast, cell.sheet_id, workbook);
   for (CellNodeId dep : deps.cell_deps) {
     graph_.add_dependency(cell, dep);
+  }
+  for (CellRangeDependency range : deps.range_deps) {
+    range_dependencies_.push_back(RegisteredRangeDependency{cell, range});
+
+    // Preserve evaluation order for formulas already inside the range. The
+    // compact range table handles literal writes (including cells created in
+    // the future); explicit graph edges are needed only for formula cells so
+    // Tarjan evaluates their fresh cached values before this aggregate.
+    const Sheet& sheet = workbook.sheet(range.sheet_id);
+    for (const auto& [row, cells] : sheet.rows()) {
+      if (row < range.row_first || row > range.row_last) {
+        continue;
+      }
+      const std::uint32_t first_col = range.col_first;
+      const std::uint32_t last_col = std::min<std::uint32_t>(range.col_last, static_cast<std::uint32_t>(cells.size()));
+      for (std::uint32_t col = first_col; col < last_col; ++col) {
+        if (!cells[col].formula_text.empty()) {
+          const CellNodeId source{range.sheet_id, row, col};
+          if (source != cell) {
+            graph_.add_dependency(cell, source);
+          }
+        }
+      }
+    }
+  }
+
+  // A formula added after an aggregate must also become an explicit graph
+  // dependency of every existing range watcher that contains it. Otherwise
+  // the watcher would be dirtied, but Tarjan would have no ordering edge to
+  // ensure the new formula's cached value is refreshed first.
+  for (const RegisteredRangeDependency& entry : range_dependencies_) {
+    if (entry.dependent != cell && entry.range.contains(cell)) {
+      graph_.add_dependency(entry.dependent, cell);
+    }
   }
   if (deps.is_volatile) {
     volatiles_.register_cell(cell);
@@ -107,6 +150,10 @@ void RecalcEngine::unregister_formula(CellNodeId cell) {
 
 void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
   graph_.remove_node(cell);
+  range_dependencies_.erase(
+      std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
+                     [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
+      range_dependencies_.end());
   volatiles_.unregister_cell(cell);
 }
 
@@ -117,6 +164,10 @@ void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
 
 void RecalcEngine::clear_cell_dependencies_locked(CellNodeId cell) {
   graph_.clear_dependencies_of(cell);
+  range_dependencies_.erase(
+      std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
+                     [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
+      range_dependencies_.end());
   volatiles_.unregister_cell(cell);
 }
 
@@ -129,8 +180,17 @@ void RecalcEngine::mark_dirty_locked(CellNodeId cell) {
   dirty_.mark(cell);
 }
 
+void RecalcEngine::mark_range_dependents_dirty_locked(CellNodeId cell) {
+  for (const RegisteredRangeDependency& entry : range_dependencies_) {
+    if (entry.range.contains(cell)) {
+      dirty_.mark(entry.dependent);
+    }
+  }
+}
+
 void RecalcEngine::reset_graph_locked() {
   graph_ = DepGraph{};
+  range_dependencies_.clear();
   volatiles_.clear();
   dirty_.clear();
 }
@@ -182,11 +242,15 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
     }
   }
 
-  // ---- Phase 3: Tarjan SCC over the entire dep graph. ----
+  // ---- Phase 3: Tarjan SCC over the dirty induced subgraph. ----
   // Tarjan emits SCCs in reverse-topological order (leaves first), so the
   // evaluation walk below sees a cell's dependencies before the cell
-  // itself.
-  const std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc();
+  // itself. Reverse-edge propagation above includes every member of a
+  // reachable cycle, so excluding clean nodes preserves SCC boundaries.
+  std::unordered_set<CellNodeId, CellNodeIdHash> dirty_nodes;
+  dirty_nodes.reserve(dirty_.size());
+  dirty_.for_each([&](CellNodeId c) { dirty_nodes.insert(c); });
+  const std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_nodes);
 
   // Index sheet pointers once so we can resolve `CellNodeId::sheet_id` to
   // a `Sheet*` without a per-cell lookup. Workbook sheet count is small
@@ -278,6 +342,9 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
 
       const IterativeOutcome outcome =
           run_iterative_solve(component, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
+      if (arena_->exhausted()) {
+        return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during iterative recalc");
+      }
       if (outcome.converged) {
         // Solver wrote the converged values into the cell store; count
         // each member as evaluated (singleton-style accounting) plus
@@ -288,28 +355,12 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
           ++stats.iterative_cells;
         }
       } else {
-        // Either divergence (solver wrote `#NUM!` on every member),
-        // iteration-limit exhaustion (solver left the last-iteration
-        // values in place), or callback-driven abort (also leaves
-        // last-iteration values in place). The user-visible failure
-        // mode in every case is "the cycle did not resolve", so we
+        // Iteration-limit exhaustion or callback-driven abort leaves the
+        // last-iteration values in place. The user-visible failure mode is
+        // still "the cycle did not resolve", so we
         // count the members in `cycle_cells` to mirror the
         // disabled-iterative-calc accounting.
-        //
-        // For the iteration-limit case (NOT for an aborted solve) we
-        // write `#NUM!` ourselves so the cells do not retain misleading
-        // partial values that the user might mistake for a converged
-        // result. An aborted solve is the user's choice — leave the
-        // partially-converged values intact so the UI can resume.
-        if (!outcome.diverged && !outcome.aborted) {
-          for (CellNodeId c : component) {
-            if (c.sheet_id >= sheet_count) {
-              continue;
-            }
-            Sheet& sheet = workbook.sheet(c.sheet_id);
-            sheet.set_cell_cached_value(c.row, c.col, Value::error(ErrorCode::Num));
-          }
-        }
+        // A later pass can continue from the retained approximation.
         for (CellNodeId c : component) {
           (void)c;
           ++stats.cycle_cells;
@@ -344,16 +395,16 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
     //     when the next cell's evaluation resets the arena.
     arena_->reset();
     Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
+    if (arena_->exhausted()) {
+      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
+    }
     sheet.set_cell_cached_value(only.row, only.col, result);
     ++stats.cells_evaluated;
   }
 
-  // ---- Phase 4b: pick up dirty cells with no graph edges. ----
-  // Isolated formula cells (e.g. `=NOW()` reading nothing) never enter the
-  // dep graph, so Tarjan does not include them in any SCC. Sweep the
-  // dirty set for any such cells and evaluate them as plain singletons.
-  // Snapshot the set first because evaluation does not mutate `dirty_`,
-  // but copying keeps the loop body trivial.
+  // ---- Phase 4b: defensive pickup for dirty cells not visited by Tarjan. ----
+  // `tarjan_scc_subset` emits isolated selected nodes, so this normally
+  // remains empty. Keep the sweep as a guard for future graph mutations.
   std::vector<CellNodeId> standalone_dirty;
   dirty_.for_each([&](CellNodeId c) {
     if (visited_in_sccs.count(c) == 0U) {
@@ -371,6 +422,9 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
     }
     arena_->reset();
     Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
+    if (arena_->exhausted()) {
+      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
+    }
     sheet.set_cell_cached_value(c.row, c.col, result);
     ++stats.cells_evaluated;
   }
@@ -510,11 +564,17 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   }
 
   // ---- Phase 4: Tarjan SCC + selective evaluation. ----
-  // We reuse the same Tarjan output as `recalc()`. Cells outside the
-  // closure are skipped even if they appear in dirty SCCs, which
-  // preserves their dirty flag for a future full / overlapping
-  // partial recalc.
-  const std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc();
+  // Restrict Tarjan to the dirty cells in the viewport closure. Cells
+  // outside it are never visited and retain their dirty flag for a later
+  // full / overlapping partial recalc.
+  std::unordered_set<CellNodeId, CellNodeIdHash> dirty_closure;
+  dirty_closure.reserve(propagation_queue.size());
+  dirty_.for_each([&](CellNodeId c) {
+    if (closure.count(c) != 0U) {
+      dirty_closure.insert(c);
+    }
+  });
+  const std::vector<std::vector<CellNodeId>> sccs = graph_.tarjan_scc_subset(dirty_closure);
   std::unordered_set<CellNodeId, CellNodeIdHash> visited_in_sccs;
   for (const std::vector<CellNodeId>& component : sccs) {
     // Skip components that have no overlap with the closure: their
@@ -587,6 +647,9 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
 
       const IterativeOutcome outcome =
           run_iterative_solve(component, iterative_, evaluate_one, commit, progress_cb_, progress_user_data_);
+      if (arena_->exhausted()) {
+        return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
+      }
       if (outcome.converged) {
         for (CellNodeId c : component) {
           (void)c;
@@ -594,15 +657,9 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
           ++stats.iterative_cells;
         }
       } else {
-        if (!outcome.diverged && !outcome.aborted) {
-          for (CellNodeId c : component) {
-            if (c.sheet_id >= sheet_count) {
-              continue;
-            }
-            Sheet& sheet = workbook.sheet(c.sheet_id);
-            sheet.set_cell_cached_value(c.row, c.col, Value::error(ErrorCode::Num));
-          }
-        }
+        // As in full recalc, only an actual divergence writes `#NUM!`.
+        // A finite iteration budget leaves the solver's final approximation
+        // in place so a later viewport/full pass can resume from it.
         for (CellNodeId c : component) {
           (void)c;
           ++stats.cycle_cells;
@@ -628,6 +685,9 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
     }
     arena_->reset();
     Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
+    if (arena_->exhausted()) {
+      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
+    }
     sheet.set_cell_cached_value(only.row, only.col, result);
     ++stats.cells_evaluated;
   }
@@ -653,6 +713,9 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
     }
     arena_->reset();
     Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
+    if (arena_->exhausted()) {
+      return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
+    }
     sheet.set_cell_cached_value(c.row, c.col, result);
     ++stats.cells_evaluated;
   }

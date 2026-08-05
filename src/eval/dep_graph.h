@@ -148,6 +148,14 @@ class DepGraph {
   /// Complexity: O(V + E).
   std::vector<std::vector<CellNodeId>> tarjan_scc() const;
 
+  /// Computes SCCs for the induced subgraph containing only `nodes`.
+  /// Edges to cells outside the set are ignored. This keeps incremental
+  /// recalc proportional to its dirty closure instead of the workbook-wide
+  /// dependency graph. Every supplied node is emitted, including nodes with
+  /// no recorded edges.
+  std::vector<std::vector<CellNodeId>> tarjan_scc_subset(
+      const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) const;
+
   /// Returns a topological ordering of the cells: every cell appears
   /// before any cell that depends on it. The ordering is derived from
   /// `tarjan_scc()` (each SCC contributes its cells in unspecified order).
@@ -167,6 +175,9 @@ class DepGraph {
 
  private:
   using AdjacencyMap = std::unordered_map<CellNodeId, std::vector<CellNodeId>, CellNodeIdHash>;
+
+  std::vector<std::vector<CellNodeId>> tarjan_scc_impl(
+      const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const;
 
   /// Hash for an ordered pair of `CellNodeId`s. Used to dedupe directed
   /// edges in O(1) on `add_dependency`. Combines the two component

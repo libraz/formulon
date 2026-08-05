@@ -192,26 +192,37 @@ TEST(DepExtractor, UnknownSheetRefIsSkipped) {
   EXPECT_TRUE(deps.cell_deps.empty());
 }
 
-TEST(DepExtractor, WholeColumnRefIsVolatileWithNoCells) {
+TEST(DepExtractor, WholeColumnRefUsesCompactRangeDependency) {
   Workbook wb = Workbook::create();
   Arena arena;
-  // SUM(A:A) — whole-column. We do not enumerate the 1M cells; instead the
-  // formula is promoted to volatile so dependents always recompute.
+  // SUM(A:A) — whole-column. We do not enumerate its 1M cells or make a
+  // non-volatile formula re-execute on every recalc pass.
   const parser::AstNode* root = ParseFormula("SUM(A:A)", arena);
   ASSERT_NE(root, nullptr);
   ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  EXPECT_TRUE(deps.is_volatile);
+  EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
+  ASSERT_EQ(deps.range_deps.size(), 1U);
+  EXPECT_EQ(deps.range_deps[0].sheet_id, 0U);
+  EXPECT_EQ(deps.range_deps[0].row_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].row_last, Sheet::kMaxRows - 1U);
+  EXPECT_EQ(deps.range_deps[0].col_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].col_last, 0U);
 }
 
-TEST(DepExtractor, WholeRowRefIsVolatileWithNoCells) {
+TEST(DepExtractor, WholeRowRefUsesCompactRangeDependency) {
   Workbook wb = Workbook::create();
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(1:1)", arena);
   ASSERT_NE(root, nullptr);
   ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  EXPECT_TRUE(deps.is_volatile);
+  EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
+  ASSERT_EQ(deps.range_deps.size(), 1U);
+  EXPECT_EQ(deps.range_deps[0].row_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].row_last, 0U);
+  EXPECT_EQ(deps.range_deps[0].col_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].col_last, Sheet::kMaxCols - 1U);
 }
 
 TEST(DepExtractor, OversizedRectIsVolatileWithoutEnumeratingCells) {
@@ -864,6 +875,26 @@ TEST(DepExtractor, RangeAcrossSheetQualifierOnLeft) {
       CellNodeId{1U, 1U, 1U},
   };
   EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, ThreeDFullColumnUsesCompactRangeDependencies) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(Sheet1:Sheet3!A:A)", arena);
+  ASSERT_NE(root, nullptr);
+
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+  ASSERT_EQ(deps.range_deps.size(), 3U);
+  for (std::size_t i = 0; i < deps.range_deps.size(); ++i) {
+    EXPECT_EQ(deps.range_deps[i].sheet_id, i);
+    EXPECT_EQ(deps.range_deps[i].row_last, Sheet::kMaxRows - 1U);
+    EXPECT_EQ(deps.range_deps[i].col_first, 0U);
+    EXPECT_EQ(deps.range_deps[i].col_last, 0U);
+  }
 }
 
 }  // namespace

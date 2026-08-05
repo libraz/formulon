@@ -89,13 +89,6 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
     prev_values.emplace(cell, Value::blank());
   }
 
-  // Track the last three max-deltas for divergence detection. We only
-  // arm divergence after we have at least three observed deltas, so the
-  // sentinel `-1.0` reads as "no observation yet" without colliding with
-  // any real delta (which is always non-negative or +infinity).
-  double d_minus_2 = -1.0;
-  double d_minus_1 = -1.0;
-
   for (std::uint32_t iter = 0U; iter < max_iters; ++iter) {
     double max_delta = 0.0;
 
@@ -155,34 +148,11 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
       out.converged = true;
       return out;
     }
-
-    // Divergence: three successive passes with non-decreasing max-delta
-    // and a max-delta that is itself above the convergence threshold
-    // (otherwise we are oscillating below the floor and the next test
-    // would have converged). Requires at least three observed deltas
-    // (`d_minus_2` and `d_minus_1` armed) before the test arms.
-    if (d_minus_2 >= 0.0 && d_minus_1 >= 0.0 && max_delta >= d_minus_1 && d_minus_1 >= d_minus_2 &&
-        max_delta > opts.max_change) {
-      // Bail out early and write `#NUM!` to every member. Excel's
-      // observable behaviour for "iterative calc could not converge" is
-      // a divergence-flagged surface; `#NUM!` matches the spec corpus
-      // entry in §2.7.3 and is the closest sentinel we have for
-      // "numerical method failed".
-      for (CellNodeId cell : scc) {
-        commit(cell, Value::error(ErrorCode::Num));
-      }
-      out.diverged = true;
-      return out;
-    }
-
-    // Slide the window for divergence detection.
-    d_minus_2 = d_minus_1;
-    d_minus_1 = max_delta;
   }
 
-  // Iteration limit hit without convergence or divergence detection.
-  // Cell values stay at the last-iteration commits; `converged` and
-  // `diverged` are both false to signal "ran out of budget".
+  // Excel has no residual-growth cutoff. Iteration-limit exhaustion leaves
+  // the last commits intact; `converged` and `diverged` are both false to
+  // signal that the finite budget was consumed.
   return out;
 }
 

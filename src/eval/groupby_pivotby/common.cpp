@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -358,6 +359,56 @@ bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t 
     }
   }
   return true;
+}
+
+std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
+  std::string out;
+  out.reserve(static_cast<std::size_t>(keys.cols) * 12U);
+  for (std::uint32_t c = 0; c < keys.cols; ++c) {
+    const Value& v = keys.cells[static_cast<std::size_t>(row) * keys.cols + c];
+    out.push_back(static_cast<char>(v.kind()));
+    switch (v.kind()) {
+      case ValueKind::Blank:
+        break;
+      case ValueKind::Number: {
+        double number = v.as_number();
+        if (std::isnan(number)) {
+          // NaN never compares equal, including to itself.
+          out.append("row");
+          out.append(std::to_string(row));
+          break;
+        }
+        number = number == 0.0 ? 0.0 : number;
+        std::uint64_t bits = 0;
+        static_assert(sizeof(bits) == sizeof(number));
+        std::memcpy(&bits, &number, sizeof(bits));
+        out.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+        break;
+      }
+      case ValueKind::Bool:
+        out.push_back(v.as_boolean() ? '\x01' : '\x00');
+        break;
+      case ValueKind::Error:
+        out.append(std::to_string(static_cast<std::uint16_t>(v.as_error())));
+        out.push_back('\0');
+        break;
+      case ValueKind::Text: {
+        const std::string folded = fold_jp_text(v.as_text());
+        out.append(std::to_string(folded.size()));
+        out.push_back(':');
+        out.append(folded);
+        break;
+      }
+      default:
+        // Array / Ref / Lambda are intentionally never equal in
+        // group_cell_equal, so each row must form its own group.
+        out.append("row");
+        out.append(std::to_string(row));
+        break;
+    }
+    out.push_back('\xff');
+  }
+  return out;
 }
 
 bool row_key_is_error(const ArrayValue& keys, std::uint32_t row) {

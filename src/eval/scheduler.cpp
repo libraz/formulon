@@ -227,19 +227,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
     if (outcome.converged) {
       ++out.cycle_recoveries;
       out.cells_evaluated += component.size();
-    } else if (!outcome.diverged) {
-      // Iteration-limit exhaustion: write #NUM! ourselves so the cells
-      // do not retain misleading partial values.
-      for (CellNodeId c : component) {
-        if (c.sheet_id >= sheet_count) {
-          continue;
-        }
-        Sheet& sheet = wb.sheet(c.sheet_id);
-        std::lock_guard<std::mutex> guard(write_mutex);
-        sheet.set_cell_cached_value(c.row, c.col, Value::error(ErrorCode::Num));
-      }
     }
-    // Divergence path already wrote #NUM! through the solver's commit.
     return out;
   }
 

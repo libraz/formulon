@@ -21,6 +21,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -116,6 +117,11 @@ bool group_cell_equal(const Value& a, const Value& b);
 /// Multi-column key equality: walks each column of the keys and compares
 /// cellwise via `group_cell_equal`.
 bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t row_b);
+
+/// Builds a hashable canonical key for one row. Text cells are Japanese-folded
+/// once here; all scalar kinds retain their type tag. Values which cannot be
+/// equal under `group_cell_equal` receive a row-unique key.
+std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row);
 
 /// True iff every column of the row's key is an Error value. Error-keyed
 /// groups sort to the bottom (after all valid groups).

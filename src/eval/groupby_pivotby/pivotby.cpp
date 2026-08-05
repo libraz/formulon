@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "eval/eval_context.h"
@@ -34,17 +35,20 @@ namespace {
 // the same first-occurrence semantics.
 std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
                               std::vector<std::uint32_t>* representative_rows,
-                              std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group) {
-  for (std::size_t g = 0; g < representative_rows->size(); ++g) {
-    if (group_key_equal(keys, row, (*representative_rows)[g])) {
-      (*member_rows)[g].push_back(row);
-      return g;
-    }
+                              std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group,
+                              std::unordered_map<std::string, std::size_t>* index) {
+  const std::string key = normalized_group_key(keys, row);
+  const auto existing = index->find(key);
+  if (existing != index->end()) {
+    (*member_rows)[existing->second].push_back(row);
+    return existing->second;
   }
+  const std::size_t group = representative_rows->size();
+  index->emplace(key, group);
   representative_rows->push_back(row);
   member_rows->push_back(std::vector<std::uint32_t>{row});
   is_error_group->push_back(row_key_is_error(keys, row));
-  return representative_rows->size() - 1U;
+  return group;
 }
 
 }  // namespace
@@ -220,6 +224,10 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::vector<std::uint32_t> col_repr;
   std::vector<std::vector<std::uint32_t>> col_members;  // rows in each col-group
   std::vector<bool> col_is_error;
+  std::unordered_map<std::string, std::size_t> row_index;
+  std::unordered_map<std::string, std::size_t> col_index;
+  row_index.reserve(data_row_count);
+  col_index.reserve(data_row_count);
 
   // Per-row tags so we can later compute (row_g, col_g) intersections by
   // walking the data rows once.
@@ -231,8 +239,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       continue;
     }
     const std::uint32_t row = data_start_row + i;
-    row_tag[i] = find_or_add_group(*row_fields, row, &row_repr, &row_members, &row_is_error);
-    col_tag[i] = find_or_add_group(*col_fields, row, &col_repr, &col_members, &col_is_error);
+    row_tag[i] = find_or_add_group(*row_fields, row, &row_repr, &row_members, &row_is_error, &row_index);
+    col_tag[i] = find_or_add_group(*col_fields, row, &col_repr, &col_members, &col_is_error, &col_index);
   }
 
   if (row_repr.empty() || col_repr.empty()) {

@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string_view>
 #include <vector>
 
@@ -739,9 +740,39 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return ctx.resolve_ref(top_left, arena, registry);
     }
 
-    // -- Unsupported: range-producing operators / array literals ----------
+    case parser::NodeKind::ArrayLiteral: {
+      // A brace literal is a first-class dynamic array in modern Excel. The
+      // bytecode VM already lowers it to MakeArray; mirror that shape here so
+      // the tree walker can spill it, broadcast it through an operator, and
+      // let `@` reduce it through the common implicit-intersection path.
+      const std::uint32_t rows = node.as_array_rows();
+      const std::uint32_t cols = node.as_array_cols();
+      if (rows == 0U || cols == 0U || cols > std::numeric_limits<std::size_t>::max() / rows) {
+        return Value::error(ErrorCode::Num);
+      }
+      const std::size_t total = static_cast<std::size_t>(rows) * cols;
+      Value* cells = arena.create_array<Value>(total);
+      if (cells == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      for (std::uint32_t row = 0; row < rows; ++row) {
+        for (std::uint32_t col = 0; col < cols; ++col) {
+          cells[static_cast<std::size_t>(row) * cols + col] =
+              eval_node(node.as_array_element(row, col), arena, registry, ctx);
+        }
+      }
+      ArrayValue* array = arena.create<ArrayValue>();
+      if (array == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      array->rows = rows;
+      array->cols = cols;
+      array->cells = cells;
+      return Value::array(array);
+    }
+
+    // -- Unsupported range-producing operator ------------------------------
     case parser::NodeKind::UnionOp:
-    case parser::NodeKind::ArrayLiteral:
       return Value::error(ErrorCode::Value);
   }
   return Value::error(ErrorCode::Value);
@@ -830,6 +861,12 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
     v = current;
   } else {
     v = eval_node(node, arena, registry, ctx_with_counters);
+  }
+  if (arena.exhausted()) {
+    if (EvalState* state = ctx.state(); state != nullptr) {
+      state->mark_out_of_memory();
+    }
+    return Value::error(ErrorCode::Num);
   }
   // Dynamic-array spill-collision surface contract. When a 365-era formula
   // produces a multi-cell array and is anchored at a known formula cell on

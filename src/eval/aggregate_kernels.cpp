@@ -5,6 +5,7 @@
 
 #include "eval/aggregate_kernels.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -188,44 +189,37 @@ Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs)
   if (xs.empty()) {
     return ErrorCode::NA;
   }
-  // First-occurrence-ordered frequency table. O(n^2) duplicate detection
-  // keeps the insertion order so ties resolve to the value that appears
-  // earliest in the input (Excel's MODE.SNGL rule). The input slices are
-  // bounded by Excel's 255-arg / ~1M-cell limits.
-  std::vector<double> values;
-  std::vector<std::size_t> counts;
-  values.reserve(xs.size());
-  counts.reserve(xs.size());
+  // Sort a copy by value while carrying source positions. This groups equal
+  // values in O(n log n), then the smallest source position implements
+  // Excel's first-occurrence tie rule without a quadratic frequency table.
+  std::vector<std::pair<double, std::size_t>> ranked;
+  ranked.reserve(xs.size());
+  for (std::size_t i = 0; i < xs.size(); ++i) {
+    ranked.emplace_back(xs[i], i);
+  }
+  std::sort(ranked.begin(), ranked.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
   std::size_t best_count = 0;
-  for (double v : xs) {
-    bool found = false;
-    for (std::size_t i = 0; i < values.size(); ++i) {
-      if (values[i] == v) {
-        ++counts[i];
-        if (counts[i] > best_count) {
-          best_count = counts[i];
-        }
-        found = true;
-        break;
-      }
+  std::size_t best_first = xs.size();
+  double best_value = 0.0;
+  for (std::size_t begin = 0; begin < ranked.size();) {
+    std::size_t end = begin + 1U;
+    std::size_t first = ranked[begin].second;
+    while (end < ranked.size() && ranked[end].first == ranked[begin].first) {
+      first = std::min(first, ranked[end].second);
+      ++end;
     }
-    if (!found) {
-      values.push_back(v);
-      counts.push_back(1U);
-      if (best_count == 0) {
-        best_count = 1U;
-      }
+    const std::size_t count = end - begin;
+    if (count > best_count || (count == best_count && first < best_first)) {
+      best_count = count;
+      best_first = first;
+      best_value = ranked[begin].first;
     }
+    begin = end;
   }
   if (best_count < 2U) {
     return ErrorCode::NA;
   }
-  for (std::size_t i = 0; i < values.size(); ++i) {
-    if (counts[i] == best_count) {
-      return values[i];
-    }
-  }
-  return ErrorCode::NA;
+  return best_value;
 }
 
 }  // namespace aggregate_kernels

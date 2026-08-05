@@ -67,6 +67,26 @@ TEST(TreeWalkerLiterals, BlankFromFactory) {
   EXPECT_TRUE(v.is_blank());
 }
 
+TEST(TreeWalkerResourceFailure, ArenaExhaustionMarksEvalState) {
+  Arena parse_arena;
+  parser::AstNode* root = parser::parse_strict("\"abc\"&\"def\"", parse_arena);
+  ASSERT_NE(root, nullptr);
+
+  // The capped arena fails before it can open its first (4 KiB) chunk. The
+  // evaluator must not turn the failed string interning into a valid empty
+  // string; it records the resource failure on the request state instead.
+  Arena eval_arena(64, 63);
+  Sheet sheet("Sheet1");
+  EvalState state;
+  const EvalContext ctx(sheet, state);
+  const Value v = evaluate(*root, eval_arena, default_registry(), ctx);
+
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_TRUE(eval_arena.exhausted());
+  EXPECT_TRUE(state.out_of_memory());
+}
+
 // ---------------------------------------------------------------------------
 // Unary operators
 // ---------------------------------------------------------------------------
@@ -360,10 +380,14 @@ TEST(TreeWalkerUnsupported, UnknownCallReturnsName) {
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
-TEST(TreeWalkerUnsupported, ArrayLiteralReturnsValue) {
+TEST(TreeWalkerUnsupported, ArrayLiteralMaterializesArray) {
   const Value v = EvalSource("={1,2}");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  ASSERT_EQ(arr->rows, 1u);
+  ASSERT_EQ(arr->cols, 2u);
+  EXPECT_EQ(arr->cells[0], Value::number(1.0));
+  EXPECT_EQ(arr->cells[1], Value::number(2.0));
 }
 
 TEST(TreeWalkerUnsupported, RangeOpUnboundContextIsName) {

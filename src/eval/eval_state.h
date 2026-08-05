@@ -88,6 +88,12 @@ class EvalState {
   /// as a coarse guard against runaway recursion.
   std::size_t depth() const noexcept { return stack_.size(); }
 
+  /// Records a storage allocation failure observed while evaluating this
+  /// request. It is sticky for the lifetime of the state so C ABI callers can
+  /// surface an engine error rather than a misleading worksheet error value.
+  void mark_out_of_memory() noexcept { out_of_memory_ = true; }
+  bool out_of_memory() const noexcept { return out_of_memory_; }
+
  private:
   // Composite key identifying a single cell across all sheets in the
   // current workbook. `sheet` is compared by pointer identity; the
@@ -121,6 +127,7 @@ class EvalState {
   std::vector<CellKey> stack_;
   // Memoised results, keyed by the composite address.
   std::unordered_map<CellKey, Value, CellKeyHash> memo_;
+  bool out_of_memory_ = false;
 };
 
 }  // namespace eval

@@ -6,27 +6,24 @@
 // cyclic SCC are no longer short-circuited to `#REF!`. Instead, the recalc
 // engine hands the SCC to `run_iterative_solve()`, which fixed-point
 // iterates the cells up to `IterativeOptions::max_iterations` times, looking
-// for either:
+// for convergence. If the cap is exhausted, it retains the final iteration
+// rather than attempting to infer a divergent sequence:
 //
 //   * **convergence** — the largest absolute change across the SCC drops
 //     below `IterativeOptions::max_change`. The solver stops and the cells
-//     keep their last computed values; or
-//   * **divergence** — three successive iterations whose maximum delta is
-//     non-decreasing (and above `max_change`). The solver writes `#NUM!`
-//     to every member and signals failure.
+//     keep their last computed values.
 //
 // The convergence test is on the *absolute* delta of numeric values, per
 // Excel's specification (no relative tolerance, no per-cell weighting). Any
 // change in `ValueKind` (Number -> Text, Number -> Error, etc.) bumps the
-// delta to +infinity so a "value flip" never reads as converged; in the
-// general case Excel cannot encode a converged non-numeric cycle anyway.
+// delta to +infinity so a "value flip" never reads as converged.
 //
 // The solver is single-threaded and synchronous. It owns nothing: callers
 // supply the SCC list, the per-cell evaluation lambda, and the per-cell
 // commit lambda. The caller is also responsible for snapshotting and
 // restoring any state that should not be visible to the solver — once
-// `run_iterative_solve` returns, the cell store has been mutated either
-// to the converged values or to `#NUM!` sentinels.
+// `run_iterative_solve` returns, the cell store has been mutated to the
+// converged values or the last finite-budget approximation.
 
 #ifndef FORMULON_EVAL_ITERATIVE_SOLVER_H_
 #define FORMULON_EVAL_ITERATIVE_SOLVER_H_
@@ -69,17 +66,16 @@ struct IterativeOptions {
 /// Outcome of a single `run_iterative_solve` invocation.
 struct IterativeOutcome {
   /// True when every member's last-pass delta dropped below
-  /// `max_change`. Mutually exclusive with `diverged` and `aborted`.
+  /// `max_change`.
   bool converged = false;
-  /// True when the solver detected divergence (three successive passes
-  /// whose maximum delta did not decrease and stayed above `max_change`)
-  /// and aborted with `#NUM!`. Mutually exclusive with `converged` and
-  /// `aborted`.
+  /// Reserved for a future numeric-failure mode. The solver intentionally
+  /// does not infer divergence from residual growth because Excel iterates
+  /// until `max_iterations`.
   bool diverged = false;
   /// True when the user-supplied progress callback returned `false` and
   /// the solver returned early. The cell store is left in its current
   /// partially-converged state; the caller should treat the result as
-  /// "not converged". Mutually exclusive with `converged` and `diverged`.
+  /// "not converged".
   bool aborted = false;
   /// Number of iterations actually executed, in `[1, max_iterations]`.
   /// Always at least 1: the solver always evaluates the SCC once before

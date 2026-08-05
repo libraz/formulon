@@ -779,6 +779,7 @@ void mark_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutator, eva
   for (eval::CellNodeId dep : mutator.dep_graph().dependents_of(cell)) {
     mutator.mark_dirty(dep);
   }
+  mutator.mark_range_dependents_dirty(cell);
 }
 
 // When `(row, col)` is a *phantom* of a committed spill region (i.e. a

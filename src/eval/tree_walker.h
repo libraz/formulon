@@ -8,11 +8,9 @@
 //
 // AST node kinds that need a `FunctionRegistry` or `Workbook` (calls,
 // references, ranges, arrays, lambdas, structured refs, defined names) are
-// evaluated to the appropriate Excel error sentinel: `#NAME?` for unresolved
-// names / functions / refs, `#VALUE!` for range-producing operators and
-// inline arrays. Once the surrounding infrastructure exists the evaluator
-// will be extended; the public API here is intentionally minimal so that
-// promotion will be a strict superset.
+// evaluated with the supplied `EvalContext` and function registry. The public
+// API remains intentionally minimal while that surrounding infrastructure
+// continues to grow.
 //
 // `NodeKind::Ref` resolution is delegated to an `EvalContext`: when a
 // context bound to a sheet is supplied, local A1 references resolve to the
@@ -50,8 +48,8 @@ class EvalContext;
 /// Excel left-most-wins rule.
 ///
 /// Unsupported node kinds return `Value::error` with an appropriate Excel
-/// error code: `#NAME?` for refs / lambdas / let bindings, and `#VALUE!`
-/// for range / union / intersect operators and array literals. Function
+/// error code: `#NAME?` for unresolved refs / lambdas / let bindings, and
+/// `#VALUE!` for unsupported union operators. Function
 /// calls are dispatched through the registry: unknown names yield `#NAME?`,
 /// arity violations yield `#VALUE!`.
 Value evaluate(const parser::AstNode& node, Arena& arena);

@@ -226,6 +226,26 @@ TEST(DepGraph, TarjanLinearChainReverseTopological) {
   EXPECT_LT(idx_b, idx_a);
 }
 
+TEST(DepGraph, TarjanSubsetUsesOnlySelectedDirtyClosure) {
+  // a -> b -> c -> d. Selecting b/c must not allocate or traverse the
+  // unrelated endpoints; the induced subgraph preserves b -> c ordering.
+  DepGraph g;
+  CellNodeId a = Make(0, 0, 0);
+  CellNodeId b = Make(0, 0, 1);
+  CellNodeId c = Make(0, 0, 2);
+  CellNodeId d = Make(0, 0, 3);
+  g.add_dependency(a, b);
+  g.add_dependency(b, c);
+  g.add_dependency(c, d);
+
+  const std::unordered_set<CellNodeId, CellNodeIdHash> selected = {b, c};
+  const auto sccs = g.tarjan_scc_subset(selected);
+  ASSERT_EQ(sccs.size(), 2U);
+  EXPECT_EQ(SccIndexOf(sccs, a), -1);
+  EXPECT_EQ(SccIndexOf(sccs, d), -1);
+  EXPECT_LT(SccIndexOf(sccs, c), SccIndexOf(sccs, b));
+}
+
 TEST(DepGraph, TarjanSelfLoopIsSingleton) {
   DepGraph g;
   CellNodeId a = Make(0, 0, 0);

@@ -121,20 +121,19 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
 bool flatten_array_literal(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx, std::vector<Value>* out_cells, std::uint32_t* out_rows,
                            std::uint32_t* out_cols, Value* out_err) {
-  const std::uint32_t rows = arg_node.as_array_rows();
-  const std::uint32_t cols = arg_node.as_array_cols();
-  *out_rows = rows;
-  *out_cols = cols;
-  out_cells->clear();
-  out_cells->reserve(static_cast<std::size_t>(rows) * cols);
-  for (std::uint32_t r = 0; r < rows; ++r) {
-    for (std::uint32_t c = 0; c < cols; ++c) {
-      Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
-      if (v.is_error()) {
-        *out_err = v;
-        return false;
-      }
-      out_cells->push_back(v);
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
+    return false;
+  }
+  RangeResult values = std::move(resolved.value());
+  *out_rows = values.rows;
+  *out_cols = values.cols;
+  *out_cells = std::move(values.cells);
+  for (const Value& value : *out_cells) {
+    if (value.is_error()) {
+      *out_err = value;
+      return false;
     }
   }
   return true;
@@ -548,16 +547,12 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
   // ArrayLiteral in array context preserves per-cell errors instead of
   // short-circuiting the whole argument.
   if (k == parser::NodeKind::ArrayLiteral) {
-    std::vector<Value> cells;
-    const std::uint32_t rows = target.as_array_rows();
-    const std::uint32_t cols = target.as_array_cols();
-    cells.reserve(static_cast<std::size_t>(rows) * cols);
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        cells.push_back(eval_node(target.as_array_element(r, c), arena, registry, ctx));
-      }
+    auto resolved = resolve_range_arg(target, arena, registry, ctx);
+    if (!resolved) {
+      return Value::error(resolved.error());
     }
-    return Value::array(make_array_value(arena, rows, cols, cells));
+    auto& values = resolved.value();
+    return Value::array(make_array_value(arena, values.rows, values.cols, values.cells));
   }
 
   // Scalar fallback. Evaluate normally, then wrap into a 1x1 array. Errors
@@ -607,8 +602,13 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // `=TRANSPOSE({1,#N/A;2,3})` as an array containing #N/A at the
   // corresponding transposed position.
   if (arg.kind() == parser::NodeKind::ArrayLiteral) {
-    const std::uint32_t in_rows = arg.as_array_rows();
-    const std::uint32_t in_cols = arg.as_array_cols();
+    auto resolved = resolve_range_arg(arg, arena, registry, ctx);
+    if (!resolved) {
+      return Value::error(resolved.error());
+    }
+    const RangeResult& values = resolved.value();
+    const std::uint32_t in_rows = values.rows;
+    const std::uint32_t in_cols = values.cols;
     const std::uint32_t out_rows = in_cols;
     const std::uint32_t out_cols = in_rows;
     const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
@@ -618,7 +618,7 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
     for (std::uint32_t r = 0; r < in_rows; ++r) {
       for (std::uint32_t c = 0; c < in_cols; ++c) {
-        const Value cell = eval_node(arg.as_array_element(r, c), arena, registry, ctx);
+        const Value cell = values.cells[static_cast<std::size_t>(r) * in_cols + c];
         // Per-cell error pass-through: errors land at their transposed
         // position rather than short-circuiting the whole call.
         buffer[static_cast<std::size_t>(c) * in_rows + r] = cell;
