@@ -213,6 +213,16 @@ TEST(FormulonCli, RecalcHelpDocumentsActualSuccessStatus) {
   EXPECT_NE(r.stdout_text.find("formulon: recalc: ok, wrote M bytes to 'OUT'"), std::string::npos);
 }
 
+TEST(FormulonCli, PaginatePrintsResolvedGeometry) {
+  const std::string path = "/tmp/fm_cli_paginate.xlsx";
+  PathGuard guard(path);
+  ASSERT_TRUE(write_fixture_workbook(path));
+
+  CliRun r = run_cli({"paginate", path});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "sheet=0\npages=1\nprint_area=\nhorizontal_breaks=\nvertical_breaks=\n");
+}
+
 TEST(FormulonCli, NoArgsExits64) {
   CliRun r = run_cli({});
   EXPECT_EQ(r.exit_code, 64);

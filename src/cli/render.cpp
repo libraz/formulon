@@ -8,27 +8,16 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "utils/a1_column.h"
 #include "utils/double_format.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
 namespace cli {
 
 void append_column_letters(std::string& out, std::uint32_t col) {
-  // Excel bijective base-26: each letter is 1..26 with no zero digit.
-  // Build letters in reverse, then append flipped. Cap at 4 letters
-  // (`XFD` is the last legal column at index 16383).
-  char buf[4];
-  std::uint32_t i = 0;
-  std::uint32_t v = col + 1;
-  while (v > 0 && i < 4) {
-    const std::uint32_t rem = (v - 1) % 26U;
-    buf[i++] = static_cast<char>('A' + rem);
-    v = (v - 1) / 26U;
-  }
-  while (i > 0) {
-    out.push_back(buf[--i]);
-  }
+  FM_CHECK(a1::append_column_letters(out, col), "column is outside Excel's grid");
 }
 
 std::string format_a1(std::uint32_t row, std::uint32_t col) {

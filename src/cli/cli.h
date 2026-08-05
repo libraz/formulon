@@ -82,6 +82,11 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 /// `--values`, `--sheets`, `--metadata`, `-h | --help`.
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
 
+/// `paginate` handler: resolve the print geometry of one worksheet.
+///
+/// Supported flags: `--sheet INDEX` (0-based, default 0), `-h | --help`.
+int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err);
+
 /// Prints the top-level usage banner to `out` and returns `0`.
 int print_usage(std::ostream& out);
 

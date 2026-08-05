@@ -27,6 +27,8 @@ void print_top_usage(std::ostream& out) {
       << "  recalc <in> -o <out>    Load, recalc, and write a workbook.\n"
       << "  dump <in> [--formulas|--values|--sheets|--metadata]\n"
       << "                          Print a diff-friendly snapshot of a workbook.\n"
+      << "  paginate <in> [--sheet N]\n"
+      << "                          Resolve print area, page breaks, and page count.\n"
       << "\n"
       << "Common options:\n"
       << "  -h, --help              Show this help (or per-subcommand help).\n"
@@ -79,6 +81,8 @@ int main(int argc, char** argv) {
     rc = formulon::cli::run_recalc(args, std::cout, std::cerr);
   } else if (cmd == "dump") {
     rc = formulon::cli::run_dump(args, std::cout, std::cerr);
+  } else if (cmd == "paginate") {
+    rc = formulon::cli::run_paginate(args, std::cout, std::cerr);
   } else {
     std::cerr << "formulon: unknown command '" << cmd << "'\n";
     print_top_usage(std::cerr);
