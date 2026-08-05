@@ -45,6 +45,16 @@ inline Expected<double, ErrorCode> read_required_number(const Value* args, std::
   return builtins_detail::read_required_number(args, index);
 }
 
+// Ceiling on how many periods a depreciation schedule may be stepped
+// through. `life` is an unconstrained double, and DB / VDB walk one
+// iteration per period, so `=DB(1, 0, 1E18, 1E18)` would otherwise spin for
+// longer than the process will live. One Excel column's worth of periods is
+// far beyond any real schedule — a period index past it could not even be
+// laid out in a worksheet — so a longer request is rejected as `#NUM!`
+// rather than accepted and never answered. DDB needs no such cap: it has a
+// closed form for the same schedule.
+inline constexpr double kMaxDepreciationPeriods = 1048576.0;
+
 // Reads a required date argument, truncating toward zero. Dates outside
 // Excel's supported serial range [0, 2958465] (9999-12-31) are rejected as
 // `#NUM!` before coupon / day-count loops consume them.

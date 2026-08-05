@@ -1037,6 +1037,54 @@ TEST(FinancialDb, ZeroCostReturnsZero) {
   EXPECT_EQ(v.as_number(), 0.0);
 }
 
+// ---------------------------------------------------------------------------
+// Depreciation schedule length
+// ---------------------------------------------------------------------------
+//
+// DDB and DB both step one iteration per integer period, and `period` is
+// bounded only by `life`, which is an ordinary user-supplied double. A
+// schedule longer than the Excel grid's row count cannot describe a real
+// asset, so each function stops before the loop becomes unbounded — DDB by
+// falling back to the closed form it already uses for fractional periods,
+// DB by refusing the request.
+
+TEST(FinancialDDB, HugeScheduleFallsBackToClosedForm) {
+  // Without the cap this would step 1e18 iterations. The closed form
+  // `cost * ((1-rate)^(p-1) - (1-rate)^p)` is exact for integer periods,
+  // so the answer is still well-defined.
+  const Value v = EvalSource("=DDB(1, 0, 2000000, 2000000)");
+  ASSERT_TRUE(v.is_number());
+  const double rate = 2.0 / 2000000.0;
+  const double expected = std::pow(1.0 - rate, 1999999.0) - std::pow(1.0 - rate, 2000000.0);
+  EXPECT_NEAR(v.as_number(), expected, expected * 1e-9);
+}
+
+TEST(FinancialDDB, ClosedFormAgreesWithTheIterativeSchedule) {
+  // The fallback is only sound because both branches compute the same
+  // number. Pin that at the largest period the iterative branch still
+  // takes, so a change to either branch is caught here.
+  const Value v = EvalSource("=DDB(1, 0, 2000000, 1048576)");
+  ASSERT_TRUE(v.is_number());
+  const double rate = 2.0 / 2000000.0;
+  const double expected = std::pow(1.0 - rate, 1048575.0) - std::pow(1.0 - rate, 1048576.0);
+  EXPECT_NEAR(v.as_number(), expected, expected * 1e-8);
+}
+
+TEST(FinancialDb, HugeScheduleIsNum) {
+  // DB's schedule carries a rounded rate and a partial-first-year term
+  // with no closed form to fall back on, so an over-long schedule is
+  // refused rather than approximated.
+  const Value v = EvalSource("=DB(10000, 1000, 1E18, 1E18, 6)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialDb, ScheduleWithinTheCapStillComputes) {
+  const Value v = EvalSource("=DB(10000, 1000, 5, 1, 6)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 1845.0, 1e-9);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

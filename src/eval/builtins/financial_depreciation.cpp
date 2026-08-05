@@ -291,9 +291,14 @@ Value Ddb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   // Fractional period: use the closed-form continuous declining-balance
   // expression `dep(p) = cost * ((1-rate)^(p-1) - (1-rate)^p)` with the
   // salvage floor applied via cumulative clamp. For integer periods the
-  // existing iterative schedule is preserved byte-for-byte.
+  // existing iterative schedule is preserved byte-for-byte, but only while
+  // the period count stays within the schedule cap: `period` is bounded
+  // only by `life`, so a huge life would otherwise step the loop for
+  // longer than the process will live. The closed form agrees with the
+  // iteration on integer periods, so beyond the cap it takes over rather
+  // than the call failing.
   const bool is_integer_period = std::floor(period) == period;
-  if (!is_integer_period) {
+  if (!is_integer_period || period > kMaxDepreciationPeriods) {
     const double bv_prev = cost * std::pow(1.0 - rate, period - 1.0);
     const double bv_curr = cost * std::pow(1.0 - rate, period);
     // Clamp to salvage: a period whose start already sits at/below
@@ -400,6 +405,9 @@ Value Db(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (period > life && month_int >= 12.0) {
     return Value::error(ErrorCode::Num);
   }
+  if (period > kMaxDepreciationPeriods) {
+    return Value::error(ErrorCode::Num);
+  }
   // Rate: (1 - (salvage/cost)^(1/life)), rounded to 3 decimals. When
   // salvage == 0, pow(0, 1/life) == 0 -> rate = 1.000 exactly.
   double rate_raw = 1.0 - std::pow(salvage / cost, 1.0 / life);
@@ -474,6 +482,13 @@ Value Vdb(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   if (start_period < 0.0 || start_period > end_period || end_period > life) {
+    return Value::error(ErrorCode::Num);
+  }
+  // The loop below walks one iteration per integer period up to
+  // `end_period`, and the switch-to-straight-line state machine has no
+  // closed form to fall back on, so an over-long schedule is refused
+  // outright.
+  if (end_period > kMaxDepreciationPeriods) {
     return Value::error(ErrorCode::Num);
   }
   // start_period == end_period is a zero-length interval: every
