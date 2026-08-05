@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `PivotTable` is the workbook-level pivot definition: identity, cache
 // binding, field configuration, layout, anchor location, transient slicer
@@ -10,6 +9,8 @@
 #define FORMULON_PIVOT_PIVOT_TABLE_H_
 
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
@@ -133,20 +134,26 @@ class PivotTable {
 
   // Most-recent evaluation result -------------------------------------------
   //
-  // `last_result_` is `mutable` because it is a logical-const memoisation
-  // slot: GETPIVOTDATA observes a `PivotTable` through a `const Workbook&`
-  // (`EvalContext::workbook()`) but still needs to refresh the result
-  // cache on demand if the OOXML reader did not pre-compute it. Marking
-  // the field `mutable` lets the lazy form refresh through the const
-  // accessor without `const_cast` gymnastics; the public surface remains
-  // const-correct because callers can only read the result through the
-  // `last_result()` accessor.
+  // `last_result_` is logical-const memoisation: GETPIVOTDATA observes a
+  // `PivotTable` through a `const Workbook&` and may publish a result on
+  // demand. Return a shared snapshot, never a reference into the cache.
+  // Parallel formula cells can therefore keep reading an older result while
+  // another cell publishes a replacement without a dangling reference.
+  std::shared_ptr<const PivotResult> last_result() const {
+    std::lock_guard<std::mutex> lock(*last_result_mutex_);
+    return last_result_;
+  }
 
-  const std::optional<PivotResult>& last_result() const { return last_result_; }
-  /// Returns the underlying `optional` for mutation. Callable through a
-  /// const reference because the result cache is logical-const
-  /// memoisation (see the `mutable` rationale on `last_result_`).
-  std::optional<PivotResult>& mutable_last_result() const { return last_result_; }
+  void set_last_result(PivotResult result) const {
+    auto snapshot = std::make_shared<const PivotResult>(std::move(result));
+    std::lock_guard<std::mutex> lock(*last_result_mutex_);
+    last_result_ = std::move(snapshot);
+  }
+
+  void clear_last_result() const {
+    std::lock_guard<std::mutex> lock(*last_result_mutex_);
+    last_result_.reset();
+  }
 
   // OOXML round-trip passthrough --------------------------------------------
   //
@@ -220,11 +227,9 @@ class PivotTable {
   std::string raw_passthrough_after_row_fields_;
   std::string raw_passthrough_after_col_fields_;
   std::vector<std::pair<std::string, std::string>> passthrough_attrs_;
-  // Logical-const memoisation slot for the most recent evaluation result.
-  // GETPIVOTDATA refreshes this through `const PivotTable&` so the field
-  // must be `mutable`; see the docstring on `last_result()` /
-  // `mutable_last_result()` above.
-  mutable std::optional<PivotResult> last_result_;
+  // Keep the mutex separately allocated so PivotTable remains movable.
+  mutable std::shared_ptr<std::mutex> last_result_mutex_ = std::make_shared<std::mutex>();
+  mutable std::shared_ptr<const PivotResult> last_result_;
 };
 
 }  // namespace formulon::pivot

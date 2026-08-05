@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for pivot layout projection. These tests verify the grid shape
 // exposed to frontends: absolute coordinates, cell kinds, labels, data cells,
@@ -371,6 +370,45 @@ TEST(PivotLayout, InsertsRowSubtotalRowsWhenEvaluatorProvidesMetadata) {
   EXPECT_DOUBLE_EQ(south_subtotal_value->value.as_number(), 500.0);
 }
 
+TEST(PivotLayout, CompactLayoutHonorsFieldSubtotalTop) {
+  PivotCache cache = build_basic_cache();
+  cache.mutable_records().erase(cache.mutable_records().begin() + 2, cache.mutable_records().begin() + 4);
+  // Keep just the North group.
+  PivotTable table = build_table(/*row=*/{0, 1}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_fields()[0].subtotal_top = false;
+
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  ASSERT_EQ(result_or.value().row_subtotals.size(), 1U);
+
+  PivotLayoutOptions options;
+  options.row_labels_label = "Row Labels";
+  auto cells_or = layout(table, result_or.value(), options);
+  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
+  const PivotCells& cells = cells_or.value();
+
+  const PivotCell* north_subtotal = nullptr;
+  std::uint32_t north_last_detail_row = 0;
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.kind != PivotCellKind::RowLabel && cell.kind != PivotCellKind::RowSubtotal) {
+      continue;
+    }
+    if (!cell.value.is_text()) {
+      continue;
+    }
+    if (cell.kind == PivotCellKind::RowSubtotal && cell.value.as_text() == "North") {
+      north_subtotal = &cell;
+    }
+    if (cell.kind == PivotCellKind::RowLabel &&
+        (cell.value.as_text() == "Gadget" || cell.value.as_text() == "Widget")) {
+      north_last_detail_row = std::max(north_last_detail_row, cell.row);
+    }
+  }
+  ASSERT_NE(north_subtotal, nullptr);
+  EXPECT_GT(north_subtotal->row, north_last_detail_row);
+}
+
 TEST(PivotLayout, InsertsColSubtotalColumnsWhenEvaluatorProvidesMetadata) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_table(/*row=*/{}, /*col=*/{0, 1});
@@ -405,6 +443,30 @@ TEST(PivotLayout, InsertsColSubtotalColumnsWhenEvaluatorProvidesMetadata) {
   EXPECT_EQ(south_subtotal_value->kind, PivotCellKind::ColSubtotal);
   ASSERT_TRUE(south_subtotal_value->value.is_number());
   EXPECT_DOUBLE_EQ(south_subtotal_value->value.as_number(), 500.0);
+}
+
+TEST(PivotLayout, ProjectsEveryCustomColumnSubtotal) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_table(/*row=*/{}, /*col=*/{0, 1});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Average, SubtotalFn::Max};
+
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  ASSERT_EQ(result_or.value().col_subtotals.size(), 4U);
+
+  auto cells_or = layout(table, result_or.value());
+  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
+  const PivotCells& cells = cells_or.value();
+  EXPECT_EQ(cells.cols, 9U);  // implicit row header + 4 leaves + 4 subtotal columns.
+
+  std::size_t subtotal_headers = 0;
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.kind == PivotCellKind::ColSubtotal && cell.row == cells.top) {
+      ++subtotal_headers;
+    }
+  }
+  EXPECT_EQ(subtotal_headers, 4U);
 }
 
 TEST(PivotLayout, InsertsColSubtotalColumnsWithRowAxis) {

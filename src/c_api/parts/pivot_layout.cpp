@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - PivotTable layout projection.
 //
@@ -20,6 +19,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "eval/pivot_locale.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_table.h"
@@ -102,7 +102,8 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
         "sheet_index=" + std::to_string(sheet_index) + " pivot_index=" + std::to_string(pivot_index));
   }
 
-  if (!table->last_result().has_value()) {
+  std::shared_ptr<const formulon::pivot::PivotResult> result = table->last_result();
+  if (!result) {
     const formulon::pivot::PivotCache* cache = wb->workbook().find_pivot_cache(table->pivot_cache_id());
     if (cache == nullptr) {
       return set_binding_error(formulon::FormulonErrorCode::kEvalPivotMissing,
@@ -113,10 +114,17 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
     if (!eval_or) {
       return set_last_error(eval_or.error());
     }
-    table->mutable_last_result().emplace(std::move(eval_or.value()));
+    table->set_last_result(std::move(eval_or.value()));
+    result = table->last_result();
+  }
+  if (!result) {
+    return set_binding_error(formulon::FormulonErrorCode::kEvalPivotMissing,
+                             "pivot result cache was invalidated during layout projection");
   }
 
-  auto layout_or = formulon::pivot::layout(*table, *table->last_result());
+  const formulon::pivot::PivotLayoutOptions layout_options =
+      formulon::eval::pivot_layout_options_for(wb->workbook().excel_profile());
+  auto layout_or = formulon::pivot::layout(*table, *result, layout_options);
   if (!layout_or) {
     return set_last_error(layout_or.error());
   }

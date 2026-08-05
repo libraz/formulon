@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Output shape of a single pivot evaluation. Stored on the owning
 // `PivotTable` so that `GETPIVOTDATA` can consult the most recent result
@@ -8,9 +7,11 @@
 #define FORMULON_PIVOT_PIVOT_RESULT_H_
 
 #include <deque>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "pivot/pivot_types.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -52,6 +53,9 @@ struct RowSubtotal {
 struct ColSubtotal {
   std::vector<std::string> labels;
   std::uint32_t depth = 0;
+  /// A custom subtotal aggregation shared by every data field, or empty
+  /// when each data field uses its own configured aggregation.
+  std::optional<Aggregation> aggregation;
   std::vector<std::vector<Value>> values;
 };
 

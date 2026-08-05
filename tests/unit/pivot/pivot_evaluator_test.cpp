@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::pivot::evaluate`. Each test hand-builds a
 // `PivotCache` + `PivotTable` (no XML, no xlsx) and checks the produced
@@ -256,6 +255,72 @@ TEST(PivotEvaluator, OneRowOneColField) {
   EXPECT_DOUBLE_EQ(r.values[north][1][0].as_number(), 125.0);  // North/Widget
   EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), 300.0);  // South/Gadget
   EXPECT_DOUBLE_EQ(r.values[south][1][0].as_number(), 200.0);  // South/Widget
+}
+
+TEST(PivotEvaluator, FieldDescendingSortReversesHierarchyAndValues) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.mutable_fields()[0].sort.ascending = false;
+  table.mutable_fields()[1].sort.ascending = false;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  ASSERT_EQ(r.cols.size(), 2U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  EXPECT_EQ(r.rows[1].label, "North");
+  EXPECT_EQ(r.cols[0].label, "Widget");
+  EXPECT_EQ(r.cols[1].label, "Gadget");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 200.0);  // South/Widget
+  EXPECT_DOUBLE_EQ(r.values[0][1][0].as_number(), 300.0);  // South/Gadget
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 125.0);  // North/Widget
+  EXPECT_DOUBLE_EQ(r.values[1][1][0].as_number(), 50.0);   // North/Gadget
+}
+
+TEST(PivotEvaluator, SparseRowColumnIntersectionIsBlank) {
+  PivotCache cache = build_basic_cache();
+  auto& records = cache.mutable_records();
+  records.erase(std::remove_if(records.begin(), records.end(),
+                               [](const PivotCacheRecord& record) {
+                                 return record.cells[0].as_text() == "North" && record.cells[1].as_text() == "Gadget";
+                               }),
+                records.end());
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const PivotResult& result = result_or.value();
+  const std::size_t north = row_index(result, "North");
+  ASSERT_NE(north, static_cast<std::size_t>(-1));
+  ASSERT_EQ(result.cols.size(), 2U);
+  ASSERT_EQ(result.cols[0].label, "Gadget");
+  EXPECT_TRUE(result.values[north][0][0].is_blank());
+}
+
+TEST(PivotEvaluator, UnresolvedHiddenItemDoesNotFilterBlankRecords) {
+  PivotCache cache = build_basic_cache();
+  PivotCacheRecord blank_region;
+  blank_region.cells = {Value::blank(), owned_text(cache, "Widget"), Value::number(75.0)};
+  cache.mutable_records().push_back(std::move(blank_region));
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  PivotItem malformed_hidden;
+  malformed_hidden.visible = false;
+  malformed_hidden.has_cache_index = true;
+  malformed_hidden.cache_index = 999U;
+  table.mutable_fields()[0].items.push_back(std::move(malformed_hidden));
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const PivotResult& result = result_or.value();
+  bool saw_blank_row = false;
+  for (std::size_t i = 0; i < result.rows.size(); ++i) {
+    if (result.rows[i].label.empty()) {
+      saw_blank_row = true;
+      EXPECT_DOUBLE_EQ(result.values[i][0][0].as_number(), 75.0);
+    }
+  }
+  EXPECT_TRUE(saw_blank_row);
 }
 
 // ---------------------------------------------------------------------------
@@ -1523,6 +1588,26 @@ TEST(PivotEvaluator, ManualFilterHidesItem) {
   EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 175.0);
 }
 
+TEST(PivotEvaluator, ManualFilterMatchesNumericDisplayLabel) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  // The numeric Amount field is rendered as its integral display label.
+  // Hiding 300 removes only South/Gadget without allocating a label string
+  // per record while the filter is evaluated.
+  table.mutable_fields()[2].items = {PivotItem{"300", /*visible=*/false}};
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  const std::size_t north = row_index(r, "North");
+  const std::size_t south = row_index(r, "South");
+  ASSERT_NE(north, static_cast<std::size_t>(-1));
+  ASSERT_NE(south, static_cast<std::size_t>(-1));
+  EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), 175.0);
+  EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), 200.0);
+}
+
 // ---------------------------------------------------------------------------
 // 10. Grand total when flagged
 // ---------------------------------------------------------------------------
@@ -2479,6 +2564,27 @@ TEST(PivotEvaluator, CustomSubtotalFunctionUsesSelectedAggregation) {
   ASSERT_FALSE(r.row_subtotals[north].values.empty());
   ASSERT_TRUE(r.row_subtotals[north].values[0].is_number());
   EXPECT_NEAR(r.row_subtotals[north].values[0].as_number(), 175.0 / 3.0, 1e-9);
+}
+
+TEST(PivotEvaluator, ColumnCustomSubtotalFunctionUsesSelectedAggregation) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{}, /*col=*/{0, 1});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_fields()[0].subtotal_fns = {SubtotalFn::Average};
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.col_subtotals.size(), 2U);
+
+  const std::size_t north = r.col_subtotals[0].labels[0] == "North" ? 0 : 1;
+  ASSERT_LT(north, r.col_subtotals.size());
+  ASSERT_TRUE(r.col_subtotals[north].aggregation.has_value());
+  EXPECT_EQ(*r.col_subtotals[north].aggregation, Aggregation::Average);
+  ASSERT_EQ(r.col_subtotals[north].values.size(), 1U);
+  ASSERT_EQ(r.col_subtotals[north].values[0].size(), 1U);
+  ASSERT_TRUE(r.col_subtotals[north].values[0][0].is_number());
+  EXPECT_NEAR(r.col_subtotals[north].values[0][0].as_number(), 175.0 / 3.0, 1e-9);
 }
 
 // ---------------------------------------------------------------------------

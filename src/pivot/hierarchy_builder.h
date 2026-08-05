@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Hierarchy construction for the pivot evaluator.
 //
@@ -45,6 +44,7 @@ struct HierNode {
 struct HierLevel {
   std::uint32_t field_index;         ///< Index into `PivotTable::fields()`.
   const PivotDateGroup* date_group;  ///< Non-null when this level buckets dates.
+  bool ascending;                    ///< False reverses this field's item order.
 };
 
 /// Inserts `record` into `tree`, walking `levels`. Returns the leaf
@@ -67,21 +67,32 @@ std::string node_label(const Value& key, const HierNode& child);
 /// pushes the corresponding `HierNode*` into `leaves` so a second pass
 /// can attach record indices.
 template <class Node>
-void finalize_hierarchy(HierNode& tree, std::vector<Node>& out, std::vector<HierNode*>& leaves) {
+void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, std::size_t depth, std::vector<Node>& out,
+                        std::vector<HierNode*>& leaves) {
   if (tree.children.empty()) {
     return;
   }
   out.reserve(tree.children.size());
-  for (auto& [key, child] : tree.children) {
+  const auto append = [&](const Value& key, HierNode& child) {
     Node node;
     node.label = node_label(key, child);
     if (child.children.empty()) {
       child.leaf_index = leaves.size();
       leaves.push_back(&child);
     } else {
-      finalize_hierarchy<Node>(child, node.children, leaves);
+      finalize_hierarchy<Node>(child, levels, depth + 1U, node.children, leaves);
     }
     out.push_back(std::move(node));
+  };
+  const bool ascending = depth >= levels.size() || levels[depth].ascending;
+  if (ascending) {
+    for (auto& [key, child] : tree.children) {
+      append(key, child);
+    }
+  } else {
+    for (auto it = tree.children.rbegin(); it != tree.children.rend(); ++it) {
+      append(it->first, it->second);
+    }
   }
 }
 

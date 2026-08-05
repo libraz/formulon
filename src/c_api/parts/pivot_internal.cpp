@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "c_api/parts/pivot_internal.h"
 
@@ -88,14 +87,14 @@ const formulon::pivot::PivotTable* resolve_pivot(const formulon::Workbook& wb, s
 }
 
 void invalidate_pivot_result(formulon::pivot::PivotTable& table) {
-  table.mutable_last_result().reset();
+  table.clear_last_result();
 }
 
 void invalidate_pivot_results_for_cache(formulon::Workbook& wb, std::uint32_t cache_id) {
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     for (auto& table : wb.sheet(s).mutable_pivot_tables()) {
       if (table != nullptr && table->pivot_cache_id() == cache_id) {
-        table->mutable_last_result().reset();
+        table->clear_last_result();
       }
     }
   }

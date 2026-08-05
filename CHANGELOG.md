@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Pivot layout projection through the C API now honours the workbook's Excel
+  profile and the selected Compact, Tabular, or Outline report layout. The
+  default ja-JP profile therefore emits localized labels and Excel-style
+  layout instead of the legacy English grid.
+
 ## [0.9.6] - 2026-07-19
 
 ### Added

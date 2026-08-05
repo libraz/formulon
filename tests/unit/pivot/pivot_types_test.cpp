@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Default-construction and basic invariant tests for the pivot data
 // model. These structures are header-only and behaviour-free at this
@@ -11,6 +10,7 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
+#include "pivot/value_order.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -36,6 +36,11 @@ TEST(PivotTypes, PivotItemDefault) {
   PivotItem item;
   EXPECT_TRUE(item.name.empty());
   EXPECT_TRUE(item.visible);
+}
+
+TEST(PivotValueOrder, DisplayStringUsesCanonicalDoubleFormatting) {
+  EXPECT_EQ(display_string(Value::number(1.5)), "1.5");
+  EXPECT_EQ(display_string(Value::number(9.223372036854776e18)), "9223372036854780000");
 }
 
 TEST(PivotTypes, PivotDateGroupDefault) {
@@ -124,7 +129,7 @@ TEST(PivotTable, IdentityDefaults) {
   EXPECT_TRUE(t.grand_totals_rows());
   EXPECT_TRUE(t.grand_totals_cols());
   EXPECT_TRUE(t.active_filters().empty());
-  EXPECT_FALSE(t.last_result().has_value());
+  EXPECT_EQ(t.last_result(), nullptr);
 }
 
 TEST(PivotTable, IdentityAccessors) {
@@ -198,18 +203,19 @@ TEST(PivotTable, MutableActiveFilters) {
 
 TEST(PivotTable, MutableLastResultRoundTrip) {
   PivotTable t;
-  EXPECT_FALSE(t.last_result().has_value());
+  EXPECT_EQ(t.last_result(), nullptr);
 
   PivotResult r;
   r.grand_total = Value::number(42.0);
   r.grand_totals.push_back(Value::number(42.0));
-  t.mutable_last_result() = std::move(r);
+  t.set_last_result(std::move(r));
 
-  ASSERT_TRUE(t.last_result().has_value());
-  EXPECT_EQ(t.last_result()->grand_total.kind(), ValueKind::Number);
-  EXPECT_EQ(t.last_result()->grand_total.as_number(), 42.0);
-  ASSERT_EQ(t.last_result()->grand_totals.size(), 1U);
-  EXPECT_EQ(t.last_result()->grand_totals[0].as_number(), 42.0);
+  const auto result = t.last_result();
+  ASSERT_NE(result, nullptr);
+  EXPECT_EQ(result->grand_total.kind(), ValueKind::Number);
+  EXPECT_EQ(result->grand_total.as_number(), 42.0);
+  ASSERT_EQ(result->grand_totals.size(), 1U);
+  EXPECT_EQ(result->grand_totals[0].as_number(), 42.0);
 }
 
 }  // namespace
