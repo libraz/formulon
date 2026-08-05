@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `evaluate_cell_for_recalc`. The function is exercised
 // indirectly through `Workbook::recalc` (the recalc engine and the

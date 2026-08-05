@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI tests for the named-cell-style surface
 // (`fm_styles_get_cell_style_count` / `fm_styles_get_cell_style` and

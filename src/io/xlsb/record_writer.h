@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB record-emission primitives — symmetric inverse of
 // `io/xlsb/record.{h,cpp}`. Every helper here writes the exact byte

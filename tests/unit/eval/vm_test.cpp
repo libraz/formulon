@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Direct VM tests. Each case parses a small formula, runs both the
 // tree-walker and the bytecode VM, and asserts the result matches. The

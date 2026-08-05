@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the dynamic-array "indexing" family: `CHOOSECOLS`,
 // `CHOOSEROWS`, `TAKE`, `DROP`. These builtins return a sub-array

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the closed-form bond-pricing financial built-ins:
 // PRICEDISC, PRICEMAT, YIELDDISC, YIELDMAT, and the STOCKHISTORY stub.

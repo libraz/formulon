@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::read_shared_strings`. The reader works
 // against an in-memory `<sst>` byte stream, so each test builds the

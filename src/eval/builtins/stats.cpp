@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Statistical built-ins: dispersion family (VAR.S / VAR.P / STDEV.S /
 // STDEV.P) plus the "A" variants (AVERAGEA / MAXA / MINA / VARA / VARPA /

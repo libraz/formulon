@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the shared A1 reference decoder in `io/a1_ref.{h,cpp}`.
 // Covers the boundary cases shared by `cell_parser` and `sax_xml_reader`:

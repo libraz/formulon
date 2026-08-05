@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `DefaultContentType`: one `<Default Extension="..." ContentType="..."/>`
 // entry from `[Content_Types].xml`. Excel declares binary and media

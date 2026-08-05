@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for AGGREGATE — the multi-mode aggregator that dispatches
 // on a leading numeric `function_num` (1..19) plus a 0..7 options byte.

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Match-result types for the conditional-format evaluator. The
 // evaluator returns one `CFMatch` per rule that fires for a given

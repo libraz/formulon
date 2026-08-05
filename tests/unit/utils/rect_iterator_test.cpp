@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::utils::RectRange`. The iterator is the shared
 // replacement for the hand-rolled `for row × for col` double loops scattered

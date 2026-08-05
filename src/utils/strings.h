@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // ASCII-only string utilities shared across the Formulon engine.
 //

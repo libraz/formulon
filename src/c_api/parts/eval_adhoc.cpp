@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - ad-hoc, side-effect-free formula evaluation. Bridges the
 // engine-side `eval::evaluate_formula_text` / `eval::evaluate_cf_formula`

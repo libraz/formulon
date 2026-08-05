@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the short-circuit "special form" family: `IF`,
 // `IFERROR`, and `IFNA`. These are routed through the dispatch table in

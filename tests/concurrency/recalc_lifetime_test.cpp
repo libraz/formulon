@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lifetime / re-entrancy / external-reader concurrency tests for the
 // parallel recalc scheduler.

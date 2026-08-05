@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // OOXML (.xlsx) package reader. The current slice extracts the workbook
 // structure (sheet names + order) and per-sheet cell contents — every

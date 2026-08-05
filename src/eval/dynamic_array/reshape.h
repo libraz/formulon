@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the dynamic-array "reshape" family: `HSTACK`, `VSTACK`,
 // `EXPAND`. These builtins assemble an `ArrayValue` whose footprint is

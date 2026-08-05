@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """WASM32 struct marshalling for the Formulon C ABI.
 
 Emscripten lowers every by-value struct parameter (and every struct

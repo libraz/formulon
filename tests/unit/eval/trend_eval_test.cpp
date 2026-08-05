@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the TREND lazy builtin (`linest_lazy.{h,cpp}`). TREND fits
 // the same multivariate least-squares model as LINEST and evaluates the

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the accrual and specialized-depreciation
 // financial built-ins: ACCRINT, ACCRINTM, VDB, AMORDEGRC, AMORLINC.

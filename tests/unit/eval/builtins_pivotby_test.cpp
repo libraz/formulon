@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for Excel 365's PIVOTBY dynamic-array function. PIVOTBY shares the
 // lazy-dispatch entry point and aggregator-resolution machinery with

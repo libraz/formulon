@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the conditional-formatting writer. See cf_writer.h
 // for the public contract; see cf_reader.cpp for the symmetric grammar.

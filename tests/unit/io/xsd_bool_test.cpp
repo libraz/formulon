@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the tri-state XSD boolean helpers. The lexical parser is
 // the interesting part: "absent" must fall back to the caller's default,

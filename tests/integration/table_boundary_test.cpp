@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for Excel structured (table) references at the
 // boundary between tables and the rest of the workbook. These tests

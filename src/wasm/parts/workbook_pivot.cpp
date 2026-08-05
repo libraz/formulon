@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook PivotCache + PivotTable mutators. Thin wrappers over the
 // `fm_workbook_pivot_*` C ABI: numeric / boolean / string args map

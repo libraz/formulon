@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Section splitter and classifier for the Excel TEXT() format-string
 // engine. The per-token scanner is in `number_format_tokenizer.cpp`; the

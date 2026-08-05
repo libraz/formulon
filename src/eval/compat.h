@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #ifndef FORMULON_EVAL_COMPAT_H_
 #define FORMULON_EVAL_COMPAT_H_

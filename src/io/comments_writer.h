@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Writer for `xl/comments<N>.xml`. Emits the modern shape with an
 // inline author table plus a flat `<commentList>` of `<comment>`

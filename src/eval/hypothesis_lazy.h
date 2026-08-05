@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for Excel's hypothesis-test / probability family:
 // T.TEST (aliased as TTEST), F.TEST (aliased as FTEST),

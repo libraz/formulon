@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal header for the OOXML cell/row/sheetData builder. Lives inside
 // src/io/; not part of the public API. The unit-test friend is the only

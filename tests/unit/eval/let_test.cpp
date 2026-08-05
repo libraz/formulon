@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Evaluator tests for the `LET` special form and bare `NameRef` lookup.
 // Covers sequential binding, shadowing, error flow, nested LETs, case

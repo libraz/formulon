@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the Web-category built-ins:
 //   * ENCODEURL   -- real impl (RFC 3986 percent-encoding, uppercase hex).

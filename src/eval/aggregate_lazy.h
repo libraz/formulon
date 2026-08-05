@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // AGGREGATE — Excel 365's ergonomic generalization of SUBTOTAL. Dispatches on
 // a leading numeric `function_num` (1..19) and accepts a second `options`

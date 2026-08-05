@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shape / round-trip tests for `eval::ByteCode` and `eval::Instruction`.
 // These tests target the IR header in isolation: they construct

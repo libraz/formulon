@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Special mathematical functions used by Excel's statistical distribution
 // family (CHISQ.*, T.*, F.*, GAMMA.*, BETA.*). The API deliberately returns

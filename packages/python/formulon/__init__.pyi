@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 # Hand-rolled type stubs for the Formulon public surface.
 # IDEs and type-checkers consume this rather than the runtime module.
 

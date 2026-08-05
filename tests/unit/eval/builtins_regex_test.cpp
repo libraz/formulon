@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the REGEX function family (REGEXTEST,
 // REGEXEXTRACT, REGEXREPLACE) backed by PCRE2. Each test parses a

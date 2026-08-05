@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Linear-algebra builtins (MMULT, MDETERM, MINVERSE). See matrix_ops_lazy.h
 // for argument and error semantics. Each function:

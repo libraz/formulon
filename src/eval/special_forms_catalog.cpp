@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Sole source of truth for the parser-integrated special-form name list.
 // See `eval/special_forms_catalog.h` for the rationale.

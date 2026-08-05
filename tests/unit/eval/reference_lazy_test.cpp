@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Direct tests for the internal A1 reference parser
 // `refs_internal::parse_a1_ref`. End-to-end INDIRECT / OFFSET behaviour

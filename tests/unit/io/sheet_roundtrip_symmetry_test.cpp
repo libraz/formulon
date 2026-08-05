@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Read<->write symmetry tests for the worksheet part, built on
 // tests/support/roundtrip_symmetry.h. A workbook is constructed with the

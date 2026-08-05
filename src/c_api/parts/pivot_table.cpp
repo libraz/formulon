@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - PivotTable mutation surface (tables, fields, items,
 // data fields, filters). Shares helpers with `pivot_cache.cpp` via

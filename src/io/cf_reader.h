@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Reader for `<conditionalFormatting>` blocks inside an OOXML sheet
 // (`xl/worksheets/sheet*.xml`). Walks the worksheet DOM and decodes

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the Workbook skeleton. Verifies the factory shape, sheet
 // accessor mutation, and the basic byte-level shape of the save() output.

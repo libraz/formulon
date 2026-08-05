@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impl for `_xlfn.ANCHORARRAY(ref)` — the OOXML internal encoding
 // of the postfix spill operator `ref#`. Excel itself transparently strips

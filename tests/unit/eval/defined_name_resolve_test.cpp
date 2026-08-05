@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for workbook / sheet-scoped defined-name resolution in the
 // tree-walk evaluator. Each case builds a workbook with `set_defined_names`,

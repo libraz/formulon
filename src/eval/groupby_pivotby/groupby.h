@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impl for Excel 365's GROUPBY dynamic-array function. GROUPBY produces
 // a 2D spilled result that summarises a tabular input by one or more

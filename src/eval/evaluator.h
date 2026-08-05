@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Skeleton header kept for project-layout symmetry. The two real evaluator
 // entry points live elsewhere:

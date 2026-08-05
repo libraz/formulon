@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // SUBTOTAL(function_num, ref1, [ref2], ...) — multi-mode aggregator that
 // dispatches on a leading numeric "function_num" argument. Excel's contract:

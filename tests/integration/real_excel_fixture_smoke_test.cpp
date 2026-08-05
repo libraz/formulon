@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Smoke test against a real Mac Excel 365-produced `.xlsx`
 // (`tests/fixtures/excel/xlsb_fidelity_base.xlsx`). Nearly every other

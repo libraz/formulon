@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the shared coupon-schedule engine declared in
 // `coupon_schedule.h`. See that header for the semantic contract and

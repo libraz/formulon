@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Writer pair for the OOXML pivot-cache parts. Symmetric counterpart of
 // `src/io/pivot_cache_reader.{h,cpp}`:

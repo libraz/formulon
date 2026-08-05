@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the LINEST lazy builtin (`linest_lazy.{h,cpp}`). Coverage:
 // single-variable / multivariable regression with and without an

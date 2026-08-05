@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the rank / percentile-rank family:
 // RANK (legacy), RANK.EQ, RANK.AVG, PERCENTRANK (legacy),

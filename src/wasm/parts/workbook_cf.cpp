@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook conditional-formatting surface: read / add / remove / clear
 // rules plus `evaluateCfRange` which projects matched rules onto a

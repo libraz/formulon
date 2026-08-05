@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Reader for one OOXML `xl/pivotTables/pivotTable*.xml` part. Parses the
 // pivot-table definition into a `formulon::pivot::PivotTable`. Does NOT

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook sheet-view and per-sheet layout surface: zoom / freeze /
 // tabHidden, the `<sheetProtection>` get/set bridge, and the column /

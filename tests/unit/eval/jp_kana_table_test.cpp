@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the shared half-to-full katakana base lookup
 // (`eval/jp_kana_table.h`). Boundary checks ensure the accessors return

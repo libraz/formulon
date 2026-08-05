@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Golden tests for `dump_sexpr`. These outputs become the parser corpus
 // contract: every change here is a contract change.

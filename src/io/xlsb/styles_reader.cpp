@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the `xl/styles.bin` reader. See
 // `io/xlsb/styles_reader.h` for the contract.

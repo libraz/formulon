@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for Print_Area / Print_Titles resolution
 // (`src/print/print_area`).

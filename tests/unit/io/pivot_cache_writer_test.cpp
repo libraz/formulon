@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::write_pivot_cache_definition` and
 // `formulon::io::write_pivot_cache_records`. Each test builds a hand-

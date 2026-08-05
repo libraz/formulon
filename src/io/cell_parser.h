@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // OOXML `<c>` (cell) element parser. Decodes a single cell node from a
 // `sheet*.xml` document into a (row, col, value, formula) tuple suitable

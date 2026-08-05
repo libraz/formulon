@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the multi-criteria aggregators COUNTIFS, SUMIFS,
 // AVERAGEIFS, MAXIFS, and MINIFS. All five route through the lazy

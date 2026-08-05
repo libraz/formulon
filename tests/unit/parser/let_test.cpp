@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Parser tests for the `LET` special form. The Pratt parser recognises
 // `LET(name, expr, [name, expr, ...], body)` and emits a `LetBinding` AST

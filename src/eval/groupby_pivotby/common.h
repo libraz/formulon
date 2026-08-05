@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared infrastructure for the GROUPBY / PIVOTBY lazy impls. Both Excel 365
 // dynamic-array functions consume a (row_fields, values [, col_fields]) shape

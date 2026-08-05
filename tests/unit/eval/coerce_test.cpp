@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the scalar coercion helpers in `eval/coerce.{h,cpp}`. The
 // focus is `coerce_to_number`'s text branch, which now falls back to the

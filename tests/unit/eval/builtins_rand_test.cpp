@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the random-number built-ins RAND and RANDBETWEEN.
 // Both are volatile, so the tests exercise distributional properties over

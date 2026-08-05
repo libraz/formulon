@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared private helpers for the three pivot-related TUs
 // (`pivot_layout.cpp`, `pivot_cache.cpp`, `pivot_table.cpp`).

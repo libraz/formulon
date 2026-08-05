@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // REGEXTEST / REGEXEXTRACT / REGEXREPLACE backed by PCRE2 (8-bit, no JIT,
 // UTF + UCP). All three functions share the `regex_kernel` helper to

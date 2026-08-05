@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Parser AST -> MS-XLSB Ptg stream encoder. The exact inverse of
 // `ptg_reader.h`: a post-order walk of the AST emits operand tokens

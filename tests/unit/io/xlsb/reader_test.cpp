@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the MS-XLSB read pipeline skeleton. The tests
 // hand-craft a minimal `.xlsb` package in memory (no committed binary

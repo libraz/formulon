@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-rule-kind matching for the CF evaluator. See rule_match.h /
 // cf/cf_evaluator.h for the contract; the public `match_rule(...)`

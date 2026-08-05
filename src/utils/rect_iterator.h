@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `RectRange` is a header-only, Value-independent range adapter for the
 // inclusive `[r0, r1] x [c0, c1]` row-major walks that every sheet-touching

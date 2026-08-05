@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `EvalContext::resolve_ref`. These tests exercise the
 // semantics table documented on the header directly — constructing

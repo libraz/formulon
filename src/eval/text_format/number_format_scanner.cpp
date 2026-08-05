@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Scanning primitives consumed by the format-string tokenizer
 // (`number_format_tokenizer.cpp`) and the section classifier

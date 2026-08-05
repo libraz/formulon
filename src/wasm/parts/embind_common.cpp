@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Out-of-line implementation of the shared embind helpers declared in
 // `parts/embind_common.h`. The status builders capture the thread-local

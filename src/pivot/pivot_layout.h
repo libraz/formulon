@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Pivot layout projection. This layer converts an evaluated `PivotResult`
 // into absolute grid cells that a UI can draw with the ordinary cell

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the workbook recalc engine. The tests drive the engine
 // indirectly through `Workbook::set_cell_*` / `Workbook::recalc` so the

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test for the OOXML conditional-formatting wiring.
 // Constructs a minimal in-memory `.xlsx` package whose Sheet1 carries

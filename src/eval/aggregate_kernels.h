@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Numeric aggregation kernels shared by SUBTOTAL (`builtins/subtotal.cpp`),
 // AGGREGATE (`aggregate_lazy.cpp`), and the QUARTILE / PERCENTILE family

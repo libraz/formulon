@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Thin registrar that stitches together the per-family builtin catalogs.
 // Each family lives in its own translation unit under `src/eval/builtins/`

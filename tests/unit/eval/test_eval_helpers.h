@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared profile-aware evaluation helpers for unit tests. Keep profile
 // selection visible at call sites so Mac/Windows behavior expectations do not

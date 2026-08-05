@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Relationship / Override XML emission helpers for the OOXML writer.
 // Path-shaping helpers that turn package paths into the various

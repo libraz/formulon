@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the exponential / logarithmic / trigonometric math
 // built-ins: EXP, LN, LOG, LOG10, PI, RADIANS, DEGREES, SIN, COS, TAN,

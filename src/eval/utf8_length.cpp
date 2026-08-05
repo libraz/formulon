@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `utf16_units_in`. See `utf8_length.h` for the contract.
 

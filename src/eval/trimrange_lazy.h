@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // TRIMRANGE — trims fully-blank leading / trailing rows and columns from a
 // rectangular reference, range, or array literal. The Excel 365 dynamic-array

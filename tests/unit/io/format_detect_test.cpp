@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for workbook container-format detection. The detector decides
 // xlsx vs xlsb from the package's central directory so the byte-only C

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `checked_mul_size_t(a, b)` performs `a * b` with overflow detection,
 // returning `Expected<std::size_t, Error>`. On 32-bit `size_t` (the WASM

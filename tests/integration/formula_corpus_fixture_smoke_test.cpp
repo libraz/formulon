@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Smoke test against a second real Mac Excel 365-produced fixture
 // (`tests/fixtures/excel/formula_corpus.xlsx`), covering a function-family

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Cache-record value extraction. Pulled out so the filter engine, the
 // hierarchy builder, and the aggregator can all index a record's field

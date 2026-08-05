@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB function-id ↔ name mapping. `BrtCellFmla`'s embedded `PtgFunc`
 // and `PtgFuncVar` tokens carry a 16-bit function id (rather than a

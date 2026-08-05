@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Top-level array-broadcasting helpers for the tree-walk evaluator's
 // BinaryOp / UnaryOp cases. Split out of `tree_walker.cpp` to keep the

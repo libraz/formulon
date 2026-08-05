@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the dynamic-array "layout" family: `TOCOL`, `TOROW`,
 // `WRAPROWS`, `WRAPCOLS`. TOCOL / TOROW flatten a 2D array into a single

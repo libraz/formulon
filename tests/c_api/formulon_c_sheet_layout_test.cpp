@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI smoke tests for the sheet view / layout entry points
 // added in `formulon_c.h`. The driver is C++ for gtest convenience but

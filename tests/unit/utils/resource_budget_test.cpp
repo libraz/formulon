@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `ResourceBudget`, the request-scoped work-unit guard used
 // to bound attacker-driven allocations (pivot result matrices, recalc

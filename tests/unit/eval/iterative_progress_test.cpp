@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the iterative-solver progress callback contract added
 // to `iterative_solver.h`. Drives the solver directly with a mock

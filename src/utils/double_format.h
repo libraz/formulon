@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Locale-independent shortest-form formatter for `double` matching Mac
 // Excel 365's General-format rendering used by VALUETOTEXT / coerce-to-text.

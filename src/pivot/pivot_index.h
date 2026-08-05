@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook-level pivot anchor resolution. Given a sheet identity + a
 // cell address, find the PivotTable (if any) whose layout bounds

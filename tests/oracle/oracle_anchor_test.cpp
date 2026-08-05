@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `anchor_or_self`, the spill-anchor projection helper used
 // by the oracle comparator. Excel 365 reports only the top-left cell of a

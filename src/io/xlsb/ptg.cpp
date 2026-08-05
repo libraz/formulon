@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the Ptg dispatch table. The table is a flat
 // `constexpr std::array` sorted by `base_byte` so a binary search lands

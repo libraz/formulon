@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Deterministic S-expression dumper for `AstNode`. The format is the golden
 // contract for the parser corpus, so the output must remain stable across

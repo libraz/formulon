@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end regression test for the recalc engine's Text-payload lifetime
 // across `Arena::reset()` cycles. The recalc engine resets its per-pass

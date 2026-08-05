@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Cell-reference formatters for the OOXML writer. Bijective base-26
 // column letters plus the `<row><col>` joiners used by `<mergeCell>`,

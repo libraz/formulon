@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // External-link metadata reader. Surfaces the cross-workbook references
 // recorded in `<externalReferences>` (in `xl/workbook.xml`) joined with

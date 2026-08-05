@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tracks the set of cells whose formula contains an Excel volatile
 // function (NOW / TODAY / RAND / RANDBETWEEN / RANDARRAY / OFFSET /

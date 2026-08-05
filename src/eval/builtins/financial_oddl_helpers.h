@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal header -- do not include outside `src/eval/builtins/financial*`.
 //

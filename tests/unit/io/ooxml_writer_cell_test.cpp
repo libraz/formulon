@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the OOXML cell/row/sheetData builder. These exercise the
 // pure helper surface (`EncodeA1`, `BuildSheetDataXml`) directly and pin

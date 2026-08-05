@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Round-trip tests for the `<mergeCells>` reader. The matching writer
 // path lives in `ooxml_writer.cpp::BuildMergeCellsBlock`; the reader's

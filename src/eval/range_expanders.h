@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Range expanders: turn a range-shaped function call AST into a flat
 // row-major vector of `Value`s for consumers that aggregate across the

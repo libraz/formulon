@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Regression tests for the Mac Excel 365 asymmetric sign-mismatch rule on
 // the legacy FLOOR / CEILING forms:

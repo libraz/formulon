@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Locale-driven labelling for the pivot-grid layout layer. See the
 // header for the contract.

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Range-argument resolution helper shared by the conditional aggregators
 // (`COUNTIF` / `SUMIF` / `AVERAGEIF` / `COUNTIFS` / ...) and the lookup

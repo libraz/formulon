@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the INDIRECT lazy impl. The textual A1 -> rectangle
 // decoder lives in `reference/common.cpp`; this TU only owns the final

@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """setuptools glue for the Formulon Python wheel.
 
 The wheel ships a single platform-agnostic ``formulon_capi.wasm`` plus

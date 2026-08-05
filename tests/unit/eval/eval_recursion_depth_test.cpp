@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Recursion-depth caps for the tree-walk evaluator. The parser already
 // caps formula nesting at 128 layers, but two orthogonal vectors bypass

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for the workbook-level iterative-calc surface.
 // Drives the public Workbook API (`set_cell_formula`, `set_cell_value`,

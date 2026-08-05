@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-token scanner for the Excel TEXT() format-string engine. Walks the
 // input format byte-by-byte and produces the `Section::tokens` stream

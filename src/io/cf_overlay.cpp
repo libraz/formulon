@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the x14 conditional-formatting overlay
 // reconciliation declared in `cf_overlay.h`. Operates purely on the raw

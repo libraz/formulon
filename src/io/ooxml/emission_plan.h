@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-package emission plan for the OOXML writer. Centralises the
 // numbering and collision-detection logic the writer used to derive

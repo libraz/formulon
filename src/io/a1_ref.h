@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared A1 reference decoder: column letters, decimal row indices, and
 // composite "AB12"-shaped references. Consolidates the equivalent helpers

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal header for the rectangle-resolution / intersection routines
 // that sit alongside INDIRECT and OFFSET in this subdirectory. The

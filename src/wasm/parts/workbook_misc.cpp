@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook trace / function-catalog / spill surfaces:
 // `precedents` / `dependents` and their shared `trace_to_val` bridge,

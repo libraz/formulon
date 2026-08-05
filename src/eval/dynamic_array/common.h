@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared helpers for the dynamic-array spilling builtins
 // (`FILTER`/`UNIQUE`/`SORT`/`SORTBY`/`HSTACK`/`VSTACK`/`CHOOSECOLS`/

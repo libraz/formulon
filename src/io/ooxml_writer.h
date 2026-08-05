@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // OOXML (.xlsx) package writer. Round-trips the workbook, including
 // passive metadata (defined names, table parts) and parts the reader

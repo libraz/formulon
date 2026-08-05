@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // "Show values as" transforms applied after the raw aggregation has
 // finished. Each data field with `show_as != Normal` triggers a walk

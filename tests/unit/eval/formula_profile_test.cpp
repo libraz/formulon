@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Formula-profile routing tests. These cases keep the runtime default and
 // explicit profile switches visible outside the oracle suite.

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit + integration tests for cross-sheet reference evaluation. Exercises
 // `Workbook::sheet_by_name`, the `Workbook`-aware `EvalContext` constructor,

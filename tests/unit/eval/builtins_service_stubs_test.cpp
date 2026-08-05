@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the service-stub family: IMAGE, RTD, TRANSLATE,
 // DETECTLANGUAGE, COPILOT, plus PHONETIC (lazy) and ISOMITTED (lazy).

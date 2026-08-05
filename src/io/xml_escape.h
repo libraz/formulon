@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tiny shared helper for OOXML serialisation: escapes the five XML-critical
 // characters (`& < > " '`) into named entities. Non-ASCII bytes (UTF-8

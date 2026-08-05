@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Strict ISO 8601 date-time parsing for OOXML payloads that carry a typed
 // date value (`<c t="d">` cells in strict OOXML, and `<d>` shared / record

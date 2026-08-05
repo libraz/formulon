@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's CONVERT built-in. CONVERT is large enough -- it carries
 // ~80 unit entries plus SI / binary prefix rules -- that it lives in its

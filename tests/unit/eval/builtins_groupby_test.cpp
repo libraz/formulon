@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for Excel 365's GROUPBY dynamic-array function. GROUPBY rides the
 // lazy-dispatch table because its `function` argument has three accepted

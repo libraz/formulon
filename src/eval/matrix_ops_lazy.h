@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the linear-algebra builtins: `MMULT`, `MDETERM`, `MINVERSE`.
 // Each accepts one or two array arguments and produces either a scalar

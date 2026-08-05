@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `comments_writer.h`. Format details live in the
 // header; this TU is self-contained so the writer side has minimal

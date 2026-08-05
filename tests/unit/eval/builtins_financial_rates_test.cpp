@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the security-rate / T-Bill financial built-ins:
 // DISC, INTRATE, RECEIVED, TBILLPRICE, TBILLYIELD, TBILLEQ. These all

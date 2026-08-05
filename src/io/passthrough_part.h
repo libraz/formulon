@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `PassthroughPart`: one OOXML part the reader did not model, captured
 // raw so the writer can re-emit it verbatim.

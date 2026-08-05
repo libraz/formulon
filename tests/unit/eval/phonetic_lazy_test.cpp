@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the PHONETIC lazy form. The Ref path requires a
 // workbook fixture with `Cell::phonetic_text` populated, so it cannot

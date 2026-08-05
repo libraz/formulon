@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test: a workbook carrying `<externalReferences>` plus
 // the matching `xl/_rels/workbook.xml.rels` and per-link rels files

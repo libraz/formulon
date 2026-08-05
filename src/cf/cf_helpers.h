@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared helpers for the CF evaluator: comparison primitives, the
 // `ColorScalePopulation` cache shape, percentile interpolation, and the

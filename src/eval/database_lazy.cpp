@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the database-aggregation lazy family. See
 // `database_lazy.h` for the dispatch-table contract and per-function

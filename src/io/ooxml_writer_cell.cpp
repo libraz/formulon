@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the OOXML cell/row/sheetData builder. Pure functions
 // only: no zip plumbing, no I/O. The orchestrating writer in

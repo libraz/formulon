@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Round-trip tests for `xl/comments<N>.xml`. Builds a `CellComment`
 // list, runs it through the writer, parses it back via the reader, and

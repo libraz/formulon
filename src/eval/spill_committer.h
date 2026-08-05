@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `SpillCommitter` is the side-effect surface that turns an evaluator-
 // produced `Value::Array` into a dynamic-array spill committed at the

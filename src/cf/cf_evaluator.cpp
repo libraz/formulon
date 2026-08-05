@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the CF evaluator's orchestration: `make_match`,
 // per-cell `evaluate_cf_at`, and the viewport `evaluate_cf_for_range`

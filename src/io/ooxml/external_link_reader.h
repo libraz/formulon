@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // External-link reader. Walks `<externalReferences>` in the parsed
 // workbook document, joins each `<externalReference>` against the

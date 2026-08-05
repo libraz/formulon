@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Strict logical coercion shared by the AND / OR / XOR eager builtins and
 // the IFS lazy impl.

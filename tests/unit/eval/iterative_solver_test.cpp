@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the iterative-calc solver. The tests drive the solver
 // directly with mock `evaluate_one` / `commit` callbacks rather than

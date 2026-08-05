@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the pivot-cache reader pair. See
 // pivot_cache_reader.h for the public contract.

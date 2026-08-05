@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `Expected<T, E>` is Formulon's exclusive error-propagation primitive. The
 // engine is built with `-fno-exceptions -fno-rtti`; every fallible API signals

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Reader pair for the OOXML pivot-cache parts:
 //   * xl/pivotCache/pivotCacheDefinition*.xml -> field schema + shared items
