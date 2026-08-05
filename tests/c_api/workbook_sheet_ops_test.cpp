@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI smoke tests for the workbook structural mutation surface added
 // in the sheet-rename / move / remove + defined-name editing bundle.
@@ -7,6 +6,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 
 #include "c_api/formulon_c.h"
@@ -216,4 +216,52 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameNullArguments) {
   EXPECT_NE(fm_workbook_set_defined_name(nullptr, "n", "=1"), 0);
   EXPECT_NE(fm_workbook_set_defined_name(wb.handle, nullptr, "=1"), 0);
   EXPECT_NE(fm_workbook_set_defined_name(wb.handle, "n", nullptr), 0);
+}
+
+TEST(WorkbookSheetOpsCApi, DeleteRejectsCountPastSheetBoundWithoutMutatingCells) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 1, 1, 42.0), 0);
+
+  // Negative values from JavaScript become large uint32_t counts at the C
+  // ABI. They must be rejected before `origin + count` can wrap in the
+  // structural-edit implementation.
+  constexpr std::uint32_t kWrappedNegative = std::numeric_limits<std::uint32_t>::max();
+  EXPECT_NE(fm_workbook_delete_rows(wb.handle, 0, 0, kWrappedNegative), 0);
+  EXPECT_NE(fm_workbook_delete_cols(wb.handle, 0, 0, kWrappedNegative), 0);
+
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 1, 1, &value), 0);
+  EXPECT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 42.0);
+}
+
+TEST(WorkbookSheetOpsCApi, InsertRowsAndColumnsShiftCells) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 2, 1, 42.0), 0);  // B3
+
+  ASSERT_EQ(fm_workbook_insert_rows(wb.handle, 0, 1, 1), 0);
+  ASSERT_EQ(fm_workbook_insert_cols(wb.handle, 0, 1, 1), 0);
+
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 3, 2, &value), 0);  // C4
+  EXPECT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 42.0);
+}
+
+TEST(WorkbookSheetOpsCApi, EmptyMetadataListsExposeTheirCAbiContracts) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  EXPECT_EQ(fm_workbook_table_count(wb.handle), 0U);
+  EXPECT_EQ(fm_workbook_passthrough_count(wb.handle), 0U);
+
+  const char* name = nullptr;
+  const char* display_name = nullptr;
+  const char* ref = nullptr;
+  std::size_t sheet_index = 99;
+  EXPECT_NE(fm_workbook_table_at(wb.handle, 0, &name, &display_name, &ref, &sheet_index), 0);
+
+  const char* path = nullptr;
+  EXPECT_NE(fm_workbook_passthrough_at(wb.handle, 0, &path), 0);
 }

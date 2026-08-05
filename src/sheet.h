@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook sheet model. A `Sheet` owns a display name and a row-sparse,
 // column-dense cell store keyed by 0-based row index. Excel sheets reach
@@ -28,6 +27,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "io/unknown_relationship.h"
 #include "value.h"
 
 namespace formulon {
@@ -397,6 +397,22 @@ struct SheetPrintSettings {
   std::vector<ManualBreak> manual_col_breaks;  ///< `<colBreaks>` entries, 0-based ids.
 };
 
+/// Worksheet children which the calculation model does not interpret but
+/// which must retain their schema position to avoid silently damaging an
+/// Excel-authored sheet. Each member is a complete XML element captured
+/// verbatim from the source worksheet.
+struct WorksheetRawExtensions {
+  std::string protected_ranges_xml;
+  std::string scenarios_xml;
+  std::string custom_sheet_views_xml;
+  std::string phonetic_pr_xml;
+  std::string ignored_errors_xml;
+  std::string legacy_drawing_hf_xml;
+  std::string picture_xml;
+  std::string ole_objects_xml;
+  std::string controls_xml;
+};
+
 /// Hash for `CellAddress` suitable for `std::unordered_map`.
 ///
 /// Excel addresses cap at row < 2^21 and col < 2^14 so a simple
@@ -474,6 +490,24 @@ class Sheet {
   /// Replaces the display name.
   void set_name(std::string name) { name_ = std::move(name); }
 
+  /// Whether this is an OOXML sheet type that Formulon intentionally treats
+  /// as opaque (chartsheet, dialogsheet, macrosheet, or a future sheet
+  /// type). Its XML part is carried through `Workbook::passthrough_parts()`
+  /// while this lightweight Sheet preserves its place, name and visibility
+  /// in the workbook's ordered `<sheets>` list.
+  bool is_opaque_ooxml_sheet() const noexcept { return !opaque_ooxml_part_path_.empty(); }
+
+  /// Marks this sheet as opaque OOXML metadata. `part_path` is the package
+  /// path (for example `xl/chartsheets/sheet1.xml`) and `relationship_type`
+  /// is the original workbook-relationship type URI.
+  void set_opaque_ooxml_sheet(std::string part_path, std::string relationship_type) {
+    opaque_ooxml_part_path_ = std::move(part_path);
+    opaque_ooxml_relationship_type_ = std::move(relationship_type);
+  }
+
+  const std::string& opaque_ooxml_part_path() const noexcept { return opaque_ooxml_part_path_; }
+  const std::string& opaque_ooxml_relationship_type() const noexcept { return opaque_ooxml_relationship_type_; }
+
   /// Stores a literal value at `(row, col)`.
   ///
   /// The cell's `formula_text` is reset to empty and `cached_value` is set
@@ -491,6 +525,13 @@ class Sheet {
   /// dropped. The spill anchor's own `cached_value` is left untouched and
   /// will be refreshed (or surface `#SPILL!`) on the next evaluation pass.
   void set_cell_value(std::uint32_t row, std::uint32_t col, Value v);
+
+  /// Stores a text literal while copying its bytes into the cell's own
+  /// heap-stable storage. This is for callers whose input buffer is only
+  /// valid for the duration of the call (such as the C ABI); readers with a
+  /// workbook-scoped shared-string store should use `set_cell_value`.
+  /// Growth and spill-invalidation semantics match `set_cell_value`.
+  void set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view text);
 
   /// Stores a formula at `(row, col)`.
   ///
@@ -605,8 +646,9 @@ class Sheet {
 
   /// Returns the spill region whose phantom area covers `(row, col)`, or
   /// `nullptr` when no region covers it. Returns `nullptr` for the
-  /// region's anchor cell itself: only phantoms are tracked in the
-  /// reverse map. Use `spill_region_at_anchor` to look up by anchor.
+  /// region's anchor cell itself: only phantom coordinates match. Lookup
+  /// scans the registered spill rectangles, avoiding a per-phantom index.
+  /// Use `spill_region_at_anchor` to look up by anchor.
   const SpillRegion* spill_region_covering(std::uint32_t row, std::uint32_t col) const noexcept;
 
   /// Returns the coordinates of every phantom cell across all registered
@@ -673,6 +715,11 @@ class Sheet {
   ///
   /// No-op when no region is anchored at `(anchor_row, anchor_col)`.
   void clear_spill(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept;
+
+  /// Invalidates every dynamic-array spill region. Structural row/column
+  /// edits use this before moving cells; the next recalculation recreates
+  /// regions at their new coordinates.
+  void clear_all_spills() noexcept;
 
   // ---------------------------------------------------------------------------
   // Pivot tables anchored on this sheet
@@ -839,6 +886,9 @@ class Sheet {
   /// Mutable access for the OOXML reader.
   SheetPrintSettings& mutable_print_settings() noexcept { return print_settings_; }
 
+  const WorksheetRawExtensions& raw_extensions() const noexcept { return raw_extensions_; }
+  WorksheetRawExtensions& mutable_raw_extensions() noexcept { return raw_extensions_; }
+
   /// Package-relative path of the DrawingML part (`xl/drawings/drawingN.xml`)
   /// this sheet references via `<drawing r:id="...">`, or empty when the
   /// sheet anchors no drawing. Populated by the OOXML reader; the part
@@ -851,6 +901,22 @@ class Sheet {
   /// Sets the sheet's DrawingML part path. Plain metadata; no lifecycle
   /// or recalc interaction.
   void set_drawing_rel_target(std::string target) { drawing_rel_target_ = std::move(target); }
+
+  /// Package-relative path of this sheet's legacy comment VML drawing, or
+  /// empty for a newly-created comment collection. It is distinct from the
+  /// DrawingML target above and lets comment shapes survive sheet reordering.
+  const std::string& comment_vml_path() const noexcept { return comment_vml_path_; }
+  void set_comment_vml_path(std::string path) { comment_vml_path_ = std::move(path); }
+
+  /// Relationships from this worksheet's `.rels` part that Formulon does
+  /// not otherwise model (OLE objects, controls, slicers, and so on).
+  /// Their target parts travel through Workbook passthrough storage; keeping
+  /// the original rIds lets raw worksheet XML which refers to them remain
+  /// connected after a round trip.
+  const std::vector<io::UnknownRelationship>& unknown_relationships() const noexcept { return unknown_relationships_; }
+  void set_unknown_relationships(std::vector<io::UnknownRelationship> relationships) {
+    unknown_relationships_ = std::move(relationships);
+  }
 
   /// Raw `<autoFilter>` element captured from the worksheet, or empty when
   /// the sheet has no auto-filter. The engine does not model filter
@@ -938,6 +1004,11 @@ class Sheet {
   const SpillRegion* spill_region_covering_locked(std::uint32_t row, std::uint32_t col) const noexcept;
 
   std::string name_;
+  // Non-empty only for chartsheets / dialog sheets / macro sheets and other
+  // non-worksheet OOXML sheet types. Their XML and descendant parts are raw
+  // passthrough payloads; these two fields preserve the workbook-level link.
+  std::string opaque_ooxml_part_path_;
+  std::string opaque_ooxml_relationship_type_;
   std::unordered_map<std::uint32_t, std::vector<Cell>> rows_;
   // Lazily allocated: most sheets do not host any spill regions, so the
   // table is only materialised on the first `commit_spill` call.
@@ -952,7 +1023,9 @@ class Sheet {
   // the scheduler calls under its `write_mutex` and which then takes
   // `spill_mutex_` internally. `mutable` because const observers
   // (`resolve_cell_value`, `cell_at`, `spill_region_*`) must lock it too.
-  mutable std::mutex spill_mutex_;
+  // Heap ownership makes the lock movable with its sheet, so Sheet's
+  // out-of-line defaulted move members cannot omit future metadata fields.
+  mutable std::unique_ptr<std::mutex> spill_mutex_;
   // Pivot tables anchored on this sheet. Empty by default; populated by
   // the OOXML reader at workbook-load time. Heap-owned so addresses stay
   // stable across vector reallocations.
@@ -984,10 +1057,18 @@ class Sheet {
   SheetFormatDefaults format_defaults_;
   // Raw print/page setup metadata and its optional printerSettings rel.
   SheetPrintSettings print_settings_;
+  // Raw worksheet children not represented by the editing/evaluation model.
+  WorksheetRawExtensions raw_extensions_;
   // Package-relative path of the DrawingML part referenced by
   // `<drawing r:id>`, or empty. The part itself round-trips via the
   // workbook's passthrough parts.
   std::string drawing_rel_target_;
+  // Package-relative VML drawing paired with this sheet's comments. The
+  // writer may assign a new output filename, but uses this path to find the
+  // original bytes in passthrough storage.
+  std::string comment_vml_path_;
+  // Unmodelled entries from `xl/worksheets/_rels/sheetN.xml.rels`.
+  std::vector<io::UnknownRelationship> unknown_relationships_;
   // Raw `<autoFilter>` element, or empty. Round-trips verbatim; filter
   // criteria are not modelled.
   std::string auto_filter_xml_;
