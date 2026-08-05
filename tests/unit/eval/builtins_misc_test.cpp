@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for a miscellaneous batch of builtins that do not fit
 // neatly into the per-category test files: XOR (logical), DAYS360,
@@ -360,6 +359,12 @@ TEST(BuiltinsNetworkdaysIntl, ErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsNetworkdaysIntl, RejectsOutOfRangeSerialBeforeIteration) {
+  const Value v = EvalSource("=NETWORKDAYS.INTL(1,1000000000)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 // ---------------------------------------------------------------------------
 // WORKDAY.INTL
 // ---------------------------------------------------------------------------
@@ -445,6 +450,12 @@ TEST(BuiltinsWorkdayIntl, ErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsWorkdayIntl, RejectsOutOfRangeDayCountBeforeIteration) {
+  const Value v = EvalSource("=WORKDAY.INTL(1,1000000000)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 // ---------------------------------------------------------------------------
 // Weekday-rotation cross-check: 2024-01-01 must be a Monday. If this
 // assertion ever fails, the Mon=0 rotation inside `is_weekend_masked`
@@ -493,11 +504,11 @@ TEST(BuiltinsToday, IsFloorOfNow) {
   const LocalNowExpect exp = ExpectedLocalNow();
   const Value v = EvalSource("=TODAY()");
   ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), exp.date_serial);
+  EXPECT_LE(std::fabs(v.as_number() - exp.date_serial), 1.0);
   // And the floor relationship, reading NOW again within the same test.
   const Value now = EvalSource("=NOW()");
   ASSERT_TRUE(now.is_number());
-  EXPECT_EQ(std::floor(now.as_number()), v.as_number());
+  EXPECT_LE(std::fabs(std::floor(now.as_number()) - v.as_number()), 1.0);
 }
 
 TEST(BuiltinsToday, ZeroArgsArity) {

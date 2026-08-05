@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the workday-arithmetic lazy impls: `NETWORKDAYS`,
 // `NETWORKDAYS.INTL`, `WORKDAY`, and `WORKDAY.INTL`. See
@@ -35,6 +34,16 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+constexpr double kExcelMaxSerial = 2958465.0;  // 9999-12-31
+
+bool is_valid_workday_serial(double value) noexcept {
+  return std::isfinite(value) && value >= 0.0 && value <= kExcelMaxSerial;
+}
+
+bool is_valid_workday_count(double value) noexcept {
+  return std::isfinite(value) && std::fabs(std::trunc(value)) <= kExcelMaxSerial;
+}
 
 // Returns true when `serial_floor` (an integer Excel serial) falls on a
 // day marked as weekend by `weekend_mask`. The mask is a 7-bit value:
@@ -229,7 +238,7 @@ Value eval_networkdays_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (!end_n) {
     return Value::error(end_n.error());
   }
-  if (start_n.value() < 0.0 || end_n.value() < 0.0) {
+  if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_serial(end_n.value())) {
     return Value::error(ErrorCode::Num);
   }
   std::vector<double> holidays;
@@ -285,7 +294,7 @@ Value eval_workday_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (!days_n) {
     return Value::error(days_n.error());
   }
-  if (start_n.value() < 0.0) {
+  if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_count(days_n.value())) {
     return Value::error(ErrorCode::Num);
   }
   std::vector<double> holidays;
@@ -309,7 +318,7 @@ Value eval_workday_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
   while (remaining > 0) {
     cur += step;
-    if (cur < 0.0) {
+    if (cur < 0.0 || cur > kExcelMaxSerial) {
       return Value::error(ErrorCode::Num);
     }
     if (is_weekend(cur)) {
@@ -345,7 +354,7 @@ Value eval_networkdays_intl_lazy(const parser::AstNode& call, Arena& arena, cons
   if (!end_n) {
     return Value::error(end_n.error());
   }
-  if (start_n.value() < 0.0 || end_n.value() < 0.0) {
+  if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_serial(end_n.value())) {
     return Value::error(ErrorCode::Num);
   }
   // Default to the Sat+Sun weekend (matches NETWORKDAYS / selector 1).
@@ -413,7 +422,7 @@ Value eval_workday_intl_lazy(const parser::AstNode& call, Arena& arena, const Fu
   if (!days_n) {
     return Value::error(days_n.error());
   }
-  if (start_n.value() < 0.0) {
+  if (!is_valid_workday_serial(start_n.value()) || !is_valid_workday_count(days_n.value())) {
     return Value::error(ErrorCode::Num);
   }
   std::uint8_t mask = 0x60U;
@@ -448,7 +457,7 @@ Value eval_workday_intl_lazy(const parser::AstNode& call, Arena& arena, const Fu
   }
   while (remaining > 0) {
     cur += step;
-    if (cur < 0.0) {
+    if (cur < 0.0 || cur > kExcelMaxSerial) {
       return Value::error(ErrorCode::Num);
     }
     if (is_weekend_masked(cur, mask)) {

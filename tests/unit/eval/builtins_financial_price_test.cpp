@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the regular-period bond-pricing builtin: PRICE.
 // The implementation lives in `eval/builtins/financial_price.cpp` and
@@ -43,6 +42,12 @@ TEST(FinancialPrice, DefaultBasisZero) {
   const Value v = EvalSource("=PRICE(DATE(2008,2,15), DATE(2017,11,15), 0.0575, 0.065, 100, 2)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 94.6343616213, 1e-9);
+}
+
+TEST(FinancialPrice, RejectsDateSerialBeyondExcelCalendar) {
+  const Value v = EvalSource("=PRICE(2958466, 2958467, 0.0575, 0.065, 100, 2, 0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(FinancialPrice, BasisOneActualActual) {
