@@ -277,6 +277,11 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
     return NullHandleError(env);
   }
   fm_status_t rc = fm_workbook_recalc(handle_);
+  // A full recalc is the coarsest boundary the binding has and the one
+  // after which the footprint has most likely moved (spilled arrays,
+  // newly cached text), so the external-memory figure is refreshed here
+  // rather than on every cell write.
+  SyncExternalMemory(env);
   return MakeStatus(env, rc);
 }
 
@@ -368,12 +373,28 @@ Napi::Value Workbook::Dispose(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  DestroyHandle();
+  DestroyHandle(env);
   return env.Undefined();
 }
 
 Napi::Value Workbook::IsValid(const Napi::CallbackInfo& info) {
   return Napi::Boolean::New(info.Env(), handle_ != nullptr);
+}
+
+Napi::Value Workbook::MemoryUsage(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return Napi::Number::New(env, 0);
+  }
+  size_t bytes = 0;
+  if (fm_workbook_memory_usage(handle_, &bytes) != 0) {
+    return Napi::Number::New(env, 0);
+  }
+  // Re-report while the figure is in hand: a script that has been
+  // filling cells since the last sync has grown the workbook without V8
+  // hearing about it, and this is the natural moment to correct that.
+  SyncExternalMemory(env);
+  return Napi::Number::New(env, static_cast<double>(bytes));
 }
 
 Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {

@@ -53,6 +53,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Lifecycle.
   Napi::Value Dispose(const Napi::CallbackInfo& info);
   Napi::Value IsValid(const Napi::CallbackInfo& info);
+  Napi::Value MemoryUsage(const Napi::CallbackInfo& info);
 
   // Lambda text read.
   Napi::Value GetLambdaText(const Napi::CallbackInfo& info);
@@ -273,11 +274,28 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
  private:
   static bool IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
                                           void* user_data);
-  void DestroyHandle();
+  void DestroyHandle(Napi::Env env);
+
+  /// Tells V8 how much memory this wrapper is really keeping alive.
+  ///
+  /// A `Workbook` is one pointer as far as the collector can see, so a
+  /// script holding a few hundred loaded workbooks looks cheap and the
+  /// heuristics never feel enough pressure to collect them. Reporting the
+  /// engine-side estimate as external memory puts the real weight in
+  /// front of the collector.
+  ///
+  /// Reports the delta since the last call, so it is idempotent and
+  /// safe to invoke after any operation that may have changed the
+  /// footprint. Destroying the handle reports the whole amount back.
+  void SyncExternalMemory(Napi::Env env);
 
   fm_workbook_t* handle_ = nullptr;
   Napi::FunctionReference iterative_progress_callback_;
   bool in_iterative_progress_callback_ = false;
+  /// Bytes currently attributed to this wrapper in V8's external-memory
+  /// accounting; the baseline `SyncExternalMemory` computes its delta
+  /// against.
+  int64_t reported_external_bytes_ = 0;
 };
 
 }  // namespace formulon_node

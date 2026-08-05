@@ -224,6 +224,47 @@ test('dispose deterministically releases a workbook and is idempotent', async ()
   assert.equal(wb.dispose(), undefined);
 });
 
+test('memoryUsage grows with the workbook and reads zero after dispose', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+
+  const empty = wb.memoryUsage();
+  assert.ok(empty > 0, `an empty workbook still owns storage, got ${empty}`);
+
+  // Distinct strings so the shared-string storage cannot fold them into
+  // one entry and hide the growth.
+  for (let row = 0; row < 2000; row += 1) {
+    wb.setText(0, row, 0, `payload-${row}-${'x'.repeat(64)}`);
+  }
+  const filled = wb.memoryUsage();
+  assert.ok(filled > empty, `expected growth, got ${empty} -> ${filled}`);
+
+  wb.dispose();
+  assert.equal(wb.memoryUsage(), 0);
+});
+
+test('memoryUsage is stable across repeated calls and survives a recalc', async () => {
+  // The external-memory report is computed as a delta against the last
+  // reported figure, so a repeated call on an unchanged workbook must be
+  // a no-op rather than double-counting, and the operations that trigger
+  // their own report must not disturb the estimate either.
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  for (let row = 0; row < 500; row += 1) {
+    wb.setFormula(0, row, 0, `=${row}+1`);
+  }
+
+  const first = wb.memoryUsage();
+  assert.equal(wb.memoryUsage(), first);
+
+  assert.equal(wb.recalc().ok, true);
+  const afterRecalc = wb.memoryUsage();
+  assert.ok(afterRecalc >= first, `recalc must not shrink the estimate: ${first} -> ${afterRecalc}`);
+  assert.equal(wb.memoryUsage(), afterRecalc);
+
+  wb.dispose();
+});
+
 test('Workbook factories return instances of the exported Workbook class', async () => {
   const mod = await getModule();
   const defaultBook = mod.Workbook.createDefault();

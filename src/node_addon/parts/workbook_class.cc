@@ -24,10 +24,10 @@ Workbook::Workbook(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Workbook>(
 }
 
 Workbook::~Workbook() {
-  DestroyHandle();
+  DestroyHandle(Env());
 }
 
-void Workbook::DestroyHandle() {
+void Workbook::DestroyHandle(Napi::Env env) {
   if (handle_ != nullptr) {
     // Clear this workbook's C callback before destroying its user-data
     // wrapper, then release the JS callback reference below.
@@ -36,6 +36,27 @@ void Workbook::DestroyHandle() {
     handle_ = nullptr;
   }
   iterative_progress_callback_.Reset();
+  // With the handle gone the measurement is zero, so this hands the
+  // whole reported amount back to V8. Doing it after the destroy (rather
+  // than before) keeps the accounting from ever going negative if the
+  // release path is entered twice.
+  SyncExternalMemory(env);
+}
+
+void Workbook::SyncExternalMemory(Napi::Env env) {
+  int64_t current = 0;
+  if (handle_ != nullptr) {
+    size_t bytes = 0;
+    if (fm_workbook_memory_usage(handle_, &bytes) == 0) {
+      current = static_cast<int64_t>(bytes);
+    }
+  }
+  const int64_t delta = current - reported_external_bytes_;
+  if (delta == 0) {
+    return;
+  }
+  reported_external_bytes_ = current;
+  Napi::MemoryManagement::AdjustExternalMemory(env, delta);
 }
 
 uint32_t Workbook::ArgU32(const Napi::CallbackInfo& info, size_t idx) {
@@ -91,6 +112,7 @@ Napi::Value Workbook::CreateDefault(const Napi::CallbackInfo& info) {
     // `kBindingInvalidHandle`. This matches embind's behaviour.
     wb->handle_ = nullptr;
   }
+  wb->SyncExternalMemory(env);
   return jsobj;
 }
 
@@ -103,6 +125,7 @@ Napi::Value Workbook::CreateEmpty(const Napi::CallbackInfo& info) {
   if (rc != 0) {
     wb->handle_ = nullptr;
   }
+  wb->SyncExternalMemory(env);
   return jsobj;
 }
 
@@ -131,6 +154,10 @@ Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   if (rc != 0) {
     wb->handle_ = nullptr;
   }
+  // A freshly loaded workbook is the one case where the footprint is
+  // both large and known up front, so this is the report that matters
+  // most for collection pressure.
+  wb->SyncExternalMemory(env);
   return jsobj;
 }
 
@@ -212,6 +239,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::InsertRows>("insertRows"),
           InstanceMethod<&Workbook::IsValid>("isValid"),
           InstanceMethod<&Workbook::LocalizeFunctionName>("localizeFunctionName"),
+          InstanceMethod<&Workbook::MemoryUsage>("memoryUsage"),
           InstanceMethod<&Workbook::MoveSheet>("moveSheet"),
           InstanceMethod<&Workbook::PartialRecalc>("partialRecalc"),
           InstanceMethod<&Workbook::Paginate>("paginate"),
