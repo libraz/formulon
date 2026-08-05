@@ -8,11 +8,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <set>
 #include <string>
 
 #include "cell.h"
 #include "gtest/gtest.h"
+#include "pivot/pivot_table.h"
 #include "value.h"
 
 namespace formulon {
@@ -142,6 +144,25 @@ TEST(SheetTest, SetCellFormulaStoresStringVerbatimWithoutValidation) {
   const Cell* cell = s.cell_at(2U, 2U);
   ASSERT_NE(cell, nullptr);
   EXPECT_EQ(cell->formula_text, "no leading equals");
+}
+
+TEST(SheetTest, StructuralEditsShiftPivotAnchorOnBothAxes) {
+  Sheet s("Sheet1");
+  auto pivot = std::make_unique<pivot::PivotTable>();
+  pivot->set_anchor(/*row=*/5U, /*col=*/7U, /*rows=*/3U, /*cols=*/4U);
+  s.add_pivot_table(std::move(pivot));
+
+  s.insert_rows(/*row=*/3U, /*count=*/2U);
+  s.insert_cols(/*col=*/4U, /*count=*/3U);
+  ASSERT_EQ(s.pivot_tables().size(), 1U);
+  EXPECT_EQ(s.pivot_tables()[0]->anchor_row(), 7U);
+  EXPECT_EQ(s.pivot_tables()[0]->anchor_col(), 10U);
+
+  // Deleting across the anchor clamps it to the start of the deleted band.
+  s.delete_rows(/*row=*/7U, /*count=*/1U);
+  s.delete_cols(/*col=*/9U, /*count=*/2U);
+  EXPECT_EQ(s.pivot_tables()[0]->anchor_row(), 7U);
+  EXPECT_EQ(s.pivot_tables()[0]->anchor_col(), 9U);
 }
 
 // ---------------------------------------------------------------------------

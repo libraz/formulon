@@ -109,6 +109,15 @@ TEST(ArenaTest, InternEmptyIsEmpty) {
   EXPECT_TRUE(arena.intern("").empty());
 }
 
+TEST(ArenaTest, AllocationLimitReportsStickyExhaustionUntilReset) {
+  Arena arena(64, 63);
+  EXPECT_EQ(nullptr, arena.allocate(1, 1));
+  EXPECT_TRUE(arena.exhausted());
+
+  arena.reset();
+  EXPECT_FALSE(arena.exhausted());
+}
+
 TEST(ArenaTest, GrowsToNewChunkWhenExhausted) {
   Arena arena(64);
   // First allocation opens the initial chunk.

@@ -145,6 +145,7 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   slot.formula_text.clear();
   slot.phonetic_text.clear();
   slot.cached_value = v;
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view text) {
@@ -165,6 +166,7 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
   auto owned = std::make_unique<std::string>(text);
   slot.cached_value = Value::text(*owned);
   slot.cached_text_owned = std::move(owned);
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string formula) {
@@ -185,6 +187,7 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   slot.formula_text = std::move(formula);
   slot.phonetic_text.clear();
   slot.cached_value = Value::blank();
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v) {
@@ -237,6 +240,23 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
     // unconditionally.
     slot.cached_value = v;
   }
+  ++cell_enumeration_revision_;
+}
+
+void Sheet::set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col, Value v) {
+  assert(row < kMaxRows && col < kMaxCols);
+
+  // This is the reader-only counterpart to `set_cell_cached_value`: the
+  // workbook-owned shared-string deque keeps Text payloads alive for the
+  // workbook lifetime, so duplicating a shared value per cell would turn a
+  // compact SST into O(number of cells) storage. Clear any evaluator-owned
+  // backing allocation before installing the borrowed view.
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  std::vector<Cell>& row_cells = rows_[row];
+  Cell& slot = EnsureSlot(row_cells, col);
+  slot.cached_text_owned.reset();
+  slot.cached_value = v;
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_view phonetic) {
@@ -254,6 +274,7 @@ void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_
   std::vector<Cell>& row_cells = rows_[row];
   Cell& slot = EnsureSlot(row_cells, col);
   slot.phonetic_text.assign(phonetic.begin(), phonetic.end());
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index) {
@@ -266,6 +287,7 @@ void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_
   std::vector<Cell>& row_cells = rows_[row];
   Cell& slot = EnsureSlot(row_cells, col);
   slot.xf_index = xf_index;
+  ++cell_enumeration_revision_;
 }
 
 const Cell* Sheet::cell_at(std::uint32_t row, std::uint32_t col) const noexcept {
@@ -446,12 +468,14 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
         std::vector<Cell>& row_cells = rows_[anchor_row];
         Cell& anchor_slot = EnsureSlot(row_cells, anchor_col);
         anchor_slot.cached_value = Value::error(ErrorCode::Spill);
+        ++cell_enumeration_revision_;
         return false;
       }
       if (spill_region_covering_locked(row, col) != nullptr) {
         std::vector<Cell>& row_cells = rows_[anchor_row];
         Cell& anchor_slot = EnsureSlot(row_cells, anchor_col);
         anchor_slot.cached_value = Value::error(ErrorCode::Spill);
+        ++cell_enumeration_revision_;
         return false;
       }
     }
@@ -485,6 +509,7 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   std::vector<Cell>& row_cells = rows_[anchor_row];
   Cell& anchor_slot = EnsureSlot(row_cells, anchor_col);
   anchor_slot.cached_value = first_cell;
+  ++cell_enumeration_revision_;
   return true;
 }
 
@@ -825,6 +850,7 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
   clear_all_spills();
   ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, conditional_formats_, layout_, print_settings_,
                      pivot_tables_, row, count, /*is_delete=*/false, /*row_axis=*/true);
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
@@ -854,6 +880,7 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
   clear_all_spills();
   ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, conditional_formats_, layout_, print_settings_,
                      pivot_tables_, row, count, /*is_delete=*/true, /*row_axis=*/true);
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
@@ -892,6 +919,7 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
   clear_all_spills();
   ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, conditional_formats_, layout_, print_settings_,
                      pivot_tables_, col, count, /*is_delete=*/false, /*row_axis=*/false);
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
@@ -909,6 +937,7 @@ void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
   clear_all_spills();
   ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, conditional_formats_, layout_, print_settings_,
                      pivot_tables_, col, count, /*is_delete=*/true, /*row_axis=*/false);
+  ++cell_enumeration_revision_;
 }
 
 void Sheet::clear_spill(std::uint32_t anchor_row, std::uint32_t anchor_col) noexcept {
@@ -934,6 +963,7 @@ void Sheet::clear_spill_locked(std::uint32_t anchor_row, std::uint32_t anchor_co
     return;
   }
   spill_table_->by_anchor.erase(it);
+  ++cell_enumeration_revision_;
 }
 
 }  // namespace formulon

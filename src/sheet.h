@@ -266,6 +266,7 @@ struct RowLayout {
   double height = 0.0;    // in points
   bool hidden = false;
   std::uint8_t outline_level = 0;
+  bool has_height = false;
 };
 
 /// Aggregate of per-sheet layout overrides (column spans + row overrides).
@@ -570,6 +571,14 @@ class Sheet {
   /// `EvalContext::dispatch_array_result`.
   void set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v);
 
+  /// Updates a cached value without copying Text bytes. The caller must
+  /// provide Text storage that outlives this Sheet and must not pass a view
+  /// backed by this cell's previous `cached_text_owned` allocation.
+  ///
+  /// OOXML/XLSB readers use this for workbook-owned shared-string storage;
+  /// evaluator results must use `set_cell_cached_value` instead.
+  void set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col, Value v);
+
   /// Stores a phonetic-kana annotation on the cell at `(row, col)`.
   ///
   /// Used by the OOXML reader after a Text cell is committed to copy the
@@ -626,6 +635,11 @@ class Sheet {
   /// implicitly default-constructed cells created by growth. Useful for
   /// tests and as a coarse memory-footprint indicator.
   std::size_t cell_count() const noexcept;
+
+  /// Monotonically changes whenever the flat stored-cell / spill-phantom
+  /// address set changes. C-ABI iteration uses it to invalidate its
+  /// per-handle sorted-address cache after any sheet mutation.
+  std::uint64_t cell_enumeration_revision() const noexcept { return cell_enumeration_revision_; }
 
   /// Read-only access to the underlying row map.
   ///
@@ -1010,6 +1024,7 @@ class Sheet {
   std::string opaque_ooxml_part_path_;
   std::string opaque_ooxml_relationship_type_;
   std::unordered_map<std::uint32_t, std::vector<Cell>> rows_;
+  std::uint64_t cell_enumeration_revision_ = 0;
   // Lazily allocated: most sheets do not host any spill regions, so the
   // table is only materialised on the first `commit_spill` call.
   std::unique_ptr<SpillTable> spill_table_;

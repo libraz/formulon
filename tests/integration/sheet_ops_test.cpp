@@ -744,7 +744,7 @@ TEST(WorkbookRowColEdits, InsertRowsShiftsConditionalFormatsLayoutAndBreaks) {
   rule.formula1 = "A2";
   format.rules.push_back(std::move(rule));
   sheet.mutable_conditional_formats().push_back(std::move(format));
-  sheet.mutable_layout().row_overrides.push_back(RowLayout{2, 24.0, true, 1});
+  sheet.mutable_layout().row_overrides.push_back(RowLayout{2, 24.0, true, 1, true});
   sheet.mutable_layout().columns.push_back(ColumnLayout{1, 2, 18.0, true, 2});
   sheet.mutable_print_settings().manual_row_breaks.push_back(ManualBreak{3, 0, 10, true});
   sheet.mutable_print_settings().manual_col_breaks.push_back(ManualBreak{2, 0, 10, true});

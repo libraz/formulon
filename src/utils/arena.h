@@ -42,9 +42,10 @@ class Arena {
  public:
   /// Builds an empty arena. The first chunk is allocated lazily on the first
   /// `allocate()` request, sized to `initial_chunk_bytes`.
-  explicit Arena(std::size_t initial_chunk_bytes = 4096) noexcept
+  explicit Arena(std::size_t initial_chunk_bytes = 4096, std::size_t max_bytes = SIZE_MAX) noexcept
       : initial_chunk_bytes_(initial_chunk_bytes == 0 ? 4096 : initial_chunk_bytes),
-        next_chunk_bytes_(initial_chunk_bytes == 0 ? 4096 : initial_chunk_bytes) {}
+        next_chunk_bytes_(initial_chunk_bytes == 0 ? 4096 : initial_chunk_bytes),
+        max_bytes_(max_bytes) {}
 
   /// Releases every owned chunk.
   ~Arena() { release_all(); }
@@ -58,11 +59,14 @@ class Arena {
         initial_chunk_bytes_(other.initial_chunk_bytes_),
         next_chunk_bytes_(other.next_chunk_bytes_),
         chunk_count_(other.chunk_count_),
-        bytes_allocated_(other.bytes_allocated_) {
+        bytes_allocated_(other.bytes_allocated_),
+        max_bytes_(other.max_bytes_),
+        exhausted_(other.exhausted_) {
     other.head_ = nullptr;
     other.chunk_count_ = 0;
     other.bytes_allocated_ = 0;
     other.next_chunk_bytes_ = other.initial_chunk_bytes_;
+    other.exhausted_ = false;
   }
 
   /// Transfers ownership of every chunk from `other`, releasing whatever this
@@ -75,10 +79,13 @@ class Arena {
       next_chunk_bytes_ = other.next_chunk_bytes_;
       chunk_count_ = other.chunk_count_;
       bytes_allocated_ = other.bytes_allocated_;
+      max_bytes_ = other.max_bytes_;
+      exhausted_ = other.exhausted_;
       other.head_ = nullptr;
       other.chunk_count_ = 0;
       other.bytes_allocated_ = 0;
       other.next_chunk_bytes_ = other.initial_chunk_bytes_;
+      other.exhausted_ = false;
     }
     return *this;
   }
@@ -102,13 +109,22 @@ class Arena {
 
     // Head is either missing or too full. Size the new chunk so it can satisfy
     // the current request even after worst-case alignment padding.
+    if (bytes > SIZE_MAX - alignment) {
+      exhausted_ = true;
+      return nullptr;
+    }
     const std::size_t needed = bytes + alignment;
     std::size_t chunk_bytes = next_chunk_bytes_;
     if (chunk_bytes < needed) {
       chunk_bytes = needed;
     }
+    if (chunk_bytes > max_bytes_ - bytes_allocated_) {
+      exhausted_ = true;
+      return nullptr;
+    }
     Chunk* c = new_chunk(chunk_bytes);
     if (c == nullptr) {
+      exhausted_ = true;
       return nullptr;
     }
     c->next = head_;
@@ -193,12 +209,18 @@ class Arena {
   /// Returns the number of chunks currently owned.
   std::size_t chunk_count() const noexcept { return chunk_count_; }
 
+  /// True when an allocation failed because the arena could not obtain more
+  /// storage. This remains set until `reset()` so callers can distinguish
+  /// resource exhaustion from a legitimate empty text value or #NUM! result.
+  bool exhausted() const noexcept { return exhausted_; }
+
   /// Releases every chunk except the most-recently-added (which is reset to
   /// empty). If the arena currently owns no chunks this is a no-op. After
   /// `reset()` the arena may be reused; the retained chunk is typically the
   /// largest one, so subsequent allocations often avoid re-growing.
   void reset() noexcept {
     if (head_ == nullptr) {
+      exhausted_ = false;
       return;
     }
     Chunk* keep = head_;
@@ -214,6 +236,7 @@ class Arena {
     keep->used = 0;
     head_ = keep;
     next_chunk_bytes_ = initial_chunk_bytes_;
+    exhausted_ = false;
   }
 
  private:
@@ -273,6 +296,7 @@ class Arena {
     chunk_count_ = 0;
     bytes_allocated_ = 0;
     next_chunk_bytes_ = initial_chunk_bytes_;
+    exhausted_ = false;
   }
 
   Chunk* head_ = nullptr;
@@ -280,6 +304,8 @@ class Arena {
   std::size_t next_chunk_bytes_ = 4096;
   std::size_t chunk_count_ = 0;
   std::size_t bytes_allocated_ = 0;
+  std::size_t max_bytes_ = SIZE_MAX;
+  bool exhausted_ = false;
 };
 
 }  // namespace formulon
