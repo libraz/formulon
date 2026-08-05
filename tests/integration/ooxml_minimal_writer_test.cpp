@@ -248,8 +248,14 @@ TEST(CellRoundTrip, UnicodeText) {
   auto result = wb.save();
   ASSERT_TRUE(static_cast<bool>(result));
 
-  const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
-  ASSERT_NE(body.find("\xE6\x97\xA5\xE6\x9C\xAC"), std::string::npos) << body;
+  // Literal text cells are interned into the shared-string table, so the
+  // multi-byte payload lands there and the sheet carries only the `t="s"`
+  // index into it.
+  const std::string sheet = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
+  ASSERT_NE(sheet.find("t=\"s\""), std::string::npos) << sheet;
+
+  const std::string sst = ExtractEntry(result.value(), "xl/sharedStrings.xml");
+  ASSERT_NE(sst.find("\xE6\x97\xA5\xE6\x9C\xAC"), std::string::npos) << sst;
 }
 
 TEST(SpillRoundTrip, AnchorHasArrayType) {

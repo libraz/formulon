@@ -13,15 +13,22 @@ namespace formulon::io {
 namespace {
 
 TEST(XmlEscape, ElementTextEscapesCriticalCharsAndControls) {
+  // LF and TAB are legal XML characters that element text preserves, so
+  // they go through verbatim. CR would be folded into LF by line-end
+  // normalisation and U+0001 is illegal outright, so both take the OOXML
+  // escape.
   std::string out;
   AppendXmlEscaped(out, "a&b<c>\"d'e\n\tf\r\x01");
-  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e_x000A__x0009_f_x000D__x0001_");
+  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e\n\tf_x000D__x0001_");
 }
 
 TEST(XmlEscape, AttrEscapesCriticalCharsAndWhitespaceControls) {
+  // Attribute-value normalisation would turn a literal LF / TAB / CR into a
+  // space, so each becomes a character reference the parser restores. An
+  // XML-illegal control still takes the OOXML escape.
   std::string out;
-  AppendXmlAttrEscaped(out, "a&b<c>\"d'e\n\tf\r");
-  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e_x000A__x0009_f_x000D_");
+  AppendXmlAttrEscaped(out, "a&b<c>\"d'e\n\tf\r\x01");
+  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e&#10;&#9;f&#13;_x0001_");
 }
 
 TEST(XmlEscape, OoxmlControlAndLiteralEscapeRoundTrip) {

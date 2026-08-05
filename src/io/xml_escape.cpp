@@ -123,7 +123,13 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, bool attribute)
       out.append("_x005F_");
       continue;
     }
-    if (byte < 0x20U) {
+    // TAB / LF / CR are legal XML 1.0 characters, so `_xHHHH_` is wrong for
+    // them: Excel reserves that notation for characters XML cannot carry at
+    // all. They still need handling because XML normalises them depending on
+    // context, which the `switch` below does. Every other C0 control is
+    // XML-illegal and takes the OOXML escape.
+    const bool xml_legal_control = raw == '\t' || raw == '\n' || raw == '\r';
+    if (byte < 0x20U && !xml_legal_control) {
       AppendOoxmlEscape(out, byte);
       continue;
     }
@@ -158,10 +164,15 @@ void AppendXmlEscapedImpl(std::string& out, std::string_view in, bool attribute)
         }
         break;
       case '\r':
+        // A raw CR is folded into LF by XML line-end normalisation in both
+        // contexts, so it can never be written literally. Attributes take a
+        // character reference like the other two whitespace controls;
+        // element text takes the OOXML escape, matching what Excel writes
+        // for a CR inside a `<t>` payload.
         if (attribute) {
           out.append("&#13;");
         } else {
-          out.push_back(raw);
+          AppendOoxmlEscape(out, byte);
         }
         break;
       default:
