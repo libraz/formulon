@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the lazy-dispatched VLOOKUP and HLOOKUP functions.
 // Both share a `lookup_scan` helper in `tree_walker.cpp` that walks the
@@ -49,6 +48,12 @@ TEST(BuiltinsVLookup, ExactNumericFirstColumn) {
   const Value v = EvalSourceIn("=VLOOKUP(20, A1:B4, 2, FALSE)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text()) << "kind=" << static_cast<int>(v.kind());
   EXPECT_EQ(v.as_text(), "twenty");
+}
+
+TEST(BuiltinsVLookup, ArrayLiteralTablePreservesTwoDimensions) {
+  const Value v = EvalSource("=VLOOKUP(2,{1,\"a\";2,\"b\"},2,FALSE)");
+  ASSERT_TRUE(v.is_text()) << v.debug_to_string();
+  EXPECT_EQ(v.as_text(), "b");
 }
 
 TEST(BuiltinsVLookup, ExactTextCaseInsensitive) {

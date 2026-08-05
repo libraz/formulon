@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/lambda_helpers_lazy.h"
 
@@ -8,6 +7,7 @@
 #include <cstdint>
 
 #include "eval/coerce.h"
+#include "eval/dynamic_array_limits.h"
 #include "eval/eval_context.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
@@ -533,6 +533,9 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
   std::uint32_t cols = 0;
   if (!read_count_arg(call.as_call_arg(1), arena, registry, ctx, kExcelMaxCols, &cols, &err)) {
     return err;
+  }
+  if (static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {
+    return Value::error(ErrorCode::Num);
   }
   const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*expected_arity=*/2U, arena, registry, ctx, &err);
   if (lv == nullptr) {

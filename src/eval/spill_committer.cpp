@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `SpillCommitter::commit` implementation. The behavioural contract — in
 // particular the four-case dispatch — is documented on the header.
@@ -18,8 +17,13 @@ namespace formulon {
 namespace eval {
 
 Value SpillCommitter::commit(Value v) const {
-  // Scalar passthrough — the common case. Cheap kind-check, no allocation.
+  // A former array formula can subsequently evaluate to a scalar. Drop any
+  // old region before returning it; otherwise the reverse index continues
+  // to mask real cells in the former footprint.
   if (!v.is_array()) {
+    if (sheet_ != nullptr) {
+      sheet_->clear_spill(row_, col_);
+    }
     return v;
   }
   // Inactive committer: caller did not opt in to spill, so we behave like

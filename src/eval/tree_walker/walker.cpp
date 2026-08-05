@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Recursive node visitor for the tree-walk evaluator. Holds the public
 // `evaluate()` overloads, the `eval_node` switch (declared with external
@@ -27,6 +26,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/implicit_intersection.h"
 #include "eval/iterative_solver.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
@@ -351,8 +351,10 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
         }
         return ctx.resolve_ref(target, arena, registry);
       }
-      // Non-range operands: identity (current pass-through behavior).
-      return eval_node(operand, arena, registry, ctx);
+      // Dynamic arrays produced by a call, spill reference, or expression no
+      // longer retain static range coordinates. Excel's `@` takes their
+      // top-left element instead of allowing the value to spill.
+      return implicit_intersect_value(eval_node(operand, arena, registry, ctx));
     }
 
     case parser::NodeKind::UnaryOp: {
@@ -782,6 +784,7 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   // on the second pass (zero delta). Only the top-level `evaluate()` call
   // drives the loop; nested re-entry (`resolve_ref`) keeps the ordinary
   // single-pass behaviour.
+  Value v = Value::blank();
   if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() && ctx.current_sheet() != nullptr &&
       ctx.workbook() != nullptr && ctx.workbook()->iterative_options().enabled) {
     const IterativeOptions& iopts = ctx.workbook()->iterative_options();
@@ -804,9 +807,15 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
       if (next.is_blank() && node.kind() != parser::NodeKind::Literal) {
         next = Value::number(0.0);
       }
-      // Convergence test: absolute change of the numeric value. A pass that
-      // produces a non-number (or flips kind) is treated as not-yet-converged
-      // so the loop keeps running until the cap.
+      // Fixed-point convergence is defined only for numeric values. A
+      // nonnumeric result cannot become convergent by repeating an otherwise
+      // independent top-level formula, so retain its first result and let the
+      // shared surface contract below render it (#CALC!, #SPILL!, etc.).
+      if (!next.is_number()) {
+        current = next;
+        break;
+      }
+      // Convergence test: absolute change of the numeric value.
       bool converged = false;
       if (next.is_number() && current.is_number()) {
         const double delta = std::fabs(next.as_number() - current.as_number());
@@ -817,10 +826,11 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
         break;
       }
     }
-    return current;
+    // Fall through to the shared top-level surface contract below.
+    v = current;
+  } else {
+    v = eval_node(node, arena, registry, ctx_with_counters);
   }
-
-  Value v = eval_node(node, arena, registry, ctx_with_counters);
   // Dynamic-array spill-collision surface contract. When a 365-era formula
   // produces a multi-cell array and is anchored at a known formula cell on
   // a resolvable sheet, Excel reports `#SPILL!` at the anchor if any cell

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the lazy-dispatched lookup / reference functions
 // CHOOSE, INDEX, and MATCH. All three are routed through the lazy table in
@@ -41,6 +40,25 @@ TEST(BuiltinsMatch, ExactNumericFirstHit) {
   wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
   wb.sheet(0).set_cell_value(3, 0, Value::number(20.0));  // duplicate, should be ignored
   const Value v = EvalSourceIn("=MATCH(20, A1:A4, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsMatch, ExactZeroDoesNotMatchBlankCell) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  // A2 remains empty. MATCH exact mode excludes blank array cells from a
+  // numeric lookup; it must not coerce the blank to zero.
+  const Value v = EvalSourceIn("=MATCH(0, A1:A2, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsMatch, ExactZeroSkipsBlankBeforeRealZero) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 0, Value::number(0.0));
+  // A1 remains empty; only the literal zero in A2 can match.
+  const Value v = EvalSourceIn("=MATCH(0, A1:A2, 0)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `EvalContext::dispatch_array_result` and the recursive-
 // resolver wiring that calls it. These tests pin the cell-level dynamic-
@@ -193,6 +192,23 @@ TEST(EvalSpillDispatch, ScalarValuesArePassthroughEvenWhenFullyBound) {
   EXPECT_EQ(ctx.dispatch_array_result(Value::error(ErrorCode::Div0)), Value::error(ErrorCode::Div0));
   // No spill registered as a side effect.
   EXPECT_EQ(sheet.spill_region_at_anchor(0U, 0U), nullptr);
+}
+
+TEST(EvalSpillDispatch, ScalarResultClearsPriorSpillAndUnmasksCells) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = EvalContext(wb, sheet, state).with_mutable_sheet(sheet).with_formula_cell(0U, 0U);
+
+  EvalHarness h;
+  ASSERT_TRUE(ctx.dispatch_array_result(MakeArrayFromLiteral(&h, "={1;2;3}", ctx)).is_number());
+  ASSERT_NE(sheet.spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(sheet.resolve_cell_value(1U, 0U), Value::number(2.0));
+
+  EXPECT_EQ(ctx.dispatch_array_result(Value::number(9.0)), Value::number(9.0));
+  EXPECT_EQ(sheet.spill_region_at_anchor(0U, 0U), nullptr);
+  sheet.set_cell_value(1U, 0U, Value::number(7.0));
+  EXPECT_EQ(sheet.resolve_cell_value(1U, 0U), Value::number(7.0));
 }
 
 // ---------------------------------------------------------------------------

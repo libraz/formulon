@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `resolve_range_arg`. See `range_args.h` for the
 // public contract.
@@ -145,6 +144,45 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
         }
       }
     }
+  }
+  if (arg_node.kind() == parser::NodeKind::IntersectOp) {
+    std::string_view sheet;
+    std::uint32_t top = 0;
+    std::uint32_t left = 0;
+    std::uint32_t bottom = 0;
+    std::uint32_t right = 0;
+    bool disjoint = false;
+    ErrorCode intersect_err = ErrorCode::Value;
+    if (!compute_intersect_rect(arg_node.as_intersect_lhs(), arg_node.as_intersect_rhs(), arena, registry, ctx, &sheet,
+                                &top, &left, &bottom, &right, &disjoint, &intersect_err)) {
+      *out_err_code = intersect_err;
+      return false;
+    }
+    if (disjoint) {
+      *out_err_code = ErrorCode::Null;
+      return false;
+    }
+    parser::Reference lhs{};
+    parser::Reference rhs{};
+    lhs.sheet = sheet;
+    lhs.row = top;
+    lhs.col = left;
+    rhs.sheet = sheet;
+    rhs.row = bottom;
+    rhs.col = right;
+    auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+    if (!expanded) {
+      *out_err_code = expanded.error();
+      return false;
+    }
+    *out_cells = std::move(expanded.value());
+    if (out_rows != nullptr) {
+      *out_rows = bottom - top + 1U;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = right - left + 1U;
+    }
+    return true;
   }
   if (arg_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs_ast = arg_node.as_range_lhs();
@@ -319,6 +357,24 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     }
     return true;
   }
+  if (arg_node.kind() == parser::NodeKind::ArrayLiteral) {
+    const std::uint32_t rows = arg_node.as_array_rows();
+    const std::uint32_t cols = arg_node.as_array_cols();
+    out_cells->clear();
+    out_cells->reserve(static_cast<std::size_t>(rows) * cols);
+    for (std::uint32_t row = 0; row < rows; ++row) {
+      for (std::uint32_t col = 0; col < cols; ++col) {
+        out_cells->push_back(eval_node(arg_node.as_array_element(row, col), arena, registry, ctx));
+      }
+    }
+    if (out_rows != nullptr) {
+      *out_rows = rows;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = cols;
+    }
+    return true;
+  }
   // Generic fallback: evaluate the expression and inspect the resulting
   // `Value`. Dynamic-array producers (MUNIT, SEQUENCE, RANDARRAY, MAP,
   // REDUCE, BYROW, BYCOL, MAKEARRAY, LAMBDA invocations, ...) return a
@@ -327,8 +383,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   // it had been written as a literal range. Errors propagate; bare scalars
   // (Number / Bool / Text / Blank) collapse to a 1x1 range, which fixes
   // `=SUM(<scalar>)`-style formulas that previously surfaced #VALUE!.
-  // Reference-shaped nodes (`RangeOp` / `Ref` / `SpillRef` / `OFFSET` /
-  // `CHOOSE` / `IF` / `ROW` / `COLUMN`) never reach this branch — their
+  // Reference-shaped nodes (`RangeOp` / `Ref` / `SpillRef` / `ArrayLiteral`
+  // / `OFFSET` / `CHOOSE` / `IF` / `ROW` / `COLUMN`) never reach this branch — their
   // dedicated expansion paths above handle them without re-evaluation.
   const Value result = eval_node(arg_node, arena, registry, ctx);
   if (result.is_error()) {

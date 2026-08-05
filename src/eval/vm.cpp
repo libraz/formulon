@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stack-machine VM implementation. See `vm.h` for the public contract and
 // `bytecode.h` for the IR shape.
@@ -50,6 +49,7 @@
 #include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
+#include "eval/implicit_intersection.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
@@ -1027,7 +1027,10 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           ++pc;
           break;
         }
-        // Non-range operand: identity pass-through (leave the operand as-is).
+        // Calls and other non-static operands retain only their value in the
+        // bytecode stream. Collapse an Array result to its top-left element
+        // so VM behavior matches the tree walker and `_xlfn.SINGLE`.
+        s.stack.back() = implicit_intersect_value(s.stack.back());
         ++pc;
         break;
       }

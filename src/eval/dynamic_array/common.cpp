@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/dynamic_array/common.h"
 
@@ -11,9 +10,13 @@
 
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "parser/ast.h"
+#include "sheet.h"
 #include "utils/arena.h"
+#include "utils/checked_mul.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -38,8 +41,15 @@ bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const 
 }
 
 ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& out_buffer) {
-  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  Value* buffer = arena.create_array<Value>(total);
+  out_buffer = nullptr;
+  if (rows == 0U || cols == 0U || rows > Sheet::kMaxRows || cols > Sheet::kMaxCols) {
+    return nullptr;
+  }
+  const auto total = checked_mul_size_t(rows, cols);
+  if (!total || total.value() > kMaxDynamicArrayCells) {
+    return nullptr;
+  }
+  Value* buffer = arena.create_array<Value>(total.value());
   if (buffer == nullptr) {
     return nullptr;
   }
@@ -239,6 +249,10 @@ bool sort_lane_less(const Value& key_a, const Value& key_b, bool descending) {
 
 bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, bool& descending, Value& error_out) {
+  if (is_omitted_arg(node)) {
+    descending = false;
+    return true;
+  }
   const Value v = eval_node(node, arena, registry, ctx);
   if (v.is_error()) {
     error_out = v;

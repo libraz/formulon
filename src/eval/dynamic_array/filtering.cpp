@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/dynamic_array/filtering.h"
 
@@ -11,6 +10,7 @@
 #include "eval/coerce.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
@@ -204,7 +204,7 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // Optional args. by_col is parsed first because it determines the valid
   // range of sort_index (column-bound for row-sort, row-bound for col-sort).
   bool by_col = false;
-  if (arity >= 4U) {
+  if (arity >= 4U && !is_omitted_arg(call.as_call_arg(3))) {
     const Value flag = eval_node(call.as_call_arg(3), arena, registry, ctx);
     if (flag.is_error()) {
       return flag;
@@ -219,8 +219,9 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   // sort_index defaults to 1 (1-based). Out-of-range -> #VALUE!. The
   // upper bound depends on the axis: row-sort uses a column index, so
   // limit is `cols`; col-sort uses a row index, so limit is `rows`.
+  const std::uint32_t key_max = by_col ? array->rows : array->cols;
   std::uint32_t sort_index = 1U;
-  if (arity >= 2U) {
+  if (arity >= 2U && !is_omitted_arg(call.as_call_arg(1))) {
     const Value v = eval_node(call.as_call_arg(1), arena, registry, ctx);
     if (v.is_error()) {
       return v;
@@ -230,12 +231,14 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       return Value::error(coerced.error());
     }
     const double n = coerced.value();
-    if (!(n >= 1.0)) {
+    // Validate the floating input before converting to uint32_t. A huge or
+    // non-finite value has no valid lane index and casting it first is
+    // undefined behaviour on some targets.
+    if (!std::isfinite(n) || n < 1.0 || n > static_cast<double>(key_max)) {
       return Value::error(ErrorCode::Value);
     }
     sort_index = static_cast<std::uint32_t>(n);
   }
-  const std::uint32_t key_max = by_col ? array->rows : array->cols;
   if (sort_index < 1U || sort_index > key_max) {
     return Value::error(ErrorCode::Value);
   }

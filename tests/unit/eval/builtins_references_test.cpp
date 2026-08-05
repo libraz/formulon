@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the reference-manipulation builtins `ADDRESS`,
 // `INDIRECT`, and `OFFSET`. ADDRESS is eager; INDIRECT and OFFSET are
@@ -513,16 +512,17 @@ TEST(BuiltinsOffset, NegativeHeightEndsAtAnchor) {
   EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
-TEST(BuiltinsOffset, MacHostNegativeHeightWalksUpTwoRows) {
+TEST(BuiltinsOffset, NegativeHeightWalksUpTwoRows) {
   // `OFFSET(C3, 0, 0, -2, 1)` anchors at C3 and walks up one row, so the
-  // rectangle spans C2:C3. In scalar context Excel 365 samples the
-  // top-left = C2.
-  Workbook wb = test::mac_workbook();
+  // rectangle spans C2:C3 and spills both cells.
+  Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 2, Value::number(42.0));  // C2
   wb.sheet(0).set_cell_value(2, 2, Value::number(99.0));  // C3
   const Value v = EvalSourceIn("=OFFSET(C3,0,0,-2,1)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 42.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[1].as_number(), 99.0);
 }
 
 TEST(BuiltinsOffset, NegativeHeightOffGridIsRef) {
@@ -541,33 +541,47 @@ TEST(BuiltinsOffset, ZeroHeightIsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(BuiltinsOffset, MacHostMultiCellInScalarContextReturnsTopLeft) {
-  // Excel 365 dynamic-array spill: a multi-cell OFFSET in scalar context
-  // spills the rectangle and readers sampling only the anchor cell
-  // observe the top-left. Match the oracle.
-  Workbook wb = test::mac_workbook();
+TEST(BuiltinsOffset, MultiCellSpillsRectangle) {
+  Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
   wb.sheet(0).set_cell_value(1, 1, Value::number(4.0));
   const Value v = EvalSourceIn("=OFFSET(A1,0,0,3,3)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[4].as_number(), 4.0);
 }
 
-TEST(BuiltinsOffset, MacHostBaseRangeInScalarContextReturnsTopLeft) {
+TEST(BuiltinsOffset, MultiCellSpillMaterialisesBlankCellsAsZero) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=OFFSET(A1,2,2,2,-2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    ASSERT_TRUE(v.as_array()->cells[i].is_number());
+    EXPECT_DOUBLE_EQ(v.as_array()->cells[i].as_number(), 0.0);
+  }
+}
+
+TEST(BuiltinsOffset, BaseRangeSpillsRectangle) {
   // `OFFSET(A1:B2, 0, 0)` defaults height/width from the base -> a 2x2
-  // rectangle starting at A1. Scalar context samples A1 (dynamic-array
-  // spill). Passing explicit `(1,1)` dimensions confirms the top-left
-  // path.
-  Workbook wb = test::mac_workbook();
+  // rectangle starting at A1. Passing explicit `(1,1)` dimensions
+  // confirms the scalar path.
+  Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(100.0));
   wb.sheet(0).set_cell_value(0, 1, Value::number(200.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(300.0));
   wb.sheet(0).set_cell_value(1, 1, Value::number(400.0));
   const Value v_multi = EvalSourceIn("=OFFSET(A1:B2,0,0)", wb, wb.sheet(0));
-  ASSERT_TRUE(v_multi.is_number());
-  EXPECT_DOUBLE_EQ(v_multi.as_number(), 100.0);
+  ASSERT_TRUE(v_multi.is_array());
+  ASSERT_EQ(v_multi.as_array_rows(), 2U);
+  ASSERT_EQ(v_multi.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(v_multi.as_array()->cells[0].as_number(), 100.0);
+  EXPECT_DOUBLE_EQ(v_multi.as_array()->cells[3].as_number(), 400.0);
   const Value v_scalar = EvalSourceIn("=OFFSET(A1:B2,0,0,1,1)", wb, wb.sheet(0));
   ASSERT_TRUE(v_scalar.is_number());
   EXPECT_DOUBLE_EQ(v_scalar.as_number(), 100.0);

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the OFFSET lazy impl plus the related range-shape
 // expanders (`expand_offset_call`, `expand_choose_call`, `expand_if_call`,
@@ -20,6 +19,7 @@
 #include <vector>
 
 #include "eval/coerce.h"
+#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
@@ -50,20 +50,42 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
                                           &err)) {
     return Value::error(err);
   }
-  (void)height;
-  (void)width;
-  // Scalar context for a multi-cell OFFSET: Excel 365 dynamic-array
-  // semantics spill the rectangle, and a reader that samples only the
-  // anchor cell (as xlwings does in the oracle pipeline) sees the
-  // top-left value. Aggregators hit a different path (they expand the
-  // rectangle via `expand_offset_call` wired into `resolve_range_arg`),
-  // so returning the top-left here only matters for direct scalar
-  // consumption, where it reproduces Mac Excel 365's observable output.
-  parser::Reference target{};
-  target.sheet = base.sheet;
-  target.row = top_row;
-  target.col = left_col;
-  return ctx.resolve_ref(target, arena, registry);
+  if (height == 1U && width == 1U) {
+    parser::Reference target{};
+    target.sheet = base.sheet;
+    target.row = top_row;
+    target.col = left_col;
+    return ctx.resolve_ref(target, arena, registry);
+  }
+
+  // A direct multi-cell OFFSET is a dynamic array. Materialise the whole
+  // rectangle so it can spill at the formula cell; range-aware consumers
+  // use the matching `expand_offset_call` path below.
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  lhs.sheet = base.sheet;
+  lhs.row = top_row;
+  lhs.col = left_col;
+  rhs.sheet = base.sheet;
+  rhs.row = top_row + height - 1U;
+  rhs.col = left_col + width - 1U;
+  auto expanded = ctx.expand_range(lhs, rhs, arena, registry);
+  if (!expanded) {
+    return Value::error(expanded.error());
+  }
+  Value* buffer = nullptr;
+  ArrayValue* out = dynamic_array::allocate_array_value(height, width, arena, buffer);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::vector<Value>& cells = expanded.value();
+  const std::size_t total = static_cast<std::size_t>(height) * width;
+  for (std::size_t i = 0; i < total && i < cells.size(); ++i) {
+    // When a reference rectangle spills, Excel exposes empty cells as zero
+    // values in the materialised array (rather than blank scalar cells).
+    buffer[i] = cells[i].is_blank() ? Value::number(0.0) : cells[i];
+  }
+  return Value::array(out);
 }
 
 bool expand_offset_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

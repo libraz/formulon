@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's dynamic-array (spilling) built-ins.
 //
@@ -28,6 +27,7 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/dynamic_array_limits.h"
 #include "eval/function_registry.h"
 #include "eval/rng.h"
 #include "sheet.h"
@@ -45,8 +45,6 @@ namespace {
 // reasonable spill footprint; cap at ~1M cells, the same order of magnitude
 // as Mac Excel's effective dynamic-array ceiling for a single formula. Going
 // over surfaces `#NUM!`, matching Excel's overflow code for SEQUENCE.
-constexpr std::size_t kMaxSequenceCells = 1U << 20;  // 1,048,576
-
 // SEQUENCE / RANDARRAY use the lenient pass-through variant: NaN / Inf are
 // not rejected here because the impls run their own `> 0` / `<=` shape
 // checks downstream which reject NaN by IEEE-754 rule.
@@ -102,12 +100,15 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
   const double start = start_c.value();
   const double step = step_c.value();
 
-  // Truncate-toward-zero is Mac Excel's behaviour for the row/col
-  // dimensions; e.g. SEQUENCE(3.7) yields 3 rows, SEQUENCE(-0.5) yields
-  // #VALUE! (truncates to 0, then the `<= 0` guard fires). NaN values fail
-  // the `> 0` test by IEEE-754 rule and surface as #VALUE!.
+  // Truncate-toward-zero is Excel's behaviour for the row/col dimensions.
+  // A value that truncates to zero yields #CALC!, while a strictly negative
+  // dimension yields #VALUE!. This distinction is observable for
+  // SEQUENCE(0) versus SEQUENCE(-1).
   const double rows_t = std::trunc(rows_c.value());
   const double cols_t = std::trunc(cols_d);
+  if (rows_t == 0.0 || cols_t == 0.0) {
+    return Value::error(ErrorCode::Calc);
+  }
   if (!(rows_t > 0.0) || !(cols_t > 0.0)) {
     return Value::error(ErrorCode::Value);
   }

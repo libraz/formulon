@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Function-call dispatch path of the tree-walk evaluator. Split out of
 // `tree_walker.cpp` to keep the recursive walker compile unit small;
@@ -164,9 +163,6 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   }
   for (std::uint32_t i = 0; i < arity; ++i) {
     const Value arg = eval_node(*call_args[i], arena, registry, ctx);
-    if (arg.is_error()) {
-      return arg;
-    }
     env = env.extend(lv->params[i], arg, arena);
   }
   for (std::uint32_t i = arity; i < lv->param_count; ++i) {

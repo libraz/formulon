@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for Excel 365's six LAMBDA-helper builtins: BYROW, BYCOL, MAP,
 // REDUCE, SCAN, MAKEARRAY. Each consumes a `Lambda` value and applies it
@@ -485,6 +484,14 @@ TEST(LambdaHelpersMakeArray, ZeroColsYieldsNumError) {
 
 TEST(LambdaHelpersMakeArray, NegativeRowsYieldsNumError) {
   const Value v = EvalSrc("=MAKEARRAY(-1, 3, LAMBDA(r, c, r))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(LambdaHelpersMakeArray, RejectsShapesBeyondDynamicArrayCellLimit) {
+  // Both dimensions fit in Excel's grid, but their product exceeds the
+  // shared dynamic-array allocation ceiling.
+  const Value v = EvalSrc("=MAKEARRAY(1048576, 2, LAMBDA(r, c, r))");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }

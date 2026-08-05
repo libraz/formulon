@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the context-aware information predicates:
 // ISFORMULA, ISREF, SHEET, SHEETS. Oracle coverage pins the
@@ -155,6 +154,40 @@ TEST(BuiltinsIsFormula, LetScalarBindingIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsIsFormula, OffsetReferenceReportsTargetFormulaCell) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_formula(0, 0, "=1+2");
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=ISFORMULA(OFFSET(A1,0,0))", ctx);
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
+// ---------------------------------------------------------------------------
+// FORMULATEXT
+// ---------------------------------------------------------------------------
+
+TEST(BuiltinsFormulaText, OffsetReferenceReturnsTargetFormulaText) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_formula(0, 0, "=1+2");
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=FORMULATEXT(OFFSET(A1,0,0))", ctx);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "=1+2");
+}
+
+TEST(BuiltinsFormulaText, LetBoundReferenceReturnsTargetFormulaText) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_formula(0, 0, "=1+2");
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(r,A1,FORMULATEXT(r))", ctx);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "=1+2");
+}
+
 // ---------------------------------------------------------------------------
 // ISREF
 // ---------------------------------------------------------------------------
@@ -217,6 +250,15 @@ TEST(BuiltinsIsRef, LetRangeBindingIsTrue) {
   const Value v = EvalWith("=LET(r, A1:A3, ISREF(r))", ctx);
   ASSERT_TRUE(v.is_boolean());
   EXPECT_TRUE(v.as_boolean());
+}
+
+TEST(BuiltinsIsRef, ChooseScalarIsFalse) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=ISREF(CHOOSE(1,42))", ctx);
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
 }
 
 // ---------------------------------------------------------------------------
@@ -290,6 +332,15 @@ TEST(BuiltinsSheet, UnboundContextReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsSheet, LetBoundReferenceRetainsQualifiedSheet) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(r,Sheet2!A1,SHEET(r))", ctx);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
 // ---------------------------------------------------------------------------
 // SHEETS
 // ---------------------------------------------------------------------------
@@ -326,6 +377,15 @@ TEST(BuiltinsSheets, NonReferenceIsNA) {
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=SHEETS(42)", ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsSheets, LetBoundScalarIsNA) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=LET(x,42,SHEETS(x))", ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }

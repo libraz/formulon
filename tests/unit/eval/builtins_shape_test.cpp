@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the shape / geometry-inspection built-ins:
 // ROWS, COLUMNS, ROW, COLUMN, and SUMPRODUCT.
@@ -154,20 +153,26 @@ TEST(BuiltinsColumn, SingleRefIsOneBasedCol) {
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
-TEST(BuiltinsRow, RangeOpReturnsFirstRow) {
-  // B2:D4 -> row range [1, 3]. First row (1-based) = 2.
+TEST(BuiltinsRow, RangeOpReturnsRowVector) {
+  // B2:D4 -> {2;3;4}.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=ROW(B2:D4)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[2].as_number(), 4.0);
 }
 
-TEST(BuiltinsColumn, RangeOpReturnsFirstCol) {
-  // B2:D4 -> col range [1, 3]. First col (1-based) = 2.
+TEST(BuiltinsColumn, RangeOpReturnsColumnVector) {
+  // B2:D4 -> {2,3,4}.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=COLUMN(B2:D4)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[2].as_number(), 4.0);
 }
 
 TEST(BuiltinsRow, ArrayLiteralIsValue) {

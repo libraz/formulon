@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // LINEST implementation. See linest_lazy.h for the user-facing
 // contract; this file owns the numerical recipe (build the design
@@ -17,6 +16,7 @@
 #include <vector>
 
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
@@ -130,10 +130,6 @@ bool eval_bool_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegis
   }
   *out_err = Value::error(ErrorCode::Value);
   return false;
-}
-
-bool is_omitted_arg(const parser::AstNode& arg) {
-  return arg.kind() == parser::NodeKind::Literal && arg.as_literal().is_blank();
 }
 
 /// Solves `A * X = B` in-place via rank-aware Gauss-Jordan with partial

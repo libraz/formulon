@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the cell-level dynamic-array spill API on `Sheet`. The
 // tests cover registration, collision detection, deep-copy semantics for
@@ -69,6 +68,23 @@ TEST(SheetSpillTest, CommitTwoByThreeRowMajorOrderingMatches) {
   EXPECT_EQ(s.resolve_cell_value(6U, 7U), Value::number(4.0));
   EXPECT_EQ(s.resolve_cell_value(6U, 8U), Value::number(5.0));
   EXPECT_EQ(s.resolve_cell_value(6U, 9U), Value::number(6.0));
+}
+
+TEST(SheetSpillTest, LargeSpillFindsFarPhantomWithoutPerCellReverseIndex) {
+  Sheet s("Sheet1");
+  constexpr std::uint32_t kRows = 1000U;
+  constexpr std::uint32_t kCols = 100U;
+  std::vector<Value> cells(static_cast<std::size_t>(kRows) * kCols, Value::number(7.0));
+
+  ASSERT_TRUE(s.commit_spill(10U, 20U, kRows, kCols, std::move(cells)));
+  const SpillRegion* region = s.spill_region_covering(10U + kRows - 1U, 20U + kCols - 1U);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->anchor_row, 10U);
+  EXPECT_EQ(region->anchor_col, 20U);
+  EXPECT_EQ(s.resolve_cell_value(10U + kRows - 1U, 20U + kCols - 1U), Value::number(7.0));
+
+  s.clear_spill(10U, 20U);
+  EXPECT_EQ(s.spill_region_covering(10U + kRows - 1U, 20U + kCols - 1U), nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -266,25 +282,22 @@ TEST(SheetSpillTest, FormulaWriteToPhantomEagerlyClearsSpill) {
   EXPECT_EQ(phantom->formula_text, "=B1");
 }
 
-TEST(SheetSpillTest, WriteToAnchorDoesNotEagerlyClearSpill) {
-  // The eager-invalidation rule is "writing to a phantom drops the spill".
-  // Writing to the anchor itself is a separate, intentional caller action
-  // (e.g. overwriting the formula). The anchor write must succeed and the
-  // spill table is not consulted for the anchor coordinate.
+TEST(SheetSpillTest, WriteToAnchorEagerlyClearsSpill) {
+  // Replacing a dynamic-array formula with a literal invalidates the entire
+  // former spill footprint, just like a direct write to one of its phantoms.
   Sheet s("Sheet1");
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
   s.set_cell_value(0U, 0U, Value::number(500.0));
 
-  // Per the contract, writing to the anchor does not auto-clear; the spill
-  // table still references the original anchor.
-  EXPECT_NE(s.spill_region_at_anchor(0U, 0U), nullptr);
-  EXPECT_NE(s.spill_region_covering(1U, 0U), nullptr);
+  EXPECT_EQ(s.spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(s.spill_region_covering(1U, 0U), nullptr);
   // The anchor cell's literal value reflects the recent write.
   const Cell* anchor = s.cell_at(0U, 0U);
   ASSERT_NE(anchor, nullptr);
   EXPECT_EQ(anchor->cached_value, Value::number(500.0));
+  EXPECT_TRUE(s.resolve_cell_value(1U, 0U).is_blank());
 }
 
 // ---------------------------------------------------------------------------

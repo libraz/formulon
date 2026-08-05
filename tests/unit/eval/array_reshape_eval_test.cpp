@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the lazy array-reshape dynamic-array spilling builtins:
 // `EXPAND`, `TOCOL`, `TOROW`, `WRAPCOLS`, `WRAPROWS`. `EXPAND` lives in
@@ -95,6 +94,20 @@ TEST(BuiltinsExpand, ColumnsArgOmittedKeepsExistingColumnCount) {
   ASSERT_TRUE(v.is_array());
   ASSERT_EQ(v.as_array_rows(), 5U);
   ASSERT_EQ(v.as_array_cols(), 3U);
+}
+
+TEST(BuiltinsExpand, RejectsOverflowingDenseResultBeforeAllocation) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, wb.sheet(0), state);
+  Arena parse_arena;
+  Arena eval_arena;
+  // Both dimensions fit Excel's grid. Their product would otherwise reserve
+  // tens of gigabytes on 64-bit or wrap a wasm32 size_t.
+  const Value v = EvalUnder("=EXPAND(A1,65536,65537)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsExpand, ExplicitPadValueIsUsed) {

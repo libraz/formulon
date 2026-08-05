@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/dynamic_array/reshape.h"
 
@@ -12,6 +11,7 @@
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -169,6 +169,9 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (rows_d < static_cast<double>(array->rows)) {
     return Value::error(ErrorCode::Value);
   }
+  if (rows_d > static_cast<double>(Sheet::kMaxRows)) {
+    return Value::error(ErrorCode::Num);
+  }
 
   // Resolve the new column count. Optional; defaults to the existing
   // column count (no horizontal expansion).
@@ -180,6 +183,9 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
     }
     if (cols_d < static_cast<double>(array->cols)) {
       return Value::error(ErrorCode::Value);
+    }
+    if (cols_d > static_cast<double>(Sheet::kMaxCols)) {
+      return Value::error(ErrorCode::Num);
     }
     out_cols = static_cast<std::uint32_t>(cols_d);
   }

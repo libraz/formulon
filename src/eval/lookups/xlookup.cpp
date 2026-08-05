@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the XLOOKUP / XMATCH family of lazy impls. See
 // `lookups/xlookup.h` for the dispatch-table contract and
@@ -19,6 +18,7 @@
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -476,7 +476,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (off == SIZE_MAX) {
     if (arity >= 4U) {
       const parser::AstNode& if_arg = call.as_call_arg(3);
-      const bool is_empty_slot = if_arg.kind() == parser::NodeKind::Literal && if_arg.as_literal().is_blank();
+      const bool is_empty_slot = is_omitted_arg(if_arg);
       if (!is_empty_slot) {
         return eval_node(if_arg, arena, registry, ctx);
       }

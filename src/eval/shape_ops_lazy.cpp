@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the shape / geometry-inspection lazy builtins
 // (`ROWS`, `COLUMNS`, `ROW`, `COLUMN`, `SUMPRODUCT`). Each dispatches on
@@ -241,6 +240,22 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
+  const auto index_array = [&](std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
+                               std::uint32_t right) -> Value {
+    const std::uint32_t rows = bottom - top + 1U;
+    const std::uint32_t cols = right - left + 1U;
+    if (rows == 1U && cols == 1U) {
+      return Value::number(static_cast<double>((want_row ? top : left) + 1U));
+    }
+    const std::uint32_t out_rows = want_row ? rows : 1U;
+    const std::uint32_t out_cols = want_row ? 1U : cols;
+    std::vector<Value> cells;
+    cells.reserve(static_cast<std::size_t>(out_rows) * out_cols);
+    for (std::uint32_t i = 0; i < (want_row ? rows : cols); ++i) {
+      cells.push_back(Value::number(static_cast<double>((want_row ? top : left) + i + 1U)));
+    }
+    return Value::array(make_array_value(arena, out_rows, out_cols, cells));
+  };
   const parser::AstNode& raw_arg = call.as_call_arg(0);
   // LET-binding passthrough: `=LET(r, A1:A3, ROW(r))` parses `r` as a
   // NameRef, but Mac Excel returns the first row of the bound rectangle
@@ -270,12 +285,11 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     }
     const parser::Reference& lhs = lhs_ast.as_ref();
     const parser::Reference& rhs = rhs_ast.as_ref();
-    // Excel returns the first-row / first-column of the rectangle, which
-    // is the smaller of the two endpoints after normalisation.
-    const std::uint32_t a = want_row ? lhs.row : lhs.col;
-    const std::uint32_t b = want_row ? rhs.row : rhs.col;
-    const std::uint32_t lo = a < b ? a : b;
-    return Value::number(static_cast<double>(lo + 1U));
+    const std::uint32_t top = std::min(lhs.row, rhs.row);
+    const std::uint32_t left = std::min(lhs.col, rhs.col);
+    const std::uint32_t bottom = std::max(lhs.row, rhs.row);
+    const std::uint32_t right = std::max(lhs.col, rhs.col);
+    return index_array(top, left, bottom, right);
   }
   if (k == parser::NodeKind::Call) {
     // Reference-returning builtins (INDIRECT, OFFSET) nested inside
@@ -289,6 +303,9 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     bool is_range = false;
     ErrorCode err = ErrorCode::Value;
     if (resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+      if (is_range && !strings::case_insensitive_eq(arg.as_call_name(), "INDIRECT")) {
+        return index_array(top, left, bottom, right);
+      }
       const std::uint32_t idx = want_row ? top : left;
       return Value::number(static_cast<double>(idx + 1U));
     }
