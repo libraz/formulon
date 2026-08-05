@@ -139,6 +139,16 @@ authoritative reference. Highlights:
 Workbook handles wrap a native pointer; always call `wb.delete()` (in a
 `finally` block) when done.
 
+## Memory when loading a workbook
+
+`loadBytes` reads worksheet XML through the DOM parser only. The native
+CLI switches to a streaming parser for worksheets past 256 KiB; that
+implementation costs binary size the WASM budget does not have, so
+loading here needs memory proportional to the largest single worksheet's
+XML rather than a fixed window. Sheets are read one at a time, so the
+peak is per worksheet, and the practical ceiling is the 32-bit WASM
+address space. Results are identical either way.
+
 ## Project
 
 Source, design notes, and the oracle test suite live at

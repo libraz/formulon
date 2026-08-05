@@ -62,6 +62,8 @@ Formulon は以下を **意図的にサポートしません**。
 | PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、`wasmtime` は `pip` が解決します。 |
 | GitHub Releases | `formulon-cli-<platform-arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
 
+同じ入力からはどの配布形態でも同じ結果が出ます。ただし規模を見積もる前に知っておくべき意図的な違いが 1 つあります。WASM ビルド（つまり npm と PyPI のパッケージ）はワークシート XML を DOM パーサだけで読みますが、ネイティブ CLI は 256 KiB を超えるワークシートをストリーミングパーサに切り替えます。ストリーミングの実装はバイナリサイズを消費し、WASM の予算にその余裕がないためです。したがって WASM でワークシートを開くときは、固定量ではなくそのシートの XML に比例したメモリが要ります。ピークはワークブック単位ではなくワークシート単位（シートは 1 枚ずつ読みます）で、実際の上限はホストの 32-bit WASM アドレス空間です。
+
 ## コマンドライン
 
 Release バイナリを `PATH` に置いた後、`eval` は単一数式の評価、`recalc`

@@ -228,6 +228,14 @@ function table through `wasmtime`. Configure iterative calculation via
 `set_iterative(enabled, max_iterations, max_change)` instead; only the
 per-sweep callback is unavailable.
 
+Worksheet XML is read through the DOM parser only. The native CLI
+switches to a streaming parser for worksheets past 256 KiB; that
+implementation costs binary size the WASM budget does not have, so
+loading a workbook here needs memory proportional to the largest single
+worksheet's XML rather than a fixed window. Sheets are read one at a
+time, so the peak is per worksheet, and the practical ceiling is the
+32-bit WASM address space. Results are identical either way.
+
 ## Building from source
 
 ```sh

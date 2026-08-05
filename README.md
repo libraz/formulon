@@ -62,6 +62,17 @@ These are **permanent** non-goals, not "not yet." The scope is finite on purpose
 | PyPI | `formulon` | Python 3.9+ `py3-none-any` wheel that bundles `formulon_capi.wasm` plus a pure-Python wrapper. `pip` resolves the platform-specific `wasmtime` runtime. |
 | GitHub Releases | `formulon-cli-<platform-arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
 
+Every surface computes the same results from the same input. One
+deliberate difference is worth knowing before you size a workload: the
+WASM builds — which is to say the npm and PyPI packages — read worksheet
+XML through the DOM parser only, whereas the native CLI switches to a
+streaming parser for worksheets past 256 KiB. Streaming costs binary
+size that the WASM budget does not have, so opening a worksheet in WASM
+needs memory proportional to that worksheet's XML rather than a fixed
+window. Peak use is per worksheet, not per workbook — sheets are read
+one at a time — and the practical ceiling is the host's 32-bit WASM
+address space.
+
 ## Command line
 
 After placing a release binary on `PATH`, use `eval` for a scalar formula,
