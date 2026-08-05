@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `EvalContext::resolve_ref`. The contract — in particular
 // the full mapping from `Reference` shape to returned `Value` — lives in the
@@ -26,6 +25,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
@@ -408,7 +408,6 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   // push-back loop to repeatedly re-allocate / OOM. Capping at 10M cells
   // is still well above any realistic aggregator footprint and rejects
   // `A1:XFD1048576`-shaped inputs uniformly across native and WASM.
-  constexpr std::uint64_t kMaxRangeExpansionCells = 10'000'000ULL;
   if (total > kMaxRangeExpansionCells) {
     return ErrorCode::Calc;
   }

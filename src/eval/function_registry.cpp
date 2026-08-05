@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the function dispatch table. See `function_registry.h`
 // for the public contract.
@@ -39,6 +38,10 @@ std::string to_upper_ascii(std::string_view s) {
 
 struct FunctionRegistry::Impl {
   std::unordered_map<std::string, FunctionDef> table;
+  // Lets lookup reject an unknown oversized name before normalising it into
+  // an allocating std::string. Registered host functions remain unrestricted:
+  // a matching long name still reaches the normal lookup path.
+  std::size_t longest_name = 0;
 };
 
 FunctionRegistry::FunctionRegistry() : impl_(std::make_unique<Impl>()) {}
@@ -53,13 +56,19 @@ bool FunctionRegistry::register_function(const FunctionDef& def) {
   // unordered_map::emplace returns {iterator, inserted}; we never overwrite
   // an existing entry, so a duplicate key is a no-op.
   auto result = impl_->table.emplace(std::move(key), def);
+  if (result.second && def.canonical_name.size() > impl_->longest_name) {
+    impl_->longest_name = def.canonical_name.size();
+  }
   return result.second;
 }
 
 const FunctionDef* FunctionRegistry::lookup(std::string_view name) const noexcept {
-  // Allocation may fail under -fno-exceptions; in practice the key is short
-  // and the lookup is on the cold path of dispatch (we already failed to find
-  // a builtin via the hot bytecode path).
+  if (name.size() > impl_->longest_name) {
+    return nullptr;
+  }
+  // `unordered_map` cannot perform heterogeneous lookup in C++17, so a
+  // matching candidate still needs an owned normalized key. The length check
+  // above avoids allocating for arbitrarily long unknown function names.
   std::string key = to_upper_ascii(name);
   auto it = impl_->table.find(key);
   if (it == impl_->table.end()) {

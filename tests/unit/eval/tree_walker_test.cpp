@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the tree-walk evaluator. Tests parse a formula source and
 // evaluate the AST end-to-end, except where the tested NodeKind is not easy
@@ -15,12 +14,14 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/tree_walker_lazy_table.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -822,6 +823,17 @@ TEST(TreeWalkerXlfnPrefix, LazyDispatchName) {
   ASSERT_TRUE(bare.is_number());
   ASSERT_TRUE(tagged.is_number());
   EXPECT_EQ(bare.as_number(), tagged.as_number());
+}
+
+TEST(TreeWalkerLazyDispatch, TableIsSortedAndSearchesCaseInsensitively) {
+  const char* const* names = lazy_form_names();
+  for (std::size_t i = 1; names[i] != nullptr; ++i) {
+    EXPECT_LT(strings::case_insensitive_compare(names[i - 1], names[i]), 0) << names[i - 1] << ", " << names[i];
+  }
+  EXPECT_NE(find_lazy_impl("areas"), nullptr);
+  EXPECT_NE(find_lazy_impl("DAVERAGE"), nullptr);
+  EXPECT_NE(find_lazy_impl("irr"), nullptr);
+  EXPECT_EQ(find_lazy_impl("NOT_A_LAZY_FUNCTION"), nullptr);
 }
 
 TEST(TreeWalkerXlfnPrefix, XlwsPrefixedName) {

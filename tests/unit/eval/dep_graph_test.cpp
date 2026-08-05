@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the workbook-wide cell dependency graph.
 
@@ -75,6 +74,23 @@ TEST(DepGraph, SingleEdge) {
   EXPECT_EQ(g.dependents_of(b), std::vector<CellNodeId>{a});
   EXPECT_TRUE(g.dependents_of(a).empty());
   EXPECT_TRUE(g.dependencies_of(b).empty());
+  EXPECT_EQ(g.dependencies_of_ref(a), std::vector<CellNodeId>{b});
+  EXPECT_TRUE(g.dependencies_of_ref(b).empty());
+}
+
+TEST(DepGraph, ClassifiesCyclicComponents) {
+  DepGraph g;
+  const CellNodeId a = Make(0, 0, 0);
+  const CellNodeId b = Make(0, 0, 1);
+  const CellNodeId c = Make(0, 0, 2);
+  g.add_dependency(a, a);
+  g.add_dependency(b, c);
+  g.add_dependency(c, b);
+
+  EXPECT_FALSE(is_cyclic_component({}, g));
+  EXPECT_TRUE(is_cyclic_component({a}, g));
+  EXPECT_FALSE(is_cyclic_component({b}, g));
+  EXPECT_TRUE(is_cyclic_component({b, c}, g));
 }
 
 TEST(DepGraph, IdempotentAddDependency) {
@@ -141,6 +157,21 @@ TEST(DepGraph, ClearDependenciesPreservesIncomingEdges) {
   EXPECT_TRUE(g.dependents_of(b).empty());
   EXPECT_EQ(g.dependents_of(a), std::vector<CellNodeId>{c});
   EXPECT_EQ(g.dependencies_of(c), std::vector<CellNodeId>{a});
+}
+
+TEST(DepGraph, ClearSelfLoopRemovesTheNowEmptyReverseBucket) {
+  DepGraph g;
+  const CellNodeId a = Make(0, 0, 0);
+  g.add_dependency(a, a);
+  ASSERT_FALSE(g.empty());
+  ASSERT_EQ(g.node_count(), 1u);
+
+  g.clear_dependencies_of(a);
+
+  EXPECT_TRUE(g.dependencies_of(a).empty());
+  EXPECT_TRUE(g.dependents_of(a).empty());
+  EXPECT_TRUE(g.empty());
+  EXPECT_EQ(g.node_count(), 0u);
 }
 
 TEST(DepGraph, RemoveNodeDropsAllEdges) {

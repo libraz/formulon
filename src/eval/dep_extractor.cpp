@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `extract_deps`. See `dep_extractor.h` for the contract.
 
@@ -26,6 +25,7 @@
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/rect_iterator.h"
+#include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
@@ -128,6 +128,15 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
   const std::uint32_t r_max = std::max(lhs.row, rhs.row);
   const std::uint32_t c_min = std::min(lhs.col, rhs.col);
   const std::uint32_t c_max = std::max(lhs.col, rhs.col);
+
+  const std::uint64_t total = static_cast<std::uint64_t>(r_max - r_min + 1U) * (c_max - c_min + 1U);
+  if (total > kMaxRangeExpansionCells) {
+    // Preserve correctness without exploding the graph: a later recalc sees
+    // this cell in the volatile seed set, just as it does for whole rows and
+    // columns that cannot be pinned as individual graph edges.
+    state.out->is_volatile = true;
+    return;
+  }
 
   for (std::uint32_t r = r_min; r <= r_max; ++r) {
     for (std::uint32_t c = c_min; c <= c_max; ++c) {

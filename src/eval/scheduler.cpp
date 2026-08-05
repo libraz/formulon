@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the parallel SCC-layered recalc scheduler. See
 // `scheduler.h` for the public contract; this TU owns the layering
@@ -9,6 +8,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -56,18 +56,6 @@ constexpr std::uint32_t kMaxAutoThreads = 8U;
 using detail::g_in_recalc;
 using detail::RecalcReentryGuard;
 
-// Returns true when the SCC `component` is cyclic (more than one cell, or
-// a singleton with a self-loop). Mirrors `recalc_engine.cpp`'s helper —
-// kept private here to avoid a public dependency.
-bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) {
-  if (component.size() > 1U) {
-    return true;
-  }
-  const CellNodeId only = component.front();
-  std::vector<CellNodeId> deps = graph.dependencies_of(only);
-  return std::find(deps.begin(), deps.end(), only) != deps.end();
-}
-
 // Maps each cell in the dirty SCC list to its 0-based super-node id. SCC
 // indices are assigned in iteration order of `sccs_dirty`.
 struct SccIndex {
@@ -100,7 +88,7 @@ CondensedGraph build_condensed_graph(const SccIndex& idx, const DepGraph& graph)
   for (std::size_t i = 0; i < n; ++i) {
     seen_preds.clear();
     for (CellNodeId member : idx.components[i]) {
-      for (CellNodeId dep : graph.dependencies_of(member)) {
+      for (CellNodeId dep : graph.dependencies_of_ref(member)) {
         auto it = idx.cell_to_scc.find(dep);
         if (it == idx.cell_to_scc.end()) {
           continue;  // Dependency outside the dirty set: irrelevant for layering.
@@ -187,7 +175,7 @@ struct SccOutcome {
 
 SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, const DepGraph& graph,
                        const FunctionRegistry& registry, const IterativeOptions& iter_opts, Arena& arena,
-                       std::mutex& write_mutex) {
+                       IterativeProgressCb progress_cb, void* progress_user_data, std::mutex& write_mutex) {
   SccOutcome out;
   const std::size_t sheet_count = wb.sheet_count();
 
@@ -234,7 +222,8 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       sheet.set_cell_cached_value(c.row, c.col, v);
     };
 
-    const IterativeOutcome outcome = run_iterative_solve(component, iter_opts, evaluate_one, commit);
+    const IterativeOutcome outcome =
+        run_iterative_solve(component, iter_opts, evaluate_one, commit, progress_cb, progress_user_data);
     if (outcome.converged) {
       ++out.cycle_recoveries;
       out.cells_evaluated += component.size();
@@ -286,6 +275,8 @@ struct LayerWork {
   const DepGraph* graph = nullptr;
   const FunctionRegistry* registry = nullptr;
   const IterativeOptions* iter_opts = nullptr;
+  IterativeProgressCb progress_cb = nullptr;
+  void* progress_user_data = nullptr;
   ThreadArenas* arenas = nullptr;
   std::mutex* write_mutex = nullptr;
   std::vector<SccOutcome>* outcomes = nullptr;
@@ -311,60 +302,84 @@ void worker_loop(std::size_t worker_id, LayerWork* work) {
     if (idx >= work->tasks->size()) {
       return;
     }
-    (*work->outcomes)[idx] = process_scc((*work->components)[(*work->tasks)[idx]], *work->wb, *work->graph,
-                                         *work->registry, *work->iter_opts, arena, *work->write_mutex);
+    (*work->outcomes)[idx] =
+        process_scc((*work->components)[(*work->tasks)[idx]], *work->wb, *work->graph, *work->registry,
+                    *work->iter_opts, arena, work->progress_cb, work->progress_user_data, *work->write_mutex);
   }
 }
 
-// Result of a single layer pool drive. Distinguishes "all workers
-// started, every task processed" from "thread spawn failed mid-pool"
-// so the caller can serial-fallback only the unprocessed tail rather
-// than blindly re-running every task.
-struct LayerPoolResult {
-  /// True iff every requested worker thread started successfully.
-  bool spawn_ok = false;
-  /// Number of tasks the worker pool actually claimed via `next_index`,
-  /// clamped to the total task count. Tasks `[claimed, total)` were
-  /// never picked up and must be processed by the caller's fallback.
-  std::size_t claimed = 0U;
+// A worker pool shared by every parallel layer in one recalc pass. Building
+// and joining workers per layer dominated small DAGs, so workers wait at a
+// layer barrier and are joined once when the pass ends.
+class LayerWorkerPool {
+ public:
+  explicit LayerWorkerPool(std::uint32_t worker_count) {
+    workers_.reserve(worker_count);
+    for (std::uint32_t worker_id = 0U; worker_id < worker_count; ++worker_id) {
+      workers_.emplace_back([this, worker_id] { worker_main(worker_id); });
+    }
+  }
+
+  LayerWorkerPool(const LayerWorkerPool&) = delete;
+  LayerWorkerPool& operator=(const LayerWorkerPool&) = delete;
+
+  ~LayerWorkerPool() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      stopping_ = true;
+    }
+    work_ready_.notify_all();
+    for (std::thread& worker : workers_) {
+      worker.join();
+    }
+  }
+
+  void run(LayerWork& work) {
+    work.outcomes->assign(work.tasks->size(), SccOutcome{});
+    work.next_index.store(0U, std::memory_order_relaxed);
+    std::unique_lock<std::mutex> lock(mutex_);
+    active_work_ = &work;
+    completed_workers_ = 0U;
+    ++generation_;
+    work_ready_.notify_all();
+    layer_done_.wait(lock, [this] { return completed_workers_ == workers_.size(); });
+    active_work_ = nullptr;
+  }
+
+ private:
+  void worker_main(std::uint32_t worker_id) {
+    std::size_t seen_generation = 0U;
+    while (true) {
+      LayerWork* work = nullptr;
+      {
+        std::unique_lock<std::mutex> lock(mutex_);
+        work_ready_.wait(lock, [this, seen_generation] { return stopping_ || generation_ != seen_generation; });
+        if (stopping_) {
+          return;
+        }
+        seen_generation = generation_;
+        work = active_work_;
+      }
+      worker_loop(static_cast<std::size_t>(worker_id), work);
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++completed_workers_;
+        if (completed_workers_ == workers_.size()) {
+          layer_done_.notify_one();
+        }
+      }
+    }
+  }
+
+  std::vector<std::thread> workers_;
+  std::mutex mutex_;
+  std::condition_variable work_ready_;
+  std::condition_variable layer_done_;
+  LayerWork* active_work_ = nullptr;
+  std::size_t generation_ = 0U;
+  std::size_t completed_workers_ = 0U;
+  bool stopping_ = false;
 };
-
-// Runs the worker pool for a single layer. All started threads are
-// joined before returning — `detach()` is forbidden by project policy.
-//
-// On a partial spawn failure (a `std::thread` constructor returned a
-// non-joinable handle, typically because the OS refused another
-// thread), the started workers still drain as much of the queue as
-// they can; `next_index` reports how many tasks they collectively
-// claimed so the caller can resume from there.
-LayerPoolResult run_layer_pool(std::uint32_t num_threads, LayerWork& work) {
-  work.outcomes->assign(work.tasks->size(), SccOutcome{});
-  std::vector<std::thread> workers;
-  workers.reserve(num_threads);
-  LayerPoolResult result;
-  result.spawn_ok = true;
-  for (std::uint32_t i = 0; i < num_threads; ++i) {
-    std::thread t(worker_loop, static_cast<std::size_t>(i), &work);
-    if (!t.joinable()) {
-      result.spawn_ok = false;
-      break;
-    }
-    workers.push_back(std::move(t));
-  }
-  for (std::thread& t : workers) {
-    if (t.joinable()) {
-      t.join();
-    }
-  }
-  // Snapshot `next_index` AFTER every worker has joined. The acq_rel
-  // updates inside the loop pair with this load, so we observe the
-  // last-claimed-plus-one count published by whichever worker drained
-  // the queue last. Clamp to the task total because the final claim
-  // may have stepped past the end (workers fetch then check).
-  const std::size_t raw_claimed = work.next_index.load(std::memory_order_acquire);
-  result.claimed = std::min(raw_claimed, work.tasks->size());
-  return result;
-}
 
 std::uint32_t resolve_thread_count(std::uint32_t requested) {
   if (requested == 0U) {
@@ -458,6 +473,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
 
   const std::uint32_t worker_count = resolve_thread_count(cfg.num_threads);
   ThreadArenas arenas = make_thread_arenas(worker_count);
+  LayerWorkerPool worker_pool(worker_count);
   std::mutex write_mutex;
 
   std::uint64_t cells_evaluated = 0;
@@ -467,6 +483,8 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   std::uint64_t cycle_recoveries = 0;
 
   const IterativeOptions iter_opts = engine.iterative_options();
+  const IterativeProgressCb progress_cb = engine.progress_cb_;
+  void* const progress_user_data = engine.progress_user_data_;
 
   for (const std::vector<std::size_t>& layer : layers) {
     sccs_processed += layer.size();
@@ -476,18 +494,16 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       ++serial_fallback_steps;
       Arena& arena = *arenas[0U];
       for (std::size_t scc_id : layer) {
-        const SccOutcome o =
-            process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena, write_mutex);
+        const SccOutcome o = process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena,
+                                         progress_cb, progress_user_data, write_mutex);
         cells_evaluated += o.cells_evaluated;
         cycle_recoveries += o.cycle_recoveries;
       }
       continue;
     }
 
-    // Parallel layer: cap workers at the layer size (no point spawning
-    // 8 threads to drain a 2-task layer).
-    const std::uint32_t threads_for_layer =
-        std::min<std::uint32_t>(worker_count, static_cast<std::uint32_t>(layer.size()));
+    // Parallel layer: the workers are already alive and return to the
+    // barrier for the next layer after draining this queue.
     std::vector<SccOutcome> outcomes;
     LayerWork work;
     work.tasks = &layer;
@@ -496,35 +512,18 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     work.graph = &engine.graph_;
     work.registry = &registry;
     work.iter_opts = &iter_opts;
+    work.progress_cb = progress_cb;
+    work.progress_user_data = progress_user_data;
     work.arenas = &arenas;
     work.write_mutex = &write_mutex;
     work.outcomes = &outcomes;
-    const LayerPoolResult pool_result = run_layer_pool(threads_for_layer, work);
+    worker_pool.run(work);
 
     for (const SccOutcome& o : outcomes) {
       cells_evaluated += o.cells_evaluated;
       cycle_recoveries += o.cycle_recoveries;
     }
-    if (pool_result.spawn_ok) {
-      ++parallel_steps;
-    } else {
-      // Partial spawn failure: drain the unprocessed tail synchronously
-      // on the calling thread. `pool_result.claimed` is the exact count
-      // of tasks the started workers picked up via `next_index`, so we
-      // process `[claimed, layer.size())` without re-running anything
-      // the pool already finished. This relies on workers honouring
-      // their fetch_add bookkeeping even when peers failed to spawn,
-      // which they do: the failure mode aborts only the pool builder,
-      // not the workers already in flight.
-      ++serial_fallback_steps;
-      Arena& arena = *arenas[0U];
-      for (std::size_t i = pool_result.claimed; i < layer.size(); ++i) {
-        const SccOutcome o =
-            process_scc(idx.components[layer[i]], wb, engine.graph_, registry, iter_opts, arena, write_mutex);
-        cells_evaluated += o.cells_evaluated;
-        cycle_recoveries += o.cycle_recoveries;
-      }
-    }
+    ++parallel_steps;
   }
 
   // Phase 4b: standalone-dirty cells (no graph edges, e.g. `=NOW()`).

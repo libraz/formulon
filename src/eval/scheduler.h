@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Multi-threaded SCC-parallel recalc scheduler.
 //
@@ -81,9 +80,8 @@ struct SchedulerStats {
   /// Layers dispatched on the worker pool (i.e. layer size >= 2 AND the
   /// pool was successfully spawned).
   std::uint64_t parallel_steps = 0;
-  /// Layers processed serially on the calling thread. Either because the
-  /// layer had <= 1 super-node, or because thread spawning failed and
-  /// the scheduler degraded gracefully.
+  /// Layers processed serially on the calling thread because the layer
+  /// had <= 1 super-node or the caller selected one worker.
   std::uint64_t serial_fallback_steps = 0;
   /// Number of cyclic SCCs successfully resolved by the iterative solver
   /// (excluding `#REF!`-fallback components).
@@ -98,10 +96,10 @@ struct SchedulerStats {
 ///
 /// `cfg` selects the worker count (see `SchedulerConfig::num_threads`).
 /// `stats` (when non-null) receives the per-pass counters. The `Expected`
-/// return slot is reserved for resource-limit failures (e.g. a fatal
-/// thread-pool error that the scheduler cannot recover from); today the
-/// function never produces an error — thread spawn failures degrade to
-/// `serial_fallback_steps` and surface as a successful return.
+/// return slot is reserved for scheduler failures. A requested worker pool
+/// is created with `std::thread`; on no-exception builds an operating-system
+/// thread-creation failure cannot be recovered by this API. Callers that
+/// require serial execution must set `SchedulerConfig::num_threads` to 1.
 Expected<void, Error> recalc_parallel(Workbook& wb, const SchedulerConfig& cfg = {}, SchedulerStats* stats = nullptr);
 
 /// Convenience overload that runs `recalc_parallel` against a caller-

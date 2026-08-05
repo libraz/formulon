@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Dependency graph used by the recalc engine. Tracks "this cell reads that
 // cell" relationships across an entire workbook (i.e. the edges may span
@@ -128,6 +127,11 @@ class DepGraph {
   /// neighbors). Order is unspecified but stable for a given graph state.
   std::vector<CellNodeId> dependencies_of(CellNodeId node) const;
 
+  /// Borrowed version of `dependencies_of`, for recalc internals that only
+  /// need to traverse an adjacency list. The returned reference stays valid
+  /// until this graph is mutated.
+  const std::vector<CellNodeId>& dependencies_of_ref(CellNodeId node) const noexcept;
+
   /// Computes the strongly connected components of the graph using an
   /// iterative Tarjan algorithm. Each inner vector is one SCC; SCCs are
   /// emitted in **reverse-topological order**: a component appears before
@@ -197,6 +201,10 @@ class DepGraph {
   // need to allocate and walk both adjacency maps every call.
   std::size_t node_count_ = 0;
 };
+
+/// Returns whether an SCC is a real cycle: two or more nodes, or a
+/// singleton whose sole cell has a self-dependency.
+bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) noexcept;
 
 }  // namespace formulon::eval
 

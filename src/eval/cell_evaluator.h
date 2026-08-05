@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared "parse + evaluate one formula cell" helper used by the recalc
 // engine and the parallel scheduler.
@@ -38,6 +37,14 @@ class FunctionRegistry;
 /// Knobs for `evaluate_cell_for_recalc`. The defaults reproduce the plain
 /// singleton evaluation path used by `RecalcEngine::recalc()`.
 struct EvaluateCellOptions {
+  /// The dependency graph schedules ordinary recalculation in dependency
+  /// order, so formula-cell reads must use their already-committed cached
+  /// values. This prevents a long acyclic chain from re-entering the tree
+  /// walker once per hop and exhausting its recursion budget. Ad-hoc
+  /// evaluation keeps recursive resolution by constructing EvalContext
+  /// directly instead of using this recalc-only helper.
+  bool use_cached_formula_refs = true;
+
   /// When `true`, the EvalContext is built WITHOUT an `EvalState` binding
   /// (`EvalContext::workbook_only`). Formula-cell reads then short-circuit
   /// to `Cell::cached_value` instead of recursing into the cell's formula

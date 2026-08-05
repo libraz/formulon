@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the lazy-dispatch table seam. See
 // `tree_walker_lazy_table.h` for rationale and contract.
@@ -65,14 +64,14 @@ struct LazyEntry {
 // duplicates. Comments preserved verbatim from the prior in-place table.
 constexpr LazyEntry kLazyDispatch[] = {
     {"AGGREGATE", &eval_aggregate_lazy},
-    {"AND", &eval_and_lazy},
     // ANCHORARRAY is the OOXML internal encoding of the postfix `#`
     // spill operator. The xlsx-only `_xlfn.` prefix is stripped by
     // `strip_future_prefix`, so callers register the canonical bare name.
     // See `eval_anchorarray_lazy`.
     {"ANCHORARRAY", &eval_anchorarray_lazy},
-    {"ARRAYTOTEXT", &eval_arraytotext_lazy},
+    {"AND", &eval_and_lazy},
     {"AREAS", &eval_areas_lazy},
+    {"ARRAYTOTEXT", &eval_arraytotext_lazy},
     {"AVERAGEIF", &eval_averageif_lazy},
     {"AVERAGEIFS", &eval_averageifs_lazy},
     {"BYCOL", &eval_bycol_lazy},
@@ -103,9 +102,9 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DATE", &eval_datetime_lazy},
     {"DATEDIF", &eval_datetime_lazy},
     {"DATEVALUE", &eval_datetime_lazy},
+    {"DAVERAGE", &eval_daverage_lazy},
     {"DAY", &eval_datetime_lazy},
     {"DAYS360", &eval_datetime_lazy},
-    {"DAVERAGE", &eval_daverage_lazy},
     {"DCOUNT", &eval_dcount_lazy},
     {"DCOUNTA", &eval_dcounta_lazy},
     {"DGET", &eval_dget_lazy},
@@ -162,11 +161,11 @@ constexpr LazyEntry kLazyDispatch[] = {
     // ISFORMULA / ISREF inspect the un-evaluated AST of their argument;
     // they cannot ride the eager path because it flattens references to
     // `Value` before the impl runs.
+    {"IRR", &eval_irr_lazy},
     {"ISFORMULA", &eval_isformula_lazy},
     {"ISOMITTED", &eval_isomitted_lazy},
     {"ISOWEEKNUM", &eval_datetime_lazy},
     {"ISREF", &eval_isref_lazy},
-    {"IRR", &eval_irr_lazy},
     {"LENB", &eval_lenb_lazy},
     {"LINEST", &eval_linest_lazy},
     {"LOGEST", &eval_logest_lazy},
@@ -268,12 +267,46 @@ constexpr LazyEntry kLazyDispatch[] = {
 
 constexpr std::size_t kLazyDispatchCount = sizeof(kLazyDispatch) / sizeof(kLazyDispatch[0]);
 
+constexpr int compare_canonical_names(const char* lhs, const char* rhs) {
+  for (std::size_t i = 0;; ++i) {
+    if (lhs[i] < rhs[i]) {
+      return -1;
+    }
+    if (lhs[i] > rhs[i]) {
+      return 1;
+    }
+    if (lhs[i] == '\0') {
+      return 0;
+    }
+  }
+}
+
+constexpr bool lazy_dispatch_is_strictly_sorted() {
+  for (std::size_t i = 1; i < kLazyDispatchCount; ++i) {
+    if (compare_canonical_names(kLazyDispatch[i - 1].name, kLazyDispatch[i].name) >= 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static_assert(lazy_dispatch_is_strictly_sorted(), "kLazyDispatch must stay in canonical-name order");
+
 }  // namespace
 
 LazyImpl find_lazy_impl(std::string_view name) noexcept {
-  for (const auto& e : kLazyDispatch) {
-    if (strings::case_insensitive_eq(name, std::string_view(e.name))) {
-      return e.impl;
+  std::size_t first = 0;
+  std::size_t last = kLazyDispatchCount;
+  while (first < last) {
+    const std::size_t middle = first + (last - first) / 2;
+    const int cmp = strings::case_insensitive_compare(name, kLazyDispatch[middle].name);
+    if (cmp == 0) {
+      return kLazyDispatch[middle].impl;
+    }
+    if (cmp < 0) {
+      last = middle;
+    } else {
+      first = middle + 1;
     }
   }
   return nullptr;

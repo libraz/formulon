@@ -1,11 +1,9 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `RecalcEngine`. See `recalc_engine.h` for the public
 // contract.
 
 #include "eval/recalc_engine.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -34,23 +32,6 @@
 #include "workbook.h"
 
 namespace formulon::eval {
-namespace {
-
-// Returns true when the SCC `component` represents a real cycle: either
-// more than one cell, or a singleton with a self-edge in the dep graph.
-// Plain singletons evaluate normally; cyclic SCCs short-circuit to #REF!.
-bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) {
-  if (component.size() > 1U) {
-    return true;
-  }
-  // Singleton: only a self-loop (cell depends on itself) is cyclic.
-  const CellNodeId only = component.front();
-  std::vector<CellNodeId> deps = graph.dependencies_of(only);
-  return std::find(deps.begin(), deps.end(), only) != deps.end();
-}
-
-}  // namespace
-
 // ----------------------------------------------------------------------------
 // RecalcEngine
 // ----------------------------------------------------------------------------
@@ -451,7 +432,7 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   // anchor forces the spill to refresh.
   const Sheet& view_sheet = workbook.sheet(viewport.sheet_id);
   std::vector<CellNodeId> seeds;
-  seeds.reserve(static_cast<std::size_t>(viewport.last_row - viewport.first_row + 1U));
+  seeds.reserve(static_cast<std::size_t>(viewport_rect.size()));
   for (auto [row, col] : viewport_rect) {
     // We seed every coordinate inside the viewport regardless of
     // whether it currently holds a stored cell: a viewport coordinate
@@ -478,7 +459,7 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   std::size_t bfs_head = 0;
   while (bfs_head < bfs_queue.size()) {
     const CellNodeId current = bfs_queue[bfs_head++];
-    for (CellNodeId predecessor : graph_.dependencies_of(current)) {
+    for (CellNodeId predecessor : graph_.dependencies_of_ref(current)) {
       if (closure.insert(predecessor).second) {
         bfs_queue.push_back(predecessor);
       }

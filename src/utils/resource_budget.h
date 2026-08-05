@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `ResourceBudget` is a small request-scoped guard against unbounded work
 // driven by attacker-controlled input (cells scanned, output bytes,
@@ -42,6 +41,14 @@ inline constexpr std::uint64_t kMaxPivotResultCells = 4194304U;  // 2^22
 /// covers any UI redraw region while rejecting near-full-grid rectangles
 /// (~17e9 coordinates).
 inline constexpr std::uint64_t kMaxRecalcViewportCells = 1048576U;  // 2^20
+
+/// Maximum dense dynamic-array result size. This is also the historic
+/// SEQUENCE ceiling; applying it at the shared allocation seam prevents
+/// other array constructors from bypassing the same resource bound.
+inline constexpr std::uint64_t kMaxDynamicArrayCells = 1048576U;  // 2^20
+
+/// Maximum cells eagerly materialised from one rectangular reference.
+inline constexpr std::uint64_t kMaxRangeExpansionCells = 10'000'000U;
 
 /// Running work-unit counter checked against a fixed ceiling.
 ///

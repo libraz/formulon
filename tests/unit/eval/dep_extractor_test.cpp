@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the AST -> dep-graph adapter. The walker should:
 //   * Resolve plain `Ref` nodes to single CellNodeIds on the bound sheet.
@@ -209,6 +208,19 @@ TEST(DepExtractor, WholeRowRefIsVolatileWithNoCells) {
   Workbook wb = Workbook::create();
   Arena arena;
   const parser::AstNode* root = ParseFormula("SUM(1:1)", arena);
+  ASSERT_NE(root, nullptr);
+  ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_TRUE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+}
+
+TEST(DepExtractor, OversizedRectIsVolatileWithoutEnumeratingCells) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  // This is a valid bounded rectangle, but expands to the entire grid.
+  // Registering all of its direct dependencies would allocate ~17 billion
+  // graph nodes while merely loading a workbook.
+  const parser::AstNode* root = ParseFormula("SUM(A1:XFD1048576)", arena);
   ASSERT_NE(root, nullptr);
   ExtractedDeps deps = extract_deps(*root, 0U, wb);
   EXPECT_TRUE(deps.is_volatile);

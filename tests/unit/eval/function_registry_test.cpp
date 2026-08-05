@@ -1,10 +1,10 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the function dispatch table.
 
 #include "eval/function_registry.h"
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "gtest/gtest.h"
@@ -49,6 +49,20 @@ TEST(FunctionRegistry, LookupNonExistentReturnsNullptr) {
   FunctionRegistry r;
   ASSERT_TRUE(r.register_function(FunctionDef{"FOO", 0u, kVariadic, &StubImpl}));
   EXPECT_EQ(r.lookup("BAR"), nullptr);
+}
+
+TEST(FunctionRegistry, LookupRejectsUnknownNameLongerThanEveryRegisteredName) {
+  FunctionRegistry r;
+  ASSERT_TRUE(r.register_function(FunctionDef{"FOO", 0u, kVariadic, &StubImpl}));
+  const std::string too_long(4096, 'x');
+  EXPECT_EQ(r.lookup(too_long), nullptr);
+}
+
+TEST(FunctionRegistry, LookupStillSupportsARegisteredLongName) {
+  FunctionRegistry r;
+  const std::string name(256, 'x');
+  ASSERT_TRUE(r.register_function(FunctionDef{name, 0u, kVariadic, &StubImpl}));
+  EXPECT_NE(r.lookup(name), nullptr);
 }
 
 TEST(FunctionRegistry, DuplicateRegistrationReturnsFalseAndPreservesFirst) {

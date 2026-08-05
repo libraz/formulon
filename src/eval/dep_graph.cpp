@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `DepGraph`. See `dep_graph.h` for the public contract.
 
@@ -66,12 +65,13 @@ void DepGraph::clear_dependencies_of(CellNodeId dependent) {
       continue;
     }
     erase_first(rev_pos->second, dependent);
-    if (rev_pos->second.empty() && forward_.find(dependency) == forward_.end()) {
+    if (rev_pos->second.empty()) {
       reverse_.erase(rev_pos);
-      // `dependency` is fully gone from both maps. Skip the self-loop
-      // case (`dependency == dependent`) because the dependent's own
-      // node-count delta is handled below.
-      if (dependency != dependent) {
+      // `dependency` is fully gone from both maps only when it also has
+      // no outgoing edges. Skip the self-loop case (`dependency ==
+      // dependent`) because the dependent's own node-count delta is
+      // handled below after its forward bucket is erased.
+      if (forward_.find(dependency) == forward_.end() && dependency != dependent) {
         --node_count_;
       }
     }
@@ -146,11 +146,25 @@ std::vector<CellNodeId> DepGraph::dependents_of(CellNodeId node) const {
 }
 
 std::vector<CellNodeId> DepGraph::dependencies_of(CellNodeId node) const {
+  return dependencies_of_ref(node);
+}
+
+const std::vector<CellNodeId>& DepGraph::dependencies_of_ref(CellNodeId node) const noexcept {
+  static const std::vector<CellNodeId> kEmptyDependencies;
   auto pos = forward_.find(node);
   if (pos == forward_.end()) {
-    return {};
+    return kEmptyDependencies;
   }
   return pos->second;
+}
+
+bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) noexcept {
+  if (component.size() != 1U) {
+    return component.size() > 1U;
+  }
+  const CellNodeId only = component.front();
+  const std::vector<CellNodeId>& dependencies = graph.dependencies_of_ref(only);
+  return std::find(dependencies.begin(), dependencies.end(), only) != dependencies.end();
 }
 
 std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {

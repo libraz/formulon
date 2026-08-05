@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the structured-reference resolver. See
 // `eval/structured_ref.h` for the public contract.
@@ -288,6 +287,12 @@ Expected<StructuredRefRange, ErrorCode> resolve_structured_ref(const StructuredR
   std::uint32_t r_bot = 0;
   std::uint32_t c_right = 0;
   if (!parse_table_ref(table->ref, &r_top, &c_left, &r_bot, &c_right)) {
+    return ErrorCode::Ref;
+  }
+  // A table needs at least distinct top and bottom rows. In particular, a
+  // crafted one-row table marked as both header and totals would otherwise
+  // compute `r_bot - 1` below and wrap to UINT32_MAX.
+  if (r_bot <= r_top) {
     return ErrorCode::Ref;
   }
 
