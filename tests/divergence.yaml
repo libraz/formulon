@@ -20,13 +20,17 @@
 # two differ (Mac Excel 365 / Win Excel 365 / Formulon). PR reviewers
 # check this file's diff on any oracle-gen roll-forward.
 #
-# Schema (parsed by tools/oracle/oracle_gen.py::_load_divergence_skips):
+# Schema (parsed by tools/oracle/oracle_gen.py):
 #
 #   entries:
 #     - id: <case_id from tests/oracle/cases/*.yaml>
+#       # `ids: [...]`, `suite: <name>`, and `suites: [...]` are also
+#       # available for a shared tolerance / compare_mode policy. Skip
+#       # entries must target exactly one `id`.
 #       reason: "..."
 #       mode: skip-oracle | tolerance      # default: tolerance
 #       tolerance: { abs: 1e-10, rel: 0 }
+#       compare_mode: exact | complex_text | numeric_text | ...
 #       prefer: mac-excel-365 | win-excel-365 | formulon
 #       first_noted: YYYY-MM-DD
 #       last_verified_excel_version: "16.xx.x (Build ...)"
@@ -43,6 +47,19 @@
 #                                                     # immediately.
 
 entries:
+  # Mac xlwings reads ARRAYTOTEXT error results back as blank cells, so the
+  # primary golden cannot distinguish #N/A / #VALUE! from a real blank.
+  - ids:
+      - arraytotext_error_in_array_default
+      - arraytotext_error_in_array_strict
+      - arraytotext_only_errors_default
+      - arraytotext_arity_zero
+      - arraytotext_arity_three
+    mode: skip-oracle
+    reason: "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
+    prefer: formulon
+    first_noted: 2026-08-05
+    last_verified_excel_version: "16.108.1"
   # -- ad-hoc evaluate-formula scalar reduction (intentional API shape) ----
   # `fm_workbook_evaluate_formula` (and the WASM / Node
   # `evaluateFormulaText`) return a single scalar. When the evaluated
@@ -56,6 +73,8 @@ entries:
   # reviewers.
   - id: evaluate_formula_array_scalar_reduction
     mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/c_api/formulon_c_evaluate_formula_test.cpp]
     reason: "fm_workbook_evaluate_formula / evaluateFormulaText reduce an array result to its top-left element (Phase 1 scalar API shape); a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
     prefer: formulon
     first_noted: 2026-07-03
@@ -273,6 +292,8 @@ entries:
   # a real implementation and the entry below is removed.
   - id: phonetic_returns_input_text
     mode: skip-oracle
+    scope: deferred-feature
+    evidence: [tests/integration/ooxml_phonetic_roundtrip_test.cpp]
     reason: "PHONETIC currently returns the input text instead of the IME-typed kana because OOXML <rPh> annotations are not yet read into Formulon's Value model; phonetic metadata not yet modelled."
     prefer: mac-excel-365
     first_noted: 2026-04-28
@@ -336,18 +357,24 @@ entries:
   # oracle verification.
   - id: regex_match_limit_regextest
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_regex_test.cpp]
     reason: "REGEXTEST with catastrophic backtracking pattern: Mac Excel hangs indefinitely; Formulon returns FALSE after pcre2_match_limit=1000000 iterations."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
   - id: regex_match_limit_regexextract
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_regex_test.cpp]
     reason: "REGEXEXTRACT with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! after the pcre2 match limit is exceeded."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
   - id: regex_match_limit_regexreplace
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_regex_test.cpp]
     reason: "REGEXREPLACE with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! after the pcre2 match limit is exceeded."
     prefer: formulon
     first_noted: 2026-04-28
@@ -556,50 +583,21 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
-  # FILTERXML is implemented in Formulon, but Mac Excel 16.109 reports the
-  # function as unavailable (#NAME?). Windows Excel oracle coverage can
-  # replace these Mac-platform divergences when available.
-  - id: filterxml_single_node_text
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML while Formulon provides a real XPath implementation for engines where FILTERXML is available."
+  # FILTERXML is unavailable in the primary Mac Excel target. Keep this
+  # entire suite out of its goldens; Windows variant goldens cover the XPath
+  # contract where the function is available.
+  - suite: filterxml
+    reason: "Mac Excel 16.108.1 does not evaluate FILTERXML through the formula2/xlwings oracle path, while Formulon implements the XPath contract and Windows Excel provides the available-host oracle."
     prefer: formulon
     first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_attribute_value
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML while Formulon provides a real XPath implementation for engines where FILTERXML is available."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_no_match_na
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XPath semantics; Formulon returns the implemented XPath no-match surface."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_malformed_xml_value
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XML parse semantics; Formulon returns the implemented parse-error surface."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_malformed_xpath_value
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XPath parse semantics; Formulon returns the implemented parse-error surface."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_numeric_xml_arg_value
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before argument/XML semantics; Formulon returns the implemented coerced-XML parse-error surface."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
+    last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
   # Stale `external_stub_info` removed from external_stubs.yaml: INFO has
   # its own environment-bound suite (`info_function.yaml`) because it is
   # host-state-dependent rather than an unavailable fixed-error stub.
   - id: external_stub_info
+    case_alias: info_system
     reason: "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
     prefer: formulon
     first_noted: 2026-04-28
@@ -656,6 +654,8 @@ entries:
   # PHONETIC is a real lazy form. The remaining divergence records the
   # rPh metadata coverage gap, not an unavailable function stub.
   - id: external_stub_phonetic
+    scope: deferred-feature
+    evidence: [tests/integration/ooxml_phonetic_roundtrip_test.cpp]
     reason: "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
     prefer: mac-excel-365
     first_noted: 2026-04-28
@@ -691,6 +691,16 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-05-02
     last_verified_excel_version: "16.108.2"
+
+  - ids:
+      - anchorarray_resolves_sequence_sum
+      - anchorarray_resolves_sequence_rows
+      - anchorarray_offset_resolved_anchor
+    mode: skip-oracle
+    reason: "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
+    prefer: formulon
+    first_noted: 2026-08-05
+    last_verified_excel_version: "16.108.1"
 
   # -- ENCODEURL: not available in Mac Excel 365 ja-JP ----------------------
   # Mac Excel 365 ja-JP returns #NAME? for every ENCODEURL invocation:
@@ -872,6 +882,8 @@ entries:
   # accepted divergence on contract-violating input.
   - id: xlookup_binary_search_dirty_data
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_xlookup_test.cpp]
     reason: "Binary search (search_mode 2/-2) is only defined on sorted input. Formulon treats incomparable cells as greater-than-target to keep the upper bound monotone, so on unsorted/dirty data a near match can be stepped over. Excel's binary search is likewise undefined on unsorted data and lands on a different cell; the divergence only occurs on contract-violating input."
     prefer: formulon
     first_noted: 2026-06-26
@@ -889,6 +901,8 @@ entries:
   # value should be returned. Remove or re-scope this entry once verified.
   - id: getpivotdata_page_axis_field_needs_verification
     mode: skip-oracle
+    scope: deferred-feature
+    evidence: [tests/unit/eval/getpivotdata_lazy_test.cpp]
     reason: "GETPIVOTDATA returns #REF! for fields on the page/data axis (filter-state routing not implemented). Excel's actual surface for page/data-axis addressing is unconfirmed and needs a live oracle run; entry tracks the unverified behaviour."
     prefer: formulon
     first_noted: 2026-06-26
@@ -923,6 +937,8 @@ entries:
   # both engines converge to the fixed point instead.
   - id: circular_reference_iterative_off_returns_ref
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/recalc_engine_test.cpp]
     reason: "A formula cycle with iterative calc OFF resolves to #REF! for every cycle-member cell in Formulon (recalc-engine SCC detection; eval_context returns ErrorCode::Ref on a re-entrant reference). Excel leaves 0 in the cells and shows a circular-reference warning banner — a UI-only surface with no computed value that the oracle harness cannot capture."
     prefer: formulon
     first_noted: 2026-07-02
@@ -939,6 +955,8 @@ entries:
   # XLSB completion work).
   - id: xlsb_pivot_getpivotdata_ref
     mode: skip-oracle
+    scope: fixture
+    evidence: [tests/unit/io/xlsb_fidelity_test.cpp]
     reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Deferred pending XLSB pivot record decoding."
     prefer: mac-excel-365
     first_noted: 2026-07-02

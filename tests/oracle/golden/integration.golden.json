@@ -2,11 +2,11 @@
   "suite": "integration",
   "description": "Cross-family composition — realistic nested formulas that exercise multiple subsystems at once",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-23T02:48:29Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

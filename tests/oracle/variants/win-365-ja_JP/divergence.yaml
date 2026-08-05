@@ -11,6 +11,43 @@
 # lives in this file and may be omitted.
 
 entries:
+  # Windows formats these financial results as text while Formulon returns
+  # their numeric value. The verifier parses the documented numeric text.
+  - suites: [financial, financial_accrual]
+    compare_mode: numeric_text
+    reason: "Win Excel 365 reads these financial result cells back as locale-formatted numeric text; Formulon returns equivalent numeric values."
+    prefer: formulon
+    first_noted: 2026-05-08
+    last_verified_excel_version: "16.0"
+  # Excel's complex-function text rounding differs by a final display digit.
+  - suite: complex
+    compare_mode: complex_text
+    reason: "Win Excel 365 rounds complex-number text differently at the final display digit; compare parsed real and imaginary components instead."
+    prefer: formulon
+    first_noted: 2026-05-08
+    last_verified_excel_version: "16.0"
+  # Trigonometric values near poles are sensitive to the platform libm.
+  - ids:
+      - tan_neg_three_pi_over_two
+      - tan_neg_pi_over_two
+      - tan_pi_over_two
+      - tan_three_pi_over_two
+      - misc_cot_pi_minus_eps
+      - misc_csc_pi_minus_eps
+      - misc_sec_halfpi_minus_eps
+      - misc_sec_halfpi_plus_eps
+    tolerance: { rel: 0.001 }
+    reason: "Near-pole trigonometric probes vary at the platform-libm level between Win Excel and Formulon; 0.1% relative tolerance preserves the observable sign and magnitude contract."
+    prefer: formulon
+    first_noted: 2026-05-08
+    last_verified_excel_version: "16.0"
+  # Windows Excel can read this pre-1900 DATEVALUE result back as zero.
+  - id: datevalue_agrees_with_date
+    compare_mode: datevalue_roundtrip_readback
+    reason: "Win Excel 365's COM read-back turns the pre-1900 DATEVALUE serial -1 into 0; accept that bridge artifact while retaining normal date comparison."
+    prefer: formulon
+    first_noted: 2026-05-08
+    last_verified_excel_version: "16.0"
   - id: jis_ascii_and_space
     mode: skip-oracle
     reason: "Win Excel 365 ja-JP currently reports JIS as #NAME?, while Formulon keeps the documented DBCS/JIS width-conversion implementation."

@@ -2,11 +2,11 @@
   "suite": "textsplit",
   "description": "TEXTSPLIT rectangle-shaping splitter — six perspectives spanning 1D row split, 2D grid split, ignore_empty collapse, delimiter-array union (longest match wins), ragged-row padding, and match_mode out-of-range error.",
   "environment": {
-    "excel_version": "16.109",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-15T01:14:23Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "DATEVALUE",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-08-05T00:52:41Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -1434,10 +1434,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 4.0
-      }
+      "skipped": "Bare =G39:G43 uses legacy row-aligned II in IronCalc; Mac spills from G39. Probe: implicit_intersection."
     },
     {
       "id": "C41",

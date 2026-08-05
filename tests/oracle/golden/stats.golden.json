@@ -2,11 +2,11 @@
   "suite": "stats",
   "description": "MEDIAN / MODE / LARGE / SMALL / PERCENTILE / QUARTILE / STDEV / VAR",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T22:35:43Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

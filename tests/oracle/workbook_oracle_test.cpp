@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Parameterized gtest skeleton for the workbook oracle track.
 //
@@ -84,9 +83,9 @@ struct GridCell {
   std::uint32_t r = 0;
   std::uint32_t c = 0;
   // Comparison is performed on the stringified value so number / text /
-  // bool / blank cells share one normalised representation. Excel goldens
-  // and the engine both render through the same display rules, so a string
-  // match is the appropriate equality here.
+  // bool / blank / error cells share one normalised representation. Excel
+  // goldens and the engine both render through the same display rules, so a
+  // string match is the appropriate equality here.
   std::string value;
 };
 
@@ -111,8 +110,10 @@ std::string render_value(const Value& v) {
       std::snprintf(buf, sizeof(buf), "%g", n);
       return std::string(buf);
     }
+    case ValueKind::Error:
+      return display_name(v.as_error());
     default:
-      return "";
+      return v.debug_to_string();
   }
 }
 
@@ -351,7 +352,9 @@ TEST_P(WorkbookOracleTest, Matches) {
     if (cell.row < anchor_row || cell.col < anchor_col) {
       continue;
     }
-    actual[{cell.row - anchor_row, cell.col - anchor_col}] = render_value(cell.value);
+    const auto [it, inserted] =
+        actual.emplace(std::make_pair(cell.row - anchor_row, cell.col - anchor_col), render_value(cell.value));
+    ASSERT_TRUE(inserted) << "duplicate rendered pivot cell at (" << it->first.first << ',' << it->first.second << ')';
   }
 
   // Extract the golden grid.
@@ -361,6 +364,7 @@ TEST_P(WorkbookOracleTest, Matches) {
   ASSERT_NE(grid_v, nullptr) << "golden 'expect.pivot' has no 'grid'";
   ASSERT_TRUE(grid_v->is_array()) << "golden 'expect.pivot.grid' is not an array";
 
+  std::map<std::pair<std::uint32_t, std::uint32_t>, std::string> expected;
   for (const JsonValue& entry : grid_v->as_array()) {
     ASSERT_TRUE(entry.is_object()) << "grid entry is not an object";
     const JsonValue* r_v = entry.find("r");
@@ -372,11 +376,10 @@ TEST_P(WorkbookOracleTest, Matches) {
 
     const auto r = static_cast<std::uint32_t>(r_v->as_number());
     const auto c = static_cast<std::uint32_t>(c_v->as_number());
-    const std::string expected = render_golden_cell(*val_v);
-    auto it = actual.find({r, c});
-    ASSERT_NE(it, actual.end()) << "pivot cell (" << r << "," << c << ") missing from rendered grid";
-    EXPECT_EQ(it->second, expected) << "pivot cell (" << r << "," << c << ") mismatch";
+    const auto [it, inserted] = expected.emplace(std::make_pair(r, c), render_golden_cell(*val_v));
+    ASSERT_TRUE(inserted) << "duplicate golden pivot cell at (" << it->first.first << ',' << it->first.second << ')';
   }
+  EXPECT_EQ(actual, expected) << "rendered pivot grid differs from the golden grid";
 }
 
 // Human-readable gtest parameter names so failures show up as

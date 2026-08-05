@@ -2,11 +2,11 @@
   "suite": "text_function_error_probes",
   "description": "Mac Excel 365 (ja-JP) probe for whether text-family functions (LEN / LOWER / UPPER / LEFT / RIGHT / MID / TRIM / PROPER) propagate errors from their input or convert them to text. IronCalc's STRING_HANDLING fixture treats `LEN(#DIV/0!)` as `LEN(\"#DIV/0!\") = 7` (textification of error display string), while Formulon currently propagates the error. Each case probes one specific (function, error type) pair so the probe results are unambiguous. The (LEFT, -1) case is included to settle the order of negative-length validation vs error-propagation. Mac's truth becomes the reference; we only switch to text-conversion if Mac matches IronCalc.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T00:58:53Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -335,6 +335,11 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(
+    NAME binding_drift_python_struct_layouts
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-struct-layouts
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
     NAME binding_drift_dts_wasm
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-wasm
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -352,6 +357,27 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME binding_drift_dts_enums
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-enums
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME DivergenceRecordIntegrity
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME OracleVariantDivergenceIntegrity
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+            --input ${CMAKE_SOURCE_DIR}/tests/oracle/variants/win-365-ja_JP/divergence.yaml
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME OracleGeneratorDivergenceMetadata
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.oracle_gen_metadata_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME OracleGoldenCoverage
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/golden_coverage_check.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
 endif()

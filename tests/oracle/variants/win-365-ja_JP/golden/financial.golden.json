@@ -20,7 +20,8 @@
       "expect": {
         "kind": "text",
         "value": "26495.3532"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pv_zero_rate",
@@ -29,7 +30,8 @@
       "expect": {
         "kind": "text",
         "value": "30000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pv_with_fv",
@@ -38,7 +40,8 @@
       "expect": {
         "kind": "text",
         "value": "34287.4071"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pv_type_1",
@@ -47,7 +50,8 @@
       "expect": {
         "kind": "text",
         "value": "26605.7505"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pv_high_rate",
@@ -56,7 +60,8 @@
       "expect": {
         "kind": "text",
         "value": "982.6585"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "fv_basic",
@@ -65,7 +70,8 @@
       "expect": {
         "kind": "text",
         "value": "36589.207"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "fv_zero_rate",
@@ -74,7 +80,8 @@
       "expect": {
         "kind": "text",
         "value": "30000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "fv_with_pv",
@@ -83,7 +90,8 @@
       "expect": {
         "kind": "text",
         "value": "46836.6282"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "fv_type_1",
@@ -92,7 +100,8 @@
       "expect": {
         "kind": "text",
         "value": "36833.1351"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "fv_high_rate",
@@ -101,7 +110,8 @@
       "expect": {
         "kind": "text",
         "value": "5727.4999"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pmt_basic",
@@ -110,7 +120,8 @@
       "expect": {
         "kind": "text",
         "value": "-471.7808"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pmt_zero_rate",
@@ -119,7 +130,8 @@
       "expect": {
         "kind": "text",
         "value": "-416.6667"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "pmt_type_1",
@@ -128,7 +140,8 @@
       "expect": {
         "kind": "text",
         "value": "-469.8232"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "nper_basic",
@@ -137,7 +150,8 @@
       "expect": {
         "kind": "number",
         "value": 56.18429076143203
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "nper_zero_rate",
@@ -146,7 +160,8 @@
       "expect": {
         "kind": "number",
         "value": 50.0
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "nper_sign_mismatch_negative",
@@ -155,7 +170,8 @@
       "expect": {
         "kind": "number",
         "value": -45.51263534057219
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "nper_type_1",
@@ -164,7 +180,8 @@
       "expect": {
         "kind": "number",
         "value": 55.9218224897202
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "nper_with_fv",
@@ -173,7 +190,8 @@
       "expect": {
         "kind": "number",
         "value": 45.94871824064973
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_basic_scalars",
@@ -182,7 +200,8 @@
       "expect": {
         "kind": "text",
         "value": "481.5928"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_from_range",
@@ -204,7 +223,8 @@
       "expect": {
         "kind": "text",
         "value": "481.5928"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_mixed_scalar_and_range",
@@ -222,7 +242,8 @@
       "expect": {
         "kind": "text",
         "value": "483.2662"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_zero_rate",
@@ -231,7 +252,8 @@
       "expect": {
         "kind": "text",
         "value": "600"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "npv_high_rate",
@@ -240,7 +262,8 @@
       "expect": {
         "kind": "text",
         "value": "137.5"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "irr_basic",
@@ -266,7 +289,8 @@
       "expect": {
         "kind": "number",
         "value": 0.0889633946933499
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "irr_with_guess",
@@ -292,7 +316,8 @@
       "expect": {
         "kind": "number",
         "value": 0.0889633946933499
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "irr_all_positive_is_num",
@@ -314,7 +339,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "irr_all_negative_is_num",
@@ -336,7 +362,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "irr_array_literal",
@@ -345,7 +372,8 @@
       "expect": {
         "kind": "number",
         "value": 0.0889633946933499
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_basic",
@@ -354,7 +382,8 @@
       "expect": {
         "kind": "number",
         "value": 0.006183413161253767
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_zero_outcome",
@@ -363,7 +392,8 @@
       "expect": {
         "kind": "number",
         "value": -1.963351707292562e-10
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_with_fv",
@@ -372,7 +402,8 @@
       "expect": {
         "kind": "number",
         "value": 0.010297911087679853
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_type_1",
@@ -381,7 +412,8 @@
       "expect": {
         "kind": "number",
         "value": 0.006407985777783673
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_guess_custom",
@@ -390,7 +422,8 @@
       "expect": {
         "kind": "number",
         "value": 0.006183413161294531
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "rate_no_solution_is_num",
@@ -399,7 +432,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_first_period",
@@ -408,7 +442,8 @@
       "expect": {
         "kind": "text",
         "value": "-104.1667"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_last_period",
@@ -417,7 +452,8 @@
       "expect": {
         "kind": "text",
         "value": "-1.9576"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_per_out_of_range_is_num",
@@ -426,7 +462,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_type_1_first_period_is_zero",
@@ -435,7 +472,8 @@
       "expect": {
         "kind": "text",
         "value": "0"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_zero_rate_is_zero",
@@ -444,7 +482,8 @@
       "expect": {
         "kind": "text",
         "value": "0"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ppmt_first_period",
@@ -453,7 +492,8 @@
       "expect": {
         "kind": "text",
         "value": "-367.6142"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ppmt_last_period",
@@ -462,7 +502,8 @@
       "expect": {
         "kind": "text",
         "value": "-469.8232"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ipmt_plus_ppmt_equals_pmt",
@@ -471,7 +512,8 @@
       "expect": {
         "kind": "text",
         "value": "0"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ppmt_zero_rate",
@@ -480,7 +522,8 @@
       "expect": {
         "kind": "text",
         "value": "-416.6667"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ppmt_type_1_first_period",
@@ -489,7 +532,8 @@
       "expect": {
         "kind": "text",
         "value": "-469.8232"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumipmt_full_range",
@@ -498,7 +542,8 @@
       "expect": {
         "kind": "number",
         "value": -3306.8504660164035
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumipmt_first_year",
@@ -507,7 +552,8 @@
       "expect": {
         "kind": "number",
         "value": -1147.4887686633192
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumipmt_start_out_of_range_is_num",
@@ -516,7 +562,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumipmt_reversed_range_is_num",
@@ -525,7 +572,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_full_range",
@@ -534,7 +582,8 @@
       "expect": {
         "kind": "number",
         "value": -25000.0
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_plus_cumipmt_eq_total_payments",
@@ -543,7 +592,8 @@
       "expect": {
         "kind": "number",
         "value": 0.0
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_first_year",
@@ -552,7 +602,8 @@
       "expect": {
         "kind": "number",
         "value": -4513.8813245399615
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_type_1",
@@ -561,7 +612,8 @@
       "expect": {
         "kind": "number",
         "value": -4598.88596634685
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "cumprinc_reversed_range_is_num",
@@ -570,7 +622,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "sln_basic",
@@ -579,7 +632,8 @@
       "expect": {
         "kind": "text",
         "value": "1800"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "sln_zero_salvage",
@@ -588,7 +642,8 @@
       "expect": {
         "kind": "text",
         "value": "1000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "sln_life_zero_is_div0",
@@ -597,7 +652,8 @@
       "expect": {
         "kind": "error",
         "code": "#DIV/0!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "sln_negative_life_is_num",
@@ -606,7 +662,8 @@
       "expect": {
         "kind": "text",
         "value": "-1800"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "sln_life_one",
@@ -615,7 +672,8 @@
       "expect": {
         "kind": "text",
         "value": "9000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "syd_first_period",
@@ -624,7 +682,8 @@
       "expect": {
         "kind": "text",
         "value": "3000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "syd_last_period",
@@ -633,7 +692,8 @@
       "expect": {
         "kind": "text",
         "value": "600"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "syd_sum_equals_depreciable_base",
@@ -642,7 +702,8 @@
       "expect": {
         "kind": "text",
         "value": "9000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "syd_period_out_of_range_is_num",
@@ -651,7 +712,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "syd_life_one",
@@ -660,7 +722,8 @@
       "expect": {
         "kind": "text",
         "value": "9000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ddb_first_period",
@@ -669,7 +732,8 @@
       "expect": {
         "kind": "text",
         "value": "4000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ddb_second_period",
@@ -678,7 +742,8 @@
       "expect": {
         "kind": "text",
         "value": "2400"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ddb_last_period_with_salvage_floor",
@@ -687,7 +752,8 @@
       "expect": {
         "kind": "text",
         "value": "296"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ddb_custom_factor",
@@ -696,7 +762,8 @@
       "expect": {
         "kind": "text",
         "value": "6000"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "ddb_period_out_of_range_is_num",
@@ -705,7 +772,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_full_year_first_period",
@@ -714,7 +782,8 @@
       "expect": {
         "kind": "text",
         "value": "3690"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_full_year_last_period",
@@ -723,7 +792,8 @@
       "expect": {
         "kind": "text",
         "value": "584.9838"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_partial_first_year",
@@ -732,7 +802,8 @@
       "expect": {
         "kind": "text",
         "value": "1845"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_period_life_plus_one_with_partial",
@@ -741,7 +812,8 @@
       "expect": {
         "kind": "text",
         "value": "238.5271"
-      }
+      },
+      "compare_mode": "numeric_text"
     },
     {
       "id": "db_invalid_month_is_num",
@@ -750,7 +822,8 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
-      }
+      },
+      "compare_mode": "numeric_text"
     }
   ]
 }

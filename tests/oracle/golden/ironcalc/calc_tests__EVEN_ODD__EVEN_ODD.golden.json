@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "EVEN_ODD",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-08-05T00:52:41Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -1077,10 +1077,7 @@
           "value": 2.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 4.0
-      }
+      "skipped": "Bare =F37:F41 uses legacy row-aligned II in IronCalc; Mac spills from F37. Probe: implicit_intersection."
     },
     {
       "id": "B39",
@@ -1107,10 +1104,7 @@
           "formula": "=F37:F41"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 4.0
-      }
+      "skipped": "Depends on A39's range spill: IronCalc applies EVEN to its row-aligned value; Mac reads the spill anchor. Probe: implicit_intersection."
     },
     {
       "id": "C39",
@@ -1137,10 +1131,7 @@
           "formula": "=F37:F41"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 5.0
-      }
+      "skipped": "Depends on A39's range spill: IronCalc applies ODD to its row-aligned value; Mac reads the spill anchor. Probe: implicit_intersection."
     },
     {
       "id": "A40",

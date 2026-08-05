@@ -2,11 +2,11 @@
   "suite": "pivotby",
   "description": "PIVOTBY dynamic-array pivot (Excel 365). Six perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
-    "excel_version": "16.110.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-06-26T07:15:51Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

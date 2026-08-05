@@ -1,12 +1,12 @@
 {
   "suite": "arraytotext",
-  "description": "ARRAYTOTEXT scalar and inline-array serialization probes. These cases are live oracle probes used to close the former implemented_unverified status.",
+  "description": "ARRAYTOTEXT(array, [format]) serialises an array (or scalar) to text in one of two modes:\n\n  * format=0 (concise, default) — element-by-element rendering separated\n    by a comma+space inter-column delimiter and a semicolon+space\n    inter-row delimiter (en_US/ja-JP). Text passes through unquoted;\n    numbers/booleans/blanks render the same as VALUETOTEXT concise.\n  * format=1 (strict) — wraps the whole result in `{...}` braces. Text\n    elements are wrapped in double-quotes with embedded `\"` doubled to\n    `\"\"`. Numbers render bare. The element separators match the array\n    literal grammar: `,` inter-column and `;` inter-row.\n\nErrors propagate from any element (Excel returns the first error encountered as the function's result, NOT a per-cell error spill).\nProbes are organised by axis:\n\n  * Scalar passthrough — pins ARRAYTOTEXT == VALUETOTEXT for non-array\n    arguments. These should hold today; Formulon's ARRAYTOTEXT_ is a\n    thin alias for VALUETOTEXT_ on scalars.\n  * Strict-mode quoting — embedded quotes, separators, whitespace,\n    Unicode. Sensitive to per-host Excel build quirks.\n  * Array shape — 1xN row, Nx1 column, MxN block, sequences from\n    SEQUENCE / SORT. Until Formulon's spill pipeline materialises these\n    as multi-cell arrays the eager dispatcher reduces the input to its\n    first element, so these cases will diverge until that work lands;\n    capturing Excel's actual output is the whole point of the suite.\n  * Format-arg coercion — bool/text format args, out-of-range values\n    that should surface #VALUE!.\n  * Error propagation — both arguments.\n\nLocale note: ja-JP Excel keeps `,` and `;` as the inter-column / inter-row separators in strict mode (the array-literal grammar is invariant). Concise mode also uses `,` and `;`; this differs from decimal-comma locales (de-DE, fr-FR) where `\\\\` and `;` show up. Those variants belong to the win-365-de_DE / -fr_FR targets.\n",
   "environment": {
-    "excel_version": "16.109",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-14T20:03:42Z"
+    "generated_at": "2026-08-05T02:34:13Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -14,21 +14,93 @@
   },
   "cases": [
     {
-      "id": "arraytotext_scalar_number",
-      "formula": "=ARRAYTOTEXT(123.45)",
+      "id": "arraytotext_scalar_number_default",
+      "formula": "=ARRAYTOTEXT(123)",
       "setup": {},
       "expect": {
         "kind": "text",
-        "value": "123.45"
+        "value": "123"
       }
     },
     {
-      "id": "arraytotext_scalar_text_concise",
+      "id": "arraytotext_scalar_negative_number_default",
+      "formula": "=ARRAYTOTEXT(-7.25)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-7.25"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_zero_default",
+      "formula": "=ARRAYTOTEXT(0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_decimal_default",
+      "formula": "=ARRAYTOTEXT(1.5)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.5"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_small_magnitude_default",
+      "formula": "=ARRAYTOTEXT(0.000001)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.000001"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_large_magnitude_default",
+      "formula": "=ARRAYTOTEXT(1.23456789E20)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.23456789E+20"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_default",
       "formula": "=ARRAYTOTEXT(\"hello\")",
       "setup": {},
       "expect": {
         "kind": "text",
         "value": "hello"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_empty_string_default",
+      "formula": "=ARRAYTOTEXT(\"\")",
+      "setup": {},
+      "expect": {
+        "kind": "blank"
+      },
+      "compare_mode": "empty_string_readback"
+    },
+    {
+      "id": "arraytotext_scalar_bool_true_default",
+      "formula": "=ARRAYTOTEXT(TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "TRUE"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_bool_false_default",
+      "formula": "=ARRAYTOTEXT(FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "FALSE"
       }
     },
     {
@@ -41,7 +113,106 @@
       }
     },
     {
-      "id": "arraytotext_row_vector_concise",
+      "id": "arraytotext_scalar_empty_string_strict",
+      "formula": "=ARRAYTOTEXT(\"\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"\"}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_number_strict",
+      "formula": "=ARRAYTOTEXT(42,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{42}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_bool_strict",
+      "formula": "=ARRAYTOTEXT(TRUE,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{TRUE}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_embedded_quote_strict",
+      "formula": "=ARRAYTOTEXT(\"a\"\"b\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a\"\"b\"}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_embedded_comma_strict",
+      "formula": "=ARRAYTOTEXT(\"a,b\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a,b\"}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_embedded_semicolon_strict",
+      "formula": "=ARRAYTOTEXT(\"a;b\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a;b\"}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_with_braces_strict",
+      "formula": "=ARRAYTOTEXT(\"{a}\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"{a}\"}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_with_newline_strict",
+      "formula": "=ARRAYTOTEXT(\"a\" & CHAR(10) & \"b\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a\nb\"}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_with_tab_strict",
+      "formula": "=ARRAYTOTEXT(\"a\" & CHAR(9) & \"b\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a\tb\"}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_unicode_jp_strict",
+      "formula": "=ARRAYTOTEXT(\"日本語\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"日本語\"}"
+      }
+    },
+    {
+      "id": "arraytotext_scalar_text_with_backslash_strict",
+      "formula": "=ARRAYTOTEXT(\"a\\b\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a\\b\"}"
+      }
+    },
+    {
+      "id": "arraytotext_row_numbers_default",
       "formula": "=ARRAYTOTEXT({1,2,3})",
       "setup": {},
       "expect": {
@@ -50,7 +221,88 @@
       }
     },
     {
-      "id": "arraytotext_col_vector_concise",
+      "id": "arraytotext_row_numbers_strict",
+      "formula": "=ARRAYTOTEXT({1,2,3},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{1,2,3}"
+      }
+    },
+    {
+      "id": "arraytotext_row_text_default",
+      "formula": "=ARRAYTOTEXT({\"a\",\"b\",\"c\"})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a, b, c"
+      }
+    },
+    {
+      "id": "arraytotext_row_text_strict",
+      "formula": "=ARRAYTOTEXT({\"a\",\"b\",\"c\"},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a\",\"b\",\"c\"}"
+      }
+    },
+    {
+      "id": "arraytotext_row_mixed_default",
+      "formula": "=ARRAYTOTEXT({1,\"two\",TRUE})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, two, TRUE"
+      }
+    },
+    {
+      "id": "arraytotext_row_mixed_strict",
+      "formula": "=ARRAYTOTEXT({1,\"two\",TRUE},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{1,\"two\",TRUE}"
+      }
+    },
+    {
+      "id": "arraytotext_row_with_embedded_quote_strict",
+      "formula": "=ARRAYTOTEXT({\"a\"\"b\",\"c\"},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a\"\"b\",\"c\"}"
+      }
+    },
+    {
+      "id": "arraytotext_row_with_embedded_separators_strict",
+      "formula": "=ARRAYTOTEXT({\"a,b\",\"c;d\"},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a,b\",\"c;d\"}"
+      }
+    },
+    {
+      "id": "arraytotext_singleton_row_strict",
+      "formula": "=ARRAYTOTEXT({\"only\"},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"only\"}"
+      }
+    },
+    {
+      "id": "arraytotext_singleton_row_default",
+      "formula": "=ARRAYTOTEXT({\"only\"})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "only"
+      }
+    },
+    {
+      "id": "arraytotext_column_numbers_default",
       "formula": "=ARRAYTOTEXT({1;2;3})",
       "setup": {},
       "expect": {
@@ -59,31 +311,340 @@
       }
     },
     {
-      "id": "arraytotext_matrix_mixed_concise",
-      "formula": "=ARRAYTOTEXT({1,\"x\";TRUE,#N/A})",
+      "id": "arraytotext_column_numbers_strict",
+      "formula": "=ARRAYTOTEXT({1;2;3},1)",
       "setup": {},
       "expect": {
         "kind": "text",
-        "value": "1, x, TRUE, #N/A"
+        "value": "{1;2;3}"
       }
     },
     {
-      "id": "arraytotext_matrix_mixed_strict",
-      "formula": "=ARRAYTOTEXT({1,\"x\";TRUE,#N/A},1)",
+      "id": "arraytotext_column_text_default",
+      "formula": "=ARRAYTOTEXT({\"x\";\"y\";\"z\"})",
       "setup": {},
       "expect": {
         "kind": "text",
-        "value": "{1,\"x\";TRUE,#N/A}"
+        "value": "x, y, z"
       }
     },
     {
-      "id": "arraytotext_invalid_format",
-      "formula": "=ARRAYTOTEXT({1,2},2)",
+      "id": "arraytotext_column_text_strict",
+      "formula": "=ARRAYTOTEXT({\"x\";\"y\";\"z\"},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"x\";\"y\";\"z\"}"
+      }
+    },
+    {
+      "id": "arraytotext_2x2_numbers_default",
+      "formula": "=ARRAYTOTEXT({1,2;3,4})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, 2, 3, 4"
+      }
+    },
+    {
+      "id": "arraytotext_2x2_numbers_strict",
+      "formula": "=ARRAYTOTEXT({1,2;3,4},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{1,2;3,4}"
+      }
+    },
+    {
+      "id": "arraytotext_2x3_mixed_default",
+      "formula": "=ARRAYTOTEXT({\"a\",1,TRUE;\"b\",2,FALSE})",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a, 1, TRUE, b, 2, FALSE"
+      }
+    },
+    {
+      "id": "arraytotext_2x3_mixed_strict",
+      "formula": "=ARRAYTOTEXT({\"a\",1,TRUE;\"b\",2,FALSE},1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"a\",1,TRUE;\"b\",2,FALSE}"
+      }
+    },
+    {
+      "id": "arraytotext_sequence_row_default",
+      "formula": "=ARRAYTOTEXT(SEQUENCE(1,5))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, 2, 3, 4, 5"
+      }
+    },
+    {
+      "id": "arraytotext_sequence_row_strict",
+      "formula": "=ARRAYTOTEXT(SEQUENCE(1,5),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{1,2,3,4,5}"
+      }
+    },
+    {
+      "id": "arraytotext_sequence_column_default",
+      "formula": "=ARRAYTOTEXT(SEQUENCE(5))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, 2, 3, 4, 5"
+      }
+    },
+    {
+      "id": "arraytotext_sequence_column_strict",
+      "formula": "=ARRAYTOTEXT(SEQUENCE(5),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{1;2;3;4;5}"
+      }
+    },
+    {
+      "id": "arraytotext_sequence_2d_default",
+      "formula": "=ARRAYTOTEXT(SEQUENCE(2,3))",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1, 2, 3, 4, 5, 6"
+      }
+    },
+    {
+      "id": "arraytotext_sequence_2d_strict",
+      "formula": "=ARRAYTOTEXT(SEQUENCE(2,3),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{1,2,3;4,5,6}"
+      }
+    },
+    {
+      "id": "arraytotext_transposed_row_strict",
+      "formula": "=ARRAYTOTEXT(TRANSPOSE({1;2;3}),1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{1,2,3}"
+      }
+    },
+    {
+      "id": "arraytotext_range_with_blank_default",
+      "formula": "=ARRAYTOTEXT(A1:A3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "alpha"
+        },
+        "A2": {
+          "kind": "blank"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "gamma"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "alpha, , gamma"
+      }
+    },
+    {
+      "id": "arraytotext_range_with_blank_strict",
+      "formula": "=ARRAYTOTEXT(A1:A3,1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "alpha"
+        },
+        "A2": {
+          "kind": "blank"
+        },
+        "A3": {
+          "kind": "text",
+          "value": "gamma"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "{\"alpha\";;\"gamma\"}"
+      }
+    },
+    {
+      "id": "arraytotext_range_all_blanks_default",
+      "formula": "=ARRAYTOTEXT(A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "blank"
+        },
+        "A2": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": ", "
+      }
+    },
+    {
+      "id": "arraytotext_range_all_blanks_strict",
+      "formula": "=ARRAYTOTEXT(A1:A2,1)",
+      "setup": {
+        "A1": {
+          "kind": "blank"
+        },
+        "A2": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "{;}"
+      }
+    },
+    {
+      "id": "arraytotext_range_mixed_kinds_strict",
+      "formula": "=ARRAYTOTEXT(A1:A4,1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "name"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "A3": {
+          "kind": "bool",
+          "value": true
+        },
+        "A4": {
+          "kind": "blank"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "{\"name\";42;TRUE;}"
+      }
+    },
+    {
+      "id": "arraytotext_format_true_strict_alias",
+      "formula": "=ARRAYTOTEXT(\"hi\",TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"hi\"}"
+      }
+    },
+    {
+      "id": "arraytotext_format_false_concise_alias",
+      "formula": "=ARRAYTOTEXT(\"hi\",FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hi"
+      }
+    },
+    {
+      "id": "arraytotext_format_text_zero",
+      "formula": "=ARRAYTOTEXT(\"hi\",\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "hi"
+      }
+    },
+    {
+      "id": "arraytotext_format_text_one",
+      "formula": "=ARRAYTOTEXT(\"hi\",\"1\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "{\"hi\"}"
+      }
+    },
+    {
+      "id": "arraytotext_format_out_of_range_two",
+      "formula": "=ARRAYTOTEXT(\"hi\",2)",
       "setup": {},
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
       }
+    },
+    {
+      "id": "arraytotext_format_negative",
+      "formula": "=ARRAYTOTEXT(\"hi\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arraytotext_format_text_nonnumeric",
+      "formula": "=ARRAYTOTEXT(\"hi\",\"abc\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "arraytotext_error_in_value_arg",
+      "formula": "=ARRAYTOTEXT(1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "arraytotext_error_in_format_arg",
+      "formula": "=ARRAYTOTEXT(\"hi\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "arraytotext_error_in_array_default",
+      "formula": "=ARRAYTOTEXT({1,NA(),3})",
+      "setup": {},
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
+    },
+    {
+      "id": "arraytotext_error_in_array_strict",
+      "formula": "=ARRAYTOTEXT({1,NA(),3},1)",
+      "setup": {},
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
+    },
+    {
+      "id": "arraytotext_only_errors_default",
+      "formula": "=ARRAYTOTEXT({NA(),#DIV/0!})",
+      "setup": {},
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
+    },
+    {
+      "id": "arraytotext_arity_zero",
+      "formula": "=ARRAYTOTEXT()",
+      "setup": {},
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
+    },
+    {
+      "id": "arraytotext_arity_three",
+      "formula": "=ARRAYTOTEXT(\"a\",0,0)",
+      "setup": {},
+      "skipped": "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
     }
   ]
 }

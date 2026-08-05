@@ -2,11 +2,11 @@
   "suite": "value_numbervalue",
   "description": "VALUE and NUMBERVALUE text-to-number parsing (numeric forms, date/time, separator overrides)",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T04:36:57Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

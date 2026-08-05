@@ -2,11 +2,11 @@
   "suite": "financial_rates",
   "description": "Security-rate / T-Bill financial builtins — DISC / INTRATE / RECEIVED / TBILLPRICE / TBILLYIELD / TBILLEQ. See `eval/builtins/financial_rates.cpp`.",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T01:46:26Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.001,

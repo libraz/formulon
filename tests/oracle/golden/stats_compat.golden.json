@@ -2,11 +2,11 @@
   "suite": "stats_compat",
   "description": "Legacy (pre-2010) statistical spellings — NORMDIST/BINOMDIST/POISSON/CHIDIST/TDIST/COVAR/PEARSON etc.",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T23:19:35Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-09,

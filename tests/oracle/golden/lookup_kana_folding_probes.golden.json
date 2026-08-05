@@ -2,11 +2,11 @@
   "suite": "lookup_kana_folding_probes",
   "description": "Mac Excel ja-JP COUNTIF / SUMIF text equality folds kana variants (hiragana<->katakana, half<->full kana with voicing composition, full<->half ASCII). The criteria.cpp matcher implements that fold. Lookup functions (VLOOKUP, HLOOKUP, MATCH, XLOOKUP, XMATCH) use separate text-equality paths, so it is unclear whether Mac applies the same fold there. These probes pin Mac's behaviour empirically before deciding whether the lookup family needs the same fix.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T22:24:23Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

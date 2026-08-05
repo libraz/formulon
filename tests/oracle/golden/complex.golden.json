@@ -2,11 +2,11 @@
   "suite": "complex",
   "description": "Excel's complex-number family: COMPLEX + the 24 IM* functions. Cases focus on the formatting rules (pure real, pure imag, +/-1 coefficient elision, alternate 'j' suffix), the arithmetic core (IMSUM / IMSUB / IMPRODUCT / IMDIV / IMPOWER) including mixed-suffix error cases, and exponential / logarithmic / root operations where floating-point drift is most likely. Trigonometric and hyperbolic variants are exercised at stable points (z=0, pure real) to keep goldens robust.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T04:40:53Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-05,

@@ -115,15 +115,26 @@ target_compile_definitions(formulon_ironcalc_oracle_tests
 
 formulon_apply_warnings(formulon_ironcalc_oracle_tests)
 
-# Single-shot ctest entry: the IronCalc suite registers ~12,500 parameterized
-# gtest cases, and registering each as its own ctest test makes `ctest` spend
-# ~0.2 s of process-launch overhead per case (377 s wall total, vs ~0.2 s
-# when the binary runs once and lets gtest iterate internally). For iteration
-# speed we register one ctest entry that invokes the binary directly; gtest
-# still prints per-case failures in `--output-on-failure`.
-add_test(NAME formulon_ironcalc_oracle
-         COMMAND formulon_ironcalc_oracle_tests --gtest_brief=1)
-set_tests_properties(formulon_ironcalc_oracle PROPERTIES LABELS "ironcalc")
+# Register one CTest entry per imported workbook sheet.  A single CTest entry
+# for all ~12,500 cases made an allowlist exception capable of suppressing
+# every secondary-oracle failure.  Per-case registration would add excessive
+# process-launch overhead, while a golden file is a useful failure unit (at
+# most 400 cases from one upstream worksheet).
+file(GLOB _formulon_ironcalc_goldens CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/golden/ironcalc/*.golden.json"
+)
+foreach(_formulon_ironcalc_golden IN LISTS _formulon_ironcalc_goldens)
+  get_filename_component(_formulon_ironcalc_file "${_formulon_ironcalc_golden}" NAME)
+  string(REGEX REPLACE "\\.golden\\.json$" "" _formulon_ironcalc_suffix "${_formulon_ironcalc_file}")
+  string(REPLACE "__" "_" _formulon_ironcalc_suite_suffix "${_formulon_ironcalc_suffix}")
+  set(_formulon_ironcalc_suite "ironcalc_${_formulon_ironcalc_suite_suffix}")
+  add_test(
+    NAME "formulon_ironcalc_${_formulon_ironcalc_suffix}"
+    COMMAND formulon_ironcalc_oracle_tests --gtest_brief=1
+            "--gtest_filter=Oracle/OracleTest.Matches/${_formulon_ironcalc_suite}_*"
+  )
+  set_tests_properties("formulon_ironcalc_${_formulon_ironcalc_suffix}" PROPERTIES LABELS "ironcalc")
+endforeach()
 
 # ---------------------------------------------------------------------------
 # Variant oracle target (opt-in)

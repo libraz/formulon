@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Drift detection: every function name reachable through `default_registry()`,
 // the tree walker's lazy-dispatch table, or `parser_special_form_names()`
@@ -14,7 +13,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
-#include <cstdio>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -145,38 +143,6 @@ TEST(RegistryCatalog, CatalogHasNoDuplicates) {
   EXPECT_EQ(catalog.names.size(), catalog.raw_line_count)
       << "tools/catalog/functions.txt contains duplicate entries: " << catalog.raw_line_count << " non-blank lines vs "
       << catalog.names.size() << " unique names.";
-}
-
-TEST(RegistryCatalog, CoverageReport) {
-  // Informational only. This test is never expected to fail; it prints a
-  // one-liner coverage summary that ctest --output-on-failure will surface
-  // when something else in the suite breaks, and that developers can eyeball
-  // during local runs.
-  const CatalogParse catalog = load_catalog(FORMULON_CATALOG_PATH);
-  ASSERT_FALSE(catalog.names.empty());
-
-  std::unordered_set<std::string> implemented;
-  for (const auto& n : collect_registered_names()) {
-    if (catalog.names.find(n) != catalog.names.end()) {
-      implemented.insert(n);
-    }
-  }
-  for (const auto& n : collect_lazy_names()) {
-    if (catalog.names.find(n) != catalog.names.end()) {
-      implemented.insert(n);
-    }
-  }
-  for (const auto& n : collect_special_form_names()) {
-    if (catalog.names.find(n) != catalog.names.end()) {
-      implemented.insert(n);
-    }
-  }
-
-  const std::size_t impl_count = implemented.size();
-  const std::size_t target = catalog.names.size();
-  const double pct = target == 0 ? 0.0 : (100.0 * static_cast<double>(impl_count) / static_cast<double>(target));
-  std::printf("[coverage] Formulon function coverage: %zu / %zu implemented (%.1f%%)\n", impl_count, target, pct);
-  std::fflush(stdout);
 }
 
 }  // namespace

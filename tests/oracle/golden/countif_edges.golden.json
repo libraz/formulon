@@ -2,11 +2,11 @@
   "suite": "countif_edges",
   "description": "COUNTIF / SUMIF criteria-engine edge cases observed in IronCalc's COUNTIF_Rows / COUNTIF_Columns / COUNTIFS_Rows2 suites. Each case here probes a specific semantic question that the existing `countif.yaml` coverage does not answer, so we can confirm whether Mac Excel 365 (ja-JP) agrees with Formulon, with IronCalc, or with neither. The author-side `expect:` value below each case is Formulon's current return, included as a documentation aid; the verifier compares against the Excel-observed golden JSON (not this field) once oracle-gen has been run.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T03:09:26Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

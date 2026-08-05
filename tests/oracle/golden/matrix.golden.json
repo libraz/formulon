@@ -2,11 +2,11 @@
   "suite": "matrix",
   "description": "Matrix-algebra family — MMULT, MDETERM, MINVERSE. Fifteen perspectives across the cluster (5 per function) covering shape products, identity neutrality, singularity, non-square errors, and non-numeric / error-cell propagation. Spill outputs from MMULT and MINVERSE are captured live by the array-aware oracle harness.",
   "environment": {
-    "excel_version": "16.110.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-06-26T07:15:51Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

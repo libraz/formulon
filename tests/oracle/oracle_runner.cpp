@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "tests/oracle/oracle_runner.h"
 
@@ -46,34 +45,6 @@ OracleCase make_load_error(const std::string& path, const std::string& detail) {
   c.raw_case = JsonValue::make_object(std::move(err_case));
   c.environment = JsonValue::make_object({});
   return c;
-}
-
-bool starts_with(std::string_view s, std::string_view prefix) {
-  return s.size() >= prefix.size() && s.compare(0, prefix.size(), prefix) == 0;
-}
-
-bool uses_win_numeric_text_compare(std::string_view variant_tag, std::string_view suite) {
-  if (!starts_with(variant_tag, "win-")) {
-    return false;
-  }
-  return suite == "financial" || suite == "financial_accrual";
-}
-
-bool uses_win_complex_text_compare(std::string_view variant_tag, std::string_view suite) {
-  return starts_with(variant_tag, "win-") && suite == "complex";
-}
-
-bool is_win_near_singularity_case(std::string_view variant_tag, std::string_view suite, std::string_view case_id) {
-  if (!starts_with(variant_tag, "win-") || suite != "ironcalc_drift_probes") {
-    return false;
-  }
-  return starts_with(case_id, "tan_") || starts_with(case_id, "misc_cot_") || starts_with(case_id, "misc_csc_") ||
-         starts_with(case_id, "misc_sec_");
-}
-
-bool is_win_datevalue_roundtrip_readback_artifact(std::string_view variant_tag, std::string_view suite,
-                                                  std::string_view case_id) {
-  return starts_with(variant_tag, "win-") && suite == "datevalue_timevalue" && case_id == "datevalue_agrees_with_date";
 }
 
 }  // namespace
@@ -276,16 +247,6 @@ std::vector<OracleCase> load_oracle_cases(const std::string& golden_dir, const s
       }
       if (const JsonValue* cm = c.find("compare_mode"); cm && cm->is_string()) {
         oc.compare_mode = cm->as_string();
-      } else if (uses_win_numeric_text_compare(variant_tag, suite)) {
-        oc.compare_mode = "numeric_text";
-      } else if (uses_win_complex_text_compare(variant_tag, suite)) {
-        oc.compare_mode = "complex_text";
-      }
-      if (is_win_datevalue_roundtrip_readback_artifact(variant_tag, suite, case_id)) {
-        oc.compare_mode = "datevalue_roundtrip_readback";
-      }
-      if (is_win_near_singularity_case(variant_tag, suite, case_id)) {
-        oc.tolerance_rel = std::max(oc.tolerance_rel, 1e-3);
       }
       out.push_back(std::move(oc));
     }

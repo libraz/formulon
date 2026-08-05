@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "FLOOR",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-08-05T00:52:41Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -164,10 +164,7 @@
           "value": 1.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 4.0
-      }
+      "skipped": "Bare =$AD$47:$AH$47 at AG2 uses legacy column-aligned II in IronCalc; Mac spills from AD47. Probe: implicit_intersection."
     },
     {
       "id": "AH2",

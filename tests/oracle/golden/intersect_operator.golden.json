@@ -1,0 +1,373 @@
+{
+  "suite": "intersect_operator",
+  "description": "Range-intersect operator (single space between two range refs). Excel evaluates `A1:C3 B1:B5` as the rectangle common to both operands (B1:B3 here); non-overlapping operands yield #NULL!. The operator is legal anywhere a range is expected (SUM argument, single-cell read in a 365 spill, comparison operand). Coverage spans: aligned intersection in an aggregator, non-overlapping operands, single-cell intersection, whole-column/whole-row intersection, and intersect feeding an INDEX call.\n",
+  "environment": {
+    "excel_version": "16.111.2",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-08-05T01:06:33Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "intersect_sum_overlap_column",
+      "formula": "=SUM(A1:C3 B1:B5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "intersect_sum_overlap_row",
+      "formula": "=SUM(A1:C3 A2:E2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "intersect_single_cell",
+      "formula": "=A1:C3 B2:B2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "intersect_disjoint_columns_is_null",
+      "formula": "=SUM(A1:A3 C1:C3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 5.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 6.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NULL!"
+      }
+    },
+    {
+      "id": "intersect_disjoint_rows_is_null",
+      "formula": "=SUM(A1:E1 A3:E3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 4.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NULL!"
+      }
+    },
+    {
+      "id": "intersect_whole_col_and_row",
+      "formula": "=B:B 2:2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 5.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "intersect_feeds_index_first_row",
+      "formula": "=INDEX(A1:C3 B1:B3, 1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "intersect_chain_three_ways",
+      "formula": "=A1:C3 B1:B5 2:2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 77.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 9.0
+        },
+        "B4": {
+          "kind": "number",
+          "value": 99.0
+        },
+        "B5": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 12.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 77.0
+      }
+    }
+  ]
+}

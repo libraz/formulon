@@ -2,11 +2,11 @@
   "suite": "areas",
   "description": "AREAS(reference) — counts the number of disjoint rectangular areas in a\nreference argument. Formulon answers from AST shape (Ref / RangeOp / UnionOp);\nMac Excel evaluates the reference at runtime and so handles INDIRECT /\nOFFSET / CHOOSE / intersection-operator inputs that Formulon's structural\nwalk cannot. This suite captures both the structural agreement cases and\nthe runtime-only cases as oracle probes; any divergence will surface in\n`oracle-verify` and either drives a Formulon fix or a divergence.yaml entry.\n",
   "environment": {
-    "excel_version": "16.110.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-06-26T07:15:51Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -26,8 +26,9 @@ import datetime as _dt
 import json
 import sys
 import time
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 # Local imports — accept both `python3 tools/oracle/oracle_gen.py` (no
 # package) and `python3 -m tools.oracle.oracle_gen` (package-style).
@@ -210,7 +211,42 @@ def _write_golden(
     )
 
 
-def _load_divergence_skips(path: Path, target_name: str) -> Dict[str, str]:
+def _load_divergence_entries(path: Path) -> List[Dict[str, Any]]:
+    """Read one divergence file without making it a generator dependency."""
+
+    if not path.exists():
+        return []
+    try:
+        import yaml  # type: ignore
+
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return []
+    entries = doc.get("entries") if isinstance(doc, dict) else None
+    if not isinstance(entries, list):
+        return []
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def _applies_to_target(entry: Dict[str, Any], path: Path, label: str, target_name: str) -> bool:
+    """Validate and evaluate an optional target selector on one entry."""
+
+    if "applies_to" not in entry or entry["applies_to"] is None:
+        return True
+    applies = entry["applies_to"]
+    if not isinstance(applies, list) or not all(isinstance(item, str) for item in applies):
+        raise RuntimeError(
+            f"{path}: entry {label!r} has invalid `applies_to`: expected list of strings, got {applies!r}"
+        )
+    return target_name in applies
+
+
+def _load_divergence_skips(
+    path: Path,
+    target_name: str,
+    *,
+    suites: Optional[Sequence[tuple[Path, case_schema.Suite]]] = None,
+) -> Dict[str, str]:
     """Loads case-id -> reason from divergence YAML entries whose mode is
     `skip-oracle` AND whose `applies_to` either includes `target_name` or
     is absent (default = applies to all targets).
@@ -222,34 +258,144 @@ def _load_divergence_skips(path: Path, target_name: str) -> Dict[str, str]:
     rather than silently masking entries.
     """
 
-    if not path.exists():
-        return {}
-    try:
-        import yaml  # type: ignore
-
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except Exception:
-        return {}
     out: Dict[str, str] = {}
-    entries = doc.get("entries") or []
-    if not isinstance(entries, list):
-        return {}
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        cid = entry.get("id")
+    suite_cases = {suite.name: [case.id for case in suite.cases] for _, suite in suites or []}
+    for entry in _load_divergence_entries(path):
         mode = entry.get("mode", "tolerance")
-        if mode != "skip-oracle" or not isinstance(cid, str):
+        if mode != "skip-oracle":
             continue
-        if "applies_to" in entry and entry["applies_to"] is not None:
-            applies = entry["applies_to"]
-            if not isinstance(applies, list) or not all(isinstance(x, str) for x in applies):
-                raise RuntimeError(
-                    f"{path}: entry {cid!r} has invalid `applies_to`: expected list of strings, got {applies!r}"
-                )
-            if target_name not in applies:
+        if "id" in entry or "ids" in entry:
+            raw_ids = entry.get("ids") if "ids" in entry else [entry.get("id")]
+        elif "suite" in entry or "suites" in entry:
+            raw_suites = entry.get("suites") if "suites" in entry else [entry.get("suite")]
+            if (
+                not isinstance(raw_suites, list)
+                or not raw_suites
+                or not all(isinstance(name, str) and name for name in raw_suites)
+            ):
                 continue
-        out[cid] = str(entry.get("reason", "divergence.yaml skip-oracle"))
+            raw_ids = [case_id for name in raw_suites for case_id in suite_cases.get(name, [])]
+        else:
+            continue
+        if (
+            not isinstance(raw_ids, list)
+            or not raw_ids
+            or not all(isinstance(case_id, str) and case_id for case_id in raw_ids)
+        ):
+            continue
+        label = ", ".join(raw_ids)
+        if not _applies_to_target(entry, path, label, target_name):
+            continue
+        reason = str(entry.get("reason", "divergence.yaml skip-oracle"))
+        for case_id in raw_ids:
+            out[case_id] = reason
+    return out
+
+
+@dataclass(frozen=True)
+class DivergenceMetadata:
+    """One target-scoped metadata overlay sourced from divergence.yaml."""
+
+    ids: frozenset[str]
+    suites: frozenset[str]
+    tolerance: Optional[case_schema.Tolerance]
+    compare_mode: Optional[str]
+    has_tolerance: bool
+    has_compare_mode: bool
+
+
+def _selector_values(entry: Dict[str, Any], path: Path, index: int) -> tuple[frozenset[str], frozenset[str]]:
+    """Validate exactly one of id(s) or suite(s) and return its members."""
+
+    selectors: list[tuple[str, frozenset[str]]] = []
+    for singular, plural in (("id", "ids"), ("suite", "suites")):
+        if singular in entry:
+            value = entry[singular]
+            if not isinstance(value, str) or not value:
+                raise RuntimeError(f"{path}: entries[{index}] `{singular}` must be a non-empty string")
+            selectors.append((singular, frozenset({value})))
+        if plural in entry:
+            value = entry[plural]
+            if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
+                raise RuntimeError(f"{path}: entries[{index}] `{plural}` must be a non-empty list of strings")
+            selectors.append((plural, frozenset(value)))
+    if len(selectors) != 1:
+        raise RuntimeError(f"{path}: entries[{index}] metadata needs exactly one of id, ids, suite, or suites")
+    name, values = selectors[0]
+    return (values, frozenset()) if name in {"id", "ids"} else (frozenset(), values)
+
+
+def _load_divergence_metadata(path: Path, target_name: str) -> List[DivergenceMetadata]:
+    """Load tolerance / comparison metadata for a generation target.
+
+    The divergence registry remains the reviewable source of every oracle
+    exception. Metadata may target individual case IDs or entire suites;
+    later entries (and the target-specific file) override earlier fields.
+    """
+
+    out: List[DivergenceMetadata] = []
+    for index, entry in enumerate(_load_divergence_entries(path)):
+        if entry.get("mode", "tolerance") == "skip-oracle":
+            continue
+        has_tolerance = "tolerance" in entry
+        has_compare_mode = "compare_mode" in entry
+        if not has_tolerance and not has_compare_mode:
+            continue
+        label = str(entry.get("id") or entry.get("suite") or f"entries[{index}]")
+        if not _applies_to_target(entry, path, label, target_name):
+            continue
+        ids, suites = _selector_values(entry, path, index)
+        tolerance: Optional[case_schema.Tolerance] = None
+        if has_tolerance:
+            try:
+                tolerance = case_schema._load_tolerance(entry["tolerance"], where=f"{path}: {label}")
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(str(exc)) from exc
+        compare_mode: Optional[str] = None
+        if has_compare_mode:
+            raw_mode = entry["compare_mode"]
+            if not isinstance(raw_mode, str) or raw_mode not in case_schema.COMPARE_MODES:
+                raise RuntimeError(
+                    f"{path}: {label}: invalid compare_mode {raw_mode!r}; "
+                    f"expected one of {sorted(case_schema.COMPARE_MODES)}"
+                )
+            compare_mode = None if raw_mode == "exact" else raw_mode
+        out.append(
+            DivergenceMetadata(
+                ids=ids,
+                suites=suites,
+                tolerance=tolerance,
+                compare_mode=compare_mode,
+                has_tolerance=has_tolerance,
+                has_compare_mode=has_compare_mode,
+            )
+        )
+    return out
+
+
+def _apply_divergence_metadata(
+    suites: Sequence[tuple[Path, case_schema.Suite]], metadata: Sequence[DivergenceMetadata]
+) -> List[tuple[Path, case_schema.Suite]]:
+    """Return suites with reviewed divergence metadata overlaid on cases."""
+
+    out: List[tuple[Path, case_schema.Suite]] = []
+    for path, suite in suites:
+        cases: List[case_schema.Case] = []
+        for case in suite.cases:
+            tolerance = case.tolerance
+            compare_mode = case.compare_mode
+            changed = False
+            for overlay in metadata:
+                if case.id not in overlay.ids and suite.name not in overlay.suites:
+                    continue
+                if overlay.has_tolerance:
+                    tolerance = overlay.tolerance
+                    changed = True
+                if overlay.has_compare_mode:
+                    compare_mode = overlay.compare_mode
+                    changed = True
+            cases.append(replace(case, tolerance=tolerance, compare_mode=compare_mode) if changed else case)
+        out.append((path, replace(suite, cases=cases)))
     return out
 
 
@@ -407,7 +553,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     try:
-        skips = _load_divergence_skips(args.divergence, target["_name"])
+        skips = _load_divergence_skips(args.divergence, target["_name"], suites=suites)
+        metadata = _load_divergence_metadata(args.divergence, target["_name"])
 
         # Variants may declare an extra `divergence:` path in targets.yaml,
         # interpreted relative to the repo root. Entries there override the
@@ -416,11 +563,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         if isinstance(target_div, str) and target_div:
             variant_div_path = REPO_ROOT / target_div
             if variant_div_path.exists():
-                variant_skips = _load_divergence_skips(variant_div_path, target["_name"])
+                variant_skips = _load_divergence_skips(variant_div_path, target["_name"], suites=suites)
                 skips.update(variant_skips)
+                metadata.extend(_load_divergence_metadata(variant_div_path, target["_name"]))
     except RuntimeError as exc:
         print(f"oracle-gen: {exc}", file=sys.stderr)
         return 2
+
+    suites = _apply_divergence_metadata(suites, metadata)
 
     iso_now = _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
