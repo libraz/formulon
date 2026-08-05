@@ -458,6 +458,28 @@ TEST(FormulonCApi, XlsbReadDiagnosticsAreZeroForCleanRoundTrip) {
   EXPECT_EQ(names, 0U);
 }
 
+TEST(FormulonCApi, MemoryUsageTracksTheWorkbookAndRejectsNulls) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  size_t empty = 0U;
+  ASSERT_EQ(fm_workbook_memory_usage(wb.handle, &empty), 0);
+  EXPECT_GT(empty, 0U);
+
+  for (uint32_t row = 0; row < 200U; ++row) {
+    ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, row, 0, "=1+2"), 0);
+  }
+  size_t filled = 0U;
+  ASSERT_EQ(fm_workbook_memory_usage(wb.handle, &filled), 0);
+  EXPECT_GT(filled, empty);
+
+  // Both NULL arguments are rejected rather than silently reporting 0,
+  // which is what lets a binding distinguish "empty" from "broken".
+  size_t scratch = 0U;
+  EXPECT_NE(fm_workbook_memory_usage(nullptr, &scratch), 0);
+  EXPECT_NE(fm_workbook_memory_usage(wb.handle, nullptr), 0);
+}
+
 TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

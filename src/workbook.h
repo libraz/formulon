@@ -99,6 +99,28 @@ class Workbook {
   /// `create()`-constructed instances.
   std::size_t sheet_count() const noexcept { return sheets_.size(); }
 
+  /// Estimated heap bytes this workbook holds.
+  ///
+  /// Exists for hosts whose garbage collector only sees the handle and
+  /// not what hangs off it — a JS engine will happily keep thousands of
+  /// multi-megabyte workbooks alive because each one looks like a
+  /// pointer-sized object — so they can report the real weight and let
+  /// collection pressure track it.
+  ///
+  /// Counted: the cell store (materialised slots plus each cell's formula
+  /// text, owned cached text and phonetic text), the shared-string
+  /// storage every text value borrows from, the passthrough part payloads
+  /// (which embedded media dominates), and the workbook-level round-trip
+  /// metadata strings. Not counted: allocator bookkeeping, the recalc
+  /// engine's dependency graph and arenas, styles, and the pivot caches —
+  /// all of which are bounded by the counted parts in practice.
+  ///
+  /// The result is an estimate for pressure reporting, not an accounting
+  /// figure: it walks every materialised cell, so it is O(cells) and
+  /// belongs at coarse boundaries (after a load, after a recalc) rather
+  /// than in a loop.
+  std::size_t approximate_memory_bytes() const noexcept;
+
   /// Immutable access to the sheet at `index`. `index` must be `<
   /// sheet_count()`.
   const Sheet& sheet(std::size_t index) const { return sheets_[index]; }

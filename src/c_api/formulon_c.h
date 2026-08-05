@@ -212,6 +212,28 @@ FM_API fm_status_t fm_workbook_xlsb_read_diagnostics(const fm_workbook_t* wb, si
                                                      size_t* out_undecoded_defined_name_count);
 
 /**
+ * @brief Reports the estimated heap footprint of `wb` in bytes.
+ *
+ * For hosts whose collector sizes an object by the handle rather than by
+ * what the handle owns: a workbook is pointer-sized to a garbage
+ * collector and arbitrarily large in reality, so a runtime that wants
+ * collection pressure to track the real cost has to be told the figure.
+ *
+ * The value covers the cell store, the shared-string storage, the
+ * passthrough part payloads and the workbook-level metadata; it excludes
+ * allocator overhead, the dependency graph and the style tables. It is an
+ * estimate for pressure reporting, not an allocation ledger, and it walks
+ * every materialised cell — call it at coarse boundaries (after a load or
+ * a recalc), not per edit.
+ *
+ * @param wb         Workbook to measure.
+ * @param out_bytes  On success receives the estimate.
+ * @return `kOk` on success; `kBindingNullPointer` if either pointer is
+ *         `NULL`.
+ */
+FM_API fm_status_t fm_workbook_memory_usage(const fm_workbook_t* wb, size_t* out_bytes);
+
+/**
  * @brief Releases a workbook handle.
  *
  * `wb == NULL` is a no-op (mirrors `free()` semantics). Every text

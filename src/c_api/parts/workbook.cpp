@@ -90,9 +90,9 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
       return set_last_error(result.error());
     }
     // The workbook now owns the text-storage deque that backs every
-    // Text-cell `string_view`, so we move only the workbook out of the
-    // result; the rest of `OoxmlReadResult` (passthrough parts mirror,
-    // audit counter) is discarded.
+    // Text-cell `string_view` as well as the passthrough payload, so
+    // moving it out takes everything the handle needs; the read result's
+    // remaining audit counter is discarded.
     handle->wb.emplace(std::move(result.value().workbook));
   }
   *out = handle.release();
@@ -108,6 +108,16 @@ extern "C" fm_status_t fm_workbook_xlsb_read_diagnostics(const fm_workbook_t* wb
   }
   *out_undecoded_formula_count = wb->xlsb_undecoded_formula_count;
   *out_undecoded_defined_name_count = wb->xlsb_undecoded_defined_name_count;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_memory_usage(const fm_workbook_t* wb, size_t* out_bytes) {
+  clear_last_error();
+  if (wb == nullptr || out_bytes == nullptr || !wb->wb.has_value()) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_memory_usage: NULL argument");
+  }
+  *out_bytes = wb->wb->approximate_memory_bytes();
   return 0;
 }
 

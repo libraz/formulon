@@ -722,6 +722,49 @@ std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept 
   return static_cast<std::size_t>(-1);
 }
 
+std::size_t Workbook::approximate_memory_bytes() const noexcept {
+  // Per-row cost of the cell store's hash map beyond the run itself: one
+  // node holding the key and the `RowCells` header, plus the bucket slot
+  // pointing at it. A constant is enough — the figure is a pressure
+  // signal, and no standard library exposes its real per-node overhead.
+  constexpr std::size_t kRowNodeOverheadBytes = sizeof(std::uint32_t) + 2U * sizeof(void*) + 32U;
+
+  std::size_t total = sizeof(Workbook);
+
+  for (const Sheet& sheet_ref : sheets_) {
+    total += sizeof(Sheet) + sheet_ref.name().capacity();
+    for (const auto& [row, cells] : sheet_ref.rows()) {
+      (void)row;
+      total += kRowNodeOverheadBytes + (cells.run().capacity() * sizeof(Cell));
+      for (const Cell& cell : cells.run()) {
+        total += cell.formula_text.capacity() + cell.phonetic_text.capacity();
+        if (cell.cached_text_owned != nullptr) {
+          total += sizeof(std::string) + cell.cached_text_owned->capacity();
+        }
+      }
+    }
+  }
+
+  // Every `Text` value in the workbook is a view into this deque, so the
+  // cell walk above deliberately does not add string payloads a second
+  // time.
+  for (const std::string& text : text_storage_) {
+    total += sizeof(std::string) + text.capacity();
+  }
+
+  for (const io::PassthroughPart& part : passthrough_parts_) {
+    total += sizeof(io::PassthroughPart) + part.path.capacity() + part.content_type.capacity() + part.bytes.capacity();
+  }
+
+  for (const io::DefinedName& name : defined_names_) {
+    total += sizeof(io::DefinedName) + name.name.capacity() + name.formula.capacity() + name.comment.capacity();
+  }
+
+  total += workbook_pr_xml_.capacity() + book_views_xml_.capacity() + workbook_protection_xml_.capacity();
+
+  return total;
+}
+
 void Workbook::add_pivot_cache(std::unique_ptr<pivot::PivotCache> cache) {
   if (cache == nullptr) {
     return;
