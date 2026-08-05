@@ -51,6 +51,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value EvaluateConditionalFormula(const Napi::CallbackInfo& info);
 
   // Lifecycle.
+  Napi::Value Dispose(const Napi::CallbackInfo& info);
   Napi::Value IsValid(const Napi::CallbackInfo& info);
 
   // Lambda text read.
@@ -91,6 +92,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value MoveSheet(const Napi::CallbackInfo& info);
   Napi::Value SheetCount(const Napi::CallbackInfo& info);
   Napi::Value SheetName(const Napi::CallbackInfo& info);
+  Napi::Value Paginate(const Napi::CallbackInfo& info);
 
   // Row / column structural edits.
   Napi::Value InsertRows(const Napi::CallbackInfo& info);
@@ -269,7 +271,13 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Object NullHandleError(Napi::Env env) const { return MakeErrorStatus(env, kBindingInvalidHandle); }
 
  private:
+  static bool IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                          void* user_data);
+  void DestroyHandle();
+
   fm_workbook_t* handle_ = nullptr;
+  Napi::FunctionReference iterative_progress_callback_;
+  bool in_iterative_progress_callback_ = false;
 };
 
 }  // namespace formulon_node

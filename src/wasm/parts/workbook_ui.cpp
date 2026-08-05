@@ -65,21 +65,27 @@ JsStatus JsWorkbook::clearMerges(uint32_t sheet) {
 emscripten::val JsWorkbook::getMerges(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
+    arr.set("status", error_status(7000));
     return arr;
   }
   uint32_t count = 0;
-  if (fm_sheet_get_merge_count(handle_, sheet, &count) != 0) {
+  fm_status_t rc = fm_sheet_get_merge_count(handle_, sheet, &count);
+  if (rc != 0) {
+    arr.set("status", status_from_rc(rc));
     return arr;
   }
   uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_merge_range m{};
-    if (fm_sheet_get_merge_at(handle_, sheet, i, &m) != 0) {
-      continue;
+    rc = fm_sheet_get_merge_at(handle_, sheet, i, &m);
+    if (rc != 0) {
+      arr.set("status", status_from_rc(rc));
+      return arr;
     }
     arr.set(emitted, merge_range_to_val(m));
     ++emitted;
   }
+  arr.set("status", ok_status());
   return arr;
 }
 
@@ -124,17 +130,22 @@ emscripten::val JsWorkbook::getCommentResult(uint32_t sheet, uint32_t row, uint3
 emscripten::val JsWorkbook::getComments(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
+    arr.set("status", error_status(7000));
     return arr;
   }
   uint32_t count = 0;
-  if (fm_sheet_get_comment_count(handle_, sheet, &count) != 0) {
+  fm_status_t rc = fm_sheet_get_comment_count(handle_, sheet, &count);
+  if (rc != 0) {
+    arr.set("status", status_from_rc(rc));
     return arr;
   }
   uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_comment c{};
-    if (fm_sheet_get_comment_at_index(handle_, sheet, i, &c) != 0) {
-      continue;
+    rc = fm_sheet_get_comment_at_index(handle_, sheet, i, &c);
+    if (rc != 0) {
+      arr.set("status", status_from_rc(rc));
+      return arr;
     }
     emscripten::val o = emscripten::val::object();
     o.set("row", c.row);
@@ -144,6 +155,7 @@ emscripten::val JsWorkbook::getComments(uint32_t sheet) const {
     arr.set(emitted, o);
     ++emitted;
   }
+  arr.set("status", ok_status());
   return arr;
 }
 
@@ -161,7 +173,7 @@ JsStatus JsWorkbook::setComment(uint32_t sheet, uint32_t row, uint32_t col, cons
 // ---- Hyperlinks --------------------------------------------------------
 
 JsStatus JsWorkbook::addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
-                                  const std::string& display, const std::string& tooltip) {
+                                  const std::string& display, const std::string& tooltip, const std::string& location) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
@@ -169,7 +181,7 @@ JsStatus JsWorkbook::addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, co
   hl.row = row;
   hl.col = col;
   hl.target = target.empty() ? nullptr : target.c_str();
-  hl.location = nullptr;
+  hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
   hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
   fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
@@ -203,27 +215,34 @@ JsStatus JsWorkbook::clearHyperlinks(uint32_t sheet) {
 emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
+    arr.set("status", error_status(7000));
     return arr;
   }
   uint32_t count = 0;
-  if (fm_sheet_get_hyperlink_count(handle_, sheet, &count) != 0) {
+  fm_status_t rc = fm_sheet_get_hyperlink_count(handle_, sheet, &count);
+  if (rc != 0) {
+    arr.set("status", status_from_rc(rc));
     return arr;
   }
   uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_hyperlink h{};
-    if (fm_sheet_get_hyperlink_at(handle_, sheet, i, &h) != 0) {
-      continue;
+    rc = fm_sheet_get_hyperlink_at(handle_, sheet, i, &h);
+    if (rc != 0) {
+      arr.set("status", status_from_rc(rc));
+      return arr;
     }
     emscripten::val item = emscripten::val::object();
     item.set("row", h.row);
     item.set("col", h.col);
     item.set("target", h.target != nullptr ? std::string(h.target) : std::string());
+    item.set("location", h.location != nullptr ? std::string(h.location) : std::string());
     item.set("display", h.display != nullptr ? std::string(h.display) : std::string());
     item.set("tooltip", h.tooltip != nullptr ? std::string(h.tooltip) : std::string());
     arr.set(emitted, item);
     ++emitted;
   }
+  arr.set("status", ok_status());
   return arr;
 }
 
@@ -232,17 +251,22 @@ emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
 emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
+    arr.set("status", error_status(7000));
     return arr;
   }
   uint32_t count = 0;
-  if (fm_sheet_get_validation_count(handle_, sheet, &count) != 0) {
+  fm_status_t rc = fm_sheet_get_validation_count(handle_, sheet, &count);
+  if (rc != 0) {
+    arr.set("status", status_from_rc(rc));
     return arr;
   }
   uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_data_validation v{};
-    if (fm_sheet_get_validation_at(handle_, sheet, i, &v) != 0) {
-      continue;
+    rc = fm_sheet_get_validation_at(handle_, sheet, i, &v);
+    if (rc != 0) {
+      arr.set("status", status_from_rc(rc));
+      return arr;
     }
     emscripten::val item = emscripten::val::object();
     emscripten::val ranges = emscripten::val::array();
@@ -266,6 +290,7 @@ emscripten::val JsWorkbook::getValidations(uint32_t sheet) const {
     arr.set(emitted, item);
     ++emitted;
   }
+  arr.set("status", ok_status());
   return arr;
 }
 

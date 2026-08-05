@@ -6,6 +6,13 @@
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
+namespace {
+
+struct WorkbookClassState {
+  Napi::FunctionReference constructor;
+};
+
+}  // namespace
 
 Workbook::Workbook(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Workbook>(info) {
   // Default constructor used by the static factories. They populate
@@ -17,17 +24,18 @@ Workbook::Workbook(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Workbook>(
 }
 
 Workbook::~Workbook() {
+  DestroyHandle();
+}
+
+void Workbook::DestroyHandle() {
   if (handle_ != nullptr) {
-    // If this workbook had the global progress callback installed
-    // we tear that down too -- otherwise the dangling C-callback
-    // pointer would be invoked on a destroyed handle if recalc is
-    // somehow re-driven against the same workbook. The slot itself
-    // keeps the JS function reference alive across the addon's
-    // lifetime; only the per-handle registration is unwound here.
+    // Clear this workbook's C callback before destroying its user-data
+    // wrapper, then release the JS callback reference below.
     (void)fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
     fm_workbook_destroy(handle_);
     handle_ = nullptr;
   }
+  iterative_progress_callback_.Reset();
 }
 
 uint32_t Workbook::ArgU32(const Napi::CallbackInfo& info, size_t idx) {
@@ -104,19 +112,19 @@ Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   Napi::Object jsobj = ctor.New({});
   Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
   if (info.Length() < 1 || !info[0].IsTypedArray()) {
-    wb->handle_ = nullptr;
+    (void)fm_workbook_load(nullptr, 0, &wb->handle_);
     return jsobj;
   }
   Napi::TypedArray ta = info[0].As<Napi::TypedArray>();
   if (ta.TypedArrayType() != napi_uint8_array) {
-    wb->handle_ = nullptr;
+    (void)fm_workbook_load(nullptr, 0, &wb->handle_);
     return jsobj;
   }
   Napi::Uint8Array u8 = ta.As<Napi::Uint8Array>();
   const uint8_t* data = u8.Data();
   const std::size_t len = u8.ElementLength();
   if (data == nullptr || len == 0) {
-    wb->handle_ = nullptr;
+    (void)fm_workbook_load(nullptr, 0, &wb->handle_);
     return jsobj;
   }
   fm_status_t rc = fm_workbook_load(data, len, &wb->handle_);
@@ -129,7 +137,11 @@ Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
 // ---- Class registration ---------------------------------------------
 
 Napi::Function Workbook::GetClass(Napi::Env env) {
-  return DefineClass(
+  if (WorkbookClassState* const state = env.GetInstanceData<WorkbookClassState>(); state != nullptr) {
+    return state->constructor.Value();
+  }
+
+  Napi::Function constructor = DefineClass(
       env, "Workbook",
       {
           StaticMethod<&Workbook::CreateDefault>("createDefault"),
@@ -162,6 +174,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::DeleteCols>("deleteCols"),
           InstanceMethod<&Workbook::DeleteRows>("deleteRows"),
           InstanceMethod<&Workbook::Dependents>("dependents"),
+          InstanceMethod<&Workbook::Dispose>("dispose"),
           InstanceMethod<&Workbook::DxfCount>("dxfCount"),
           InstanceMethod<&Workbook::EvaluateCfRange>("evaluateCfRange"),
           InstanceMethod<&Workbook::EvaluateConditionalFormula>("evaluateConditionalFormula"),
@@ -201,6 +214,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::LocalizeFunctionName>("localizeFunctionName"),
           InstanceMethod<&Workbook::MoveSheet>("moveSheet"),
           InstanceMethod<&Workbook::PartialRecalc>("partialRecalc"),
+          InstanceMethod<&Workbook::Paginate>("paginate"),
           InstanceMethod<&Workbook::PassthroughAt>("passthroughAt"),
           InstanceMethod<&Workbook::PassthroughCount>("passthroughCount"),
           InstanceMethod<&Workbook::PivotCacheCount>("pivotCacheCount"),
@@ -312,6 +326,10 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::TableCount>("tableCount"),
           InstanceMethod<&Workbook::XfCount>("xfCount"),
       });
+  auto* const state = new WorkbookClassState{};
+  state->constructor = Napi::Persistent(constructor);
+  env.SetInstanceData(state);
+  return constructor;
 }
 
 }  // namespace formulon_node

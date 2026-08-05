@@ -7,8 +7,9 @@
 //   --out-dir   packages/npm/dist
 //
 // Copies:
-//   <build-dir>/formulon.js   -> <out-dir>/formulon.js
+//   <build-dir>/formulon.js   -> <out-dir>/formulon_core.js
 //   <build-dir>/formulon.wasm -> <out-dir>/formulon.wasm
+//   packages/npm/index.mjs     -> <out-dir>/formulon.js
 //   src/wasm/formulon.d.ts    -> <out-dir>/formulon.d.ts
 //
 // Run via `make npm-package`. No npm dependencies; Node 18 stdlib only.
@@ -59,8 +60,9 @@ async function main() {
   const jsSrc = path.join(absBuildDir, 'formulon.js');
   const wasmSrc = path.join(absBuildDir, 'formulon.wasm');
   const dtsSrc = path.join(repoRoot, 'src', 'wasm', 'formulon.d.ts');
+  const shimSrc = path.join(repoRoot, 'packages', 'npm', 'index.mjs');
 
-  for (const p of [jsSrc, wasmSrc, dtsSrc]) {
+  for (const p of [jsSrc, wasmSrc, dtsSrc, shimSrc]) {
     if (!(await fileExists(p))) {
       console.error(`stage.mjs: missing input ${p}`);
       console.error('  Run `make wasm` first to produce the WASM artefacts.');
@@ -70,11 +72,12 @@ async function main() {
 
   await mkdir(absOutDir, { recursive: true });
 
-  await copyFile(jsSrc, path.join(absOutDir, 'formulon.js'));
+  await copyFile(jsSrc, path.join(absOutDir, 'formulon_core.js'));
   await copyFile(wasmSrc, path.join(absOutDir, 'formulon.wasm'));
   await copyFile(dtsSrc, path.join(absOutDir, 'formulon.d.ts'));
+  await copyFile(shimSrc, path.join(absOutDir, 'formulon.js'));
 
-  console.log(`staged 3 file(s) -> ${absOutDir}`);
+  console.log(`staged 4 file(s) -> ${absOutDir}`);
 }
 
 main().catch((e) => {

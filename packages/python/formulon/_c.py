@@ -138,6 +138,7 @@ class _WasmInstance:
         self._exports: dict = {}
         self._init_lock = threading.Lock()
         self._call_lock = threading.RLock()
+        self._last_diagnostic = threading.local()
 
     def _ensure(self) -> None:
         if self._instance is not None:
@@ -199,7 +200,20 @@ class _WasmInstance:
         # Wrap so the caller can use a ctypes-like call syntax.
         def _wrapped(*args):
             with lock:
-                return fn(store, *args)
+                result = fn(store, *args)
+                # Capture diagnostics before another thread can enter the
+                # shared, no-pthread WASM instance. Some successful scalar
+                # APIs are also non-zero; an unused snapshot is harmless.
+                if isinstance(result, int) and result != 0:
+                    message_fn = self._exports.get("fm_last_error_message")
+                    context_fn = self._exports.get("fm_last_error_context")
+                    if message_fn is not None and context_fn is not None:
+                        self._last_diagnostic.value = (
+                            result,
+                            self._read_cstr_unlocked(message_fn(store)),
+                            self._read_cstr_unlocked(context_fn(store)),
+                        )
+                return result
 
         return _wrapped
 
@@ -279,6 +293,36 @@ class _WasmInstance:
                 chunks.append(buf)
                 offset = end
         return b"".join(chunks).decode("utf-8", errors="replace")
+
+    def _read_cstr_unlocked(self, ptr: int) -> str:
+        """Decode a C string while the caller already owns ``_call_lock``."""
+        if ptr == 0:
+            return ""
+        assert self._memory is not None
+        chunks: list[bytes] = []
+        offset = ptr
+        mem_len = self._memory.data_len(self._store)
+        while offset < mem_len:
+            end = min(offset + 256, mem_len)
+            buf = bytes(self._memory.read(self._store, offset, end))
+            nul = buf.find(b"\x00")
+            if nul >= 0:
+                chunks.append(buf[:nul])
+                break
+            chunks.append(buf)
+            offset = end
+        return b"".join(chunks).decode("utf-8", errors="replace")
+
+    def last_diagnostic(self, status: int) -> Tuple[str, str]:
+        """Return the diagnostic atomically captured for ``status`` if any."""
+        snapshot = getattr(self._last_diagnostic, "value", None)
+        if snapshot is not None and snapshot[0] == status:
+            return snapshot[1], snapshot[2]
+        with self._call_lock:
+            return (
+                self._read_cstr_unlocked(self._exports["fm_last_error_message"](self._store)),
+                self._read_cstr_unlocked(self._exports["fm_last_error_context"](self._store)),
+            )
 
     def alloc(self, size: int) -> int:
         """Allocate ``size`` bytes in WASM memory; return the pointer.

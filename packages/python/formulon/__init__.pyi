@@ -51,6 +51,18 @@ class Table(NamedTuple):
 class PassthroughPart(NamedTuple):
     path: str
 
+class CommentEntry(NamedTuple):
+    row: int
+    col: int
+    author: str
+    text: str
+
+class PaginationResult:
+    page_count: int
+    print_area: List[tuple[int, int, int, int]]
+    horizontal_breaks: List[int]
+    vertical_breaks: List[int]
+
 class FormulonError(Exception):
     status: int
     status_name: str
@@ -310,6 +322,56 @@ class CfCellResult:
     col: int
     matches: List[CfMatch]
 
+class CfColor:
+    r: int
+    g: int
+    b: int
+    a: int
+    def __init__(self, r: int, g: int, b: int, a: int = ...) -> None: ...
+
+class CfValueObject:
+    type: int
+    value: Optional[str]
+    gte: bool
+    def __init__(self, type: int, value: Optional[str] = ..., gte: bool = ...) -> None: ...
+
+class ColorScale:
+    thresholds: List[CfValueObject]
+    colors: List[CfColor]
+    def __init__(self, thresholds: List[CfValueObject], colors: List[CfColor]) -> None: ...
+
+class DataBar:
+    minimum: CfValueObject
+    maximum: CfValueObject
+    fill: CfColor
+    show_value: bool
+    min_length_pct: int
+    max_length_pct: int
+    def __init__(
+        self,
+        minimum: CfValueObject,
+        maximum: CfValueObject,
+        fill: CfColor,
+        show_value: bool = ...,
+        min_length_pct: int = ...,
+        max_length_pct: int = ...,
+    ) -> None: ...
+
+class IconSet:
+    name: int
+    thresholds: List[CfValueObject]
+    reverse: bool
+    show_value: bool
+    percent: bool
+    def __init__(
+        self,
+        name: int,
+        thresholds: List[CfValueObject],
+        reverse: bool = ...,
+        show_value: bool = ...,
+        percent: bool = ...,
+    ) -> None: ...
+
 class ConditionalFormat:
     id: str
     type: int
@@ -328,6 +390,9 @@ class ConditionalFormat:
     std_dev: float
     text: str
     time_period: int
+    color_scale: Optional[ColorScale]
+    data_bar: Optional[DataBar]
+    icon_set: Optional[IconSet]
 
 class ConditionalFormatInput:
     sqref: List[MergeRange]
@@ -352,6 +417,9 @@ class ConditionalFormatInput:
     text: str
     time_period_engaged: bool
     time_period: int
+    color_scale: Optional[ColorScale]
+    data_bar: Optional[DataBar]
+    icon_set: Optional[IconSet]
     def __init__(
         self,
         sqref: List[MergeRange],
@@ -376,6 +444,9 @@ class ConditionalFormatInput:
         text: str = ...,
         time_period_engaged: bool = ...,
         time_period: int = ...,
+        color_scale: Optional[ColorScale] = ...,
+        data_bar: Optional[DataBar] = ...,
+        icon_set: Optional[IconSet] = ...,
     ) -> None: ...
 
 class CellNode:
@@ -469,6 +540,21 @@ class FillRecord:
     bg_argb: int
     def __init__(self, pattern: int = ..., fg_argb: int = ..., bg_argb: int = ...) -> None: ...
 
+class DifferentialFormat:
+    font: Optional[FontRecord]
+    fill: Optional[FillRecord]
+    border: Optional[Dict[str, object]]
+    num_fmt_id: Optional[int]
+    num_fmt_code: str
+    def __init__(
+        self,
+        font: Optional[FontRecord] = ...,
+        fill: Optional[FillRecord] = ...,
+        border: Optional[Dict[str, object]] = ...,
+        num_fmt_id: Optional[int] = ...,
+        num_fmt_code: str = ...,
+    ) -> None: ...
+
 class CellStyle:
     name: str
     xf_id: int
@@ -500,6 +586,17 @@ class PivotLayout:
     rows: int
     cols: int
     cells: List[PivotCell]
+
+class PivotReportLayout(IntEnum):
+    COMPACT: int
+    TABULAR: int
+    OUTLINE: int
+
+class PivotWorksheetSource:
+    ref: Optional[str]
+    sheet: Optional[str]
+    name: Optional[str]
+    def __init__(self, ref: Optional[str] = ..., sheet: Optional[str] = ..., name: Optional[str] = ...) -> None: ...
 
 class PivotFieldSpec:
     source_name: str
@@ -661,6 +758,13 @@ class Workbook:
     # Comments.
     def get_comment(self, sheet: int, row: int, col: int) -> Optional[Comment]: ...
     def set_comment(self, sheet: int, row: int, col: int, author: str, text: str) -> None: ...
+    def comment_count(self, sheet: int) -> int: ...
+    def get_comments(self, sheet: int) -> List[CommentEntry]: ...
+
+    # Ad-hoc conditional-format evaluation.
+    def evaluate_cf_formula(
+        self, sheet: int, row: int, col: int, anchor_row: int, anchor_col: int, formula: str
+    ) -> bool: ...
 
     # Data validations.
     def validation_count(self, sheet: int) -> int: ...
@@ -675,6 +779,7 @@ class Workbook:
     def set_sheet_protection(self, sheet: int, protection: SheetProtection) -> None: ...
 
     # Sheet view / layout.
+    def paginate(self, sheet: int) -> PaginationResult: ...
     def get_sheet_view(self, sheet: int) -> SheetView: ...
     def set_sheet_zoom(self, sheet: int, zoom_scale: int) -> None: ...
     def set_sheet_freeze(self, sheet: int, freeze_rows: int, freeze_cols: int) -> None: ...
@@ -718,6 +823,7 @@ class Workbook:
     def get_font(self, font_index: int) -> FontRecord: ...
     def get_fill(self, fill_index: int) -> FillRecord: ...
     def get_border(self, border_index: int) -> Dict[str, object]: ...
+    def get_dxf(self, dxf_index: int) -> DifferentialFormat: ...
     def get_num_fmt(self, num_fmt_id: int) -> str: ...
     def font_count(self) -> int: ...
     def fill_count(self) -> int: ...
@@ -725,22 +831,28 @@ class Workbook:
     def cell_xf_count(self) -> int: ...
     def cell_style_count(self) -> int: ...
     def cell_style_xf_count(self) -> int: ...
+    def dxf_count(self) -> int: ...
     def add_font(self, record: FontRecord) -> int: ...
     def add_fill(self, record: FillRecord) -> int: ...
     def add_border(self, sides: Dict[str, object]) -> int: ...
     def add_num_fmt(self, format_code: str) -> int: ...
     def add_cell_xf(self, record: CellXf) -> int: ...
+    def add_dxf(self, record: DifferentialFormat) -> int: ...
     def get_cell_style(self, index: int) -> CellStyle: ...
     def get_cell_style_xf(self, index: int) -> CellXf: ...
 
     # Pivot layout projection.
     def pivot_count(self, sheet: int) -> int: ...
     def pivot_layout(self, sheet: int, pivot_index: int) -> PivotLayout: ...
+    def get_pivot_report_layout(self, sheet: int, pivot_index: int) -> PivotReportLayout: ...
+    def set_pivot_report_layout(self, sheet: int, pivot_index: int, layout: PivotReportLayout) -> None: ...
 
     # Pivot caches.
     def pivot_cache_count(self) -> int: ...
     def pivot_cache_id_at(self, index: int) -> int: ...
     def pivot_cache_create(self, requested_id: int = ...) -> int: ...
+    def get_pivot_cache_worksheet_source(self, cache_id: int) -> Optional[PivotWorksheetSource]: ...
+    def set_pivot_cache_worksheet_source(self, cache_id: int, source: Optional[PivotWorksheetSource]) -> None: ...
     def pivot_cache_remove(self, cache_id: int) -> None: ...
     def pivot_cache_field_count(self, cache_id: int) -> int: ...
     def pivot_cache_field_name(self, cache_id: int, field_idx: int) -> str: ...
@@ -863,4 +975,5 @@ class Workbook:
 
 def library_version() -> str: ...
 def version_string() -> str: ...
+def error_display_name(error_code: int) -> str: ...
 def eval_formula(formula: str) -> Value: ...

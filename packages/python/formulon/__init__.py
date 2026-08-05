@@ -34,21 +34,29 @@ from .workbook import (
     CellStyle,
     CellXf,
     CfCellResult,
+    CfColor,
     CfMatch,
+    CfValueObject,
+    ColorScale,
     ColumnLayout,
     Comment,
+    CommentEntry,
     ConditionalFormat,
     ConditionalFormatInput,
+    DataBar,
     DataValidation,
     DataValidationInput,
     DefinedName,
+    DifferentialFormat,
     ExternalLink,
     FillRecord,
     FontRecord,
     FormulonError,
     FunctionMetadata,
     Hyperlink,
+    IconSet,
     MergeRange,
+    PaginationResult,
     PassthroughPart,
     PivotAggregation,
     PivotAxis,
@@ -62,7 +70,9 @@ from .workbook import (
     PivotFilterType,
     PivotFilterValueKind,
     PivotLayout,
+    PivotReportLayout,
     PivotShowValuesAs,
+    PivotWorksheetSource,
     RowLayout,
     SheetProtection,
     SheetView,
@@ -129,14 +139,20 @@ __all__ = [
     "CellStyle",
     "CellXf",
     "CfCellResult",
+    "CfColor",
     "CfMatch",
+    "CfValueObject",
     "ColumnLayout",
     "Comment",
+    "CommentEntry",
     "ConditionalFormat",
     "ConditionalFormatInput",
+    "ColorScale",
+    "DataBar",
     "DataValidation",
     "DataValidationInput",
     "DefinedName",
+    "DifferentialFormat",
     "ExternalLink",
     "FillRecord",
     "FontRecord",
@@ -146,8 +162,10 @@ __all__ = [
     "FunctionMetadataLocalized",
     "FunctionMetadataProvider",
     "Hyperlink",
+    "IconSet",
     "MergeRange",
     "MergedFunctionMetadata",
+    "PaginationResult",
     "PassthroughPart",
     "PivotAggregation",
     "PivotAxis",
@@ -161,7 +179,9 @@ __all__ = [
     "PivotFilterType",
     "PivotFilterValueKind",
     "PivotLayout",
+    "PivotReportLayout",
     "PivotShowValuesAs",
+    "PivotWorksheetSource",
     "RowLayout",
     "SheetProtection",
     "SheetView",
@@ -172,6 +192,7 @@ __all__ = [
     "Workbook",
     "WorkbookFormat",
     "__version__",
+    "error_display_name",
     "eval_formula",
     "library_version",
     "merge_function_metadata",
@@ -186,6 +207,14 @@ def library_version() -> str:
       The result of ``fm_version_string()``. Always non-empty.
     """
     return decode_cstr(LIB.fm_version_string())
+
+
+def error_display_name(error_code: int) -> str:
+    """Return an Excel literal such as ``"#DIV/0!"`` for an error code.
+
+    Unknown numeric values return ``"#UNKNOWN!"``.
+    """
+    return decode_cstr(LIB.fm_error_display_name(int(error_code)))
 
 
 # Backward-compat alias mirroring the npm binding's ``versionString`` name.

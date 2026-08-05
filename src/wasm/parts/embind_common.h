@@ -127,21 +127,6 @@ struct JsCfMatch {
   int32_t iconIndex = 0;
 };
 
-/// One cell's CF result: row / col plus the priority-ascending match
-/// list. Mirrors `cf::CFRangeCellMatches` flattened across the C ABI.
-struct JsCfCellResult {
-  uint32_t row = 0;
-  uint32_t col = 0;
-  std::vector<JsCfMatch> matches;
-};
-
-/// Return envelope for `Workbook.evaluateCfRange(...)`. `cells` is
-/// sparse: only cells that produced at least one match appear.
-struct JsCfRangeResult {
-  JsStatus status;
-  std::vector<JsCfCellResult> cells;
-};
-
 /// JS-side mirror of `fm_sheet_view_ex_t` (superset of `fm_sheet_view_t`).
 struct JsSheetView {
   uint32_t zoomScale = 100U;
@@ -193,35 +178,6 @@ struct JsSheetProtection {
 struct JsSheetProtectionResult {
   JsStatus status;
   JsSheetProtection protection{};
-};
-
-/// JS-side mirror of `fm_column_layout_t`.
-struct JsColumnLayout {
-  uint32_t first = 0U;
-  uint32_t last = 0U;
-  double width = 0.0;
-  int32_t hidden = 0;
-  int32_t outlineLevel = 0;
-};
-
-/// JS-side mirror of `fm_row_layout_t`.
-struct JsRowLayout {
-  uint32_t row = 0U;
-  double height = 0.0;
-  int32_t hidden = 0;
-  int32_t outlineLevel = 0;
-};
-
-/// Return envelope for `Workbook.getSheetColumns(...)`.
-struct JsColumnsResult {
-  JsStatus status;
-  std::vector<JsColumnLayout> columns;
-};
-
-/// Return envelope for `Workbook.getSheetRowOverrides(...)`.
-struct JsRowsResult {
-  JsStatus status;
-  std::vector<JsRowLayout> rows;
 };
 
 /// Return envelope for `Workbook.addFont` / `addFill` / `addBorder` /

@@ -52,6 +52,12 @@ async function loadStagedFactory() {
   return mod.default;
 }
 
+async function loadStagedModule() {
+  const raw = await readFile(pkgJsonPath, 'utf8');
+  const pkg = JSON.parse(raw);
+  return import(pathToFileURL(path.resolve(pkgRoot, pkg.main)).href);
+}
+
 // Load once and reuse across tests; the factory itself is cheap, but the
 // underlying WASM instantiation costs ~30ms per invocation.
 let modulePromise;
@@ -71,6 +77,18 @@ test('default export is callable factory returning a Module', async () => {
   const Module = await factory();
   assert.ok(Module && typeof Module === 'object');
   assert.equal(typeof Module.versionString, 'function');
+});
+
+test('all declared enum and constant exports resolve at runtime', async () => {
+  const mod = await loadStagedModule();
+  const dts = await readFile(path.join(pkgRoot, 'dist', 'formulon.d.ts'), 'utf8');
+  const names = [...dts.matchAll(/^export (?:const )?(?:enum|const) (\w+)/gm)].map((match) => match[1]);
+  for (const name of names) {
+    assert.ok(name in mod, `missing runtime export ${name}`);
+  }
+  assert.equal(mod.ValueKind.Error, 4);
+  assert.equal(mod.PivotAxis.Row, 0);
+  assert.equal(mod.ExternalLinkKind.Dde, 3);
 });
 
 test('versionString returns a non-empty string', async () => {

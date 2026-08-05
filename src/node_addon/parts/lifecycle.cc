@@ -320,31 +320,56 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  ProgressSlot& slot = js_progress_slot();
   // Passing null / undefined clears the callback. Anything else MUST be
   // a JS function -- we surface a 7000-band error if it is not.
   if (info.Length() < 1 || info[0].IsNull() || info[0].IsUndefined()) {
-    if (slot.installed) {
-      slot.fn.Reset();
-      slot.installed = false;
-    }
+    iterative_progress_callback_.Reset();
     fm_status_t rc = fm_workbook_set_iterative_progress(handle_, nullptr, nullptr);
     return MakeStatus(env, rc);
   }
   if (!info[0].IsFunction()) {
     return MakeErrorStatus(env, kBindingInvalidHandle);
   }
-  // Persist the JS function in the module-global slot. A FunctionReference
-  // with refcount=1 keeps the function alive against GC for as long as
-  // the slot owns it. Replace any previous registration.
-  if (slot.installed) {
-    slot.fn.Reset();
-  }
-  slot.fn = Napi::Persistent(info[0].As<Napi::Function>());
-  slot.fn.SuppressDestruct();
-  slot.installed = true;
-  fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &IterativeProgressTrampoline, nullptr);
+  // Persist the function on this wrapper, then let the C ABI give the
+  // trampoline this wrapper as user-data. Replacing a callback on another
+  // Workbook never changes this instance's callback.
+  iterative_progress_callback_.Reset();
+  iterative_progress_callback_ = Napi::Persistent(info[0].As<Napi::Function>());
+  fm_status_t rc = fm_workbook_set_iterative_progress(handle_, &Workbook::IterativeProgressTrampoline, this);
   return MakeStatus(env, rc);
+}
+
+bool Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                           void* user_data) {
+  auto* const workbook = static_cast<Workbook*>(user_data);
+  if (workbook == nullptr || workbook->iterative_progress_callback_.IsEmpty()) {
+    return true;
+  }
+  Napi::Env env = workbook->iterative_progress_callback_.Env();
+  Napi::HandleScope scope(env);
+  workbook->in_iterative_progress_callback_ = true;
+  Napi::Value ret = workbook->iterative_progress_callback_.Call({
+      Napi::Number::New(env, iteration),
+      Napi::Number::New(env, max_residual),
+      Napi::Number::New(env, max_iterations),
+  });
+  workbook->in_iterative_progress_callback_ = false;
+  if (env.IsExceptionPending()) {
+    (void)env.GetAndClearPendingException();
+    return false;
+  }
+  return ret.IsUndefined() || ret.IsNull() || ret.ToBoolean().Value();
+}
+
+Napi::Value Workbook::Dispose(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (in_iterative_progress_callback_) {
+    Napi::Error::New(env, "cannot dispose a Workbook from its iterative progress callback")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  DestroyHandle();
+  return env.Undefined();
 }
 
 Napi::Value Workbook::IsValid(const Napi::CallbackInfo& info) {

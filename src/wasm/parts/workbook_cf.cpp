@@ -63,24 +63,26 @@ emscripten::val cfvo_to_js(const fm_cfvo_t& cfvo) {
 
 }  // namespace
 
-JsCfRangeResult JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+emscripten::val JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
                                             uint32_t lastCol, double todaySerial) const {
-  JsCfRangeResult r;
+  emscripten::val r = emscripten::val::object();
+  emscripten::val cells = emscripten::val::array();
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.set("status", error_status(7000));
+    r.set("cells", cells);
     return r;
   }
   fm_cf_results_t* results = nullptr;
   fm_status_t rc =
       fm_workbook_cf_evaluate_range(handle_, sheet, firstRow, firstCol, lastRow, lastCol, todaySerial, &results);
   if (rc != 0) {
-    r.status = error_status(rc);
+    r.set("status", error_status(rc));
+    r.set("cells", cells);
     return r;
   }
   const std::size_t cell_count = fm_cf_results_cell_count(results);
-  r.cells.reserve(cell_count);
+  std::size_t emitted_cells = 0;
   for (std::size_t i = 0; i < cell_count; ++i) {
-    JsCfCellResult cell;
     uint32_t row = 0;
     uint32_t col = 0;
     std::size_t match_count = 0;
@@ -89,36 +91,47 @@ JsCfRangeResult JsWorkbook::evaluateCfRange(uint32_t sheet, uint32_t firstRow, u
       // defensive -- the index is always valid by construction.
       continue;
     }
-    cell.row = row;
-    cell.col = col;
-    cell.matches.reserve(match_count);
+    emscripten::val cell = emscripten::val::object();
+    emscripten::val matches = emscripten::val::array();
+    std::size_t emitted_matches = 0;
     for (std::size_t j = 0; j < match_count; ++j) {
       fm_cf_match_t m{};
       if (fm_cf_results_match_at(results, i, j, &m) != 0) {
         continue;
       }
-      cell.matches.push_back(translate_cf_match(m));
+      matches.set(emitted_matches, emscripten::val(translate_cf_match(m)));
+      ++emitted_matches;
     }
-    r.cells.push_back(std::move(cell));
+    cell.set("row", row);
+    cell.set("col", col);
+    cell.set("matches", matches);
+    cells.set(emitted_cells, cell);
+    ++emitted_cells;
   }
   fm_cf_results_destroy(results);
-  r.status = ok_status();
+  r.set("status", ok_status());
+  r.set("cells", cells);
   return r;
 }
 
 emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
+    arr.set("status", error_status(7000));
     return arr;
   }
   std::size_t count = 0;
-  if (fm_sheet_cf_count(handle_, sheet, &count) != 0) {
+  fm_status_t rc = fm_sheet_cf_count(handle_, sheet, &count);
+  if (rc != 0) {
+    arr.set("status", status_from_rc(rc));
     return arr;
   }
   for (std::size_t i = 0; i < count; ++i) {
     fm_cf_rule_t rule{};
-    if (fm_sheet_cf_get_at(handle_, sheet, i, &rule) != 0) {
-      continue;
+    rc = fm_sheet_cf_get_at(handle_, sheet, i, &rule);
+    if (rc != 0) {
+      arr.set("status", status_from_rc(rc));
+      return arr;
     }
     emscripten::val item = emscripten::val::object();
     item.set("id", rule.id != nullptr ? std::string(rule.id) : std::string());
@@ -205,6 +218,7 @@ emscripten::val JsWorkbook::getConditionalFormats(uint32_t sheet) const {
     }
     arr.set(static_cast<uint32_t>(i), item);
   }
+  arr.set("status", ok_status());
   return arr;
 }
 

@@ -25,7 +25,7 @@ Why prefer the native build:
 ## Surface parity
 
 This package exposes the full `Workbook` surface of the WASM-backed
-`@libraz/formulon` package — the same 176 instance methods plus the
+`@libraz/formulon` package — the same 178 instance methods plus the
 three static factories, all marshalling to the identical C-ABI
 functions. The `Workbook` methods use the same `{ status, value }`
 envelopes and result shapes; switching packages still requires updating the
@@ -43,6 +43,7 @@ Static factories
   Workbook.createDefault(), createEmpty(), loadBytes(bytes)
 
 Cells & recalc
+  dispose
   setNumber, setBool, setText, setBlank, setFormula
   getValue, getLambdaText
   recalc, partialRecalc, setIterative, setIterativeProgress, save

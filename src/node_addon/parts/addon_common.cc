@@ -231,38 +231,4 @@ void BuildDataFieldSpec(const Napi::Object& spec, fm_pivot_data_field_spec_t& ou
   out.show_as_base_item = SpecPullInt32(spec, "showAsBaseItem", -1);
 }
 
-ProgressSlot& js_progress_slot() {
-  static ProgressSlot slot;
-  return slot;
-}
-
-bool IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
-                                 void* /*user_data*/) {
-  ProgressSlot& slot = js_progress_slot();
-  if (!slot.installed || slot.fn.IsEmpty()) {
-    return true;
-  }
-  Napi::Env env = slot.fn.Env();
-  Napi::HandleScope scope(env);
-  // The iteration index, max residual, and max iteration cap are all
-  // delivered to JS as plain numbers; embind does the same.
-  Napi::Value ret = slot.fn.Call({
-      Napi::Number::New(env, iteration),
-      Napi::Number::New(env, max_residual),
-      Napi::Number::New(env, max_iterations),
-  });
-  if (env.IsExceptionPending()) {
-    // Under -fno-exceptions, node-addon-api still routes JS exceptions
-    // through `env.GetAndClearPendingException()`. Treat any pending
-    // exception from the callback as "abort the solve" and clear it
-    // so we don't propagate into the engine.
-    (void)env.GetAndClearPendingException();
-    return false;
-  }
-  if (ret.IsUndefined() || ret.IsNull()) {
-    return true;
-  }
-  return ret.ToBoolean().Value();
-}
-
 }  // namespace formulon_node

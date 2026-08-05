@@ -133,8 +133,12 @@ class JsWorkbook {
   uint32_t pivotCount(uint32_t sheet) const;
   emscripten::val pivotLayout(uint32_t sheet, uint32_t pivotIndex) const;
 
-  JsCfRangeResult evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
+  emscripten::val evaluateCfRange(uint32_t sheet, uint32_t firstRow, uint32_t firstCol, uint32_t lastRow,
                                   uint32_t lastCol, double todaySerial) const;
+
+  /// Computes the printable page grid for one sheet. Returns
+  /// `{ status, printArea, horizontalBreaks, verticalBreaks, pageCount }`.
+  emscripten::val paginate(uint32_t sheet) const;
 
   // ---- Sheet view / layout ------------------------------------------------
 
@@ -151,12 +155,12 @@ class JsWorkbook {
   JsStatus setSheetTabSelected(uint32_t sheet, bool selected);
   JsStatus setSheetViewMode(uint32_t sheet, std::string mode);
 
-  JsColumnsResult getSheetColumns(uint32_t sheet) const;
+  emscripten::val getSheetColumns(uint32_t sheet) const;
   JsStatus setColumnWidth(uint32_t sheet, uint32_t first, uint32_t last, double width);
   JsStatus setColumnHidden(uint32_t sheet, uint32_t first, uint32_t last, bool hidden);
   JsStatus setColumnOutline(uint32_t sheet, uint32_t first, uint32_t last, uint32_t level);
 
-  JsRowsResult getSheetRowOverrides(uint32_t sheet) const;
+  emscripten::val getSheetRowOverrides(uint32_t sheet) const;
   JsStatus setRowHeight(uint32_t sheet, uint32_t row, double height);
   JsStatus setRowHidden(uint32_t sheet, uint32_t row, bool hidden);
   JsStatus setRowOutline(uint32_t sheet, uint32_t row, uint32_t level);
@@ -204,7 +208,7 @@ class JsWorkbook {
   JsStatus setComment(uint32_t sheet, uint32_t row, uint32_t col, const std::string& author, const std::string& text);
 
   JsStatus addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
-                        const std::string& display, const std::string& tooltip);
+                        const std::string& display, const std::string& tooltip, const std::string& location);
   JsStatus removeHyperlink(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus removeHyperlinkAt(uint32_t sheet, uint32_t index);
   JsStatus clearHyperlinks(uint32_t sheet);
@@ -347,6 +351,9 @@ std::string version_string();
 
 /// Returns the static C string for `status`.
 std::string status_string(int32_t status);
+
+/// Returns an Excel literal such as `#DIV/0!` for a cell error code.
+std::string error_display_name(int32_t error_code);
 
 /// Returns the most-recent thread-local error message.
 std::string last_error_message();

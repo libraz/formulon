@@ -1,6 +1,7 @@
 // Free (non-method) bindings exposed on the module exports object:
 // `evalFormula`, `version` (aliased as `versionString` to match the WASM
-// binding), `lastErrorMessage`, `lastErrorContext`, and `statusString`.
+// binding), `lastErrorMessage`, `lastErrorContext`, `statusString`, and
+// `errorDisplayName`.
 // Declared here so `addon.cc::Init` can attach them without leaking the
 // per-area TU layout.
 
@@ -27,6 +28,9 @@ Napi::Value LastErrorContext(const Napi::CallbackInfo& info);
 
 /// Returns the human-readable description of a numeric status code.
 Napi::Value StatusString(const Napi::CallbackInfo& info);
+
+/// Returns an Excel literal such as `#DIV/0!` for a numeric cell error code.
+Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info);
 
 }  // namespace formulon_node
 

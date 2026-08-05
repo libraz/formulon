@@ -346,17 +346,22 @@ emscripten::val JsWorkbook::pivotLayout(uint32_t sheet, uint32_t pivotIndex) con
 emscripten::val JsWorkbook::getExternalLinks() const {
   emscripten::val arr = emscripten::val::array();
   if (handle_ == nullptr) {
+    arr.set("status", error_status(7000));
     return arr;
   }
   uint32_t count = 0;
-  if (fm_workbook_external_link_count(handle_, &count) != 0) {
+  fm_status_t rc = fm_workbook_external_link_count(handle_, &count);
+  if (rc != 0) {
+    arr.set("status", status_from_rc(rc));
     return arr;
   }
   uint32_t emitted = 0;
   for (uint32_t i = 0; i < count; ++i) {
     fm_external_link_record_t rec{};
-    if (fm_workbook_external_link_at(handle_, i, &rec) != 0) {
-      continue;
+    rc = fm_workbook_external_link_at(handle_, i, &rec);
+    if (rc != 0) {
+      arr.set("status", status_from_rc(rc));
+      return arr;
     }
     emscripten::val item = emscripten::val::object();
     item.set("index", rec.index);
@@ -368,6 +373,7 @@ emscripten::val JsWorkbook::getExternalLinks() const {
     arr.set(emitted, item);
     ++emitted;
   }
+  arr.set("status", ok_status());
   return arr;
 }
 

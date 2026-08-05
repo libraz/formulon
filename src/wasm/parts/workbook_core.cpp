@@ -64,6 +64,7 @@ JsWorkbook* JsWorkbook::loadBytes(emscripten::val bytes) {
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
   const std::vector<uint8_t> buf = val_to_bytes(bytes);
   if (buf.empty()) {
+    (void)fm_workbook_load(nullptr, 0, &wb->handle_);
     return wb.release();
   }
   (void)fm_workbook_load(buf.data(), buf.size(), &wb->handle_);
@@ -361,6 +362,11 @@ std::string version_string() {
 
 std::string status_string(int32_t status) {
   const char* s = fm_status_string(static_cast<fm_status_t>(status));
+  return s != nullptr ? std::string(s) : std::string();
+}
+
+std::string error_display_name(int32_t error_code) {
+  const char* s = fm_error_display_name(static_cast<fm_error_code_t>(error_code));
   return s != nullptr ? std::string(s) : std::string();
 }
 

@@ -46,6 +46,7 @@ export const versionString = native.versionString;
 export const lastErrorMessage = native.lastErrorMessage;
 export const lastErrorContext = native.lastErrorContext;
 export const statusString = native.statusString;
+export const errorDisplayName = native.errorDisplayName;
 
 /**
  * Merge a host-supplied metadata entry over the engine's structural
@@ -119,6 +120,74 @@ export const PivotCellKind = Object.freeze({
   Blank: 7,
 });
 
+/** `fm_pivot_axis_t` ordinals. */
+export const PivotAxis = Object.freeze({ Row: 0, Col: 1, Value: 2, Page: 3 });
+
+/** `fm_pivot_aggregation_t` ordinals. */
+export const PivotAggregation = Object.freeze({
+  Sum: 0,
+  Count: 1,
+  Average: 2,
+  Max: 3,
+  Min: 4,
+  Product: 5,
+  CountNumbers: 6,
+  StdDev: 7,
+  StdDevP: 8,
+  Var: 9,
+  VarP: 10,
+});
+
+/** `fm_pivot_show_as_t` ordinals. */
+export const PivotShowValuesAs = Object.freeze({
+  Normal: 0,
+  PercentOfRow: 1,
+  PercentOfCol: 2,
+  PercentOfTotal: 3,
+  RunningTotalInRow: 4,
+  RunningTotalInCol: 5,
+  Index: 6,
+  DifferenceFrom: 7,
+  PercentDifferenceFrom: 8,
+  PercentOfParentRow: 9,
+  PercentOfParentCol: 10,
+  PercentOfParent: 11,
+});
+
+export const PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828;
+export const PIVOT_SHOW_AS_BASE_NEXT = 1048829;
+
+/** `fm_pivot_filter_type_t` ordinals. */
+export const PivotFilterType = Object.freeze({
+  ValueTop10: 0,
+  ValueGreaterThan: 1,
+  ValueBetween: 2,
+  LabelContains: 3,
+  LabelBeginsWith: 4,
+  LabelDate: 5,
+});
+
+/** `fm_pivot_date_grouping_t` ordinals. */
+export const PivotDateGrouping = Object.freeze({
+  Day: 0,
+  Month: 1,
+  Quarter: 2,
+  Year: 3,
+  Week: 4,
+  Hour: 5,
+  Minute: 6,
+  Second: 7,
+});
+
+/** `fm_pivot_calendar_t` ordinals. */
+export const PivotCalendar = Object.freeze({ Gregorian: 0, Japanese: 1 });
+
+/** `fm_pivot_filter_value_kind_t` ordinals. */
+export const PivotFilterValueKind = Object.freeze({ None: -1, Int: 0, Double: 1, Text: 2 });
+
+/** `fm_pivot_layout_t` ordinals. */
+export const PivotReportLayout = Object.freeze({ Compact: 0, Tabular: 1, Outline: 2 });
+
 /** `fm_workbook_format_t` ordinals: container format for `saveEx`. */
 export const WorkbookFormat = Object.freeze({
   Unknown: 0,
@@ -159,6 +228,16 @@ export default {
   ValueKind,
   CfMatchKind,
   PivotCellKind,
+  PivotAxis,
+  PivotAggregation,
+  PivotShowValuesAs,
+  PIVOT_SHOW_AS_BASE_PREVIOUS,
+  PIVOT_SHOW_AS_BASE_NEXT,
+  PivotFilterType,
+  PivotDateGrouping,
+  PivotCalendar,
+  PivotFilterValueKind,
+  PivotReportLayout,
   ErrorCode,
   WorkbookFormat,
 };

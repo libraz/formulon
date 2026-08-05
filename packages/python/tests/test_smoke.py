@@ -11,6 +11,7 @@ against an installed wheel (after `pip install dist/formulon-*.whl`).
 
 from __future__ import annotations
 
+import threading
 import unittest
 
 import formulon
@@ -48,6 +49,10 @@ class VersionTests(unittest.TestCase):
     def test_version_string_alias(self) -> None:
         # Backward-compat alias matching the npm binding's name.
         self.assertEqual(formulon.version_string(), formulon.library_version())
+
+    def test_error_display_name_returns_excel_literal(self) -> None:
+        self.assertEqual(formulon.error_display_name(1), "#DIV/0!")
+        self.assertEqual(formulon.error_display_name(999), "#UNKNOWN!")
 
 
 class EvalFormulaTests(unittest.TestCase):
@@ -109,8 +114,45 @@ class WorkbookLifecycleTests(unittest.TestCase):
         with self.assertRaises(FormulonError):
             wb.sheet_count()
 
+    def test_concurrent_errors_keep_their_diagnostics(self) -> None:
+        with Workbook.create_default() as wb:
+            barrier = threading.Barrier(2)
+            messages = []
+
+            def fail(sheet: int) -> None:
+                barrier.wait()
+                try:
+                    wb.get_value(sheet, 0, 0)
+                except FormulonError as error:
+                    messages.append(error.message)
+
+            threads = [threading.Thread(target=fail, args=(99,)), threading.Thread(target=fail, args=(100,))]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+            self.assertEqual(len(messages), 2)
+            self.assertTrue(all(messages))
+
 
 class WorkbookRoundtripTests(unittest.TestCase):
+    def test_comment_enumeration_and_cf_formula_evaluation(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_comment(0, 2, 3, "Ada", "review")
+            self.assertEqual(wb.comment_count(0), 1)
+            self.assertEqual(wb.get_comments(0), [(2, 3, "Ada", "review")])
+            self.assertTrue(wb.evaluate_cf_formula(0, 0, 0, 0, 0, "=A1=0"))
+
+    def test_paginate_returns_resolved_breaks(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_number(0, 0, 0, 1.0)
+            wb.set_number(0, 48, 0, 2.0)
+            result = wb.paginate(0)
+            self.assertEqual(result.page_count, 2)
+            self.assertEqual(result.print_area, [])
+            self.assertEqual(result.horizontal_breaks, [44])
+            self.assertEqual(result.vertical_breaks, [])
+
     def test_set_get_number(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_number(0, 0, 0, 42.0)

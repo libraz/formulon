@@ -256,6 +256,11 @@ async function run() {
     assert.ok(unknown.length > 0);
   });
 
+  test('errorDisplayName returns Excel literals', () => {
+    assert.equal(Module.errorDisplayName(1), '#DIV/0!');
+    assert.equal(Module.errorDisplayName(999), '#UNKNOWN!');
+  });
+
   test('evalFormula(=SUM(1,2,3)) returns NUMBER 6', () => {
     const r = Module.evalFormula('=SUM(1,2,3)');
     assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
@@ -310,6 +315,22 @@ async function run() {
       // addSheet should grow sheetCount.
       assert.ok(wb.addSheet('Second').ok);
       assert.equal(wb.sheetCount(), 2);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('paginate exposes a status envelope and page geometry', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+      assert.ok(wb.setNumber(0, 48, 0, 2).ok);
+      const result = wb.paginate(0);
+      assert.ok(result.status.ok, `status=${JSON.stringify(result.status)}`);
+      assert.equal(result.pageCount, 2);
+      assert.deepEqual(result.printArea, []);
+      assert.deepEqual(result.horizontalBreaks, [44]);
+      assert.deepEqual(result.verticalBreaks, []);
     } finally {
       wb.delete();
     }
@@ -386,6 +407,26 @@ async function run() {
       assert.equal(a1.value.number, 7);
     } finally {
       loaded.delete();
+    }
+  });
+
+  test('Workbook.loadBytes reports empty input instead of leaving stale diagnostics', () => {
+    const wb = Module.Workbook.loadBytes(new Uint8Array());
+    try {
+      assert.equal(wb.isValid(), false);
+      assert.match(Module.lastErrorMessage(), /NULL or empty input/);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('Workbook.loadBytes rejects non-Uint8Array input like the native binding', () => {
+    const wb = Module.Workbook.loadBytes(new Uint16Array([1]));
+    try {
+      assert.equal(wb.isValid(), false);
+      assert.match(Module.lastErrorMessage(), /NULL or empty input/);
+    } finally {
+      wb.delete();
     }
   });
 
@@ -540,6 +581,21 @@ async function run() {
       assert.equal(c0.formula, null);
       assert.equal(c0.value.kind, VAL.NUMBER);
       assert.equal(c0.value.number, 1);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('failed entry lookups omit optional payload fields', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      for (const entry of [wb.cellAt(99, 0), wb.definedNameAt(0), wb.tableAt(0), wb.passthroughAt(0)]) {
+        assert.equal(entry.status.ok, false);
+      }
+      assert.ok(!('value' in wb.cellAt(99, 0)));
+      assert.ok(!('name' in wb.definedNameAt(0)));
+      assert.ok(!('name' in wb.tableAt(0)));
+      assert.ok(!('path' in wb.passthroughAt(0)));
     } finally {
       wb.delete();
     }
@@ -823,9 +879,9 @@ async function run() {
     try {
       assert.equal(wb.getHyperlinks(0).length, 0);
       // Three entries with progressively more optional fields populated.
-      assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '').ok);
-      assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '').ok);
-      assert.ok(wb.addHyperlink(0, 5, 6, 'https://example.org/x', 'See X', 'External link').ok);
+      assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '').ok);
+      assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '').ok);
+      assert.ok(wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1').ok);
       const list = wb.getHyperlinks(0);
       assert.equal(list.length, 3);
       assert.equal(list[0].row, 1);
@@ -836,9 +892,10 @@ async function run() {
       assert.equal(list[1].target, 'mailto:hello@example.com');
       assert.equal(list[1].display, 'Hello');
       assert.equal(list[2].display, 'See X');
-      assert.equal(list[2].tooltip, 'External link');
+      assert.equal(list[2].tooltip, 'Internal link');
+      assert.equal(list[2].location, 'Sheet1!A1');
       // Sheet-out-of-range is rejected.
-      assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '').ok);
+      assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '', '').ok);
       // clearHyperlinks drops everything.
       assert.ok(wb.clearHyperlinks(0).ok);
       assert.equal(wb.getHyperlinks(0).length, 0);
@@ -997,6 +1054,53 @@ async function run() {
       assert.ok(!wb.addValidation(999, listRule).ok);
       assert.ok(!wb.removeValidationAt(999, 0).ok);
       assert.ok(!wb.clearValidations(999).ok);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('CF and sheet-layout lists are plain JS arrays with no delete lifecycle', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const cf = wb.evaluateCfRange(0, 0, 0, 1, 1, Number.NaN);
+      assert.ok(cf.status.ok);
+      assert.ok(Array.isArray(cf.cells));
+
+      assert.ok(wb.setColumnWidth(0, 2, 2, 18).ok);
+      const columns = wb.getSheetColumns(0);
+      assert.ok(columns.status.ok);
+      assert.ok(Array.isArray(columns.columns));
+      assert.equal(columns.columns[0].first, 2);
+      assert.equal(columns.columns[0].width, 18);
+
+      assert.ok(wb.setRowHeight(0, 3, 22).ok);
+      const rows = wb.getSheetRowOverrides(0);
+      assert.ok(rows.status.ok);
+      assert.ok(Array.isArray(rows.rows));
+      assert.equal(rows.rows[0].row, 3);
+      assert.equal(rows.rows[0].height, 22);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('list getters expose failures through their array status', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      for (const list of [
+        wb.getMerges(99),
+        wb.getComments(99),
+        wb.getHyperlinks(99),
+        wb.getValidations(99),
+        wb.getConditionalFormats(99),
+      ]) {
+        assert.ok(Array.isArray(list));
+        assert.equal(list.length, 0);
+        assert.equal(list.status.ok, false);
+      }
+      const links = wb.getExternalLinks();
+      assert.ok(Array.isArray(links));
+      assert.equal(links.status.ok, true);
     } finally {
       wb.delete();
     }
