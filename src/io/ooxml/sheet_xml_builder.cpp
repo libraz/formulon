@@ -18,6 +18,7 @@
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/relationship_writer.h"
+#include "io/ooxml/shared_strings_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/xml_escape.h"
@@ -646,11 +647,12 @@ std::string BuildDimensionXml(const Sheet& sheet) {
 
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
-                              std::string_view drawing_rid, std::string_view legacy_drawing_rid) {
+                              std::string_view drawing_rid, std::string_view legacy_drawing_rid,
+                              const SharedStrings* shared_strings) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml = BuildSheetFormatPrXml(sheet.format_defaults());
   const std::string cols_xml = BuildColsXml(sheet.layout());
-  const std::string sheet_data = BuildSheetDataXml(sheet);
+  const std::string sheet_data = BuildSheetDataXml(sheet, shared_strings);
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.

@@ -51,6 +51,8 @@ constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-pack
 constexpr std::string_view kCtXml = "application/xml";
 constexpr std::string_view kCtWorksheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
 constexpr std::string_view kCtStyles = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+constexpr std::string_view kCtSharedStrings =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
 constexpr std::string_view kCtTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
 constexpr std::string_view kCtPivotCacheDefinition =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
@@ -168,6 +170,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     AppendOverride(out, sheet_path, kCtWorksheet);
   }
   AppendOverride(out, "xl/styles.xml", kCtStyles);
+  if (plan.generated_shared_strings) {
+    AppendOverride(out, "xl/sharedStrings.xml", kCtSharedStrings);
+  }
   // Per-table overrides (one per emitted table part, regardless of
   // owning sheet).
   for (const auto& per_sheet : plan.tables_by_sheet) {
@@ -401,6 +406,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   }
   // Styles relationship follows the worksheet relationships.
   AppendRelationship(out, static_cast<std::uint32_t>(sheet_count + 1), kRelStyles, "styles.xml");
+  if (plan.generated_shared_strings) {
+    AppendRelationship(out, static_cast<std::uint32_t>(sheet_count + 2), kRelSharedStrings, "sharedStrings.xml");
+  }
   // Pivot-cache definition relationships, one per planned cache. Targets
   // are relative to the workbook directory (`xl/`); we strip the `xl/`
   // prefix from `definition_path` so the form matches what Excel emits
@@ -419,8 +427,8 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   // these the passthrough parts they point at become orphans and Excel
   // opens the package in "needs repair" mode. Fresh deterministic rIds
   // sit past the worksheet / styles / pivot / external-link numbering.
-  std::uint32_t next_rid =
-      static_cast<std::uint32_t>(sheet_count + 2 + plan.pivot_caches.size() + plan.external_links.size());
+  std::uint32_t next_rid = static_cast<std::uint32_t>(sheet_count + 2 + (plan.generated_shared_strings ? 1U : 0U) +
+                                                      plan.pivot_caches.size() + plan.external_links.size());
   auto has_unknown_rel = [&wb](std::string_view type, std::string_view resolved_target) {
     for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
       if (!r.target_external && r.type == type && r.target == resolved_target) {
@@ -435,7 +443,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   if (HasPassthroughPart(plan, "xl/theme/theme1.xml") && !has_unknown_rel(kRelTheme, "xl/theme/theme1.xml")) {
     AppendRelationship(out, next_rid++, kRelTheme, "theme/theme1.xml");
   }
-  if (HasPassthroughPart(plan, "xl/sharedStrings.xml")) {
+  if (!plan.generated_shared_strings && HasPassthroughPart(plan, "xl/sharedStrings.xml")) {
     AppendRelationship(out, next_rid++, kRelSharedStrings, "sharedStrings.xml");
   }
   for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {

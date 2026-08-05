@@ -19,23 +19,24 @@ namespace formulon {
 namespace io {
 
 // Escapes `in` for element text content: `& < > " '` become named
-// entities; TAB / LF / CR pass through verbatim (a conforming XML reader
-// preserves them unchanged in text content, so no character reference is
-// needed there).
+// entities. XML-invalid C0 controls and CR use OOXML's `_xHHHH_` notation;
+// a literal sequence that resembles that notation is escaped as
+// `_x005F_xHHHH_` so a subsequent OOXML reader preserves it literally.
 void AppendXmlEscaped(std::string& out, std::string_view in);
 
 // Escapes `in` for an attribute value (`name="..."`). In addition to the
-// same five XML-critical characters as `AppendXmlEscaped`, TAB / LF / CR
-// are emitted as character references (`&#9;` / `&#10;` / `&#13;`).
+// same five XML-critical characters as `AppendXmlEscaped`, all C0 controls
+// use OOXML's `_xHHHH_` notation.
 //
-// This differs from element-text escaping because XML attribute-value
-// normalisation (a mandatory step every conforming parser performs, e.g.
-// pugixml and Excel itself) replaces a *literal* TAB/LF/CR inside an
-// attribute value with a single space; only a character reference for
-// those code points survives normalisation intact. Without this, a
-// multi-line string written into an attribute (e.g. a defined name with
-// an embedded newline) silently loses its exact whitespace on reload.
+// This differs from element-text escaping only in its XML context; both
+// forms use OOXML escapes for controls so XML attribute-value normalisation
+// cannot alter them.
 void AppendXmlAttrEscaped(std::string& out, std::string_view in);
+
+// Appends `in` after decoding OOXML `_xHHHH_` escapes. This is for text
+// payloads read from OOXML parts after XML entity decoding; it preserves a
+// literal escaped-looking sequence emitted as `_x005F_xHHHH_`.
+void AppendOoxmlTextUnescaped(std::string& out, std::string_view in);
 
 }  // namespace io
 }  // namespace formulon

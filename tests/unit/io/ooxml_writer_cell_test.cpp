@@ -47,6 +47,10 @@ TEST(EncodeA1, MaxCell) {
   EXPECT_EQ(EncodeA1(1048575U, 16383U), "XFD1048576");
 }
 
+TEST(EncodeA1, RejectsColumnOutsideExcelGrid) {
+  EXPECT_EQ(EncodeA1(0U, 16384U), "");
+}
+
 // ---------------------------------------------------------------------------
 // BuildSheetDataXml: scalar cell shapes
 // ---------------------------------------------------------------------------

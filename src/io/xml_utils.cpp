@@ -58,6 +58,24 @@ std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t 
   return static_cast<std::uint32_t>(parsed);
 }
 
+std::optional<std::uint32_t> parse_xml_u32_attr_strict(const pugi::xml_attribute& attr) {
+  if (!attr) {
+    return std::nullopt;
+  }
+  const char* raw = attr.value();
+  if (raw == nullptr || *raw == '\0' || *raw == '-' || *raw == '+') {
+    return std::nullopt;
+  }
+  errno = 0;
+  char* end = nullptr;
+  const unsigned long parsed = std::strtoul(raw, &end, 10);
+  if (end == raw || *end != '\0' || errno != 0 ||
+      parsed > static_cast<unsigned long>(std::numeric_limits<std::uint32_t>::max())) {
+    return std::nullopt;
+  }
+  return static_cast<std::uint32_t>(parsed);
+}
+
 std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t default_value) {
   if (!attr) {
     return default_value;
@@ -211,7 +229,7 @@ std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {
   // Direct `<t>` children: the simple inlineStr / shared-string / comment
   // shape (`<is><t>...</t></is>`).
   for (pugi::xml_node t = node.child("t"); t; t = t.next_sibling("t")) {
-    out.append(t.text().get());
+    AppendOoxmlTextUnescaped(out, t.text().get());
     ++count;
   }
 
@@ -220,7 +238,7 @@ std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {
   // plain-text only.
   for (pugi::xml_node r = node.child("r"); r; r = r.next_sibling("r")) {
     for (pugi::xml_node t = r.child("t"); t; t = t.next_sibling("t")) {
-      out.append(t.text().get());
+      AppendOoxmlTextUnescaped(out, t.text().get());
       ++count;
     }
   }

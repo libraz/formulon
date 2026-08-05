@@ -94,6 +94,33 @@ TEST(OoxmlMinimalWriter, RoundTripContainsAllRequiredParts) {
   EXPECT_TRUE(entries.count("xl/styles.xml") == 1) << "missing xl/styles.xml";
 }
 
+TEST(OoxmlMinimalWriter, LiteralTextUsesDeduplicatedSharedStrings) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0U, 0U, Value::text("repeat"));
+  sheet.set_cell_value(1U, 0U, Value::text("repeat"));
+  sheet.set_cell_value(2U, 0U, Value::text("unique"));
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const std::set<std::string> entries = ListEntries(saved.value());
+  EXPECT_TRUE(entries.count("xl/sharedStrings.xml") == 1);
+
+  const std::string sst = ExtractEntry(saved.value(), "xl/sharedStrings.xml");
+  EXPECT_NE(sst.find("count=\"3\" uniqueCount=\"2\""), std::string::npos) << sst;
+  const std::string sheet_xml = ExtractEntry(saved.value(), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(sheet_xml.find("<c r=\"A1\" t=\"s\"><v>0</v></c>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"A2\" t=\"s\"><v>0</v></c>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"A3\" t=\"s\"><v>1</v></c>"), std::string::npos) << sheet_xml;
+  EXPECT_EQ(sheet_xml.find("inlineStr"), std::string::npos) << sheet_xml;
+
+  auto loaded = io::read_ooxml(SpanOf(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  EXPECT_EQ(loaded.value().workbook.sheet(0).cell_at(0U, 0U)->cached_value.as_text(), "repeat");
+  EXPECT_EQ(loaded.value().workbook.sheet(0).cell_at(1U, 0U)->cached_value.as_text(), "repeat");
+  EXPECT_EQ(loaded.value().workbook.sheet(0).cell_at(2U, 0U)->cached_value.as_text(), "unique");
+}
+
 TEST(OoxmlMinimalWriter, WorkbookXmlIsWellFormed) {
   Workbook wb = Workbook::create();
   auto result = wb.save();

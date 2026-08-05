@@ -180,7 +180,7 @@ Expected<void, Error> DecodeLocationRef(std::string_view ref, pivot::PivotTable*
 /// document-order position among real items so name resolution still has
 /// an index to look up; `has_cache_index` stays false so the writer can
 /// re-emit the original (attribute-absent) form.
-void ParseItems(const pugi::xml_node& items_node, pivot::PivotField* field) {
+Expected<void, Error> ParseItems(const pugi::xml_node& items_node, pivot::PivotField* field) {
   std::uint32_t ordinal = 0;
   for (pugi::xml_node it = items_node.child("item"); it; it = it.next_sibling("item")) {
     const std::string_view t = it.attribute("t").as_string();
@@ -192,14 +192,20 @@ void ParseItems(const pugi::xml_node& items_node, pivot::PivotField* field) {
     pivot::PivotItem entry;
     entry.visible = !parse_xml_bool_attr(it.attribute("h"));
     if (pugi::xml_attribute x = it.attribute("x"); x) {
+      const std::optional<std::uint32_t> cache_index = parse_xml_u32_attr_strict(x);
+      if (!cache_index.has_value()) {
+        return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivotTableDefinition: <item> has invalid x attribute",
+                          "context=pivot_table_reader");
+      }
       entry.has_cache_index = true;
-      entry.cache_index = parse_xml_u32_attr(x, 0U);
+      entry.cache_index = *cache_index;
     } else {
       entry.cache_index = ordinal;
     }
     field->items.push_back(std::move(entry));
     ++ordinal;
   }
+  return Expected<void, Error>::Ok();
 }
 
 /// Pairs an OOXML `<pivotField>` `*Subtotal` boolean attribute name with
@@ -227,7 +233,7 @@ constexpr SubtotalAttrEntry kSubtotalAttrs[] = {
 
 /// Walks `<pivotFields>` in document order, materialising each
 /// `<pivotField>` into the table.
-void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out) {
+Expected<void, Error> ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out) {
   for (pugi::xml_node f = fields_node.child("pivotField"); f; f = f.next_sibling("pivotField")) {
     pivot::PivotField field;
     // Axis resolution: an explicit `axis` attribute wins; otherwise a
@@ -261,7 +267,7 @@ void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out)
       }
     }
     if (pugi::xml_node items_node = f.child("items"); items_node) {
-      ParseItems(items_node, &field);
+      RETURN_IF_ERROR(ParseItems(items_node, &field));
     }
     // Preserve unmodelled `<pivotField>` attributes (`compact`, `outline`,
     // `showAll`, `includeNewItemsInFilter`, ...) for verbatim round-trip.
@@ -272,6 +278,7 @@ void ParsePivotFields(const pugi::xml_node& fields_node, pivot::PivotTable* out)
                           field.passthrough_attrs);
     out->mutable_fields().push_back(std::move(field));
   }
+  return Expected<void, Error>::Ok();
 }
 
 /// Walks `<rowFields>` / `<colFields>` and pushes each `<field x="N">`
@@ -404,7 +411,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
                                 opt_u32_attr(loc, "colPageCount"));
 
   if (pugi::xml_node fields = root.child("pivotFields"); fields) {
-    ParsePivotFields(fields, &table);
+    RETURN_IF_ERROR(ParsePivotFields(fields, &table));
   }
   if (pugi::xml_node rows = root.child("rowFields"); rows) {
     ParseFieldOrder(rows, &table.mutable_row_field_order());

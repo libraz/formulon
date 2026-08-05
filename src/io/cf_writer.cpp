@@ -12,6 +12,8 @@
 #include "cf/cf_types.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/xml_escape.h"
+#include "utils/a1_column.h"
+#include "utils/expected.h"
 
 namespace formulon::io {
 namespace {
@@ -168,22 +170,6 @@ std::string_view TimePeriodToString(cf::TimePeriod p) {
   return "today";
 }
 
-/// Appends the Excel column letters (`A`, `AB`, `XFD`) for a 0-based column
-/// index to `out`.
-void AppendColumnLetters(std::string& out, std::uint32_t col) {
-  char buf[4];
-  int len = 0;
-  std::uint32_t n = col + 1U;  // 1-based for the base-26 bijection.
-  while (n > 0U && len < 4) {
-    const std::uint32_t rem = (n - 1U) % 26U;
-    buf[len++] = static_cast<char>('A' + static_cast<int>(rem));
-    n = (n - 1U) / 26U;
-  }
-  for (int i = len - 1; i >= 0; --i) {
-    out.push_back(buf[i]);
-  }
-}
-
 /// Formats one `CFCellRange` as A1 (single cell) or A1:B5 (range). The
 /// reader accepts both `A1:A1` and `A1` for a single cell; the writer
 /// prefers the shorter `A1` form so the round-trip output matches what
@@ -192,9 +178,9 @@ void AppendColumnLetters(std::string& out, std::uint32_t col) {
 std::string EncodeA1Range(const cf::CFCellRange& r) {
   if (r.is_full_col()) {
     std::string out;
-    AppendColumnLetters(out, r.first.col);
+    FM_CHECK(a1::append_column_letters(out, r.first.col), "conditional-format column is outside Excel's grid");
     out.push_back(':');
-    AppendColumnLetters(out, r.last.col);
+    FM_CHECK(a1::append_column_letters(out, r.last.col), "conditional-format column is outside Excel's grid");
     return out;
   }
   if (r.is_full_row()) {

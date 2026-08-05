@@ -956,7 +956,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         ctx.append(" sst_size=").append(std::to_string(sst.entries.size()));
         return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared-string index out of range", std::move(ctx));
       }
-      wb.sheet(i).set_cell_cached_value(row, col, Value::text(sst.entries[idx]));
+      wb.sheet(i).set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[idx]));
       // Propagate any <rPh> annotation from the SST entry onto the cell
       // so PHONETIC() can surface the kana. The SST reader keeps
       // `phonetic_for_entries` parallel to `entries`, with empty views

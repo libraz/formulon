@@ -23,6 +23,7 @@
 namespace formulon {
 class Sheet;
 namespace io {
+class SharedStrings;
 
 /// Result of building a single per-sheet `_rels` file: the serialised
 /// XML alongside the rId strings (`"rIdN"`) the writer assigned to each
@@ -49,7 +50,8 @@ struct SheetRelsResult {
 /// printer settings).
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
-                              std::string_view drawing_rid, std::string_view legacy_drawing_rid);
+                              std::string_view drawing_rid, std::string_view legacy_drawing_rid,
+                              const SharedStrings* shared_strings);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, and comments / VML.

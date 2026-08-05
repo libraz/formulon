@@ -6,23 +6,53 @@
 #include <string>
 
 #include "gtest/gtest.h"
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 
 namespace formulon::io {
 namespace {
 
-TEST(XmlEscape, ElementTextEscapesCriticalCharsOnly) {
+TEST(XmlEscape, ElementTextEscapesCriticalCharsAndControls) {
   std::string out;
-  AppendXmlEscaped(out, "a&b<c>\"d'e\n\tf\r");
-  // TAB / LF / CR pass through verbatim in element-text context; only the
-  // five XML-critical characters are entity-escaped.
-  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e\n\tf\r");
+  AppendXmlEscaped(out, "a&b<c>\"d'e\n\tf\r\x01");
+  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e_x000A__x0009_f_x000D__x0001_");
 }
 
 TEST(XmlEscape, AttrEscapesCriticalCharsAndWhitespaceControls) {
   std::string out;
   AppendXmlAttrEscaped(out, "a&b<c>\"d'e\n\tf\r");
-  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e&#10;&#9;f&#13;");
+  EXPECT_EQ(out, "a&amp;b&lt;c&gt;&quot;d&apos;e_x000A__x0009_f_x000D_");
+}
+
+TEST(XmlEscape, OoxmlControlAndLiteralEscapeRoundTrip) {
+  const std::string original = "a\r\x01_x000D_\xF0\x9F\x98\x80";
+  std::string escaped;
+  AppendXmlEscaped(escaped, original);
+  EXPECT_EQ(escaped, "a_x000D__x0001__x005F_x000D_\xF0\x9F\x98\x80");
+
+  std::string unescaped;
+  AppendOoxmlTextUnescaped(unescaped, escaped);
+  EXPECT_EQ(unescaped, original);
+}
+
+TEST(XmlEscape, ReplacesInvalidUtf8BeforeWritingXml) {
+  std::string escaped;
+  AppendXmlEscaped(escaped, "a\xC3\x28\x80");
+  EXPECT_EQ(escaped, "a\xEF\xBF\xBD(\xEF\xBF\xBD");
+
+  pugi::xml_document doc;
+  const std::string xml = "<t>" + escaped + "</t>";
+  ASSERT_TRUE(doc.load_buffer(xml.data(), xml.size()));
+  EXPECT_EQ(doc.child("t").text().get(), escaped);
+}
+
+TEST(XmlEscape, RichTextReaderDecodesOoxmlEscapes) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string("<si><t>a_x000D__x005F_x000D_</t></si>"));
+
+  std::string text;
+  EXPECT_EQ(append_rich_text(doc.child("si"), text), 1U);
+  EXPECT_EQ(text, "a\r_x000D_");
 }
 
 TEST(XmlEscape, AttrEscapedNewlineSurvivesPugixmlRoundtrip) {

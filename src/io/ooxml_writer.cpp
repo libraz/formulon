@@ -3,10 +3,8 @@
 // surface that Excel 365 will open without complaint, and additionally
 // round-trips the metadata Bundles 2.3 and 2.4 wired into the reader:
 // defined names, table parts, and Override-listed parts the reader did
-// not consume (unknown-part passthrough). Cells are still emitted with
-// inline strings (`t="inlineStr"`); SST emission would force every text
-// cell to walk a side table for no observable gain — the inline form
-// round-trips cleanly already.
+// not consume (unknown-part passthrough). Literal text cells are interned in
+// xl/sharedStrings.xml so repeated values are emitted once per package.
 //
 // This TU is now a thin orchestrator. Emission planning, relationship
 // emission, miniz wrappers, and cell-reference formatting live in
@@ -35,6 +33,7 @@
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
+#include "io/ooxml/shared_strings_writer.h"
 #include "io/ooxml/sheet_xml_builder.h"
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml/zip_part_writer.h"
@@ -219,7 +218,8 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     }
   }
 
-  const EmissionPlan plan = BuildEmissionPlan(wb);
+  const SharedStrings shared_strings = BuildSharedStrings(wb);
+  const EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty());
 
   ZipWriterGuard writer;
   if (!writer.init()) {
@@ -285,7 +285,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     auto wresult = AddPart(
         writer.get(), part_path,
         BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids, rels_result.printer_settings_rid,
-                          rels_result.drawing_rid, rels_result.legacy_drawing_rid));
+                          rels_result.drawing_rid, rels_result.legacy_drawing_rid, &shared_strings));
     if (!wresult) {
       return wresult.error();
     }
@@ -303,6 +303,16 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   // 6. xl/styles.xml
   {
     auto result = AddPart(writer.get(), "xl/styles.xml", write_styles(wb.styles()));
+    if (!result) {
+      return result.error();
+    }
+  }
+
+  // 6.5. xl/sharedStrings.xml — emitted only when literal text cells are
+  // present. The matching relationship and content-type Override are
+  // generated from the same plan flag above.
+  if (!shared_strings.empty()) {
+    auto result = AddPart(writer.get(), "xl/sharedStrings.xml", WriteSharedStrings(shared_strings));
     if (!result) {
       return result.error();
     }

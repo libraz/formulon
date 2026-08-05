@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -49,6 +50,12 @@ void append_xml_attr_uint(std::string& out, std::string_view name, std::uint32_t
 /// malformed, signed, or out-of-range input returns `default_value` so a
 /// stray optional OOXML attribute does not reject the whole part.
 std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t default_value);
+
+/// Parses a required non-negative decimal integer attribute body. Missing,
+/// empty, malformed, signed, or out-of-range input returns `std::nullopt`.
+/// Use this at structural boundaries where silently selecting a default index
+/// would point at unrelated workbook data.
+std::optional<std::uint32_t> parse_xml_u32_attr_strict(const pugi::xml_attribute& attr);
 
 /// Parses a signed 32-bit decimal attribute body. Missing, empty,
 /// malformed, or out-of-range input returns `default_value`.

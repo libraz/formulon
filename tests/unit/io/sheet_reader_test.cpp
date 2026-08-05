@@ -213,6 +213,21 @@ TEST(SheetReader, IgnoresArrayFormulaWhoseRefDoesNotStartAtItsAnchor) {
   EXPECT_EQ(StoredFormula(wb, 0U, 0U, 2U), "=1");
 }
 
+TEST(SheetReader, RetainsSingleCellArrayFormulaAnchor) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(
+      doc.load_string("<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><f t=\"array\" ref=\"A1\">IFS(TRUE,1)</f>"
+                      "<v>1</v></c></row></sheetData></worksheet>"));
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+  const SpillRegion* region = wb.sheet(0).spill_region_at_anchor(0U, 0U);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->rows, 1U);
+  EXPECT_EQ(region->cols, 1U);
+}
+
 TEST(SheetReader, PendingSstCellsCollected) {
   const char* xml =
       "<worksheet><sheetData>"

@@ -19,6 +19,7 @@
 #include <string_view>
 #include <vector>
 
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -40,7 +41,7 @@ namespace {
 void AppendPhoneticText(const pugi::xml_node& si_node, std::string& out) {
   for (pugi::xml_node rph = si_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
     for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
-      out.append(t.text().get());
+      AppendOoxmlTextUnescaped(out, t.text().get());
     }
   }
 }

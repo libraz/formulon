@@ -31,6 +31,7 @@
 
 #include "io/a1_ref.h"
 #include "io/iso_date.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -153,7 +154,7 @@ void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
 void ConcatInlinePhoneticText(const pugi::xml_node& is_node, std::string& out) {
   for (pugi::xml_node rph = is_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
     for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
-      out.append(t.text().get());
+      AppendOoxmlTextUnescaped(out, t.text().get());
     }
   }
 }
