@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `AstNode`: factory invocation, accessor round-trips, and
 // the storage policy that strings and child arrays are arena-owned.
@@ -84,6 +83,17 @@ TEST(AstNodeRef, FormatsQuotedSheet) {
   AstNode* n = make_ref(a, r);
   ASSERT_NE(n, nullptr);
   EXPECT_EQ(format_a1(n->as_ref()), "'Sheet 1'!A1");
+}
+
+TEST(AstNodeRef, QuotesAmbiguousSheetNamesWithoutRoundTripHint) {
+  Arena a;
+  Reference r;
+  r.sheet = "2026";
+  r.col = 0;
+  r.row = 0;
+  AstNode* n = make_ref(a, r);
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(format_a1(n->as_ref()), "'2026'!A1");
 }
 
 TEST(AstNodeRef, FormatsMultiLetterColumn) {

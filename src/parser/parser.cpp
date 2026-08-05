@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the Pratt parser. Driven by a single `Tokenizer` pass;
 // whitespace tokens are stripped during ingest. A leading `=` (Excel
@@ -103,6 +102,12 @@ int InfixBindingPower(TokenKind kind, int* right_bp) noexcept {
     default:
       return 0;
   }
+}
+
+bool is_range_endpoint_kind(NodeKind kind) noexcept {
+  return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::ExternalRef ||
+         kind == NodeKind::StructuredRef || kind == NodeKind::RangeOp || kind == NodeKind::Call ||
+         kind == NodeKind::ErrorPlaceholder;
 }
 
 // Maps a binary token kind to its `BinOp` enum value.
@@ -493,6 +498,19 @@ AstNode* Parser::parse() {
     return nullptr;
   }
 
+  // A left-associative chain such as `1+1+...` is assembled by the Pratt
+  // loop without adding parse_expression frames. Validate the completed tree
+  // as well, so this shape observes the same configured ceiling as nested
+  // calls and parentheses before any recursive consumer sees it.
+  if (!ast_depth_within_limit(*root_, opts_.max_parse_depth)) {
+    const TextRange range = root_->range();
+    record_error(ParseErrorCode::NestedFormulaTooDeep, range);
+    root_ = make_recovery_placeholder(range);
+    if (root_ == nullptr) {
+      return nullptr;
+    }
+  }
+
   // Trailing tokens that we did not consume are an error; we surface the
   // first such token as UnexpectedToken (recovery here just records and
   // skips so the user sees a single trailing diagnostic, not a cascade).
@@ -834,9 +852,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       const NodeKind rk = rhs->kind();
       if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
-      } else if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::ExternalRef &&
-                 rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::Call &&
-                 rk != NodeKind::ErrorPlaceholder) {
+      } else if (!is_range_endpoint_kind(lk) || !is_range_endpoint_kind(rk)) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_range_op(arena_, lhs, rhs);

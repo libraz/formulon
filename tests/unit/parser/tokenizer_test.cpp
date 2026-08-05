@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the Excel formula tokenizer. Each group exercises a
 // specific syntactic family.
@@ -435,6 +434,15 @@ TEST(TokenizerCellRefs, MixedAnchoredDouble) {
   ASSERT_EQ(v.size(), 2u);
   EXPECT_EQ(v[0].kind, TokenKind::CellRef);
   EXPECT_EQ(std::string(v[0].lexeme), "$AA$99");
+}
+
+TEST(TokenizerCellRefs, RepeatedAbsoluteAnchorIsInvalidReference) {
+  Tokenizer tz("A$$1");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 2u);
+  EXPECT_EQ(v[0].kind, TokenKind::Invalid);
+  ASSERT_EQ(tz.errors().size(), 1u);
+  EXPECT_EQ(tz.errors()[0].code, LexerErrorCode::InvalidReference);
 }
 
 TEST(TokenizerCellRefs, OverflowColumn) {

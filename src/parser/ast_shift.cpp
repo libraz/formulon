@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Generic reference-transform walker over the parser AST.
 //
@@ -106,6 +105,45 @@ const AstNode* TransformExternalRef(const AstNode& node, Arena& arena, const Ref
   }
   const std::string_view final_sheet = new_sheet.has_value() ? *new_sheet : sheet;
   return make_external_ref(arena, book_id, final_sheet, nr);
+}
+
+bool SameReference(const Reference& lhs, const Reference& rhs) {
+  return lhs.sheet.data() == rhs.sheet.data() && lhs.sheet.size() == rhs.sheet.size() &&
+         lhs.sheet_quoted == rhs.sheet_quoted && lhs.col == rhs.col && lhs.row == rhs.row &&
+         lhs.col_abs == rhs.col_abs && lhs.row_abs == rhs.row_abs && lhs.is_full_col == rhs.is_full_col &&
+         lhs.is_full_row == rhs.is_full_row;
+}
+
+const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransform& transform) {
+  const Reference& first = node.as_ref3d_cell();
+  std::optional<Reference> rewritten_first = transform.apply(first);
+  if (!rewritten_first.has_value()) {
+    return MakeRefError(arena);
+  }
+  const bool is_range = node.as_ref3d_is_range();
+  const Reference& last = node.as_ref3d_cell_end();
+  std::optional<Reference> rewritten_last = is_range ? transform.apply(last) : std::optional<Reference>(last);
+  if (!rewritten_last.has_value()) {
+    return MakeRefError(arena);
+  }
+
+  // Ref3D stores its sheet span outside Reference, as ExternalRef does. A
+  // book id of zero identifies this workbook-local span to the existing
+  // sheet-name hook.
+  const std::string_view begin = node.as_ref3d_sheet_begin();
+  const std::string_view end = node.as_ref3d_sheet_end();
+  const std::optional<std::string_view> new_begin = transform.transform_external_sheet(0U, begin);
+  const std::optional<std::string_view> new_end = transform.transform_external_sheet(0U, end);
+  if (!new_begin.has_value() && !new_end.has_value() && SameReference(first, *rewritten_first) &&
+      (!is_range || SameReference(last, *rewritten_last))) {
+    return &node;
+  }
+  const std::string_view final_begin = new_begin.has_value() ? *new_begin : begin;
+  const std::string_view final_end = new_end.has_value() ? *new_end : end;
+  if (is_range) {
+    return make_ref3d_range(arena, final_begin, final_end, *rewritten_first, *rewritten_last);
+  }
+  return make_ref3d(arena, final_begin, final_end, *rewritten_first);
 }
 
 const AstNode* TransformUnary(const AstNode& node, Arena& arena, const RefTransform& transform) {
@@ -379,10 +417,6 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
     case NodeKind::ErrorPlaceholder:
     case NodeKind::NameRef:
     case NodeKind::StructuredRef:
-    // A 3-D reference's sheet span is name-based and its cell offset is not
-    // affected by row / column structural edits on any single sheet, so it
-    // round-trips unchanged through the shift transform.
-    case NodeKind::Ref3D:
       return &node;
     case NodeKind::Ref:
       return TransformRef(node, arena, transform);
@@ -390,6 +424,8 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
       return TransformSpillRef(node, arena, transform);
     case NodeKind::ExternalRef:
       return TransformExternalRef(node, arena, transform);
+    case NodeKind::Ref3D:
+      return TransformRef3D(node, arena, transform);
     case NodeKind::UnaryOp:
       return TransformUnary(node, arena, transform);
     case NodeKind::BinaryOp:
@@ -454,10 +490,16 @@ class RelativeShiftTransform final : public RefTransform {
 }  // namespace
 
 const AstNode* shift_refs(const AstNode& root, Arena& arena, const RefTransform& transform) {
+  if (!ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
+    return MakeRefError(arena);
+  }
   return TransformNode(root, arena, transform);
 }
 
 const AstNode* shift_relative_refs(const AstNode& root, Arena& arena, std::int32_t row_delta, std::int32_t col_delta) {
+  if (!ast_depth_within_limit(root, kMaxFormulaAstDepth)) {
+    return MakeRefError(arena);
+  }
   RelativeShiftTransform transform(row_delta, col_delta);
   return TransformNode(root, arena, transform);
 }

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the Excel formula tokenizer. See the header for
 // the high-level contract. Key implementation choices:
@@ -1022,12 +1021,11 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
     }
   }
 
-  // Degenerate forms: `A$` / `$A$` / other `$`-bearing runs without a row are
-  // not refs and not identifiers; flag as InvalidReference and emit Invalid
-  // so the parser doesn't try to treat them as names.
-  if (run.size() >= 2 && (run.front() == '$' || run.back() == '$')) {
-    // Allow `_xlfn.` and similar which don't contain `$`; we only reach
-    // this path if `$` is present.
+  // A run that contains `$` but did not classify as a CellRef (or the one
+  // absolute whole-column form above) is neither a legal name nor a valid
+  // reference. In particular this rejects repeated anchors such as `A$$1`;
+  // treating those as identifiers silently defers a syntax error to #NAME?.
+  if (run.find('$') != std::string_view::npos) {
     Token t;
     t.kind = TokenKind::Invalid;
     t.range = make_range();

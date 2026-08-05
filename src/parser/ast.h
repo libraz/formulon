@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Parser abstract syntax tree.
 //
@@ -38,6 +37,11 @@
 
 namespace formulon {
 namespace parser {
+
+/// Shared ceiling for AST consumers that receive a tree without parser
+/// diagnostics (notably the XLSB Ptg decoder). Keep this in lockstep with
+/// ParserOptions' default so every recursive AST walk has the same bound.
+inline constexpr std::uint32_t kMaxFormulaAstDepth = 128;
 
 /// Discriminator tag for every AST variant.
 ///
@@ -366,6 +370,11 @@ class AstNode final {
   TextRange range_{};
   Payload data_;
 };
+
+/// Returns whether every root-to-leaf path in `root` fits within
+/// `max_depth` nodes. The walk is iterative so it is itself safe for an
+/// adversarially deep tree.
+bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth);
 
 static_assert(std::is_trivially_destructible_v<AstNode>, "AstNode must be trivially destructible to live in an Arena");
 

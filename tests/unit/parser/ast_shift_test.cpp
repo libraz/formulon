@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for `shift_refs` (generic walker), `shift_relative_refs` (the
 // historical relative-shift wrapper), and the integration with
@@ -35,6 +34,14 @@ const AstNode* ParseOrNull(std::string_view src, Arena& arena) {
   return root;
 }
 
+const AstNode* MakeTooDeepAst(Arena& arena) {
+  AstNode* node = make_literal(arena, Value::number(1));
+  for (std::uint32_t depth = 1; depth <= kMaxFormulaAstDepth; ++depth) {
+    node = make_unary_op(arena, UnaryOp::Plus, node);
+  }
+  return node;
+}
+
 std::string ParseShiftRelativeDump(std::string_view src, std::int32_t row_delta, std::int32_t col_delta) {
   Arena arena;
   const AstNode* root = ParseOrNull(src, arena);
@@ -54,6 +61,16 @@ std::string ParseShiftRelativeDump(std::string_view src, std::int32_t row_delta,
 
 TEST(ShiftRelativeRefs, IdentityZeroDelta) {
   EXPECT_EQ(ParseShiftRelativeDump("=A1", 0, 0), "(ref A1)");
+}
+
+TEST(ShiftRelativeRefs, RejectsAstDeeperThanSharedLimit) {
+  Arena arena;
+  const AstNode* root = MakeTooDeepAst(arena);
+  ASSERT_NE(root, nullptr);
+  const AstNode* shifted = shift_relative_refs(*root, arena, 0, 0);
+  ASSERT_NE(shifted, nullptr);
+  ASSERT_EQ(shifted->kind(), NodeKind::ErrorLiteral);
+  EXPECT_EQ(shifted->as_error_literal(), ErrorCode::Ref);
 }
 
 TEST(ShiftRelativeRefs, RowDeltaShiftsRelativeRow) {
@@ -213,6 +230,25 @@ TEST(ShiftRefsWithSheetRename, ExternalRefUnrelatedSheetUnchanged) {
   SheetRenameTransform transform("Sheet1", "Renamed");
   const AstNode* shifted = shift_refs(*ext, arena, transform);
   EXPECT_EQ(shifted, ext) << "non-matching external sheet should be a no-op";
+}
+
+TEST(ShiftRefsWithSheetRename, RenamesBoth3DSpanEndpoints) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM(Sheet1:Sheet2!A1:B2)", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("Sheet1", "Renamed");
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "SUM(Renamed:Sheet2!A1:B2)");
+}
+
+TEST(ShiftRefs, RelativeShiftUpdates3DRangeTail) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=Sheet1:Sheet2!A1:B2", arena);
+  ASSERT_NE(root, nullptr);
+  const AstNode* shifted = shift_relative_refs(*root, arena, 2, 3);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "Sheet1:Sheet2!D3:E4");
 }
 
 // ---------------------------------------------------------------------------

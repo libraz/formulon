@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Pratt parser core.
 //
@@ -14,9 +13,9 @@
 //     comparisons (`=`, `<>`, `<`, `<=`, `>`, `>=`), prefix `@`
 //     (implicit-intersection, lowest precedence).
 //
-// Out of scope for the current parser (deferred to follow-up work):
+// Out of scope for the current parser:
 //   * Union (`,`) outside call arglists; intersection-as-space.
-//   * External / structured / lambda / let / immediately-invoked-lambda forms.
+//   * External-workbook references.
 //   * Suggestion engine (the `ParseError::suggestion` slot is reserved but
 //     never populated yet).
 //
@@ -64,7 +63,7 @@ struct ParserOptions {
   /// the wild rarely exceed double-digit depths; 128 leaves a comfortable
   /// margin while still preventing pathological inputs from blowing the
   /// native stack.
-  std::uint32_t max_parse_depth = 128;
+  std::uint32_t max_parse_depth = kMaxFormulaAstDepth;
 };
 
 /// Single-shot Pratt parser.

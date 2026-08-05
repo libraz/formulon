@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "parser/ref_transforms.h"
 
@@ -12,19 +11,6 @@
 
 namespace formulon {
 namespace parser {
-
-bool sheet_name_needs_quoting(std::string_view name) noexcept {
-  if (name.empty()) {
-    return true;
-  }
-  for (char c : name) {
-    const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
-    if (!ok) {
-      return true;
-    }
-  }
-  return false;
-}
 
 SheetRenameTransform::SheetRenameTransform(std::string_view old_name, std::string_view new_name) noexcept
     : old_name_(old_name), new_name_(new_name), new_name_needs_quotes_(sheet_name_needs_quoting(new_name)) {}

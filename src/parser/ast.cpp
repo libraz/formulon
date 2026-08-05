@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // AST factories and per-kind accessor implementations. Storage policy: every
 // pointer array and every string view stored in the AST lives in the arena
@@ -10,6 +9,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "parser/reference.h"
 #include "parser/token.h"
@@ -54,6 +54,113 @@ const std::string_view* CopyNameArray(Arena& arena, const std::string_view* src,
 }
 
 }  // namespace
+
+namespace {
+
+std::uint64_t ChildCount(const AstNode& node) {
+  switch (node.kind()) {
+    case NodeKind::UnaryOp:
+    case NodeKind::ImplicitIntersection:
+    case NodeKind::Lambda:
+      return 1;
+    case NodeKind::BinaryOp:
+    case NodeKind::RangeOp:
+    case NodeKind::IntersectOp:
+      return 2;
+    case NodeKind::UnionOp:
+      return node.as_union_arity();
+    case NodeKind::Call:
+      return node.as_call_arity();
+    case NodeKind::ArrayLiteral:
+      return static_cast<std::uint64_t>(node.as_array_rows()) * node.as_array_cols();
+    case NodeKind::LetBinding:
+      return static_cast<std::uint64_t>(node.as_let_binding_count()) + 1;
+    case NodeKind::LambdaCall:
+      return static_cast<std::uint64_t>(node.as_lambda_call_arity()) + 1;
+    case NodeKind::Literal:
+    case NodeKind::Ref:
+    case NodeKind::SpillRef:
+    case NodeKind::ExternalRef:
+    case NodeKind::Ref3D:
+    case NodeKind::StructuredRef:
+    case NodeKind::NameRef:
+    case NodeKind::ErrorLiteral:
+    case NodeKind::ErrorPlaceholder:
+      return 0;
+  }
+  return 0;
+}
+
+const AstNode& ChildAt(const AstNode& node, std::uint64_t index) {
+  switch (node.kind()) {
+    case NodeKind::UnaryOp:
+      return node.as_unary_operand();
+    case NodeKind::ImplicitIntersection:
+      return node.as_implicit_intersection_operand();
+    case NodeKind::Lambda:
+      return node.as_lambda_body();
+    case NodeKind::BinaryOp:
+      return index == 0 ? node.as_binary_lhs() : node.as_binary_rhs();
+    case NodeKind::RangeOp:
+      return index == 0 ? node.as_range_lhs() : node.as_range_rhs();
+    case NodeKind::IntersectOp:
+      return index == 0 ? node.as_intersect_lhs() : node.as_intersect_rhs();
+    case NodeKind::UnionOp:
+      return node.as_union_child(static_cast<std::uint32_t>(index));
+    case NodeKind::Call:
+      return node.as_call_arg(static_cast<std::uint32_t>(index));
+    case NodeKind::ArrayLiteral: {
+      const std::uint32_t cols = node.as_array_cols();
+      return node.as_array_element(static_cast<std::uint32_t>(index / cols), static_cast<std::uint32_t>(index % cols));
+    }
+    case NodeKind::LetBinding: {
+      const std::uint32_t bindings = node.as_let_binding_count();
+      return index < bindings ? node.as_let_binding_expr(static_cast<std::uint32_t>(index)) : node.as_let_body();
+    }
+    case NodeKind::LambdaCall:
+      return index == 0 ? node.as_lambda_call_callee() : node.as_lambda_call_arg(static_cast<std::uint32_t>(index - 1));
+    case NodeKind::Literal:
+    case NodeKind::Ref:
+    case NodeKind::SpillRef:
+    case NodeKind::ExternalRef:
+    case NodeKind::Ref3D:
+    case NodeKind::StructuredRef:
+    case NodeKind::NameRef:
+    case NodeKind::ErrorLiteral:
+    case NodeKind::ErrorPlaceholder:
+      break;
+  }
+  FM_CHECK(false, "AstNode child requested from a leaf");
+  return node;
+}
+
+}  // namespace
+
+bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth) {
+  if (max_depth == 0) {
+    return false;
+  }
+  struct Frame {
+    const AstNode* node;
+    std::uint64_t next_child;
+    std::uint64_t child_count;
+  };
+  std::vector<Frame> stack;
+  stack.push_back(Frame{&root, 0, ChildCount(root)});
+  while (!stack.empty()) {
+    Frame& frame = stack.back();
+    if (frame.next_child == frame.child_count) {
+      stack.pop_back();
+      continue;
+    }
+    const AstNode& child = ChildAt(*frame.node, frame.next_child++);
+    if (stack.size() >= max_depth) {
+      return false;
+    }
+    stack.push_back(Frame{&child, 0, ChildCount(child)});
+  }
+  return true;
+}
 
 // ---------------------------------------------------------------------------
 // Factories
@@ -683,11 +790,44 @@ void AppendColumnLetters(std::string& out, std::uint32_t col) {
 
 }  // namespace
 
+bool sheet_name_needs_quoting(std::string_view name) noexcept {
+  if (name.empty()) {
+    return true;
+  }
+
+  bool all_digits = true;
+  std::size_t i = 0;
+  while (i < name.size() && ((name[i] >= 'A' && name[i] <= 'Z') || (name[i] >= 'a' && name[i] <= 'z'))) {
+    ++i;
+  }
+  const std::size_t letters = i;
+  const bool cell_ref_prefix = letters >= 1 && letters <= 3 && i < name.size() && name[i] >= '1' && name[i] <= '9';
+  for (char c : name) {
+    const bool bare_name_char =
+        (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
+    if (!bare_name_char) {
+      return true;
+    }
+    all_digits = all_digits && c >= '0' && c <= '9';
+  }
+  if (all_digits) {
+    return true;
+  }
+  if (!cell_ref_prefix) {
+    return false;
+  }
+  ++i;
+  while (i < name.size() && name[i] >= '0' && name[i] <= '9') {
+    ++i;
+  }
+  return i == name.size();
+}
+
 std::string format_a1(const Reference& r) {
   FM_CHECK(!(r.is_full_col && r.is_full_row), "format_a1: is_full_col and is_full_row must not both be set");
   std::string out;
   if (!r.sheet.empty()) {
-    if (r.sheet_quoted) {
+    if (r.sheet_quoted || sheet_name_needs_quoting(r.sheet)) {
       out.push_back('\'');
       // Escape any embedded single quotes by doubling them.
       for (char c : r.sheet) {

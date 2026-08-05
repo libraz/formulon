@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `SheetRenameTransform` and the `sheet_name_needs_quoting`
 // helper. The walker integration is exercised in `ast_shift_test.cpp`;
@@ -23,6 +22,12 @@ TEST(SheetNameNeedsQuoting, EmptyRequiresQuotes) {
 
 TEST(SheetNameNeedsQuoting, SimpleAsciiNoQuotes) {
   EXPECT_FALSE(sheet_name_needs_quoting("Sheet1"));
+}
+
+TEST(SheetNameNeedsQuoting, NumericAndCellReferenceNamesRequireQuotes) {
+  EXPECT_TRUE(sheet_name_needs_quoting("2026"));
+  EXPECT_TRUE(sheet_name_needs_quoting("S2"));
+  EXPECT_FALSE(sheet_name_needs_quoting("S0"));
 }
 
 TEST(SheetNameNeedsQuoting, UnderscoreAndDotAllowed) {

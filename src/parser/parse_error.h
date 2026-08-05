@@ -1,12 +1,12 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Parser-level error model.
 //
 // `ParseErrorCode` consolidates lexer-level codes (promoted from
 // `LexerErrorCode`) with the syntactic parser-level codes that the Pratt
-// parser produces. The semantic codes (unknown function, unknown name,
-// arity mismatches, structured-ref / sheet validation, ...) are still
-// deferred until the FunctionRegistry and Workbook surfaces land.
+// parser produces. Semantic failures (unknown function or name, arity
+// mismatches, and workbook-dependent reference validation) belong to the
+// evaluator / FunctionRegistry boundary rather than this syntax diagnostic
+// catalogue.
 //
 // Messages are static English literals (one per code, no parameterisation).
 // The `string_view` in `ParseError::message` therefore points at program-

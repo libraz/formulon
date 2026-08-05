@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Round-trip golden tests for `format_formula`. Each case formats a
 // hand-built or parsed AST, re-parses the result, and asserts that the
@@ -53,6 +52,22 @@ void ExpectRoundTripsToSame(std::string_view src) {
   EXPECT_EQ(sexpr2, sexpr1) << "round-trip diverged for: " << src << "\n  formatted = " << formatted;
 }
 
+const AstNode* MakeTooDeepAst(Arena& arena) {
+  AstNode* node = make_literal(arena, Value::number(1));
+  for (std::uint32_t depth = 1; depth <= kMaxFormulaAstDepth; ++depth) {
+    node = make_unary_op(arena, UnaryOp::Plus, node);
+  }
+  return node;
+}
+
+TEST(AstFormat, RejectsAstDeeperThanSharedLimit) {
+  Arena arena;
+  const AstNode* root = MakeTooDeepAst(arena);
+  ASSERT_NE(root, nullptr);
+  EXPECT_FALSE(ast_depth_within_limit(*root, kMaxFormulaAstDepth));
+  EXPECT_EQ(format_formula(*root), "#REF!");
+}
+
 // ---------------------------------------------------------------------------
 // Literals
 // ---------------------------------------------------------------------------
@@ -82,6 +97,14 @@ TEST(AstFormat, TextSimple) {
 }
 TEST(AstFormat, TextEscapesEmbeddedQuote) {
   ExpectRoundTripsToSame("=\"he said \"\"hi\"\"\"");
+}
+
+TEST(AstFormat, OmittedCallArgumentsRoundTripAsOmittedSlots) {
+  // Blank AST literals encode omitted arguments, not empty-text literals.
+  // This form is rewritten during sheet-name and structural edits, so the
+  // formatter must preserve the exact argument kind through a re-parse.
+  ExpectRoundTripsToSame("=VLOOKUP(A1,B:C,2,)");
+  ExpectRoundTripsToSame("=IF(,1,)");
 }
 
 TEST(AstFormat, ErrorLiteralDiv0) {
@@ -115,6 +138,9 @@ TEST(AstFormat, RefSheetQualified) {
 }
 TEST(AstFormat, RefSheetQuoted) {
   ExpectRoundTripsToSame("='Sheet 1'!A1");
+}
+TEST(AstFormat, RefNumericSheetQuoted) {
+  ExpectRoundTripsToSame("='2026'!A1");
 }
 TEST(AstFormat, RefFullColumn) {
   ExpectRoundTripsToSame("=A:A");
@@ -184,6 +210,14 @@ TEST(AstFormat, ExternalRefQuotesSheetWithSpace) {
   AstNode* n = make_external_ref(a, 2, "My Book", cell);
   ASSERT_NE(n, nullptr);
   EXPECT_EQ(format_formula(*n), "[2]'My Book'!A1");
+}
+
+TEST(AstFormat, ExternalRefQuotesNumericSheet) {
+  Arena a;
+  Reference cell;
+  AstNode* n = make_external_ref(a, 2, "2026", cell);
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(format_formula(*n), "[2]'2026'!A1");
 }
 
 TEST(AstFormat, StructuredRefRoundTripsColumn) {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `Reference` is the parser's structural representation of an A1-style cell
 // reference. It is shared by every node kind that needs to talk about a cell
@@ -59,10 +58,16 @@ struct Reference {
 /// Formats `r` as canonical A1 syntax.
 ///
 /// Examples: `A1`, `$A$1`, `Sheet1!A1`, `'Sheet 1'!$A$1`. The sheet name is
-/// wrapped in single quotes iff `r.sheet_quoted` is true; the parser is
-/// responsible for setting that flag, and any embedded single quotes are
-/// doubled per Excel's escaping convention.
+/// wrapped in single quotes iff `r.sheet_quoted` is true or the sheet name
+/// cannot be represented unambiguously without them; any embedded single
+/// quotes are doubled per Excel's escaping convention.
 std::string format_a1(const Reference& r);
+
+/// Returns true iff `name` must be wrapped in single quotes when written
+/// into a sheet-qualified A1 reference. Besides names containing bytes
+/// outside `[A-Za-z0-9_.]`, this covers all-numeric names and names shaped
+/// like A1 cell references, both of which are ambiguous to the tokenizer.
+bool sheet_name_needs_quoting(std::string_view name) noexcept;
 
 }  // namespace parser
 }  // namespace formulon
