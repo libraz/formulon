@@ -73,6 +73,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/reader_test.cpp
   unit/io/xlsb/record_test.cpp
   unit/io/xlsb/record_writer_test.cpp
+  unit/io/xlsb/sheet_tail_test.cpp
   unit/io/xlsb/sst_writer_test.cpp
   unit/io/xlsb/writer_test.cpp
   unit/io/xlsb_fidelity_test.cpp
@@ -135,6 +136,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/getpivotdata_lazy_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
+  unit/eval/array_alloc_test.cpp
   unit/eval/array_producer_test.cpp
   unit/eval/builtins_row_column_array_test.cpp
   unit/eval/sumproduct_array_test.cpp
@@ -358,6 +360,21 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME binding_drift_dts_enums
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-enums
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # Structural invariants enforced by "exactly one implementation exists":
+  # the bounds-checked array-allocation seam (what keeps a wasm32
+  # `rows * cols` from wrapping into a short buffer) and the raw-XML
+  # retention helpers (what keeps a consumed part's unmodelled content from
+  # vanishing on save). Static regex analysis over src/.
+  add_test(
+    NAME SeamIntegrityArrayAlloc
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py array-alloc
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME SeamIntegrityXmlPassthrough
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py xml-passthrough
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(
