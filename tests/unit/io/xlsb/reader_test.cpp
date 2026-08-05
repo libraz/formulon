@@ -14,6 +14,7 @@
 
 #include "cell.h"
 #include "gtest/gtest.h"
+#include "io/defined_names.h"
 #include "miniz.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -138,9 +139,35 @@ std::string WorkbookRelsXml() {
       "</Relationships>");
 }
 
+/// Builds one `BrtName` record body carrying `name` at workbook scope
+/// with `rgce` as its formula. Only the prefix the reader consumes is
+/// emitted (flags + 3 reserved + itab + cch + UTF-16LE name + cce +
+/// rgce); the trailing fields a real Excel record carries after the
+/// formula body are never read, so omitting them keeps the builder
+/// honest about what the decoder depends on.
+std::vector<std::uint8_t> NameRecord(std::string_view name, const std::vector<std::uint8_t>& rgce) {
+  std::vector<std::uint8_t> p;
+  p.push_back(0);  // flags[0] — fHidden clear.
+  p.push_back(0);  // flags[1]
+  p.push_back(0);  // reserved
+  p.push_back(0);
+  p.push_back(0);
+  AppendU32(p, 0xFFFFFFFFU);  // itab == -1: workbook scope.
+  AppendU32(p, static_cast<std::uint32_t>(name.size()));
+  for (char c : name) {
+    p.push_back(static_cast<std::uint8_t>(c));
+    p.push_back(0);
+  }
+  AppendU32(p, static_cast<std::uint32_t>(rgce.size()));
+  p.insert(p.end(), rgce.begin(), rgce.end());
+  return p;
+}
+
 /// Builds `xl/workbook.bin` containing two BrtBundleSh entries
-/// pointing at rIdSheet1 / rIdSheet2.
-std::vector<std::uint8_t> WorkbookBin() {
+/// pointing at rIdSheet1 / rIdSheet2. `name_records` are emitted as
+/// `BrtName` records after the sheet bundle, which is where Excel puts
+/// them and where both name passes expect to find them.
+std::vector<std::uint8_t> WorkbookBin(const std::vector<std::vector<std::uint8_t>>& name_records = {}) {
   std::vector<std::uint8_t> body;
 
   // BrtBeginBook (131): empty payload.
@@ -169,6 +196,11 @@ std::vector<std::uint8_t> WorkbookBin() {
   }
 
   AppendRecord(body, 144, {});  // BrtEndBundleShs
+
+  for (const std::vector<std::uint8_t>& rec : name_records) {
+    AppendRecord(body, 39, rec);  // BrtName
+  }
+
   AppendRecord(body, 132, {});  // BrtEndBook
   return body;
 }
@@ -449,6 +481,86 @@ TEST(XlsbReader, UndecodableFormulaPreservesCachedValueWithoutFakeFormula) {
   EXPECT_EQ(c->cached_value.as_number(), 42.0);
   EXPECT_EQ(result.value().undecoded_formula_count, 1U);
   EXPECT_EQ(result.value().undecoded_defined_name_count, 0U);
+}
+
+TEST(XlsbReader, ExternalBookNameInCellFormulaKeepsCachedValueAndCounts) {
+  // rgce = `PtgNameX` (0x39) + ixti (u16) + name index (u32): a defined
+  // name owned by another workbook. Resolving it needs the supporting-
+  // book and external-name tables, which this reader does not decode, so
+  // the token stays explicitly unsupported. Reusing the index against
+  // this workbook's own name table would silently retarget the formula
+  // at a different name, so the cell must instead fall back to the same
+  // contract an undecodable stream gets: cached value kept, no formula,
+  // one diagnostic counted.
+  const std::vector<std::uint8_t> rgce = {0x39, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinFmlaNum(7.25, rgce)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  const Cell* c = result.value().workbook.sheet(0).cell_at(0, 0);
+  ASSERT_NE(c, nullptr);
+  EXPECT_TRUE(c->formula_text.empty());
+  ASSERT_TRUE(c->cached_value.is_number());
+  EXPECT_EQ(c->cached_value.as_number(), 7.25);
+  EXPECT_EQ(result.value().undecoded_formula_count, 1U);
+  EXPECT_EQ(result.value().undecoded_defined_name_count, 0U);
+}
+
+TEST(XlsbReader, DecodableDefinedNameRegistersAndCountsNothing) {
+  // Positive control for the record builder the next test relies on: a
+  // `BrtName` whose rgce is `PtgInt 5` must reach the workbook intact,
+  // so a zero counter there means "nothing was undecodable" rather than
+  // "no name record was ever parsed".
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin({NameRecord("Rate", rgce)})});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  const std::vector<io::DefinedName>& names = result.value().workbook.defined_names();
+  ASSERT_EQ(names.size(), 1U);
+  EXPECT_EQ(names[0].name, "Rate");
+  EXPECT_EQ(names[0].formula, "5");
+  EXPECT_EQ(names[0].local_sheet_id, -1);
+  EXPECT_EQ(result.value().undecoded_defined_name_count, 0U);
+}
+
+TEST(XlsbReader, ExternalBookNameInDefinedNameIsSkippedAndCounted) {
+  // Same unsupported token, this time as a defined name's own body. The
+  // name is dropped rather than registered with a fabricated formula,
+  // and the read still succeeds so one external reference cannot cost
+  // the caller the whole workbook.
+  const std::vector<std::uint8_t> rgce = {0x39, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00};
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin({NameRecord("ExtRate", rgce)})});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  EXPECT_TRUE(result.value().workbook.defined_names().empty());
+  EXPECT_EQ(result.value().undecoded_defined_name_count, 1U);
+  EXPECT_EQ(result.value().undecoded_formula_count, 0U);
 }
 
 TEST(XlsbReader, OutOfRangeCellColumnIsRecordCorrupt) {
