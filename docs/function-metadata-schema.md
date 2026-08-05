@@ -71,8 +71,10 @@ parsed or evaluated.
 
 A host resolves the displayed metadata for a function by calling the
 engine, then merging a provider entry over it with the pure helper
-`mergeFunctionMetadata` (node / wasm host) or `merge_function_metadata`
-(python). Given `base` (the engine result), `entry`
+`mergeFunctionMetadata` (the native Node package) or
+`merge_function_metadata` (Python). The raw WASM C ABI intentionally does
+not export a merge helper; browser hosts can apply the same precedence below
+in their provider layer. Given `base` (the engine result), `entry`
 (`functions[NAME]`, or absent), and a display `locale` tag, each field is
 resolved by first-non-null precedence:
 

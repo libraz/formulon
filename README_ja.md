@@ -26,7 +26,7 @@ CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/release
 
 - **互換性を oracle で確認します。** 既定の profile は `win-365-ja_JP` です。primary oracle は Mac Excel 365 (ja-JP) で、Windows Excel 365 (ja-JP) は variant golden として管理しています。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
 - **C++ コア 1 本で動きます。** ブラウザ、Python、CLI のために別々の計算ロジックを持たず、同じエンジンを配布します。実装が複数に分かれて結果がずれる、という問題を避けています。
-- **WASM サイズに上限を置いています。** 目標は 1.65 MB、Brotli 圧縮で 530 KB。ハード上限は 1.9 MB / 600 KB です。CI で上限を確認し、超える機能は入れません。
+- **WASM サイズを管理します。** CI は **3.00 MiB** の hard ceiling を強制し、**2.50 MiB** の soft ceiling を報告します。現在値は `make size-check` で確認できます。
 - **依存は小さく保っています。** ランタイム依存は `miniz` (zip/deflate)、`pugixml` (XML + XPath 1.0)、`PCRE2` (`REGEX*`)、`double-conversion` (Grisu3 `dtoa`) の 4 つです。線形代数、UTF-8 処理、数値変換の多くはリポジトリ内で実装しています。
 - **監査しやすい C++ を優先します。** `Expected<T, Error>` ベースのエラー処理、RAII、`-fno-exceptions -fno-rtti`、Google C++ Style を採用しています。
 
@@ -62,6 +62,21 @@ Formulon は以下を **意図的にサポートしません**。
 | PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、`wasmtime` は `pip` が解決します。 |
 | GitHub Releases | `formulon-cli-<platform-arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
 
+## コマンドライン
+
+Release バイナリを `PATH` に置いた後、`eval` は単一数式の評価、`recalc`
+は再計算済みブックの書き出し、`dump` はテキストスナップショットに使えます。
+
+```bash
+formulon eval '=SUM(1,2,3)'
+formulon recalc input.xlsx -o output.xlsx
+formulon dump output.xlsx --formulas
+```
+
+`recalc` は成功時に stderr へ
+`formulon: recalc: ok, wrote M bytes to 'OUT'` を出力します。抑制するには
+`--quiet` を指定します。
+
 ## ステータス
 
 カタログ済み Excel 関数は **522 / 522 を認識**します。ただし、「関数名を知っている」ことと「Excel 互換の実装がある」ことは分けて扱います。現在の内訳は `make function-status` で確認できます。
@@ -88,7 +103,7 @@ oracle は **92 カテゴリ** あります。primary oracle は Mac Excel 365 j
 
 新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
 
-実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、parity を検証しています。OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer も実装済みです。シート追加、リネーム、移動、数式書き換えを伴う行・列の挿入 / 削除、partial recalc、反復計算ソルバの進捗コールバックは、C ABI 経由で WASM / Python / CLI から使えます。
+実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、parity を検証しています。OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer も実装済みです。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` のみを公開します。
 
 不具合報告・oracle 差分レポート・ご意見はいつでも歓迎しています。
 
