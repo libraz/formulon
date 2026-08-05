@@ -15,6 +15,7 @@
 //   * `max_iterations` is honoured: a tight cap forces the iteration
 //     limit to fire and the engine writes #NUM! on exhaustion.
 
+#include <cmath>
 #include <cstdint>
 
 #include "cell.h"
@@ -128,11 +129,11 @@ TEST(WorkbookIterative, EnabledAveragingCycleConvergesToSharedValue) {
   EXPECT_NEAR(b1.as_number(), 20.0, 0.001);
 }
 
-TEST(WorkbookIterative, EnabledDivergentCycleSurfacesNumError) {
-  // A1 = 2 * A1 + 1: a single-cell self-referential SCC whose
-  // recurrence is monotonically increasing. The solver detects
-  // divergence after three successive non-decreasing deltas and writes
-  // #NUM! to the cell.
+TEST(WorkbookIterative, EnabledGrowingCycleKeepsFiniteApproximation) {
+  // A1 = 2 * A1 + 1: a single-cell self-referential SCC whose recurrence
+  // grows without bound. Excel has no residual-growth cutoff, so 100
+  // iterations from a blank seed simply leave `2^100 - 1` in the cell.
+  // Only an actual non-finite result would surface #NUM!.
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=2*A1+1")));
 
@@ -144,22 +145,21 @@ TEST(WorkbookIterative, EnabledDivergentCycleSurfacesNumError) {
 
   auto stats = wb.recalc(eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(stats));
-  // Divergence path: cycle_cells gets the failure tally; iterative_cells
-  // is 0 because the solver never converged.
+  // The solve never met `max_change`, so the members are tallied as
+  // unresolved rather than iterative.
   EXPECT_EQ(stats.value().cycle_cells, 1U);
   EXPECT_EQ(stats.value().iterative_cells, 0U);
 
   Value a1 = StoredValue(wb, 0U, 0U, 0U);
-  ASSERT_TRUE(a1.is_error());
-  EXPECT_EQ(a1.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(a1.is_number()) << "iteration-limit exhaustion must retain the last approximation";
+  EXPECT_DOUBLE_EQ(a1.as_number(), std::pow(2.0, 100.0) - 1.0);
 }
 
 TEST(WorkbookIterative, MaxIterationsHonoured) {
-  // Convergent-but-slow recurrence: A1 = (A1 + 1000) / 2, fixed point
-  // at A1 = 1000. With max_iterations = 3 and a tight max_change the
-  // solver cannot converge in time; the recalc engine writes #NUM! on
-  // exhaustion and bumps `cycle_cells` to mirror the user-visible
-  // failure mode.
+  // Convergent-but-slow recurrence: A1 = (A1 + 1000) / 2, fixed point at
+  // A1 = 1000. With max_iterations = 3 and a tight max_change the solver
+  // cannot converge in time. Excel leaves the last approximation in the
+  // cell, so three halvings from a blank seed give 500, 750, 875.
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=(A1+1000)/2")));
 
@@ -175,8 +175,8 @@ TEST(WorkbookIterative, MaxIterationsHonoured) {
   EXPECT_EQ(stats.value().iterative_cells, 0U);
 
   Value a1 = StoredValue(wb, 0U, 0U, 0U);
-  ASSERT_TRUE(a1.is_error()) << "expected #NUM! after iteration-limit exhaustion";
-  EXPECT_EQ(a1.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(a1.is_number()) << "iteration-limit exhaustion must retain the last approximation";
+  EXPECT_DOUBLE_EQ(a1.as_number(), 875.0);
 }
 
 TEST(WorkbookIterative, OptionsRoundTrip) {

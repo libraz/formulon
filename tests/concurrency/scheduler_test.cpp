@@ -159,9 +159,12 @@ TEST(Scheduler, ParallelIterativeProgressCallbackCanAbort) {
   ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), config, nullptr)));
   EXPECT_EQ(progress.calls.load(std::memory_order_relaxed), 3U);
 
+  // Aborting is a "stop here", not a failure: the cell keeps whatever the
+  // last completed pass committed, exactly as iteration-limit exhaustion
+  // does. Three halvings toward the fixed point 1000 give 500, 750, 875.
   const Value value = StoredValue(wb, 0U, 0U, 0U);
-  ASSERT_TRUE(value.is_error());
-  EXPECT_EQ(value.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(value.is_number()) << "an aborted solve must retain the last approximation";
+  EXPECT_DOUBLE_EQ(value.as_number(), 875.0);
 }
 
 // ---------------------------------------------------------------------------

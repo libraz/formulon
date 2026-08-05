@@ -313,6 +313,23 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
               break;
             }
           }
+          // Pop order follows the DFS, which starts from whatever order the
+          // hash containers enumerated the graph in — that order differs
+          // between standard-library implementations. Members of a cyclic
+          // component are committed in this order by the Gauss-Seidel
+          // iterative solver, and a tautological cycle (`A1=B1+1`,
+          // `B1=A1-1`) settles on a different pair depending on which
+          // member goes first, so the order has to be pinned. Address order
+          // also matches Excel's top-left-first calculation chain.
+          std::sort(component.begin(), component.end(), [](CellNodeId lhs, CellNodeId rhs) {
+            if (lhs.sheet_id != rhs.sheet_id) {
+              return lhs.sheet_id < rhs.sheet_id;
+            }
+            if (lhs.row != rhs.row) {
+              return lhs.row < rhs.row;
+            }
+            return lhs.col < rhs.col;
+          });
           sccs.push_back(std::move(component));
         }
 
