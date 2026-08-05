@@ -25,6 +25,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
   unit/utils/checked_mul_test.cpp
+  unit/utils/a1_column_test.cpp
   unit/utils/double_format_test.cpp
   unit/utils/rect_iterator_test.cpp
   unit/utils/resource_budget_test.cpp
