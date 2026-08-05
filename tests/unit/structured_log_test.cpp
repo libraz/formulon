@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for StructuredLog. The emitter writes to stderr, so each test
 // redirects the stderr file descriptor (fd 2) through a pipe, runs the log
@@ -93,6 +92,18 @@ bool Contains(std::string_view haystack, std::string_view needle) {
   return haystack.find(needle) != std::string_view::npos;
 }
 
+class StructuredLogConfigReset {
+ public:
+  ~StructuredLogConfigReset() {
+    set_structured_log_sink(nullptr);
+    set_structured_log_min_level(StructuredLogLevel::kDebug);
+  }
+};
+
+void AppendToString(std::string_view record, void* user_data) {
+  static_cast<std::string*>(user_data)->append(record);
+}
+
 TEST(StructuredLogTest, InfoEmitsEventAndLevel) {
   StderrCapture cap;
   StructuredLog("cell.evaluated").info();
@@ -141,6 +152,29 @@ TEST(StructuredLogTest, DebugWarnAndMultipleLevels) {
   EXPECT_TRUE(Contains(out, "\"level\":\"warn\"")) << out;
   EXPECT_TRUE(Contains(out, "\"event\":\"a.b\"")) << out;
   EXPECT_TRUE(Contains(out, "\"event\":\"c.d\"")) << out;
+}
+
+TEST(StructuredLogTest, SinkReceivesCompleteRecord) {
+  StructuredLogConfigReset reset;
+  std::string records;
+  set_structured_log_sink(AppendToString, &records);
+
+  StructuredLog("embedded.event").field("id", static_cast<int64_t>(7)).info();
+
+  EXPECT_EQ(records, "{\"level\":\"info\",\"event\":\"embedded.event\",\"id\":7}\n");
+}
+
+TEST(StructuredLogTest, MinimumLevelSuppressesLowerSeverities) {
+  StructuredLogConfigReset reset;
+  std::string records;
+  set_structured_log_sink(AppendToString, &records);
+  set_structured_log_min_level(StructuredLogLevel::kWarn);
+
+  StructuredLog("hidden").info();
+  StructuredLog("visible").warn();
+
+  EXPECT_FALSE(Contains(records, "hidden"));
+  EXPECT_TRUE(Contains(records, "\"event\":\"visible\"")) << records;
 }
 
 #else  // !FORMULON_HAVE_POSIX_PIPE

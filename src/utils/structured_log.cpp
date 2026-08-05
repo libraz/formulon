@@ -1,17 +1,17 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the StructuredLog emitter. The output format is a single
 // line of JSON written to stderr; we hand-roll the escaping to avoid pulling
 // any external dependency into this low-level TU (see CLAUDE.md "Dependencies
-// (strict)"). The emitter is lock-free: interleaved output from multiple
-// threads may mix across records, but each record is emitted with a single
-// `fwrite` call so lines remain intact on POSIX platforms.
+// (strict). Configuration is protected while a record snapshots it; output is
+// then delivered synchronously without holding that lock, so an embedding sink
+// can itself log or reconfigure logging safely.
 
 #include "utils/structured_log.h"
 
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -70,7 +70,38 @@ void AppendKey(std::string& out, std::string_view key) {
   out.push_back(':');
 }
 
+struct LogConfig {
+  StructuredLogSink sink = nullptr;
+  void* sink_user_data = nullptr;
+  StructuredLogLevel min_level = StructuredLogLevel::kDebug;
+};
+
+std::mutex& log_config_mutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
+LogConfig& log_config() {
+  static LogConfig config;
+  return config;
+}
+
+bool is_enabled(StructuredLogLevel level, StructuredLogLevel min_level) {
+  return min_level != StructuredLogLevel::kOff && static_cast<unsigned>(level) >= static_cast<unsigned>(min_level);
+}
+
 }  // namespace
+
+void set_structured_log_sink(StructuredLogSink sink, void* user_data) {
+  std::lock_guard<std::mutex> lock(log_config_mutex());
+  log_config().sink = sink;
+  log_config().sink_user_data = sink == nullptr ? nullptr : user_data;
+}
+
+void set_structured_log_min_level(StructuredLogLevel level) {
+  std::lock_guard<std::mutex> lock(log_config_mutex());
+  log_config().min_level = level;
+}
 
 StructuredLog::StructuredLog(std::string_view event) : event_(event) {
   fields_.reserve(128);
@@ -120,32 +151,45 @@ StructuredLog& StructuredLog::error_code(FormulonErrorCode code) {
   return *this;
 }
 
-void StructuredLog::flush(std::string_view level) {
+void StructuredLog::flush(StructuredLogLevel level, std::string_view level_name) {
+  LogConfig config;
+  {
+    std::lock_guard<std::mutex> lock(log_config_mutex());
+    config = log_config();
+  }
+  if (!is_enabled(level, config.min_level)) {
+    fields_.clear();
+    return;
+  }
+
   std::string out;
   out.reserve(event_.size() + fields_.size() + 48);
   out.append("{\"level\":");
-  AppendEscapedJsonString(out, level);
+  AppendEscapedJsonString(out, level_name);
   out.append(",\"event\":");
   AppendEscapedJsonString(out, event_);
   out.append(fields_);
   out.push_back('}');
   out.push_back('\n');
-  std::fwrite(out.data(), 1, out.size(), stderr);
-  std::fflush(stderr);
+  if (config.sink != nullptr) {
+    config.sink(out, config.sink_user_data);
+  } else {
+    std::fwrite(out.data(), 1, out.size(), stderr);
+  }
   fields_.clear();
 }
 
 void StructuredLog::debug() {
-  flush("debug");
+  flush(StructuredLogLevel::kDebug, "debug");
 }
 void StructuredLog::info() {
-  flush("info");
+  flush(StructuredLogLevel::kInfo, "info");
 }
 void StructuredLog::warn() {
-  flush("warn");
+  flush(StructuredLogLevel::kWarn, "warn");
 }
 void StructuredLog::error() {
-  flush("error");
+  flush(StructuredLogLevel::kError, "error");
 }
 
 }  // namespace formulon
