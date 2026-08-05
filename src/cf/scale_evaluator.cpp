@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // ColorScale / DataBar / IconSet resolution. See scale_evaluator.h for
 // the contract and cf/cf_evaluator.h for the public-facing rule kinds.
@@ -217,10 +216,27 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
   if (!threshold_min.has_value() || !threshold_max.has_value()) {
     return std::nullopt;
   }
-  // Degenerate threshold range collapses the bar — no meaningful length
-  // can be produced. Fall through to nullopt so the caller can decide.
+  // Excel renders a constant population as a full bar. Returning no match
+  // here makes every data bar disappear for a range such as [42, 42, 42].
   if (*threshold_min == *threshold_max) {
-    return std::nullopt;
+    DataBarRender render;
+    render.length_pct = static_cast<double>(spec.max_length_pct);
+    render.is_negative = cell_value.as_number() < 0.0;
+    render.fill = render.is_negative ? spec.negative_fill : spec.fill;
+    render.border = render.is_negative ? spec.negative_border : spec.border;
+    render.gradient = spec.gradient;
+    switch (spec.axis_position) {
+      case DataBarAxisPosition::None:
+        render.axis_position_pct = kAxisLeft;
+        break;
+      case DataBarAxisPosition::Middle:
+        render.axis_position_pct = kAxisMid;
+        break;
+      case DataBarAxisPosition::Automatic:
+        render.axis_position_pct = automatic_axis_position(*threshold_min, *threshold_max);
+        break;
+    }
+    return render;
   }
 
   const double cell = cell_value.as_number();

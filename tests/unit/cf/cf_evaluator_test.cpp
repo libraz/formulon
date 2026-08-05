@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the conditional-format evaluator. Coverage so far:
 // the value-only rule types (ContainsBlanks / NotContainsBlanks /
@@ -16,6 +15,7 @@
 #include "cf/cf_helpers.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
+#include "cf/scale_evaluator.h"
 #include "eval/date_time.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
@@ -503,6 +503,29 @@ struct CFEvalHarness {
     return ctx;
   }
 };
+
+TEST(CFEvaluator, DataBarConstantPopulationIsFullLength) {
+  CFRule rule = MakeRule(RuleType::DataBar);
+  DataBarSpec bar;
+  bar.min.type = CfvoType::Min;
+  bar.max.type = CfvoType::Max;
+  bar.min_length_pct = 10;
+  bar.max_length_pct = 90;
+  rule.data_bar = bar;
+  ColorScalePopulation population;
+  population.sorted = {42.0, 42.0, 42.0};
+  population.min = 42.0;
+  population.max = 42.0;
+  CFEvalHarness harness;
+  std::vector<CFCellRange> sqref{{At(0, 0), At(2, 0)}};
+  CFEvalContext context = harness.context(At(0, 0), At(0, 0));
+  context.sqref = &sqref;
+  context.cached_population = &population;
+
+  auto render = scales::resolve_data_bar(rule, Value::number(42.0), context);
+  ASSERT_TRUE(render.has_value());
+  EXPECT_DOUBLE_EQ(render->length_pct, 90.0);
+}
 
 TEST(CFEvaluator, ExpressionRuleLiteralTrueMatches) {
   CFEvalHarness harness;
@@ -1835,8 +1858,8 @@ TEST(CFEvaluator, DataBarNonNumericCellDoesNotResolve) {
   EXPECT_FALSE(match.data_bar_render.has_value());
 }
 
-TEST(CFEvaluator, DataBarDegenerateRangeDoesNotResolve) {
-  // Population is all 7s → min == max → no meaningful bar length.
+TEST(CFEvaluator, DataBarDegenerateRangeUsesFullLength) {
+  // Population is all 7s → Excel draws a full-length bar for every cell.
   CFEvalHarness harness;
   for (std::uint32_t row = 0; row < 4; ++row) {
     harness.sheet.set_cell_value(row, 0, Value::number(7.0));
@@ -1846,9 +1869,10 @@ TEST(CFEvaluator, DataBarDegenerateRangeDoesNotResolve) {
   r.data_bar = MakeDataBarSpec(Cfvo(CfvoType::Min), Cfvo(CfvoType::Max));
   const auto ctx = SqrefContext(harness, sqref);
 
-  EXPECT_FALSE(match_rule(r, Value::number(7.0), ctx));
+  EXPECT_TRUE(match_rule(r, Value::number(7.0), ctx));
   CFMatch match = make_match(r, Value::number(7.0), ctx);
-  EXPECT_FALSE(match.data_bar_render.has_value());
+  ASSERT_TRUE(match.data_bar_render.has_value());
+  EXPECT_DOUBLE_EQ(match.data_bar_render->length_pct, 100.0);
 }
 
 TEST(CFEvaluator, DataBarValueOnlyOverloadStillReturnsFalse) {
