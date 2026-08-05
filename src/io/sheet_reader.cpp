@@ -38,6 +38,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -66,7 +67,7 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
 
   std::string source("=");
   source.append(master.text);
-  Arena arena;
+  Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
   parser::Parser parser(source, arena);
   parser::AstNode* root = parser.parse();
   if (root == nullptr || !parser.errors().empty()) {

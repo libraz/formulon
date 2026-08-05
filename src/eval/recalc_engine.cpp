@@ -37,7 +37,7 @@ namespace formulon::eval {
 // RecalcEngine
 // ----------------------------------------------------------------------------
 
-RecalcEngine::RecalcEngine() : arena_(std::make_unique<Arena>()) {}
+RecalcEngine::RecalcEngine() : arena_(std::make_unique<Arena>(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes)) {}
 RecalcEngine::~RecalcEngine() = default;
 
 // ---------------------------------------------------------------------------

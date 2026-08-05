@@ -32,6 +32,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -156,7 +157,7 @@ ThreadArenas make_thread_arenas(std::size_t count) {
   ThreadArenas arenas;
   arenas.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
-    arenas.emplace_back(std::make_unique<Arena>());
+    arenas.emplace_back(std::make_unique<Arena>(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes));
   }
   return arenas;
 }
