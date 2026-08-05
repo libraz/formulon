@@ -85,6 +85,17 @@ typedef int32_t fm_status_t;
 /** @brief Opaque workbook handle. */
 typedef struct fm_workbook fm_workbook_t;
 
+/** @brief Inclusive, 0-based print-area rectangle. */
+typedef struct {
+  uint32_t first_row;
+  uint32_t first_col;
+  uint32_t last_row;
+  uint32_t last_col;
+} fm_print_range_t;
+
+/** @brief Opaque result of one sheet pagination operation. */
+typedef struct fm_pagination fm_pagination_t;
+
 /**
  * @brief Cell error code payload. Mirrors `formulon::ErrorCode`.
  *
@@ -188,6 +199,17 @@ FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
  *         `formulon::FormulonErrorCode` on parse / archive failure.
  */
 FM_API fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workbook_t** out);
+
+/**
+ * @brief Returns lossy-Ptg recovery counters from the XLSB load that created `wb`.
+ *
+ * `out_undecoded_formula_count` counts formula-cell Ptg streams that could
+ * not be decoded and were retained only as cached values.
+ * `out_undecoded_defined_name_count` counts similarly skipped defined names.
+ * Both are zero for `.xlsx` loads and for clean `.xlsb` loads.
+ */
+FM_API fm_status_t fm_workbook_xlsb_read_diagnostics(const fm_workbook_t* wb, size_t* out_undecoded_formula_count,
+                                                     size_t* out_undecoded_defined_name_count);
 
 /**
  * @brief Releases a workbook handle.
@@ -1491,6 +1513,44 @@ typedef struct {
   uint8_t icon_index;
   uint8_t _pad[3]; /* padding for alignment determinism */
 } fm_cf_match_t;
+
+/* -------------------------------------------------------------------------- */
+/* Print pagination                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * @brief Paginates one worksheet and returns an owned snapshot of its
+ *        resolved print area, row/column breaks, and physical page count.
+ *
+ * `sheet_index` is 0-based. Release a successful result with
+ * `fm_pagination_destroy`.
+ */
+FM_API fm_status_t fm_workbook_paginate(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out);
+
+/** @brief Releases a pagination result. `pagination == NULL` is a no-op. */
+FM_API void fm_pagination_destroy(fm_pagination_t* pagination);
+
+/** @brief Returns the total physical page count, or zero for `NULL`. */
+FM_API uint32_t fm_pagination_page_count(const fm_pagination_t* pagination);
+
+/** @brief Number of resolved print-area rectangles, or zero for `NULL`. */
+FM_API size_t fm_pagination_print_area_count(const fm_pagination_t* pagination);
+
+/** @brief Copies a resolved print-area rectangle by index. */
+FM_API fm_status_t fm_pagination_print_area_at(const fm_pagination_t* pagination, size_t index, fm_print_range_t* out);
+
+/** @brief Number of horizontal (row) page breaks, or zero for `NULL`. */
+FM_API size_t fm_pagination_horizontal_break_count(const fm_pagination_t* pagination);
+
+/** @brief Reads a 0-based row index that a horizontal break precedes. */
+FM_API fm_status_t fm_pagination_horizontal_break_at(const fm_pagination_t* pagination, size_t index,
+                                                     uint32_t* out_row);
+
+/** @brief Number of vertical (column) page breaks, or zero for `NULL`. */
+FM_API size_t fm_pagination_vertical_break_count(const fm_pagination_t* pagination);
+
+/** @brief Reads a 0-based column index that a vertical break precedes. */
+FM_API fm_status_t fm_pagination_vertical_break_at(const fm_pagination_t* pagination, size_t index, uint32_t* out_col);
 
 /**
  * @brief Opaque handle for a CF range evaluation result.
@@ -2962,6 +3022,15 @@ FM_API const char* fm_last_error_context(void);
  */
 FM_API const char* fm_status_string(fm_status_t status);
 
+/**
+ * @brief Returns the Excel display literal for a cell error code.
+ *
+ * Known values return literals such as `"#DIV/0!"` and `"#REF!"`.
+ * Unknown numeric values return `"#UNKNOWN!"`. The returned pointer is
+ * never `NULL` and has program lifetime.
+ */
+FM_API const char* fm_error_display_name(fm_error_code_t error);
+
 /* -------------------------------------------------------------------------- */
 /* Styles                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -3050,6 +3119,32 @@ typedef struct {
   int32_t diagonal_up;   /* 0=false, 1=true */
   int32_t diagonal_down; /* 0=false, 1=true */
 } fm_border_record;
+
+/**
+ * @brief One-shot style-table insertion request.
+ *
+ * Each non-empty input array requires its matching output-index array. The
+ * call deduplicates each table in linear time across the existing records
+ * and the supplied batch; fonts, fills and borders are installed before xfs
+ * so an xf may refer to indices returned by the earlier arrays.
+ */
+typedef struct {
+  const fm_font_record* fonts;
+  size_t font_count;
+  uint32_t* font_indices;
+  const fm_fill_record* fills;
+  size_t fill_count;
+  uint32_t* fill_indices;
+  const fm_border_record* borders;
+  size_t border_count;
+  uint32_t* border_indices;
+  const fm_cell_xf* cell_xfs;
+  size_t cell_xf_count;
+  uint32_t* cell_xf_indices;
+  const char* const* num_fmt_codes;
+  size_t num_fmt_count;
+  uint16_t* num_fmt_ids;
+} fm_styles_batch;
 
 /**
  * @brief Plain-data projection of one OOXML `<dxf>` differential format.
@@ -3399,6 +3494,14 @@ FM_API fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_c
  *         `kInvalidArgument` for any out-of-range / unregistered field.
  */
 FM_API fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_index);
+
+/**
+ * @brief Adds and deduplicates a batch of fonts, fills, borders, and cell xfs.
+ *
+ * Empty arrays may be `NULL`. A non-empty input or output array that is NULL
+ * returns `kBindingNullPointer`; invalid xfs return `kInvalidArgument`.
+ */
+FM_API fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_batch* batch);
 
 /* -------------------------------------------------------------------------- */
 /* External links                                                             */

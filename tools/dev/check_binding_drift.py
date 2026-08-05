@@ -230,8 +230,11 @@ def check_python_struct_layouts() -> List[str]:
         "fm_pivot_filter_value_kind_t": (4, 4),
         "fm_calc_mode_t": (4, 4),
         "fm_value_t": (16, 8),
-        "fm_cfvo_t": (12, 4),
         "fm_cf_color_t": (4, 1),
+        "fm_cfvo_t": (12, 4),
+        "fm_font_record": (40, 8),
+        "fm_fill_record": (12, 4),
+        "fm_border_record": (48, 4),
     }
     problems: List[str] = []
     for layout in (value for value in vars(module).values() if isinstance(value, module.Struct)):

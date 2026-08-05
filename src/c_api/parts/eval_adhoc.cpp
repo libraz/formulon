@@ -59,6 +59,10 @@ extern "C" fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, siz
   const formulon::Value v =
       formulon::eval::evaluate_formula_text(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                             std::string_view(formula), arena, formulon::eval::default_registry());
+  if (arena.exhausted()) {
+    return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory,
+                             "fm_workbook_evaluate_formula: evaluation arena exhausted");
+  }
   // Read-path scratch: cleared per call so returned text pointers stay
   // valid only until the next read (see `fm_workbook_get_value`). Cast away
   // const because the scratch is logically internal — it never affects the
@@ -87,6 +91,10 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* w
   const formulon::Value v =
       formulon::eval::evaluate_formula_text_array(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                                   std::string_view(formula), arena, formulon::eval::default_registry());
+  if (arena.exhausted()) {
+    return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory,
+                             "fm_workbook_evaluate_formula_array: evaluation arena exhausted");
+  }
 
   // Stash the whole result on the handle. Cast away const for the same reason
   // as the read scratch: the stash is internal handle state, never part of
@@ -162,6 +170,10 @@ extern "C" fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, 
   const bool fired = formulon::eval::evaluate_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                                          anchor_row, anchor_col, std::string_view(formula), arena,
                                                          formulon::eval::default_registry());
+  if (arena.exhausted()) {
+    return set_binding_error(formulon::FormulonErrorCode::kOutOfMemory,
+                             "fm_workbook_evaluate_cf_formula: evaluation arena exhausted");
+  }
   *out = fm_value_t{};
   out->kind = FM_VAL_BOOL;
   out->u.boolean = fired ? 1 : 0;

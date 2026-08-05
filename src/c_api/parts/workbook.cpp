@@ -80,7 +80,10 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
     if (!result) {
       return set_last_error(result.error());
     }
-    handle->wb.emplace(std::move(result.value().workbook));
+    formulon::io::xlsb::XlsbReadResult read_result = std::move(result.value());
+    handle->xlsb_undecoded_formula_count = read_result.undecoded_formula_count;
+    handle->xlsb_undecoded_defined_name_count = read_result.undecoded_defined_name_count;
+    handle->wb.emplace(std::move(read_result.workbook));
   } else {
     auto result = formulon::io::read_ooxml(span);
     if (!result) {
@@ -93,6 +96,18 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
     handle->wb.emplace(std::move(result.value().workbook));
   }
   *out = handle.release();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_xlsb_read_diagnostics(const fm_workbook_t* wb, size_t* out_undecoded_formula_count,
+                                                         size_t* out_undecoded_defined_name_count) {
+  clear_last_error();
+  if (wb == nullptr || out_undecoded_formula_count == nullptr || out_undecoded_defined_name_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_xlsb_read_diagnostics: NULL argument");
+  }
+  *out_undecoded_formula_count = wb->xlsb_undecoded_formula_count;
+  *out_undecoded_defined_name_count = wb->xlsb_undecoded_defined_name_count;
   return 0;
 }
 
@@ -229,6 +244,11 @@ extern "C" fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_i
   if (!r) {
     return set_last_error(r.error());
   }
+  // The enumeration cache is keyed by sheet index. Moving sheets can put a
+  // different Sheet at a cached index with the same cell revision.
+  wb->cell_enumeration_cache.addresses.clear();
+  wb->cell_enumeration_cache.sheet_index = std::numeric_limits<std::size_t>::max();
+  wb->cell_enumeration_cache.revision = std::numeric_limits<std::uint64_t>::max();
   return 0;
 }
 
@@ -241,6 +261,12 @@ extern "C" fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t inde
   if (!r) {
     return set_last_error(r.error());
   }
+  // Removing a sheet shifts later sheet indices, so invalidate the
+  // index-keyed coordinate cache even though the remaining Sheet objects
+  // themselves were not mutated.
+  wb->cell_enumeration_cache.addresses.clear();
+  wb->cell_enumeration_cache.sheet_index = std::numeric_limits<std::size_t>::max();
+  wb->cell_enumeration_cache.revision = std::numeric_limits<std::uint64_t>::max();
   return 0;
 }
 

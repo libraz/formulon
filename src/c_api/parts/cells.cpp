@@ -257,6 +257,19 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(cons
   return out;
 }
 
+const std::vector<std::pair<std::uint32_t, std::uint32_t>>& cached_cell_addresses(const fm_workbook_t* wb,
+                                                                                  std::size_t sheet_index) {
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  const std::uint64_t revision = sheet.cell_enumeration_revision();
+  auto& cache = wb->cell_enumeration_cache;
+  if (cache.sheet_index != sheet_index || cache.revision != revision) {
+    cache.addresses = collect_cell_addresses(sheet);
+    cache.sheet_index = sheet_index;
+    cache.revision = revision;
+  }
+  return cache.addresses;
+}
+
 }  // namespace
 
 // `fm_workbook_cell_count` is now emitted by the binding codegen (see
@@ -272,12 +285,10 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
     return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  // Materialise the sorted address vector. This is O(N log N) in the
-  // sheet's cell count; the CLI calls cell_at in a tight loop so a
-  // future optimisation could cache the vector on the handle. For the
-  // current scope (workbooks up to ~100k populated cells) the simple
-  // path is fast enough and avoids invalidation bookkeeping.
-  const auto addrs = collect_cell_addresses(sheet);
+  // The sorted address vector is cached on the handle until the Sheet's
+  // enumeration revision changes. A `cell_count` / `cell_at(0..N)` pass
+  // therefore pays the O(N log N) collection once rather than per cell.
+  const auto& addrs = cached_cell_addresses(wb, sheet_index);
   if (idx >= addrs.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_cell_at: idx out of range",
                              "idx=" + std::to_string(idx) + " count=" + std::to_string(addrs.size()));

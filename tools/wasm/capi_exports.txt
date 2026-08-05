@@ -51,6 +51,7 @@ fm_workbook_get_value
 fm_workbook_lambda_text_at
 
 # -- Ad-hoc array evaluation (two-step: evaluate + per-cell readback) -------------
+fm_workbook_evaluate_cf_formula
 fm_workbook_evaluate_formula_array
 fm_workbook_evaluate_formula_array_cell
 
@@ -91,6 +92,8 @@ fm_sheet_clear_hyperlinks
 fm_sheet_get_hyperlink_at
 fm_sheet_get_hyperlink_count
 fm_sheet_get_comment_at
+fm_sheet_get_comment_count
+fm_sheet_get_comment_at_index
 fm_sheet_set_comment
 
 # -- Data validations ------------------------------------------------------------
@@ -156,6 +159,8 @@ fm_styles_get_cell_xf
 fm_styles_get_font
 fm_styles_get_fill
 fm_styles_get_border
+fm_styles_get_dxf_count
+fm_styles_get_dxf
 fm_styles_get_num_fmt_string
 fm_styles_get_font_count
 fm_styles_get_fill_count
@@ -168,6 +173,7 @@ fm_styles_get_cell_style_xf
 fm_styles_add_font
 fm_styles_add_fill
 fm_styles_add_border
+fm_styles_add_batch
 fm_styles_add_num_fmt
 fm_styles_add_cell_xf
 fm_styles_add_dxf
@@ -254,9 +260,22 @@ fm_workbook_external_link_count
 fm_workbook_external_link_at
 
 # -- Diagnostics -----------------------------------------------------------------
+fm_workbook_xlsb_read_diagnostics
 fm_last_error_message
 fm_last_error_context
 fm_status_string
+fm_error_display_name
+
+# -- Print pagination -------------------------------------------------------------
+fm_workbook_paginate
+fm_pagination_destroy
+fm_pagination_page_count
+fm_pagination_print_area_count
+fm_pagination_print_area_at
+fm_pagination_horizontal_break_count
+fm_pagination_horizontal_break_at
+fm_pagination_vertical_break_count
+fm_pagination_vertical_break_at
 
 # -- Version ---------------------------------------------------------------------
 fm_version_string

@@ -734,3 +734,35 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   ASSERT_NE(reloaded_fmt, nullptr);
   EXPECT_STREQ(reloaded_fmt, "0.00%");
 }
+
+TEST(FormulonCApiStyles, AddBatchDeduplicatesAllStyleTables) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  const fm_font_record fonts[] = {MakeArial(), MakeArial()};
+  const fm_fill_record fills[] = {MakeRedFill(), MakeRedFill()};
+  fm_border_record border{};
+  border.left.style = 1;
+  border.left.color_argb = 0xFF000000U;
+  const fm_border_record borders[] = {border, border};
+  uint32_t font_indices[2]{};
+  uint32_t fill_indices[2]{};
+  uint32_t border_indices[2]{};
+  const char* const num_fmt_codes[] = {"0.000%", "0.000%"};
+  uint16_t num_fmt_ids[2]{};
+  fm_cell_xf xf{};
+  xf.font_index = 1U;
+  xf.fill_index = 1U;
+  xf.border_index = 1U;
+  const fm_cell_xf xfs[] = {xf, xf};
+  uint32_t xf_indices[2]{};
+  const fm_styles_batch batch{fonts, 2U, font_indices, fills,         2U, fill_indices, borders, 2U, border_indices,
+                              xfs,   2U, xf_indices,   num_fmt_codes, 2U, num_fmt_ids};
+
+  ASSERT_EQ(fm_styles_add_batch(wb.handle, &batch), 0);
+  EXPECT_EQ(font_indices[0], font_indices[1]);
+  EXPECT_EQ(fill_indices[0], fill_indices[1]);
+  EXPECT_EQ(border_indices[0], border_indices[1]);
+  EXPECT_EQ(xf_indices[0], xf_indices[1]);
+  EXPECT_EQ(num_fmt_ids[0], num_fmt_ids[1]);
+}

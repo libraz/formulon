@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -131,6 +132,12 @@ fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const 
 struct fm_workbook {
   std::optional<formulon::Workbook> wb;
 
+  // Diagnostics captured only while loading an XLSB package. They remain
+  // attached to this handle so callers can inspect lossy Ptg recovery after
+  // `fm_workbook_load` returns successfully.
+  std::uint32_t xlsb_undecoded_formula_count = 0;
+  std::uint32_t xlsb_undecoded_defined_name_count = 0;
+
   // Scratch storage for strings handed back to the caller on the read
   // path (`fm_workbook_get_value` / `fm_workbook_cell_at` /
   // `fm_workbook_lambda_text_at`). Each fallible read entry point clears
@@ -141,6 +148,16 @@ struct fm_workbook {
   // call on the same handle (or any mutation, or handle destruction) —
   // the standard C-ABI scratch contract documented in `formulon_c.h`.
   formulon::c_api::parts::TextStore read_scratch;
+
+  // Sorted coordinate cache for the `cell_count` / `cell_at` iteration
+  // pair. The associated Sheet revision invalidates it after any cell,
+  // spill, or structural mutation.
+  struct CellEnumerationCache {
+    std::size_t sheet_index = std::numeric_limits<std::size_t>::max();
+    std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> addresses;
+  };
+  mutable CellEnumerationCache cell_enumeration_cache;
 
   // Scratch buffers for `fm_sheet_cf_get_at` visual payload arrays. The
   // returned pointers follow the same read-scratch lifetime as textual

@@ -98,6 +98,86 @@ TEST(FormulonCApiSpill, CellEnumerationIncludesSpillPhantoms) {
   EXPECT_TRUE(saw_d3);
 }
 
+TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterMutation) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+
+  // Starts a cached enumeration pass for the original one-cell sheet.
+  uint32_t row = 0;
+  uint32_t col = 0;
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+  EXPECT_EQ(row, 0U);
+  EXPECT_EQ(col, 0U);
+
+  // A new stored cell must invalidate the cached coordinate list, even
+  // though this is not a fresh handle or a fresh process.
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 5, 7, 2.0), 0);
+  size_t count = 0;
+  ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &count), 0);
+  // The current row store is column-dense, so writing column 7 creates
+  // eight slots in row 5 plus the original A1 slot.
+  ASSERT_EQ(count, 9U);
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
+  EXPECT_EQ(row, 5U);
+  EXPECT_EQ(col, 7U);
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 2.0);
+}
+
+TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetRemoval) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
+  // Give both sheets the same enumeration revision while making their
+  // coordinate lists observably different.
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 1, 1, 2.0), 0);
+
+  uint32_t row = 0;
+  uint32_t col = 0;
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+
+  // Sheet 1 becomes sheet 0. Without an explicit invalidation this can
+  // incorrectly reuse the old sheet-0 cache because both revisions are 1.
+  ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 0), 0);
+  size_t count = 0;
+  ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 2U);
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
+  EXPECT_EQ(row, 1U);
+  EXPECT_EQ(col, 1U);
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 2.0);
+}
+
+TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetMove) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 1, 1, 2.0), 0);
+
+  uint32_t row = 0;
+  uint32_t col = 0;
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
+
+  // As with removal, the incoming sheet has the same revision as the
+  // previously cached one, so index movement itself must discard the cache.
+  ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 1, 0), 0);
+  size_t count = 0;
+  ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &count), 0);
+  ASSERT_EQ(count, 2U);
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
+  EXPECT_EQ(row, 1U);
+  EXPECT_EQ(col, 1U);
+  ASSERT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 2.0);
+}
+
 TEST(FormulonCApiSpill, OutOfRangeSheetReturnsInvalidArgument) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

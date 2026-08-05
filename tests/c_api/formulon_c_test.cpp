@@ -70,6 +70,31 @@ TEST(FormulonCApi, CreateAndDestroy) {
   EXPECT_STREQ(name, "Sheet1");
 }
 
+TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 48, 0, 2.0), 0);
+
+  fm_pagination_t* pagination = nullptr;
+  ASSERT_EQ(fm_workbook_paginate(wb.handle, 0, &pagination), 0);
+  ASSERT_NE(pagination, nullptr);
+  EXPECT_EQ(fm_pagination_page_count(pagination), 2U);
+  // No explicit _xlnm.Print_Area is reported even though pagination falls
+  // back to the used range internally.
+  EXPECT_EQ(fm_pagination_print_area_count(pagination), 0U);
+  ASSERT_EQ(fm_pagination_horizontal_break_count(pagination), 1U);
+  std::uint32_t row = 0;
+  ASSERT_EQ(fm_pagination_horizontal_break_at(pagination, 0, &row), 0);
+  EXPECT_EQ(row, 44U);
+  EXPECT_EQ(fm_pagination_vertical_break_count(pagination), 0U);
+  EXPECT_NE(fm_pagination_horizontal_break_at(pagination, 1, &row), 0);
+  fm_pagination_destroy(pagination);
+
+  EXPECT_NE(fm_workbook_paginate(nullptr, 0, &pagination), 0);
+  EXPECT_NE(fm_workbook_paginate(wb.handle, 0, nullptr), 0);
+}
+
 TEST(FormulonCApi, CellPhoneticCanBeReadClearedAndRejectsInvalidArguments) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -416,6 +441,23 @@ TEST(FormulonCApi, SaveXlsbWithResultReportsUnsupportedFormulaDowngrade) {
   EXPECT_EQ(downgraded, 1U);
 }
 
+TEST(FormulonCApi, XlsbReadDiagnosticsAreZeroForCleanRoundTrip) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 42.0), 0);
+
+  BufferGuard bytes;
+  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
+
+  size_t formulas = 99U;
+  size_t names = 99U;
+  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics(loaded.handle, &formulas, &names), 0);
+  EXPECT_EQ(formulas, 0U);
+  EXPECT_EQ(names, 0U);
+}
+
 TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -566,6 +608,14 @@ TEST(FormulonCApi, StatusStringCoversKnownCodes) {
   const char* unknown = fm_status_string(123456);
   ASSERT_NE(unknown, nullptr);
   EXPECT_GT(std::strlen(unknown), 0U);
+}
+
+TEST(FormulonCApi, ErrorDisplayNameUsesExcelLiterals) {
+  EXPECT_STREQ(fm_error_display_name(0), "#NULL!");
+  EXPECT_STREQ(fm_error_display_name(1), "#DIV/0!");
+  EXPECT_STREQ(fm_error_display_name(3), "#REF!");
+  EXPECT_STREQ(fm_error_display_name(-1), "#UNKNOWN!");
+  EXPECT_STREQ(fm_error_display_name(999), "#UNKNOWN!");
 }
 
 TEST(FormulonCApi, VersionStringNonEmpty) {
