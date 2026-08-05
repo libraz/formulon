@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `formulon_cli` entry point: tiny argv dispatcher.
 //
@@ -19,27 +18,6 @@
 #include "cli/cli.h"
 
 namespace {
-
-// Maps a non-zero `fm_status_t` to a POSIX-friendly exit code. We
-// avoid 0 (would mask error) and clamp the high bits because shells
-// historically truncate to 7-bit on macOS / Linux. Specific carve-outs
-// preserve the well-known `kExitUsage = 64` value.
-int status_to_exit(int rc) {
-  if (rc == 0) {
-    return 0;
-  }
-  if (rc == formulon::cli::kExitUsage) {
-    return rc;
-  }
-  const int low = rc & 0xff;
-  if (low == 0) {
-    return 1;
-  }
-  if (low > 127) {
-    return low - 128;
-  }
-  return low;
-}
 
 void print_top_usage(std::ostream& out) {
   out << "Usage: formulon <command> [options]\n"
@@ -107,5 +85,5 @@ int main(int argc, char** argv) {
     return formulon::cli::kExitUsage;
   }
 
-  return status_to_exit(rc);
+  return formulon::cli::exit_code_for_status(rc);
 }

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `formulon dump <in.xlsx> [--formulas|--values|--sheets|--metadata]`.
 //
@@ -14,8 +13,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <fstream>
-#include <ios>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -23,6 +20,7 @@
 
 #include "c_api/formulon_c.h"
 #include "cli/cli.h"
+#include "cli/file_io.h"
 #include "cli/render.h"
 #include "utils/error.h"
 
@@ -60,27 +58,6 @@ void emit_last_error(std::ostream& err, const char* subcommand) {
   err << '\n';
 }
 
-fm_status_t read_all(const std::string& path, std::vector<std::uint8_t>& out) {
-  std::ifstream in(path, std::ios::binary);
-  if (!in) {
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
-  }
-  in.seekg(0, std::ios::end);
-  const std::streamsize size = in.tellg();
-  if (size < 0) {
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
-  }
-  in.seekg(0, std::ios::beg);
-  out.resize(static_cast<std::size_t>(size));
-  if (size > 0) {
-    in.read(reinterpret_cast<char*>(out.data()), size);
-    if (!in) {
-      return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
-    }
-  }
-  return 0;
-}
-
 // Emits every formula cell on every sheet as `Sheet!A1 =formula`.
 fm_status_t dump_formulas(const fm_workbook_t* wb, std::ostream& out) {
   const std::size_t n_sheets = fm_workbook_sheet_count(wb);
@@ -104,7 +81,9 @@ fm_status_t dump_formulas(const fm_workbook_t* wb, std::ostream& out) {
       if (formula == nullptr) {
         continue;
       }
-      out << sheet_name << '!' << format_a1(row, col) << ' ' << formula << '\n';
+      out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
+          << format_a1(row, col) << ' '
+          << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
     }
   }
   return 0;
@@ -133,7 +112,8 @@ fm_status_t dump_values(const fm_workbook_t* wb, std::ostream& out) {
       if (v.kind == FM_VAL_BLANK) {
         continue;
       }
-      out << sheet_name << '!' << format_a1(row, col) << ' ' << render_value(v) << '\n';
+      out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
+          << format_a1(row, col) << ' ' << escape_single_line(render_value(v)) << '\n';
     }
   }
   return 0;
@@ -147,7 +127,7 @@ fm_status_t dump_sheets(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_sheet_name(wb, s, &sheet_name); rc != 0) {
       return rc;
     }
-    out << sheet_name << '\n';
+    out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '\n';
   }
   return 0;
 }
@@ -170,9 +150,12 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
       if (auto rc = fm_workbook_sheet_name(wb, static_cast<std::size_t>(local_sheet_id), &sheet_name); rc != 0) {
         return rc;
       }
-      out << sheet_name << '!' << name << ' ' << formula << '\n';
+      out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
+          << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
+          << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
     } else {
-      out << name << ' ' << formula << '\n';
+      out << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
+          << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
     }
   }
   out << "[tables]\n";
@@ -185,7 +168,9 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_table_at(wb, i, &name, &display, &ref, &sheet_index); rc != 0) {
       return rc;
     }
-    out << name << ' ' << display << ' ' << sheet_index << ' ' << ref << '\n';
+    out << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
+        << escape_single_line(display != nullptr ? std::string_view(display) : std::string_view{}) << ' ' << sheet_index
+        << ' ' << escape_single_line(ref != nullptr ? std::string_view(ref) : std::string_view{}) << '\n';
   }
   out << "[passthrough_parts]\n";
   const std::size_t n_parts = fm_workbook_passthrough_count(wb);
@@ -194,7 +179,7 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_passthrough_at(wb, i, &path); rc != 0) {
       return rc;
     }
-    out << path << '\n';
+    out << escape_single_line(path != nullptr ? std::string_view(path) : std::string_view{}) << '\n';
   }
   return 0;
 }
@@ -266,7 +251,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   std::vector<std::uint8_t> bytes;
-  if (auto rc = read_all(input_path, bytes); rc != 0) {
+  if (auto rc = read_file(input_path, bytes); rc != 0) {
     err << "formulon: dump: cannot read '" << input_path << "': " << std::strerror(errno) << '\n';
     return rc;
   }
@@ -305,6 +290,11 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   if (rc != 0) {
     emit_last_error(err, "dump");
     return rc;
+  }
+  out.flush();
+  if (!out) {
+    err << "formulon: dump: failed to write output\n";
+    return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
   }
   return 0;
 }
