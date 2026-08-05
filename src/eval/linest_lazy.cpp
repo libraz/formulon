@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
@@ -77,25 +78,15 @@ bool coerce_array(const ArrayValue& src, std::vector<double>& out, Value* out_er
 ArrayValue* make_double_array(const std::vector<Value>& data, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
   // Same overflow-defensive guard as `coerce_array`: bail on 32-bit
   // wrap so the arena allocation request matches what the loop expects.
-  auto n_or = checked_mul_size_t(rows, cols);
-  if (!n_or) {
-    return nullptr;
-  }
-  const std::size_t n = n_or.value();
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
-    return nullptr;
-  }
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = data[i];
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     return nullptr;
   }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
+  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  for (std::size_t i = 0; i < n; ++i) {
+    buffer[i] = data[i];
+  }
   return arr;
 }
 

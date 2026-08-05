@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "parser/ast.h"
@@ -36,9 +37,9 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
   if (!has_array) {
     return entry.impl(args, arity, arena, date1904);
   }
-  const std::size_t count = static_cast<std::size_t>(rows) * cols;
-  Value* cells = arena.create_array<Value>(count);
-  if (cells == nullptr)
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr)
     return Value::error(ErrorCode::Num);
   std::vector<Value> cell_args;
   cell_args.reserve(arity);
@@ -75,12 +76,6 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
       cells[idx] = entry.impl(cell_args.data(), arity, arena, date1904);
     next_cell:;
     }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr)
-    return Value::error(ErrorCode::Num);
-  out->rows = rows;
-  out->cols = cols;
-  out->cells = cells;
   return Value::array(out);
 }
 

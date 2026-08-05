@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/scalar_ops.h"
 #include "parser/ast.h"
@@ -102,9 +103,9 @@ Value broadcast_binop(parser::BinOp op, const Value& lhs, const Value& rhs, Aren
   const std::uint32_t out_rows = la.rows > ra.rows ? la.rows : ra.rows;
   const std::uint32_t out_cols = la.cols > ra.cols ? la.cols : ra.cols;
 
-  const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buf = arena.create_array<Value>(n);
-  if (buf == nullptr) {
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   std::size_t i = 0;
@@ -120,13 +121,6 @@ Value broadcast_binop(parser::BinOp op, const Value& lhs, const Value& rhs, Aren
       buf[i] = apply_binop_per_cell(op, *lv, *rv, arena);
     }
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buf;
   return Value::array(out);
 }
 
@@ -135,22 +129,16 @@ Value broadcast_unary(parser::UnaryOp op, const Value& operand, Arena& arena) {
     return apply_unary(op, operand);
   }
   const ArrayValue* in = operand.as_array();
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  Value* buf = arena.create_array<Value>(n);
-  if (buf == nullptr) {
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
+  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
   for (std::size_t i = 0; i < n; ++i) {
     const Value& cell = in->cells[i];
     buf[i] = cell.is_error() ? cell : apply_unary(op, cell);
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = in->rows;
-  out->cols = in->cols;
-  out->cells = buf;
   return Value::array(out);
 }
 

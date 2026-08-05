@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/range_resolvers.h"
 #include "parser/ast.h"
@@ -87,21 +88,15 @@ Value eval_anchorarray_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (region == nullptr) {
     return Value::error(ErrorCode::Ref);
   }
-  const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = region->cells[i];
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(region->rows, region->cols, arena, buffer, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  arr->rows = region->rows;
-  arr->cols = region->cols;
-  arr->cells = buffer;
+  const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
+  for (std::size_t i = 0; i < n; ++i) {
+    buffer[i] = region->cells[i];
+  }
   return Value::array(arr);
 }
 

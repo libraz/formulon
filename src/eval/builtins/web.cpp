@@ -26,6 +26,7 @@
 #include <string>
 #include <string_view>
 
+#include "eval/array_alloc.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -266,20 +267,19 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   // or the anchor-unwrap helper as appropriate. pugixml's xpath_node_set
   // exposes O(1) `size()` and indexed access (private storage is a pair
   // of `xpath_node*` pointers), so a single pass is sufficient.
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  // The node count comes straight from the document, so bound it before
+  // narrowing to the allocation seam's 32-bit row count.
+  if (static_cast<std::uint64_t>(n) > kMaxDerivedArrayCells) {
+    return Value::error(ErrorCode::Num);
+  }
+  Value* cells = nullptr;
+  ArrayValue* arr = allocate_array_value(static_cast<std::uint32_t>(n), 1U, arena, cells, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t i = 0; i < n; ++i) {
     cells[i] = node_value(nodes[i], arena);
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = static_cast<std::uint32_t>(n);
-  arr->cols = 1U;
-  arr->cells = cells;
   return Value::array(arr);
 }
 

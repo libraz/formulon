@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "eval/aggregate_kernels.h"
+#include "eval/array_alloc.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -95,20 +96,14 @@ Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
     }
   }
   const auto rows = static_cast<std::uint32_t>(modes.size());
-  Value* buffer = arena.create_array<Value>(rows);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, 1u, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t i = 0; i < modes.size(); ++i) {
     buffer[i] = Value::number(modes[i]);
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = 1u;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 

@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -400,19 +401,13 @@ Value build_width_result(const Sheet& sheet, std::uint32_t col, Arena& arena) {
       is_default = false;
     }
   }
-  Value* cells = arena.create_array<Value>(2);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* arr = allocate_array_value(1U, 2U, arena, cells, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Value);
   }
   cells[0] = Value::number(width);
   cells[1] = Value::boolean(is_default);
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Value);
-  }
-  arr->rows = 1U;
-  arr->cols = 2U;
-  arr->cells = cells;
   return Value::array(arr);
 }
 

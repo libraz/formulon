@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
 #include "eval/shape_ops_lazy.h"
@@ -156,10 +157,9 @@ Value eval_trimrange_lazy(const parser::AstNode& call, Arena& arena, const Funct
 
   const std::uint32_t kept_rows = row_end - row_start;
   const std::uint32_t kept_cols = col_end - col_start;
-  const std::size_t total = static_cast<std::size_t>(kept_rows) * static_cast<std::size_t>(kept_cols);
-
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(kept_rows, kept_cols, arena, buffer, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   const std::size_t in_cols = static_cast<std::size_t>(cols_in);
@@ -172,13 +172,6 @@ Value eval_trimrange_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
   }
 
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = kept_rows;
-  out->cols = kept_cols;
-  out->cells = buffer;
   return Value::array(out);
 }
 

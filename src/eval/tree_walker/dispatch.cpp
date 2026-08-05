@@ -30,6 +30,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
@@ -220,9 +221,9 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
       views.push_back({&v, nullptr, 1U, 1U});
     }
   }
-  const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   std::vector<Value> cell_args(views.size(), Value::blank());
@@ -245,17 +246,10 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
       cells[idx] = result;
     }
   }
-  if (n == 1) {
+  if (out_rows == 1U && out_cols == 1U) {
     return cells[0];
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = out_rows;
-  arr->cols = out_cols;
-  arr->cells = cells;
-  return Value::array(arr);
+  return Value::array(out);
 }
 
 }  // namespace
@@ -669,22 +663,16 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         }
         const std::uint32_t rrows = union_rhs.row - union_lhs.row + 1u;
         const std::uint32_t rcols = union_rhs.col - union_lhs.col + 1u;
-        const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
-        Value* buffer = arena.create_array<Value>(total);
-        if (buffer == nullptr) {
+        Value* buffer = nullptr;
+        ArrayValue* arr = allocate_array_value(rrows, rcols, arena, buffer, kMaxDerivedArrayCells);
+        if (arr == nullptr) {
           return Value::error(ErrorCode::Num);
         }
+        const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
         const std::vector<Value>& ev = expanded.value();
         for (std::size_t k = 0; k < total; ++k) {
           buffer[k] = k < ev.size() ? ev[k] : Value::blank();
         }
-        ArrayValue* arr = arena.create<ArrayValue>();
-        if (arr == nullptr) {
-          return Value::error(ErrorCode::Num);
-        }
-        arr->rows = rrows;
-        arr->cols = rcols;
-        arr->cells = buffer;
         values.push_back(Value::array(arr));
         continue;
       }

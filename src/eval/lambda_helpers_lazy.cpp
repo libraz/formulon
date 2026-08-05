@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/dynamic_array_limits.h"
 #include "eval/eval_context.h"
@@ -30,26 +31,13 @@ namespace {
 constexpr std::uint32_t kExcelMaxRows = 1048576U;
 constexpr std::uint32_t kExcelMaxCols = 16384U;
 
-// Wraps a freshly populated `Value` buffer into an arena-allocated
-// `ArrayValue`. The buffer must already live in `arena`. Returns a scalar
-// `#NUM!` if either allocation fails.
-Value wrap_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, Value* buffer) {
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
-  return Value::array(arr);
-}
-
-// Allocates a fresh row-major `Value` buffer of size `rows * cols` in
-// `arena`. Returns `nullptr` on allocation failure (caller surfaces
-// `#NUM!`). The buffer is not initialised; the caller writes every cell.
-Value* alloc_cells(Arena& arena, std::uint32_t rows, std::uint32_t cols) {
-  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  return arena.create_array<Value>(n);
+// Allocates the `(rows, cols)` result array through the evaluator's shared
+// seam, handing back the header to publish once the cells are written and,
+// via `out_cells`, the uninitialised row-major buffer the caller fills.
+// Returns `nullptr` when the shape is rejected or the arena is exhausted
+// (caller surfaces `#NUM!`).
+ArrayValue* alloc_cells(Arena& arena, std::uint32_t rows, std::uint32_t cols, Value*& out_cells) {
+  return allocate_array_value(rows, cols, arena, out_cells, kMaxDerivedArrayCells);
 }
 
 // If `v` is a 1x1 Array, returns its single cell unchanged. Otherwise
@@ -69,15 +57,6 @@ Value unwrap_1x1_array(const Value& v) {
     return a->cells[0];
   }
   return v;
-}
-
-// Builds a fresh 1-cell-wide / 1-cell-tall `ArrayValue` carrying `cells`.
-// The buffer must already live in `arena`. Used by BYROW / BYCOL to hand a
-// row or column slice of the input to the per-cell lambda invocation. The
-// resulting `Value::Array` is a perfectly normal Array value: callers can
-// `as_array()` / `as_array_cells()` it identically to any other array.
-Value make_slice_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, Value* cells) {
-  return wrap_array(arena, rows, cols, cells);
 }
 
 // Builds a synthetic `ArrayLiteral` AST that mirrors the cells of `arr`.
@@ -260,14 +239,16 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   const std::uint32_t slice_cols = by_row ? cols_in : 1U;
   const std::uint32_t slice_size = by_row ? cols_in : rows_in;
 
-  Value* out_cells = alloc_cells(arena, out_rows, out_cols);
-  if (out_cells == nullptr) {
+  Value* out_cells = nullptr;
+  ArrayValue* out_arr = alloc_cells(arena, out_rows, out_cols, out_cells);
+  if (out_arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
 
   for (std::uint32_t i = 0; i < iter_count; ++i) {
-    Value* slice_buf = alloc_cells(arena, slice_rows, slice_cols);
-    if (slice_buf == nullptr) {
+    Value* slice_buf = nullptr;
+    ArrayValue* slice_arr = alloc_cells(arena, slice_rows, slice_cols, slice_buf);
+    if (slice_arr == nullptr) {
       return Value::error(ErrorCode::Num);
     }
     if (by_row) {
@@ -280,7 +261,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
         slice_buf[r] = in->cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols_in) + i];
       }
     }
-    const Value slice = make_slice_array(arena, slice_rows, slice_cols, slice_buf);
+    const Value slice = Value::array(slice_arr);
     Value arg = slice;
     // Bind the slice with both the Value and a synthetic ArrayLiteral AST
     // so range-aware functions inside the body (`SUM(r)`, `AVERAGE(r)`,
@@ -307,7 +288,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     out_cells[i] = scalar_res;
   }
 
-  return wrap_array(arena, out_rows, out_cols, out_cells);
+  return Value::array(out_arr);
 }
 
 }  // namespace
@@ -368,8 +349,9 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     return Value::error(ErrorCode::Calc);
   }
 
-  Value* out_cells = alloc_cells(arena, rows, cols);
-  if (out_cells == nullptr) {
+  Value* out_cells = nullptr;
+  ArrayValue* out_arr = alloc_cells(arena, rows, cols, out_cells);
+  if (out_arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -409,7 +391,7 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     out_cells[idx] = scalar_res;
   }
 
-  return wrap_array(arena, rows, cols, out_cells);
+  return Value::array(out_arr);
 }
 
 Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -487,8 +469,9 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Calc);
   }
 
-  Value* out_cells = alloc_cells(arena, rows, cols);
-  if (out_cells == nullptr) {
+  Value* out_cells = nullptr;
+  ArrayValue* out_arr = alloc_cells(arena, rows, cols, out_cells);
+  if (out_arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -517,7 +500,7 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     out_cells[i] = acc;
   }
 
-  return wrap_array(arena, rows, cols, out_cells);
+  return Value::array(out_arr);
 }
 
 Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -542,8 +525,9 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return err;
   }
 
-  Value* out_cells = alloc_cells(arena, rows, cols);
-  if (out_cells == nullptr) {
+  Value* out_cells = nullptr;
+  ArrayValue* out_arr = alloc_cells(arena, rows, cols, out_cells);
+  if (out_arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -570,7 +554,7 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
   }
 
-  return wrap_array(arena, rows, cols, out_cells);
+  return Value::array(out_arr);
 }
 
 }  // namespace eval

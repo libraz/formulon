@@ -40,30 +40,6 @@ bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const 
   return true;
 }
 
-ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& out_buffer) {
-  out_buffer = nullptr;
-  if (rows == 0U || cols == 0U || rows > Sheet::kMaxRows || cols > Sheet::kMaxCols) {
-    return nullptr;
-  }
-  const auto total = checked_mul_size_t(rows, cols);
-  if (!total || total.value() > kMaxDynamicArrayCells) {
-    return nullptr;
-  }
-  Value* buffer = arena.create_array<Value>(total.value());
-  if (buffer == nullptr) {
-    return nullptr;
-  }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return nullptr;
-  }
-  out->rows = rows;
-  out->cols = cols;
-  out->cells = buffer;
-  out_buffer = buffer;
-  return out;
-}
-
 ArrayValue* materialise_selected_lanes(const ArrayValue& src, const std::vector<std::uint32_t>& indices, bool by_col,
                                        Arena& arena) {
   const std::uint32_t out_rows = by_col ? src.rows : static_cast<std::uint32_t>(indices.size());

@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -238,9 +239,9 @@ Value eval_if_array(const parser::AstNode& call, const Value& cond, Arena& arena
   std::uint32_t out_cols = cv.cols > tv.cols ? cv.cols : tv.cols;
   out_cols = out_cols > ev.cols ? out_cols : ev.cols;
 
-  const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buf = arena.create_array<Value>(n);
-  if (buf == nullptr) {
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, buf, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   std::size_t i = 0;
@@ -264,13 +265,6 @@ Value eval_if_array(const parser::AstNode& call, const Value& cond, Arena& arena
       buf[i] = pick == nullptr ? Value::error(ErrorCode::NA) : *pick;
     }
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = out_rows;
-  out->cols = out_cols;
-  out->cells = buf;
   return Value::array(out);
 }
 

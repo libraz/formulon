@@ -584,6 +584,56 @@ TEST(RegexReplace, OutputWithinTextCapSucceeds) {
   EXPECT_EQ(v.as_text(), "bbbbbb");
 }
 
+// A find-all scan retains one span slot per match plus one per capture
+// group. PCRE2's `match_limit` bounds a single match attempt and says
+// nothing about that accumulation, so the kernel charges it against its own
+// budget. A subject long enough to blow the budget reports #CALC! for the
+// extract / replace pair, the same surface PCRE2's own resource errors use.
+TEST(RegexExtract, MatchAccumulationPastBudgetIsCalcError) {
+  // Each of the 32,767 characters matches, and the pattern carries 32
+  // capture groups, so the scan would retain ~1.08M span slots -- past the
+  // 2^20 budget.
+  std::string pattern;
+  for (int i = 0; i < 32; ++i) {
+    pattern += "()";
+  }
+  pattern += ".";
+  const Value v = EvalSource("=REGEXEXTRACT(REPT(\"a\", 32767), \"" + pattern + "\", 3)");
+  ASSERT_TRUE(v.is_error()) << "expected #CALC! once the match budget is exhausted";
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
+// Replacing a single occurrence has to locate the N-th match first, which
+// runs the same find-all scan and is bounded by the same budget. (The
+// default replace-everything mode streams through PCRE2's own global
+// substitution and never accumulates spans, so only this path is affected.)
+TEST(RegexReplace, NthOccurrenceMatchAccumulationPastBudgetIsCalcError) {
+  std::string pattern;
+  for (int i = 0; i < 32; ++i) {
+    pattern += "()";
+  }
+  pattern += ".";
+  const Value v = EvalSource("=REGEXREPLACE(REPT(\"a\", 32767), \"" + pattern + "\", \"b\", 5)");
+  ASSERT_TRUE(v.is_error()) << "expected #CALC! once the match budget is exhausted";
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
+// The same call with a subject short enough to stay inside the budget still
+// replaces the requested occurrence.
+TEST(RegexReplace, NthOccurrenceWithinBudgetSucceeds) {
+  const Value v = EvalSource("=REGEXREPLACE(\"aaaa\", \"a\", \"b\", 3)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "aaba");
+}
+
+// A scan well inside the budget is unaffected.
+TEST(RegexExtract, MatchAccumulationWithinBudgetSucceeds) {
+  const Value v = EvalSource("=REGEXEXTRACT(\"abcabc\", \"(a)(b)\", 3)");
+  ASSERT_TRUE(v.is_array()) << "expected the 2x2 capture matrix";
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
@@ -427,20 +428,14 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
   if (n == 0U) {
     return nullptr;
   }
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* arr = allocate_array_value(n, 1U, arena, cells, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return nullptr;
   }
   for (std::uint32_t i = 0; i < n; ++i) {
     cells[i] = values.cells[static_cast<std::size_t>(row_indices[i]) * values.cols + value_col];
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return nullptr;
-  }
-  arr->rows = n;
-  arr->cols = 1U;
-  arr->cells = cells;
   return arr;
 }
 
@@ -496,9 +491,9 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
     return Value::error(ErrorCode::Calc);
   }
   const std::uint32_t out_rows_n = static_cast<std::uint32_t>(rows.size());
-  const std::size_t total_cells = static_cast<std::size_t>(out_rows_n) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total_cells);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(out_rows_n, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::uint32_t r = 0; r < out_rows_n; ++r) {
@@ -506,13 +501,6 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
       buffer[static_cast<std::size_t>(r) * out_cols + c] = rows[r][c];
     }
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = out_rows_n;
-  arr->cols = out_cols;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 

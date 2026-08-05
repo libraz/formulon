@@ -33,6 +33,7 @@
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -40,6 +41,7 @@
 #include "eval/utf8_length.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 
 namespace formulon {
@@ -206,12 +208,32 @@ KernelResult regex_kernel(std::string_view subject, std::string_view pattern, bo
   pcre2_set_match_limit(mctx, kMatchLimit);
   pcre2_set_depth_limit(mctx, kDepthLimit);
 
+  // PCRE2's limits bound one match attempt, not how much a find-all scan
+  // retains across attempts. Charge each retained match its whole-match slot
+  // plus one per capture group so a many-group pattern over a long subject
+  // cannot accumulate without bound.
+  ResourceBudget match_slots(kMaxRegexMatchSlots);
+
   PCRE2_SIZE start_offset = 0;
   while (start_offset <= static_cast<PCRE2_SIZE>(subject.size())) {
     const int rc = pcre2_match(code, reinterpret_cast<PCRE2_SPTR>(subject.data()),
                                static_cast<PCRE2_SIZE>(subject.size()), start_offset, 0, match_data, mctx);
     if (rc == PCRE2_ERROR_NOMATCH) {
       break;
+    }
+    if (rc >= 0 && !match_slots.consume(static_cast<std::uint64_t>(capture_count) + 1U)) {
+      // Same surface as a PCRE2 resource error: the scan cannot complete,
+      // so REGEXTEST degrades to "no match" and the extract / replace pair
+      // reports #CALC!.
+      if (on_match_limit_returns_no_match) {
+        break;
+      }
+      result.ok = false;
+      result.err = Value::error(ErrorCode::Calc);
+      pcre2_match_context_free(mctx);
+      pcre2_match_data_free(match_data);
+      pcre2_code_free(code);
+      return result;
     }
     if (rc < 0) {
       // Resource exhaustion: PCRE2_ERROR_MATCHLIMIT / DEPTHLIMIT /
@@ -410,21 +432,15 @@ Value extract_mode1(const KernelResult& kr, std::string_view subject, Arena& are
     return Value::error(ErrorCode::NA);
   }
   const std::uint32_t n = static_cast<std::uint32_t>(kr.matches.size());
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(1U, n, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::uint32_t i = 0; i < n; ++i) {
     const MatchSpan& m = kr.matches[i];
     cells[i] = text_from_span(subject, m.whole_start, m.whole_end, arena);
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = 1U;
-  out->cols = n;
-  out->cells = cells;
   return Value::array(out);
 }
 
@@ -439,8 +455,9 @@ Value extract_mode2(const KernelResult& kr, std::string_view subject, Arena& are
   if (kr.capture_count == 0U) {
     return Value::error(ErrorCode::Value);
   }
-  Value* cells = arena.create_array<Value>(kr.capture_count);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(1U, kr.capture_count, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   const MatchSpan& m = kr.matches.front();
@@ -454,13 +471,6 @@ Value extract_mode2(const KernelResult& kr, std::string_view subject, Arena& are
       cells[g] = text_from_span(subject, m.groups[g].first, m.groups[g].second, arena);
     }
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = 1U;
-  out->cols = kr.capture_count;
-  out->cells = cells;
   return Value::array(out);
 }
 
@@ -473,9 +483,9 @@ Value extract_mode3(const KernelResult& kr, std::string_view subject, Arena& are
     return Value::error(ErrorCode::Value);
   }
   const std::uint32_t n = static_cast<std::uint32_t>(kr.matches.size());
-  const std::size_t total = static_cast<std::size_t>(n) * static_cast<std::size_t>(kr.capture_count);
-  Value* cells = arena.create_array<Value>(total);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(n, kr.capture_count, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::uint32_t i = 0; i < n; ++i) {
@@ -489,13 +499,6 @@ Value extract_mode3(const KernelResult& kr, std::string_view subject, Arena& are
       }
     }
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = n;
-  out->cols = kr.capture_count;
-  out->cells = cells;
   return Value::array(out);
 }
 
@@ -679,11 +682,12 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // Array broadcast: one regex evaluation per cell, output shape =
   // input shape.
   const ArrayValue* in = text_arg.array;
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
+  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
   for (std::size_t i = 0; i < n; ++i) {
     const Value& cell = in->cells[i];
     if (cell.is_error()) {
@@ -703,13 +707,6 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
     cells[i] = Value::boolean(!kr.matches.empty());
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = in->rows;
-  out->cols = in->cols;
-  out->cells = cells;
   return Value::array(out);
 }
 
@@ -787,11 +784,12 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
   }
 
   const ArrayValue* in = text_arg.array;
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
+  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
   // Per-cell subject buffers must outlive the text_from_span calls
   // below; keep them around for the whole loop.
   std::vector<std::string> subjects;
@@ -818,13 +816,6 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
     }
     cells[i] = extract_dispatch(kr, subjects.back(), mode, arena);
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = in->rows;
-  out->cols = in->cols;
-  out->cells = cells;
   return Value::array(out);
 }
 
@@ -893,11 +884,12 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
   }
 
   const ArrayValue* in = text_arg.array;
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(in->rows, in->cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
+  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
   std::vector<std::string> subjects;
   subjects.reserve(n);
   for (std::size_t i = 0; i < n; ++i) {
@@ -916,13 +908,6 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
     subjects.push_back(std::move(t.value()));
     cells[i] = run_one(subjects.back());
   }
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = in->rows;
-  out->cols = in->cols;
-  out->cells = cells;
   return Value::array(out);
 }
 

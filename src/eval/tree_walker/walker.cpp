@@ -23,6 +23,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -277,22 +278,16 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       }
       const std::uint32_t rrows = r2 - r1 + 1u;
       const std::uint32_t rcols = c2 - c1 + 1u;
-      const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
-      Value* buffer = arena.create_array<Value>(total);
-      if (buffer == nullptr) {
+      Value* buffer = nullptr;
+      ArrayValue* arr = allocate_array_value(rrows, rcols, arena, buffer, kMaxDerivedArrayCells);
+      if (arr == nullptr) {
         return Value::error(ErrorCode::Num);
       }
+      const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
       const std::vector<Value>& ev = expanded.value();
       for (std::size_t k = 0; k < total; ++k) {
         buffer[k] = k < ev.size() ? ev[k] : Value::blank();
       }
-      ArrayValue* arr = arena.create<ArrayValue>();
-      if (arr == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      arr->rows = rrows;
-      arr->cols = rcols;
-      arr->cells = buffer;
       return Value::array(arr);
     }
 
@@ -435,21 +430,15 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       if (region == nullptr) {
         return Value::error(ErrorCode::Ref);
       }
-      const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
-      Value* buffer = arena.create_array<Value>(n);
-      if (buffer == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      for (std::size_t i = 0; i < n; ++i) {
-        buffer[i] = region->cells[i];
-      }
-      ArrayValue* arr = arena.create<ArrayValue>();
+      Value* buffer = nullptr;
+      ArrayValue* arr = allocate_array_value(region->rows, region->cols, arena, buffer, kMaxDerivedArrayCells);
       if (arr == nullptr) {
         return Value::error(ErrorCode::Num);
       }
-      arr->rows = region->rows;
-      arr->cols = region->cols;
-      arr->cells = buffer;
+      const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
+      for (std::size_t i = 0; i < n; ++i) {
+        buffer[i] = region->cells[i];
+      }
       return Value::array(arr);
     }
 
@@ -604,21 +593,19 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       }
       const std::uint32_t rows = rect.row_last - rect.row_first + 1u;
       const std::uint32_t cols = rect.col_last - rect.col_first + 1u;
-      const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-      Value* buffer = arena.create_array<Value>(total);
-      if (buffer == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      for (std::size_t i = 0; i < total && i < cells.value().size(); ++i) {
-        buffer[i] = cells.value()[i];
-      }
-      ArrayValue* arr = arena.create<ArrayValue>();
+      Value* buffer = nullptr;
+      ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
       if (arr == nullptr) {
         return Value::error(ErrorCode::Num);
       }
-      arr->rows = rows;
-      arr->cols = cols;
-      arr->cells = buffer;
+      // The seam hands back uninitialised storage, so every cell must be
+      // written even when the expansion returned fewer values than the
+      // rectangle covers (a clamped whole-row / whole-column endpoint).
+      const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+      const std::vector<Value>& expanded = cells.value();
+      for (std::size_t i = 0; i < total; ++i) {
+        buffer[i] = i < expanded.size() ? expanded[i] : Value::blank();
+      }
       return Value::array(arr);
     }
 
@@ -747,12 +734,9 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // let `@` reduce it through the common implicit-intersection path.
       const std::uint32_t rows = node.as_array_rows();
       const std::uint32_t cols = node.as_array_cols();
-      if (rows == 0U || cols == 0U || cols > std::numeric_limits<std::size_t>::max() / rows) {
-        return Value::error(ErrorCode::Num);
-      }
-      const std::size_t total = static_cast<std::size_t>(rows) * cols;
-      Value* cells = arena.create_array<Value>(total);
-      if (cells == nullptr) {
+      Value* cells = nullptr;
+      ArrayValue* array = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+      if (array == nullptr) {
         return Value::error(ErrorCode::Num);
       }
       for (std::uint32_t row = 0; row < rows; ++row) {
@@ -761,13 +745,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
               eval_node(node.as_array_element(row, col), arena, registry, ctx);
         }
       }
-      ArrayValue* array = arena.create<ArrayValue>();
-      if (array == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      array->rows = rows;
-      array->cols = cols;
-      array->cells = cells;
       return Value::array(array);
     }
 
@@ -925,15 +902,12 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
       }
     }
     if (any_blank) {
-      Value* buffer = arena.create_array<Value>(n);
-      ArrayValue* promoted = buffer != nullptr ? arena.create<ArrayValue>() : nullptr;
+      Value* buffer = nullptr;
+      ArrayValue* promoted = allocate_array_value(arr->rows, arr->cols, arena, buffer, kMaxDerivedArrayCells);
       if (promoted != nullptr) {
         for (std::size_t i = 0; i < n; ++i) {
           buffer[i] = arr->cells[i].is_blank() ? Value::number(0.0) : arr->cells[i];
         }
-        promoted->rows = arr->rows;
-        promoted->cols = arr->cols;
-        promoted->cells = buffer;
         v = Value::array(promoted);
       }
     }

@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <random>
 
+#include "eval/array_alloc.h"
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
@@ -117,28 +118,19 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   const auto rows = static_cast<std::uint32_t>(rows_t);
   const auto cols = static_cast<std::uint32_t>(cols_t);
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
+  if (arr == nullptr) {
+    // Rejected shape or arena OOM -- preserve the spill pipeline's invariant
+    // that a function either returns an Array with valid storage or an
+    // error. #NUM! is the closest Excel-visible analogue for "result too
+    // large".
+    return Value::error(ErrorCode::Num);
+  }
   const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  if (n > kMaxSequenceCells) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
-    // Arena OOM -- preserve the spill pipeline's invariant that a function
-    // either returns an Array with valid storage or an error. #NUM! is the
-    // closest Excel-visible analogue for "result too large".
-    return Value::error(ErrorCode::Num);
-  }
   for (std::size_t i = 0; i < n; ++i) {
     buffer[i] = Value::number(start + static_cast<double>(i) * step);
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 
@@ -206,10 +198,7 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   const auto rows = static_cast<std::uint32_t>(rows_t);
   const auto cols = static_cast<std::uint32_t>(cols_t);
-  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  if (n > kMaxSequenceCells) {
-    return Value::error(ErrorCode::Num);
-  }
+  const auto n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
 
   // Bounds validation.
   if (std::isnan(min_v) || std::isnan(max_v) || std::isinf(min_v) || std::isinf(max_v)) {
@@ -224,8 +213,9 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
     }
   }
 
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   std::mt19937_64& rng = thread_local_rng();
@@ -252,13 +242,6 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
     }
   }
 
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 
@@ -291,28 +274,18 @@ Value MUnit(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::Num);
   }
   const auto n = static_cast<std::uint32_t>(n_t);
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(n, n, arena, buffer, kMaxSequenceCells);
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
   const std::size_t total = static_cast<std::size_t>(n) * static_cast<std::size_t>(n);
-  if (total > kMaxSequenceCells) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
   for (std::size_t i = 0; i < total; ++i) {
     buffer[i] = Value::number(0.0);
   }
   for (std::uint32_t i = 0; i < n; ++i) {
     buffer[static_cast<std::size_t>(i) * n + i] = Value::number(1.0);
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = n;
-  arr->cols = n;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 
