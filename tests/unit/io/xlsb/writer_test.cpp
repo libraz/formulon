@@ -296,7 +296,7 @@ TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
 
   bool found_theme = false;
-  for (const PassthroughPart& part : read_or.value().unknown_parts) {
+  for (const PassthroughPart& part : read_or.value().workbook.passthrough_parts()) {
     if (part.path == "xl/theme/theme1.xml") {
       found_theme = true;
       EXPECT_EQ(part.content_type, "application/vnd.openxmlformats-officedocument.theme+xml");

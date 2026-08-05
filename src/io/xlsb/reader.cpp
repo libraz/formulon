@@ -1767,12 +1767,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   }
   std::sort(unknown_parts.begin(), unknown_parts.end(),
             [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
-  wb.set_passthrough_parts(unknown_parts);
+  // The workbook is the sole owner; the read result does not mirror the
+  // payload. See `XlsbReadResult`.
+  wb.set_passthrough_parts(std::move(unknown_parts));
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
 
-  XlsbReadResult result{std::move(wb), std::move(unknown_parts), cells_read, undecoded_formula_count,
-                        undecoded_defined_name_count};
+  XlsbReadResult result{std::move(wb), cells_read, undecoded_formula_count, undecoded_defined_name_count};
   return result;
 }
 

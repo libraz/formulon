@@ -629,7 +629,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if (!sst_bytes_or) {
       return sst_bytes_or.error();
     }
-    auto sst_or = read_shared_strings(sst_bytes_or.value(), result_text_storage);
+    auto sst_or = read_shared_strings(std::move(sst_bytes_or.value()), result_text_storage);
     if (!sst_or) {
       return sst_or.error();
     }
@@ -725,7 +725,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if (!sheet_bytes_or) {
       return sheet_bytes_or.error();
     }
-    const std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
+    // Bound to a mutable reference because the DOM path below parses it
+    // in place; nothing else in this iteration reads the sheet bytes
+    // after that point, and `sheet_bytes_or` outlives `sheet_doc`.
+    std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
     // Choose the read path by raw XML size: small sheets stay on the
     // pugixml DOM path (familiar code, well-validated); large sheets
     // (>= `kSaxThresholdBytes`) stream through the SAX scanner so a
@@ -759,12 +762,21 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     // merges, hyperlinks, data validations, protection, and print
     // settings that the SAX path used to drop. Row overrides
     // (<row ht=/hidden=>) live inside <sheetData> and stay DOM-only.
+    //
+    // Both parses below are in place: the DOM aliases the buffer it was
+    // built from instead of pugixml holding a second full-size copy,
+    // which is what made a large sheet cost twice its own size to open.
+    // The buffers are single-use — the shell is built here and read
+    // nowhere else, `sheet_bytes` is dead once the cell reader has run.
+    // `shell` is declared ahead of `sheet_doc` so it is destroyed after
+    // it; `sheet_bytes_or` already sits further out for the same reason.
+    std::vector<std::uint8_t> shell;
     pugi::xml_document sheet_doc;
     if (sax_used) {
-      const std::vector<std::uint8_t> shell = BuildWorksheetShellBytes(sheet_bytes);
-      RETURN_IF_ERROR(load_xml_buffer(sheet_doc, shell, "ooxml_reader", "sheet*.xml (metadata shell)"));
+      shell = BuildWorksheetShellBytes(sheet_bytes);
+      RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, shell, "ooxml_reader", "sheet*.xml (metadata shell)"));
     } else {
-      RETURN_IF_ERROR(load_xml_buffer(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
+      RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
       auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage);
       if (!rs) {
         return rs.error();
@@ -1049,7 +1061,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       if (!rec_bytes_or) {
         return rec_bytes_or.error();
       }
-      auto rec_status = read_pivot_cache_records(rec_bytes_or.value(), cache);
+      auto rec_status = read_pivot_cache_records(std::move(rec_bytes_or.value()), cache);
       if (!rec_status) {
         return rec_status.error();
       }
@@ -1173,16 +1185,15 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   std::sort(unknown_parts.begin(), unknown_parts.end(),
             [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
 
-  // Hand the same payload to the workbook so the writer can find it
-  // even when the caller only retains `result.workbook`. The
-  // `OoxmlReadResult::unknown_parts` view stays populated for tests and
-  // tooling that want to inspect what was preserved.
-  wb.set_passthrough_parts(unknown_parts);
+  // The workbook is the sole owner of the passthrough payload; the read
+  // result does not mirror it. Handing it over by move keeps a package
+  // with an 80 MB embedded image at one resident copy rather than two.
+  wb.set_passthrough_parts(std::move(unknown_parts));
   wb.set_unknown_workbook_rels(std::move(wb_rels.unknown_rels));
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_default_content_types(std::move(default_content_types));
 
-  OoxmlReadResult result{std::move(wb), std::move(unknown_parts), pending_sst_count};
+  OoxmlReadResult result{std::move(wb), pending_sst_count};
   return result;
 }
 
