@@ -17,11 +17,16 @@
 // is written as its cached literal value; callers receive an explicit
 // downgrade count instead of losing the rest of the package.
 //
-// Styles, row/column layout, merged cells, and defined names are emitted.
-// Conditional formats, data validation, hyperlinks, pane state, print
-// settings, and tables which cannot yet be represented in XLSB are reported
-// through the explicit deferred-feature count rather than being skipped
-// silently.
+// Styles, row/column layout, merged cells, pane state, and defined names are
+// emitted from the model.
+//
+// Conditional formats, data validation, hyperlinks, auto-filter, print
+// settings and tables are not lowered to records. A sheet read from an
+// `.xlsb` keeps them as `Sheet::xlsb_tail()` and this writer re-emits those
+// bytes verbatim (together with the sheet's own rels, so the ids they carry
+// still resolve). A workbook built in memory or read from `.xlsx` has no such
+// bytes; its modelled equivalents are counted in `deferred_feature_count` and
+// logged under `xlsb.writer.deferred` rather than being dropped silently.
 
 #ifndef FORMULON_IO_XLSB_WRITER_H_
 #define FORMULON_IO_XLSB_WRITER_H_

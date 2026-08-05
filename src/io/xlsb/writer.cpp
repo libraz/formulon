@@ -269,6 +269,7 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   paths.insert("xl/_rels/workbook.bin.rels");
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     paths.insert("xl/worksheets/sheet" + std::to_string(i + 1) + ".bin");
+    paths.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".bin.rels");
   }
   if (emit_sst_part) {
     paths.insert("xl/sharedStrings.bin");
@@ -443,6 +444,65 @@ std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
     }
     AppendRelationship(out, &next_rid, r.type, r.target, r.target_external);
   }
+  out.append("</Relationships>\n");
+  return out;
+}
+
+// Shapes a package path into the form a worksheet rels file resolves against
+// (`xl/worksheets/`), mirroring `WorkbookRelativeTarget` one directory down.
+std::string WorksheetRelativeTarget(std::string_view package_path) {
+  constexpr std::string_view kWorkbookDirectory = "xl/";
+  std::string out;
+  if (package_path.size() >= kWorkbookDirectory.size() &&
+      package_path.substr(0U, kWorkbookDirectory.size()) == kWorkbookDirectory) {
+    out.assign("../");
+    out.append(package_path.substr(kWorkbookDirectory.size()));
+    return out;
+  }
+  out.assign(package_path);
+  return out;
+}
+
+// Builds `xl/worksheets/_rels/sheet<N>.bin.rels`, or an empty string when the
+// sheet has nothing to relate to.
+//
+// Relationship ids are preserved verbatim rather than renumbered: the retained
+// worksheet-tail records (`Sheet::xlsb_tail`) address hyperlink targets,
+// drawings and table parts by the source package's rId, and the writer does
+// not decode those records to rewrite them. A relationship whose target part
+// is not in the package is dropped so the emitted rels never dangle.
+std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan) {
+  std::string entries;
+  for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
+    if (!rel.target_external && !HasPassthrough(plan, rel.target)) {
+      StructuredLog("xlsb.writer.sheet_rel_skipped")
+          .field("reason", std::string_view("target_part_absent"))
+          .field("type", rel.type)
+          .field("target", rel.target)
+          .warn();
+      continue;
+    }
+    const std::string target = rel.target_external ? rel.target : WorksheetRelativeTarget(rel.target);
+    entries.append("  <Relationship Id=\"");
+    AppendXmlEscaped(entries, rel.id);
+    entries.append("\" Type=\"");
+    AppendXmlEscaped(entries, rel.type);
+    entries.append("\" Target=\"");
+    AppendXmlEscaped(entries, target);
+    if (rel.target_external) {
+      entries.append("\" TargetMode=\"External\"/>\n");
+    } else {
+      entries.append("\"/>\n");
+    }
+  }
+  if (entries.empty()) {
+    return {};
+  }
+  std::string out;
+  out.reserve(entries.size() + 192);
+  out.append(kXmlDecl);
+  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  out.append(entries);
   out.append("</Relationships>\n");
   return out;
 }
@@ -1001,13 +1061,23 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       return r.error();
     }
   }
-  // 5. xl/worksheets/sheet<N>.bin
+  // 5. xl/worksheets/sheet<N>.bin, plus its rels when the sheet's retained
+  // records reference other parts (hyperlinks, drawings, table definitions).
   for (std::size_t i = 0; i < sheet_count; ++i) {
     std::string path("xl/worksheets/sheet");
     path.append(std::to_string(i + 1));
     path.append(".bin");
     if (auto r = AddPartBytes(writer.get(), path, sheet_bodies[i]); !r) {
       return r.error();
+    }
+    const std::string sheet_rels = BuildSheetRels(workbook.sheet(i), plan);
+    if (!sheet_rels.empty()) {
+      std::string rels_path("xl/worksheets/_rels/sheet");
+      rels_path.append(std::to_string(i + 1));
+      rels_path.append(".bin.rels");
+      if (auto r = AddPart(writer.get(), rels_path, sheet_rels); !r) {
+        return r.error();
+      }
     }
   }
   // 6. xl/sharedStrings.bin (conditional)

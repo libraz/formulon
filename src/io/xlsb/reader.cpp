@@ -28,6 +28,7 @@
 
 #include "io/ooxml/package_validator.h"
 #include "io/passthrough_part.h"
+#include "io/unknown_relationship.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/styles_reader.h"
@@ -39,6 +40,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "value.h"
@@ -626,7 +628,7 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
                               const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
                               std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                               std::uint32_t* undecoded_formula_count) {
-  Arena arena;
+  Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
   auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges);
   if (!ast_or) {
     StructuredLog("xlsb.formula.not_decoded")
@@ -715,7 +717,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
       continue;
     }
     ByteSpan rgce{p.data, cce};
-    Arena arena;
+    Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
     auto ast_or = decode_ptgs(rgce, ByteSpan{}, arena, sheet_names, name_table, sheet_ranges);
     if (!ast_or) {
       StructuredLog("xlsb.defined_name.not_decoded")
@@ -762,7 +764,76 @@ struct SheetDecodeState {
   /// has been decoded (see `RegisterArraySpills`'s doc comment for why
   /// this cannot happen inline).
   std::vector<ArrayAnchor> array_anchors;
+  /// Worksheet-tail records retained verbatim (see `XlsbSheetTail`).
+  XlsbSheetTail tail;
+  /// True once `BrtEndSheetData` has been seen: everything from there to
+  /// `BrtEndSheet` is tail.
+  bool in_tail = false;
+  /// True once the merged-cell block has been passed, which selects which
+  /// of `tail`'s two buffers subsequent records append to.
+  bool merges_seen = false;
 };
+
+/// True for a tail record the writer re-emits from the model, which must
+/// therefore not also be retained verbatim (or it would be emitted twice).
+bool IsModelOwnedTailRecord(XlsbRecordType type) {
+  switch (type) {
+    case XlsbRecordType::BrtEndSheet:
+    case XlsbRecordType::BrtBeginMergeCells:
+    case XlsbRecordType::BrtMergeCell:
+    case XlsbRecordType::BrtEndMergeCells:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Appends the framed bytes of one worksheet-tail record to whichever
+/// `XlsbSheetTail` buffer matches its position relative to the merged-cell
+/// block. `framed` spans the record header *and* payload, so re-emission is
+/// a plain byte copy rather than a re-encode.
+void RetainTailRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed, std::size_t size) {
+  if (IsModelOwnedTailRecord(type)) {
+    return;
+  }
+  std::vector<std::uint8_t>& dst = state.merges_seen ? state.tail.after_merges : state.tail.before_merges;
+  dst.insert(dst.end(), framed, framed + size);
+}
+
+/// Reads every entry of a worksheet's `.rels` part, keeping the original
+/// relationship ids so the retained tail records still resolve. Internal
+/// targets are normalised to package-relative paths (matching what the OOXML
+/// reader stores); external targets stay verbatim.
+Expected<std::vector<io::UnknownRelationship>, Error> LoadSheetRelationships(const ZipReader& zip,
+                                                                             std::string_view rels_path,
+                                                                             std::string_view sheet_dir) {
+  std::vector<io::UnknownRelationship> out;
+  auto status = VisitRelationshipNodes(zip, rels_path, "sheet rels", [&](const pugi::xml_node& rel) {
+    io::UnknownRelationship entry;
+    entry.id = rel.attribute("Id").value();
+    if (entry.id.empty()) {
+      return Expected<void, Error>::Ok();
+    }
+    entry.type = rel.attribute("Type").value();
+    const std::string_view target = rel.attribute("Target").value();
+    entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+    if (entry.target_external) {
+      entry.target = std::string(target);
+    } else {
+      auto resolved = ResolveRelativePath(sheet_dir, target);
+      if (!resolved) {
+        return Expected<void, Error>(resolved.error());
+      }
+      entry.target = std::move(resolved).value();
+    }
+    out.push_back(std::move(entry));
+    return Expected<void, Error>::Ok();
+  });
+  if (!status) {
+    return status.error();
+  }
+  return out;
+}
 
 /// Column + style-table index decoded by `ReadCellHeader`.
 struct CellHeaderInfo {
@@ -869,12 +940,24 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
   SheetDecodeState state;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
+    const std::uint8_t* const framed = cursor.data;
     auto rec_or = read_record(cursor);
     if (!rec_or) {
       return rec_or.error();
     }
     const XlsbRecord& rec = rec_or.value();
     const auto type = static_cast<XlsbRecordType>(rec.type);
+    // Retain worksheet-tail records before dispatching: the tail carries the
+    // sheet-level features the model does not express, and the sheet part is
+    // consumed whole so package passthrough cannot rescue them.
+    if (state.in_tail) {
+      RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
+    }
+    if (type == XlsbRecordType::BrtEndSheetData) {
+      state.in_tail = true;
+    } else if (type == XlsbRecordType::BrtEndMergeCells) {
+      state.merges_seen = true;
+    }
     switch (type) {
       case XlsbRecordType::BrtBeginWsView: {
         // BrtBeginWsView ([MS-XLSB] §2.4.141) stores the SheetView fields
@@ -1430,6 +1513,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
     }
   }
   RegisterArraySpills(wb, sheet_index, state.array_anchors);
+  if (!state.tail.empty()) {
+    wb.sheet(sheet_index).set_xlsb_tail(state.tail);
+  }
   return state;
 }
 
@@ -1633,6 +1719,21 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     }
     cells_read += state_or.value().cells_decoded;
     consumed_parts.insert(sheet_path);
+
+    // The sheet's own rels file resolves the relationship ids carried by the
+    // retained tail records (hyperlink targets, drawing and table parts). It
+    // is `rels`-Default-typed, so the Override-driven passthrough loop below
+    // never sees it; keeping every entry — none of them are modelled by the
+    // binary reader — preserves both the ids and their targets.
+    const std::string sheet_rels_path = RelsPathForPart(sheet_path);
+    if (zip.has_entry(sheet_rels_path)) {
+      auto rels_or = LoadSheetRelationships(zip, sheet_rels_path, DirOf(sheet_path));
+      if (!rels_or) {
+        return rels_or.error();
+      }
+      wb.sheet(i).set_unknown_relationships(std::move(rels_or.value()));
+      consumed_parts.insert(sheet_rels_path);
+    }
   }
 
   // 8. Passthrough parts: every Override-listed part the reader did
