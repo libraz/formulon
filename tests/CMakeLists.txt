@@ -29,6 +29,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/utils/double_format_test.cpp
   unit/utils/rect_iterator_test.cpp
   unit/utils/resource_budget_test.cpp
+  unit/utils/thread_launch_test.cpp
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
   unit/io/a1_ref_test.cpp

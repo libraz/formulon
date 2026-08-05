@@ -33,6 +33,8 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
+#include "utils/structured_log.h"
+#include "utils/thread_launch.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -300,12 +302,40 @@ void worker_loop(std::size_t worker_id, LayerWork* work) {
 // A worker pool shared by every parallel layer in one recalc pass. Building
 // and joining workers per layer dominated small DAGs, so workers wait at a
 // layer barrier and are joined once when the pass ends.
+//
+// The pool takes the requested worker count as an upper bound, not a
+// promise. `launch_thread` reports an OS refusal instead of throwing (the
+// engine is built `-fno-exceptions`, so `std::thread` would have
+// terminated the host here), and the pool keeps whatever workers it did
+// start. `size()` is therefore the number to schedule against; the caller
+// falls back to evaluating on its own thread when that reaches zero, which
+// is slower but produces identical results.
 class LayerWorkerPool {
  public:
   explicit LayerWorkerPool(std::uint32_t worker_count) {
+    // Both vectors are reserved and never grown afterwards: each live
+    // worker holds a pointer into `slots_`, which a reallocation would
+    // dangle.
+    slots_.reserve(worker_count);
     workers_.reserve(worker_count);
     for (std::uint32_t worker_id = 0U; worker_id < worker_count; ++worker_id) {
-      workers_.emplace_back([this, worker_id] { worker_main(worker_id); });
+      slots_.push_back(WorkerSlot{this, worker_id, ThreadStart{}});
+      WorkerSlot& slot = slots_.back();
+      slot.start.entry = &LayerWorkerPool::worker_entry;
+      slot.start.arg = &slot;
+      auto thread_or = launch_thread(slot.start);
+      if (!thread_or) {
+        // Degrade rather than abort: drop the slot that never started and
+        // run the pass on the workers already alive.
+        slots_.pop_back();
+        StructuredLog("recalc.worker.launch_failed")
+            .field("requested", static_cast<std::int64_t>(worker_count))
+            .field("started", static_cast<std::int64_t>(workers_.size()))
+            .field("reason", thread_or.error().message)
+            .warn();
+        break;
+      }
+      workers_.push_back(std::move(thread_or.value()));
     }
   }
 
@@ -318,11 +348,20 @@ class LayerWorkerPool {
       stopping_ = true;
     }
     work_ready_.notify_all();
-    for (std::thread& worker : workers_) {
+    for (Thread& worker : workers_) {
       worker.join();
     }
   }
 
+  /// Workers actually running, which is at most what the constructor was
+  /// asked for.
+  std::uint32_t size() const noexcept { return static_cast<std::uint32_t>(workers_.size()); }
+
+  /// Dispatches one layer across the live workers and returns once they
+  /// have all come back to the barrier. Requires `size() >= 1`: with no
+  /// worker to drain the queue this would return with the layer
+  /// untouched, so the caller checks the count first and takes the serial
+  /// path instead.
   void run(LayerWork& work) {
     work.outcomes->assign(work.tasks->size(), SccOutcome{});
     work.next_index.store(0U, std::memory_order_relaxed);
@@ -336,6 +375,19 @@ class LayerWorkerPool {
   }
 
  private:
+  /// One launched worker's identity, kept at a stable address for the
+  /// lifetime of the thread that reads it.
+  struct WorkerSlot {
+    LayerWorkerPool* pool = nullptr;
+    std::uint32_t worker_id = 0U;
+    ThreadStart start;
+  };
+
+  static void worker_entry(void* raw) {
+    auto* slot = static_cast<WorkerSlot*>(raw);
+    slot->pool->worker_main(slot->worker_id);
+  }
+
   void worker_main(std::uint32_t worker_id) {
     std::size_t seen_generation = 0U;
     while (true) {
@@ -360,7 +412,8 @@ class LayerWorkerPool {
     }
   }
 
-  std::vector<std::thread> workers_;
+  std::vector<WorkerSlot> slots_;
+  std::vector<Thread> workers_;
   std::mutex mutex_;
   std::condition_variable work_ready_;
   std::condition_variable layer_done_;
@@ -460,9 +513,14 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   const CondensedGraph cg = build_condensed_graph(idx, engine.graph_);
   const std::vector<std::vector<std::size_t>> layers = kahn_layers(cg);
 
-  const std::uint32_t worker_count = resolve_thread_count(cfg.num_threads);
-  ThreadArenas arenas = make_thread_arenas(worker_count);
-  LayerWorkerPool worker_pool(worker_count);
+  // The pool is built before the arenas because it may come back smaller
+  // than requested: an OS that refuses a thread degrades the pass instead
+  // of ending the process. Every layer then dispatches against the live
+  // worker count, and zero live workers falls all the way through to the
+  // serial branch below — which still needs one arena of its own.
+  LayerWorkerPool worker_pool(resolve_thread_count(cfg.num_threads));
+  const std::uint32_t worker_count = worker_pool.size();
+  ThreadArenas arenas = make_thread_arenas(std::max<std::uint32_t>(worker_count, 1U));
   std::mutex write_mutex;
 
   std::uint64_t cells_evaluated = 0;

@@ -30,11 +30,19 @@
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
+#include "utils/thread_launch.h"
 #include "value.h"
 #include "workbook.h"
 
 namespace formulon::eval {
 namespace {
+
+/// Clears any injected thread-launch failure when the test leaves scope.
+/// Without this an assertion that aborts a degradation test mid-way would
+/// leave every later test unable to start a worker.
+struct ThreadLaunchInjection {
+  ~ThreadLaunchInjection() { clear_thread_launch_failure_injection(); }
+};
 
 Value StoredValue(const Workbook& wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
   const Sheet& s = wb.sheet(sheet_index);
@@ -303,6 +311,66 @@ TEST(Scheduler, DiamondParallelLayer) {
   ASSERT_TRUE(d1.is_number());
   EXPECT_DOUBLE_EQ(d1.as_number(), 35.0);
 
+  RecalcBothAndExpectEqual(wp, 8U);
+}
+
+// ---------------------------------------------------------------------------
+// Degradation when the OS refuses worker threads
+// ---------------------------------------------------------------------------
+
+TEST(Scheduler, NoWorkerThreadsFallsBackToSerialEvaluation) {
+  // A host at its thread limit must still complete the recalc. Every
+  // launch is refused here, so the pool starts empty and each layer takes
+  // the calling-thread path; the numbers have to match what the fully
+  // parallel diamond produces.
+  ThreadLaunchInjection injection;
+  WorkbookPair wp;
+  wp.set_value(0, 0, 0, Value::number(10.0));
+  wp.set_formula(0, 0, 1, "=A1*2");
+  wp.set_formula(0, 0, 2, "=A1+5");
+  wp.set_formula(0, 0, 3, "=B1+C1");
+
+  set_thread_launch_failure_after(0U);
+  SchedulerStats stats;
+  SchedulerConfig cfg;
+  cfg.num_threads = 8U;
+  ASSERT_TRUE(static_cast<bool>(wp.parallel.recalc_parallel(default_registry(), cfg, &stats)));
+  clear_thread_launch_failure_injection();
+
+  EXPECT_EQ(stats.parallel_steps, 0U) << "no worker was started, so no layer can have been dispatched to the pool";
+  EXPECT_GE(stats.serial_fallback_steps, 1U);
+  EXPECT_EQ(stats.cells_evaluated, 3U);
+
+  Value d1 = StoredValue(wp.parallel, 0, 0, 3);
+  ASSERT_TRUE(d1.is_number());
+  EXPECT_DOUBLE_EQ(d1.as_number(), 35.0);
+}
+
+TEST(Scheduler, PartialWorkerLaunchStillDispatchesWideLayers) {
+  // Two workers out of the eight requested: the pass keeps using the pool
+  // for layers wide enough to benefit, just with less of it.
+  ThreadLaunchInjection injection;
+  WorkbookPair wp;
+  wp.set_value(0, 0, 0, Value::number(10.0));
+  wp.set_formula(0, 0, 1, "=A1*2");
+  wp.set_formula(0, 0, 2, "=A1+5");
+  wp.set_formula(0, 0, 3, "=B1+C1");
+
+  set_thread_launch_failure_after(2U);
+  SchedulerStats stats;
+  SchedulerConfig cfg;
+  cfg.num_threads = 8U;
+  ASSERT_TRUE(static_cast<bool>(wp.parallel.recalc_parallel(default_registry(), cfg, &stats)));
+  clear_thread_launch_failure_injection();
+
+  EXPECT_GE(stats.parallel_steps, 1U) << "the B/C layer should still reach the two workers that did start";
+  EXPECT_EQ(stats.cells_evaluated, 3U);
+
+  Value d1 = StoredValue(wp.parallel, 0, 0, 3);
+  ASSERT_TRUE(d1.is_number());
+  EXPECT_DOUBLE_EQ(d1.as_number(), 35.0);
+
+  // And the degraded pass agrees with a plain serial recalc cell for cell.
   RecalcBothAndExpectEqual(wp, 8U);
 }
 

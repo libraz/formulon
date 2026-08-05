@@ -19,8 +19,8 @@
 //   layer N -> super-nodes whose dependencies live in layers < N.
 //
 // Within a single layer no two super-nodes share a dependency edge with
-// one another, so they may be evaluated concurrently. A pool of
-// `std::thread` workers drains a per-layer queue; each worker holds its
+// one another, so they may be evaluated concurrently. A pool of OS
+// workers drains a per-layer queue; each worker holds its
 // own `EvalContext` (the type carries no globals — it is a non-owning
 // view of `Workbook` + `Sheet` + `EvalState`). The `Workbook`'s cell
 // store is mutated through a single `std::mutex`; the lock is held only
@@ -96,10 +96,17 @@ struct SchedulerStats {
 ///
 /// `cfg` selects the worker count (see `SchedulerConfig::num_threads`).
 /// `stats` (when non-null) receives the per-pass counters. The `Expected`
-/// return slot is reserved for scheduler failures. A requested worker pool
-/// is created with `std::thread`; on no-exception builds an operating-system
-/// thread-creation failure cannot be recovered by this API. Callers that
-/// require serial execution must set `SchedulerConfig::num_threads` to 1.
+/// return slot is reserved for scheduler failures.
+///
+/// `num_threads` is an upper bound, not a guarantee. Workers are started
+/// through `launch_thread`, which reports an operating-system refusal
+/// rather than throwing, so a host at its thread limit gets a smaller pool
+/// instead of a terminated process; a pass that can start no worker at all
+/// evaluates every layer on the calling thread and reports each of them in
+/// `SchedulerStats::serial_fallback_steps`. The results do not depend on
+/// how many workers were obtained. Callers that require serial execution
+/// must still set `SchedulerConfig::num_threads` to 1 rather than relying
+/// on this degradation.
 Expected<void, Error> recalc_parallel(Workbook& wb, const SchedulerConfig& cfg = {}, SchedulerStats* stats = nullptr);
 
 /// Convenience overload that runs `recalc_parallel` against a caller-
