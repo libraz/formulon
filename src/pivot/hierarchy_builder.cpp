@@ -220,7 +220,7 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg) {
 }  // namespace
 
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
-                      HierNode& root) {
+                      std::size_t record_index, HierNode& root) {
   HierNode* cursor = &root;
   for (const HierLevel& level : levels) {
     const Value raw = cell_value(cache, record, level.field_index);
@@ -236,6 +236,7 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
       it->second.label_override = std::move(label_override);
     }
     cursor = &it->second;
+    cursor->record_indices.push_back(record_index);
   }
   return cursor;
 }

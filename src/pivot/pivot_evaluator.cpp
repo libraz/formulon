@@ -46,6 +46,32 @@
 namespace formulon::pivot {
 namespace {
 
+struct ValueSortSpec {
+  std::uint32_t field_index;
+  Aggregation aggregation;
+};
+
+std::optional<ValueSortSpec> resolve_value_sort(const PivotTable& table, std::uint32_t pivot_field_index) {
+  if (pivot_field_index >= table.fields().size()) {
+    return std::nullopt;
+  }
+  const std::string& by_field = table.fields()[pivot_field_index].sort.by_field;
+  if (by_field.empty()) {
+    return std::nullopt;
+  }
+  for (const PivotDataField& data_field : table.data_fields()) {
+    if (data_field.field_index >= table.fields().size()) {
+      continue;
+    }
+    const PivotField& source = table.fields()[data_field.field_index];
+    if (by_field == data_field.name || by_field == source.source_name ||
+        (!source.custom_name.empty() && by_field == source.custom_name)) {
+      return ValueSortSpec{data_field.field_index, data_field.aggregation};
+    }
+  }
+  return std::nullopt;
+}
+
 // ---------------------------------------------------------------------------
 // Result-side text reification.
 // ---------------------------------------------------------------------------
@@ -122,7 +148,10 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       dg = &*table.fields()[fi].date_group;
     }
     const bool ascending = fi >= table.fields().size() || table.fields()[fi].sort.ascending;
-    return HierLevel{fi, dg, ascending};
+    const std::optional<ValueSortSpec> value_sort = resolve_value_sort(table, fi);
+    return HierLevel{fi, dg, ascending,
+                     value_sort.has_value() ? std::optional<std::uint32_t>(value_sort->field_index) : std::nullopt,
+                     value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt};
   };
   std::vector<HierLevel> row_levels;
   row_levels.reserve(table.row_field_order().size());
@@ -147,12 +176,35 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   for (std::size_t i = 0; i < surviving.size(); ++i) {
     const PivotCacheRecord& rec = cache.records()[surviving[i]];
     if (!row_levels.empty()) {
-      row_leaves_for_record[i] = insert_path(cache, row_levels, rec, row_tree);
+      row_leaves_for_record[i] = insert_path(cache, row_levels, rec, surviving[i], row_tree);
     }
     if (!col_levels.empty()) {
-      col_leaves_for_record[i] = insert_path(cache, col_levels, rec, col_tree);
+      col_leaves_for_record[i] = insert_path(cache, col_levels, rec, surviving[i], col_tree);
     }
   }
+
+  // A non-empty SortSpec::by_field orders siblings by the aggregate of the
+  // named value field rather than by their display labels. Populate those
+  // keys before finalising either hierarchy so leaf indices, values, and the
+  // rendered axis all receive the same permutation.
+  auto assign_value_sort_keys = [&](auto&& self, HierNode& node, const std::vector<HierLevel>& levels,
+                                    std::size_t depth) -> void {
+    if (depth >= levels.size()) {
+      return;
+    }
+    const HierLevel& level = levels[depth];
+    for (auto& [unused_key, child] : node.children) {
+      (void)unused_key;
+      if (level.value_sort_field.has_value() && level.value_sort_aggregation.has_value()) {
+        std::vector<Value> values;
+        append_record_field_values(cache, child.record_indices, *level.value_sort_field, values);
+        child.value_sort_key = apply_aggregation(*level.value_sort_aggregation, values);
+      }
+      self(self, child, levels, depth + 1U);
+    }
+  };
+  assign_value_sort_keys(assign_value_sort_keys, row_tree, row_levels, 0U);
+  assign_value_sort_keys(assign_value_sort_keys, col_tree, col_levels, 0U);
 
   PivotResult result;
   std::vector<HierNode*> row_leaves;

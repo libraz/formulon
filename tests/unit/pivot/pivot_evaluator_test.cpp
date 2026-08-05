@@ -278,6 +278,31 @@ TEST(PivotEvaluator, FieldDescendingSortReversesHierarchyAndValues) {
   EXPECT_DOUBLE_EQ(r.values[1][1][0].as_number(), 50.0);   // North/Gadget
 }
 
+TEST(PivotEvaluator, FieldSortByValueFieldReordersAxisAndValues) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{1});
+  table.mutable_fields()[0].sort.by_field = "Amount";
+  table.mutable_fields()[0].sort.ascending = false;
+  table.mutable_fields()[1].sort.by_field = "Sum of Amount";
+  table.mutable_fields()[1].sort.ascending = true;
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 2U);
+  ASSERT_EQ(r.cols.size(), 2U);
+  // Row totals: South=500, North=175, so descending by Amount puts South first.
+  EXPECT_EQ(r.rows[0].label, "South");
+  EXPECT_EQ(r.rows[1].label, "North");
+  // Column totals: Widget=325, Gadget=350, so ascending by Sum of Amount puts Widget first.
+  EXPECT_EQ(r.cols[0].label, "Widget");
+  EXPECT_EQ(r.cols[1].label, "Gadget");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 200.0);  // South/Widget
+  EXPECT_DOUBLE_EQ(r.values[0][1][0].as_number(), 300.0);  // South/Gadget
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 125.0);  // North/Widget
+  EXPECT_DOUBLE_EQ(r.values[1][1][0].as_number(), 50.0);   // North/Gadget
+}
+
 TEST(PivotEvaluator, SparseRowColumnIntersectionIsBlank) {
   PivotCache cache = build_basic_cache();
   auto& records = cache.mutable_records();

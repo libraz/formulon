@@ -157,6 +157,9 @@ struct PivotFilter {
 /// Sort directive for a pivot field.
 struct SortSpec {
   bool ascending = true;
+  /// Empty selects display-label ordering. Otherwise this matches a data
+  /// field's display name or source/custom field name and sorts sibling items
+  /// by that field's aggregate.
   std::string by_field;
 };
 

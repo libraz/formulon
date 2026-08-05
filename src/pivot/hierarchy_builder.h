@@ -16,9 +16,11 @@
 #ifndef FORMULON_PIVOT_HIERARCHY_BUILDER_H_
 #define FORMULON_PIVOT_HIERARCHY_BUILDER_H_
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -33,6 +35,12 @@ namespace formulon::pivot {
 
 struct HierNode {
   std::map<Value, HierNode, ValueLess> children;
+  /// Cache-record indices below this node. They permit value-based sorting
+  /// without reconstructing a hierarchy path after aggregation.
+  std::vector<std::size_t> record_indices;
+  /// Aggregate used when the owning field has SortSpec::by_field. Absent
+  /// means normal label ordering remains in effect.
+  std::optional<Value> value_sort_key;
   /// Index into the flat leaf array assigned during finalisation. Leaves only.
   std::size_t leaf_index = static_cast<std::size_t>(-1);
   /// When non-empty, used in place of `display_string(key)` for this
@@ -45,6 +53,8 @@ struct HierLevel {
   std::uint32_t field_index;         ///< Index into `PivotTable::fields()`.
   const PivotDateGroup* date_group;  ///< Non-null when this level buckets dates.
   bool ascending;                    ///< False reverses this field's item order.
+  std::optional<std::uint32_t> value_sort_field;
+  std::optional<Aggregation> value_sort_aggregation;
 };
 
 /// Inserts `record` into `tree`, walking `levels`. Returns the leaf
@@ -53,7 +63,7 @@ struct HierLevel {
 /// the label is stashed on the inserted child for the renderer to
 /// surface.
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
-                      HierNode& root);
+                      std::size_t record_index, HierNode& root);
 
 /// Returns the display label for `(key, child)`: the override if set,
 /// otherwise the standard `display_string(key)`. Used by all hierarchy
@@ -73,6 +83,30 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
     return;
   }
   out.reserve(tree.children.size());
+  struct ChildEntry {
+    const Value* key;
+    HierNode* node;
+  };
+  std::vector<ChildEntry> entries;
+  entries.reserve(tree.children.size());
+  for (auto& [key, child] : tree.children) {
+    entries.push_back({&key, &child});
+  }
+  const bool ascending = depth >= levels.size() || levels[depth].ascending;
+  const bool sort_by_value = depth < levels.size() && levels[depth].value_sort_field.has_value();
+  std::sort(entries.begin(), entries.end(), [&](const ChildEntry& lhs, const ChildEntry& rhs) {
+    if (sort_by_value && lhs.node->value_sort_key.has_value() && rhs.node->value_sort_key.has_value()) {
+      const ValueLess less;
+      if (less(*lhs.node->value_sort_key, *rhs.node->value_sort_key)) {
+        return ascending;
+      }
+      if (less(*rhs.node->value_sort_key, *lhs.node->value_sort_key)) {
+        return !ascending;
+      }
+    }
+    const ValueLess less;
+    return ascending ? less(*lhs.key, *rhs.key) : less(*rhs.key, *lhs.key);
+  });
   const auto append = [&](const Value& key, HierNode& child) {
     Node node;
     node.label = node_label(key, child);
@@ -84,15 +118,8 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
     }
     out.push_back(std::move(node));
   };
-  const bool ascending = depth >= levels.size() || levels[depth].ascending;
-  if (ascending) {
-    for (auto& [key, child] : tree.children) {
-      append(key, child);
-    }
-  } else {
-    for (auto it = tree.children.rbegin(); it != tree.children.rend(); ++it) {
-      append(it->first, it->second);
-    }
+  for (const ChildEntry& entry : entries) {
+    append(*entry.key, *entry.node);
   }
 }
 
