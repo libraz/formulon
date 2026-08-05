@@ -436,6 +436,12 @@ TEST(BuiltinsComplex, ImExpOfZero) {
   EXPECT_EQ(v.as_text(), "1");
 }
 
+TEST(BuiltinsComplex, ImExpOverflowIsNum) {
+  const Value v = EvalSource("=IMEXP(\"1000\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 TEST(BuiltinsComplex, ImLn) {
   // ln(1+i) = 0.5*ln(2) + i*pi/4. Tolerance accommodates the 6-digit
   // roundtrip through format_double.

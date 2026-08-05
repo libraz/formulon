@@ -395,6 +395,19 @@ TEST(DateTimeWeekday, Type3MondayZero) {
   EXPECT_EQ(v.as_number(), 3.0);
 }
 
+TEST(DateTimeWeekday, PreGhostDaysUseGregorianWeekdays) {
+  // Excel's serial weekday arithmetic deliberately reports the weekday one
+  // day earlier before its fictitious 1900-02-29. Formulon keeps the real
+  // Gregorian weekday instead; the verified intentional divergence lives in
+  // tests/divergence.yaml as weekday_pre_1900_excel_serial_bug.
+  const Value jan_1 = EvalSource("=WEEKDAY(DATE(1900, 1, 1), 2)");
+  const Value feb_28 = EvalSource("=WEEKDAY(DATE(1900, 2, 28), 2)");
+  ASSERT_TRUE(jan_1.is_number());
+  ASSERT_TRUE(feb_28.is_number());
+  EXPECT_EQ(jan_1.as_number(), 1.0);   // Monday
+  EXPECT_EQ(feb_28.as_number(), 3.0);  // Wednesday
+}
+
 TEST(DateTimeWeekday, Type11MondayStart) {
   // Type 11 starts the week on Monday, returns 1..7. Thursday -> 4.
   const Value v = EvalSource("=WEEKDAY(DATE(2026, 4, 23), 11)");

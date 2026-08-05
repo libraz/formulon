@@ -173,6 +173,13 @@ TEST(BuiltinsTInv, MedianIsZero) {
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
+TEST(BuiltinsTInv, ExtremeUpperTailExpandsBracket) {
+  // df=1 is Cauchy: tan(pi * (p - 0.5)) is far above the old 1e6 cap.
+  const Value v = EvalSource("=T.INV(0.999999999999,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 3.183e11, 5e8);
+}
+
 TEST(BuiltinsTInv, PZeroIsNum) {
   const Value v = EvalSource("=T.INV(0, 10)");
   ASSERT_TRUE(v.is_error());

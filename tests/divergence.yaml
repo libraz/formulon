@@ -47,6 +47,18 @@
 #                                                     # immediately.
 
 entries:
+  # Excel preserves its 1900 serial-calendar weekday offset for dates before
+  # the fictitious 1900-02-29. Formulon intentionally returns the real
+  # proleptic-Gregorian weekday; this non-oracle unit test fixes that policy.
+  - id: weekday_pre_1900_excel_serial_bug
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_datetime_test.cpp]
+    reason: "Excel 365 ja-JP 16.111.2 returns WEEKDAY(DATE(1900,1,1),2)=7 and WEEKDAY(DATE(1900,2,28),2)=2, one day earlier than their real Gregorian weekdays. Formulon intentionally returns 1 and 3."
+    prefer: formulon
+    first_noted: 2026-08-05
+    last_verified_excel_version: "16.111.2"
+
   # Mac xlwings reads ARRAYTOTEXT error results back as blank cells, so the
   # primary golden cannot distinguish #N/A / #VALUE! from a real blank.
   - ids:

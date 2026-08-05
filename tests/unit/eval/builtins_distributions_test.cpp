@@ -552,6 +552,14 @@ TEST(BuiltinsBetaInv, RoundTripTinyAtSupportBoundary) {
   EXPECT_NEAR(back.as_number(), 1.0e-12, 5e-8);
 }
 
+TEST(BuiltinsBetaInv, ExtremeTailDoesNotClampToFixedLowerBound) {
+  // BETA(1, 1) has CDF(x) = x, making this an exact probe of the inverter's
+  // lower search bound rather than of the incomplete-beta approximation.
+  const Value v = EvalSource("=BETA.INV(5.77e-151, 1, 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 5.77e-151, 1e-160);
+}
+
 // ---------------------------------------------------------------------------
 // GAMMA
 // ---------------------------------------------------------------------------

@@ -78,6 +78,12 @@ TEST(BuiltinsCountIf, RangeWithNumericEqCriterion) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsCountIf, ArrayLiteralUsesSharedRangeMaterialization) {
+  const Value v = EvalSource("=COUNTIF({1,2;2,3},2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
 TEST(BuiltinsCountIf, RangeWithGtNumericCriterion) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
@@ -87,6 +93,30 @@ TEST(BuiltinsCountIf, RangeWithGtNumericCriterion) {
   const Value v = EvalSourceIn("=COUNTIF(A1:A4, \">5\")", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountIf, SumIfOverflowIsNum) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(1.0));
+  sheet.set_cell_value(0, 1, Value::number(1.0e308));
+  sheet.set_cell_value(1, 1, Value::number(1.0e308));
+  const Value v = EvalSourceIn("=SUMIF(A1:A2, 1, B1:B2)", wb, sheet);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsCountIf, AverageIfOverflowIsNum) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(1.0));
+  sheet.set_cell_value(0, 1, Value::number(1.0e308));
+  sheet.set_cell_value(1, 1, Value::number(1.0e308));
+  const Value v = EvalSourceIn("=AVERAGEIF(A1:A2, 1, B1:B2)", wb, sheet);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsCountIf, RangeWithLtEqNumericCriterion) {

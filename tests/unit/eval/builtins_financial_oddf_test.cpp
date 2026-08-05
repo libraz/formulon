@@ -527,6 +527,15 @@ TEST(FinancialOddf, OddfYieldConvergesFromHighPremium) {
   EXPECT_NEAR(price_v.as_number(), 140.0, 1e-9);
 }
 
+TEST(FinancialOddf, OddfYieldLowYieldRoundTrip) {
+  const Value yld_v = EvalSource(
+      "=ODDFYIELD(DATE(2024,1,1), DATE(2054,1,1), DATE(2023,1,1), DATE(2024,7,1), 0.005, "
+      "ODDFPRICE(DATE(2024,1,1), DATE(2054,1,1), DATE(2023,1,1), DATE(2024,7,1), 0.005, 0.0125, 100, 2, 0), "
+      "100, 2, 0)");
+  ASSERT_TRUE(yld_v.is_number());
+  EXPECT_NEAR(yld_v.as_number(), 0.0125, 1e-9);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

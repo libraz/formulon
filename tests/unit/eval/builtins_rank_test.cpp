@@ -46,6 +46,14 @@ TEST(BuiltinsRank, DescendingBasic) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsRank, PercentRankExcessiveSignificanceIsNum) {
+  for (const char* formula : {"=PERCENTRANK.INC({1;2}, 1, 309)", "=PERCENTRANK.EXC({1;2}, 1, 309)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+}
+
 TEST(BuiltinsRank, AscendingBasic) {
   // Array {30, 20, 10} ascending: 20 has 1 strictly less (10) -> rank 2.
   const Value v = EvalSource("=RANK(20, {30;20;10}, 1)");

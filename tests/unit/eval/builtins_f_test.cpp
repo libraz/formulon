@@ -173,6 +173,14 @@ TEST(BuiltinsFInv, Median) {
   EXPECT_NEAR(v.as_number(), 0.93193316085104805, 1e-6);
 }
 
+TEST(BuiltinsFInv, ExtremeUpperTailExpandsBracket) {
+  // F(1,1) is the square of a Cauchy variate. For p near one its quantile
+  // is far outside the former fixed 1e10 inverse bracket.
+  const Value v = EvalSource("=F.INV(0.999999999999,1,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 4.052e23, 5e20);
+}
+
 TEST(BuiltinsFInv, PZeroIsLeftBoundary) {
   // The F distribution's support starts at 0, so F.INV(0, ...) is the
   // natural left-edge value and Mac Excel 365 returns 0.0 rather than
