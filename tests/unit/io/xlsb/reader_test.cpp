@@ -447,6 +447,8 @@ TEST(XlsbReader, UndecodableFormulaPreservesCachedValueWithoutFakeFormula) {
   // Cached value preserved so the cell still shows the right number.
   ASSERT_TRUE(c->cached_value.is_number());
   EXPECT_EQ(c->cached_value.as_number(), 42.0);
+  EXPECT_EQ(result.value().undecoded_formula_count, 1U);
+  EXPECT_EQ(result.value().undecoded_defined_name_count, 0U);
 }
 
 TEST(XlsbReader, OutOfRangeCellColumnIsRecordCorrupt) {

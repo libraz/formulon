@@ -67,6 +67,7 @@ constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.bin
 constexpr std::string_view kCtWorksheetXlsb = "application/vnd.ms-excel.worksheet";
 constexpr std::string_view kCtSharedStringsXlsb = "application/vnd.ms-excel.sharedStrings";
 constexpr std::string_view kCtStylesXlsb = "application/vnd.ms-excel.styles";
+constexpr std::string_view kCtSheetMetadataXlsb = "application/vnd.ms-excel.sheetMetadata";
 
 constexpr std::string_view kRelOfficeDocument =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -107,6 +108,7 @@ struct EmissionPlan {
   std::vector<const PassthroughPart*> passthrough_kept;
   bool has_text_cells = false;  // gates emission of xl/sharedStrings.bin
   bool has_generated_styles = false;
+  bool has_generated_dynamic_metadata = false;
 };
 
 void ReportDeferred(std::uint32_t* count, std::string_view kind, std::size_t items, std::size_t sheet_index) {
@@ -129,8 +131,6 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     ReportDeferred(&count, "data_validations", sheet.validations().size(), i);
     ReportDeferred(&count, "hyperlinks", sheet.hyperlinks().size(), i);
     ReportDeferred(&count, "auto_filter", sheet.auto_filter_xml().empty() ? 0U : 1U, i);
-    const SheetView& view = sheet.view();
-    ReportDeferred(&count, "frozen_panes", (view.freeze_rows != 0U || view.freeze_cols != 0U) ? 1U : 0U, i);
     const SheetPrintSettings& print = sheet.print_settings();
     const bool has_print = !print.sheet_pr_xml.empty() || !print.page_margins_xml.empty() ||
                            !print.page_setup_xml.empty() || !print.print_options_xml.empty() ||
@@ -152,6 +152,15 @@ bool IsBinaryIndexPart(const std::string& path) {
   return path.size() > kPrefix.size() && path.compare(0, kPrefix.size(), kPrefix) == 0;
 }
 
+// `xl/metadata.xml` is an XLSX-only dynamic-array metadata part.  Its XLSB
+// counterpart is `xl/metadata.bin`; copying XML bytes into a binary workbook
+// makes Excel repair the file on open.  Dynamic-array metadata that the
+// model can represent is regenerated below; other XLSX-only metadata remains
+// deliberately out of the XLSB package.
+bool IsXlsxOnlyMetadataPart(const std::string& path) {
+  return path == "xl/metadata.xml";
+}
+
 bool HasRawStylesPart(const Workbook& wb) {
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (part.path == "xl/styles.bin")
@@ -170,7 +179,89 @@ bool HasModelledStyles(const Workbook& wb) {
          !styles.cell_xfs.empty() || !styles.cell_style_xfs.empty() || !styles.cell_styles.empty();
 }
 
-std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part, bool emit_styles_part) {
+bool HasDynamicArrayMetadata(const Workbook& wb) {
+  for (std::size_t sheet_index = 0; sheet_index < wb.sheet_count(); ++sheet_index) {
+    const Sheet& sheet = wb.sheet(sheet_index);
+    for (const auto& [row, cells] : sheet.rows()) {
+      for (std::uint32_t col = 0; col < cells.size(); ++col) {
+        if (!cells[col].formula_text.empty()) {
+          if (sheet.spill_region_at_anchor(row, col) != nullptr) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// Emits the XLDAPR metadata stream Excel uses to mark spilled dynamic-array
+// anchors. The record sequence and constant GUID are the canonical dynamic
+// array metadata shape Excel writes in XLSB workbooks. Cell records refer to
+// its sole entry with BrtCellMeta index 1.
+std::vector<std::uint8_t> BuildDynamicArrayMetadataBin() {
+  constexpr std::uint16_t kBrtBeginMetadata = 332;
+  constexpr std::uint16_t kBrtEndMetadata = 333;
+  constexpr std::uint16_t kBrtBeginEsmdtinfo = 334;
+  constexpr std::uint16_t kBrtMdtinfo = 335;
+  constexpr std::uint16_t kBrtEndEsmdtinfo = 336;
+  constexpr std::uint16_t kBrtBeginEsfmd = 337;
+  constexpr std::uint16_t kBrtEndEsfmd = 338;
+  constexpr std::uint16_t kBrtBeginEsfmdInfo = 339;
+  constexpr std::uint16_t kBrtEndEsfmdInfo = 340;
+  constexpr std::uint16_t kBrtBeginExt = 52;
+  constexpr std::uint16_t kBrtBeginFRT = 35;
+  constexpr std::uint16_t kBrtBeginDynamicArrayExt = 4096;
+  constexpr std::uint16_t kBrtDynamicArrayProperties = 4097;
+  constexpr std::uint16_t kBrtEndFRT = 36;
+  constexpr std::uint16_t kBrtEndExt = 53;
+  constexpr std::uint16_t kBrtCellMetaEntry = 51;
+
+  std::vector<std::uint8_t> out;
+  std::vector<std::uint8_t> payload;
+  emit_record(out, kBrtBeginMetadata, ByteSpan{});
+
+  emit_u32(payload, 1U);
+  emit_record(out, kBrtBeginEsmdtinfo, payload);
+  payload.clear();
+  emit_u32(payload, 0xD86AC0B0U);
+  emit_u32(payload, 0x0001D4C0U);
+  emit_xlwidestring(payload, "XLDAPR");
+  emit_record(out, kBrtMdtinfo, payload);
+  emit_record(out, kBrtEndEsmdtinfo, ByteSpan{});
+
+  payload.clear();
+  emit_u32(payload, 1U);
+  emit_xlwidestring(payload, "XLDAPR");
+  emit_record(out, kBrtBeginEsfmdInfo, payload);
+  emit_record(out, kBrtBeginExt, ByteSpan{});
+  payload.clear();
+  emit_u32(payload, 0x00020002U);
+  emit_record(out, kBrtBeginFRT, payload);
+  emit_record(out, kBrtBeginDynamicArrayExt, ByteSpan{});
+  payload.clear();
+  emit_u16(payload, 1U);
+  emit_record(out, kBrtDynamicArrayProperties, payload);
+  emit_record(out, kBrtEndFRT, ByteSpan{});
+  emit_record(out, kBrtEndExt, ByteSpan{});
+  emit_record(out, kBrtEndEsfmdInfo, ByteSpan{});
+
+  payload.clear();
+  emit_u32(payload, 1U);
+  emit_u32(payload, 1U);
+  emit_record(out, kBrtBeginEsfmd, payload);
+  payload.clear();
+  emit_u32(payload, 1U);
+  emit_u32(payload, 1U);
+  emit_u32(payload, 0U);
+  emit_record(out, kBrtCellMetaEntry, payload);
+  emit_record(out, kBrtEndEsfmd, ByteSpan{});
+  emit_record(out, kBrtEndMetadata, ByteSpan{});
+  return out;
+}
+
+std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part, bool emit_styles_part,
+                                                      bool emit_dynamic_metadata_part) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
@@ -185,6 +276,9 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   if (emit_styles_part) {
     paths.insert("xl/styles.bin");
   }
+  if (emit_dynamic_metadata_part) {
+    paths.insert("xl/metadata.bin");
+  }
   return paths;
 }
 
@@ -196,8 +290,13 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool sst_present) {
   // (notably differential formats).  XLSX/native workbooks have no raw part,
   // so their modelled style table becomes a fresh styles.bin instead.
   plan.has_generated_styles = !HasRawStylesPart(wb) && HasModelledStyles(wb);
+  plan.has_generated_dynamic_metadata =
+      HasDynamicArrayMetadata(wb) &&
+      !std::any_of(wb.passthrough_parts().begin(), wb.passthrough_parts().end(),
+                   [](const PassthroughPart& part) { return part.path == "xl/metadata.bin"; });
 
-  const std::unordered_set<std::string> generated = BuildGeneratedPathSet(wb, sst_present, plan.has_generated_styles);
+  const std::unordered_set<std::string> generated =
+      BuildGeneratedPathSet(wb, sst_present, plan.has_generated_styles, plan.has_generated_dynamic_metadata);
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (generated.count(part.path) != 0U) {
       StructuredLog("xlsb.writer.passthrough_collision")
@@ -214,7 +313,13 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool sst_present) {
     // chain is rejected, and Excel rebuilds it on load when absent (same
     // policy as the OOXML writer). Neither carries a workbook relationship
     // here, so keeping them would leave dangling / mismatched parts.
-    if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin") {
+    if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin" || IsXlsxOnlyMetadataPart(part.path)) {
+      if (IsXlsxOnlyMetadataPart(part.path)) {
+        StructuredLog("xlsb.writer.deferred")
+            .field("kind", std::string_view("xlsx_metadata"))
+            .field("count", static_cast<std::int64_t>(1))
+            .warn();
+      }
       continue;
     }
     plan.passthrough_kept.push_back(&part);
@@ -254,6 +359,11 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   if (plan.has_text_cells) {
     out.append("  <Override PartName=\"/xl/sharedStrings.bin\" ContentType=\"");
     out.append(kCtSharedStringsXlsb);
+    out.append("\"/>\n");
+  }
+  if (plan.has_generated_dynamic_metadata) {
+    out.append("  <Override PartName=\"/xl/metadata.bin\" ContentType=\"");
+    out.append(kCtSheetMetadataXlsb);
     out.append("\"/>\n");
   }
   if (plan.has_generated_styles) {
@@ -337,9 +447,18 @@ std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan) {
+std::string WorkbookRelativeTarget(std::string_view package_path) {
+  constexpr std::string_view kWorkbookDirectory = "xl/";
+  if (package_path.size() >= kWorkbookDirectory.size() &&
+      package_path.substr(0U, kWorkbookDirectory.size()) == kWorkbookDirectory) {
+    return std::string(package_path.substr(kWorkbookDirectory.size()));
+  }
+  return std::string(package_path);
+}
+
+std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan, const Workbook& wb) {
   std::string out;
-  out.reserve(256 + sheet_count * 192);
+  out.reserve(256 + sheet_count * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   std::size_t next_rid = 1;
@@ -366,8 +485,29 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   if (HasPassthrough(plan, "xl/theme/theme1.xml")) {
     AppendRelationship(out, &next_rid, kRelTheme, "theme/theme1.xml");
   }
-  if (HasPassthrough(plan, "xl/metadata.bin")) {
+  if (plan.has_generated_dynamic_metadata || HasPassthrough(plan, "xl/metadata.bin")) {
     AppendRelationship(out, &next_rid, kRelSheetMetadata, "metadata.bin");
+  }
+  // Preserve relationships to raw XLSB parts that the reader does not model
+  // (drawings, VBA, custom XML, etc.).  Internal targets are stored as
+  // package paths on Workbook, while workbook relationships are relative to
+  // `xl/`.  Do not duplicate relationships which the generated package
+  // already owns above.
+  for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
+    if (!rel.target_external && !HasPassthrough(plan, rel.target)) {
+      StructuredLog("xlsb.writer.workbook_rel_skipped")
+          .field("reason", std::string_view("target_part_absent"))
+          .field("type", rel.type)
+          .field("target", rel.target)
+          .warn();
+      continue;
+    }
+    if (!rel.target_external && ((rel.type == kRelTheme && rel.target == "xl/theme/theme1.xml") ||
+                                 (rel.type == kRelSheetMetadata && rel.target == "xl/metadata.bin"))) {
+      continue;
+    }
+    const std::string target = rel.target_external ? rel.target : WorkbookRelativeTarget(rel.target);
+    AppendRelationship(out, &next_rid, rel.type, target, rel.target_external);
   }
   out.append("</Relationships>\n");
   return out;
@@ -377,13 +517,16 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
 // PtgName table (BrtName): defined names + future-function callees
 // ---------------------------------------------------------------------------
 
-/// Parses `formula` (no leading `=`) and folds every name
+/// Parses `formula` (with or without a leading `=`) and folds every name
 /// `collect_ptg_names` finds into `names` / `seen`. Parse failures are
 /// silently skipped here — `EncodeCellFormula` / the defined-name
 /// encode pass below surface the same failure as a proper `Expected`
 /// error when the formula is actually encoded.
 void CollectNamesFromFormula(std::string_view formula, std::vector<std::string>& names,
                              std::unordered_set<std::string>& seen) {
+  if (!formula.empty() && formula.front() == '=') {
+    formula.remove_prefix(1);
+  }
   Arena arena;
   parser::Parser p(formula, arena);
   parser::AstNode* root = p.parse();
@@ -396,7 +539,7 @@ void CollectNamesFromFormula(std::string_view formula, std::vector<std::string>&
 /// Builds the `PtgName` table for the whole workbook: every genuine
 /// defined name (`Workbook::defined_names()`, in declaration order) is
 /// registered first, then every future-function callee / `NameRef`
-/// `collect_ptg_names` discovers across every sheet's formulas (in
+/// `collect_ptg_names` discovers across defined-name and sheet formulas (in
 /// first-encounter order) that is not already a defined name. Returns
 /// the ordered name list (index `i` <-> 1-based `ilbl` `i + 1`) and the
 /// name -> ilbl map `encode_ptgs` consults.
@@ -407,6 +550,9 @@ void BuildNameTable(const Workbook& wb, std::vector<std::string>& ordered_names,
       ordered_names.push_back(dn.name);
     }
   }
+  for (const io::DefinedName& dn : wb.defined_names()) {
+    CollectNamesFromFormula(dn.formula, ordered_names, seen);
+  }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     for (const auto& [row, cells] : wb.sheet(i).rows()) {
       (void)row;
@@ -414,11 +560,7 @@ void BuildNameTable(const Workbook& wb, std::vector<std::string>& ordered_names,
         if (cell.formula_text.empty()) {
           continue;
         }
-        std::string_view body(cell.formula_text);
-        if (!body.empty() && body.front() == '=') {
-          body.remove_prefix(1);
-        }
-        CollectNamesFromFormula(body, ordered_names, seen);
+        CollectNamesFromFormula(cell.formula_text, ordered_names, seen);
       }
     }
   }
@@ -793,13 +935,14 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const SheetRangeTable sheet_ranges = BuildSheetRangeTable(workbook, sheet_names);
 
   SstBuilder sst;
+  const bool emit_dynamic_metadata = HasDynamicArrayMetadata(workbook);
   std::uint32_t downgraded_formula_count = 0;
   const std::uint32_t deferred_feature_count = ReportDeferredSheetFeatures(workbook);
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    auto sheet_body_or =
-        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, name_table, &downgraded_formula_count);
+    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, name_table,
+                                    &downgraded_formula_count, emit_dynamic_metadata);
     if (!sheet_body_or) {
       return sheet_body_or.error();
     }
@@ -826,7 +969,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // Passthrough parts (styles.bin, theme, metadata, sharedStrings) are only
   // discoverable through workbook relationships; BuildWorkbookRels emits a rel
   // for each part actually present so none dangle on reload.
-  if (auto r = AddPart(writer.get(), "xl/_rels/workbook.bin.rels", BuildWorkbookRels(sheet_count, emit_sst_part, plan));
+  if (auto r = AddPart(writer.get(), "xl/_rels/workbook.bin.rels",
+                       BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook));
       !r) {
     return r.error();
   }
@@ -846,6 +990,14 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   if (plan.has_generated_styles) {
     const std::vector<std::uint8_t> styles_bytes = write_styles_bin(workbook.styles());
     if (auto r = AddPartBytes(writer.get(), "xl/styles.bin", styles_bytes); !r) {
+      return r.error();
+    }
+  }
+  // 4c. xl/metadata.bin for dynamic-array spill anchors. The worksheet
+  // BrtCellMeta records and workbook relationship are emitted in lockstep.
+  if (plan.has_generated_dynamic_metadata) {
+    const std::vector<std::uint8_t> metadata_bytes = BuildDynamicArrayMetadataBin();
+    if (auto r = AddPartBytes(writer.get(), "xl/metadata.bin", metadata_bytes); !r) {
       return r.error();
     }
   }

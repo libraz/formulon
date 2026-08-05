@@ -62,10 +62,15 @@ namespace xlsb {
 ///
 /// `cells_read` is an audit counter: every cell record successfully
 /// decoded into the workbook (literal or formula) bumps it once.
+/// `undecoded_*` counters record lossy recovery from Ptg streams outside
+/// the supported vocabulary; their cached values remain available but a
+/// caller can now detect the missing formulas without parsing log output.
 struct XlsbReadResult {
   Workbook workbook;
   std::vector<PassthroughPart> unknown_parts;
   std::uint32_t cells_read = 0;
+  std::uint32_t undecoded_formula_count = 0;
+  std::uint32_t undecoded_defined_name_count = 0;
 };
 
 /// Reads a `.xlsb` package from in-memory bytes.

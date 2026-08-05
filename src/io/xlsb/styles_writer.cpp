@@ -69,7 +69,11 @@ void EmitColor(std::vector<std::uint8_t>& payload, std::uint32_t argb, const Col
     case ColorSpec::Kind::kRgb:
       break;
   }
-  emit_u8(payload, static_cast<std::uint8_t>(0x80U | kind));  // fValidRGB + xColorType
+  // BrtColor stores fValidRGB in bit 0 and XColorType in bits 1..7.
+  // Setting bit 7 turns an RGB color into the reserved type 0x41, which
+  // makes Excel reject the entire styles part.
+  const std::uint32_t color_flags = (static_cast<std::uint32_t>(kind) << 1U) | 0x01U;
+  emit_u8(payload, static_cast<std::uint8_t>(color_flags));
   emit_u8(payload, index);
   emit_u16(payload, static_cast<std::uint16_t>(tint));
   emit_u8(payload, static_cast<std::uint8_t>((argb >> 16U) & 0xFFU));

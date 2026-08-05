@@ -56,6 +56,40 @@ Error corrupt_stack(const char* detail) {
                     "context=xlsb_ptg_reader");
 }
 
+// `PtgMemArea` has one matching PtgExtraMem in RgbExtra: a u32 count
+// followed by `count` 16-byte UncheckedRfX records. The ranges cache the
+// result of the following binary-reference expression; the expression's own
+// Ptgs remain authoritative for the AST, so this reader only validates and
+// consumes the opaque cache payload to keep later RgbExtra entries aligned.
+Expected<void, Error> skip_ptg_extra_mem(ByteSpan& extra) {
+  auto count_or = read_u32(extra);
+  if (!count_or) {
+    return count_or.error();
+  }
+  constexpr std::size_t kUncheckedRfXBytes = 16U;
+  const std::size_t count = count_or.value();
+  if (count > extra.size / kUncheckedRfXBytes) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgExtraMem range array truncated",
+                      "context=xlsb_ptg_reader");
+  }
+  const std::size_t bytes = count * kUncheckedRfXBytes;
+  extra.data += bytes;
+  extra.size -= bytes;
+  return Expected<void, Error>::Ok();
+}
+
+// Mem Ptgs encode the byte length of the following binary-reference
+// expression. That expression remains in `cursor` and is decoded normally;
+// validating the advertised bound catches a malformed cache marker without
+// skipping the actual formula.
+Expected<void, Error> validate_mem_expression_size(std::uint16_t cce, const ByteSpan& cursor, const char* ptg_name) {
+  if (static_cast<std::size_t>(cce) > cursor.size) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
+                      std::string(ptg_name) + " binary-reference expression truncated", "context=xlsb_ptg_reader");
+  }
+  return Expected<void, Error>::Ok();
+}
+
 /// Maps an MS-XLSB error wire code to the engine `ErrorCode`. Delegates
 /// to the single `kErrorTable`-backed lookup so this path can never drift
 /// from the writer's `ooxml_code()` (see `error_from_ooxml_code` in
@@ -372,6 +406,67 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
     cursor.size -= 1;
 
     switch (info->kind) {
+      // ---- Memory/cache markers ------------------------------------------
+      // These markers do not push an operand. Their following expression is
+      // still encoded in the normal Ptg stream, so preserve it by consuming
+      // only the marker payload (and the matching PtgMemArea extra cache).
+      case PtgKind::MemArea:
+      case PtgKind::MemNoMem: {
+        auto unused_or = read_u32(cursor);
+        if (!unused_or) {
+          return unused_or.error();
+        }
+        auto cce_or = read_u16(cursor);
+        if (!cce_or) {
+          return cce_or.error();
+        }
+        auto size_check = validate_mem_expression_size(cce_or.value(), cursor, info->name);
+        if (!size_check) {
+          return size_check.error();
+        }
+        if (info->kind == PtgKind::MemArea) {
+          auto extra_check = skip_ptg_extra_mem(extra);
+          if (!extra_check) {
+            return extra_check.error();
+          }
+        }
+        break;
+      }
+      case PtgKind::MemErr: {
+        auto error_or = read_u8(cursor);
+        if (!error_or) {
+          return error_or.error();
+        }
+        auto unused_or = read_u8(cursor);
+        if (!unused_or) {
+          return unused_or.error();
+        }
+        auto unused2_or = read_u16(cursor);
+        if (!unused2_or) {
+          return unused2_or.error();
+        }
+        auto cce_or = read_u16(cursor);
+        if (!cce_or) {
+          return cce_or.error();
+        }
+        auto size_check = validate_mem_expression_size(cce_or.value(), cursor, info->name);
+        if (!size_check) {
+          return size_check.error();
+        }
+        break;
+      }
+      case PtgKind::MemFunc: {
+        auto cce_or = read_u16(cursor);
+        if (!cce_or) {
+          return cce_or.error();
+        }
+        auto size_check = validate_mem_expression_size(cce_or.value(), cursor, info->name);
+        if (!size_check) {
+          return size_check.error();
+        }
+        break;
+      }
+
       // ---- Operands -------------------------------------------------------
       case PtgKind::Int: {
         auto v_or = read_u16(cursor);

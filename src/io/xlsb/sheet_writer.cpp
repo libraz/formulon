@@ -42,15 +42,20 @@ bool IsEmptySlot(const Cell& cell) {
 ///   * miyRw      : u16 (custom row height in twips; 0 = use default)
 ///   * flags1     : u8
 ///   * flags2     : u8  (outline / hidden / customHeight bits)
-///   * ccolspan   : u32 (number of following BrtColSpan records; zero here)
+///   * fPhShow    : u8  (phonetic-guide default)
+///   * ccolspan   : u32 (number of following BrtColSpan records)
+///   * rgBrtColspan: repeated (colMic, colLast) u32 pairs
 ///
-/// `ccolspan == 0` is a 16-byte payload. It must not carry the obsolete
-/// trailing colMic/colMac fields outside a BrtColSpan array.
-void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowLayout* layout) {
+/// A row with cell records must describe every 1,024-column segment which
+/// contains one.  Excel repairs a stream that claims `ccolspan == 0` while
+/// following it with cells, even though our own permissive reader can decode
+/// it.  An empty layout-only row legitimately has no spans.
+void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowLayout* layout,
+                   const std::map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>>& spans) {
   std::vector<std::uint8_t> p;
   emit_u32(p, row);
   emit_u32(p, 0);  // iStyleRef
-  const bool has_height = layout != nullptr && layout->height > 0.0;
+  const bool has_height = layout != nullptr && (layout->has_height || layout->height > 0.0);
   const double twips = has_height ? std::round(layout->height * 20.0) : 0.0;
   emit_u16(p, static_cast<std::uint16_t>(std::clamp(twips, 0.0, 65535.0)));  // miyRw
   emit_u8(p, 0);                                                             // flags1
@@ -62,7 +67,15 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
     flags2 |= 0x20U;  // fUnsynced
   }
   emit_u8(p, flags2);
-  emit_u32(p, 0);  // ccolspan
+  // fPhShow is a distinct byte, not part of flags2.  It is required even
+  // when the phonetic guide is disabled; otherwise ccolspan is misaligned.
+  emit_u8(p, 0U);
+  emit_u32(p, static_cast<std::uint32_t>(spans.size()));  // ccolspan
+  for (const auto& [segment, span] : spans) {
+    (void)segment;
+    emit_u32(p, span.first);   // colMic
+    emit_u32(p, span.second);  // colLast
+  }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtRowHdr), p);
 }
 
@@ -90,6 +103,124 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) 
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtColInfo), p);
   }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndColInfos), ByteSpan{});
+}
+
+/// Emits the worksheet-properties record which starts the mandatory worksheet
+/// prefix. `BrtWsDim` must follow this record before the view collection.
+void EmitWorksheetProperties(std::vector<std::uint8_t>& dst) {
+  std::vector<std::uint8_t> properties;
+  emit_u16(properties, 0x04C9U);  // page breaks, publish, outline defaults
+  emit_u8(properties, 0x02U);     // evaluate conditional formatting
+  // BrtColor: automatic tab color (type=automatic, index=0x40).
+  emit_u8(properties, 0U);
+  emit_u8(properties, 0x40U);
+  emit_u16(properties, 0U);
+  emit_u8(properties, 0U);
+  emit_u8(properties, 0U);
+  emit_u8(properties, 0U);
+  emit_u8(properties, 0U);
+  emit_u32(properties, 0xFFFFFFFFU);  // rwSync: unused
+  emit_u32(properties, 0xFFFFFFFFU);  // colSync: unused
+  emit_u32(properties, 0U);           // empty CodeName
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsProp), properties);
+}
+
+/// Emits the mandatory worksheet-view and default-formatting suffix. Omitting
+/// these records leaves a technically decodable stream that desktop Excel
+/// repairs before opening. The defaults match an Excel-created normal
+/// worksheet: visible grid/headings, 100% zoom, 10-character default column
+/// width, and 20-point default row height.
+void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const SheetView& sheet_view) {
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsViews), ByteSpan{});
+  std::vector<std::uint8_t> view;
+  std::uint16_t flags = 0x0380U;  // ruler, outline symbols, default gridline color
+  if (sheet_view.show_grid_lines) {
+    flags |= 0x0004U;
+  }
+  if (sheet_view.show_row_col_headers) {
+    flags |= 0x0008U;
+  }
+  if (sheet_view.show_zeros) {
+    flags |= 0x0010U;
+  }
+  if (sheet_view.right_to_left) {
+    flags |= 0x0020U;
+  }
+  if (sheet_view.tab_selected) {
+    flags |= 0x0040U;
+  }
+  emit_u16(view, flags);
+  emit_u32(view, 0U);    // XLVNORMAL
+  emit_u32(view, 0U);    // rwTop
+  emit_u32(view, 0U);    // colLeft
+  emit_u8(view, 0x40U);  // default gridline color
+  emit_u8(view, 0U);
+  emit_u16(view, 0U);
+  const std::uint32_t zoom = std::clamp(sheet_view.zoom_scale, 10U, 400U);
+  emit_u16(view, static_cast<std::uint16_t>(zoom));
+  emit_u16(view, 0U);
+  emit_u16(view, 0U);
+  emit_u16(view, 0U);
+  emit_u32(view, 0U);  // workbook view index
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsView), view);
+  if (sheet_view.freeze_rows != 0U || sheet_view.freeze_cols != 0U) {
+    // BrtPane uses the frozen row and column counts in the two Xnum fields,
+    // and identifies the bottom-right pane as the active pane. fFrozenNoSplit
+    // represents Excel's ordinary "Freeze Panes" state.
+    std::vector<std::uint8_t> pane;
+    emit_double(pane, static_cast<double>(sheet_view.freeze_rows));
+    emit_double(pane, static_cast<double>(sheet_view.freeze_cols));
+    emit_u32(pane, sheet_view.freeze_rows);
+    emit_u32(pane, sheet_view.freeze_cols);
+    emit_u32(pane, 0U);  // PNNBOTRIGHT
+    emit_u8(pane, 0x02U);
+    emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtPane), pane);
+  }
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsView), ByteSpan{});
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsViews), ByteSpan{});
+
+  std::vector<std::uint8_t> formatting;
+  emit_u32(formatting, 0xFFFFFFFFU);  // default column width is character-count based
+  emit_u16(formatting, 10U);          // default column width
+  emit_u16(formatting, 400U);         // default row height (twips)
+  emit_u32(formatting, 0U);           // default visibility/borders/outline levels
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsFmtInfo), formatting);
+}
+
+/// Emits the bounding RfX of actual emitted cells.  Although BrtWsDim is
+/// optional in the grammar, Excel itself writes it for every non-empty sheet
+/// and uses it to establish the worksheet's used range before reading the
+/// cell table.
+void EmitWorksheetDimensions(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
+  std::uint32_t first_row = Sheet::kMaxRows;
+  std::uint32_t last_row = 0U;
+  std::uint32_t first_col = Sheet::kMaxCols;
+  std::uint32_t last_col = 0U;
+  bool any = false;
+  auto include = [&](std::uint32_t row, std::uint32_t col) {
+    first_row = std::min(first_row, row);
+    last_row = std::max(last_row, row);
+    first_col = std::min(first_col, col);
+    last_col = std::max(last_col, col);
+    any = true;
+  };
+
+  for (const auto& [row, cells] : sheet.rows()) {
+    for (std::uint32_t col = 0; col < cells.size(); ++col) {
+      if (!IsEmptySlot(cells[col])) {
+        include(row, col);
+      }
+    }
+  }
+  if (!any) {
+    return;
+  }
+  std::vector<std::uint8_t> payload;
+  emit_u32(payload, first_row);
+  emit_u32(payload, last_row);
+  emit_u32(payload, first_col);
+  emit_u32(payload, last_col);
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsDim), payload);
 }
 
 void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
@@ -129,12 +260,16 @@ void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst,
                                                       const std::vector<std::string>& sheet_names,
                                                       const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                                      std::uint32_t* downgraded_formula_count) {
+                                                      std::uint32_t* downgraded_formula_count,
+                                                      bool emit_dynamic_metadata) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
   // BrtEndSheet.
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheet), ByteSpan{});
+  EmitWorksheetProperties(body);
+  EmitWorksheetDimensions(body, sheet);
+  EmitWorksheetViewsAndFormatting(body, sheet.view());
   EmitColumnInfos(body, sheet.layout());
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 
@@ -235,16 +370,47 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
       continue;
     }
 
-    EmitRowHeader(body, row, row_layout);
+    // BrtRowHdr represents cells in 1,024-column segments.  Include only
+    // cells actually emitted below; leading default-constructed slots must
+    // not enlarge a span.
+    std::map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>> spans;
+    auto add_to_span = [&spans](std::uint32_t col) {
+      const std::uint32_t segment = col / 1024U;
+      const auto [it, inserted] = spans.emplace(segment, std::make_pair(col, col));
+      if (!inserted) {
+        it->second.first = std::min(it->second.first, col);
+        it->second.second = std::max(it->second.second, col);
+      }
+    };
+    if (row_cells != nullptr) {
+      for (std::uint32_t col = 0; col < row_cells->size(); ++col) {
+        if (!IsEmptySlot((*row_cells)[col])) {
+          add_to_span(col);
+        }
+      }
+    }
+    if (row_phantoms != nullptr) {
+      for (const auto& [col, phantom] : *row_phantoms) {
+        (void)phantom;
+        add_to_span(col);
+      }
+    }
+
+    EmitRowHeader(body, row, row_layout, spans);
     for (std::uint32_t col = 0; col <= max_col; ++col) {
       const Cell* cell = row_cells != nullptr && col < row_cells->size() ? &(*row_cells)[col] : nullptr;
       if (cell != nullptr && !IsEmptySlot(*cell)) {
         const SpillRegion* region = cell->formula_text.empty() ? nullptr : sheet.spill_region_at_anchor(row, col);
-        if (region != nullptr && static_cast<std::uint64_t>(region->rows) * region->cols > 1U) {
+        if (region != nullptr) {
           const std::uint32_t last_row = row + region->rows - 1U;
           const std::uint32_t last_col = col + region->cols - 1U;
           const Value& anchor_value = !region->cells.empty() ? region->cells.front() : cell->cached_value;
           bool downgraded_to_literal = false;
+          if (emit_dynamic_metadata) {
+            std::vector<std::uint8_t> metadata_index;
+            emit_u32(metadata_index, 1U);  // XLDAPR dynamic-array metadata entry
+            emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), metadata_index);
+          }
           if (auto r =
                   emit_array_anchor(body, *cell, anchor_value, col, row, last_row, last_col, sheet_names, sheet_ranges,
                                     name_table, sst, downgraded_formula_count, &downgraded_to_literal);

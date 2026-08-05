@@ -14,6 +14,7 @@
 #include "io/xlsb/reader.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -288,6 +289,7 @@ struct WorkbookRels {
   std::unordered_map<std::string, std::string> sheet_targets;  // rId -> resolved part path
   std::string sst_path;
   std::string styles_path;
+  std::vector<UnknownRelationship> unknown_rels;
 };
 
 Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string_view workbook_path) {
@@ -327,6 +329,23 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
             return resolved.error();
           }
           rels.styles_path = std::move(resolved).value();
+        } else {
+          UnknownRelationship unknown;
+          unknown.id.assign(rel.attribute("Id").value());
+          unknown.type.assign(type);
+          unknown.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+          if (unknown.target_external) {
+            unknown.target.assign(target);
+          } else {
+            auto resolved = ResolveRelativePath(base_dir, target);
+            if (!resolved) {
+              return resolved.error();
+            }
+            unknown.target = std::move(resolved).value();
+          }
+          if (!unknown.type.empty()) {
+            rels.unknown_rels.push_back(std::move(unknown));
+          }
         }
         return Expected<void, Error>::Ok();
       });
@@ -605,7 +624,8 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(const std:
 /// of a fabricated formula that would recalc to `#NAME?`.
 std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vector<std::string>& sheet_names,
                               const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
-                              std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
+                              std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                              std::uint32_t* undecoded_formula_count) {
   Arena arena;
   auto ast_or = decode_ptgs(ptg_bytes, rgcb, arena, sheet_names, name_table, sheet_ranges);
   if (!ast_or) {
@@ -616,6 +636,9 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
         .field("ptg_bytes", static_cast<std::int64_t>(ptg_bytes.size))
         .field("reason", ast_or.error().message)
         .warn();
+    if (undecoded_formula_count != nullptr) {
+      ++*undecoded_formula_count;
+    }
     return {};
   }
   std::string out("=");
@@ -640,7 +663,8 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
 Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body,
                                            const std::vector<XlsbName>& name_table,
                                            const std::vector<std::string>& sheet_names,
-                                           const std::vector<XlsbSheetRange>& sheet_ranges, Workbook& wb) {
+                                           const std::vector<XlsbSheetRange>& sheet_ranges, Workbook& wb,
+                                           std::uint32_t* undecoded_defined_name_count) {
   ByteSpan cursor{body.data(), body.size()};
   std::size_t name_index = 0;
   while (cursor.size > 0) {
@@ -698,6 +722,9 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
           .field("name", entry.name)
           .field("reason", ast_or.error().message)
           .warn();
+      if (undecoded_defined_name_count != nullptr) {
+        ++*undecoded_defined_name_count;
+      }
       continue;
     }
     // Defined-name formulas store the bare expression text (no leading
@@ -714,8 +741,8 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
 /// A dynamic-array formula's anchor cell plus its footprint, decoded
 /// from a `BrtArrFmla` record's `RfX`. `row` / `col` is the anchor
 /// (`rwFirst`, `colFirst`); `last_row` / `last_col` is the footprint's
-/// bottom-right corner (`rwLast`, `colLast`). Only spans wider than the
-/// anchor cell are recorded (see `RegisterArraySpills`).
+/// bottom-right corner (`rwLast`, `colLast`). One-cell array anchors are
+/// retained as well so dynamic-array metadata survives an XLSB rewrite.
 struct ArrayAnchor {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
@@ -821,7 +848,7 @@ void RegisterArraySpills(Workbook& wb, std::size_t sheet_index, const std::vecto
         if (r == a.row && c == a.col) {
           continue;
         }
-        wb.sheet(sheet_index).set_cell_cached_value(r, c, Value::blank());
+        wb.sheet(sheet_index).set_cell_cached_value_borrowed(r, c, Value::blank());
       }
     }
     wb.sheet(sheet_index).commit_spill(a.row, a.col, rows, cols, std::move(values));
@@ -837,7 +864,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
                                                  std::deque<std::string>& text_storage,
                                                  const std::vector<std::string>& sheet_names,
                                                  const std::vector<XlsbName>& name_table,
-                                                 const std::vector<XlsbSheetRange>& sheet_ranges) {
+                                                 const std::vector<XlsbSheetRange>& sheet_ranges,
+                                                 std::uint32_t* undecoded_formula_count) {
   SheetDecodeState state;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
@@ -848,9 +876,76 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
     const XlsbRecord& rec = rec_or.value();
     const auto type = static_cast<XlsbRecordType>(rec.type);
     switch (type) {
+      case XlsbRecordType::BrtBeginWsView: {
+        // BrtBeginWsView ([MS-XLSB] §2.4.141) stores the SheetView fields
+        // modelled by Formulon in its flags word and wScale.  Other viewport
+        // state is intentionally not represented by SheetView yet.
+        ByteSpan p = rec.payload;
+        auto flags_or = read_u16(p);
+        auto skip_view = read_u32(p);
+        auto skip_top = read_u32(p);
+        auto skip_left = read_u32(p);
+        auto skip_color = read_u8(p);
+        auto skip_reserved8 = read_u8(p);
+        auto skip_reserved16 = read_u16(p);
+        auto zoom_or = read_u16(p);
+        if (!flags_or || !skip_view || !skip_top || !skip_left || !skip_color || !skip_reserved8 || !skip_reserved16 ||
+            !zoom_or) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtBeginWsView truncated",
+                            "context=xlsb_reader");
+        }
+        SheetView& view = wb.sheet(sheet_index).mutable_view();
+        const std::uint16_t flags = flags_or.value();
+        view.show_grid_lines = (flags & 0x0004U) != 0U;
+        view.show_row_col_headers = (flags & 0x0008U) != 0U;
+        view.show_zeros = (flags & 0x0010U) != 0U;
+        view.right_to_left = (flags & 0x0020U) != 0U;
+        view.tab_selected = (flags & 0x0040U) != 0U;
+        if (zoom_or.value() >= 10U && zoom_or.value() <= 400U) {
+          view.zoom_scale = zoom_or.value();
+        }
+        break;
+      }
+      case XlsbRecordType::BrtPane: {
+        // BrtPane ([MS-XLSB] §2.4.723): two Xnum split positions, then
+        // the lower-right pane's top-left cell and the frozen-state flags.
+        // In a frozen pane the Xnum fields are integral row/column counts.
+        ByteSpan p = rec.payload;
+        if (p.size < 29U) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane truncated", "context=xlsb_reader");
+        }
+        double rows = 0.0;
+        double cols = 0.0;
+        std::memcpy(&rows, p.data, sizeof(rows));
+        std::memcpy(&cols, p.data + sizeof(rows), sizeof(cols));
+        p.data += 16U;
+        p.size -= 16U;
+        auto top_row_or = read_u32(p);
+        auto left_col_or = read_u32(p);
+        auto active_pane_or = read_u32(p);
+        auto flags_or = read_u8(p);
+        if (!top_row_or || !left_col_or || !active_pane_or || !flags_or) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtPane fields truncated",
+                            "context=xlsb_reader");
+        }
+        const std::uint8_t frozen_flags = static_cast<std::uint8_t>(flags_or.value() & 0x03U);
+        if (frozen_flags == 0U) {
+          break;
+        }
+        if (frozen_flags == 0x03U || !std::isfinite(rows) || !std::isfinite(cols) || rows < 0.0 || cols < 0.0 ||
+            std::trunc(rows) != rows || std::trunc(cols) != cols || rows >= Sheet::kMaxRows ||
+            cols >= Sheet::kMaxCols) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtPane frozen counts invalid",
+                            "context=xlsb_reader");
+        }
+        SheetView& view = wb.sheet(sheet_index).mutable_view();
+        view.freeze_rows = static_cast<std::uint32_t>(rows);
+        view.freeze_cols = static_cast<std::uint32_t>(cols);
+        break;
+      }
       case XlsbRecordType::BrtRowHdr: {
         // BrtRowHdr ([MS-XLSB] §2.4.770): rw, ixfe, miyRw, two flag
-        // bytes, then ccolspan. Older minimal producers may provide only
+        // bytes, fPhShow, then ccolspan. Older minimal producers may provide only
         // rw, which remains enough for cell decoding.
         ByteSpan p = rec.payload;
         auto row_or = read_u32(p);
@@ -863,12 +958,13 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         }
         state.current_row = row_or.value();
         state.row_seen = true;
-        if (p.size >= 8U) {
+        if (p.size >= 9U) {
           auto skip_xf = read_u32(p);
           auto height_or = read_u16(p);
           auto flags1_or = read_u8(p);
           auto flags2_or = read_u8(p);
-          if (!skip_xf || !height_or || !flags1_or || !flags2_or) {
+          auto skip_phonetic_show = read_u8(p);
+          if (!skip_xf || !height_or || !flags1_or || !flags2_or || !skip_phonetic_show) {
             return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtRowHdr layout truncated",
                               "context=xlsb_reader");
           }
@@ -877,6 +973,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
             RowLayout layout;
             layout.row = state.current_row;
             layout.height = static_cast<double>(height_or.value()) / 20.0;
+            layout.has_height = height_or.value() != 0U || (flags & 0x20U) != 0U;
             layout.hidden = (flags & 0x10U) != 0U;
             layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
             wb.sheet(sheet_index).mutable_layout().row_overrides.push_back(std::move(layout));
@@ -946,7 +1043,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         if (!col_or) {
           return col_or.error();
         }
-        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, Value::blank());
+        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::blank());
         if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
             !r) {
           return r.error();
@@ -968,7 +1065,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
           return rk_or.error();
         }
         const double v = decode_rk_number(rk_or.value());
-        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, Value::number(v));
+        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::number(v));
         if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
             !r) {
           return r.error();
@@ -991,7 +1088,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         }
         double v;
         std::memcpy(&v, p.data, sizeof(v));
-        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, Value::number(v));
+        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::number(v));
         if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
             !r) {
           return r.error();
@@ -1013,7 +1110,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
           return b_or.error();
         }
         wb.sheet(sheet_index)
-            .set_cell_cached_value(state.current_row, col_or.value().col, Value::boolean(b_or.value() != 0));
+            .set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::boolean(b_or.value() != 0));
         if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
             !r) {
           return r.error();
@@ -1039,7 +1136,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         // path stays symmetric with `ooxml_code()` (see
         // `error_from_ooxml_code` in `value.h`).
         const ErrorCode ec = error_from_ooxml_code(static_cast<std::int32_t>(code_or.value()));
-        wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, Value::error(ec));
+        wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::error(ec));
         if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
             !r) {
           return r.error();
@@ -1062,7 +1159,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         }
         text_storage.push_back(std::move(str_or.value()));
         wb.sheet(sheet_index)
-            .set_cell_cached_value(state.current_row, col_or.value().col, Value::text(text_storage.back()));
+            .set_cell_cached_value_borrowed(state.current_row, col_or.value().col, Value::text(text_storage.back()));
         if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
             !r) {
           return r.error();
@@ -1093,7 +1190,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
           return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb sst index out of range", std::move(ctx));
         }
         wb.sheet(sheet_index)
-            .set_cell_cached_value(state.current_row, col_or.value().col, Value::text(sst_entries[idx_or.value()]));
+            .set_cell_cached_value_borrowed(state.current_row, col_or.value().col,
+                                            Value::text(sst_entries[idx_or.value()]));
         if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
             !r) {
           return r.error();
@@ -1202,8 +1300,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
           }
           rgcb = ByteSpan{p.data, cb};
         }
-        const std::string formula_text = DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges,
-                                                           sheet_index, state.current_row, col_or.value().col);
+        const std::string formula_text =
+            DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, sheet_index, state.current_row,
+                              col_or.value().col, undecoded_formula_count);
         if (!formula_text.empty()) {
           // Register the real formula via the workbook-level entry so the
           // dep graph tracks it (matching the OOXML reader). The cached
@@ -1217,7 +1316,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         // is the only correct datum the cell carries; for decoded ones it
         // matches Excel's stored result until the next recalc).
         if (!cached.is_blank()) {
-          wb.sheet(sheet_index).set_cell_cached_value(state.current_row, col_or.value().col, cached);
+          wb.sheet(sheet_index).set_cell_cached_value_borrowed(state.current_row, col_or.value().col, cached);
         }
         if (auto r = ApplyXfIndex(wb, sheet_index, state.current_row, col_or.value().col, col_or.value().xf_index);
             !r) {
@@ -1301,8 +1400,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
           }
           rgcb = ByteSpan{p.data, cb};
         }
-        const std::string formula_text = DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges,
-                                                           sheet_index, rw_first_or.value(), col_first_or.value());
+        const std::string formula_text =
+            DecodeFormulaText(rgce, rgcb, sheet_names, name_table, sheet_ranges, sheet_index, rw_first_or.value(),
+                              col_first_or.value(), undecoded_formula_count);
         if (formula_text.empty()) {
           break;
         }
@@ -1321,10 +1421,8 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         // phantom cells with their raw literal payload, which a
         // subsequent recalc's spill-commit would then see as "already
         // occupied" and surface `#SPILL!` instead of the real result.
-        if (rw_last_or.value() > rw_first_or.value() || col_last_or.value() > col_first_or.value()) {
-          state.array_anchors.push_back(
-              ArrayAnchor{rw_first_or.value(), col_first_or.value(), rw_last_or.value(), col_last_or.value()});
-        }
+        state.array_anchors.push_back(
+            ArrayAnchor{rw_first_or.value(), col_first_or.value(), rw_last_or.value(), col_last_or.value()});
         break;
       }
       default:
@@ -1459,7 +1557,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // formula) and the complete `name_table` / `sheet_ranges` (for
   // self-consistent `PtgName` / `PtgRef3d` resolution), so this can
   // only run after both are fully built above.
-  if (auto r = RegisterDefinedNames(wb_bytes_or.value(), name_table, sheet_names, sheet_ranges, wb); !r) {
+  std::uint32_t undecoded_formula_count = 0;
+  std::uint32_t undecoded_defined_name_count = 0;
+  if (auto r = RegisterDefinedNames(wb_bytes_or.value(), name_table, sheet_names, sheet_ranges, wb,
+                                    &undecoded_defined_name_count);
+      !r) {
     return r.error();
   }
 
@@ -1524,8 +1626,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!sheet_bytes_or) {
       return sheet_bytes_or.error();
     }
-    auto state_or =
-        DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, text_storage, sheet_names, name_table, sheet_ranges);
+    auto state_or = DecodeSheetBin(sheet_bytes_or.value(), i, wb, sst_entries, text_storage, sheet_names, name_table,
+                                   sheet_ranges, &undecoded_formula_count);
     if (!state_or) {
       return state_or.error();
     }
@@ -1566,8 +1668,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
             [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
   wb.set_passthrough_parts(unknown_parts);
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
+  wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
 
-  XlsbReadResult result{std::move(wb), std::move(unknown_parts), cells_read};
+  XlsbReadResult result{std::move(wb), std::move(unknown_parts), cells_read, undecoded_formula_count,
+                        undecoded_defined_name_count};
   return result;
 }
 

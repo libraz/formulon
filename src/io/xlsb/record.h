@@ -72,6 +72,7 @@ enum class XlsbRecordType : std::uint16_t {
   BrtFmlaBool = 10,    ///< Formula cell with boolean result.
   BrtFmlaError = 11,   ///< Formula cell with error result.
   BrtSSTItem = 19,     ///< One entry of the shared-string table.
+  BrtCellMeta = 49,    ///< Cell metadata index (for dynamic-array anchors).
   BrtColInfo = 60,     ///< Column width / visibility / outline span.
   BrtMergeCell = 176,  ///< One merged-cell rectangle.
 
@@ -80,11 +81,17 @@ enum class XlsbRecordType : std::uint16_t {
   BrtEndSheet = 130,         ///< End of a worksheet stream.
   BrtBeginBook = 131,        ///< Start of the workbook stream.
   BrtEndBook = 132,          ///< End of the workbook stream.
+  BrtBeginWsViews = 133,     ///< Start of worksheet-view collection.
+  BrtEndWsViews = 134,       ///< End of worksheet-view collection.
+  BrtBeginWsView = 137,      ///< One worksheet view.
+  BrtEndWsView = 138,        ///< End of one worksheet view.
   BrtWbProp = 153,           ///< Workbook properties, including the date system.
   BrtBeginBundleShs = 143,   ///< Start of the sheet-bundle list.
   BrtEndBundleShs = 144,     ///< End of the sheet-bundle list.
   BrtBeginSheetData = 145,   ///< Start of `<sheetData>` equivalent.
   BrtEndSheetData = 146,     ///< End of `<sheetData>` equivalent.
+  BrtWsProp = 147,           ///< Worksheet properties.
+  BrtWsDim = 148,            ///< Bounding range of non-empty worksheet cells.
   BrtBundleSh = 156,         ///< One entry in the sheet-bundle list.
   BrtBeginSst = 159,         ///< Start of the shared-string table.
   BrtEndSst = 160,           ///< End of the shared-string table.
@@ -110,6 +117,8 @@ enum class XlsbRecordType : std::uint16_t {
   // record supplies them, keyed by the anchor's `(row, col)` via its
   // leading `RfX` (row/col range).
   BrtArrFmla = 426,
+  BrtWsFmtInfo = 485,  ///< Default row/column formatting for a worksheet.
+  BrtPane = 561,       ///< Split or frozen panes for a worksheet view.
 
   // Styles (`xl/styles.bin`): custom number formats and the font / fill
   // / border / xf tables `iStyleRef` (in the per-cell header) indexes

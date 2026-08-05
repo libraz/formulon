@@ -219,14 +219,14 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::Name, 0x23, "Name", PtgStatus::Full},
     {PtgKind::Ref, 0x24, "Ref", PtgStatus::Full},
     {PtgKind::Area, 0x25, "Area", PtgStatus::Full},
-    // `MemArea` / `MemErr` / `MemNoMem` / `MemFunc` / `RefN` / `AreaN` /
-    // `MemAreaN` / `MemNoMemN` / `NameX`: none of these has a
-    // `decode_ptgs` case (falls through to the `default:` ->
-    // `unsupported_ptg` branch) or an `encode_ptgs` emission site.
-    {PtgKind::MemArea, 0x26, "MemArea", PtgStatus::Unsupported},
-    {PtgKind::MemErr, 0x27, "MemErr", PtgStatus::Unsupported},
-    {PtgKind::MemNoMem, 0x28, "MemNoMem", PtgStatus::Unsupported},
-    {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Unsupported},
+    // Mem Ptgs are reader-only metadata around their following
+    // binary-reference expression. The decoder consumes their payload (and
+    // PtgMemArea's RgbExtra entry) then preserves the expression itself;
+    // the writer canonicalizes the AST without emitting a cache marker.
+    {PtgKind::MemArea, 0x26, "MemArea", PtgStatus::Full},
+    {PtgKind::MemErr, 0x27, "MemErr", PtgStatus::Full},
+    {PtgKind::MemNoMem, 0x28, "MemNoMem", PtgStatus::Full},
+    {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Full},
     // `RefErr` / `AreaErr` / `RefErr3d` / `AreaErr3d`: the reader decodes
     // these to an `#REF!` `ErrorLiteral` node (see `ptg_reader.cpp`'s
     // combined `RefErr`/`RefErr3d` and `AreaErr`/`AreaErr3d` cases). The
