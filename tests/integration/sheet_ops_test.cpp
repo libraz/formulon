@@ -900,6 +900,45 @@ TEST(WorkbookRowColEdits, InsertRowsRewritesDefinedName) {
   EXPECT_EQ(wb.defined_names()[0].formula, "Sheet1!$A$7:$A$12");
 }
 
+// A formula that reaches a shifted range only through a defined name is
+// textually unchanged by the shift — a `NameRef` node is the identity case
+// for the transform — so the per-formula rewriter never re-registers it. Its
+// dep-graph edges were extracted by expanding the *old* definition, which now
+// points somewhere else, so without a full re-index the next recalc misses
+// the cells the name actually covers.
+TEST(WorkbookRowColEdits, InsertRowsReindexesFormulasThatReachRangesViaDefinedName) {
+  Workbook wb = Workbook::create();
+  std::vector<io::DefinedName> names;
+  io::DefinedName dn;
+  dn.name = "Region";
+  dn.formula = "Sheet1!$A$2:$A$3";
+  dn.local_sheet_id = -1;
+  names.push_back(dn);
+  wb.set_defined_names(std::move(names));
+
+  // A2 = 10, A3 = 20 (0-based rows 1 and 2).
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 2, 0, Value::number(20.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 2, "=SUM(Region)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0).cell_at(0, 2), nullptr);
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 2)->cached_value.as_number(), 30.0);
+
+  // Insert a row above the named range: the definition moves to $A$3:$A$4 and
+  // the two values move with it. `=SUM(Region)` is unchanged as text.
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, /*row=*/1, /*count=*/1)));
+  EXPECT_EQ(wb.defined_names()[0].formula, "Sheet1!$A$3:$A$4");
+
+  // Write to A4 (0-based row 3). That row is inside the *new* definition and
+  // outside the old one, so the edit only marks `=SUM(Region)` dirty if the
+  // dep graph was re-indexed against the rewritten definition.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 3, 0, Value::number(25.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0).cell_at(0, 2), nullptr);
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 2)->cached_value.as_number(), 35.0)
+      << "SUM over the defined name did not follow the shifted definition";
+}
+
 TEST(WorkbookRowColEdits, InsertRowsRecomputesShiftedFormulasAndAggregates) {
   Workbook wb = Workbook::create();
   // Items: qty (col 1), unit (col 2), subtotal=qty*unit (col 3), tax=sub*0.08 (col 4).

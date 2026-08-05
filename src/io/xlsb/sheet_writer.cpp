@@ -342,7 +342,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
       }
     }
     const auto stored_it = sheet.rows().find(row);
-    const std::vector<Cell>* row_cells = stored_it != sheet.rows().end() ? &stored_it->second : nullptr;
+    const RowCells* row_cells = stored_it != sheet.rows().end() ? &stored_it->second : nullptr;
     const auto phantom_it = phantoms.find(row);
     const std::map<std::uint32_t, PhantomShell>* row_phantoms =
         phantom_it != phantoms.end() ? &phantom_it->second : nullptr;
@@ -441,7 +441,14 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   }
 
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheetData), ByteSpan{});
+  // Retained tail records bracket the merged-cell block so a sheet read from
+  // an .xlsb keeps its conditional formatting, data validation, hyperlinks,
+  // auto-filter and print setup in their original stream positions. The
+  // buffers hold already-framed records, so this is a byte append.
+  const XlsbSheetTail& tail = sheet.xlsb_tail();
+  body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
+  body.insert(body.end(), tail.after_merges.begin(), tail.after_merges.end());
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheet), ByteSpan{});
   return body;
 }

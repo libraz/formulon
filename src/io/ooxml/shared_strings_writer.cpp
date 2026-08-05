@@ -70,7 +70,7 @@ SharedStrings BuildSharedStrings(const Workbook& workbook) {
       if (row_it == sheet.rows().end()) {
         continue;
       }
-      const std::vector<Cell>& cells = row_it->second;
+      const RowCells& cells = row_it->second;
       for (const Cell& cell : cells) {
         if (cell.formula_text.empty() && cell.cached_value.is_text()) {
           strings.intern(cell.cached_value.as_text(), cell.phonetic_text);

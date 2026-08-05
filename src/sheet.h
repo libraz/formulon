@@ -414,6 +414,35 @@ struct WorksheetRawExtensions {
   std::string controls_xml;
 };
 
+/// Worksheet records captured verbatim from an `.xlsb` sheet part that the
+/// calculation model does not express: conditional formatting, data
+/// validation, hyperlinks, auto-filter, print setup, manual breaks, and the
+/// drawing / table part references.
+///
+/// The XML path keeps such content as unknown *parts* or as raw element
+/// strings (`WorksheetRawExtensions`), but a binary sheet part is a single
+/// record stream the reader consumes whole, so neither mechanism reaches it.
+/// Retaining the framed record bytes is the binary equivalent.
+///
+/// The two buffers bracket the merged-cell block, which is the only tail
+/// construct the model owns and re-emits itself; keeping the split preserves
+/// the source stream's record order without the writer having to know the
+/// worksheet grammar.
+///
+/// Retention is byte-verbatim, with the same consequences the raw-XML
+/// retention already carries: a row/column edit does not remap coordinates
+/// inside these records, and a retained formula blob's sheet-qualified
+/// references resolve through the regenerated `BrtExternSheet` table rather
+/// than the source one.
+struct XlsbSheetTail {
+  /// Records between the end of the cell table and the merged-cell block.
+  std::vector<std::uint8_t> before_merges;
+  /// Records after the merged-cell block, up to the end of the sheet.
+  std::vector<std::uint8_t> after_merges;
+
+  bool empty() const noexcept { return before_merges.empty() && after_merges.empty(); }
+};
+
 /// Hash for `CellAddress` suitable for `std::unordered_map`.
 ///
 /// Excel addresses cap at row < 2^21 and col < 2^14 so a simple
@@ -426,6 +455,81 @@ struct CellAddressHash {
     h = h * 31U + static_cast<std::size_t>(a.col);
     return h;
   }
+};
+
+/// One populated row's cells, stored as a contiguous run that begins at
+/// `first_col()` instead of at column 0.
+///
+/// A row's populated columns are usually clustered, but the cluster is not
+/// anchored at column A: a sheet with data in `A:H` and one cell in `CZ` is
+/// ordinary, and so is a row whose only content sits far to the right. A
+/// vector indexed by absolute column materialises every slot from 0, which
+/// makes a sheet's memory scale with its used *width* rather than with its
+/// content — at 88 bytes per `Cell` a single far-right cell costs kilobytes
+/// per row. Carrying the run's own origin removes the leading gap.
+///
+/// Reads stay in absolute coordinates. `size()` is one past the highest
+/// stored column and `operator[]` accepts any column below it, answering the
+/// leading gap with a shared blank cell, so a consumer that walks
+/// `0 .. size()` and skips blanks sees exactly what a dense vector gave it.
+/// `find()` (and through it `Sheet::cell_at`) instead reports the gap as
+/// absent, because those slots were never written.
+class RowCells {
+ public:
+  /// Absolute column of the first materialised slot. Meaningless when the
+  /// run is empty.
+  std::uint32_t first_col() const noexcept { return first_col_; }
+
+  /// One past the highest materialised column, in absolute coordinates.
+  std::size_t size() const noexcept { return run_.empty() ? 0U : static_cast<std::size_t>(first_col_) + run_.size(); }
+
+  bool empty() const noexcept { return run_.empty(); }
+
+  /// Number of slots actually held in memory, i.e. `size()` minus the
+  /// unmaterialised leading gap.
+  std::size_t stored_count() const noexcept { return run_.size(); }
+
+  /// The cell at absolute column `col`. Columns in the leading gap, and
+  /// columns past the run, read as a shared blank cell.
+  const Cell& operator[](std::size_t col) const noexcept {
+    if (col < first_col_) {
+      return blank();
+    }
+    const std::size_t index = col - first_col_;
+    return index < run_.size() ? run_[index] : blank();
+  }
+
+  /// The materialised slot at `col`, or `nullptr` when that column was never
+  /// written.
+  const Cell* find(std::uint32_t col) const noexcept {
+    if (run_.empty() || col < first_col_) {
+      return nullptr;
+    }
+    const std::size_t index = static_cast<std::size_t>(col) - first_col_;
+    return index < run_.size() ? &run_[index] : nullptr;
+  }
+  Cell* find(std::uint32_t col) noexcept { return const_cast<Cell*>(static_cast<const RowCells*>(this)->find(col)); }
+
+  /// Materialises `col` — extending the run in either direction — and returns
+  /// its slot. Existing slots keep their heap-stable `cached_text_owned`
+  /// payload across the move.
+  Cell& ensure(std::uint32_t col);
+
+  /// Iteration over materialised slots only, in ascending column order.
+  std::vector<Cell>::const_iterator begin() const noexcept { return run_.begin(); }
+  std::vector<Cell>::const_iterator end() const noexcept { return run_.end(); }
+
+  /// Direct access to the run for the structural-edit paths, which rewrite
+  /// both the storage and its origin together.
+  const std::vector<Cell>& run() const noexcept { return run_; }
+  std::vector<Cell>& mutable_run() noexcept { return run_; }
+  void set_first_col(std::uint32_t col) noexcept { first_col_ = col; }
+
+ private:
+  static const Cell& blank() noexcept;
+
+  std::uint32_t first_col_ = 0;
+  std::vector<Cell> run_;
 };
 
 // Private spill-table type defined in sheet.cpp. Only the unique_ptr<>
@@ -629,11 +733,13 @@ class Sheet {
   /// Convenience predicate equivalent to `cell_at(row, col) != nullptr`.
   bool has_cell(std::uint32_t row, std::uint32_t col) const noexcept;
 
-  /// Total number of stored `Cell` slots across all populated rows.
+  /// Total number of materialised `Cell` slots across all populated rows.
   ///
-  /// Counts every slot in every populated row's vector, including
-  /// implicitly default-constructed cells created by growth. Useful for
-  /// tests and as a coarse memory-footprint indicator.
+  /// Counts every slot a row actually holds, including the implicitly
+  /// default-constructed ones a write to a later column creates between the
+  /// row's first and last populated column. Columns before a row's first
+  /// populated one are not materialised and are not counted. Useful for tests
+  /// and as a coarse memory-footprint indicator.
   std::size_t cell_count() const noexcept;
 
   /// Monotonically changes whenever the flat stored-cell / spill-phantom
@@ -646,7 +752,7 @@ class Sheet {
   /// Exposed so consumers (e.g. the OOXML writer) can iterate populated
   /// rows in their own order without paying for an intermediate copy. The
   /// reference is invalidated by mutating Sheet operations.
-  const std::unordered_map<std::uint32_t, std::vector<Cell>>& rows() const noexcept { return rows_; }
+  const std::unordered_map<std::uint32_t, RowCells>& rows() const noexcept { return rows_; }
 
   // ---------------------------------------------------------------------------
   // Dynamic-array spill API
@@ -691,6 +797,23 @@ class Sheet {
   /// row-major cell), so anchors round-trip correctly without a special
   /// case in the caller.
   Value resolve_cell_value(std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// Appends the effective value of every coordinate in the rectangle
+  /// `[first_row, last_row] x [first_col, last_col]` to `out`, in row-major
+  /// order, taking the sheet lock once for the whole rectangle.
+  ///
+  /// Reading a rectangle a cell at a time costs two lock acquisitions per
+  /// cell — one for `cell_at`, one for `resolve_cell_value` — which dominates
+  /// a wide aggregate such as `SUM(A1:A100000)`. Each appended value is what
+  /// `resolve_cell_value` would return, except that a coordinate holding a
+  /// formula is appended as its *cached* value and its position in `out` is
+  /// collected in `formula_indices`. Evaluating a formula re-enters the sheet
+  /// and would deadlock on the non-recursive lock, so the caller re-resolves
+  /// those positions itself after this returns.
+  ///
+  /// A reversed or out-of-range rectangle appends nothing.
+  void read_range(std::uint32_t first_row, std::uint32_t last_row, std::uint32_t first_col, std::uint32_t last_col,
+                  std::vector<Value>& out, std::vector<std::size_t>& formula_indices) const;
 
   /// Registers a spill region anchored at `(anchor_row, anchor_col)` with
   /// the given dimensions and row-major cell payload.
@@ -964,6 +1087,12 @@ class Sheet {
   const std::string& root_extra_ns_attrs() const noexcept { return root_extra_ns_attrs_; }
   void set_root_extra_ns_attrs(std::string attrs) { root_extra_ns_attrs_ = std::move(attrs); }
 
+  /// Verbatim `.xlsb` worksheet-tail records; empty for a sheet that did not
+  /// come from a binary package. See `XlsbSheetTail` for what they carry and
+  /// what verbatim retention does not do.
+  const XlsbSheetTail& xlsb_tail() const noexcept { return xlsb_tail_; }
+  void set_xlsb_tail(XlsbSheetTail tail) { xlsb_tail_ = std::move(tail); }
+
   // ---------------------------------------------------------------------------
   // Row / column structural edits
   // ---------------------------------------------------------------------------
@@ -998,6 +1127,31 @@ class Sheet {
   void delete_cols(std::uint32_t col, std::uint32_t count);
 
  private:
+  /// One row/column structural edit, as the coordinate mapping every
+  /// sheet-attached structure derives from.
+  ///
+  /// `index` is the 0-based band the edit starts at and `count` its width. On
+  /// an insert, a coordinate `>= index` moves forward by `count`. On a delete,
+  /// `[index, index + count)` is the deleted band — a coordinate inside it is
+  /// dropped or clamped, and a coordinate past it moves back by `count`.
+  ///
+  /// The four public edit methods each build one of these and hand it to
+  /// `shift_sheet_metadata`, which is the single place that enumerates the
+  /// structures. A structure that is not listed there does not move, and that
+  /// failure is silent in a user's file — `tests/integration/
+  /// structural_edit_matrix_test.cpp` asserts each one's post-edit coordinate.
+  struct StructuralEdit {
+    std::uint32_t index = 0;
+    std::uint32_t count = 0;
+    bool is_delete = false;
+    bool row_axis = false;
+  };
+
+  /// Applies `edit` to every sheet-attached structure other than the cells
+  /// themselves (which each public edit method moves first, since the cell
+  /// storage differs per axis).
+  void shift_sheet_metadata(const StructuralEdit& edit);
+
   // ---------------------------------------------------------------------------
   // Non-locking spill/cell helpers (caller must already hold `spill_mutex_`).
   // ---------------------------------------------------------------------------
@@ -1023,7 +1177,7 @@ class Sheet {
   // passthrough payloads; these two fields preserve the workbook-level link.
   std::string opaque_ooxml_part_path_;
   std::string opaque_ooxml_relationship_type_;
-  std::unordered_map<std::uint32_t, std::vector<Cell>> rows_;
+  std::unordered_map<std::uint32_t, RowCells> rows_;
   std::uint64_t cell_enumeration_revision_ = 0;
   // Lazily allocated: most sheets do not host any spill regions, so the
   // table is only materialised on the first `commit_spill` call.
@@ -1094,6 +1248,9 @@ class Sheet {
   // re-emission so namespaced attributes in raw captures resolve. Empty by
   // default.
   std::string root_extra_ns_attrs_;
+  // Verbatim `.xlsb` worksheet-tail records, or empty for a sheet that did
+  // not come from a binary package.
+  XlsbSheetTail xlsb_tail_;
 };
 
 }  // namespace formulon

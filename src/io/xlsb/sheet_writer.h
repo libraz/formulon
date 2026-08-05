@@ -7,10 +7,15 @@
 //
 // Cells are emitted in `(row, col)` ascending order, grouped by row
 // so each `BrtRowHdr` is followed by its row's cells before the next
-// `BrtRowHdr`. Column/row layout and merged-cell rectangles are also
-// emitted. Conditional-format rules, data validation, hyperlinks,
-// page breaks, frozen panes, and other sheet-level metadata remain
-// outside this stream emitter's current scope.
+// `BrtRowHdr`. Column/row layout, frozen panes and merged-cell
+// rectangles are emitted from the model.
+//
+// Conditional-format rules, data validation, hyperlinks, auto-filter,
+// print setup and page breaks are not modelled per-record. For a sheet
+// that came from an `.xlsb` they survive as `Sheet::xlsb_tail()`, whose
+// framed bytes are appended around the merged-cell block; a sheet from
+// any other source carries none and the writer reports them through
+// `XlsbWriteResult::deferred_feature_count`.
 //
 // Design references:
 //   * [MS-XLSB] §2.4.x (BrtBeginSheet / BrtRowHdr / cell records)

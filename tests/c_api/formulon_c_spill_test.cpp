@@ -116,9 +116,9 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterMutation) {
   ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 5, 7, 2.0), 0);
   size_t count = 0;
   ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &count), 0);
-  // The current row store is column-dense, so writing column 7 creates
-  // eight slots in row 5 plus the original A1 slot.
-  ASSERT_EQ(count, 9U);
+  // A row's slots start at its first populated column, so writing column 7
+  // materialises one slot in row 5 alongside the original A1 slot.
+  ASSERT_EQ(count, 2U);
   ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(row, 5U);
   EXPECT_EQ(col, 7U);
@@ -145,7 +145,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetRemoval) {
   ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 0), 0);
   size_t count = 0;
   ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &count), 0);
-  ASSERT_EQ(count, 2U);
+  ASSERT_EQ(count, 1U);
   ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 1U);
@@ -170,7 +170,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetMove) {
   ASSERT_EQ(fm_workbook_move_sheet(wb.handle, 1, 0), 0);
   size_t count = 0;
   ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &count), 0);
-  ASSERT_EQ(count, 2U);
+  ASSERT_EQ(count, 1U);
   ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, count - 1U, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(row, 1U);
   EXPECT_EQ(col, 1U);

@@ -223,7 +223,7 @@ extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t shee
 // Iteration / dump
 // ---------------------------------------------------------------------------
 //
-// Sheets are stored row-sparse (`unordered_map<row, vector<Cell>>`); we
+// Sheets are stored row-sparse (`unordered_map<row, RowCells>`); we
 // surface a flat enumeration to bindings by materialising a sorted
 // `(row, col)` index on demand. The cache is purely an optimisation;
 // correctness does not depend on it.
@@ -236,11 +236,13 @@ namespace {
 // row) are kept: the dump command may want to surface them as blank
 // slots, and dropping them here would make the count returned by
 // `fm_workbook_cell_count` mismatch the indexable range. The CLI
-// filters them out at render time.
+// filters them out at render time. Columns before a row's first populated
+// one are never materialised, so they are neither counted nor enumerated —
+// this walks the row's stored run, matching `Sheet::cell_count`.
 std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(const formulon::Sheet& sheet) {
   std::vector<std::pair<std::uint32_t, std::uint32_t>> out;
   for (const auto& [row, cells] : sheet.rows()) {
-    for (std::size_t col = 0; col < cells.size(); ++col) {
+    for (std::size_t col = cells.first_col(); col < cells.size(); ++col) {
       out.emplace_back(row, static_cast<std::uint32_t>(col));
     }
   }

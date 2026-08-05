@@ -172,10 +172,12 @@ TEST(SheetTest, StructuralEditsShiftPivotAnchorOnBothAxes) {
 TEST(SheetTest, OverwriteLiteralWithLiteralKeepsCountAndUpdatesValue) {
   Sheet s("Sheet1");
   s.set_cell_value(1U, 1U, Value::number(1.0));
-  ASSERT_EQ(s.cell_count(), 2U);  // columns 0 and 1 grown
+  // The row's run starts at its first populated column, so writing B2 does
+  // not materialise column A.
+  ASSERT_EQ(s.cell_count(), 1U);
 
   s.set_cell_value(1U, 1U, Value::number(99.0));
-  EXPECT_EQ(s.cell_count(), 2U);
+  EXPECT_EQ(s.cell_count(), 1U);
 
   const Cell* cell = s.cell_at(1U, 1U);
   ASSERT_NE(cell, nullptr);
@@ -254,6 +256,82 @@ TEST(SheetTest, SparseRowsLeaveUnvisitedRowsAbsent) {
 
   EXPECT_TRUE(s.has_cell(0U, 0U));
   EXPECT_TRUE(s.has_cell(100U, 0U));
+}
+
+// ---------------------------------------------------------------------------
+// Leading-gap storage
+// ---------------------------------------------------------------------------
+
+TEST(SheetTest, ColumnsBeforeTheFirstPopulatedOneAreNotMaterialised) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 5000U, Value::number(1.0));
+
+  const RowCells& row = s.rows().at(0U);
+  EXPECT_EQ(row.first_col(), 5000U);
+  // One slot held, but the row still reports its full addressable width so
+  // index-based scans behave as they would against a dense vector.
+  EXPECT_EQ(row.stored_count(), 1U);
+  EXPECT_EQ(row.size(), 5001U);
+  EXPECT_EQ(s.cell_count(), 1U);
+
+  // A column in the leading gap reads as a blank cell...
+  EXPECT_TRUE(row[0U].formula_text.empty());
+  EXPECT_TRUE(row[0U].cached_value.is_blank());
+  // ...but is reported as absent, because it was never written.
+  EXPECT_EQ(s.cell_at(0U, 0U), nullptr);
+  EXPECT_FALSE(s.has_cell(0U, 0U));
+}
+
+TEST(SheetTest, WritingLeftOfTheRunExtendsItWithoutLosingCells) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 10U, Value::number(1.0));
+  s.set_cell_text(0U, 12U, "kept");
+  s.set_cell_value(0U, 4U, Value::number(2.0));
+
+  const RowCells& row = s.rows().at(0U);
+  EXPECT_EQ(row.first_col(), 4U);
+  EXPECT_EQ(row.stored_count(), 9U);  // columns 4..12
+  EXPECT_EQ(s.cell_at(0U, 4U)->cached_value.as_number(), 2.0);
+  EXPECT_EQ(s.cell_at(0U, 10U)->cached_value.as_number(), 1.0);
+  // The heap-owned text payload survives the run being re-seated.
+  EXPECT_EQ(s.cell_at(0U, 12U)->cached_value.as_text(), "kept");
+}
+
+TEST(SheetTest, InsertColsLeftOfTheRunOnlyMovesItsOrigin) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 10U, Value::number(1.0));
+  s.insert_cols(/*col=*/2U, /*count=*/3U);
+
+  const RowCells& row = s.rows().at(0U);
+  EXPECT_EQ(row.first_col(), 13U);
+  EXPECT_EQ(row.stored_count(), 1U);
+  EXPECT_EQ(s.cell_at(0U, 13U)->cached_value.as_number(), 1.0);
+  EXPECT_EQ(s.cell_at(0U, 10U), nullptr);
+}
+
+TEST(SheetTest, DeleteColsLeftOfTheRunOnlyMovesItsOrigin) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 10U, Value::number(1.0));
+  s.delete_cols(/*col=*/2U, /*count=*/3U);
+
+  const RowCells& row = s.rows().at(0U);
+  EXPECT_EQ(row.first_col(), 7U);
+  EXPECT_EQ(row.stored_count(), 1U);
+  EXPECT_EQ(s.cell_at(0U, 7U)->cached_value.as_number(), 1.0);
+}
+
+TEST(SheetTest, DeleteColsStraddlingTheRunStartDropsTheCoveredCells) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 10U, Value::number(1.0));
+  s.set_cell_value(0U, 12U, Value::number(2.0));
+  // The band covers columns 8..10, i.e. the run's first stored column.
+  s.delete_cols(/*col=*/8U, /*count=*/3U);
+
+  const RowCells& row = s.rows().at(0U);
+  EXPECT_EQ(row.first_col(), 8U);
+  EXPECT_EQ(row.stored_count(), 2U);  // former columns 11 and 12
+  EXPECT_TRUE(s.cell_at(0U, 8U)->cached_value.is_blank());
+  EXPECT_EQ(s.cell_at(0U, 9U)->cached_value.as_number(), 2.0);
 }
 
 // ---------------------------------------------------------------------------

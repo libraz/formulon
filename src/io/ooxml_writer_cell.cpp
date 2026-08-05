@@ -554,7 +554,7 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
 // When the row body collapses to nothing but `override_attrs` is
 // non-empty, an empty self-closing `<row r="N" .../>` is still emitted
 // so the override survives the round-trip.
-bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const std::vector<Cell>& row_cells,
+bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
                   std::string_view override_attrs, const SharedStrings* shared_strings) {
   // Buffer the row body separately so we can tell whether anything ended
   // up inside the <row> wrapper before we commit to writing it.
@@ -636,7 +636,7 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
   body.reserve((rows_map.size() + row_overrides.size()) * 64U);
   // Sentinel empty span used when a row has no override; avoids a
   // per-row default-construction of std::string.
-  static const std::vector<Cell> kEmptyRow;
+  static const RowCells kEmptyRow;
   for (std::uint32_t row : row_indices) {
     std::string override_attrs;
     auto override_it = overrides_by_row.find(row);
@@ -644,7 +644,7 @@ std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_st
       AppendRowOverrideAttrs(override_attrs, *override_it->second);
     }
     auto cells_it = rows_map.find(row);
-    const std::vector<Cell>& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
+    const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
     AppendRowXml(body, sheet, row, row_cells, override_attrs, shared_strings);
   }
 

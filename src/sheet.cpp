@@ -59,17 +59,40 @@ void Sheet::add_pivot_table(std::unique_ptr<pivot::PivotTable> table) {
   pivot_tables_.push_back(std::move(table));
 }
 
-namespace {
-
-// Grows `row_cells` so that index `col` is addressable, padding with
-// default-constructed cells, and returns a reference to the slot at `col`.
-Cell& EnsureSlot(std::vector<Cell>& row_cells, std::uint32_t col) {
-  const std::size_t needed = static_cast<std::size_t>(col) + 1U;
-  if (row_cells.size() < needed) {
-    row_cells.resize(needed);
-  }
-  return row_cells[col];
+const Cell& RowCells::blank() noexcept {
+  // Shared read-only stand-in for a column the row never materialised.
+  // `operator[]` hands it out for the leading gap, so index-based scans see a
+  // default cell exactly where a dense vector would have held one.
+  static const Cell kBlank;
+  return kBlank;
 }
+
+Cell& RowCells::ensure(std::uint32_t col) {
+  if (run_.empty()) {
+    first_col_ = col;
+    run_.resize(1U);
+    return run_.front();
+  }
+  if (col < first_col_) {
+    // Extending to the left re-seats the run. `Cell` is move-only, so build
+    // the wider run and move the existing slots into place; the heap-stable
+    // `cached_text_owned` payload each cell owns survives the move.
+    const std::size_t shift = static_cast<std::size_t>(first_col_) - col;
+    std::vector<Cell> grown;
+    grown.resize(shift + run_.size());
+    std::move(run_.begin(), run_.end(), grown.begin() + static_cast<std::ptrdiff_t>(shift));
+    run_ = std::move(grown);
+    first_col_ = col;
+    return run_.front();
+  }
+  const std::size_t index = static_cast<std::size_t>(col) - first_col_;
+  if (index >= run_.size()) {
+    run_.resize(index + 1U);
+  }
+  return run_[index];
+}
+
+namespace {
 
 // Returns true when `c` is "occupied" for the purposes of a spill collision
 // check: a non-default cell (literal value or formula) lives there. The
@@ -140,8 +163,8 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
     clear_spill_locked(covering->anchor_row, covering->anchor_col);
   }
 
-  std::vector<Cell>& row_cells = rows_[row];
-  Cell& slot = EnsureSlot(row_cells, col);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
   slot.formula_text.clear();
   slot.phonetic_text.clear();
   slot.cached_value = v;
@@ -159,8 +182,8 @@ void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view
     clear_spill_locked(covering->anchor_row, covering->anchor_col);
   }
 
-  std::vector<Cell>& row_cells = rows_[row];
-  Cell& slot = EnsureSlot(row_cells, col);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
   slot.formula_text.clear();
   slot.phonetic_text.clear();
   auto owned = std::make_unique<std::string>(text);
@@ -182,8 +205,8 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
     clear_spill_locked(covering->anchor_row, covering->anchor_col);
   }
 
-  std::vector<Cell>& row_cells = rows_[row];
-  Cell& slot = EnsureSlot(row_cells, col);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
   slot.formula_text = std::move(formula);
   slot.phonetic_text.clear();
   slot.cached_value = Value::blank();
@@ -209,8 +232,8 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
   // own `write_mutex`; the outer-to-inner lock ordering (`write_mutex` then
   // `spill_mutex_`) is preserved and never inverted.
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  std::vector<Cell>& row_cells = rows_[row];
-  Cell& slot = EnsureSlot(row_cells, col);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
 
   if (v.is_text()) {
     // Deep-copy the Text payload into a heap-stable `std::string` owned by
@@ -252,8 +275,8 @@ void Sheet::set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col,
   // compact SST into O(number of cells) storage. Clear any evaluator-owned
   // backing allocation before installing the borrowed view.
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  std::vector<Cell>& row_cells = rows_[row];
-  Cell& slot = EnsureSlot(row_cells, col);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
   slot.cached_text_owned.reset();
   slot.cached_value = v;
   ++cell_enumeration_revision_;
@@ -271,8 +294,8 @@ void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_
   // surface value first via `set_cell_cached_value`, and only the
   // post-hoc phonetic copy lands here.
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  std::vector<Cell>& row_cells = rows_[row];
-  Cell& slot = EnsureSlot(row_cells, col);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
   slot.phonetic_text.assign(phonetic.begin(), phonetic.end());
   ++cell_enumeration_revision_;
 }
@@ -284,8 +307,8 @@ void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_
   // write would. It can still grow `rows_`, so share the sheet mutation lock
   // used by the spill and cached-value paths.
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  std::vector<Cell>& row_cells = rows_[row];
-  Cell& slot = EnsureSlot(row_cells, col);
+  RowCells& row_cells = rows_[row];
+  Cell& slot = row_cells.ensure(col);
   slot.xf_index = xf_index;
   ++cell_enumeration_revision_;
 }
@@ -300,11 +323,7 @@ const Cell* Sheet::cell_at_locked(std::uint32_t row, std::uint32_t col) const no
   if (it == rows_.end()) {
     return nullptr;
   }
-  const std::vector<Cell>& row_cells = it->second;
-  if (col >= row_cells.size()) {
-    return nullptr;
-  }
-  return &row_cells[col];
+  return it->second.find(col);
 }
 
 bool Sheet::has_cell(std::uint32_t row, std::uint32_t col) const noexcept {
@@ -315,11 +334,11 @@ std::size_t Sheet::cell_count() const noexcept {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   std::size_t total = 0;
   for (const auto& kv : rows_) {
-    total += kv.second.size();
+    total += kv.second.stored_count();
   }
   // Add dynamic-array spill phantoms that have no underlying stored slot. A
   // phantom may coincide with an implicitly default-constructed slot (created
-  // when the row vector grew to cover a later column); such a coordinate is
+  // when the row's run grew to cover a later column); such a coordinate is
   // already counted above, so only phantoms absent from `rows_` add to the
   // total. This keeps the count aligned with the flat enumeration exposed
   // through the C ABI, which surfaces phantoms via `resolve_cell_value`.
@@ -418,6 +437,35 @@ Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noex
   return Value::blank();
 }
 
+void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uint32_t first_col, std::uint32_t last_col,
+                       std::vector<Value>& out, std::vector<std::size_t>& formula_indices) const {
+  if (first_row > last_row || first_col > last_col || last_row >= kMaxRows || last_col >= kMaxCols) {
+    return;
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  for (std::uint32_t row = first_row; row <= last_row; ++row) {
+    const auto row_it = rows_.find(row);
+    const RowCells* stored = row_it != rows_.end() ? &row_it->second : nullptr;
+    for (std::uint32_t col = first_col; col <= last_col; ++col) {
+      const Cell* cell = stored != nullptr ? stored->find(col) : nullptr;
+      // Order matters and mirrors the scalar path: a stored formula wins over
+      // a covering spill region, which in turn wins over a stored literal.
+      if (cell != nullptr && !cell->formula_text.empty()) {
+        formula_indices.push_back(out.size());
+        out.push_back(cell->cached_value);
+        continue;
+      }
+      if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
+        const std::size_t index = static_cast<std::size_t>(row - covering->anchor_row) * covering->cols +
+                                  static_cast<std::size_t>(col - covering->anchor_col);
+        out.push_back(covering->cells[index]);
+        continue;
+      }
+      out.push_back(cell != nullptr ? cell->cached_value : Value::blank());
+    }
+  }
+}
+
 bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows, std::uint32_t cols,
                          std::vector<Value> cells) {
   // Shape validation. These conditions indicate caller bugs; report them
@@ -465,15 +513,15 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
       if (IsCellOccupied(cell_at_locked(row, col))) {
         // Surface #SPILL! at the anchor; preserve the existing literal at
         // the colliding cell.
-        std::vector<Cell>& row_cells = rows_[anchor_row];
-        Cell& anchor_slot = EnsureSlot(row_cells, anchor_col);
+        RowCells& row_cells = rows_[anchor_row];
+        Cell& anchor_slot = row_cells.ensure(anchor_col);
         anchor_slot.cached_value = Value::error(ErrorCode::Spill);
         ++cell_enumeration_revision_;
         return false;
       }
       if (spill_region_covering_locked(row, col) != nullptr) {
-        std::vector<Cell>& row_cells = rows_[anchor_row];
-        Cell& anchor_slot = EnsureSlot(row_cells, anchor_col);
+        RowCells& row_cells = rows_[anchor_row];
+        Cell& anchor_slot = row_cells.ensure(anchor_col);
         anchor_slot.cached_value = Value::error(ErrorCode::Spill);
         ++cell_enumeration_revision_;
         return false;
@@ -506,8 +554,8 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // Anchor's cached_value mirrors the first cell of the region so that
   // `cell_at(anchor)->cached_value` and `resolve_cell_value(anchor)` agree
   // without a special anchor case.
-  std::vector<Cell>& row_cells = rows_[anchor_row];
-  Cell& anchor_slot = EnsureSlot(row_cells, anchor_col);
+  RowCells& row_cells = rows_[anchor_row];
+  Cell& anchor_slot = row_cells.ensure(anchor_col);
   anchor_slot.cached_value = first_cell;
   ++cell_enumeration_revision_;
   return true;
@@ -794,34 +842,37 @@ void ShiftPivotAnchors(std::vector<std::unique_ptr<pivot::PivotTable>>& pivots, 
   }
 }
 
-void ShiftSheetMetadata(std::vector<Hyperlink>& hyperlinks, std::vector<CellComment>& comments,
-                        std::vector<MergeRange>& merges, std::vector<DataValidation>& validations,
-                        std::vector<cf::ConditionalFormat>& conditional_formats, SheetLayout& layout,
-                        SheetPrintSettings& print_settings, std::vector<std::unique_ptr<pivot::PivotTable>>& pivots,
-                        std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis) {
+}  // namespace
+
+// Every sheet-attached structure derives its new coordinates from the one
+// `StructuralEdit` description. This list is the enumeration: a structure
+// added to `Sheet` and not added here does not follow a row/column edit.
+void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
+  const std::uint32_t index = edit.index;
+  const std::uint32_t count = edit.count;
+  const bool is_delete = edit.is_delete;
+  const bool row_axis = edit.row_axis;
   if (row_axis) {
-    ShiftRowAnchored(hyperlinks, index, count, is_delete);
-    ShiftRowAnchored(comments, index, count, is_delete);
+    ShiftRowAnchored(hyperlinks_, index, count, is_delete);
+    ShiftRowAnchored(comments_, index, count, is_delete);
   } else {
-    ShiftColAnchored(hyperlinks, index, count, is_delete);
-    ShiftColAnchored(comments, index, count, is_delete);
+    ShiftColAnchored(hyperlinks_, index, count, is_delete);
+    ShiftColAnchored(comments_, index, count, is_delete);
   }
-  ShiftRangeList(merges, index, count, is_delete, row_axis);
-  for (DataValidation& dv : validations) {
+  ShiftRangeList(merges_, index, count, is_delete, row_axis);
+  for (DataValidation& dv : validations_) {
     ShiftRangeList(dv.ranges, index, count, is_delete, row_axis);
   }
-  ShiftConditionalFormats(conditional_formats, index, count, is_delete, row_axis);
+  ShiftConditionalFormats(conditional_formats_, index, count, is_delete, row_axis);
   if (row_axis) {
-    ShiftRowLayouts(layout.row_overrides, index, count, is_delete);
-    ShiftBreaks(print_settings.manual_row_breaks, index, count, is_delete, Sheet::kMaxRows);
+    ShiftRowLayouts(layout_.row_overrides, index, count, is_delete);
+    ShiftBreaks(print_settings_.manual_row_breaks, index, count, is_delete, Sheet::kMaxRows);
   } else {
-    ShiftColumnLayouts(layout.columns, index, count, is_delete);
-    ShiftBreaks(print_settings.manual_col_breaks, index, count, is_delete, Sheet::kMaxCols);
+    ShiftColumnLayouts(layout_.columns, index, count, is_delete);
+    ShiftBreaks(print_settings_.manual_col_breaks, index, count, is_delete, Sheet::kMaxCols);
   }
-  ShiftPivotAnchors(pivots, index, count, is_delete, row_axis);
+  ShiftPivotAnchors(pivot_tables_, index, count, is_delete, row_axis);
 }
-
-}  // namespace
 
 void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
   if (count == 0U) {
@@ -848,8 +899,7 @@ void Sheet::insert_rows(std::uint32_t row, std::uint32_t count) {
     rows_.insert(std::move(node));
   }
   clear_all_spills();
-  ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, conditional_formats_, layout_, print_settings_,
-                     pivot_tables_, row, count, /*is_delete=*/false, /*row_axis=*/true);
+  shift_sheet_metadata({row, count, /*is_delete=*/false, /*row_axis=*/true});
   ++cell_enumeration_revision_;
 }
 
@@ -878,8 +928,7 @@ void Sheet::delete_rows(std::uint32_t row, std::uint32_t count) {
     rows_.insert(std::move(node));
   }
   clear_all_spills();
-  ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, conditional_formats_, layout_, print_settings_,
-                     pivot_tables_, row, count, /*is_delete=*/true, /*row_axis=*/true);
+  shift_sheet_metadata({row, count, /*is_delete=*/true, /*row_axis=*/true});
   ++cell_enumeration_revision_;
 }
 
@@ -888,20 +937,39 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
     return;
   }
   for (auto& kv : rows_) {
-    std::vector<Cell>& cells = kv.second;
-    if (col >= cells.size()) {
+    RowCells& row = kv.second;
+    if (row.empty() || col >= row.size()) {
       continue;
     }
-    // Insertion point sits inside this row's populated span. Pad with
-    // default Cells starting at `col`. Cells past `kMaxCols` are
-    // dropped wholesale.
+    // Insertion entirely left of the run: the run keeps its contents and only
+    // its origin moves. A run pushed wholly past the last column is dropped.
+    if (col <= row.first_col()) {
+      const std::uint64_t shifted = static_cast<std::uint64_t>(row.first_col()) + count;
+      if (shifted >= kMaxCols) {
+        row.mutable_run().clear();
+        row.set_first_col(0U);
+        continue;
+      }
+      row.set_first_col(static_cast<std::uint32_t>(shifted));
+      // The tail may now overhang the sheet; drop what no longer fits.
+      const std::size_t capacity = static_cast<std::size_t>(kMaxCols) - row.first_col();
+      if (row.mutable_run().size() > capacity) {
+        row.mutable_run().resize(capacity);
+      }
+      continue;
+    }
+    // Insertion point sits inside this row's run. Pad with default Cells at
+    // the local index. Cells past `kMaxCols` are dropped wholesale.
+    std::vector<Cell>& cells = row.mutable_run();
+    const std::size_t local_col = static_cast<std::size_t>(col) - row.first_col();
     const std::size_t old_size = cells.size();
     const std::uint64_t new_size_unbounded = static_cast<std::uint64_t>(old_size) + count;
-    const std::size_t new_size = static_cast<std::size_t>(std::min<std::uint64_t>(new_size_unbounded, kMaxCols));
+    const std::size_t new_size =
+        static_cast<std::size_t>(std::min<std::uint64_t>(new_size_unbounded, kMaxCols - row.first_col()));
     cells.resize(new_size);
     // Move the tail to its new position. Walk from the back so source
     // and destination never overlap during the swap.
-    const std::size_t tail_count = old_size - col;
+    const std::size_t tail_count = old_size - local_col;
     for (std::size_t i = 0; i < tail_count; ++i) {
       const std::size_t src = old_size - 1U - i;
       const std::size_t dst = src + count;
@@ -911,14 +979,13 @@ void Sheet::insert_cols(std::uint32_t col, std::uint32_t count) {
       cells[dst] = std::move(cells[src]);
     }
     // Clear the inserted slots so they read as default-blank.
-    const std::size_t clear_end = std::min<std::size_t>(col + count, new_size);
-    for (std::size_t i = col; i < clear_end; ++i) {
+    const std::size_t clear_end = std::min<std::size_t>(local_col + count, new_size);
+    for (std::size_t i = local_col; i < clear_end; ++i) {
       cells[i] = Cell{};
     }
   }
   clear_all_spills();
-  ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, conditional_formats_, layout_, print_settings_,
-                     pivot_tables_, col, count, /*is_delete=*/false, /*row_axis=*/false);
+  shift_sheet_metadata({col, count, /*is_delete=*/false, /*row_axis=*/false});
   ++cell_enumeration_revision_;
 }
 
@@ -927,16 +994,30 @@ void Sheet::delete_cols(std::uint32_t col, std::uint32_t count) {
     return;
   }
   for (auto& kv : rows_) {
-    std::vector<Cell>& cells = kv.second;
-    if (col >= cells.size()) {
+    RowCells& row = kv.second;
+    if (row.empty() || col >= row.size()) {
       continue;
     }
-    const std::size_t del_end = std::min<std::size_t>(col + count, cells.size());
-    cells.erase(cells.begin() + static_cast<std::ptrdiff_t>(col), cells.begin() + static_cast<std::ptrdiff_t>(del_end));
+    std::vector<Cell>& cells = row.mutable_run();
+    const std::uint64_t band_end = static_cast<std::uint64_t>(col) + count;
+    if (band_end <= row.first_col()) {
+      // The deleted band lies entirely left of the run: only the origin moves.
+      row.set_first_col(row.first_col() - count);
+      continue;
+    }
+    // The band reaches into the run. Everything from the run's start up to the
+    // band's end goes; what remains starts at `col`.
+    const std::size_t local_first = col > row.first_col() ? static_cast<std::size_t>(col) - row.first_col() : 0U;
+    const std::size_t local_last =
+        static_cast<std::size_t>(std::min<std::uint64_t>(band_end - row.first_col(), cells.size()));
+    cells.erase(cells.begin() + static_cast<std::ptrdiff_t>(local_first),
+                cells.begin() + static_cast<std::ptrdiff_t>(local_last));
+    if (col < row.first_col()) {
+      row.set_first_col(col);
+    }
   }
   clear_all_spills();
-  ShiftSheetMetadata(hyperlinks_, comments_, merges_, validations_, conditional_formats_, layout_, print_settings_,
-                     pivot_tables_, col, count, /*is_delete=*/true, /*row_axis=*/false);
+  shift_sheet_metadata({col, count, /*is_delete=*/true, /*row_axis=*/false});
   ++cell_enumeration_revision_;
 }
 

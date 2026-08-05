@@ -1117,7 +1117,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
       if (it == sheet.rows().end()) {
         continue;
       }
-      const std::vector<Cell>& cells = it->second;
+      const RowCells& cells = it->second;
       for (std::size_t col = 0; col < cells.size(); ++col) {
         const Cell& cell = cells[col];
         if (cell.formula_text.empty()) {
@@ -1218,13 +1218,19 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
   }
 }
 
-void rewrite_defined_names(std::vector<io::DefinedName>& names, const parser::RefTransform& transform) {
+/// Applies `transform` to every defined name's formula. Returns true when at
+/// least one definition changed, which means every formula that references a
+/// name now resolves to a different range than the dep graph was built from.
+bool rewrite_defined_names(std::vector<io::DefinedName>& names, const parser::RefTransform& transform) {
+  bool any_changed = false;
   for (io::DefinedName& entry : names) {
     FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
     if (result.changed) {
       entry.formula = std::move(result.text);
+      any_changed = true;
     }
   }
+  return any_changed;
 }
 
 void rewrite_conditional_format_formulas(std::vector<cf::ConditionalFormat>& formats,
@@ -1303,7 +1309,8 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
 // `rewrite_defined_names` does not touch the engine but is included
 // here to preserve the "defined-name table matches dep-graph state"
 // invariant for any other reader that consults both under the same
-// lock.
+// lock, and because the dep-graph re-index it can trigger has to run
+// against the rewritten table.
 Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
                                                    const eval::RecalcEngine::LockedMutator& mutator,
                                                    std::vector<io::DefinedName>& defined_names, std::size_t sheet_index,
@@ -1311,9 +1318,20 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
                                                    std::uint32_t origin, std::uint32_t count, const char* op_name) {
   RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, edit, origin, count, op_name));
   const std::string target_sheet_name = sheets[sheet_index].name();
-  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
+  // Defined names are rewritten before cell formulas, and a change to any of
+  // them forces a full re-index afterwards. A formula that reaches a shifted
+  // range only through a name — `=MyRef*1` — is textually unchanged by the
+  // shift, because a `NameRef` node is the identity case for the transform.
+  // The per-formula rewriter only re-registers formulas whose text changed,
+  // so without the re-index that formula keeps dep-graph edges pointing at
+  // the range `MyRef` used to cover. `set_defined_name_scoped` and
+  // `remove_sheet` already take this fallback for the same reason.
   const parser::RowColShiftTransform name_transform(target_sheet_name, axis, edit, origin, count);
-  rewrite_defined_names(defined_names, name_transform);
+  const bool names_changed = rewrite_defined_names(defined_names, name_transform);
+  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
+  if (names_changed) {
+    reindex_all_formulas(sheets, mutator, wb);
+  }
   Sheet& target = sheets[sheet_index];
   const parser::RowColShiftTransform cf_transform(target_sheet_name, axis, edit, origin, count,
                                                   /*local_means_target=*/true);
