@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Excel TEXT() format-string engine.
 //
@@ -7,22 +6,25 @@
 // https://support.microsoft.com/en-us/office/number-format-codes-5026bbd6-.
 // The implemented subset is:
 //
-//   Number tokens:  `0`, `#`, `?`, `.`, `,`, `%`, `E+/E-/e+/e-`, sign.
+//   Number tokens:  `0`, `#`, `?`, `.`, `,`, `%`, `E+/E-/e+/e-`, sign,
+//                   and proper/improper fractions such as `# ?/?`.
 //   Date tokens:    `y`/`yy`/`yyyy`, `m`/`mm`/`mmm`/`mmmm`, `d`/`dd`/`ddd`/
 //                   `dddd`, `h`/`hh`, `m`/`mm` (minute), `s`/`ss`, `.0*`
 //                   fractional seconds, `AM/PM` / `A/P`, `[h]`/`[m]`/`[s]`
 //                   elapsed brackets.
 //   Literal:        `"..."`, `\x`, `!x`, plus any character that does not
 //                   match a token (so e.g. `円`, `-`, ` ` pass through).
-//   Section split:  `;` (up to 4 sections: positive; negative; zero; text).
+//   Section split:  `;` (up to 4 sections: positive; negative; zero; text),
+//                   and conditional selectors such as `[>100]`.
+//   Digit styles:    `[DBNum1]`, `[DBNum2]`, `[DBNum3]`.
 //   Discarded:      `[Red]` / `[Blue]` / ... colour specifiers, currency
 //                   locale prefixes like `[$-409]` (treated as inert).
 //   Text-section:   `@` substitutes the original text input in the text
 //                   section of the format.
 //
 // Deferred (documented as divergences via `tests/divergence.yaml` if they
-// trip the oracle): wareki eras, fractional formats `# ?/?`, conditional
-// sections `[>100]...`, and DBNum digit styles.
+// trip the oracle): wareki eras and locale/currency directives whose locale
+// semantics require an Excel-compatible locale database.
 //
 // The engine is stateless: a call with identical (value, format) returns
 // the same string on every thread.

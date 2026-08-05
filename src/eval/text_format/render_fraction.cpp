@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Fraction-format rendering for the Excel TEXT() engine. Covers `# ?/?`,
 // `# ??/??`, `0/0`, and friends. Implements Excel's bounded
@@ -166,6 +165,11 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
     num = 0;
     den = 1;
   }
+  // A whole value has no fractional component to render. Emitting the
+  // numerator/denominator placeholders here produced e.g. `2 0/1` for
+  // `# ?/?`, whereas Excel suppresses the entire fraction (including its
+  // separating space).
+  const bool suppress_fraction = has_int_group && num == 0;
 
   std::string result;
   if (negative) {
@@ -220,12 +224,25 @@ void render_fraction(const Section& section, std::string_view fmt, double value,
       emit_fraction_digits(section, fmt, integer_part, int_begin, int_end, result);
     }
     i = static_cast<std::size_t>(int_end);
-    // 3) Literals between integer group and numerator group (typically a
-    // single space).
-    while (i < static_cast<std::size_t>(num_begin)) {
+    if (suppress_fraction) {
+      // Retain only suffix literals following the denominator group.
+      i = static_cast<std::size_t>(den_end);
+    } else {
+      // 3) Literals between integer group and numerator group (typically a
+      // single space).
+      while (i < static_cast<std::size_t>(num_begin)) {
+        emit_token_verbatim(i);
+        ++i;
+      }
+    }
+  }
+  if (suppress_fraction) {
+    while (i < n_tokens) {
       emit_token_verbatim(i);
       ++i;
     }
+    out.append(result);
+    return;
   }
   // 4) Numerator group.
   emit_fraction_digits(section, fmt, num, num_begin, num_end, result);

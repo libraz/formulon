@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for TEXT, VALUE, and NUMBERVALUE. Each test parses a
 // formula source and evaluates it through the default registry.
@@ -14,12 +13,14 @@
 #include "parser/parser.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
 using formulon::test::EvalSource;
+using formulon::test::EvalSourceIn;
 
 // ---------------------------------------------------------------------------
 // TEXT
@@ -31,10 +32,34 @@ TEST(TextFunctionText, IntegerFormat) {
   EXPECT_EQ(v.as_text(), "1,234");
 }
 
+TEST(TextFunctionText, BoundedRangeSpillsElementwise) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0U, 0U, Value::number(12.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1U, 0U, Value::number(34.0))));
+  const Value result = EvalSourceIn("=TEXT(A1:A2,\"00\")", wb, wb.sheet(0));
+  ASSERT_TRUE(result.is_array());
+  ASSERT_EQ(result.as_array_rows(), 2U);
+  ASSERT_EQ(result.as_array_cols(), 1U);
+  EXPECT_EQ(result.as_array()->cells[0].as_text(), "12");
+  EXPECT_EQ(result.as_array()->cells[1].as_text(), "34");
+}
+
 TEST(TextFunctionText, TwoDecimals) {
   const Value v = EvalSource("=TEXT(3.14159, \"0.00\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "3.14");
+}
+
+TEST(TextFunctionText, RoundsTiesAwayFromZero) {
+  EXPECT_EQ(EvalSource("=TEXT(2.5, \"0\")").as_text(), "3");
+  EXPECT_EQ(EvalSource("=TEXT(1234.5, \"0\")").as_text(), "1235");
+  EXPECT_EQ(EvalSource("=TEXT(-2.5, \"0\")").as_text(), "-3");
+}
+
+TEST(TextFunctionText, LimitsDisplayToFifteenSignificantDigits) {
+  const Value v = EvalSource("=TEXT(0.1+0.2, \"0.00000000000000000\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "0.30000000000000000");
 }
 
 TEST(TextFunctionText, Percent) {

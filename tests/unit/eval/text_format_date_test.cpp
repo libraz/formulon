@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the date/time side of the TEXT() format-string engine.
 // Serials used below match the Excel 1900 epoch (see `eval/date_time.cpp`):
@@ -154,6 +153,8 @@ TEST(DateFormatMinuteDisambiguation, StandaloneIsMonth) {
 TEST(DateFormatElapsed, ElapsedHours) {
   // 1.5 days = 36 hours.
   EXPECT_EQ(Render(1.5, "[h]"), "36");
+  // Repeated elapsed-hour tokens request a minimum field width.
+  EXPECT_EQ(Render(1.0 / 24.0, "[hh]"), "01");
 }
 
 TEST(DateFormatElapsed, ElapsedMinutes) {

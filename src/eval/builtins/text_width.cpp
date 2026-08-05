@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the width-conversion text built-ins: ASC (full-width
 // to half-width) and JIS / DBCS (half-width to full-width). Both functions
@@ -164,85 +163,6 @@ constexpr std::array<KatakanaMap, 92> kKatakanaFullToHalf = {{
     {0xFF70, 0},            // U+30FC ー
 }};
 
-// Half-width katakana -> full-width base mapping lives in the shared
-// `eval/jp_kana_table.h` so `text_width` (ASC / JIS / DBCS) and
-// `jp_fold` (lookup-key folding) draw from the same source. Callers
-// here still merge a trailing U+FF9E / U+FF9F into the voiced /
-// semi-voiced form via `voiced_full_from_base` /
-// `semi_voiced_full_from_base` defined below.
-
-// Returns the voiced full-width katakana for `full_base`, or 0 if no
-// such voiced form exists (callers should then emit the base codepoint
-// plus U+309B spacing dakuten).
-std::uint16_t voiced_full_from_base(std::uint16_t full_base) noexcept {
-  switch (full_base) {
-    case 0x30A6:  // ウ -> ヴ
-      return 0x30F4;
-    case 0x30AB:  // カ -> ガ
-      return 0x30AC;
-    case 0x30AD:  // キ -> ギ
-      return 0x30AE;
-    case 0x30AF:  // ク -> グ
-      return 0x30B0;
-    case 0x30B1:  // ケ -> ゲ
-      return 0x30B2;
-    case 0x30B3:  // コ -> ゴ
-      return 0x30B4;
-    case 0x30B5:  // サ -> ザ
-      return 0x30B6;
-    case 0x30B7:  // シ -> ジ
-      return 0x30B8;
-    case 0x30B9:  // ス -> ズ
-      return 0x30BA;
-    case 0x30BB:  // セ -> ゼ
-      return 0x30BC;
-    case 0x30BD:  // ソ -> ゾ
-      return 0x30BE;
-    case 0x30BF:  // タ -> ダ
-      return 0x30C0;
-    case 0x30C1:  // チ -> ヂ
-      return 0x30C2;
-    case 0x30C4:  // ツ -> ヅ
-      return 0x30C5;
-    case 0x30C6:  // テ -> デ
-      return 0x30C7;
-    case 0x30C8:  // ト -> ド
-      return 0x30C9;
-    case 0x30CF:  // ハ -> バ
-      return 0x30D0;
-    case 0x30D2:  // ヒ -> ビ
-      return 0x30D3;
-    case 0x30D5:  // フ -> ブ
-      return 0x30D6;
-    case 0x30D8:  // ヘ -> ベ
-      return 0x30D9;
-    case 0x30DB:  // ホ -> ボ
-      return 0x30DC;
-    default:
-      return 0;
-  }
-}
-
-// Returns the semi-voiced full-width katakana for `full_base`, or 0 if no
-// such form exists (callers should then emit the base plus U+309C spacing
-// handakuten). Only the ハ-row bases accept handakuten.
-std::uint16_t semi_voiced_full_from_base(std::uint16_t full_base) noexcept {
-  switch (full_base) {
-    case 0x30CF:  // ハ -> パ
-      return 0x30D1;
-    case 0x30D2:  // ヒ -> ピ
-      return 0x30D4;
-    case 0x30D5:  // フ -> プ
-      return 0x30D7;
-    case 0x30D8:  // ヘ -> ペ
-      return 0x30DA;
-    case 0x30DB:  // ホ -> ポ
-      return 0x30DD;
-    default:
-      return 0;
-  }
-}
-
 // Appends the UTF-8 encoding of `cp` to `out`. Thin wrapper over
 // `encode_utf8_codepoint`; a zero codepoint or an invalid codepoint
 // yields no bytes.
@@ -335,17 +255,17 @@ Value Jis(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
       const std::uint16_t full_base = static_cast<std::uint16_t>(half_to_full_katakana_base(cp));
       view.remove_prefix(d.byte_len);
       // Peek the next codepoint for dakuten / handakuten merging.
-      std::uint16_t emitted = full_base;
+      std::uint32_t emitted = full_base;
       if (!view.empty()) {
         const Utf8DecodeResult next = decode_first_utf8_codepoint(view);
         if (next.valid && next.codepoint == 0xFF9E) {
-          const std::uint16_t voiced = voiced_full_from_base(full_base);
+          const std::uint32_t voiced = voiced_full_from_base(full_base);
           if (voiced != 0) {
             emitted = voiced;
             view.remove_prefix(next.byte_len);
           }
         } else if (next.valid && next.codepoint == 0xFF9F) {
-          const std::uint16_t semi = semi_voiced_full_from_base(full_base);
+          const std::uint32_t semi = semi_voiced_full_from_base(full_base);
           if (semi != 0) {
             emitted = semi;
             view.remove_prefix(next.byte_len);

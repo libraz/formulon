@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Standard numeric and `General` rendering for the Excel TEXT() engine.
 // See `number_format_render.cpp` for shared helpers and the text-section
@@ -18,6 +17,7 @@
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_common.h"
 #include "eval/text_format/render_fraction.h"
+#include "eval/text_format/rounding.h"
 
 namespace formulon {
 namespace text_format {
@@ -36,19 +36,28 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
   // no sign byte. Mac Excel's two-section formats (`#,##0_);(#,##0)`) expect
   // the positive section to emit "0 " for both `+0` and `-0`; without this
   // guard the minus leaks out via `signbit(-0.0)`.
-  *negative = v < 0.0;
-  double abs_v = std::fabs(v);
-  // Use snprintf with requested precision so we pick up libc rounding.
-  // `%.*f` in the C locale rounds ties away from zero on the two libcs
-  // Formulon targets (glibc, musl, and Apple's libc); this matches
-  // Excel's observable behaviour for TEXT's common cases.
+  const double rounded = ::formulon::text_format::round_display_decimal(v, decimals);
+  *negative = rounded < 0.0;
+  const double abs_v = std::fabs(rounded);
+  // `snprintf` only converts an already Excel-rounded decimal value to its
+  // digit string. It must not decide the tie direction: Apple libc rounds
+  // `%.0f` ties to even, while Excel rounds them away from zero.
+  const int requested_decimals = decimals < 0 ? 0 : decimals;
+  int rendered_decimals = requested_decimals;
+  if (abs_v != 0.0) {
+    const int exponent = static_cast<int>(std::floor(std::log10(abs_v)));
+    // Once the 15 significant digits have been emitted, any extra fixed
+    // places are known zeros. Rendering them from the binary double would
+    // reintroduce representation residue (0.1 + 0.2 -> ...00004).
+    rendered_decimals = std::min(requested_decimals, std::max(0, 14 - exponent));
+  }
   char buf[64];
-  const int n = std::snprintf(buf, sizeof(buf), "%.*f", decimals < 0 ? 0 : decimals, abs_v);
+  const int n = std::snprintf(buf, sizeof(buf), "%.*f", rendered_decimals, abs_v);
   if (n < 0 || static_cast<std::size_t>(n) >= sizeof(buf)) {
     // Fallback: fall back to sprintf with a heap buffer (extremely rare).
     std::string out;
-    out.resize(static_cast<std::size_t>(decimals < 0 ? 0 : decimals) + 32u);
-    const int m = std::snprintf(&out[0], out.size(), "%.*f", decimals < 0 ? 0 : decimals, abs_v);
+    out.resize(static_cast<std::size_t>(rendered_decimals) + 32u);
+    const int m = std::snprintf(&out[0], out.size(), "%.*f", rendered_decimals, abs_v);
     if (m > 0) {
       out.resize(static_cast<std::size_t>(m));
     } else {
@@ -62,6 +71,7 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
       *int_digits = out.substr(0, dot);
       *frac_digits = out.substr(dot + 1);
     }
+    frac_digits->append(static_cast<std::size_t>(requested_decimals) - frac_digits->size(), '0');
     return;
   }
   std::string_view s(buf, static_cast<std::size_t>(n));
@@ -73,6 +83,7 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
     int_digits->assign(s.substr(0, dot));
     frac_digits->assign(s.substr(dot + 1));
   }
+  frac_digits->append(static_cast<std::size_t>(requested_decimals) - frac_digits->size(), '0');
 }
 
 // Excel's `General` format code produces an ~11-character-wide numeric
@@ -315,6 +326,14 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
   }
 
   format_fixed_digits(scaled, frac_digits, &negative, &int_digits, &frac_digits_str);
+
+  // `General` chooses its own display precision below.  Its sign must
+  // therefore come from the unrounded input, not from the zero-decimal
+  // placeholder pass above: e.g. TEXT(-1/3, "General") is -0.333333333,
+  // not 0.333333333.
+  if (section.has_general) {
+    negative = scaled < 0.0;
+  }
 
   // Pad integer digits to the required minimum (zero + pad digits). Leading
   // `#` tokens above the actual digit count drop silently.

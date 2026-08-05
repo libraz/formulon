@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's text-conversion builtins: TEXT, VALUE, and
 // NUMBERVALUE. All three mediate between numeric and textual
@@ -23,6 +22,7 @@
 #include "eval/number_parse.h"
 #include "eval/shape_ops_lazy.h"
 #include "eval/text_format/number_format.h"
+#include "eval/text_format/rounding.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
@@ -178,14 +178,7 @@ Value Fixed_(const Value* args, std::uint32_t arity, Arena& arena) {
     }
     no_commas = parsed.value();
   }
-  // Apply negative-decimals rounding manually: round to the nearest
-  // multiple of 10^|decimals| with the same half-away-from-zero convention
-  // as `std::round`.
-  double value = num.value();
-  if (decimals < 0) {
-    const double scale = std::pow(10.0, -decimals);
-    value = std::round(value / scale) * scale;
-  }
+  const double value = ::formulon::text_format::round_display_decimal(num.value(), decimals);
   const int effective_decimals = decimals < 0 ? 0 : decimals;
   std::string fmt;
   fmt.reserve(16 + static_cast<std::size_t>(effective_decimals));
@@ -223,20 +216,7 @@ Value Dollar_(const Value* args, std::uint32_t arity, Arena& arena) {
     return Value::error(decimals_e.error());
   }
   const int decimals = decimals_e.value();
-  // Excel rounds half-away-from-zero, but the underlying snprintf used by
-  // `apply_format` rounds half-to-even on macOS (e.g. `%.0f` on 1234.5 ->
-  // 1234). Pre-round explicitly with `std::round` so DOLLAR(1234.5, 0)
-  // yields 1235 to match Mac Excel.
-  double value = num.value();
-  if (decimals < 0) {
-    const double scale = std::pow(10.0, -decimals);
-    value = std::round(value / scale) * scale;
-  } else if (decimals > 0) {
-    const double scale = std::pow(10.0, decimals);
-    value = std::round(value * scale) / scale;
-  } else {
-    value = std::round(value);
-  }
+  const double value = ::formulon::text_format::round_display_decimal(num.value(), decimals);
   const int effective_decimals = decimals < 0 ? 0 : decimals;
   // Two-section ¥ format: positive uses `¥#,##0[.00]`, negative uses
   // `¥-#,##0[.00]`. The format engine passes `std::fabs(value)` into

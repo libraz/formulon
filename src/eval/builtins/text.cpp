@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's text built-in functions: UPPER, LOWER, TRIM,
 // LEFT, RIGHT, MID, REPT, SUBSTITUTE, FIND, SEARCH, EXACT, TEXTJOIN,
@@ -257,20 +256,38 @@ Value Substitute(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   std::string out;
   out.reserve(haystack.size());
+  std::uint64_t out_units = 0;
+  const auto append_capped = [&out, &out_units](std::string_view piece) {
+    const std::uint64_t units = utf16_units_in(piece);
+    if (units > kExcelTextCapUnits - out_units) {
+      return false;
+    }
+    out.append(piece);
+    out_units += units;
+    return true;
+  };
   std::size_t i = 0;
   int hits = 0;
   while (i < haystack.size()) {
     const std::size_t pos = haystack.find(needle, i);
     if (pos == std::string::npos) {
-      out.append(haystack, i, std::string::npos);
+      if (!append_capped(std::string_view(haystack).substr(i))) {
+        return Value::error(ErrorCode::Value);
+      }
       break;
     }
-    out.append(haystack, i, pos - i);
+    if (!append_capped(std::string_view(haystack).substr(i, pos - i))) {
+      return Value::error(ErrorCode::Value);
+    }
     ++hits;
     if (!nth_only || hits == instance) {
-      out.append(new_text.value());
+      if (!append_capped(new_text.value())) {
+        return Value::error(ErrorCode::Value);
+      }
     } else {
-      out.append(needle);
+      if (!append_capped(needle)) {
+        return Value::error(ErrorCode::Value);
+      }
     }
     i = pos + needle.size();
   }

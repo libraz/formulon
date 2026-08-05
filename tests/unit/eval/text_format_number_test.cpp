@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the number-format engine driving TEXT() through the
 // numeric side of Excel's format-string language. Date/time coverage lives
@@ -198,6 +197,12 @@ TEST(NumberFormatSections, FourSectionsNumericValueUsesFirst) {
   EXPECT_EQ(Render(1.0, "0.0;(0.0);\"z\";@"), "1.0");
 }
 
+TEST(NumberFormatSections, TextSectionIsReachableThroughPublicFormatter) {
+  std::string out;
+  EXPECT_EQ(apply_format(0.0, "0.0;(0.0);\"z\";\"text: \"@", "abc", out), FormatStatus::kOk);
+  EXPECT_EQ(out, "text: abc");
+}
+
 // ---------------------------------------------------------------------------
 // Bracketed specifiers: named colours tolerated, locale-currency discarded,
 // unknown qualifiers rejected.
@@ -239,6 +244,13 @@ TEST(NumberFormatBracketed, ConditionalLeMatchesNegative) {
   // the value is rendered verbatim (sign included).
   EXPECT_EQ(Render(-5.0, "[<=0]0.00;0.00"), "-5.00");
   EXPECT_EQ(Render(0.0, "[<=0]0.00;0.00"), "0.00");
+}
+
+TEST(NumberFormatBracketed, ConditionalExplicitMinusIsNotDoubled) {
+  // A conditional section is not inherently a negative section. Its literal
+  // minus supplies the sign itself, so the numeric renderer must use the
+  // magnitude rather than adding a second prefix.
+  EXPECT_EQ(Render(-1.5, "[<=0]-0.00;0.00"), "-1.50");
 }
 
 TEST(NumberFormatBracketed, ConditionalEqOperator) {
@@ -315,10 +327,12 @@ TEST(NumberFormatGeneral, FractionTrimmedAndScientific) {
   // 1/3 prints 9 fractional digits (exactly what Mac Excel / IronCalc
   // goldens emit), with trailing zeros trimmed.
   EXPECT_EQ(Render(1.0 / 3.0, "General"), "0.333333333");
+  EXPECT_EQ(Render(-1.0 / 3.0, "General"), "-0.333333333");
   // Large magnitudes switch to scientific with an exponent zero-padded to
   // two digits; trailing mantissa zeros still collapse.
   EXPECT_EQ(Render(250000000000.0, "General"), "2.5E+11");
   EXPECT_EQ(Render(123456789012.0, "General"), "1.23457E+11");
+  EXPECT_EQ(Render(-2.7e-18, "General"), "-2.7E-18");
 }
 
 // ---------------------------------------------------------------------------
@@ -361,6 +375,12 @@ TEST(NumberFormatFraction, ProperFractionZeroIntegerSuppressed) {
 TEST(NumberFormatFraction, MixedFractionWithIntegerOne) {
   // 1.5 -> "1 1/2": integer 1 emits, literal space, then 1/2.
   EXPECT_EQ(Render(1.5, "# ?/?"), "1 1/2");
+}
+
+TEST(NumberFormatFraction, WholeValueSuppressesFractionComponent) {
+  // An exact integer must not render the synthetic 0/1 approximation.
+  EXPECT_EQ(Render(2.0, "# ?/?"), "2");
+  EXPECT_EQ(Render(-2.0, "# ?/?"), "-2");
 }
 
 TEST(NumberFormatFraction, NegativeMixedFraction) {

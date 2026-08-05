@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the third batch of text built-ins: REPLACE,
 // REPLACEB, FINDB, SEARCHB, TEXTBEFORE, TEXTAFTER, FIXED, DOLLAR. Each
@@ -343,6 +342,11 @@ TEST(BuiltinsText3Fixed, ZeroDecimals) {
   EXPECT_EQ(v.as_text(), "1,235");
 }
 
+TEST(BuiltinsText3Fixed, RoundsTiesAwayFromZero) {
+  EXPECT_EQ(EvalSource("=FIXED(2.5, 0)").as_text(), "3");
+  EXPECT_EQ(EvalSource("=FIXED(-2.5, 0)").as_text(), "-3");
+}
+
 TEST(BuiltinsText3Fixed, NegativeDecimalsRoundsLeft) {
   const Value v = EvalSource("=FIXED(1234.56, -2)");
   ASSERT_TRUE(v.is_text());
@@ -418,9 +422,7 @@ TEST(BuiltinsText3Dollar, ExplicitTwoDecimals) {
 }
 
 TEST(BuiltinsText3Dollar, ZeroDecimals) {
-  // Use 1234.7 to avoid platform-dependent tie-rounding (snprintf's %.*f on
-  // macOS rounds half-to-even, giving 1234 for 1234.5).
-  const Value v = EvalSource("=DOLLAR(1234.7, 0)");
+  const Value v = EvalSource("=DOLLAR(1234.5, 0)");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), std::string("\xC2\xA5"
                                      "1,235"));

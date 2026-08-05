@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the shared half-to-full katakana base lookup. See
 // `jp_kana_table.h` for the contract.
@@ -100,6 +99,49 @@ std::uint32_t half_to_full_punctuation(std::uint32_t cp) noexcept {
     return 0u;
   }
   return kHalfToFullPunctuation[cp - 0xFF61u];
+}
+
+std::uint32_t voiced_full_from_base(std::uint32_t full_base) noexcept {
+  switch (full_base) {
+    case 0x30A6u:
+      return 0x30F4u;  // ウ -> ヴ
+    case 0x30ABu:
+    case 0x30ADu:
+    case 0x30AFu:
+    case 0x30B1u:
+    case 0x30B3u:
+    case 0x30B5u:
+    case 0x30B7u:
+    case 0x30B9u:
+    case 0x30BBu:
+    case 0x30BDu:
+    case 0x30BFu:
+    case 0x30C1u:
+    case 0x30C4u:
+    case 0x30C6u:
+    case 0x30C8u:
+    case 0x30CFu:
+    case 0x30D2u:
+    case 0x30D5u:
+    case 0x30D8u:
+    case 0x30DBu:
+      return full_base + 1u;
+    default:
+      return 0u;
+  }
+}
+
+std::uint32_t semi_voiced_full_from_base(std::uint32_t full_base) noexcept {
+  switch (full_base) {
+    case 0x30CFu:
+    case 0x30D2u:
+    case 0x30D5u:
+    case 0x30D8u:
+    case 0x30DBu:
+      return full_base + 2u;
+    default:
+      return 0u;
+  }
 }
 
 }  // namespace eval
