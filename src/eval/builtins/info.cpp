@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's info-style built-in functions:
 // ISNUMBER, ISTEXT, ISBLANK, ISLOGICAL, ISERROR, ISERR, ISNA, ISEVEN,
@@ -177,14 +176,11 @@ Expected<bool, ErrorCode> truncated_is_even(const Value& v) {
   if (std::isnan(x) || std::isinf(x)) {
     return ErrorCode::Num;
   }
-  // `std::trunc` rounds toward zero; casting through int64_t keeps the
-  // low-bit check exact for any |x| <= 2^63. Larger magnitudes wrap, but
-  // Excel's own behaviour at that range is also undefined — matching
-  // open-source xlcalc implementations.
-  const auto truncated = static_cast<std::int64_t>(std::trunc(x));
-  // C++ modulo on negative operands is implementation-defined-free only
-  // for `%2` returning 0/-1/1, so fold back to unsigned parity.
-  return (truncated % 2) == 0;
+  // `std::fmod` preserves the low bit represented by a finite double without
+  // narrowing through int64_t. The former conversion was undefined for
+  // values outside int64_t (for example 1E20), despite such values being
+  // valid Excel numbers.
+  return std::fmod(std::trunc(x), 2.0) == 0.0;
 }
 
 // ISEVEN(value) - truncated integer of value is even. Errors propagate.

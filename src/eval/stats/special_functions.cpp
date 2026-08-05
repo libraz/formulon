@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the regularized incomplete gamma functions
 // `P(a, x)` / `Q(a, x) = 1 - P(a, x)` and the regularized incomplete beta
@@ -27,6 +26,7 @@
 
 #include "eval/stats/special_functions.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -35,11 +35,13 @@ namespace eval {
 namespace stats {
 namespace {
 
-// Maximum number of iterations before we give up on convergence in either
-// the series or continued-fraction branch. Numerical Recipes suggests 100;
-// we round up to 200 for safety on inputs near the transition boundary,
-// where convergence is slowest.
-constexpr int kMaxIter = 200;
+// The gamma series and continued fraction need materially more work for a
+// large shape parameter around their transition boundary. Never return a
+// partial sum silently: callers receive NaN on a genuine non-convergence and
+// convert it to Excel's #NUM!.
+int max_gamma_iterations(double a) noexcept {
+  return std::max(1000, static_cast<int>(10.0 * std::sqrt(a) + 200.0));
+}
 
 // Relative convergence threshold. Tightening this past ~1e-15 runs into
 // IEEE-754 round-off and no longer buys accuracy.
@@ -53,31 +55,36 @@ constexpr double kFpMin = 1e-300;
 // γ(a, x) / Γ(a) = e^(-x) * x^a / Γ(a) * Σ_{n=0..∞} x^n / (a*(a+1)*...*(a+n))
 // which is written iteratively as sum_{n} del_n where del_0 = 1/a and
 // del_{n+1} = del_n * x / (a + n + 1). Early-out when |del| < |sum| * eps.
-double p_gamma_series(double a, double x) noexcept {
+struct GammaResult {
+  double value;
+  bool converged;
+};
+
+GammaResult p_gamma_series(double a, double x) noexcept {
   double ap = a;
   double sum = 1.0 / a;
   double del = sum;
-  for (int n = 1; n <= kMaxIter; ++n) {
+  for (int n = 1; n <= max_gamma_iterations(a); ++n) {
     ap += 1.0;
     del *= x / ap;
     sum += del;
     if (std::abs(del) < std::abs(sum) * kEps) {
-      break;
+      return {sum * std::exp(-x + a * std::log(x) - std::lgamma(a)), true};
     }
   }
-  return sum * std::exp(-x + a * std::log(x) - std::lgamma(a));
+  return {std::numeric_limits<double>::quiet_NaN(), false};
 }
 
 // Lentz's modified continued fraction for `Q(a, x)` valid for `x >= a + 1`.
 // Γ(a, x) / Γ(a) = e^(-x) * x^a / Γ(a) * (1 / (x + 1 - a - ...))
 // evaluated via the standard Lentz recursion on partial numerators
 // `an = -i * (i - a)` and partial denominators `b = x + 2i + 1 - a`.
-double q_gamma_cf(double a, double x) noexcept {
+GammaResult q_gamma_cf(double a, double x) noexcept {
   double b = x + 1.0 - a;
   double c = 1.0 / kFpMin;
   double d = 1.0 / b;
   double h = d;
-  for (int i = 1; i <= kMaxIter; ++i) {
+  for (int i = 1; i <= max_gamma_iterations(a); ++i) {
     const double an = -static_cast<double>(i) * (static_cast<double>(i) - a);
     b += 2.0;
     d = an * d + b;
@@ -92,10 +99,10 @@ double q_gamma_cf(double a, double x) noexcept {
     const double del = d * c;
     h *= del;
     if (std::abs(del - 1.0) < kEps) {
-      break;
+      return {h * std::exp(-x + a * std::log(x) - std::lgamma(a)), true};
     }
   }
-  return h * std::exp(-x + a * std::log(x) - std::lgamma(a));
+  return {std::numeric_limits<double>::quiet_NaN(), false};
 }
 
 // Lentz's modified continued fraction for the incomplete beta integral,
@@ -119,7 +126,7 @@ double beta_cf(double a, double b, double x) noexcept {
   }
   d = 1.0 / d;
   double h = d;
-  for (int m = 1; m <= kMaxIter; ++m) {
+  for (int m = 1; m <= 200; ++m) {
     const double dm = static_cast<double>(m);
     const double m2 = 2.0 * dm;
     // Even step of Lentz's recursion.
@@ -164,10 +171,11 @@ double p_gamma(double a, double x) noexcept {
     return 0.0;
   }
   if (x < a + 1.0) {
-    return p_gamma_series(a, x);
+    return p_gamma_series(a, x).value;
   }
   // Continued-fraction branch computes Q; return 1 - Q.
-  return 1.0 - q_gamma_cf(a, x);
+  const GammaResult q = q_gamma_cf(a, x);
+  return q.converged ? 1.0 - q.value : q.value;
 }
 
 double q_gamma(double a, double x) noexcept {
@@ -178,9 +186,10 @@ double q_gamma(double a, double x) noexcept {
     return 1.0;
   }
   if (x < a + 1.0) {
-    return 1.0 - p_gamma_series(a, x);
+    const GammaResult p = p_gamma_series(a, x);
+    return p.converged ? 1.0 - p.value : p.value;
   }
-  return q_gamma_cf(a, x);
+  return q_gamma_cf(a, x).value;
 }
 
 double regularized_incomplete_beta(double a, double b, double x) noexcept {

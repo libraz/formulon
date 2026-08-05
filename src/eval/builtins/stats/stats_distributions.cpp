@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Excel's probability-distribution builtins that share the
 // MEDIAN / STDEV argument-coercion conventions: NORM.DIST / NORM.S.DIST /
@@ -619,12 +618,14 @@ Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // Snedecor's F CDF at `x >= 0` with `(d1, d2)` degrees of freedom, via
-// the regularized incomplete beta on `y = d1*x / (d1*x + d2)`.
+// the regularized incomplete beta on `y = x / (x + d2/d1)`. This is
+// algebraically identical to `d1*x / (d1*x + d2)` but retains a finite
+// ratio for large finite x instead of forming an Inf/Inf intermediate.
 static double FDistCdf(double x, double d1, double d2) noexcept {
   if (x <= 0.0) {
     return 0.0;
   }
-  const double y = (d1 * x) / (d1 * x + d2);
+  const double y = x / (x + d2 / d1);
   return stats::regularized_incomplete_beta(0.5 * d1, 0.5 * d2, y);
 }
 

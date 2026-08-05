@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's combinatorial, numeral-system, precise-
 // rounding, and miscellaneous scalar math built-in functions:
@@ -35,6 +34,7 @@ namespace eval {
 namespace {
 
 using builtins_detail::kPi;
+using builtins_detail::snap_to_integer;
 using builtins_detail::to_finite_value;
 
 // Factorial table for n = 0..170 (double precision). 170! is the largest
@@ -710,7 +710,7 @@ inline Value precise_rounding(const Value* args, std::uint32_t arity, bool up) {
     return Value::number(0.0);
   }
   const double abs_s = std::fabs(sig);
-  const double scaled = n / abs_s;
+  const double scaled = snap_to_integer(n / abs_s);
   const double rounded = up ? std::ceil(scaled) : std::floor(scaled);
   const double r = rounded * abs_s;
   if (std::isnan(r) || std::isinf(r)) {

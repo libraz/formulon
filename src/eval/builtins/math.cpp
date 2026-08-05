@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's arithmetic and rounding built-in functions:
 // ABS, SIGN, INT, TRUNC, SQRT, MOD, POWER, ROUND, ROUNDDOWN, ROUNDUP,
@@ -10,7 +9,9 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
+#include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
@@ -21,6 +22,8 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+using builtins_detail::snap_to_integer;
 
 // --- Single-number transforms -------------------------------------------
 
@@ -245,7 +248,7 @@ Value Round(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double scaled = value.value() * factor;
-  const double bias = std::copysign(std::fabs(scaled) * 2.0e-14, scaled);
+  const double bias = std::copysign(std::fabs(scaled) * 2.0 * std::numeric_limits<double>::epsilon(), scaled);
   const double r = std::round(scaled + bias) / factor;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
@@ -347,28 +350,6 @@ inline bool is_empty_text(const Value& v) {
       return false;
   }
   return true;
-}
-
-// Snap a floating-point quotient to its nearest integer when the deviation
-// is within ~a few ULPs. CEILING / FLOOR would otherwise return `n - s`
-// for inputs like `FLOOR(7.1, 0.1)` because 7.1 / 0.1 in IEEE-754 is
-// 70.999... rather than exactly 71; Excel recognises this as an exact
-// multiple and returns `n` itself. The tolerance is small enough that
-// genuinely small-but-nonzero quotients (e.g. `CEILING(1e-12, 1)` where
-// the quotient is 1e-12, far more than 1 ULP away from 0) are not
-// mistaken for exact integers.
-inline double snap_to_integer(double q) {
-  const double nearest = std::round(q);
-  // Tolerance scales with |q| because FP error in `n / s` is proportional
-  // to |q|. A relative tolerance of 2e-15 (~9 ULPs) is tight enough that
-  // legitimate non-integer quotients like `9999999999999 / 0.21`
-  // (fractional part 0.143) are not snapped, while absorbing the 5-ULP
-  // error in `7.1 / 0.1`. No `max(1.0, ...)` floor: snapping a tiny
-  // non-zero quotient to 0 would corrupt `CEILING(1e-12, 1) -> 1`.
-  if (std::fabs(q - nearest) < 2e-15 * std::fabs(q)) {
-    return nearest;
-  }
-  return q;
 }
 
 inline double signum(double x) {

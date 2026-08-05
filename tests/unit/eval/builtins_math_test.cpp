@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the math built-in functions: ABS, SIGN, INT, TRUNC,
 // SQRT, MOD, POWER, ROUND, ROUNDDOWN, ROUNDUP, MIN, MAX, AVERAGE, PRODUCT.
@@ -320,6 +319,14 @@ TEST(MathRound, OneAndAHalfRoundsUp) {
   const Value v = EvalSource("=ROUND(1.5, 0)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(MathRound, ValueOutsideUlpToleranceDoesNotRoundUp) {
+  // The decimal is about 90 ULPs below 0.5. ROUND must not mistake it for
+  // arithmetic noise around a half boundary.
+  const Value v = EvalSource("=ROUND(0.49999999999999, 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 TEST(MathRound, ExtremePositiveDigitsIsNoOp) {

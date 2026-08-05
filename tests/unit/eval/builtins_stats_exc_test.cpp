@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the exclusive percentile / quartile variants:
 // PERCENTILE.EXC and QUARTILE.EXC. Both share the `accepts_ranges = true`
@@ -74,6 +73,12 @@ TEST(BuiltinsPercentileExc, MedianOnTenValues) {
   const Value v = EvalSource("=PERCENTILE.EXC({1;2;3;4;5;6;7;8;9;10}, 0.5)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 5.5);
+}
+
+TEST(BuiltinsPercentileExc, OppositeExtremeFiniteEndpointsInterpolate) {
+  const Value v = EvalSource("=PERCENTILE.EXC(-1E308,1E308,0.5)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
 TEST(BuiltinsPercentileExc, Q3OnTenValues) {

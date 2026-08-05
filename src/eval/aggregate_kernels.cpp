@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the numeric aggregation kernels declared in
 // `aggregate_kernels.h`. See that header for the rationale around algorithm
@@ -145,7 +144,10 @@ Expected<double, ErrorCode> percentile_sorted_inc(const std::vector<double>& xs_
   if (frac == 0.0 || lo_index + 1U >= n) {
     return xs_sorted[lo_index];
   }
-  const double interpolated = xs_sorted[lo_index] + frac * (xs_sorted[lo_index + 1U] - xs_sorted[lo_index]);
+  // Weighted endpoints avoid overflowing `high - low` for a legitimate
+  // extreme pair such as {-1E308, 1E308}; the result remains inside the
+  // closed interval spanned by the two finite neighbours.
+  const double interpolated = (1.0 - frac) * xs_sorted[lo_index] + frac * xs_sorted[lo_index + 1U];
   if (!std::isfinite(interpolated)) {
     return ErrorCode::Num;
   }
@@ -175,7 +177,7 @@ Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_
   if (frac == 0.0 || lo_index + 1U >= n) {
     return xs_sorted[lo_index];
   }
-  const double interpolated = xs_sorted[lo_index] + frac * (xs_sorted[lo_index + 1U] - xs_sorted[lo_index]);
+  const double interpolated = (1.0 - frac) * xs_sorted[lo_index] + frac * xs_sorted[lo_index + 1U];
   if (!std::isfinite(interpolated)) {
     return ErrorCode::Num;
   }

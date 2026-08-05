@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared scalar-numeric helpers used across the built-in catalog. These
 // were previously duplicated (4x for `kPi`, 5x for the `non-finite ->
@@ -44,6 +43,18 @@ inline Value to_finite_value(double r) noexcept {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(r);
+}
+
+/// Snaps a quotient to its nearest integer only when it is within a few ULPs.
+/// This preserves decimal exact multiples such as `7.1 / 0.1`, which binary
+/// floating point can represent just below 71, without collapsing genuinely
+/// non-integer quotients near zero.
+inline double snap_to_integer(double quotient) noexcept {
+  const double nearest = std::round(quotient);
+  if (std::fabs(quotient - nearest) < 2e-15 * std::fabs(quotient)) {
+    return nearest;
+  }
+  return quotient;
 }
 
 /// (a, b) pair returned by `read_number_pair`. Used by distribution

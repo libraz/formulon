@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Order-statistic and quantile family for the statistical builtins:
 // MEDIAN, MODE / MODE.SNGL / MODE.MULT, LARGE / SMALL, PERCENTILE[.INC] /
@@ -32,6 +31,17 @@ namespace formulon {
 namespace eval {
 namespace stats_detail {
 
+namespace {
+
+double midpoint_without_overflow(double low, double high) {
+  if (std::signbit(low) == std::signbit(high)) {
+    return low + (high - low) * 0.5;
+  }
+  return low * 0.5 + high * 0.5;
+}
+
+}  // namespace
+
 // MEDIAN(value, ...) - median of numeric values. Non-numerics are skipped;
 // an empty collection yields `#NUM!`. For an even count the result is the
 // arithmetic mean of the two middle elements.
@@ -45,7 +55,7 @@ Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if ((n % 2u) == 1u) {
     return Value::number(xs[n / 2u]);
   }
-  return Value::number(0.5 * (xs[n / 2u - 1u] + xs[n / 2u]));
+  return Value::number(midpoint_without_overflow(xs[n / 2u - 1u], xs[n / 2u]));
 }
 
 // MODE / MODE.SNGL(value, ...) - most-frequent numeric value. Ties resolve
