@@ -8,10 +8,8 @@ the same C++ engine, so any divergence implicates a binding-layer bug
 (number-formatting drift, UTF-8 handling, error-code translation, ...).
 
 The fixture corpus is `fixtures.json`; each entry is one formula plus a
-human-readable `expect` hint. The runner does not assert against
-`expect` directly -- the comparison is *between* channels, not against a
-golden -- but the hint shows up in divergence reports so failures are
-self-explanatory.
+expected normalized result. The runner verifies `expect` for every active
+channel as well as comparing channels against one another.
 
 ## How to run
 
@@ -62,13 +60,13 @@ The runner *never* requires every channel to be present:
     fallback)                            => Python channel skipped.
 
 If fewer than 2 channels remain active, the harness prints a warning
-and exits 0: a single channel cannot diverge from itself, so the gate
-is a no-op rather than a false positive. The harness only fails when
-two or more channels were exercised and they disagreed.
+and exits with CTest's conventional skip code (77): a single channel
+cannot establish parity. With two or more active channels, the harness
+fails for a channel invocation error, a cross-channel difference, or an
+unmet fixture expectation.
 
-This makes the test safe to include in the default `ctest` suite even
-on developer machines where only one of the three channels has been
-built.
+The CTest entry maps code 77 to `Skipped`, so the default suite remains
+accurate on developer machines where only one channel has been built.
 
 ## What to do when a divergence is reported
 
@@ -96,6 +94,6 @@ a real bug, fix the bug.
   * Locale-specific formatting (Japanese era dates, ja-JP separators)
     is owned by the oracle harness (`tests/oracle/`).
   * Status-envelope failures (parser crashes that surface as a non-OK
-    status, not a `Value.Error`) are out of scope. This harness exits
-    early on any host-side failure with a `channel-failure` line in the
-    summary; investigating those is a separate workflow.
+    status, not a `Value.Error`) are reported as `channel-failure` and
+    fail the gate; diagnosing the underlying binding issue is a separate
+    workflow.
