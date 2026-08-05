@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - cell mutation (set_*), cell read (get_value, lambda_text_at),
 // flat-enumeration (cell_count, cell_at), and dynamic-array spill info.
@@ -24,7 +23,6 @@
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::intern_text;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::TextStore;
@@ -87,13 +85,30 @@ extern "C" fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_inde
   if (utf8 == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_text: utf8 is NULL");
   }
-  // The cell stores a non-owning view; we must keep the bytes alive for
-  // as long as the handle does.
-  const std::string_view view = intern_text(wb->text_store, std::string_view(utf8));
-  auto r = wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::text(view));
+  // Copy directly into the destination cell. Keeping every overwritten
+  // input in a handle-global deque leaked one string per C-ABI write.
+  auto r = wb->workbook().set_cell_text(sheet_index, row, col, utf8);
   if (!r) {
     return set_last_error(r.error());
   }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                     const char* utf8) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_cell_phonetic"); rc != 0) {
+    return rc;
+  }
+  if (utf8 == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_cell_phonetic: utf8 is NULL");
+  }
+  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_cell_phonetic: cell coordinate out of range");
+  }
+  wb->workbook().sheet(sheet_index).set_cell_phonetic(row, col, utf8);
   return 0;
 }
 
@@ -151,6 +166,24 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
   TextStore& store = const_cast<TextStore&>(wb->read_scratch);
   store.clear();
   value_to_fm(v, store, out);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                     uint32_t col, const char** out_text) {
+  clear_last_error();
+  if (out_text == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_get_cell_phonetic: out_text is NULL");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic"); rc != 0) {
+    return rc;
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
+  store.emplace_back(cell == nullptr ? std::string() : cell->phonetic_text);
+  *out_text = store.back().c_str();
   return 0;
 }
 

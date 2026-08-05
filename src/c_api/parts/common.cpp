@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "c_api/parts/common.h"
 
@@ -85,11 +84,6 @@ bool check_range_count(std::uint32_t n, const char* api) {
     return false;
   }
   return true;
-}
-
-std::string_view intern_text(TextStore& store, std::string_view text) {
-  store.emplace_back(text.data(), text.size());
-  return std::string_view(store.back());
 }
 
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out) {

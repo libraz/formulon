@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - workbook lifecycle, save/load, sheet management, recalc /
 // iterative / partial-recalc / calc-mode / profile, defined names,
@@ -22,6 +21,7 @@
 #include "io/format_detect.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
@@ -58,7 +58,11 @@ extern "C" fm_status_t fm_workbook_create_empty(fm_workbook_t** out) {
 
 extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workbook_t** out) {
   clear_last_error();
-  if (bytes == nullptr || out == nullptr || len == 0) {
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_load: NULL or empty input");
+  }
+  *out = nullptr;
+  if (bytes == nullptr || len == 0) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_load: NULL or empty input");
   }
   formulon::io::ByteSpan span;
@@ -152,6 +156,28 @@ extern "C" fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, fm_workbook_
   }
   *out_bytes = buffer;
   *out_len = src.size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_save_xlsb_with_result(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len,
+                                                         size_t* out_downgraded_formula_count) {
+  clear_last_error();
+  if (wb == nullptr || out_bytes == nullptr || out_len == nullptr || out_downgraded_formula_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_save_xlsb_with_result: NULL argument");
+  }
+  auto result_or = formulon::io::xlsb::write_xlsb_with_result(wb->workbook());
+  if (!result_or) {
+    return set_last_error(result_or.error());
+  }
+  formulon::io::xlsb::XlsbWriteResult result = std::move(result_or.value());
+  auto* buffer = new uint8_t[result.bytes.size()];
+  if (!result.bytes.empty()) {
+    std::memcpy(buffer, result.bytes.data(), result.bytes.size());
+  }
+  *out_bytes = buffer;
+  *out_len = result.bytes.size();
+  *out_downgraded_formula_count = result.downgraded_formula_count;
   return 0;
 }
 
@@ -407,6 +433,32 @@ extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enab
   opts.max_iterations = max_iterations < 1 ? 1U : static_cast<std::uint32_t>(max_iterations);
   opts.max_change = max_change;
   wb->workbook().set_iterative_options(opts);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_iterative_enabled(fm_workbook_t* wb, int32_t enabled) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_iterative_enabled: wb is NULL");
+  }
+  formulon::eval::IterativeOptions opts = wb->workbook().iterative_options();
+  opts.enabled = enabled != 0;
+  wb->workbook().set_iterative_options(opts);
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_t* out_enabled,
+                                                 uint32_t* out_max_iterations, double* out_max_change) {
+  clear_last_error();
+  if (wb == nullptr || out_enabled == nullptr || out_max_iterations == nullptr || out_max_change == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_get_iterative: NULL argument");
+  }
+  const formulon::eval::IterativeOptions& opts = wb->workbook().iterative_options();
+  *out_enabled = opts.enabled ? 1 : 0;
+  *out_max_iterations = opts.max_iterations;
+  *out_max_change = opts.max_change;
   return 0;
 }
 

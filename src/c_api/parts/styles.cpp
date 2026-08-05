@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - styles surface (cell xf bindings, fonts, fills, borders, num
 // formats, cell styles, dedup-on-insert helpers).
@@ -102,6 +101,19 @@ extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index
   out->italic = f.italic ? 1 : 0;
   out->strike = f.strike ? 1 : 0;
   out->underline = f.underline;
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_font_ex(fm_workbook_t* wb, uint32_t font_index, fm_font_record_ex* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_font_ex: out is NULL");
+  }
+  const fm_status_t rc = fm_styles_get_font(wb, font_index, &out->base);
+  if (rc != 0) {
+    return rc;
+  }
+  out->vert_align = wb->workbook().styles().fonts[font_index].vert_align;
   return 0;
 }
 
@@ -332,7 +344,7 @@ namespace {
 /// one here keeps the dedup-comparator confined to the C ABI's needs.
 bool font_records_equal(const formulon::io::FontRecord& a, const formulon::io::FontRecord& b) {
   return a.name == b.name && a.size == b.size && a.bold == b.bold && a.italic == b.italic && a.strike == b.strike &&
-         a.underline == b.underline && a.color_argb == b.color_argb;
+         a.underline == b.underline && a.vert_align == b.vert_align && a.color_argb == b.color_argb;
 }
 
 bool fill_records_equal(const formulon::io::FillRecord& a, const formulon::io::FillRecord& b) noexcept {
@@ -394,6 +406,12 @@ formulon::io::FontRecord font_from_c(const fm_font_record& record) {
   return out;
 }
 
+formulon::io::FontRecord font_from_c_ex(const fm_font_record_ex& record) {
+  formulon::io::FontRecord out = font_from_c(record.base);
+  out.vert_align = record.vert_align;
+  return out;
+}
+
 formulon::io::FillRecord fill_from_c(const fm_fill_record& record) noexcept {
   formulon::io::FillRecord out;
   out.pattern = record.pattern;
@@ -430,6 +448,24 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   }
   formulon::io::FontRecord candidate = font_from_c(record);
 
+  formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
+    if (font_records_equal(styles.fonts[i], candidate)) {
+      *out_index = static_cast<uint32_t>(i);
+      return 0;
+    }
+  }
+  styles.fonts.push_back(std::move(candidate));
+  *out_index = static_cast<uint32_t>(styles.fonts.size() - 1);
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_add_font_ex(fm_workbook_t* wb, fm_font_record_ex record, uint32_t* out_index) {
+  clear_last_error();
+  if (wb == nullptr || out_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_font_ex: NULL argument");
+  }
+  formulon::io::FontRecord candidate = font_from_c_ex(record);
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
   for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
     if (font_records_equal(styles.fonts[i], candidate)) {

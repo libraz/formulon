@@ -68,6 +68,8 @@ fm_workbook_passthrough_at
 # -- Recalc / calc policy / profile ----------------------------------------------
 fm_workbook_recalc
 fm_workbook_set_iterative
+fm_workbook_set_iterative_enabled
+fm_workbook_get_iterative
 fm_workbook_partial_recalc
 fm_workbook_set_iterative_progress
 fm_workbook_calc_mode

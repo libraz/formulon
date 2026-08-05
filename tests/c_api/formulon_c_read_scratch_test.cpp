@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Regression test for the per-handle read-path text storage. A long-lived
 // handle that loops over text reads must not accumulate one scratch entry
@@ -69,28 +68,28 @@ TEST(FormulonCApiReadScratch, MixedReadsStayBounded) {
   EXPECT_LE(wb.handle->read_scratch.size(), 1U);
 }
 
-// The read scratch must not disturb the intern store: cell text written via
-// `fm_workbook_set_text` is interned in `text_store` and stays alive for the
-// handle's lifetime even after many read calls reset the scratch.
-TEST(FormulonCApiReadScratch, InternStorePersistsAcrossReads) {
+// Text writes own their current bytes in the cell rather than retaining every
+// historical buffer in a handle-global store. Repeated overwrites must leave
+// the workbook-level shared-string storage untouched and preserve the final
+// text through later reads.
+TEST(FormulonCApiReadScratch, RepeatedTextOverwritesDoNotRetainHistoricalBuffers) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "persistent"), 0);
+  constexpr int kWrites = 1000;
+  for (int i = 0; i < kWrites; ++i) {
+    const std::string text = "value-" + std::to_string(i);
+    ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, text.c_str()), 0);
+  }
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
-
-  const std::size_t interned = wb.handle->text_store.size();
-  EXPECT_GE(interned, 1U);
 
   for (int i = 0; i < 1000; ++i) {
     fm_value_t v{};
     ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
   }
 
-  // Reads never touch the intern store, so its size is unchanged and the
-  // round-tripped text is still readable.
-  EXPECT_EQ(wb.handle->text_store.size(), interned);
+  EXPECT_TRUE(wb.handle->workbook().text_storage().empty());
   fm_value_t v{};
   ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
   ASSERT_EQ(v.kind, FM_VAL_TEXT);
-  EXPECT_STREQ(v.u.text, "persistent");
+  EXPECT_STREQ(v.u.text, "value-999");
 }

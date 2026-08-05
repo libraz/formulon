@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI calc-mode regression tests. Covers the
 // `fm_workbook_calc_mode` / `fm_workbook_set_calc_mode` getter / setter
@@ -57,6 +56,21 @@ TEST(FormulonCApiCalcMode, SetThenGetReturnsRequestedMode) {
   ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_AUTO), 0);
   ASSERT_EQ(fm_workbook_calc_mode(wb.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO);
+}
+
+TEST(FormulonCApiCalcMode, IterativeEnabledTogglePreservesConfiguredLimits) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 0, 42, 0.25), 0);
+  ASSERT_EQ(fm_workbook_set_iterative_enabled(wb.handle, 1), 0);
+
+  int32_t enabled = 0;
+  uint32_t max_iterations = 0;
+  double max_change = 0.0;
+  ASSERT_EQ(fm_workbook_get_iterative(wb.handle, &enabled, &max_iterations, &max_change), 0);
+  EXPECT_EQ(enabled, 1);
+  EXPECT_EQ(max_iterations, 42U);
+  EXPECT_DOUBLE_EQ(max_change, 0.25);
 }
 
 TEST(FormulonCApiCalcMode, UnknownModeRejected) {

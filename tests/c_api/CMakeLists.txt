@@ -40,3 +40,13 @@ target_include_directories(formulon_c_api_tests
 formulon_apply_warnings(formulon_c_api_tests)
 
 gtest_discover_tests(formulon_c_api_tests)
+
+# Keep the advertised C11 header contract honest. The primary C API tests
+# are C++ gtests, so compile a tiny C translation unit with an actual C
+# compiler as a separate CTest entry.
+find_program(FORMULON_C_COMPILER NAMES cc clang gcc REQUIRED)
+add_test(
+  NAME formulon_c_header_compile
+  COMMAND ${FORMULON_C_COMPILER} -std=c11 -fsyntax-only -I${CMAKE_SOURCE_DIR}/src
+          ${CMAKE_CURRENT_SOURCE_DIR}/formulon_c_header_compile.c
+)

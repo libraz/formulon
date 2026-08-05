@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared private helpers for the C-ABI implementation split across
 // `src/c_api/parts/*.cpp`. These leak no symbols outside the binary
@@ -95,12 +94,6 @@ constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 // bogus reservation.
 bool check_range_count(std::uint32_t n, const char* api);
 
-// Inserts `text` (a non-owning UTF-8 view) into `store` and returns a
-// non-owning `string_view` whose pointee is owned by `store`. Used by
-// `fm_workbook_set_text` so the view stored on the cell remains valid
-// for the lifetime of the handle.
-std::string_view intern_text(TextStore& store, std::string_view text);
-
 // Translates a `Value` into a C-side `fm_value_t`. For text variants the
 // payload is appended to `store` and the returned pointer is a stable,
 // NUL-terminated `c_str()` into it. Read-path callers pass the per-handle
@@ -137,13 +130,6 @@ fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const 
 // retains the storage.
 struct fm_workbook {
   std::optional<formulon::Workbook> wb;
-
-  // Intern storage for UTF-8 strings that must live for the lifetime of
-  // the handle: cell text inputs (`fm_workbook_set_text`) and any other
-  // string whose bytes back a non-owning `Value::text` view stored inside
-  // the workbook. Entries are never removed while the handle is alive, so
-  // every view interned here stays valid until the handle is destroyed.
-  formulon::c_api::parts::TextStore text_store;
 
   // Scratch storage for strings handed back to the caller on the read
   // path (`fm_workbook_get_value` / `fm_workbook_cell_at` /

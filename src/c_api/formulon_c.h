@@ -1,6 +1,4 @@
 /*
- * Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
- *
  * Formulon stable C ABI.
  *
  * This is a pure C11 header: every declaration sits inside `extern "C"`
@@ -51,6 +49,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -256,6 +257,19 @@ FM_API fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, fm_workbook_form
                                        size_t* out_len);
 
 /**
+ * @brief Serialises `wb` as XLSB and reports formula downgrades.
+ *
+ * Formula ASTs that cannot be represented by the current XLSB Ptg encoder
+ * are emitted as their cached literals, rather than aborting the complete
+ * save. `out_downgraded_formula_count` receives the number of affected
+ * cells, allowing bindings to present a data-loss warning to the caller.
+ * The returned buffer follows the same `fm_buffer_free` ownership rule as
+ * `fm_workbook_save_ex`.
+ */
+FM_API fm_status_t fm_workbook_save_xlsb_with_result(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len,
+                                                     size_t* out_downgraded_formula_count);
+
+/**
  * @brief Releases a buffer returned by `fm_workbook_save` or
  *        `fm_workbook_save_ex`.
  *
@@ -397,7 +411,8 @@ FM_API fm_status_t fm_workbook_set_defined_name_scoped(fm_workbook_t* wb, const 
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet` is out of range, `row` is
- *         past the sheet bound, or `count == 0`.
+ *         past the sheet bound, or `count == 0`. Delete operations also
+ *         reject a `count` that extends past the sheet bound.
  */
 FM_API fm_status_t fm_workbook_insert_rows(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t count);
 
@@ -465,9 +480,8 @@ FM_API fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_index, 
                                          fm_error_code_t error);
 
 /**
- * @brief Stores a text literal. The handle copies the UTF-8 contents
- *        into its internal text storage; `utf8` does not need to
- *        outlive the call.
+ * @brief Stores a text literal. The destination cell copies the UTF-8
+ *        contents, so `utf8` does not need to outlive the call.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -475,6 +489,20 @@ FM_API fm_status_t fm_workbook_set_error(fm_workbook_t* wb, size_t sheet_index, 
  */
 FM_API fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                         const char* utf8);
+
+/**
+ * @brief Stores the phonetic guide (OOXML `<rPh>`) for a cell.
+ *
+ * The guide is independent of the cell's visible text. Passing an empty
+ * string clears an existing guide. The destination cell copies `utf8`, so
+ * the input does not need to outlive the call.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                 const char* utf8);
 
 /**
  * @brief Stores a `Blank` literal at `(row, col)`. Equivalent to
@@ -524,6 +552,21 @@ FM_API fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index
  */
 FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                          fm_value_t* out);
+
+/**
+ * @brief Reads the cell's phonetic guide (OOXML `<rPh>`), or an empty string
+ *        when the cell has no guide.
+ *
+ * `*out_text` borrows a NUL-terminated UTF-8 string from the handle's read
+ * scratch. It remains valid until the next read or mutation on the handle,
+ * or until the handle is destroyed. Copy it when it must outlive that window.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out_text` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                 uint32_t col, const char** out_text);
 
 /**
  * @brief Renders the lambda closure stored at `(sheet_index, row, col)`
@@ -927,8 +970,9 @@ FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, uint32_t sheet);
 
 /**
  * @brief Reads `(out_row, out_col, out_author, out_text)` for the
- *        comment at `(row, col)` on `sheet`. Returns `kInvalidArgument`
- *        when no comment is anchored there.
+ *        comment at `(row, col)` on `sheet`. Returns `kNotFound` when no
+ *        comment is anchored there, and `kInvalidArgument` when `sheet` is
+ *        out of range.
  *
  * `out->author` and `out->text` borrow NUL-terminated UTF-8 pointers
  * from the workbook handle. Both are valid until the next mutation
@@ -1139,6 +1183,27 @@ FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
  */
 FM_API fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled, int32_t max_iterations,
                                              double max_change);
+
+/**
+ * @brief Changes only whether iterative calculation is enabled.
+ *
+ * Preserves the workbook's existing iteration cap and convergence threshold.
+ * This is useful for hosts that expose Excel's enable checkbox separately
+ * from its advanced iterative-calculation settings.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`.
+ */
+FM_API fm_status_t fm_workbook_set_iterative_enabled(fm_workbook_t* wb, int32_t enabled);
+
+/**
+ * @brief Reads the iterative-calculation settings currently stored on a workbook.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if any argument is `NULL`.
+ */
+FM_API fm_status_t fm_workbook_get_iterative(const fm_workbook_t* wb, int32_t* out_enabled,
+                                             uint32_t* out_max_iterations, double* out_max_change);
 
 /* -------------------------------------------------------------------------- */
 /* Calculation mode (workbook-level `<calcPr calcMode>` policy)               */
@@ -2475,8 +2540,9 @@ typedef enum {
  * not engine-owned data: the engine returns `NULL` for them and expects a
  * host (editor / docs surface) to supply its own document and merge it over
  * this structural result at display time. The document contract lives in
- * `docs/function-metadata-schema.md`, and the bindings ship a pure merge
- * helper (`mergeFunctionMetadata` / `merge_function_metadata`) for it. This
+ * `docs/function-metadata-schema.md`; the native Node and Python bindings
+ * ship pure merge helpers (`mergeFunctionMetadata` /
+ * `merge_function_metadata`) for it. This
  * metadata is display-only: formula input parsing stays fixed to the
  * English canonical names, so `fm_function_localize` /
  * `fm_function_canonicalize` are unaffected by any injected document and
@@ -2934,6 +3000,14 @@ typedef struct {
   uint8_t underline; /* 0=none, 1=single, 2=double, 3/4=accounting variants */
 } fm_font_record;
 
+/** Versioned font record including OOXML `vertAlign` (`0=baseline`,
+ * `1=superscript`, `2=subscript`). `base` preserves the stable
+ * `fm_font_record` layout for existing ABI consumers. */
+typedef struct {
+  fm_font_record base;
+  uint8_t vert_align;
+} fm_font_record_ex;
+
 /**
  * @brief Plain-data projection of a `formulon::io::FillRecord`.
  *
@@ -3077,6 +3151,8 @@ FM_API fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, f
  *         `kInvalidArgument` when `font_index >= fonts.size()`.
  */
 FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out);
+
+FM_API fm_status_t fm_styles_get_font_ex(fm_workbook_t* wb, uint32_t font_index, fm_font_record_ex* out);
 
 /**
  * @brief Looks up the format string for `num_fmt_id` (built-in 0..163
@@ -3244,6 +3320,8 @@ FM_API fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index
  *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
  */
 FM_API fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record record, uint32_t* out_index);
+
+FM_API fm_status_t fm_styles_add_font_ex(fm_workbook_t* wb, fm_font_record_ex record, uint32_t* out_index);
 
 /**
  * @brief Adds a fill record to the workbook's styles table, deduplicating

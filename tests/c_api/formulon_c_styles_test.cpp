@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI tests for the styles surface
 // (`fm_cell_get_xf_index`, `fm_cell_set_xf_index`,
@@ -308,6 +307,27 @@ TEST(FormulonCApiStyles, AddFontGrowsTable) {
   EXPECT_DOUBLE_EQ(out.size, 12.0);
   EXPECT_EQ(out.color_argb, 0xFF112233U);
   EXPECT_EQ(out.bold, 1);
+}
+
+TEST(FormulonCApiStyles, AddFontExPreservesVerticalAlignmentWithoutChangingLegacyRecord) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_font_record_ex superscript{};
+  superscript.base = MakeArial();
+  superscript.vert_align = 1;
+  uint32_t idx = 0;
+  ASSERT_EQ(fm_styles_add_font_ex(wb.handle, superscript, &idx), 0);
+
+  fm_font_record_ex loaded{};
+  ASSERT_EQ(fm_styles_get_font_ex(wb.handle, idx, &loaded), 0);
+  EXPECT_STREQ(loaded.base.name, "Arial");
+  EXPECT_EQ(loaded.vert_align, 1U);
+
+  fm_font_record legacy{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &legacy), 0);
+  EXPECT_STREQ(legacy.name, "Arial");
+  EXPECT_EQ(legacy.underline, 0U);
 }
 
 TEST(FormulonCApiStyles, AddFillDedupReturnsExistingIndex) {
