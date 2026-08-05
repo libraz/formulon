@@ -73,10 +73,10 @@ release:
 	$(CMAKE) --build build-release --parallel
 
 test:
-	(cd $(BUILD_DIR) && $(CTEST) -LE "SLOW|LOAD" -j $(CTEST_JOBS) --output-on-failure --timeout 30)
+	(cd $(BUILD_DIR) && $(CTEST) -LE "SLOW|BENCH|TSAN" -j $(CTEST_JOBS) --output-on-failure --timeout 30)
 
 test-slow:
-	(cd $(BUILD_DIR) && $(CTEST) -LE "LOAD" -j $(CTEST_JOBS) --output-on-failure --timeout 120)
+	(cd $(BUILD_DIR) && $(CTEST) -LE "BENCH|TSAN" -j $(CTEST_JOBS) --output-on-failure --timeout 120)
 
 test-all:
 	(cd $(BUILD_DIR) && $(CTEST) -j $(CTEST_JOBS) --output-on-failure --timeout 300)
@@ -319,9 +319,10 @@ node-test: node-package
 # `make parity-test` -> evaluate fixtures.json on every available channel
 #                       (CLI / npm / Python wheel) and assert all channels
 #                       agree at %.15g-canonicalized IEEE-754 bit
-#                       granularity. Skip-aware: missing channels are
-#                       reported but do not fail. Fails (exit 1) only when
-#                       two or more channels actually disagreed.
+#                       granularity. Fewer than two active channels exits
+#                       with CTest's conventional skip code (77); otherwise
+#                       any disagreement, failed channel, or unmet fixture
+#                       expectation fails (exit 1).
 #
 # Intentionally has no make-level dependency on `npm-package`, `python-package`,
 # or the native build: the runner itself decides which channels to exercise

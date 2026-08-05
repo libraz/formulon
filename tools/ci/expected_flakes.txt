@@ -25,14 +25,3 @@
 SheetSpillTest.ZeroRowsOrZeroColsIsRejected
 SheetSpillTest.MismatchedCellsLengthIsRejected
 SheetSpillTest.FootprintOverflowingSheetBoundsIsRejected
-
-# Error-propagation regression: scalar-first-arg cases on aggregator-shaped
-# builtins return the wrong error kind. Targeted by the criteria-coercion
-# cleanup bundle.
-BuiltinsCountIf.ScalarFirstArgIsValueError
-BuiltinsCountIfs.ScalarFirstArgIsValueError
-BuiltinsChoose.ChooseScalarChildStillFailsInSum
-
-# IronCalc is the *secondary* oracle. We accept divergences here until the
-# secondary-oracle gate flip in Phase 4 / Phase 6.
-formulon_ironcalc_oracle

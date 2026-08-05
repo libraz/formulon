@@ -79,17 +79,21 @@ jobs:
         # under -O0 + --coverage every bench is 5-10x slower and the
         # gate trivially fails. Bench is also excluded from the local
         # fast-suite definition in tests/bench/CMakeLists.txt.
-        run: ctest -LE "SLOW|LOAD|BENCH" --output-on-failure --timeout 60 -j 4
+        run: ctest -LE "SLOW|BENCH|TSAN" --output-on-failure --timeout 60 -j 4
 
       - name: Check failures against allowlist
         run: |
+          ctest --test-dir build-coverage --show-only=json-v1 > build-coverage/ctest-tests.json
           if [ -f build-coverage/Testing/Temporary/LastTestsFailed.log ]; then
-            python3 tools/ci/check_test_failures.py \
-              --failed build-coverage/Testing/Temporary/LastTestsFailed.log \
-              --allowlist tools/ci/expected_flakes.txt
+            failed=build-coverage/Testing/Temporary/LastTestsFailed.log
           else
-            echo "ctest produced no LastTestsFailed.log; assuming success"
+            failed=build-coverage/no-failures.log
+            : > "$failed"
           fi
+          python3 tools/ci/check_test_failures.py \
+            --failed "$failed" \
+            --allowlist tools/ci/expected_flakes.txt \
+            --ctest-json build-coverage/ctest-tests.json
 
       - name: Capture and filter lcov tracefile
         run: |

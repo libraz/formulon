@@ -108,17 +108,20 @@ jobs:
         id: ctest
         continue-on-error: true
         working-directory: build
-        # Same label exclusion as ci.yml's native job: SLOW/LOAD are the
-        # minutes-to-tens-of-minutes tiers, BENCH is a wall-clock
-        # regression gate run out of band.
-        run: ctest -LE "SLOW|LOAD|BENCH" --output-on-failure --timeout 60 -j 4
+        # Same label exclusion as ci.yml's native job: SLOW is the
+        # minutes-to-tens-of-minutes tier; BENCH and TSAN run out of band.
+        run: ctest -LE "SLOW|BENCH|TSAN" --output-on-failure --timeout 60 -j 4
 
       - name: Check failures against allowlist
         run: |
+          ctest --test-dir build --show-only=json-v1 > build/ctest-tests.json
           if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
-            python3 tools/ci/check_test_failures.py \
-              --failed build/Testing/Temporary/LastTestsFailed.log \
-              --allowlist tools/ci/expected_flakes.txt
+            failed=build/Testing/Temporary/LastTestsFailed.log
           else
-            echo "ctest produced no LastTestsFailed.log; assuming success"
+            failed=build/no-failures.log
+            : > "$failed"
           fi
+          python3 tools/ci/check_test_failures.py \
+            --failed "$failed" \
+            --allowlist tools/ci/expected_flakes.txt \
+            --ctest-json build/ctest-tests.json
