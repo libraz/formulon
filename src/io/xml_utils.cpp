@@ -235,30 +235,56 @@ void append_raw_attrs(std::string& out, const std::vector<std::pair<std::string,
   }
 }
 
+namespace {
+
+// `parse_ws_pcdata_single` retains whitespace-only text inside leaf
+// elements (those with no element children). This is required so a
+// whitespace-only string body — e.g. `<t> </t>` in a shared-string,
+// inline-string, or comment part — reads back as the literal
+// whitespace rather than being silently dropped to "". Because it only
+// affects childless elements, it is safe for every reader that shares
+// this loader: structural parts read their data from attributes and
+// child elements, never from whitespace-only PCDATA in a leaf.
+constexpr unsigned int kPartParseFlags = pugi::parse_default | pugi::parse_ws_pcdata_single;
+
+/// Builds the `kIoXmlParse` envelope both part loaders share, so the
+/// copying and in-place paths stay indistinguishable to callers that
+/// match on the message or context.
+Expected<void, Error> PartParseResult(const pugi::xml_parse_result& parse, std::string_view reader_module,
+                                      std::string_view part_name) {
+  if (parse) {
+    return Expected<void, Error>::Ok();
+  }
+  std::string ctx("context=");
+  ctx.append(reader_module);
+  ctx.append(" part=");
+  ctx.append(part_name);
+  ctx.append(" desc=");
+  ctx.append(parse.description());
+  std::string msg(part_name);
+  msg.append(": pugixml parse failed");
+  return make_error(FormulonErrorCode::kIoXmlParse, std::move(msg), std::move(ctx));
+}
+
+}  // namespace
+
 Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector<std::uint8_t>& bytes,
                                       std::string_view reader_module, std::string_view part_name) {
-  // `parse_ws_pcdata_single` retains whitespace-only text inside leaf
-  // elements (those with no element children). This is required so a
-  // whitespace-only string body — e.g. `<t> </t>` in a shared-string,
-  // inline-string, or comment part — reads back as the literal
-  // whitespace rather than being silently dropped to "". Because it only
-  // affects childless elements, it is safe for every reader that shares
-  // this loader: structural parts read their data from attributes and
-  // child elements, never from whitespace-only PCDATA in a leaf.
-  constexpr unsigned int kParseFlags = pugi::parse_default | pugi::parse_ws_pcdata_single;
-  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), kParseFlags, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=");
-    ctx.append(reader_module);
-    ctx.append(" part=");
-    ctx.append(part_name);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    std::string msg(part_name);
-    msg.append(": pugixml parse failed");
-    return make_error(FormulonErrorCode::kIoXmlParse, std::move(msg), std::move(ctx));
-  }
-  return Expected<void, Error>::Ok();
+  const pugi::xml_parse_result parse =
+      doc.load_buffer(bytes.data(), bytes.size(), kPartParseFlags, pugi::encoding_utf8);
+  return PartParseResult(parse, reader_module, part_name);
+}
+
+Expected<void, Error> load_xml_buffer_inplace(pugi::xml_document& doc, std::vector<std::uint8_t>& bytes,
+                                              std::string_view reader_module, std::string_view part_name) {
+  // `load_buffer_inplace` (as opposed to `..._own`) leaves ownership of
+  // the storage with the caller: pugixml tokenises within `bytes` and
+  // never frees it. Pinning the encoding to UTF-8 matches the copying
+  // overload and keeps pugixml out of the transcoding path, which is
+  // what would silently reintroduce a full-size private copy.
+  const pugi::xml_parse_result parse =
+      doc.load_buffer_inplace(bytes.data(), bytes.size(), kPartParseFlags, pugi::encoding_utf8);
+  return PartParseResult(parse, reader_module, part_name);
 }
 
 std::uint32_t parse_rgb_hex(std::string_view hex, std::uint32_t fallback) noexcept {

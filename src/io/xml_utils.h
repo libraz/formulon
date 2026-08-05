@@ -198,8 +198,36 @@ void capture_unknown_children(const pugi::xml_node& parent, std::initializer_lis
 /// Centralises the parse-error envelope reproduced verbatim by every
 /// reader. Callers wishing to use a non-default parse mode or build a
 /// bespoke error message must continue to call `load_buffer` directly.
+///
+/// This overload leaves `bytes` untouched, which costs a full private
+/// copy of the part inside pugixml. Prefer `load_xml_buffer_inplace`
+/// for large single-use parts.
 Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector<std::uint8_t>& bytes,
                                       std::string_view reader_module, std::string_view part_name);
+
+/// Destructive variant of `load_xml_buffer` that parses out of the
+/// caller's buffer instead of the private copy pugixml would otherwise
+/// allocate. Peak memory for the parse drops from two copies of the
+/// part to one — the difference that decides whether a workbook with a
+/// 40 MB `pivotCacheRecords` part loads at all on a memory-capped
+/// surface.
+///
+/// The contract is stricter than the copying overload:
+///
+///   * `bytes` is rewritten in situ (entity expansion, in-place NUL
+///     termination of names and values), so its contents are no longer
+///     the part's source text once this returns — including on the
+///     failure path, where the buffer is left partially rewritten.
+///   * `doc` points into `bytes`. The buffer must outlive `doc` and
+///     must not be resized, moved from, or parsed a second time.
+///
+/// Use the copying overload when either does not hold: when the same
+/// buffer feeds more than one parse (`[Content_Types].xml`, which the
+/// package validator walks three times), or when the original bytes are
+/// still needed afterwards (a part that is also carried through
+/// passthrough verbatim).
+Expected<void, Error> load_xml_buffer_inplace(pugi::xml_document& doc, std::vector<std::uint8_t>& bytes,
+                                              std::string_view reader_module, std::string_view part_name);
 
 /// Parses an OOXML hex colour string into a packed `0xAARRGGBB` value.
 ///

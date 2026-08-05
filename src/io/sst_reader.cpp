@@ -48,10 +48,12 @@ void AppendPhoneticText(const pugi::xml_node& si_node, std::string& out) {
 
 }  // namespace
 
-Expected<SharedStringTable, Error> read_shared_strings(const std::vector<std::uint8_t>& sst_bytes,
+Expected<SharedStringTable, Error> read_shared_strings(std::vector<std::uint8_t> sst_bytes,
                                                        std::deque<std::string>& text_storage) {
+  // `doc` is a body local and `sst_bytes` a parameter, so the buffer the
+  // DOM aliases is destroyed after the DOM that points into it.
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, sst_bytes, "sst_reader", "sharedStrings.xml"));
+  RETURN_IF_ERROR(load_xml_buffer_inplace(doc, sst_bytes, "sst_reader", "sharedStrings.xml"));
   pugi::xml_node root = doc.child("sst");
   if (!root) {
     return make_error(FormulonErrorCode::kIoXmlParse, "sharedStrings.xml: missing <sst> root",

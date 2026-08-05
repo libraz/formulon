@@ -92,10 +92,14 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
 ///   * Excess children (more than the cache field count) are ignored
 ///     with no error (forward compatibility with Excel additions).
 ///
+/// `records_bytes` is a sink: the records part is the largest XML a
+/// pivot-bearing workbook carries, so it is parsed in place rather than
+/// copied into pugixml. Pass an rvalue (the buffer `ZipReader` just
+/// handed back) and treat it as consumed on return.
+///
 /// Errors:
 ///   * `kIoXmlParse`, `kIoContentTypeInvalid`, `kIoSheetCorrupt`.
-Expected<void, Error> read_pivot_cache_records(const std::vector<std::uint8_t>& records_bytes,
-                                               pivot::PivotCache& cache);
+Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache);
 
 }  // namespace formulon::io
 

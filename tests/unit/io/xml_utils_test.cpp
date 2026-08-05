@@ -215,5 +215,90 @@ TEST(XmlUtilsUnknownChildren, VectorOverloadAppendsToExistingContent) {
   EXPECT_EQ(out[1], "<alpha/>");
 }
 
+// ---------------------------------------------------------------------------
+// Part loaders. The copying and in-place variants must be
+// indistinguishable in what they produce — same tree, same whitespace
+// policy, same error envelope — and differ only in whether the DOM owns
+// its text or aliases the caller's buffer.
+// ---------------------------------------------------------------------------
+
+std::vector<std::uint8_t> Bytes(std::string_view xml) {
+  return std::vector<std::uint8_t>(xml.begin(), xml.end());
+}
+
+constexpr std::string_view kSamplePart =
+    R"(<sst count="2"><si><t>alpha</t></si><si><t> </t></si><si><t>&amp;&lt;</t></si></sst>)";
+
+TEST(XmlUtilsLoadPart, InPlaceProducesTheSameTreeAsTheCopyingLoader) {
+  std::vector<std::uint8_t> copied = Bytes(kSamplePart);
+  std::vector<std::uint8_t> aliased = Bytes(kSamplePart);
+
+  pugi::xml_document copy_doc;
+  ASSERT_TRUE(static_cast<bool>(load_xml_buffer(copy_doc, copied, "test", "part.xml")));
+  pugi::xml_document inplace_doc;
+  ASSERT_TRUE(static_cast<bool>(load_xml_buffer_inplace(inplace_doc, aliased, "test", "part.xml")));
+
+  auto texts = [](const pugi::xml_document& doc) {
+    std::vector<std::string> out;
+    for (pugi::xml_node si = doc.child("sst").child("si"); si; si = si.next_sibling("si")) {
+      out.emplace_back(si.child("t").text().get());
+    }
+    return out;
+  };
+  const std::vector<std::string> expected{"alpha", " ", "&<"};
+  EXPECT_EQ(texts(copy_doc), expected);
+  EXPECT_EQ(texts(inplace_doc), expected);
+  EXPECT_EQ(attr_u32(copy_doc.child("sst"), "count", 0U), attr_u32(inplace_doc.child("sst"), "count", 0U));
+}
+
+TEST(XmlUtilsLoadPart, InPlaceTextAliasesTheCallerBuffer) {
+  // The whole point of the in-place loader: the DOM's payloads live in
+  // the caller's storage rather than in a second copy inside pugixml.
+  // Any node text must therefore fall inside `bytes`, and the copying
+  // loader's must not.
+  std::vector<std::uint8_t> aliased = Bytes(kSamplePart);
+  const char* const begin = reinterpret_cast<const char*>(aliased.data());
+  const char* const end = begin + aliased.size();
+
+  pugi::xml_document inplace_doc;
+  ASSERT_TRUE(static_cast<bool>(load_xml_buffer_inplace(inplace_doc, aliased, "test", "part.xml")));
+  const char* const inplace_text = inplace_doc.child("sst").child("si").child("t").text().get();
+  EXPECT_GE(inplace_text, begin);
+  EXPECT_LT(inplace_text, end);
+
+  std::vector<std::uint8_t> copied = Bytes(kSamplePart);
+  const char* const copy_begin = reinterpret_cast<const char*>(copied.data());
+  pugi::xml_document copy_doc;
+  ASSERT_TRUE(static_cast<bool>(load_xml_buffer(copy_doc, copied, "test", "part.xml")));
+  const char* const copy_text = copy_doc.child("sst").child("si").child("t").text().get();
+  EXPECT_TRUE(copy_text < copy_begin || copy_text >= copy_begin + copied.size());
+}
+
+TEST(XmlUtilsLoadPart, BothLoadersKeepWhitespaceOnlyLeafText) {
+  // `parse_ws_pcdata_single` is what makes `<t> </t>` read back as a
+  // space instead of an empty string; the in-place path must not lose it.
+  std::vector<std::uint8_t> bytes = Bytes(R"(<si><t> </t></si>)");
+  pugi::xml_document doc;
+  ASSERT_TRUE(static_cast<bool>(load_xml_buffer_inplace(doc, bytes, "test", "part.xml")));
+  EXPECT_EQ(std::string_view(doc.child("si").child("t").text().get()), std::string_view(" "));
+}
+
+TEST(XmlUtilsLoadPart, BothLoadersReportTheSameParseFailureEnvelope) {
+  std::vector<std::uint8_t> copied = Bytes("<sst><si></sst>");
+  std::vector<std::uint8_t> aliased = Bytes("<sst><si></sst>");
+
+  pugi::xml_document copy_doc;
+  auto copy_status = load_xml_buffer(copy_doc, copied, "sst_reader", "sharedStrings.xml");
+  pugi::xml_document inplace_doc;
+  auto inplace_status = load_xml_buffer_inplace(inplace_doc, aliased, "sst_reader", "sharedStrings.xml");
+
+  ASSERT_FALSE(static_cast<bool>(copy_status));
+  ASSERT_FALSE(static_cast<bool>(inplace_status));
+  EXPECT_EQ(copy_status.error().code, FormulonErrorCode::kIoXmlParse);
+  EXPECT_EQ(inplace_status.error().code, copy_status.error().code);
+  EXPECT_EQ(inplace_status.error().message, copy_status.error().message);
+  EXPECT_EQ(inplace_status.error().context, copy_status.error().context);
+}
+
 }  // namespace
 }  // namespace formulon::io

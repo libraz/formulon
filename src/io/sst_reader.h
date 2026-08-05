@@ -71,13 +71,19 @@ struct SharedStringTable {
 ///     parser keeps internal whitespace in element text, so the raw
 ///     `text().get()` payload is taken without trimming.
 ///
+/// `sst_bytes` is a sink: the shared-string table is the one part whose
+/// size scales with the workbook's total distinct text, so it is parsed
+/// in place rather than copied into pugixml. Pass an rvalue and treat
+/// the buffer as consumed on return — the decoded payloads have already
+/// been copied into `text_storage` by then.
+///
 /// Errors:
 ///   * `kIoXmlParse` — pugixml could not parse the document.
 ///   * `kIoSheetCorrupt` — an `<si>` carried no resolvable `<t>` text
 ///     (no `<t>` direct child and no `<r><t>` runs). This catches
 ///     truncated SST entries that would otherwise silently turn into
 ///     empty strings and lose data on round-trip.
-Expected<SharedStringTable, Error> read_shared_strings(const std::vector<std::uint8_t>& sst_bytes,
+Expected<SharedStringTable, Error> read_shared_strings(std::vector<std::uint8_t> sst_bytes,
                                                        std::deque<std::string>& text_storage);
 
 }  // namespace io

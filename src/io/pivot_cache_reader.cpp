@@ -320,10 +320,11 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
   return cache;
 }
 
-Expected<void, Error> read_pivot_cache_records(const std::vector<std::uint8_t>& records_bytes,
-                                               pivot::PivotCache& cache) {
+Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache) {
+  // `doc` is a body local and `records_bytes` a parameter, so the buffer
+  // the DOM aliases is destroyed after the DOM that points into it.
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, records_bytes, "pivot_cache_reader", "pivotCacheRecords*.xml"));
+  RETURN_IF_ERROR(load_xml_buffer_inplace(doc, records_bytes, "pivot_cache_reader", "pivotCacheRecords*.xml"));
   pugi::xml_node root = doc.child("pivotCacheRecords");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid,
