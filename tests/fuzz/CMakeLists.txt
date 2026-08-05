@@ -48,6 +48,7 @@ endfunction()
 _formulon_add_fuzz_target(parser_fuzz parser_fuzz.cpp)
 _formulon_add_fuzz_target(eval_fuzz   eval_fuzz.cpp)
 _formulon_add_fuzz_target(xlsx_fuzz   xlsx_fuzz.cpp)
+_formulon_add_fuzz_target(xlsb_fuzz   xlsb_fuzz.cpp)
 
 # Smoke tests run a handful of iterations against an empty corpus so a
 # default `ctest` invocation surfaces obvious regressions without
@@ -71,3 +72,14 @@ add_test(
   COMMAND xlsx_fuzz -runs=1000 -timeout=10
 )
 set_tests_properties(FuzzXlsxSmoke PROPERTIES LABELS "SLOW")
+
+# The real XLSB fixture exercises the P1-8 Ptg/function coverage from the
+# first run. P1-18's deep-Ptg reproducer is currently a unit-built stream,
+# not a portable file fixture, so it remains tracked in the audit until a
+# serialised corpus seed is added.
+add_test(
+  NAME FuzzXlsbSmoke
+  COMMAND xlsb_fuzz -runs=1000 -timeout=10
+          ${CMAKE_SOURCE_DIR}/tests/fixtures/excel/xlsb_fidelity_base.xlsb
+)
+set_tests_properties(FuzzXlsbSmoke PROPERTIES LABELS "SLOW")

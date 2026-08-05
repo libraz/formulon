@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Round-trip tests for the MS-XLSB Ptg codec (encoder + decoder).
 //
@@ -77,6 +76,11 @@ TEST(XlsbPtgCodec, ArithmeticWithPrecedence) {
 
 TEST(XlsbPtgCodec, SumOverArea) {
   EXPECT_EQ(RoundTrip("SUM(A1:A10)"), "SUM(A1:A10)");
+}
+
+TEST(XlsbPtgCodec, WholeColumnAndRowRefsEncodeAsSentinelAreas) {
+  EXPECT_EQ(RoundTrip("SUM(A:A)"), "SUM(A1:A1048576)");
+  EXPECT_EQ(RoundTrip("SUM(1:1)"), "SUM(A1:XFD1)");
 }
 
 TEST(XlsbPtgCodec, IfWithStrings) {
@@ -196,6 +200,20 @@ TEST(XlsbPtgCodec, NestedFunctions) {
   EXPECT_EQ(RoundTrip("ROUND(SUM(A1:A3),2)"), "ROUND(SUM(A1:A3),2)");
 }
 
+TEST(XlsbPtgCodec, Post2007BuiltinsUseNativeFunctionIds) {
+  EXPECT_EQ(RoundTrip("ASC(\"Ａ\")"), "ASC(\"Ａ\")");
+  EXPECT_EQ(RoundTrip("JIS(\"A\")"), "JIS(\"A\")");
+  EXPECT_EQ(RoundTrip("EDATE(A1,1)"), "EDATE(A1,1)");
+  EXPECT_EQ(RoundTrip("EOMONTH(A1,1)"), "EOMONTH(A1,1)");
+  EXPECT_EQ(RoundTrip("WORKDAY(A1,1)"), "WORKDAY(A1,1)");
+  EXPECT_EQ(RoundTrip("NETWORKDAYS(A1,B1)"), "NETWORKDAYS(A1,B1)");
+  EXPECT_EQ(RoundTrip("IFERROR(A1,0)"), "IFERROR(A1,0)");
+  EXPECT_EQ(RoundTrip("COUNTIFS(A1,1)"), "COUNTIFS(A1,1)");
+  EXPECT_EQ(RoundTrip("SUMIFS(A1,B1,1)"), "SUMIFS(A1,B1,1)");
+  EXPECT_EQ(RoundTrip("AVERAGEIF(A1,1)"), "AVERAGEIF(A1,1)");
+  EXPECT_EQ(RoundTrip("AVERAGEIFS(A1,B1,1)"), "AVERAGEIFS(A1,B1,1)");
+}
+
 TEST(XlsbPtgCodec, PowerAndDivide) {
   EXPECT_EQ(RoundTrip("A1^2/B1"), "A1^2/B1");
 }
@@ -218,6 +236,36 @@ TEST(XlsbPtgCodec, DecoderRejectsUnknownPtg) {
   auto decoded = decode_ptgs(span, ByteSpan{}, arena, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
+}
+
+TEST(XlsbPtgCodec, DecoderAcceptsTransparentParenToken) {
+  // PtgInt(1), PtgInt(2), PtgAdd, PtgParen. Excel emits the trailing
+  // PtgParen for explicit grouping; its value stack is otherwise unchanged.
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x01, 0x00, 0x1E, 0x02, 0x00, 0x03, 0x15};
+  Arena arena;
+  ByteSpan main{rgce.data(), rgce.size()};
+  ByteSpan extra{nullptr, 0};
+  auto decoded = decode_ptgs(main, extra, arena, {}, {}, {});
+  ASSERT_TRUE(static_cast<bool>(decoded));
+  EXPECT_EQ(parser::format_formula(*decoded.value()), "1+2");
+}
+
+TEST(XlsbPtgCodec, DecoderRejectsAstDeeperThanSharedLimit) {
+  Arena enc_arena;
+  parser::AstNode* root = parser::make_literal(enc_arena, Value::number(1));
+  for (std::uint32_t depth = 1; depth <= parser::kMaxFormulaAstDepth; ++depth) {
+    root = parser::make_unary_op(enc_arena, parser::UnaryOp::Plus, root);
+  }
+  ASSERT_NE(root, nullptr);
+  auto encoded = encode_ptgs(*root, {}, {}, {});
+  ASSERT_TRUE(static_cast<bool>(encoded));
+
+  Arena dec_arena;
+  ByteSpan rgce{encoded.value().rgce.data(), encoded.value().rgce.size()};
+  ByteSpan rgcb{encoded.value().rgcb.data(), encoded.value().rgcb.size()};
+  auto decoded = decode_ptgs(rgce, rgcb, dec_arena, {}, {}, {});
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbCorrupt);
 }
 
 TEST(XlsbPtgCodec, EncoderRejectsUnregisteredDefinedName) {

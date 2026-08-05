@@ -163,6 +163,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/sheet_writer.cpp
   src/io/xlsb/sst_writer.cpp
   src/io/xlsb/styles_reader.cpp
+  src/io/xlsb/styles_writer.cpp
   src/io/xlsb/writer.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp
@@ -403,6 +404,7 @@ if(FM_BUILD_CLI)
     src/cli/eval_cmd.cpp
     src/cli/recalc_cmd.cpp
     src/cli/dump_cmd.cpp
+    src/cli/file_io.cpp
     src/cli/render.cpp
   )
   add_executable(formulon_cli ${FORMULON_CLI_SOURCES})

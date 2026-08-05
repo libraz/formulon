@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the XLSB read pipeline. See `io/xlsb/reader.h` for
 // the design context.
@@ -56,6 +55,12 @@ namespace {
 
 constexpr std::string_view kRelOfficeDocument =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+constexpr std::string_view kRelCoreProperties =
+    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+constexpr std::string_view kRelExtendedProperties =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+constexpr std::string_view kRelCustomProperties =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 constexpr std::string_view kRelWorksheet =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
 constexpr std::string_view kRelSharedStrings =
@@ -246,6 +251,39 @@ Expected<std::string, Error> ResolveOfficeDocumentPath(const std::vector<std::ui
                     "package-level rels: no OfficeDocument relationship found", "context=xlsb_reader part=_rels/.rels");
 }
 
+Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const std::vector<std::uint8_t>& bytes) {
+  pugi::xml_document doc;
+  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parse) {
+    return make_error(FormulonErrorCode::kIoXmlParse, "package-level rels: pugixml parse failed",
+                      "context=xlsb_reader part=_rels/.rels desc=" + std::string(parse.description()));
+  }
+  const pugi::xml_node root = doc.child("Relationships");
+  if (!root) {
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
+                      "context=xlsb_reader part=_rels/.rels");
+  }
+  std::vector<UnknownRelationship> result;
+  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    const std::string_view type(rel.attribute("Type").value());
+    if (type == kRelOfficeDocument || type == kRelCoreProperties || type == kRelExtendedProperties ||
+        type == kRelCustomProperties) {
+      continue;
+    }
+    const bool external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+    std::string target = NormalisePartName(rel.attribute("Target").value());
+    if (type.empty() || target.empty())
+      continue;
+    if (!external && !ooxml::is_safe_part_name(target)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "package relationship target escapes package root",
+                        "context=xlsb_reader part=_rels/.rels target=" + target);
+    }
+    result.push_back(
+        UnknownRelationship{std::string(rel.attribute("Id").value()), std::string(type), std::move(target), external});
+  }
+  return result;
+}
+
 struct WorkbookRels {
   std::unordered_map<std::string, std::string> sheet_targets;  // rId -> resolved part path
   std::string sst_path;
@@ -316,11 +354,16 @@ struct SheetBundleEntry {
   bool hidden = false;
 };
 
-/// Decodes `xl/workbook.bin` to extract the ordered sheet-bundle list.
-/// Records other than `BrtBundleSh` are skipped — only the (name, rId)
-/// tuples are needed to build sheets in document order.
-Expected<std::vector<SheetBundleEntry>, Error> DecodeWorkbookBin(const std::vector<std::uint8_t>& body) {
-  std::vector<SheetBundleEntry> entries;
+/// Workbook-global fields needed while constructing the model.
+struct WorkbookBinInfo {
+  std::vector<SheetBundleEntry> sheets;
+  bool date1904 = false;
+};
+
+/// Decodes `xl/workbook.bin` to extract the ordered sheet-bundle list and
+/// workbook date system. Other records are skipped.
+Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_t>& body) {
+  WorkbookBinInfo info;
   ByteSpan cursor{body.data(), body.size()};
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
@@ -328,6 +371,18 @@ Expected<std::vector<SheetBundleEntry>, Error> DecodeWorkbookBin(const std::vect
       return rec_or.error();
     }
     const XlsbRecord& rec = rec_or.value();
+    if (rec.type == static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp)) {
+      // BrtWbProp ([MS-XLSB] §2.4.866) begins with a u32 grbit; bit 0
+      // is f1904. The following theme-version and optional code-name
+      // fields are irrelevant to the workbook model.
+      ByteSpan p = rec.payload;
+      auto flags_or = read_u32(p);
+      if (!flags_or) {
+        return flags_or.error();
+      }
+      info.date1904 = (flags_or.value() & 0x00000001U) != 0U;
+      continue;
+    }
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtBundleSh)) {
       continue;
     }
@@ -358,13 +413,13 @@ Expected<std::vector<SheetBundleEntry>, Error> DecodeWorkbookBin(const std::vect
     entry.rid = std::move(rid_or.value());
     entry.name = std::move(name_or.value());
     entry.hidden = hs_state_or.value() != 0U;
-    entries.push_back(std::move(entry));
+    info.sheets.push_back(std::move(entry));
   }
-  if (entries.empty()) {
+  if (info.sheets.empty()) {
     return make_error(FormulonErrorCode::kIoXlsbCorrupt, "workbook.bin: no BrtBundleSh records",
                       "context=xlsb_reader part=xl/workbook.bin");
   }
-  return entries;
+  return info;
 }
 
 /// Decodes a UTF-16LE name of `units` code units starting at `cursor`,
@@ -794,7 +849,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
     const auto type = static_cast<XlsbRecordType>(rec.type);
     switch (type) {
       case XlsbRecordType::BrtRowHdr: {
-        // BrtRowHdr ([MS-XLSB] §2.4.660): first u32 is the row index.
+        // BrtRowHdr ([MS-XLSB] §2.4.770): rw, ixfe, miyRw, two flag
+        // bytes, then ccolspan. Older minimal producers may provide only
+        // rw, which remains enough for cell decoding.
         ByteSpan p = rec.payload;
         auto row_or = read_u32(p);
         if (!row_or) {
@@ -806,6 +863,78 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         }
         state.current_row = row_or.value();
         state.row_seen = true;
+        if (p.size >= 8U) {
+          auto skip_xf = read_u32(p);
+          auto height_or = read_u16(p);
+          auto flags1_or = read_u8(p);
+          auto flags2_or = read_u8(p);
+          if (!skip_xf || !height_or || !flags1_or || !flags2_or) {
+            return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtRowHdr layout truncated",
+                              "context=xlsb_reader");
+          }
+          const std::uint8_t flags = flags2_or.value();
+          if (height_or.value() != 0U || (flags & 0x10U) != 0U || (flags & 0x07U) != 0U) {
+            RowLayout layout;
+            layout.row = state.current_row;
+            layout.height = static_cast<double>(height_or.value()) / 20.0;
+            layout.hidden = (flags & 0x10U) != 0U;
+            layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
+            wb.sheet(sheet_index).mutable_layout().row_overrides.push_back(std::move(layout));
+          }
+        }
+        break;
+      }
+      case XlsbRecordType::BrtColInfo: {
+        // BrtColInfo ([MS-XLSB] §2.4.336): colFirst, colLast, coldx,
+        // ixfe, flags(u16). coldx is in 1/256 standard digits.
+        ByteSpan p = rec.payload;
+        auto first_or = read_u32(p);
+        auto last_or = read_u32(p);
+        auto width_or = read_u32(p);
+        auto skip_xf = read_u32(p);
+        auto flags_or = read_u16(p);
+        if (!first_or || !last_or || !width_or || !skip_xf || !flags_or) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtColInfo truncated",
+                            "context=xlsb_reader");
+        }
+        if (first_or.value() >= Sheet::kMaxCols || last_or.value() >= Sheet::kMaxCols ||
+            first_or.value() > last_or.value()) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtColInfo range out of bounds",
+                            "context=xlsb_reader");
+        }
+        ColumnLayout layout;
+        layout.first = first_or.value();
+        layout.last = last_or.value();
+        layout.width = static_cast<double>(width_or.value()) / 256.0;
+        layout.hidden = (flags_or.value() & 0x0001U) != 0U;
+        layout.outline_level = static_cast<std::uint8_t>((flags_or.value() >> 8U) & 0x07U);
+        wb.sheet(sheet_index).mutable_layout().columns.push_back(std::move(layout));
+        break;
+      }
+      case XlsbRecordType::BrtMergeCell: {
+        // BrtMergeCell ([MS-XLSB] §2.4.713): RfX = first/last row and
+        // first/last column, all u32.  Containers are structural only; a
+        // record may appear after sheet data and therefore must not depend on
+        // the active BrtRowHdr state.
+        ByteSpan p = rec.payload;
+        auto first_row_or = read_u32(p);
+        auto last_row_or = read_u32(p);
+        auto first_col_or = read_u32(p);
+        auto last_col_or = read_u32(p);
+        if (!first_row_or || !last_row_or || !first_col_or || !last_col_or) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtMergeCell truncated",
+                            "context=xlsb_reader");
+        }
+        if (first_row_or.value() >= Sheet::kMaxRows || last_row_or.value() >= Sheet::kMaxRows ||
+            first_col_or.value() >= Sheet::kMaxCols || last_col_or.value() >= Sheet::kMaxCols ||
+            first_row_or.value() > last_row_or.value() || first_col_or.value() > last_col_or.value()) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtMergeCell range out of bounds",
+                            "context=xlsb_reader");
+        }
+        wb.sheet(sheet_index)
+            .mutable_merges()
+            .push_back(
+                MergeRange{first_row_or.value(), first_col_or.value(), last_row_or.value(), last_col_or.value()});
         break;
       }
       case XlsbRecordType::BrtCellBlank: {
@@ -1243,6 +1372,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     return wb_path_or.error();
   }
   const std::string workbook_path = wb_path_or.value();
+  auto package_rels_or = ReadUnknownPackageRels(root_rels_or.value());
+  if (!package_rels_or) {
+    return package_rels_or.error();
+  }
 
   // 3. xl/_rels/workbook.xml.rels (still XML in xlsb).
   auto wb_rels_or = LoadWorkbookRels(zip, workbook_path);
@@ -1264,7 +1397,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   if (!bundle_or) {
     return bundle_or.error();
   }
-  const std::vector<SheetBundleEntry>& bundle = bundle_or.value();
+  const WorkbookBinInfo& workbook_info = bundle_or.value();
+  const std::vector<SheetBundleEntry>& bundle = workbook_info.sheets;
 
   // `BrtName` (defined names + hidden future-function / LET-parameter
   // placeholders) and `BrtExternSheet` (qualified-reference sheet
@@ -1284,6 +1418,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
 
   // 5. Build the workbook bottom-up.
   Workbook wb = Workbook::create_empty();
+  wb.set_date1904(workbook_info.date1904);
   std::vector<std::string> sheet_part_paths;
   sheet_part_paths.reserve(bundle.size());
   for (const SheetBundleEntry& b : bundle) {
@@ -1430,6 +1565,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   std::sort(unknown_parts.begin(), unknown_parts.end(),
             [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
   wb.set_passthrough_parts(unknown_parts);
+  wb.set_unknown_package_rels(std::move(package_rels_or.value()));
 
   XlsbReadResult result{std::move(wb), std::move(unknown_parts), cells_read};
   return result;

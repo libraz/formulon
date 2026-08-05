@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the AST -> Ptg encoder. See `io/xlsb/ptg_writer.h`.
 //
@@ -355,9 +354,33 @@ class Encoder {
 
   Expected<void, Error> emit_ref(const parser::Reference& ref) {
     if (ref.is_full_col || ref.is_full_row) {
-      // Whole-column / whole-row refs need the Area form with sentinel
-      // bounds; out of scope for the common-token codec.
-      return unsupported_node("Ref(full-col/row)");
+      // XLSB has no standalone whole-column / whole-row token. Encode the
+      // logical extent as an Area using Excel's grid sentinels; this is
+      // semantically identical to A:A / 1:1 and, crucially, keeps one
+      // unsupported formula from aborting the entire workbook save.
+      parser::Reference first = ref;
+      parser::Reference last = ref;
+      first.is_full_col = false;
+      first.is_full_row = false;
+      last.is_full_col = false;
+      last.is_full_row = false;
+      if (ref.is_full_col) {
+        first.row = 0;
+        last.row = 1048575U;
+      } else {
+        first.col = 0;
+        last.col = 16383U;
+      }
+      if (ref.sheet.empty()) {
+        emit_u8(out_, 0x25 | kPtgValueClass);  // PtgArea
+        emit_area(out_, first, last);
+        return Expected<void, Error>::Ok();
+      }
+      ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(ref.sheet));
+      emit_u8(out_, 0x3B | kPtgValueClass);  // PtgArea3d
+      emit_u16(out_, ixti);
+      emit_area(out_, first, last);
+      return Expected<void, Error>::Ok();
     }
     if (ref.sheet.empty()) {
       emit_u8(out_, 0x24 | kPtgValueClass);  // PtgRef

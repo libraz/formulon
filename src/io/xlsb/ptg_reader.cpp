@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the Ptg-stream -> AST decoder. See
 // `io/xlsb/ptg_reader.h` for the contract and the [MS-XLSB] references.
@@ -1032,6 +1031,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
 
   if (stack.size() != 1) {
     return corrupt_stack(stack.empty() ? "empty stack at end" : "multiple values at end");
+  }
+  if (!parser::ast_depth_within_limit(*stack.front(), parser::kMaxFormulaAstDepth)) {
+    return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb formula exceeds maximum AST depth",
+                      "context=xlsb_ptg_reader max_depth=" + std::to_string(parser::kMaxFormulaAstDepth));
   }
   return stack.front();
 }

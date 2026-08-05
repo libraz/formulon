@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the MS-XLSB package writer. See `io/xlsb/writer.h`
 // for the contract. The implementation mirrors the structure of
@@ -8,9 +7,11 @@
 
 #include "io/xlsb/writer.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,6 +20,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "cf/cf_types.h"
 #include "io/ooxml/package_validator.h"
 #include "io/passthrough_part.h"
 #include "io/xlsb/ptg_writer.h"
@@ -26,6 +28,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_writer.h"
 #include "io/xlsb/sst_writer.h"
+#include "io/xlsb/styles_writer.h"
 #include "io/xml_escape.h"
 #include "miniz.h"
 #include "parser/ast.h"
@@ -63,6 +66,7 @@ constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.bin
 // reject it (-50).
 constexpr std::string_view kCtWorksheetXlsb = "application/vnd.ms-excel.worksheet";
 constexpr std::string_view kCtSharedStringsXlsb = "application/vnd.ms-excel.sharedStrings";
+constexpr std::string_view kCtStylesXlsb = "application/vnd.ms-excel.styles";
 
 constexpr std::string_view kRelOfficeDocument =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
@@ -78,6 +82,8 @@ constexpr std::string_view kRelCoreProps =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
 constexpr std::string_view kRelExtendedProps =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+constexpr std::string_view kRelCustomProps =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
 // Workbook-globals record ids the reader does not consume (so they are absent
 // from `XlsbRecordType`) but the writer must emit for a well-formed stream.
@@ -89,7 +95,6 @@ constexpr std::uint16_t kBrtSupSelf = 357;
 constexpr std::uint16_t kBrtEndExternals = 354;
 // Workbook-globals structural records Excel expects before the sheet bundle.
 constexpr std::uint16_t kBrtFileVersion = 128;
-constexpr std::uint16_t kBrtWbProp = 153;
 constexpr std::uint16_t kBrtBeginBookViews = 135;
 constexpr std::uint16_t kBrtWbView = 158;
 constexpr std::uint16_t kBrtEndBookViews = 136;
@@ -101,7 +106,43 @@ constexpr std::uint16_t kBrtEndBookViews = 136;
 struct EmissionPlan {
   std::vector<const PassthroughPart*> passthrough_kept;
   bool has_text_cells = false;  // gates emission of xl/sharedStrings.bin
+  bool has_generated_styles = false;
 };
+
+void ReportDeferred(std::uint32_t* count, std::string_view kind, std::size_t items, std::size_t sheet_index) {
+  if (items == 0U)
+    return;
+  const std::uint64_t total = static_cast<std::uint64_t>(*count) + items;
+  *count = static_cast<std::uint32_t>(std::min<std::uint64_t>(total, std::numeric_limits<std::uint32_t>::max()));
+  StructuredLog("xlsb.writer.deferred")
+      .field("kind", kind)
+      .field("count", static_cast<std::int64_t>(items))
+      .field("sheet_index", static_cast<std::int64_t>(sheet_index))
+      .warn();
+}
+
+std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
+  std::uint32_t count = 0U;
+  for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
+    const Sheet& sheet = workbook.sheet(i);
+    ReportDeferred(&count, "conditional_formats", sheet.conditional_formats().size(), i);
+    ReportDeferred(&count, "data_validations", sheet.validations().size(), i);
+    ReportDeferred(&count, "hyperlinks", sheet.hyperlinks().size(), i);
+    ReportDeferred(&count, "auto_filter", sheet.auto_filter_xml().empty() ? 0U : 1U, i);
+    const SheetView& view = sheet.view();
+    ReportDeferred(&count, "frozen_panes", (view.freeze_rows != 0U || view.freeze_cols != 0U) ? 1U : 0U, i);
+    const SheetPrintSettings& print = sheet.print_settings();
+    const bool has_print = !print.sheet_pr_xml.empty() || !print.page_margins_xml.empty() ||
+                           !print.page_setup_xml.empty() || !print.print_options_xml.empty() ||
+                           !print.header_footer_xml.empty() || !print.manual_row_breaks.empty() ||
+                           !print.manual_col_breaks.empty();
+    ReportDeferred(&count, "print_settings", has_print ? 1U : 0U, i);
+  }
+  if (!workbook.tables().empty()) {
+    ReportDeferred(&count, "tables", workbook.tables().size(), 0U);
+  }
+  return count;
+}
 
 // True for a worksheet binary-index part (`xl/worksheets/binaryIndex<N>.bin`).
 // These describe the original sheet bodies' row layout and are stale once we
@@ -111,7 +152,25 @@ bool IsBinaryIndexPart(const std::string& path) {
   return path.size() > kPrefix.size() && path.compare(0, kPrefix.size(), kPrefix) == 0;
 }
 
-std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part) {
+bool HasRawStylesPart(const Workbook& wb) {
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.path == "xl/styles.bin")
+      return true;
+  }
+  return false;
+}
+
+bool HasModelledStyles(const Workbook& wb) {
+  const StylesTable& styles = wb.styles();
+  // An empty table is the intentionally unstyled `Workbook::create_empty()`
+  // shape.  Any populated collection, including an explicitly-created default
+  // XF, needs a styles part because worksheet iStyleRef values resolve only
+  // through its relationship.
+  return !styles.fonts.empty() || !styles.fills.empty() || !styles.borders.empty() || !styles.num_fmts.empty() ||
+         !styles.cell_xfs.empty() || !styles.cell_style_xfs.empty() || !styles.cell_styles.empty();
+}
+
+std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part, bool emit_styles_part) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
@@ -123,14 +182,22 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   if (emit_sst_part) {
     paths.insert("xl/sharedStrings.bin");
   }
+  if (emit_styles_part) {
+    paths.insert("xl/styles.bin");
+  }
   return paths;
 }
 
 EmissionPlan BuildEmissionPlan(const Workbook& wb, bool sst_present) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
+  // Existing XLSB packages retain their original styles bytes verbatim.  This
+  // protects style features which are not represented by StylesTable yet
+  // (notably differential formats).  XLSX/native workbooks have no raw part,
+  // so their modelled style table becomes a fresh styles.bin instead.
+  plan.has_generated_styles = !HasRawStylesPart(wb) && HasModelledStyles(wb);
 
-  const std::unordered_set<std::string> generated = BuildGeneratedPathSet(wb, sst_present);
+  const std::unordered_set<std::string> generated = BuildGeneratedPathSet(wb, sst_present, plan.has_generated_styles);
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (generated.count(part.path) != 0U) {
       StructuredLog("xlsb.writer.passthrough_collision")
@@ -189,6 +256,11 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     out.append(kCtSharedStringsXlsb);
     out.append("\"/>\n");
   }
+  if (plan.has_generated_styles) {
+    out.append("  <Override PartName=\"/xl/styles.bin\" ContentType=\"");
+    out.append(kCtStylesXlsb);
+    out.append("\"/>\n");
+  }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
   // content_type) must NOT appear as Overrides.
@@ -207,14 +279,19 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
 }
 
 // Appends one `<Relationship>` with a fresh rId drawn from `*next_rid`.
-void AppendRelationship(std::string& out, std::size_t* next_rid, std::string_view type, std::string_view target) {
+void AppendRelationship(std::string& out, std::size_t* next_rid, std::string_view type, std::string_view target,
+                        bool target_external = false) {
   out.append("  <Relationship Id=\"rId");
   out.append(std::to_string((*next_rid)++));
   out.append("\" Type=\"");
-  out.append(type);
+  AppendXmlEscaped(out, type);
   out.append("\" Target=\"");
-  out.append(target);
-  out.append("\"/>\n");
+  AppendXmlEscaped(out, target);
+  if (target_external) {
+    out.append("\" TargetMode=\"External\"/>\n");
+  } else {
+    out.append("\"/>\n");
+  }
 }
 
 // Returns true when a passthrough part with `path` will be emitted.
@@ -227,7 +304,7 @@ bool HasPassthrough(const EmissionPlan& plan, std::string_view path) {
   return false;
 }
 
-std::string BuildPackageRels(const EmissionPlan& plan) {
+std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
   std::string out;
   out.reserve(384);
   out.append(kXmlDecl);
@@ -241,6 +318,20 @@ std::string BuildPackageRels(const EmissionPlan& plan) {
   }
   if (HasPassthrough(plan, "docProps/app.xml")) {
     AppendRelationship(out, &next_rid, kRelExtendedProps, "docProps/app.xml");
+  }
+  if (HasPassthrough(plan, "docProps/custom.xml")) {
+    AppendRelationship(out, &next_rid, kRelCustomProps, "docProps/custom.xml");
+  }
+  for (const UnknownRelationship& r : wb.unknown_package_rels()) {
+    if (!r.target_external && !HasPassthrough(plan, r.target)) {
+      StructuredLog("xlsb.writer.package_rel_skipped")
+          .field("reason", std::string_view("target_part_absent"))
+          .field("type", r.type)
+          .field("target", r.target)
+          .warn();
+      continue;
+    }
+    AppendRelationship(out, &next_rid, r.type, r.target, r.target_external);
   }
   out.append("</Relationships>\n");
   return out;
@@ -269,7 +360,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   // Without them a styled cell's iStyleRef dangles against an empty style
   // table, and the theme / metadata parts are treated as orphans. Emit a rel
   // for each part that is actually present in the package.
-  if (HasPassthrough(plan, "xl/styles.bin")) {
+  if (plan.has_generated_styles || HasPassthrough(plan, "xl/styles.bin")) {
     AppendRelationship(out, &next_rid, kRelStyles, "styles.bin");
   }
   if (HasPassthrough(plan, "xl/theme/theme1.xml")) {
@@ -519,13 +610,19 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
       0x00, 0x00, 0x00, 0x78, 0x00, 0x6c, 0x00, 0x01, 0x00, 0x00, 0x00, 0x37, 0x00, 0x01, 0x00, 0x00, 0x00,
       0x37, 0x00, 0x05, 0x00, 0x00, 0x00, 0x31, 0x00, 0x30, 0x00, 0x36, 0x00, 0x32, 0x00, 0x38, 0x00};
-  static const std::vector<std::uint8_t> kWbPropPayload = {0x20, 0x00, 0x01, 0x00, 0x3c, 0x16,
-                                                           0x03, 0x00, 0x00, 0x00, 0x00, 0x00};
+  static const std::vector<std::uint8_t> kDefaultWbPropPayload = {0x20, 0x00, 0x01, 0x00, 0x3c, 0x16,
+                                                                  0x03, 0x00, 0x00, 0x00, 0x00, 0x00};
   static const std::vector<std::uint8_t> kWbViewPayload = {0x10, 0x4f, 0x00, 0x00, 0x18, 0x15, 0x00, 0x00, 0x8c, 0x6e,
                                                            0x00, 0x00, 0xd0, 0x43, 0x00, 0x00, 0x58, 0x02, 0x00, 0x00,
                                                            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78};
   emit_record(body, kBrtFileVersion, kFileVersionPayload);
-  emit_record(body, kBrtWbProp, kWbPropPayload);
+  std::vector<std::uint8_t> wb_prop_payload = kDefaultWbPropPayload;
+  // BrtWbProp ([MS-XLSB] §2.4.866): f1904 is bit 0 of the leading
+  // little-endian u32 grbit. Preserve Excel's captured default flags.
+  if (wb.date1904()) {
+    wb_prop_payload[0] |= 0x01U;
+  }
+  emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtWbProp), wb_prop_payload);
   emit_record(body, kBrtBeginBookViews, ByteSpan{});
   emit_record(body, kBrtWbView, kWbViewPayload);
   emit_record(body, kBrtEndBookViews, ByteSpan{});
@@ -595,13 +692,6 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
     }
   }
 
-  if (!wb.tables().empty()) {
-    StructuredLog("xlsb.writer.deferred")
-        .field("kind", std::string_view("tables"))
-        .field("count", static_cast<std::int64_t>(wb.tables().size()))
-        .info();
-  }
-
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndBook), ByteSpan{});
   return body;
 }
@@ -668,7 +758,7 @@ Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view pat
 
 }  // namespace
 
-Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) {
+Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook) {
   const std::size_t sheet_count = workbook.sheet_count();
   if (sheet_count == 0) {
     return make_error(FormulonErrorCode::kInvalidArgument, "workbook has zero sheets", "context=write_xlsb");
@@ -703,10 +793,13 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
   const SheetRangeTable sheet_ranges = BuildSheetRangeTable(workbook, sheet_names);
 
   SstBuilder sst;
+  std::uint32_t downgraded_formula_count = 0;
+  const std::uint32_t deferred_feature_count = ReportDeferredSheetFeatures(workbook);
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, name_table);
+    auto sheet_body_or =
+        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, name_table, &downgraded_formula_count);
     if (!sheet_body_or) {
       return sheet_body_or.error();
     }
@@ -726,7 +819,7 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
     return r.error();
   }
   // 2. _rels/.rels
-  if (auto r = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(plan)); !r) {
+  if (auto r = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(workbook, plan)); !r) {
     return r.error();
   }
   // 3. xl/_rels/workbook.bin.rels
@@ -744,6 +837,15 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
       return wb_bytes_or.error();
     }
     if (auto r = AddPartBytes(writer.get(), "xl/workbook.bin", wb_bytes_or.value()); !r) {
+      return r.error();
+    }
+  }
+  // 4b. xl/styles.bin, when the source was not already an XLSB package with
+  // an opaque style payload to preserve.  Its relationship is emitted above
+  // in lockstep with this part.
+  if (plan.has_generated_styles) {
+    const std::vector<std::uint8_t> styles_bytes = write_styles_bin(workbook.styles());
+    if (auto r = AddPartBytes(writer.get(), "xl/styles.bin", styles_bytes); !r) {
       return r.error();
     }
   }
@@ -803,7 +905,15 @@ Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) 
   if (archive_ptr != nullptr) {
     mz_free(archive_ptr);
   }
-  return bytes;
+  return XlsbWriteResult{std::move(bytes), downgraded_formula_count, deferred_feature_count};
+}
+
+Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) {
+  auto result_or = write_xlsb_with_result(workbook);
+  if (!result_or) {
+    return result_or.error();
+  }
+  return std::move(result_or.value().bytes);
 }
 
 }  // namespace xlsb
