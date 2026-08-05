@@ -405,9 +405,13 @@ AstNode* Parser::parse() {
   // right). The Pratt parser ultimately decides whether the AST shape
   // allows the intersection: a bare-literal operand is re-rejected there,
   // so admitting Number here only widens the conservative candidate set.
-  auto is_ref_candidate = [](TokenKind k) noexcept {
-    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::RParen || k == TokenKind::RBracket ||
-           k == TokenKind::Number;
+  auto is_ref_left_candidate = [](TokenKind k) noexcept {
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::RParen ||
+           k == TokenKind::RBracket || k == TokenKind::Number;
+  };
+  auto is_ref_right_candidate = [](TokenKind k) noexcept {
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::LParen ||
+           k == TokenKind::RParen || k == TokenKind::RBracket || k == TokenKind::Number;
   };
   // Walk `raw` with a sliding window over the most recent non-whitespace
   // token and the next non-whitespace token after each whitespace run. If
@@ -428,7 +432,13 @@ AstNode* Parser::parse() {
     }
     // Find the previous non-whitespace token already pushed onto `tokens_`.
     TokenKind prev_kind = tokens_.empty() ? TokenKind::Eof : tokens_.back().kind;
-    if (is_ref_candidate(prev_kind) && is_ref_candidate(next_kind)) {
+    // A cell-shaped token followed by a spaced opening parenthesis is a
+    // function name such as `LOG10 (100)`, unless it closes a range tail
+    // (`A1:A3 (B1:D1)`). The former must retain the legacy function-call
+    // disambiguation; the latter is Excel's intersection operator.
+    const bool cellref_call_space = next_kind == TokenKind::LParen && prev_kind == TokenKind::CellRef &&
+                                    (tokens_.size() < 2 || tokens_[tokens_.size() - 2].kind != TokenKind::Colon);
+    if (is_ref_left_candidate(prev_kind) && is_ref_right_candidate(next_kind) && !cellref_call_space) {
       tokens_.push_back(t);
     }
     // Otherwise: drop. Subsequent iterations resume on the next token.

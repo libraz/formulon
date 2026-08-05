@@ -166,6 +166,18 @@ TEST(ParserAtoms, ThreeDRangeTailAbsolute) {
   EXPECT_EQ(ParseToSexpr("=Sheet1:Sheet3!$A$1:$B$2"), "(ref3d Sheet1:Sheet3 $A$1:$B$2)");
 }
 
+TEST(ParserAtoms, ThreeDFullColumn) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1:Sheet3!A:A"), "(ref3d Sheet1:Sheet3 A:A)");
+}
+
+TEST(ParserAtoms, ThreeDFullRowRange) {
+  EXPECT_EQ(ParseToSexpr("=Sheet1:Sheet3!1:3"), "(ref3d Sheet1:Sheet3 1:3)");
+}
+
+TEST(ParserAtoms, QuotedThreeDFullColumn) {
+  EXPECT_EQ(ParseToSexpr("='First Sheet:Last Sheet'!A:A"), "(ref3d First Sheet:Last Sheet A:A)");
+}
+
 TEST(ParserAtoms, FullRowOverflowDoesNotWrapToSmallRow) {
   // 2^64 + 1 == 18446744073709551617. Unguarded `std::uint64_t`
   // accumulation wraps this back to 1, so `18446744073709551617:1` used
@@ -347,6 +359,19 @@ TEST(ParserRange, RangeInsideSum) {
 
 TEST(ParserIntersect, BetweenTwoRanges) {
   EXPECT_EQ(ParseToSexpr("=A1:C3 B2:D4"), "(intersect (range (ref A1) (ref C3)) (range (ref B2) (ref D4)))");
+}
+
+TEST(ParserIntersect, ParenthesizedRightOperand) {
+  EXPECT_EQ(ParseToSexpr("=SUM(A1:A3 (B1:D1))"),
+            "(call SUM (intersect (range (ref A1) (ref A3)) (range (ref B1) (ref D1))))");
+}
+
+TEST(ParserIntersect, ParenthesizedBothOperands) {
+  EXPECT_EQ(ParseToSexpr("=(A1:A5) (A3:C3)"), "(intersect (range (ref A1) (ref A5)) (range (ref A3) (ref C3)))");
+}
+
+TEST(ParserIntersect, QuotedSheetRightOperand) {
+  EXPECT_EQ(ParseToSexpr("=A1:C3 'Sheet 2'!B1"), "(intersect (range (ref A1) (ref C3)) (ref 'Sheet 2'!B1))");
 }
 
 TEST(ParserIntersect, InsideAreasCall) {

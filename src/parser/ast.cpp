@@ -13,6 +13,7 @@
 
 #include "parser/reference.h"
 #include "parser/token.h"
+#include "utils/a1_column.h"
 #include "utils/arena.h"
 #include "utils/expected.h"  // FM_CHECK
 #include "value.h"
@@ -768,28 +769,6 @@ ErrorCode AstNode::as_error_literal() const {
 // Reference helper
 // ---------------------------------------------------------------------------
 
-namespace {
-
-// Encodes a 0-based column index as Excel column letters (0 -> "A", 25 -> "Z",
-// 26 -> "AA", ..., 16383 -> "XFD"). Appends to `out`.
-void AppendColumnLetters(std::string& out, std::uint32_t col) {
-  // Excel uses bijective base-26: each letter is 1..26 with no zero digit.
-  // We build the letters in reverse, then append them flipped.
-  char buf[4];
-  std::uint32_t i = 0;
-  std::uint32_t v = col + 1;  // shift to 1-based for the bijective scheme.
-  while (v > 0 && i < 4) {
-    const std::uint32_t rem = (v - 1) % 26;
-    buf[i++] = static_cast<char>('A' + rem);
-    v = (v - 1) / 26;
-  }
-  while (i > 0) {
-    out.push_back(buf[--i]);
-  }
-}
-
-}  // namespace
-
 bool sheet_name_needs_quoting(std::string_view name) noexcept {
   if (name.empty()) {
     return true;
@@ -846,12 +825,12 @@ std::string format_a1(const Reference& r) {
     if (r.col_abs) {
       out.push_back('$');
     }
-    AppendColumnLetters(out, r.col);
+    FM_CHECK(a1::append_column_letters(out, r.col), "reference column is outside Excel's grid");
     out.push_back(':');
     if (r.col_abs) {
       out.push_back('$');
     }
-    AppendColumnLetters(out, r.col);
+    FM_CHECK(a1::append_column_letters(out, r.col), "reference column is outside Excel's grid");
     return out;
   }
   if (r.is_full_row) {
@@ -869,7 +848,7 @@ std::string format_a1(const Reference& r) {
   if (r.col_abs) {
     out.push_back('$');
   }
-  AppendColumnLetters(out, r.col);
+  FM_CHECK(a1::append_column_letters(out, r.col), "reference column is outside Excel's grid");
   if (r.row_abs) {
     out.push_back('$');
   }

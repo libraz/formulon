@@ -73,8 +73,9 @@ enum class Severity : std::uint8_t { Error = 0, Warning = 1 };
 
 /// A single parser error record.
 ///
-/// `range` is in UTF-16 code units, matching the editor position model used
-/// by every other Formulon diagnostic. `message` is a static English string
+/// `range` is in UTF-16 code units. These diagnostics are currently consumed
+/// only by internal C++ callers; stable language bindings expose a failed
+/// parse as their ordinary error status. `message` is a static English string
 /// keyed off `code`; this will be swapped for an interned, parameterised
 /// message once localisation lands.
 ///

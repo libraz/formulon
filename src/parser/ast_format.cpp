@@ -220,11 +220,20 @@ void FormatRef3D(const AstNode& node, std::string& out) {
   out.append(format_a1(cell_no_sheet));
   // Range tail (`'Data:S2'!A1:B2`): append the bottom-right corner.
   if (node.as_ref3d_is_range()) {
-    out.push_back(':');
     Reference end_no_sheet = node.as_ref3d_cell_end();
     end_no_sheet.sheet = {};
     end_no_sheet.sheet_quoted = false;
-    out.append(format_a1(end_no_sheet));
+    if ((cell_no_sheet.is_full_col && end_no_sheet.is_full_col) ||
+        (cell_no_sheet.is_full_row && end_no_sheet.is_full_row)) {
+      const std::string end_ref_text = format_a1(end_no_sheet);
+      const std::size_t begin_axis_end = out.find(':', out.size() - format_a1(cell_no_sheet).size());
+      out.erase(begin_axis_end);
+      out.push_back(':');
+      out.append(end_ref_text, 0, end_ref_text.find(':'));
+    } else {
+      out.push_back(':');
+      out.append(format_a1(end_no_sheet));
+    }
   }
 }
 

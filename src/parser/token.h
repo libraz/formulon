@@ -3,8 +3,8 @@
 //
 // This header declares `TokenKind`, `TextRange`, and `Token`: the three
 // types that the Pratt parser consumes from the tokenizer. Offsets use
-// UTF-16 code units so diagnostics drop directly into Monaco / CodeMirror 6
-// editors.
+// UTF-16 code units. Parser diagnostics are currently an internal C++ API;
+// no stable binding exposes these offsets yet.
 //
 // Token lifetime: `lexeme` and `text` are `string_view`s into storage owned
 // by either the original source buffer (most tokens) or the `Arena` held by
@@ -78,7 +78,7 @@ enum class TokenKind : std::uint8_t {
 /// source buffer passed to the tokenizer. `line` is 1-based; `column` is
 /// 1-based in UTF-16 code units within the line. Supplementary-plane code
 /// points (emoji, rare CJK) contribute 2 UTF-16 code units but only one
-/// grapheme of visual width - this matches the Monaco Editor position model.
+/// grapheme of visual width.
 struct TextRange {
   std::uint32_t start = 0;
   std::uint32_t end = 0;
