@@ -45,6 +45,7 @@
 #include "io/ooxml_reader.h"
 #include "io/passthrough_part.h"
 #include "io/sheet_reader.h"
+#include "io/sst_reader.h"
 #include "io/tables_reader.h"
 #include "io/workbook_kind.h"
 #include "io/zip_reader.h"
@@ -280,6 +281,13 @@ Expected<Workbook, Error> build_workbook(std::uint32_t book_id, const AxisValues
 /// Defined names / tables / passthrough are not exercised here — those
 /// flow through the production reader path unchanged. The caller
 /// compares the resulting cells to a DOM-read workbook.
+///
+/// The shared-string resolution pass is part of the adapter, not an
+/// extra: `read_sheet_data_sax` only queues `(row, col, sst_index)` in
+/// the context and leaves a `Text("")` placeholder in the cell, exactly
+/// as the DOM reader does. Skipping the pass would compare resolved text
+/// on one side against placeholders on the other and call the reader
+/// paths divergent when they are not.
 Expected<Workbook, Error> read_via_sax(io::ByteSpan bytes, const Workbook& template_wb) {
   io::ZipReader zip;
   RETURN_IF_ERROR(zip.open(bytes));
@@ -293,6 +301,23 @@ Expected<Workbook, Error> read_via_sax(io::ByteSpan bytes, const Workbook& templ
   // reader appends directly into `wb.mutable_text_storage()`. Cell
   // `Value::text` views remain valid for the workbook's lifetime.
   std::deque<std::string>& text_storage = wb.mutable_text_storage();
+
+  // The corpus writer emits string cells through the shared-string
+  // table, so the adapter has to load it before the sheets that index
+  // into it. Absent part means the book had no string cells.
+  io::SharedStringTable sst;
+  if (zip.has_entry("xl/sharedStrings.xml")) {
+    auto sst_bytes_or = zip.read_entry("xl/sharedStrings.xml");
+    if (!sst_bytes_or) {
+      return sst_bytes_or.error();
+    }
+    auto sst_or = io::read_shared_strings(std::move(sst_bytes_or.value()), text_storage);
+    if (!sst_or) {
+      return sst_or.error();
+    }
+    sst = std::move(sst_or.value());
+  }
+
   // Walk the same per-sheet part paths the DOM reader resolves. We
   // enumerate the archive directly because we want the raw bytes
   // regardless of relationship structure; the assumption is that
@@ -314,6 +339,16 @@ Expected<Workbook, Error> read_via_sax(io::ByteSpan bytes, const Workbook& templ
     auto rs = io::read_sheet_data_sax(span, i, wb, ctx, text_storage);
     if (!rs) {
       return rs.error();
+    }
+    for (const auto& [row, col, sst_index] : ctx.pending_sst_cells) {
+      if (sst_index >= sst.entries.size()) {
+        return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared-string index out of range",
+                          "context=sax_corpus_parity sheet_index=" + std::to_string(i));
+      }
+      wb.sheet(i).set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[sst_index]));
+      if (sst_index < sst.phonetic_for_entries.size() && !sst.phonetic_for_entries[sst_index].empty()) {
+        wb.sheet(i).set_cell_phonetic(row, col, sst.phonetic_for_entries[sst_index]);
+      }
     }
   }
   // Text storage now travels with the workbook itself, so no static
