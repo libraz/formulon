@@ -93,7 +93,7 @@ groups:
         expected: impl
       - name: "[Red] colour bracket"
         probe: "[Red]"
-        expected: diverged
+        expected: impl
       - name: "[>=N] conditional bracket"
         probe_regex: '\[\s*[<>=][^]]*\]'
         expected: impl
@@ -350,8 +350,8 @@ groups:
         probe_regex: 'BYCOL\(.+,\s*LAMBDA\([a-z]+,\s*[a-z]+,'
         expected: impl
       - name: "BYCOL with error in column"
-        probe_regex: 'BYCOL\([^)]*1/0'
-        expected: diverged
+        probe_regex: 'BYCOL\([^)]*#DIV/0!'
+        expected: impl
 
   - function: "MAP"
     aspect: "lambda dispatcher"
@@ -372,8 +372,8 @@ groups:
         probe_regex: 'MAP\(\{[^}]+\},\s*LAMBDA\([a-z]+,\s*[a-z]+'
         expected: impl
       - name: "MAP error propagation"
-        probe_regex: 'MAP\([^)]*1/0'
-        expected: diverged
+        probe_regex: 'MAP\([^)]*#DIV/0!'
+        expected: impl
 
   - function: "REDUCE"
     aspect: "lambda dispatcher"
@@ -410,8 +410,8 @@ groups:
         probe_regex: 'SCAN\([^,]+,\s*A\d+:A\d+'
         expected: impl
       - name: "SCAN error in element propagates"
-        probe_regex: 'SCAN\(.*1/0'
-        expected: diverged
+        probe_regex: 'SCAN\(.*#DIV/0!'
+        expected: impl
       - name: "SCAN over single-element"
         probe: "SCAN("
         expected: impl
@@ -539,7 +539,7 @@ groups:
         expected: impl
       - name: "linear trend (no period detected)"
         probe_regex: 'FORECAST\.ETS\.SEASONALITY\(\{10;12;14;16;18;20;22;24;26;28\}'
-        expected: diverged
+        expected: impl
       - name: "too short (n=3) returns 1"
         probe_regex: 'FORECAST\.ETS\.SEASONALITY\(\{1;2;3\}'
         expected: impl
