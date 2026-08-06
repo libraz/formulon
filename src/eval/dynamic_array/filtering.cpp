@@ -2,6 +2,7 @@
 #include "eval/dynamic_array/filtering.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <numeric>

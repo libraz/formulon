@@ -170,11 +170,17 @@ void EmitXf(std::vector<std::uint8_t>& out, const CellXf& xf, bool is_style_xf) 
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtXF), payload);
 }
 
+// Returns `entries`, or a one-element default-initialised collection staged in
+// `storage` when `entries` is empty; `storage` must outlive the result. The
+// default is built in place rather than taken as a parameter, because binding
+// a caller's temporary to a reference parameter of a reference-returning
+// function is what -Wdangling-reference reports, whether or not that reference
+// can actually escape.
 template <typename T>
-const std::vector<T>& Normalized(const std::vector<T>& entries, const T& fallback, std::vector<T>& storage) {
+const std::vector<T>& Normalized(const std::vector<T>& entries, std::vector<T>& storage) {
   if (!entries.empty())
     return entries;
-  storage.assign(1U, fallback);
+  storage.assign(1U, T{});
   return storage;
 }
 
@@ -209,35 +215,35 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table) {
   emit_record(out, kBrtEndFmts, empty);
 
   std::vector<FontRecord> font_default;
-  const std::vector<FontRecord>& fonts = Normalized(table.fonts, FontRecord{}, font_default);
+  const std::vector<FontRecord>& fonts = Normalized(table.fonts, font_default);
   EmitCount(out, kBrtBeginFonts, fonts.size());
   for (const FontRecord& font : fonts)
     EmitFont(out, font);
   emit_record(out, kBrtEndFonts, empty);
 
   std::vector<FillRecord> fill_default;
-  const std::vector<FillRecord>& fills = Normalized(table.fills, FillRecord{}, fill_default);
+  const std::vector<FillRecord>& fills = Normalized(table.fills, fill_default);
   EmitCount(out, kBrtBeginFills, fills.size());
   for (const FillRecord& fill : fills)
     EmitFill(out, fill);
   emit_record(out, kBrtEndFills, empty);
 
   std::vector<BorderRecord> border_default;
-  const std::vector<BorderRecord>& borders = Normalized(table.borders, BorderRecord{}, border_default);
+  const std::vector<BorderRecord>& borders = Normalized(table.borders, border_default);
   EmitCount(out, kBrtBeginBorders, borders.size());
   for (const BorderRecord& border : borders)
     EmitBorder(out, border);
   emit_record(out, kBrtEndBorders, empty);
 
   std::vector<CellXf> style_default;
-  const std::vector<CellXf>& style_xfs = Normalized(table.cell_style_xfs, CellXf{}, style_default);
+  const std::vector<CellXf>& style_xfs = Normalized(table.cell_style_xfs, style_default);
   EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellStyleXFs), style_xfs.size());
   for (const CellXf& xf : style_xfs)
     EmitXf(out, xf, true);
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtEndCellStyleXFs), empty);
 
   std::vector<CellXf> cell_default;
-  const std::vector<CellXf>& cell_xfs = Normalized(table.cell_xfs, CellXf{}, cell_default);
+  const std::vector<CellXf>& cell_xfs = Normalized(table.cell_xfs, cell_default);
   EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellXFs), cell_xfs.size());
   for (const CellXf& xf : cell_xfs)
     EmitXf(out, xf, false);
