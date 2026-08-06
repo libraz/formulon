@@ -213,11 +213,18 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // The grand total aggregates over EVERY filtered data row. It is rendered
   // with the literal "Grand Total" label in the first key column and blank
   // cells in the remaining key columns.
+  // A ±2 request adds one subtotal row per outer group — the first key
+  // column alone — on top of the grand total. With a single key column the
+  // outer level coincides with the groups themselves and every subtotal row
+  // would just restate its group, so that shape stays on the ±1 layout.
+  const bool emit_subtotals = (total_depth == 2 || total_depth == -2) && key_cols >= 2U;
+
   std::vector<Value> grand_total_row;
   bool emit_grand_total = (total_depth != 0);
   if (emit_grand_total) {
     grand_total_row.assign(out_cols, Value::blank());
-    grand_total_row[0] = Value::text(arena.intern(grand_total_label(ctx)));
+    grand_total_row[0] =
+        Value::text(arena.intern(emit_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
     const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
     const std::vector<Value> totals =
         aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
@@ -226,11 +233,6 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     }
   }
   // -- Nested subtotals (|total_depth| == 2) -------------------------------
-  // A ±2 request adds one subtotal row per outer group — the first key
-  // column alone — on top of the grand total. With a single key column the
-  // outer level coincides with the groups themselves and every subtotal row
-  // would just restate its group, so that shape stays on the ±1 layout.
-  const bool emit_subtotals = (total_depth == 2 || total_depth == -2) && key_cols >= 2U;
   OuterGrouping hierarchy;
   std::vector<std::vector<Value>> subtotal_rows;
   std::vector<std::size_t> outer_order;
@@ -254,8 +256,10 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     subtotal_rows.reserve(outer_count);
     for (std::size_t o = 0; o < outer_count; ++o) {
       std::vector<Value> row(out_cols, Value::blank());
-      const Value& outer_key = row_fields->cells[static_cast<std::size_t>(hierarchy.repr_of_outer[o]) * key_cols];
-      row[0] = Value::text(arena.intern(subtotal_label(outer_key, ctx)));
+      // The subtotal row restates its outer key verbatim in the first key
+      // column and leaves the inner key columns blank, so it reads as the
+      // roll-up of the group rows directly above or below it.
+      row[0] = row_fields->cells[static_cast<std::size_t>(hierarchy.repr_of_outer[o]) * key_cols];
       const std::vector<Value> totals = aggregate_value_columns(*values, val_cols, hierarchy.rows_of_outer[o], agg,
                                                                 arena, registry, ctx, ErrorCode::Calc);
       for (std::uint32_t vc = 0; vc < val_cols; ++vc) {

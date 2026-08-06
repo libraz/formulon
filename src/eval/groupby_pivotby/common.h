@@ -59,10 +59,11 @@ struct HeaderLayout {
 /// Returns the locale-appropriate "Grand Total" label.
 std::string_view grand_total_label(const EvalContext& ctx);
 
-/// Returns the label of a subtotal row for the outer group whose first key
-/// column holds `outer_key`, e.g. "East Total" / "East 合計". A key that has
-/// no text rendering (an error or blank) contributes an empty prefix.
-std::string subtotal_label(const Value& outer_key, const EvalContext& ctx);
+/// Returns the label of the grand-total row for a layout that also emits
+/// subtotal rows. ja-JP names the two levels apart ("総計" above the
+/// subtotals' "合計"); locales that draw no such distinction reuse
+/// `grand_total_label`.
+std::string_view hierarchy_grand_total_label(const EvalContext& ctx);
 
 /// The outer/inner hierarchy that a `|total_depth| == 2` request needs on
 /// top of the flat composite-key grouping. The outer level is the first key

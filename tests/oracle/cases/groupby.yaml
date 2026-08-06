@@ -39,12 +39,11 @@ cases:
 
   # =========================================================================
   # |total_depth| == 2 requests per-outer-group subtotal rows for a
-  # multi-column grouping. Formulon does not yet implement nested subtotals
-  # and falls back to the grand-total-only layout; this case is skipped via
-  # tests/divergence.yaml until the layout is built. Needs macOS golden
-  # regeneration once implemented.
+  # multi-column grouping. Each subtotal row restates its outer key in the
+  # first key column and blanks the inner ones; the ja-JP grand total moves
+  # from 合計 to 総計 so the two levels stay distinguishable.
   # =========================================================================
 
   - id: groupby_subtotal_depth_two
-    description: 'GROUPBY({"A","x";"A","y";"B","x"}, {10;20;30}, SUM, 0, 2) -> per-outer-group subtotals (not yet implemented; falls back to grand total)'
+    description: 'GROUPBY({"A","x";"A","y";"B","x"}, {10;20;30}, SUM, 0, 2) -> per-outer-group subtotal rows under a 総計 row'
     formula: '=GROUPBY({"A","x";"A","y";"B","x"}, {10;20;30}, SUM, 0, 2)'

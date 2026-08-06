@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-06T01:56:08Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -65,7 +65,33 @@
       "id": "groupby_subtotal_depth_two",
       "formula": "=GROUPBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {10;20;30}, SUM, 0, 2)",
       "setup": {},
-      "skipped": "Nested subtotals for |total_depth|==2 not yet implemented; GROUPBY falls back to flat grouping (grand total only). Fallback is non-silent (structured-log warning)."
+      "expect": {
+        "kind": "array",
+        "value": [
+          "A",
+          "x",
+          10.0,
+          "A",
+          "y",
+          20.0,
+          "A",
+          null,
+          30.0,
+          "B",
+          "x",
+          30.0,
+          "B",
+          null,
+          30.0,
+          "総計",
+          null,
+          60.0
+        ],
+        "shape": [
+          6,
+          3
+        ]
+      }
     }
   ]
 }

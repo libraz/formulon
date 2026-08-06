@@ -144,9 +144,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 5: row_total_depth ∈ {-2,-1,0,1,2}, default +1 ------------------
   // The grand-total row (showing column totals) defaults to the BOTTOM of
-  // the result. ±2 (per-region subtotal rows) is not yet implemented and
-  // falls back to the ±1 grand-total-only layout; the fallback is recorded
-  // in tests/divergence.yaml and a diagnostic is emitted below.
+  // the result. ±2 adds one subtotal row per outer row group; with a single
+  // row-key column there is no outer level to roll up, so that shape stays
+  // on the ±1 grand-total-only layout.
   static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
   int row_total_depth = 1;
   if (!read_optional_int_in_set(call, 5, arity, 1, arena, registry, ctx, kTotalDepths,
@@ -165,9 +165,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 7: col_total_depth ∈ {-2,-1,0,1,2}, default 1 -------------------
   // The grand-total column (showing row totals) defaults to the RIGHT of
-  // the result. ±2 (per-region subtotal columns) is not yet implemented
-  // and falls back to the ±1 grand-total-only layout, as for
-  // row_total_depth above.
+  // the result. ±2 (per-region subtotal columns) is not implemented and
+  // falls back to the ±1 grand-total-only layout; the fallback is recorded
+  // in tests/divergence.yaml and a diagnostic is emitted below.
   int col_total_depth = 1;
   if (!read_optional_int_in_set(call, 7, arity, 1, arena, registry, ctx, kTotalDepths,
                                 sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &col_total_depth, &err)) {
@@ -549,10 +549,16 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return row;
   };
 
+  // A ±2 row request adds one subtotal row per outer row group — the first
+  // row-key column alone. With a single row-key column the outer level
+  // coincides with the row groups themselves, so that shape stays on the ±1
+  // layout.
+  const bool emit_row_subtotals = (row_total_depth == 2 || row_total_depth == -2) && key_cols >= 2U;
+
   // Helper: render a TOP/BOTTOM grand-total row (column totals).
   auto render_totals_row = [&]() {
     std::vector<Value> row(out_cols, Value::blank());
-    row[0] = Value::text(arena.intern(grand_total_label(ctx)));
+    row[0] = Value::text(arena.intern(emit_row_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
     // Cells [1..K-1] stay blank (the rest of the row-keys columns).
     for (std::size_t ci = 0; ci < n_cols; ++ci) {
       const std::size_t cg = col_order[ci];
@@ -612,11 +618,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- Nested row subtotals (|row_total_depth| == 2) -----------------------
   // A ±2 request adds one subtotal row per outer row group — the first row-
-  // key column alone. With a single row-key column the outer level
-  // coincides with the row groups themselves, so that shape stays on the ±1
-  // layout. Each subtotal row carries the outer group's aggregate for every
-  // (col group, value col) cell, plus its total in the grand-total column.
-  const bool emit_row_subtotals = (row_total_depth == 2 || row_total_depth == -2) && key_cols >= 2U;
+  // key column alone. Each subtotal row carries the outer group's aggregate
+  // for every (col group, value col) cell, plus its total in the grand-total
+  // column.
   OuterGrouping row_hierarchy;
   std::vector<std::size_t> outer_row_order;
   std::vector<std::vector<std::size_t>> row_groups_of_outer;
@@ -645,8 +649,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         by_col_group[col_tag[row - data_start_row]].push_back(row);
       }
       std::vector<Value> row(out_cols, Value::blank());
-      const Value& outer_key = row_fields->cells[static_cast<std::size_t>(row_hierarchy.repr_of_outer[o]) * key_cols];
-      row[0] = Value::text(arena.intern(subtotal_label(outer_key, ctx)));
+      // The subtotal row restates its outer key verbatim in the first row-key
+      // column and leaves the inner row-key columns blank.
+      row[0] = row_fields->cells[static_cast<std::size_t>(row_hierarchy.repr_of_outer[o]) * key_cols];
       for (std::size_t ci = 0; ci < n_cols; ++ci) {
         const std::size_t cg = col_order[ci];
         if (by_col_group[cg].empty()) {

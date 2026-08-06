@@ -249,15 +249,17 @@ TEST(GroupBy, TotalDepthTwoAddsASubtotalRowPerOuterGroup) {
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "A");
   EXPECT_DOUBLE_EQ(Cell(v, 0, 2).as_number(), 10.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 20.0);
-  // Subtotal for outer group X. The label carries the ja-JP total wording,
-  // and the remaining key columns are blank as on the grand-total row.
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "X 合計");
+  // Subtotal for outer group X. The row restates the outer key verbatim and
+  // blanks the inner key column, as on the grand-total row.
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "X");
   EXPECT_TRUE(Cell(v, 2, 1).is_blank()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 30.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 30.0);
-  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y 合計");
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y");
   EXPECT_DOUBLE_EQ(Cell(v, 4, 2).as_number(), 30.0);
-  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "合計");
+  // With subtotals in the same column the ja-JP grand total moves up to
+  // 総計 so the two levels stay distinguishable.
+  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "総計");
   EXPECT_DOUBLE_EQ(Cell(v, 5, 2).as_number(), 60.0);
 }
 
@@ -265,12 +267,12 @@ TEST(GroupBy, TotalDepthNegativeTwoPutsEverySubtotalAboveItsGroup) {
   const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, -2, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 6U);
-  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "合計");
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "X 合計");
+  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "総計");
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "X");
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 30.0);
   EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "A");
   EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "B");
-  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y 合計");
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y");
 }
 
 TEST(GroupBy, TotalDepthTwoWithOneKeyColumnKeepsTheGrandTotalOnlyLayout) {
@@ -294,10 +296,10 @@ TEST(GroupBy, SubtotalsKeepEachOuterGroupContiguousUnderASort) {
   // its own members ordered C then A.
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "C");
   EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "A");
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "X 合計");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "X");
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 11.0);
   EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "B");
-  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y 合計");
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y");
 }
 
 TEST(GroupBy, TotalDepthTwoEmitsNoFallbackDiagnostic) {

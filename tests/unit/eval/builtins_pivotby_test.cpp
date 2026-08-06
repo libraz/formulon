@@ -918,18 +918,19 @@ TEST(PivotBy, RowTotalDepthTwoAddsASubtotalRowPerOuterRowGroup) {
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 10.0);
   EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 20.0);
   // Subtotal for outer group A: 10 under X, 20 under Y, 30 in total.
-  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "A 合計");
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "A");
   EXPECT_TRUE(Cell(v, 3, 1).is_blank()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 10.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 20.0);
   EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 30.0);
   // Outer group B has no Y data, so that cell stays blank.
-  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "B 合計");
+  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "B");
   EXPECT_DOUBLE_EQ(Cell(v, 5, 2).as_number(), 30.0);
   EXPECT_TRUE(Cell(v, 5, 3).is_blank()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 5, 4).as_number(), 30.0);
-  // Grand total closes the block.
-  EXPECT_EQ(std::string(Cell(v, 6, 0).as_text()), "合計");
+  // Grand total closes the block, promoted to 総計 now that subtotal rows
+  // share the same column.
+  EXPECT_EQ(std::string(Cell(v, 6, 0).as_text()), "総計");
   EXPECT_DOUBLE_EQ(Cell(v, 6, 4).as_number(), 60.0);
 }
 
@@ -938,11 +939,11 @@ TEST(PivotBy, RowTotalDepthNegativeTwoPutsEverySubtotalAboveItsGroup) {
       EvalSrc("=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, -2)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_rows(), 7U);
-  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "合計");
-  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A 合計");
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "総計");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A");
   EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "x");
   EXPECT_EQ(std::string(Cell(v, 4, 1).as_text()), "y");
-  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "B 合計");
+  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "B");
 }
 
 TEST(PivotBy, RowTotalDepthTwoWithOneRowKeyColumnKeepsTheGrandTotalOnlyLayout) {

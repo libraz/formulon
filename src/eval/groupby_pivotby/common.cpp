@@ -107,18 +107,14 @@ std::string_view grand_total_label(const EvalContext& ctx) {
   return "Grand Total";
 }
 
-std::string subtotal_label(const Value& outer_key, const EvalContext& ctx) {
-  // The suffix mirrors the grand-total label of the same locale rather than
-  // the PivotTable layer's "総計 / 集計" pair, because GROUPBY / PIVOTBY use
-  // their own "Grand Total" / "合計" wording. The ja-JP suffix has not been
-  // confirmed against a live Excel run; it is isolated here so a single edit
-  // corrects every subtotal row once the goldens are captured.
-  const bool ja = ctx.excel_profile().locale == ExcelLocale::kJaJP;
-  const std::string_view suffix = ja ? " 合計" : " Total";
-  auto key_text = coerce_to_text(outer_key);
-  std::string label = key_text ? key_text.value() : std::string();
-  label.append(suffix);
-  return label;
+std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
+  // A subtotal row carries its outer key verbatim rather than a derived
+  // label, so the grand total is what has to move out of the way: ja-JP
+  // promotes it from "合計" to "総計" once subtotals share the column.
+  if (ctx.excel_profile().locale == ExcelLocale::kJaJP) {
+    return "総計";
+  }
+  return grand_total_label(ctx);
 }
 
 OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
