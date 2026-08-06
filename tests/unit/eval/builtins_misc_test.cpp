@@ -114,13 +114,46 @@ TEST(BuiltinsAreas, IfFalseSelectsElseUnionBranch) {
   EXPECT_EQ(v.as_number(), 3.0);
 }
 
-// INDIRECT of a union string is the documented deferred case: Excel returns
-// 2, Formulon counts the opaque INDIRECT call as a single reference (1).
-// See tests/divergence.yaml (arg_indirect_union).
-TEST(BuiltinsAreas, IndirectOfUnionCountsAsSingleAreaDeferred) {
+// AREAS decodes an INDIRECT reference string rather than treating the call
+// as one opaque reference, so a union string reports every area it names.
+TEST(BuiltinsAreas, IndirectOfUnionCountsEachArea) {
   const Value v = EvalSource("=AREAS(INDIRECT(\"A1,B2\"))");
-  ASSERT_TRUE(v.is_number());
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsAreas, IndirectOfASingleReferenceOrRangeIsOneArea) {
+  const Value single = EvalSource("=AREAS(INDIRECT(\"A1\"))");
+  ASSERT_TRUE(single.is_number()) << single.debug_to_string();
+  EXPECT_EQ(single.as_number(), 1.0);
+  const Value range = EvalSource("=AREAS(INDIRECT(\"A1:B2\"))");
+  ASSERT_TRUE(range.is_number()) << range.debug_to_string();
+  EXPECT_EQ(range.as_number(), 1.0);
+}
+
+TEST(BuiltinsAreas, IndirectUnionMixesRangesAndSheetQualifiers) {
+  const Value v = EvalSource("=AREAS(INDIRECT(\"Sheet1!A1,B2,C3:D4\"))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsAreas, IndirectCommaInsideAQuotedSheetNameDoesNotSplit) {
+  // The comma belongs to the sheet name, so this is one area, not two.
+  const Value v = EvalSource("=AREAS(INDIRECT(\"'Q1,Q2'!A1\"))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
   EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(BuiltinsAreas, IndirectTextTheDecoderRejectsKeepsTheSingleAreaCount) {
+  // Text that is not a union of A1 references — a defined name here, and
+  // R1C1 text below — falls back to counting the call as one reference
+  // rather than guessing.
+  const Value name_text = EvalSource("=AREAS(INDIRECT(\"SomeName\"))");
+  ASSERT_TRUE(name_text.is_number()) << name_text.debug_to_string();
+  EXPECT_EQ(name_text.as_number(), 1.0);
+  const Value r1c1 = EvalSource("=AREAS(INDIRECT(\"R1C1,R2C2\",FALSE))");
+  ASSERT_TRUE(r1c1.is_number()) << r1c1.debug_to_string();
+  EXPECT_EQ(r1c1.as_number(), 1.0);
 }
 
 // ---------------------------------------------------------------------------

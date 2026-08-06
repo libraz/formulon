@@ -4,23 +4,24 @@
 // AST: `UnionOp` children sum, `RangeOp` / `Ref` contribute 1, anything
 // else is `#VALUE!`. See `eval/areas_lazy.h` for the dispatch contract.
 //
-// Reference-returning function calls are handled in two ways. CHOOSE and
+// Reference-returning function calls are handled in three ways. CHOOSE and
 // IF return one of their reference branches, so AREAS recurses into the
 // branch that the index / condition selects and counts areas there (this
-// makes `=AREAS(CHOOSE(2, A1:B2, (C1,D1)))` return 2). Other
-// reference-returning calls (INDIRECT, OFFSET, INDEX, XLOOKUP, ...) are
-// recognised by static name and counted as 1 area. The latter is an
-// approximation: Excel can return a multi-area union via e.g.
-// `=INDIRECT("A1,B2")`, which is actually 2 areas. Resolving that would
-// require parsing / evaluating the INDIRECT string into a runtime
-// reference union, which the engine cannot represent today; see the
-// `areas-indirect-union` entry in tests/divergence.yaml.
+// makes `=AREAS(CHOOSE(2, A1:B2, (C1,D1)))` return 2). INDIRECT gets its
+// text argument decoded, because a union string such as `"A1,B2"` names
+// two areas and counting the call as one would be wrong; the decode is
+// textual only, so nothing here depends on the engine being able to hold a
+// multi-area reference as a runtime value. Other reference-returning calls
+// (OFFSET, INDEX, XLOOKUP, ...) are recognised by static name and counted
+// as 1 area.
 
 #include "eval/areas_lazy.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
+#include "eval/a1_parse.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -50,9 +51,62 @@ constexpr std::int64_t kAreasRef = -3;      // -> #REF! (cross-sheet intersectio
 // forms; AREAS arguments are matched case-insensitively below.
 bool returns_single_reference(std::string_view name) noexcept {
   using strings::case_insensitive_eq;
-  return case_insensitive_eq(name, "INDIRECT") || case_insensitive_eq(name, "OFFSET") ||
-         case_insensitive_eq(name, "IFS") || case_insensitive_eq(name, "SWITCH") ||
-         case_insensitive_eq(name, "INDEX") || case_insensitive_eq(name, "XLOOKUP");
+  return case_insensitive_eq(name, "OFFSET") || case_insensitive_eq(name, "IFS") ||
+         case_insensitive_eq(name, "SWITCH") || case_insensitive_eq(name, "INDEX") ||
+         case_insensitive_eq(name, "XLOOKUP");
+}
+
+// Counts the comma-separated areas named by an INDIRECT reference string.
+// Returns 0 when the text is not a well-formed union of A1 references, so
+// callers can keep the "one opaque reference" approximation for anything
+// this decoder does not recognise (R1C1 text, a defined name, malformed
+// input). Commas inside a single-quoted sheet qualifier do not split, so
+// `'Q1,Q2'!A1` stays one area.
+std::uint32_t count_areas_in_reference_text(std::string_view text) noexcept {
+  std::uint32_t areas = 0;
+  std::size_t start = 0;
+  bool in_quotes = false;
+  for (std::size_t i = 0; i <= text.size(); ++i) {
+    const bool at_end = (i == text.size());
+    if (!at_end && text[i] == '\'') {
+      in_quotes = !in_quotes;
+      continue;
+    }
+    if (!at_end && (text[i] != ',' || in_quotes)) {
+      continue;
+    }
+    if (in_quotes) {
+      return 0;  // unterminated quote: not a reference we can decode.
+    }
+    const std::string_view segment = strings::trim(text.substr(start, i - start));
+    if (!refs_internal::parse_a1_ref(segment).valid) {
+      return 0;
+    }
+    ++areas;
+    start = i + 1U;
+  }
+  return areas;
+}
+
+// Decodes the reference string of an `INDIRECT(text, [a1])` call and
+// returns the number of areas it names, or 0 when the call cannot be
+// counted textually. An explicit `a1 = FALSE` selects R1C1 text, which
+// `parse_a1_ref` rejects, so that path falls through to 0 on its own.
+std::uint32_t count_areas_in_indirect(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                                      const EvalContext& ctx) {
+  const std::uint32_t fn_arity = call.as_call_arity();
+  if (fn_arity < 1U || fn_arity > 2U) {
+    return 0;
+  }
+  const Value text_v = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (text_v.is_error()) {
+    return 0;
+  }
+  auto text = coerce_to_text(text_v);
+  if (!text) {
+    return 0;
+  }
+  return count_areas_in_reference_text(text.value());
 }
 
 // Recursively sums the leaf rectangles in a reference-shaped AST subtree.
@@ -124,6 +178,12 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
         }
       }
       return kAreasInvalid;
+    }
+    // INDIRECT("A1,B2") names two areas. Decode the text; anything the
+    // decoder does not recognise keeps the single-opaque-reference count.
+    if (strings::case_insensitive_eq(fname, "INDIRECT")) {
+      const std::uint32_t decoded = count_areas_in_indirect(n, arena, registry, ctx);
+      return decoded > 0U ? static_cast<std::int64_t>(decoded) : 1;
     }
     if (returns_single_reference(fname)) {
       return 1;
