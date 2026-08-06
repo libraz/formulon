@@ -321,11 +321,8 @@ entries:
   # parameter syntax is the remaining gap, captured per-case.
 
   # -- LAMBDA family (oracle-close family=lambda, 2026-04-28) ---------------
-  # The LAMBDA helper implementation is now live for anchor unwrap, MAP
-  # shape extension, and MAKEARRAY per-cell error spills. The remaining
-  # entries need evaluator-side error propagation through inline array
-  # literals / higher-order helper inputs before they can be live oracle
-  # cases.
+  # The LAMBDA helper implementation is live for anchor unwrap, MAP shape
+  # extension, and per-slot error spills.
 
   # Gap 1: LAMBDA-helper anchor unwrap — closed 2026-05-01.
   # BYROW / BYCOL / MAP / SCAN / MAKEARRAY (and SEQUENCE / TRANSPOSE in the
@@ -333,26 +330,16 @@ entries:
   # The oracle comparator now projects Array results down to their top-left
   # anchor cell (matching xlwings' read-back semantics); see
   # tests/oracle/oracle_anchor.{h,cpp} and the corresponding unit tests.
-  # Pure "anchor not unwrapped" entries have been removed below; only
-  # cases with additional Mac-side quirks remain.
-  - id: bycol_error_in_column
-    mode: skip-oracle
-    reason: "BYCOL with an errored inline-array source column should produce a per-column spill including the error. Formulon currently loses the inline-array expression error before BYCOL sees it; keep skipped until evaluator-side error propagation is fixed."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.109"
-  - id: map_error_propagation
-    mode: skip-oracle
-    reason: "MAP propagating an inline-array element error should preserve that error in the output spill. Formulon currently loses the inline-array expression error before MAP sees it; keep skipped until evaluator-side error propagation is fixed."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.109"
-  - id: scan_error_in_element
-    mode: skip-oracle
-    reason: "SCAN propagating an inline-array element error should produce downstream error spill cells. Formulon currently loses the inline-array expression error before SCAN sees it; keep skipped until evaluator-side error propagation is fixed."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.109"
+  #
+  # Stale `bycol_error_in_column` / `map_error_propagation` /
+  # `scan_error_in_element` removed: BYROW / BYCOL / SCAN no longer collapse
+  # the whole call on the first errored slot, so each helper spills the
+  # error into its own output cell (SCAN additionally carries it forward on
+  # the accumulator) exactly as Excel does. The three case formulas also
+  # moved off `1/0` inside an array constant — an expression Excel rejects
+  # at formula entry — onto the `#DIV/0!` error literal, so they now name
+  # something a live host can actually evaluate. The goldens still carry the
+  # old `skipped` marker and need a regeneration run to go live.
 
   # Gap 2 (closed 2026-04-29): Formulon parser now accepts the
   # `[optional_param]` bracket syntax in LAMBDA parameter lists. Optional
@@ -432,12 +419,11 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
-  - id: forecast_ets_seasonality_linear_no_period
-    reason: "Mac Excel detrends before computing ACF, so a perfectly linear series surfaces no period (returns 0). Formulon's plain ACF picks lag 2 because all autocorrelations on a non-stationary linear series exceed the 0.3 threshold. Implementing detrending is a correctness improvement but out of scope here."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
+  # Stale `forecast_ets_seasonality_linear_no_period` removed: the
+  # seasonality detector now removes the linear trend before computing the
+  # autocorrelation, so a perfectly linear series reports no period (0) like
+  # Excel instead of picking lag 2 off a non-stationary series. The golden
+  # still carries the old `skipped` marker and needs a regeneration run.
 
   # REGEXEXTRACT spill-mode results — modes 1 (1 x N) and 2 (1 x G) are
   # now captured as full arrays by the spill-shape oracle probe. Mode 3
@@ -487,7 +473,7 @@ entries:
   # entries remain for numerically unstable perfect-fit statistics and an
   # empty-array-literal read-back quirk.
   - id: linest_univariate_stats_true
-    reason: "Perfect-fit LINEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 reports a huge finite F statistic while Formulon currently surfaces #N/A for the unstable F slot. Other stats cells are covered by unit tests."
+    reason: "Perfect-fit LINEST stats=TRUE drives the residual sum to exactly 0, so the F statistic is infinite in the limit. Both engines report a huge finite F — Formulon by flooring the residual at the squared rounding error the data's scale can still resolve, Mac Excel 16.109 by whatever residual its own arithmetic happens to leave — and the two magnitudes differ by a numerically unstable factor. Same class as logest_univariate_stats_true. Other stats cells are covered by unit tests."
     prefer: mac-excel-365
     first_noted: 2026-05-15
     last_verified_excel_version: "16.109"
@@ -858,26 +844,24 @@ entries:
     last_verified_excel_version: "16.0"
 
   # -- GROUPBY / PIVOTBY nested subtotals (|total_depth| == 2) -------------
-  # A ±2 total_depth requests per-outer-group subtotal rows (GROUPBY) or
-  # per-region subtotal rows/columns (PIVOTBY) in addition to the grand
-  # total. Formulon does not yet build the outer/inner grouping hierarchy
-  # and subtotal-row placement; a ±2 request falls back to the ±1
-  # grand-total-only layout and emits a structured-log warning
-  # (eval.groupby.subtotals_unsupported / eval.pivotby.subtotals_unsupported).
-  # Drop these skips and regenerate the goldens on macOS once nested
-  # subtotals are implemented.
-  - id: groupby_subtotal_depth_two
-    mode: skip-oracle
-    reason: "Nested subtotals for |total_depth|==2 not yet implemented; GROUPBY falls back to flat grouping (grand total only). Fallback is non-silent (structured-log warning)."
-    prefer: mac-excel-365
-    first_noted: 2026-06-26
-    last_verified_excel_version: "16.109"
-  - id: pivotby_row_subtotal_depth_two
-    mode: skip-oracle
-    reason: "Nested subtotals for |row_total_depth|/|col_total_depth|==2 not yet implemented; PIVOTBY falls back to flat grouping (grand total only). Fallback is non-silent (structured-log warning)."
-    prefer: mac-excel-365
-    first_noted: 2026-06-26
-    last_verified_excel_version: "16.109"
+  # A ±2 total_depth requests per-outer-group subtotal rows in addition to
+  # the grand total. Both functions now build the outer/inner hierarchy over
+  # the first key column and place a subtotal row per outer group on the
+  # same side of its block as the grand total, so
+  # `groupby_subtotal_depth_two` and `pivotby_row_subtotal_depth_two` are no
+  # longer divergences and their entries are gone; the goldens still carry
+  # the old `skipped` marker and need a regeneration run to go live. That
+  # run is also what confirms the ja-JP subtotal-row wording, which is
+  # currently derived from the grand-total label (`<key> 合計`) rather than
+  # captured from a host — see `subtotal_label` in
+  # src/eval/groupby_pivotby/common.cpp.
+  #
+  # PIVOTBY subtotal COLUMNS (|col_total_depth| == 2) remain unimplemented:
+  # they insert an extra value-wide block per outer column group, which
+  # reshapes every column index in the layout. A ±2 column request still
+  # falls back to the ±1 grand-total-only layout behind the
+  # eval.pivotby.subtotals_unsupported warning. No oracle case covers that
+  # shape yet, so there is no entry to record here.
 
   # -- XLOOKUP / XMATCH binary search over dirty (non-sorted) data --------
   # Binary search (search_mode = 2 / -2) requires the lookup vector to be
@@ -920,18 +904,17 @@ entries:
     first_noted: 2026-06-26
     last_verified_excel_version: "unverified (needs live oracle run)"
 
-  # AREAS now recurses into CHOOSE / IF reference branches, so a branch
-  # that is itself a union reports its real area count. INDIRECT of a
-  # union string is still deferred: `=AREAS(INDIRECT("A1,B2"))` is a
-  # 2-area reference union in Excel, but Formulon counts the INDIRECT call
-  # as a single opaque reference (1) because the engine has no runtime
-  # reference-union Value to parse the INDIRECT string into. See
-  # src/eval/areas_lazy.cpp.
-  - id: arg_indirect_union
-    mode: skip-oracle
-    reason: "AREAS(INDIRECT(\"A1,B2\")) is 2 areas in Excel; Formulon returns 1 because it has no runtime reference-union value to parse the INDIRECT string into. Deferred pending a reference-union runtime."
-    prefer: mac-excel-365
-    first_noted: 2026-06-26
+  # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
+  # itself a union reports its real area count.
+  #
+  # Stale `arg_indirect_union` removed: AREAS now decodes an INDIRECT call's
+  # reference text and counts the areas it names, so
+  # `=AREAS(INDIRECT("A1,B2"))` reports 2. The decode is textual, so nothing
+  # here waits on the engine being able to hold a multi-area reference as a
+  # runtime value; text the decoder does not recognise (R1C1, a defined
+  # name, malformed input) keeps the single-opaque-reference count. See
+  # src/eval/areas_lazy.cpp. The golden still carries the old `skipped`
+  # marker and needs a regeneration run to go live.
 
   # -- Circular reference with iterative calculation OFF ------------------
   # A formula cycle (e.g. A1 = =A2, A2 = =A1) with the workbook's iterative
