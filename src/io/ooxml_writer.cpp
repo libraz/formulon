@@ -20,6 +20,7 @@
 
 #include "io/ooxml_writer.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
