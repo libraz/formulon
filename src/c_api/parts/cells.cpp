@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - cell mutation (set_*), cell read (get_value, lambda_text_at),
 // flat-enumeration (cell_count, cell_at), and dynamic-array spill info.
@@ -24,7 +23,6 @@
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_u32;
 using formulon::c_api::parts::clear_last_error;
-using formulon::c_api::parts::intern_text;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::TextStore;
@@ -87,13 +85,30 @@ extern "C" fm_status_t fm_workbook_set_text(fm_workbook_t* wb, size_t sheet_inde
   if (utf8 == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_text: utf8 is NULL");
   }
-  // The cell stores a non-owning view; we must keep the bytes alive for
-  // as long as the handle does.
-  const std::string_view view = intern_text(wb->text_store, std::string_view(utf8));
-  auto r = wb->workbook().set_cell_value(sheet_index, row, col, formulon::Value::text(view));
+  // Copy directly into the destination cell. Keeping every overwritten
+  // input in a handle-global deque leaked one string per C-ABI write.
+  auto r = wb->workbook().set_cell_text(sheet_index, row, col, utf8);
   if (!r) {
     return set_last_error(r.error());
   }
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_cell_phonetic(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                     const char* utf8) {
+  clear_last_error();
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_set_cell_phonetic"); rc != 0) {
+    return rc;
+  }
+  if (utf8 == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_set_cell_phonetic: utf8 is NULL");
+  }
+  if (row >= formulon::Sheet::kMaxRows || col >= formulon::Sheet::kMaxCols) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_set_cell_phonetic: cell coordinate out of range");
+  }
+  wb->workbook().sheet(sheet_index).set_cell_phonetic(row, col, utf8);
   return 0;
 }
 
@@ -154,6 +169,24 @@ extern "C" fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t she
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                     uint32_t col, const char** out_text) {
+  clear_last_error();
+  if (out_text == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_get_cell_phonetic: out_text is NULL");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_get_cell_phonetic"); rc != 0) {
+    return rc;
+  }
+  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
+  TextStore& store = const_cast<TextStore&>(wb->read_scratch);
+  store.clear();
+  store.emplace_back(cell == nullptr ? std::string() : cell->phonetic_text);
+  *out_text = store.back().c_str();
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                                   const char** out_text) {
   clear_last_error();
@@ -190,7 +223,7 @@ extern "C" fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t shee
 // Iteration / dump
 // ---------------------------------------------------------------------------
 //
-// Sheets are stored row-sparse (`unordered_map<row, vector<Cell>>`); we
+// Sheets are stored row-sparse (`unordered_map<row, RowCells>`); we
 // surface a flat enumeration to bindings by materialising a sorted
 // `(row, col)` index on demand. The cache is purely an optimisation;
 // correctness does not depend on it.
@@ -203,11 +236,13 @@ namespace {
 // row) are kept: the dump command may want to surface them as blank
 // slots, and dropping them here would make the count returned by
 // `fm_workbook_cell_count` mismatch the indexable range. The CLI
-// filters them out at render time.
+// filters them out at render time. Columns before a row's first populated
+// one are never materialised, so they are neither counted nor enumerated —
+// this walks the row's stored run, matching `Sheet::cell_count`.
 std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(const formulon::Sheet& sheet) {
   std::vector<std::pair<std::uint32_t, std::uint32_t>> out;
   for (const auto& [row, cells] : sheet.rows()) {
-    for (std::size_t col = 0; col < cells.size(); ++col) {
+    for (std::size_t col = cells.first_col(); col < cells.size(); ++col) {
       out.emplace_back(row, static_cast<std::uint32_t>(col));
     }
   }
@@ -222,6 +257,19 @@ std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(cons
   std::sort(out.begin(), out.end());
   out.erase(std::unique(out.begin(), out.end()), out.end());
   return out;
+}
+
+const std::vector<std::pair<std::uint32_t, std::uint32_t>>& cached_cell_addresses(const fm_workbook_t* wb,
+                                                                                  std::size_t sheet_index) {
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  const std::uint64_t revision = sheet.cell_enumeration_revision();
+  auto& cache = wb->cell_enumeration_cache;
+  if (cache.sheet_index != sheet_index || cache.revision != revision) {
+    cache.addresses = collect_cell_addresses(sheet);
+    cache.sheet_index = sheet_index;
+    cache.revision = revision;
+  }
+  return cache.addresses;
 }
 
 }  // namespace
@@ -239,12 +287,10 @@ extern "C" fm_status_t fm_workbook_cell_at(const fm_workbook_t* wb, size_t sheet
     return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  // Materialise the sorted address vector. This is O(N log N) in the
-  // sheet's cell count; the CLI calls cell_at in a tight loop so a
-  // future optimisation could cache the vector on the handle. For the
-  // current scope (workbooks up to ~100k populated cells) the simple
-  // path is fast enough and avoids invalidation bookkeeping.
-  const auto addrs = collect_cell_addresses(sheet);
+  // The sorted address vector is cached on the handle until the Sheet's
+  // enumeration revision changes. A `cell_count` / `cell_at(0..N)` pass
+  // therefore pays the O(N log N) collection once rather than per cell.
+  const auto& addrs = cached_cell_addresses(wb, sheet_index);
   if (idx >= addrs.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_cell_at: idx out of range",
                              "idx=" + std::to_string(idx) + " count=" + std::to_string(addrs.size()));

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the lazy-dispatched lookup / reference functions
 // CHOOSE, INDEX, and MATCH. All three are routed through the lazy table in
@@ -41,6 +40,31 @@ TEST(BuiltinsMatch, ExactNumericFirstHit) {
   wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
   wb.sheet(0).set_cell_value(3, 0, Value::number(20.0));  // duplicate, should be ignored
   const Value v = EvalSourceIn("=MATCH(20, A1:A4, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsMatch, ExactMatchArrayLiteralUsesSharedRangeMaterialization) {
+  const Value v = EvalSource("=MATCH(20,{10;20;30},0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsMatch, ExactZeroDoesNotMatchBlankCell) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  // A2 remains empty. MATCH exact mode excludes blank array cells from a
+  // numeric lookup; it must not coerce the blank to zero.
+  const Value v = EvalSourceIn("=MATCH(0, A1:A2, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsMatch, ExactZeroSkipsBlankBeforeRealZero) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 0, Value::number(0.0));
+  // A1 remains empty; only the literal zero in A2 can match.
+  const Value v = EvalSourceIn("=MATCH(0, A1:A2, 0)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
@@ -257,6 +281,12 @@ TEST(BuiltinsIndex, TwoDimensionalRowAndColumn) {
   const Value v = EvalSourceIn("=INDEX(A1:C3, 2, 3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 6.0);  // row 2, col 3 -> cell (1,2) -> 1*3+2+1 = 6
+}
+
+TEST(BuiltinsIndex, ArrayLiteralUsesSharedRangeMaterialization) {
+  const Value v = EvalSource("=INDEX({1,2;3,4},2,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
 TEST(BuiltinsIndex, OutOfBoundsRowIsRefError) {

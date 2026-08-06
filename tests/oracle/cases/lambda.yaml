@@ -101,9 +101,12 @@ cases:
     description: "BYCOL with two-arg LAMBDA — should be #VALUE!"
     formula: "=BYCOL({1,2,3;4,5,6}, LAMBDA(a, b, a+b))"
 
+  # Array constants hold literal values only, so the errored cell is written
+  # as the `#DIV/0!` literal rather than a `1/0` expression, which Excel
+  # rejects at formula entry.
   - id: bycol_error_in_column
     description: "Error in one column should propagate per-column"
-    formula: "=BYCOL({1,2;1/0,3}, LAMBDA(col, SUM(col)))"
+    formula: "=BYCOL({1,2;#DIV/0!,3}, LAMBDA(col, SUM(col)))"
 
   # -- MAP ------------------------------------------------------------------
   - id: map_single_array_doubles
@@ -128,7 +131,7 @@ cases:
 
   - id: map_error_propagation
     description: "Error in element propagates per-element"
-    formula: "=MAP({1,1/0,3}, LAMBDA(x, x*2))"
+    formula: "=MAP({1,#DIV/0!,3}, LAMBDA(x, x*2))"
 
   # -- REDUCE ---------------------------------------------------------------
   - id: reduce_sum_from_initial
@@ -172,7 +175,7 @@ cases:
 
   - id: scan_error_in_element
     description: "Error in mid-element propagates downstream"
-    formula: "=SCAN(0, {1,1/0,3}, LAMBDA(a, v, a+v))"
+    formula: "=SCAN(0, {1,#DIV/0!,3}, LAMBDA(a, v, a+v))"
 
   - id: scan_single_element
     description: "SCAN over single-element array"

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the `*IF` / `*IFS` conditional aggregator lazy
 // impls. See `conditional_aggregates.h` for the dispatch-table contract
@@ -6,6 +5,7 @@
 
 #include "eval/conditional_aggregates.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -179,6 +179,9 @@ Value aggregate_matching_numbers(const IfsInputs& inputs, ExcelProfile profile, 
       continue;
     }
     const double x = value.as_number();
+    if (!std::isfinite(x)) {
+      return Value::error(ErrorCode::Num);
+    }
     switch (aggregate) {
       case IfsNumericAggregate::Sum:
       case IfsNumericAggregate::Average:
@@ -201,9 +204,12 @@ Value aggregate_matching_numbers(const IfsInputs& inputs, ExcelProfile profile, 
 
   switch (aggregate) {
     case IfsNumericAggregate::Sum:
-      return Value::number(sum);
+      return std::isfinite(sum) ? Value::number(sum) : Value::error(ErrorCode::Num);
     case IfsNumericAggregate::Average:
-      return count == 0.0 ? Value::error(ErrorCode::Div0) : Value::number(sum / count);
+      if (count == 0.0) {
+        return Value::error(ErrorCode::Div0);
+      }
+      return std::isfinite(sum / count) ? Value::number(sum / count) : Value::error(ErrorCode::Num);
     case IfsNumericAggregate::Max:
     case IfsNumericAggregate::Min:
       return any ? Value::number(best) : Value::number(0.0);
@@ -326,6 +332,9 @@ Value eval_sumif_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       continue;
     }
     sum += sv.as_number();
+    if (!std::isfinite(sum)) {
+      return Value::error(ErrorCode::Num);
+    }
   }
   return Value::number(sum);
 }
@@ -389,12 +398,16 @@ Value eval_averageif_lazy(const parser::AstNode& call, Arena& arena, const Funct
       continue;
     }
     sum += av.as_number();
+    if (!std::isfinite(sum)) {
+      return Value::error(ErrorCode::Num);
+    }
     count += 1.0;
   }
   if (count == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  return Value::number(sum / count);
+  const double average = sum / count;
+  return std::isfinite(average) ? Value::number(average) : Value::error(ErrorCode::Num);
 }
 
 // COUNTIFS(range1, crit1 [, range2, crit2, ...])

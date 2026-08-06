@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """WASM32 struct marshalling for the Formulon C ABI.
 
 Emscripten lowers every by-value struct parameter (and every struct
@@ -200,6 +199,11 @@ VIEWPORT = Struct(
 CF_COLOR = Struct(
     "fm_cf_color_t",
     [("r", U8), ("g", U8), ("b", U8), ("a", U8)],
+)
+
+CFVO = Struct(
+    "fm_cfvo_t",
+    [("type", U8), ("_pad", ("blob_pad3", 3, 1)), ("gte", I32), ("value", PTR)],
 )
 
 CF_MATCH = Struct(
@@ -456,6 +460,28 @@ BORDER_RECORD = Struct(
         ("diagonal_color_argb", U32),
         ("diagonal_up", I32),
         ("diagonal_down", I32),
+    ],
+)
+
+# Inline members of ``fm_dxf_record``. They deliberately remain opaque here:
+# callers marshal them through the standalone layouts above at their recorded
+# offsets.
+FONT_RECORD_BLOB = ("blob_font_record", FONT_RECORD.size, 8)
+FILL_RECORD_BLOB = ("blob_fill_record", FILL_RECORD.size, 4)
+BORDER_RECORD_BLOB = ("blob_border_record", BORDER_RECORD.size, 4)
+
+DXF_RECORD = Struct(
+    "fm_dxf_record",
+    [
+        ("font_engaged", I32),
+        ("font", FONT_RECORD_BLOB),
+        ("fill_engaged", I32),
+        ("fill", FILL_RECORD_BLOB),
+        ("border_engaged", I32),
+        ("border", BORDER_RECORD_BLOB),
+        ("num_fmt_engaged", I32),
+        ("num_fmt_id", U16),
+        ("num_fmt_code", PTR),
     ],
 )
 

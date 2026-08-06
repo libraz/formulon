@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // ja-JP canonical text folding for Mac Excel COUNTIF / SUMIF / AVERAGEIF
 // equality and the lookup family (VLOOKUP / HLOOKUP / MATCH / XLOOKUP /

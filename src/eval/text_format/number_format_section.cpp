@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Section splitter and classifier for the Excel TEXT() format-string
 // engine. The per-token scanner is in `number_format_tokenizer.cpp`; the
@@ -121,7 +120,7 @@ std::vector<std::string_view> split_sections(std::string_view fmt) {
       continue;
     }
     if (c == '[') {
-      // Skip to matching `]` so e.g. `[Red]` does not interact with `;`.
+      // Skip to matching `]` so e.g. `[赤]` does not interact with `;`.
       while (i < fmt.size() && fmt[i] != ']') {
         ++i;
       }

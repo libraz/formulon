@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the Excel REGEX function family backed by PCRE2:
 //   * REGEXTEST(text, pattern, [case_sensitivity]) -> bool

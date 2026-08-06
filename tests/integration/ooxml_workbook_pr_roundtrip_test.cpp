@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test: workbook.xml level elements `<workbookPr>` (with the
 // `date1904` date-system flag and the VBA `codeName`), `<bookViews>`
@@ -107,6 +106,8 @@ constexpr std::string_view kWorkbookWithAll =
     "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
     "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
     "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
+    "  <fileVersion appName=\"xl\" lastEdited=\"8\"/>\n"
+    "  <fileSharing readOnlyRecommended=\"1\"/>\n"
     "  <workbookPr date1904=\"1\" codeName=\"ThisWorkbook\"/>\n"
     "  <workbookProtection lockStructure=\"1\" lockWindows=\"0\"/>\n"
     "  <bookViews>\n"
@@ -115,6 +116,7 @@ constexpr std::string_view kWorkbookWithAll =
     "  <sheets>\n"
     "    <sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/>\n"
     "  </sheets>\n"
+    "  <extLst><ext uri=\"urn:test:workbook-extension\"/></extLst>\n"
     "</workbook>\n";
 
 TEST(OoxmlWorkbookPrRoundTrip, Date1904FlagAndRawElementsSurvive) {
@@ -129,6 +131,9 @@ TEST(OoxmlWorkbookPrRoundTrip, Date1904FlagAndRawElementsSurvive) {
   EXPECT_NE(wb.workbook_pr_xml().find("codeName=\"ThisWorkbook\""), std::string::npos);
   EXPECT_NE(wb.workbook_protection_xml().find("lockStructure=\"1\""), std::string::npos);
   EXPECT_NE(wb.book_views_xml().find("activeTab=\"2\""), std::string::npos);
+  EXPECT_NE(wb.file_version_xml().find("lastEdited=\"8\""), std::string::npos);
+  EXPECT_NE(wb.file_sharing_xml().find("readOnlyRecommended=\"1\""), std::string::npos);
+  EXPECT_NE(wb.workbook_ext_lst_xml().find("urn:test:workbook-extension"), std::string::npos);
 
   auto save_or = wb.save();
   ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;

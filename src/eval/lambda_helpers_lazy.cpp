@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/lambda_helpers_lazy.h"
 
@@ -7,7 +6,9 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/dynamic_array_limits.h"
 #include "eval/eval_context.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
@@ -30,26 +31,13 @@ namespace {
 constexpr std::uint32_t kExcelMaxRows = 1048576U;
 constexpr std::uint32_t kExcelMaxCols = 16384U;
 
-// Wraps a freshly populated `Value` buffer into an arena-allocated
-// `ArrayValue`. The buffer must already live in `arena`. Returns a scalar
-// `#NUM!` if either allocation fails.
-Value wrap_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, Value* buffer) {
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
-  return Value::array(arr);
-}
-
-// Allocates a fresh row-major `Value` buffer of size `rows * cols` in
-// `arena`. Returns `nullptr` on allocation failure (caller surfaces
-// `#NUM!`). The buffer is not initialised; the caller writes every cell.
-Value* alloc_cells(Arena& arena, std::uint32_t rows, std::uint32_t cols) {
-  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  return arena.create_array<Value>(n);
+// Allocates the `(rows, cols)` result array through the evaluator's shared
+// seam, handing back the header to publish once the cells are written and,
+// via `out_cells`, the uninitialised row-major buffer the caller fills.
+// Returns `nullptr` when the shape is rejected or the arena is exhausted
+// (caller surfaces `#NUM!`).
+ArrayValue* alloc_cells(Arena& arena, std::uint32_t rows, std::uint32_t cols, Value*& out_cells) {
+  return allocate_array_value(rows, cols, arena, out_cells, kMaxDerivedArrayCells);
 }
 
 // If `v` is a 1x1 Array, returns its single cell unchanged. Otherwise
@@ -69,15 +57,6 @@ Value unwrap_1x1_array(const Value& v) {
     return a->cells[0];
   }
   return v;
-}
-
-// Builds a fresh 1-cell-wide / 1-cell-tall `ArrayValue` carrying `cells`.
-// The buffer must already live in `arena`. Used by BYROW / BYCOL to hand a
-// row or column slice of the input to the per-cell lambda invocation. The
-// resulting `Value::Array` is a perfectly normal Array value: callers can
-// `as_array()` / `as_array_cells()` it identically to any other array.
-Value make_slice_array(Arena& arena, std::uint32_t rows, std::uint32_t cols, Value* cells) {
-  return wrap_array(arena, rows, cols, cells);
 }
 
 // Builds a synthetic `ArrayLiteral` AST that mirrors the cells of `arr`.
@@ -127,9 +106,10 @@ const parser::AstNode* build_array_literal_for(const ArrayValue* arr, Arena& are
 // `nullptr` to fall back to scalar bindings.
 //
 // Strict arity match (Excel's `#VALUE!` policy). Argument errors are NOT
-// short-circuited here — the caller is expected to filter them first if
-// required (REDUCE / SCAN want to surface array-cell errors verbatim, but
-// MAP / BYROW / BYCOL pre-check). The lambda body is evaluated in the
+// short-circuited here and no caller filters them either: every helper
+// hands an errored cell to the body so an `IFERROR`-guarded lambda can
+// recover, and an unguarded one returns the error into that output slot
+// alone. The lambda body is evaluated in the
 // caller's `EvalContext` with the caller-supplied `NameEnv` swapped for
 // the freshly extended frame.
 Value invoke_lambda_with_values(const LambdaValue* lv, const Value* args, const parser::AstNode* const* ast_args,
@@ -260,14 +240,16 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   const std::uint32_t slice_cols = by_row ? cols_in : 1U;
   const std::uint32_t slice_size = by_row ? cols_in : rows_in;
 
-  Value* out_cells = alloc_cells(arena, out_rows, out_cols);
-  if (out_cells == nullptr) {
+  Value* out_cells = nullptr;
+  ArrayValue* out_arr = alloc_cells(arena, out_rows, out_cols, out_cells);
+  if (out_arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
 
   for (std::uint32_t i = 0; i < iter_count; ++i) {
-    Value* slice_buf = alloc_cells(arena, slice_rows, slice_cols);
-    if (slice_buf == nullptr) {
+    Value* slice_buf = nullptr;
+    ArrayValue* slice_arr = alloc_cells(arena, slice_rows, slice_cols, slice_buf);
+    if (slice_arr == nullptr) {
       return Value::error(ErrorCode::Num);
     }
     if (by_row) {
@@ -280,7 +262,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
         slice_buf[r] = in->cells[static_cast<std::size_t>(r) * static_cast<std::size_t>(cols_in) + i];
       }
     }
-    const Value slice = make_slice_array(arena, slice_rows, slice_cols, slice_buf);
+    const Value slice = Value::array(slice_arr);
     Value arg = slice;
     // Bind the slice with both the Value and a synthetic ArrayLiteral AST
     // so range-aware functions inside the body (`SUM(r)`, `AVERAGE(r)`,
@@ -293,7 +275,11 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     const parser::AstNode* ast_args[1] = {slice_ast};
     const Value res = invoke_lambda_with_values(lv, &arg, ast_args, 1U, arena, registry, ctx);
     if (res.is_error()) {
-      return res;
+      // Each row / column is reduced independently, so an error lands in
+      // that slice's output cell only. Short-circuiting the whole call here
+      // would hide the other slices' results, which Excel still spills.
+      out_cells[i] = res;
+      continue;
     }
     // Mac Excel anchor-unwraps a 1x1 Array lambda result (e.g.
     // `LAMBDA(row, row*10)` applied to a 1x1 row slice produces {10},
@@ -307,7 +293,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     out_cells[i] = scalar_res;
   }
 
-  return wrap_array(arena, out_rows, out_cols, out_cells);
+  return Value::array(out_arr);
 }
 
 }  // namespace
@@ -368,8 +354,9 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     return Value::error(ErrorCode::Calc);
   }
 
-  Value* out_cells = alloc_cells(arena, rows, cols);
-  if (out_cells == nullptr) {
+  Value* out_cells = nullptr;
+  ArrayValue* out_arr = alloc_cells(arena, rows, cols, out_cells);
+  if (out_arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -409,7 +396,7 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     out_cells[idx] = scalar_res;
   }
 
-  return wrap_array(arena, rows, cols, out_cells);
+  return Value::array(out_arr);
 }
 
 Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -443,19 +430,14 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
   for (std::size_t i = 0; i < total; ++i) {
     args[0] = acc;
     args[1] = in->cells[i];
-    // An error in the current cell short-circuits the fold (matches Mac
-    // Excel's spill semantics: a single bad cell taints the result).
-    if (args[1].is_error()) {
-      return args[1];
-    }
+    // An errored cell reaches the lambda verbatim, matching SCAN: a body
+    // that guards with IFERROR keeps folding, and one that does not leaves
+    // the error in the accumulator, which is what the fold returns.
+    //
     // REDUCE feeds scalar (accumulator, current) per call. The accumulator
     // can be any Value but is consumed inside the body via the parameter
     // name lookup, not as a range-aware seam, so no AST hint is required.
-    const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
-    if (res.is_error()) {
-      return res;
-    }
-    acc = res;
+    acc = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
   }
   return acc;
 }
@@ -487,8 +469,9 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Calc);
   }
 
-  Value* out_cells = alloc_cells(arena, rows, cols);
-  if (out_cells == nullptr) {
+  Value* out_cells = nullptr;
+  ArrayValue* out_arr = alloc_cells(arena, rows, cols, out_cells);
+  if (out_arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -497,14 +480,18 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   for (std::size_t i = 0; i < total; ++i) {
     args[0] = acc;
     args[1] = in->cells[i];
-    if (args[1].is_error()) {
-      return args[1];
-    }
+    // An errored cell is handed to the lambda verbatim rather than
+    // short-circuited: a body that guards with IFERROR recovers, and one
+    // that does not returns the error, which then rides the accumulator
+    // into every later cell. Both outcomes are per-cell, not whole-call.
+    //
     // SCAN feeds scalar (accumulator, current) per call. No AST hint is
     // needed; the body sees both bindings as scalar Values.
     const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
     if (res.is_error()) {
-      return res;
+      acc = res;
+      out_cells[i] = res;
+      continue;
     }
     // SCAN, like BYROW / BYCOL / MAP, has a single output slot per cell;
     // a multi-cell lambda return would require nested spilling. A 1x1
@@ -517,7 +504,7 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     out_cells[i] = acc;
   }
 
-  return wrap_array(arena, rows, cols, out_cells);
+  return Value::array(out_arr);
 }
 
 Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -534,13 +521,17 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (!read_count_arg(call.as_call_arg(1), arena, registry, ctx, kExcelMaxCols, &cols, &err)) {
     return err;
   }
+  if (static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxSequenceCells) {
+    return Value::error(ErrorCode::Num);
+  }
   const LambdaValue* lv = eval_lambda_arg(call.as_call_arg(2), /*expected_arity=*/2U, arena, registry, ctx, &err);
   if (lv == nullptr) {
     return err;
   }
 
-  Value* out_cells = alloc_cells(arena, rows, cols);
-  if (out_cells == nullptr) {
+  Value* out_cells = nullptr;
+  ArrayValue* out_arr = alloc_cells(arena, rows, cols, out_cells);
+  if (out_arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
 
@@ -567,7 +558,7 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
   }
 
-  return wrap_array(arena, rows, cols, out_cells);
+  return Value::array(out_arr);
 }
 
 }  // namespace eval

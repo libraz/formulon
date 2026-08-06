@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "io/ooxml/sheet_aux_rels_reader.h"
 
@@ -50,49 +49,66 @@ Expected<std::vector<std::string>, Error> load_sheet_table_targets(const ZipRead
 Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::string_view sheet_rels_path,
                                                   std::string_view sheet_dir) {
   SheetAuxRels out;
-  auto visit_status = visit_relationship_nodes(zip, sheet_rels_path, "sheet rels",
-                                               [&](const pugi::xml_node& rel) -> Expected<void, Error> {
-                                                 const std::string_view type = rel.attribute("Type").value();
-                                                 const std::string_view target = rel.attribute("Target").value();
-                                                 if (target.empty()) {
-                                                   return Expected<void, Error>::Ok();
-                                                 }
-                                                 if (type == kRelHyperlink) {
-                                                   const std::string id = rel.attribute("Id").value();
-                                                   if (id.empty()) {
-                                                     return Expected<void, Error>::Ok();
-                                                   }
-                                                   // Hyperlink targets are external URLs — preserve them exactly as
-                                                   // the OOXML producer wrote them (no relative-path resolution).
-                                                   out.hyperlink_rid_to_target.emplace(id, std::string(target));
-                                                 } else if (type == kRelComments) {
-                                                   auto resolved = resolve_relative_path(sheet_dir, target);
-                                                   if (!resolved) {
-                                                     return resolved.error();
-                                                   }
-                                                   out.comments_path = std::move(resolved).value();
-                                                 } else if (type == kRelVmlDrawing) {
-                                                   auto resolved = resolve_relative_path(sheet_dir, target);
-                                                   if (!resolved) {
-                                                     return resolved.error();
-                                                   }
-                                                   out.vml_path = std::move(resolved).value();
-                                                 } else if (type == kRelPrinterSettings) {
-                                                   auto resolved = resolve_relative_path(sheet_dir, target);
-                                                   if (!resolved) {
-                                                     return resolved.error();
-                                                   }
-                                                   out.printer_settings_rid.assign(rel.attribute("Id").value());
-                                                   out.printer_settings_path = std::move(resolved).value();
-                                                 } else if (type == kRelDrawing) {
-                                                   auto resolved = resolve_relative_path(sheet_dir, target);
-                                                   if (!resolved) {
-                                                     return resolved.error();
-                                                   }
-                                                   out.drawing_path = std::move(resolved).value();
-                                                 }
-                                                 return Expected<void, Error>::Ok();
-                                               });
+  auto visit_status = visit_relationship_nodes(
+      zip, sheet_rels_path, "sheet rels", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+        const std::string_view type = rel.attribute("Type").value();
+        const std::string_view target = rel.attribute("Target").value();
+        if (target.empty()) {
+          return Expected<void, Error>::Ok();
+        }
+        if (type == kRelHyperlink) {
+          const std::string id = rel.attribute("Id").value();
+          if (id.empty()) {
+            return Expected<void, Error>::Ok();
+          }
+          // Hyperlink targets are external URLs — preserve them exactly as
+          // the OOXML producer wrote them (no relative-path resolution).
+          out.hyperlink_rid_to_target.emplace(id, std::string(target));
+        } else if (type == kRelComments) {
+          auto resolved = resolve_relative_path(sheet_dir, target);
+          if (!resolved) {
+            return resolved.error();
+          }
+          out.comments_path = std::move(resolved).value();
+        } else if (type == kRelVmlDrawing) {
+          auto resolved = resolve_relative_path(sheet_dir, target);
+          if (!resolved) {
+            return resolved.error();
+          }
+          out.vml_path = std::move(resolved).value();
+        } else if (type == kRelPrinterSettings) {
+          auto resolved = resolve_relative_path(sheet_dir, target);
+          if (!resolved) {
+            return resolved.error();
+          }
+          out.printer_settings_rid.assign(rel.attribute("Id").value());
+          out.printer_settings_path = std::move(resolved).value();
+        } else if (type == kRelDrawing) {
+          auto resolved = resolve_relative_path(sheet_dir, target);
+          if (!resolved) {
+            return resolved.error();
+          }
+          out.drawing_path = std::move(resolved).value();
+        } else if (type != kRelTable && type != kRelPivotTable) {
+          UnknownRelationship entry;
+          entry.id = rel.attribute("Id").value();
+          entry.type = std::string(type);
+          entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+          if (entry.target_external) {
+            entry.target = std::string(target);
+          } else {
+            auto resolved = resolve_relative_path(sheet_dir, target);
+            if (!resolved) {
+              return resolved.error();
+            }
+            entry.target = std::move(resolved).value();
+          }
+          if (!entry.id.empty()) {
+            out.unknown_rels.push_back(std::move(entry));
+          }
+        }
+        return Expected<void, Error>::Ok();
+      });
   if (!visit_status) {
     return visit_status.error();
   }

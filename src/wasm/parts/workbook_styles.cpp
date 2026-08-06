@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook styles surface: per-cell xfIndex get/set, font / fill /
 // border / numFmt / xf record getters and adders, named cell-style and
@@ -78,20 +77,21 @@ emscripten::val JsWorkbook::getFont(uint32_t font_index) const {
     o.set("status", error_status(7000));
     return o;
   }
-  fm_font_record f{};
-  fm_status_t rc = fm_styles_get_font(handle_, font_index, &f);
+  fm_font_record_ex f{};
+  fm_status_t rc = fm_styles_get_font_ex(handle_, font_index, &f);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
   }
   o.set("status", ok_status());
-  o.set("name", std::string(f.name != nullptr ? f.name : ""));
-  o.set("size", f.size);
-  o.set("colorArgb", f.color_argb);
-  o.set("bold", f.bold != 0);
-  o.set("italic", f.italic != 0);
-  o.set("strike", f.strike != 0);
-  o.set("underline", static_cast<uint32_t>(f.underline));
+  o.set("name", std::string(f.base.name != nullptr ? f.base.name : ""));
+  o.set("size", f.base.size);
+  o.set("colorArgb", f.base.color_argb);
+  o.set("bold", f.base.bold != 0);
+  o.set("italic", f.base.italic != 0);
+  o.set("strike", f.base.strike != 0);
+  o.set("underline", static_cast<uint32_t>(f.base.underline));
+  o.set("vertAlign", static_cast<uint32_t>(f.vert_align));
   return o;
 }
 
@@ -227,16 +227,17 @@ JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
     return r;
   }
   const std::string name = js_pull_string(record, "name");
-  fm_font_record fr{};
-  fr.name = name.c_str();
-  fr.size = js_pull_double(record, "size", 11.0);
-  fr.bold = js_pull_bool(record, "bold", false) ? 1 : 0;
-  fr.italic = js_pull_bool(record, "italic", false) ? 1 : 0;
-  fr.strike = js_pull_bool(record, "strike", false) ? 1 : 0;
-  fr.underline = js_pull_u8(record, "underline", 0U);
-  fr.color_argb = js_pull_u32(record, "colorArgb", 0xFF000000U);
+  fm_font_record_ex fr{};
+  fr.base.name = name.c_str();
+  fr.base.size = js_pull_double(record, "size", 11.0);
+  fr.base.bold = js_pull_bool(record, "bold", false) ? 1 : 0;
+  fr.base.italic = js_pull_bool(record, "italic", false) ? 1 : 0;
+  fr.base.strike = js_pull_bool(record, "strike", false) ? 1 : 0;
+  fr.base.underline = js_pull_u8(record, "underline", 0U);
+  fr.base.color_argb = js_pull_u32(record, "colorArgb", 0xFF000000U);
+  fr.vert_align = js_pull_u8(record, "vertAlign", 0U);
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
+  fm_status_t rc = fm_styles_add_font_ex(handle_, fr, &idx);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Microbenchmark: large independent-cell layer driven through the parallel
 // SCC scheduler.

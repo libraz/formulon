@@ -2,11 +2,11 @@
   "suite": "financial_dcc",
   "description": "financial_dcc family — bond pricing/yield/duration with shared day-count basis matrix (0..4). 8 members (PRICE, YIELD, ODDFPRICE, ODDFYIELD, ODDLPRICE, ODDLYIELD, DURATION, MDURATION) × 7 perspectives = 56 cases. Each member exercises all 5 DCC bases plus two error paths (boundary date and invalid basis 5). Tolerance 1e-8 covers Mac Excel's bond-math ULP drift.",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T19:08:04Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-08,

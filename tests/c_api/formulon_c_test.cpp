@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI (`src/c_api/formulon_c.h`) end-to-end tests.
 //
@@ -46,6 +45,17 @@ struct BufferGuard {
   BufferGuard& operator=(const BufferGuard&) = delete;
 };
 
+void MarkZipEntriesEncrypted(std::vector<std::uint8_t>& bytes) {
+  for (std::size_t i = 0; i + 8U <= bytes.size(); ++i) {
+    const bool local = bytes[i] == 'P' && bytes[i + 1U] == 'K' && bytes[i + 2U] == 3U && bytes[i + 3U] == 4U;
+    const bool central = bytes[i] == 'P' && bytes[i + 1U] == 'K' && bytes[i + 2U] == 1U && bytes[i + 3U] == 2U;
+    if (local || central) {
+      const std::size_t flag_offset = i + (local ? 6U : 8U);
+      bytes[flag_offset] = static_cast<std::uint8_t>(bytes[flag_offset] | 0x01U);
+    }
+  }
+}
+
 }  // namespace
 
 TEST(FormulonCApi, CreateAndDestroy) {
@@ -58,6 +68,83 @@ TEST(FormulonCApi, CreateAndDestroy) {
   EXPECT_EQ(fm_workbook_sheet_name(wb.handle, 0, &name), 0);
   ASSERT_NE(name, nullptr);
   EXPECT_STREQ(name, "Sheet1");
+}
+
+TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 48, 0, 2.0), 0);
+
+  fm_pagination_t* pagination = nullptr;
+  ASSERT_EQ(fm_workbook_paginate(wb.handle, 0, &pagination), 0);
+  ASSERT_NE(pagination, nullptr);
+  EXPECT_EQ(fm_pagination_page_count(pagination), 2U);
+  // No explicit _xlnm.Print_Area is reported even though pagination falls
+  // back to the used range internally.
+  EXPECT_EQ(fm_pagination_print_area_count(pagination), 0U);
+  ASSERT_EQ(fm_pagination_horizontal_break_count(pagination), 1U);
+  std::uint32_t row = 0;
+  ASSERT_EQ(fm_pagination_horizontal_break_at(pagination, 0, &row), 0);
+  EXPECT_EQ(row, 44U);
+  EXPECT_EQ(fm_pagination_vertical_break_count(pagination), 0U);
+  EXPECT_NE(fm_pagination_horizontal_break_at(pagination, 1, &row), 0);
+  fm_pagination_destroy(pagination);
+
+  EXPECT_NE(fm_workbook_paginate(nullptr, 0, &pagination), 0);
+  EXPECT_NE(fm_workbook_paginate(wb.handle, 0, nullptr), 0);
+}
+
+TEST(FormulonCApi, CellPhoneticCanBeReadClearedAndRejectsInvalidArguments) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "漢字"), 0);
+  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
+
+  const char* phonetic = nullptr;
+  ASSERT_EQ(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
+  ASSERT_NE(phonetic, nullptr);
+  EXPECT_STREQ(phonetic, "かんじ");
+
+  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, ""), 0);
+  ASSERT_EQ(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
+  ASSERT_NE(phonetic, nullptr);
+  EXPECT_STREQ(phonetic, "");
+
+  ASSERT_EQ(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, "かんじ"), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "文字列"), 0);
+  ASSERT_EQ(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, &phonetic), 0);
+  ASSERT_NE(phonetic, nullptr);
+  EXPECT_STREQ(phonetic, "");
+
+  EXPECT_NE(fm_workbook_set_cell_phonetic(nullptr, 0, 0, 0, "x"), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic(wb.handle, 0, 0, 0, nullptr), 0);
+  EXPECT_NE(fm_workbook_set_cell_phonetic(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "x"), 0);
+  EXPECT_NE(fm_workbook_get_cell_phonetic(wb.handle, 0, 0, 0, nullptr), 0);
+}
+
+TEST(FormulonCApi, LoadMapsCorruptAndEncryptedContainersToIoErrors) {
+  fm_workbook_t* loaded = reinterpret_cast<fm_workbook_t*>(0x1);
+  const std::vector<std::uint8_t> garbage = {0x01U, 0x02U, 0x03U, 0x04U};
+  EXPECT_EQ(fm_workbook_load(garbage.data(), garbage.size(), &loaded),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipCorrupt));
+  EXPECT_EQ(loaded, nullptr);
+
+  loaded = reinterpret_cast<fm_workbook_t*>(0x1);
+  const std::vector<std::uint8_t> cdfv2 = {0xD0U, 0xCFU, 0x11U, 0xE0U, 0xA1U, 0xB1U, 0x1AU, 0xE1U};
+  EXPECT_EQ(fm_workbook_load(cdfv2.data(), cdfv2.size(), &loaded),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted));
+  EXPECT_EQ(loaded, nullptr);
+
+  formulon::Workbook source = formulon::Workbook::create();
+  auto saved = source.save();
+  ASSERT_TRUE(static_cast<bool>(saved));
+  std::vector<std::uint8_t> encrypted = saved.value();
+  MarkZipEntriesEncrypted(encrypted);
+  loaded = reinterpret_cast<fm_workbook_t*>(0x1);
+  EXPECT_EQ(fm_workbook_load(encrypted.data(), encrypted.size(), &loaded),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted));
+  EXPECT_EQ(loaded, nullptr);
 }
 
 TEST(FormulonCApi, CreateEmptyAndAddSheet) {
@@ -341,6 +428,58 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   EXPECT_DOUBLE_EQ(v.u.number, 42.0);
 }
 
+TEST(FormulonCApi, SaveXlsbWithResultReportsUnsupportedFormulaDowngrade) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=@A1:A10"), 0);
+
+  BufferGuard xlsb_buf;
+  size_t downgraded = 0;
+  ASSERT_EQ(fm_workbook_save_xlsb_with_result(wb.handle, &xlsb_buf.data, &xlsb_buf.len, &downgraded), 0);
+  ASSERT_NE(xlsb_buf.data, nullptr);
+  EXPECT_GT(xlsb_buf.len, 0U);
+  EXPECT_EQ(downgraded, 1U);
+}
+
+TEST(FormulonCApi, XlsbReadDiagnosticsAreZeroForCleanRoundTrip) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 42.0), 0);
+
+  BufferGuard bytes;
+  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
+
+  size_t formulas = 99U;
+  size_t names = 99U;
+  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics(loaded.handle, &formulas, &names), 0);
+  EXPECT_EQ(formulas, 0U);
+  EXPECT_EQ(names, 0U);
+}
+
+TEST(FormulonCApi, MemoryUsageTracksTheWorkbookAndRejectsNulls) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  size_t empty = 0U;
+  ASSERT_EQ(fm_workbook_memory_usage(wb.handle, &empty), 0);
+  EXPECT_GT(empty, 0U);
+
+  for (uint32_t row = 0; row < 200U; ++row) {
+    ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, row, 0, "=1+2"), 0);
+  }
+  size_t filled = 0U;
+  ASSERT_EQ(fm_workbook_memory_usage(wb.handle, &filled), 0);
+  EXPECT_GT(filled, empty);
+
+  // Both NULL arguments are rejected rather than silently reporting 0,
+  // which is what lets a binding distinguish "empty" from "broken".
+  size_t scratch = 0U;
+  EXPECT_NE(fm_workbook_memory_usage(nullptr, &scratch), 0);
+  EXPECT_NE(fm_workbook_memory_usage(wb.handle, nullptr), 0);
+}
+
 TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -439,26 +578,16 @@ TEST(FormulonCApi, IterativeOptionsConverge) {
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 1e-6), 0);
 
-  // Classic Excel iterative-calc fixed point: A1 = 0.5 * (A1 + 2/A1)
-  // converges to sqrt(2) ~= 1.4142135.
-  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=0.5*(A1+2/A1)"), 0);
+  // A1 = 0.5 * (A1 + 2) converges to 2 from the blank initial cache
+  // value. Unlike Newton's method, this intentionally needs no separate
+  // numeric seed, because setting a formula replaces that cell's cache.
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=0.5*(A1+2)"), 0);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   fm_value_t v{};
   ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
-  // Iterative calc may surface NUMBER (converged) or ERROR depending on
-  // the engine's resolution path; we accept the converged-numeric case
-  // and assert the fixed-point quality. If the engine surfaces a
-  // sentinel (e.g. when iterative-calc opt-in is not yet wired into
-  // every code path) we still treat it as a contract-level check that
-  // the option flag was accepted.
-  if (v.kind == FM_VAL_NUMBER) {
-    EXPECT_NEAR(v.u.number, 1.41421356, 1e-3);
-  } else {
-    GTEST_SKIP() << "iterative recalc not yet wired through this path; "
-                    "iterative_options() set/get smoke test still passed";
-  }
+  ASSERT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_NEAR(v.u.number, 2.0, 1e-3);
 }
 
 TEST(FormulonCApi, ThreadLocalLastErrorIsolation) {
@@ -501,6 +630,14 @@ TEST(FormulonCApi, StatusStringCoversKnownCodes) {
   const char* unknown = fm_status_string(123456);
   ASSERT_NE(unknown, nullptr);
   EXPECT_GT(std::strlen(unknown), 0U);
+}
+
+TEST(FormulonCApi, ErrorDisplayNameUsesExcelLiterals) {
+  EXPECT_STREQ(fm_error_display_name(0), "#NULL!");
+  EXPECT_STREQ(fm_error_display_name(1), "#DIV/0!");
+  EXPECT_STREQ(fm_error_display_name(3), "#REF!");
+  EXPECT_STREQ(fm_error_display_name(-1), "#UNKNOWN!");
+  EXPECT_STREQ(fm_error_display_name(999), "#UNKNOWN!");
 }
 
 TEST(FormulonCApi, VersionStringNonEmpty) {

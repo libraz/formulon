@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the pairwise linear-regression lazy impls:
 // CORREL, COVARIANCE.P, COVARIANCE.S, SLOPE, INTERCEPT, RSQ,
@@ -29,6 +28,7 @@
 #include <variant>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
@@ -513,20 +513,14 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // Materialise as a column ArrayValue. With zero numeric bins, this is
   // a 1x1 array; otherwise (n_bins + 1) x 1.
   const std::uint32_t out_rows = static_cast<std::uint32_t>(n_bins + 1U);
-  Value* buffer = arena.create_array<Value>(out_rows);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(out_rows, 1U, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::uint32_t i = 0; i < out_rows; ++i) {
     buffer[i] = Value::number(static_cast<double>(counts[i]));
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = out_rows;
-  arr->cols = 1U;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 

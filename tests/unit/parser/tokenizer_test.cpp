@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the Excel formula tokenizer. Each group exercises a
 // specific syntactic family.
@@ -437,6 +436,15 @@ TEST(TokenizerCellRefs, MixedAnchoredDouble) {
   EXPECT_EQ(std::string(v[0].lexeme), "$AA$99");
 }
 
+TEST(TokenizerCellRefs, RepeatedAbsoluteAnchorIsInvalidReference) {
+  Tokenizer tz("A$$1");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 2u);
+  EXPECT_EQ(v[0].kind, TokenKind::Invalid);
+  ASSERT_EQ(tz.errors().size(), 1u);
+  EXPECT_EQ(tz.errors()[0].code, LexerErrorCode::InvalidReference);
+}
+
 TEST(TokenizerCellRefs, OverflowColumn) {
   // XFE is past the column cap; falls back to Ident.
   Tokenizer tz("XFE1");
@@ -599,6 +607,45 @@ TEST(TokenizerIdentBytes, MidRangeContinuationByteIsNotIdentStart) {
   (void)tz.tokens();
   ASSERT_FALSE(tz.errors().empty());
   EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+}
+
+TEST(TokenizerIdentBytes, TruncatedLeadByteTerminates) {
+  // A lead byte with no continuation byte behind it decodes to nothing, so
+  // the identifier scanner consumed zero bytes and returned to a dispatcher
+  // that classified the same byte as an identifier start all over again.
+  // The tokenizer appended an empty token per turn and grew without bound;
+  // reaching Eof at all is the assertion.
+  Tokenizer tz("\xD7");
+  const std::vector<Token>& toks = tz.tokens();
+  ASSERT_FALSE(toks.empty());
+  EXPECT_EQ(toks.back().kind, TokenKind::Eof);
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+}
+
+TEST(TokenizerIdentBytes, LeadByteFollowedByNonContinuationTerminates) {
+  // Same non-progress path, reached with a 4-byte lead whose second byte is
+  // not a continuation.
+  Tokenizer tz(
+      "\xF3"
+      "\x0B");
+  const std::vector<Token>& toks = tz.tokens();
+  ASSERT_FALSE(toks.empty());
+  EXPECT_EQ(toks.back().kind, TokenKind::Eof);
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+}
+
+TEST(TokenizerIdentBytes, TruncatedLeadByteDoesNotSwallowWhatFollows) {
+  // Consuming exactly one byte keeps the rest of the formula tokenizable,
+  // so a malformed prefix degrades the input instead of destroying it.
+  Tokenizer tz(
+      "\xD7"
+      "A1");
+  const std::vector<Token>& toks = tz.tokens();
+  ASSERT_GE(toks.size(), 2U);
+  EXPECT_EQ(toks.front().kind, TokenKind::CellRef);
+  EXPECT_EQ(toks.front().lexeme, "A1");
 }
 
 TEST(TokenizerWhitespace, FullwidthSpaceIsInvalid) {

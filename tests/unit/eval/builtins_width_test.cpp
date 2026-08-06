@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the width-conversion text built-ins: ASC (full-width
 // to half-width), JIS (half-width to full-width), and DBCS (alias of JIS).

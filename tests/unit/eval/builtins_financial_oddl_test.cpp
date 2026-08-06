@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the irregular-last-period bond-pricing
 // builtins: ODDLPRICE and ODDLYIELD. The implementations live in

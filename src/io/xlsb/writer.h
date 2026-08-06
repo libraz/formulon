@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB (.xlsb) package writer. The write-side counterpart to
 // `io/xlsb/reader.h`: walks a `Workbook` and produces a complete OPC
@@ -15,15 +14,19 @@
 // `io/xlsb/ptg_writer.h`'s `encode_ptgs`): `cell.formula_text` is
 // re-parsed and lowered directly to the `rgce` Ptg byte stream spliced
 // into a `BrtFmla*` record. A formula that cannot be parsed or lowered
-// to the supported Ptg token set is a hard write failure
-// (`kIoXlsbUnsupportedPtg`), not a silent fallback to the cached
-// literal — losing the formula silently would be worse than failing
-// the write outright.
+// is written as its cached literal value; callers receive an explicit
+// downgrade count instead of losing the rest of the package.
 //
-// Defined names, tables, conditional formats, styles, and other
-// sheet-level metadata are out of scope: if the workbook carries any,
-// we log `xlsb.writer.deferred` and skip them. The OOXML writer
-// remains the canonical round-trip path for those features.
+// Styles, row/column layout, merged cells, pane state, and defined names are
+// emitted from the model.
+//
+// Conditional formats, data validation, hyperlinks, auto-filter, print
+// settings and tables are not lowered to records. A sheet read from an
+// `.xlsb` keeps them as `Sheet::xlsb_tail()` and this writer re-emits those
+// bytes verbatim (together with the sheet's own rels, so the ids they carry
+// still resolve). A workbook built in memory or read from `.xlsx` has no such
+// bytes; its modelled equivalents are counted in `deferred_feature_count` and
+// logged under `xlsb.writer.deferred` rather than being dropped silently.
 
 #ifndef FORMULON_IO_XLSB_WRITER_H_
 #define FORMULON_IO_XLSB_WRITER_H_
@@ -38,6 +41,17 @@
 namespace formulon {
 namespace io {
 namespace xlsb {
+
+struct XlsbWriteResult {
+  std::vector<std::uint8_t> bytes;
+  std::uint32_t downgraded_formula_count = 0;
+  std::uint32_t deferred_feature_count = 0;
+};
+
+/// Serialises a workbook and reports formulas emitted as cached literals
+/// because their AST could not be lowered to XLSB Ptg tokens, plus modelled
+/// features the current XLSB writer could not represent.
+Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook);
 
 /// Serialises `workbook` into an in-memory `.xlsb` byte stream.
 ///

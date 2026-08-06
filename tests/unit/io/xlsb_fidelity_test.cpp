@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Fidelity tests against a real Mac Excel 365-produced `.xlsb`
 // (`tests/fixtures/excel/xlsb_fidelity_base.xlsb`). Mirrors

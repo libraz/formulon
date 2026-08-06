@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for Excel 365 dynamic-array spill semantics on bare ranges
 // (`=A1:A5`) and implicit intersection on `@`-prefixed ranges
@@ -24,6 +23,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/iterative_solver.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -234,6 +234,62 @@ TEST(ImplicitIntersection, AtBindsTighterThanMultiply) {
   const Value out_row = EvalSourceAt("=@D3:D5*2", wb, wb.sheet(0), 0U, 3U);
   ASSERT_TRUE(out_row.is_error());
   EXPECT_EQ(out_row.as_error(), ErrorCode::Value);
+}
+
+TEST(ImplicitIntersection, DynamicArrayCallCollapsesToTopLeft) {
+  Workbook wb = Workbook::create();
+  const Value at = EvalSourceAt("=@SEQUENCE(3,1)", wb, wb.sheet(0), 0U, 0U);
+  ASSERT_TRUE(at.is_number());
+  EXPECT_EQ(at.as_number(), 1.0);
+
+  const Value single = EvalSourceAt("=_xlfn.SINGLE(SEQUENCE(3,1))", wb, wb.sheet(0), 0U, 0U);
+  ASSERT_TRUE(single.is_number());
+  EXPECT_EQ(single.as_number(), 1.0);
+}
+
+TEST(ImplicitIntersection, ArrayLiteralCollapsesToTopLeft) {
+  Workbook wb = Workbook::create();
+  const Value value = EvalSourceAt("=@{1,2;3,4}", wb, wb.sheet(0), 0U, 0U);
+  ASSERT_TRUE(value.is_number());
+  EXPECT_DOUBLE_EQ(value.as_number(), 1.0);
+}
+
+TEST(ImplicitIntersection, ArrayLiteralSpillsAndBroadcastsOutsideAt) {
+  Workbook wb = Workbook::create();
+  const Value value = EvalSourceIn("={1,2;3,4}+10", wb, wb.sheet(0));
+  ExpectNumberArray(value, 2U, 2U, {11.0, 12.0, 13.0, 14.0});
+}
+
+TEST(ImplicitIntersection, SingleMatchesAtForTwoDimensionalRange) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::number(22.0));  // B2
+
+  const Value at = EvalSourceAt("=@A1:B5", wb, wb.sheet(0), 1U, 1U);
+  const Value single = EvalSourceAt("=_xlfn.SINGLE(A1:B5)", wb, wb.sheet(0), 1U, 1U);
+  ASSERT_TRUE(at.is_number());
+  ASSERT_TRUE(single.is_number());
+  EXPECT_EQ(at.as_number(), 22.0);
+  EXPECT_EQ(single.as_number(), at.as_number());
+}
+
+TEST(IterativeEvaluation, AppliesTopLevelSurfaceContractsAfterFixedPointLoop) {
+  Workbook wb = Workbook::create();
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 1U;
+  wb.set_iterative_options(options);
+
+  // An uninvoked LAMBDA must remain a top-level #CALC! result even when
+  // iterative calculation is on.
+  const Value lambda = EvalSourceAt("=LAMBDA(x,x+1)", wb, wb.sheet(0), 0U, 0U);
+  ASSERT_TRUE(lambda.is_error());
+  EXPECT_EQ(lambda.as_error(), ErrorCode::Calc);
+
+  // The read-only spill collision check is likewise a top-level contract.
+  wb.sheet(0).set_cell_value(1U, 0U, Value::number(99.0));  // A2 blocks A1:A3.
+  const Value spill = EvalSourceAt("=SEQUENCE(3,1)", wb, wb.sheet(0), 0U, 0U);
+  ASSERT_TRUE(spill.is_error());
+  EXPECT_EQ(spill.as_error(), ErrorCode::Spill);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Round-trip integration tests: writer -> reader. The earlier slice only
 // covered sheet names; this slice exercises cell-level round-tripping
@@ -167,9 +166,9 @@ TEST(OoxmlRoundTrip, NumericLiteralAndFormulaRecalcMatches) {
 }
 
 TEST(OoxmlRoundTrip, InlineStringCellRoundTrips) {
-  // The empty-workbook writer emits text values via t="inlineStr" (SST
-  // is a Bundle 2.3 concern), so this is the round-trip path that
-  // currently exists end-to-end without SST resolution.
+  // Input-origin inline strings are normalised to the writer's shared-string
+  // representation on save, so this verifies the resulting SST resolution
+  // path end-to-end.
   Workbook src = Workbook::create();
   std::string greeting = "Hello, world!";
   ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0U, 0U, 0U, Value::text(greeting))));
@@ -177,8 +176,7 @@ TEST(OoxmlRoundTrip, InlineStringCellRoundTrips) {
   const std::vector<std::uint8_t> bytes = SaveOrDie(src);
   auto result_or = io::read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(result_or));
-  // No SST cells were used.
-  EXPECT_EQ(result_or.value().pending_sst_count, 0U);
+  EXPECT_EQ(result_or.value().pending_sst_count, 1U);
 
   const Workbook& dst = result_or.value().workbook;
   const Cell* a1 = dst.sheet(0).cell_at(0U, 0U);
@@ -346,7 +344,7 @@ TEST(OoxmlRoundTrip, SstResolutionEndToEnd) {
   EXPECT_EQ(result.pending_sst_count, 3U);
 
   // sharedStrings.xml and styles.xml should NOT surface as unknown.
-  for (const io::PassthroughPart& part : result.unknown_parts) {
+  for (const io::PassthroughPart& part : result.workbook.passthrough_parts()) {
     EXPECT_NE(part.path, "xl/sharedStrings.xml");
     EXPECT_NE(part.path, "xl/styles.xml");
     EXPECT_NE(part.path, "xl/worksheets/sheet1.xml");

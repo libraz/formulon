@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/groupby_pivotby/groupby.h"
 
@@ -6,7 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -17,7 +16,6 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
-#include "utils/structured_log.h"
 #include "value.h"
 
 namespace formulon {
@@ -101,32 +99,30 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
 
   // -- Build groups --------------------------------------------------------
-  // Walk filtered data rows in input order; for each row, look up its group
-  // key against the existing list of unique keys (linear scan via
-  // `group_key_equal`). New keys append; matching keys add the row index to
-  // their bucket. This preserves first-occurrence ordering for sort_order=0
-  // for free.
+  // Walk filtered data rows in input order. The canonical key folds each
+  // text cell once and indexes the composite key, preserving first-occurrence
+  // ordering while avoiding a linear scan of existing groups.
   //
   // Group representatives are stored as row indices (into `row_fields`) so
   // that subsequent equality checks can re-use the same column-walk path.
   std::vector<std::uint32_t> group_repr;               // row index of representative
   std::vector<std::vector<std::uint32_t>> group_rows;  // row indices in each group
   std::vector<bool> group_is_error;
+  std::unordered_map<std::string, std::size_t> group_index;
+  group_index.reserve(data_row_count);
 
   for (std::uint32_t i = 0; i < data_row_count; ++i) {
     if (!include_row[i]) {
       continue;
     }
     const std::uint32_t row = data_start_row + i;
-    bool matched = false;
-    for (std::size_t g = 0; g < group_repr.size(); ++g) {
-      if (group_key_equal(*row_fields, row, group_repr[g])) {
-        group_rows[g].push_back(row);
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) {
+    const std::string key = normalized_group_key(*row_fields, row);
+    const auto existing = group_index.find(key);
+    if (existing != group_index.end()) {
+      group_rows[existing->second].push_back(row);
+    } else {
+      const std::size_t group = group_repr.size();
+      group_index.emplace(key, group);
       group_repr.push_back(row);
       group_rows.push_back(std::vector<std::uint32_t>{row});
       group_is_error.push_back(row_key_is_error(*row_fields, row));
@@ -217,11 +213,18 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // The grand total aggregates over EVERY filtered data row. It is rendered
   // with the literal "Grand Total" label in the first key column and blank
   // cells in the remaining key columns.
+  // A ±2 request adds one subtotal row per outer group — the first key
+  // column alone — on top of the grand total. With a single key column the
+  // outer level coincides with the groups themselves and every subtotal row
+  // would just restate its group, so that shape stays on the ±1 layout.
+  const bool emit_subtotals = (total_depth == 2 || total_depth == -2) && key_cols >= 2U;
+
   std::vector<Value> grand_total_row;
   bool emit_grand_total = (total_depth != 0);
   if (emit_grand_total) {
     grand_total_row.assign(out_cols, Value::blank());
-    grand_total_row[0] = Value::text(arena.intern(grand_total_label(ctx)));
+    grand_total_row[0] =
+        Value::text(arena.intern(emit_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
     const std::vector<std::uint32_t> all_rows = collect_included_rows(include_row, data_start_row);
     const std::vector<Value> totals =
         aggregate_value_columns(*values, val_cols, all_rows, agg, arena, registry, ctx, ErrorCode::Calc);
@@ -229,24 +232,46 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       grand_total_row[key_cols + vc] = totals[vc];
     }
   }
-  // Subtotals (|total_depth| == 2) request per-outer-group subtotal rows
-  // in addition to the grand total. Implementing them requires replacing
-  // the flat composite-key grouping with an outer/inner hierarchy plus the
-  // corresponding subtotal-row placement, which is not yet built. Until
-  // then a ±2 request falls back to the ±1 (grand-total-only) layout. The
-  // fallback is recorded in tests/divergence.yaml; emit a diagnostic so it
-  // is observable rather than silent.
-  if (total_depth == 2 || total_depth == -2) {
-    StructuredLog("eval.groupby.subtotals_unsupported")
-        .field("function", std::string_view("GROUPBY"))
-        .field("total_depth", static_cast<int64_t>(total_depth))
-        .field("fallback", std::string_view("grand_total_only"))
-        .warn();
+  // -- Nested subtotals (|total_depth| == 2) -------------------------------
+  OuterGrouping hierarchy;
+  std::vector<std::vector<Value>> subtotal_rows;
+  std::vector<std::size_t> outer_order;
+  std::vector<std::vector<std::size_t>> groups_of_outer;
+  if (emit_subtotals) {
+    hierarchy = build_outer_grouping(*row_fields, group_repr, group_rows);
+    const std::size_t outer_count = hierarchy.repr_of_outer.size();
+    // The hierarchy is primary and the sort applies within it: outer groups
+    // follow the sorted order of their first member, and each outer group's
+    // members keep their relative order from the same sort.
+    groups_of_outer.resize(outer_count);
+    std::vector<bool> outer_seen(outer_count, false);
+    for (std::size_t g : order) {
+      const std::size_t outer = hierarchy.outer_of_group[g];
+      if (!outer_seen[outer]) {
+        outer_seen[outer] = true;
+        outer_order.push_back(outer);
+      }
+      groups_of_outer[outer].push_back(g);
+    }
+    subtotal_rows.reserve(outer_count);
+    for (std::size_t o = 0; o < outer_count; ++o) {
+      std::vector<Value> row(out_cols, Value::blank());
+      // The subtotal row restates its outer key verbatim in the first key
+      // column and leaves the inner key columns blank, so it reads as the
+      // roll-up of the group rows directly above or below it.
+      row[0] = row_fields->cells[static_cast<std::size_t>(hierarchy.repr_of_outer[o]) * key_cols];
+      const std::vector<Value> totals = aggregate_value_columns(*values, val_cols, hierarchy.rows_of_outer[o], agg,
+                                                                arena, registry, ctx, ErrorCode::Calc);
+      for (std::uint32_t vc = 0; vc < val_cols; ++vc) {
+        row[key_cols + vc] = totals[vc];
+      }
+      subtotal_rows.push_back(std::move(row));
+    }
   }
 
   // -- Assemble output ----------------------------------------------------
   std::vector<std::vector<Value>> out_rows;
-  out_rows.reserve(agg_rows.size() + 2U);
+  out_rows.reserve(agg_rows.size() + subtotal_rows.size() + 2U);
 
   // Header row (if requested).
   if (layout.output_emits_header) {
@@ -280,9 +305,25 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     emit_row(&out_rows, grand_total_row);
   }
 
-  // Per-group rows in sorted order.
-  for (std::size_t i : order) {
-    emit_row(&out_rows, agg_rows[i]);
+  // Per-group rows in sorted order. With subtotals each outer group's rows
+  // are bracketed by its subtotal row, placed on the same side of the block
+  // as the grand total.
+  if (emit_subtotals) {
+    for (std::size_t o : outer_order) {
+      if (total_depth < 0) {
+        emit_row(&out_rows, subtotal_rows[o]);
+      }
+      for (std::size_t g : groups_of_outer[o]) {
+        emit_row(&out_rows, agg_rows[g]);
+      }
+      if (total_depth > 0) {
+        emit_row(&out_rows, subtotal_rows[o]);
+      }
+    }
+  } else {
+    for (std::size_t i : order) {
+      emit_row(&out_rows, agg_rows[i]);
+    }
   }
 
   // Grand total at bottom (positive total_depth).

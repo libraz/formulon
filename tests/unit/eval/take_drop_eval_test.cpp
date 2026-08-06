@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the lazy `TAKE(array, rows, [columns])` and
 // `DROP(array, rows, [columns])` dynamic-array spilling builtins. Both

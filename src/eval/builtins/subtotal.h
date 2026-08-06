@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's SUBTOTAL aggregator into a FunctionRegistry. Lives in
 // its own translation unit so the multi-mode dispatch can evolve without

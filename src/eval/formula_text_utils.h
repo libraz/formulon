@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared helpers for normalising the `Cell::formula_text` representation
 // into the form the parser expects (a bare expression, no leading `=`).

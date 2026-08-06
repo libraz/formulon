@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/textsplit_lazy.h"
 
@@ -8,6 +7,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
 #include "eval/shape_ops_lazy.h"
@@ -291,9 +291,10 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
   const std::size_t out_rows = grid.size();
 
-  const std::size_t total = out_rows * out_cols;
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* out = allocate_array_value(static_cast<std::uint32_t>(out_rows), static_cast<std::uint32_t>(out_cols),
+                                         arena, buffer, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t r = 0; r < out_rows; ++r) {
@@ -307,13 +308,6 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
   }
 
-  ArrayValue* out = arena.create<ArrayValue>();
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  out->rows = static_cast<std::uint32_t>(out_rows);
-  out->cols = static_cast<std::uint32_t>(out_cols);
-  out->cells = buffer;
   return Value::array(out);
 }
 

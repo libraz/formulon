@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `formulon recalc <in.xlsx> -o <out.xlsx>` — load, recalc, save.
 //
@@ -12,19 +11,16 @@
 //      extension (`.xlsb` -> MS-XLSB, anything else -> `.xlsx`).
 //   3. Writes the saved buffer back out to `out`.
 //
-// `--iterative` enables iterative-calc with Excel's default knobs
-// (max=100, change=0.001) before the recalc step. `--quiet` suppresses
-// the `Recalculated ...` status line on stderr; otherwise we print one
-// per successful run.
+// `--iterative` enables iterative-calc while preserving any iteration cap
+// and convergence threshold loaded from the workbook. `--quiet` suppresses
+// the `Recalculated ...` status line on stderr; otherwise we print one per
+// successful run.
 
 #include <cctype>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
-#include <fstream>
-#include <ios>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -32,6 +28,7 @@
 
 #include "c_api/formulon_c.h"
 #include "cli/cli.h"
+#include "cli/file_io.h"
 #include "utils/error.h"
 
 namespace formulon {
@@ -67,7 +64,7 @@ void print_recalc_usage(std::ostream& out) {
       << "Load <in.xlsx>, drive a full recalc, and write the result to <out.xlsx>.\n"
       << "The output format is chosen from -o's extension: '.xlsb' writes MS-XLSB,\n"
       << "any other extension (or none) writes OOXML .xlsx.\n"
-      << "Status: prints \"Recalculated N cells -> wrote M bytes\" on stderr unless\n"
+      << "Status: prints \"formulon: recalc: ok, wrote M bytes to 'OUT'\" on stderr unless\n"
       << "--quiet is supplied.\n";
 }
 
@@ -78,30 +75,6 @@ void emit_last_error(std::ostream& err, const char* subcommand) {
     err << " (" << ctx << ')';
   }
   err << '\n';
-}
-
-// Slurps `path` into a heap-allocated `vector<uint8_t>`. Returns
-// `kIoFileNotFound` on open failure (we map every fopen failure mode
-// onto this code; the OS-specific reason lives in `strerror`).
-fm_status_t read_all(const std::string& path, std::vector<std::uint8_t>& out) {
-  std::ifstream in(path, std::ios::binary);
-  if (!in) {
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
-  }
-  in.seekg(0, std::ios::end);
-  const std::streamsize size = in.tellg();
-  if (size < 0) {
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
-  }
-  in.seekg(0, std::ios::beg);
-  out.resize(static_cast<std::size_t>(size));
-  if (size > 0) {
-    in.read(reinterpret_cast<char*>(out.data()), size);
-    if (!in) {
-      return static_cast<fm_status_t>(FormulonErrorCode::kCliFileNotFound);
-    }
-  }
-  return 0;
 }
 
 // Derives the `fm_workbook_save_ex` container format from `path`'s
@@ -119,54 +92,6 @@ fm_workbook_format_t format_from_extension(const std::string& path) {
     c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   }
   return ext == "xlsb" ? FM_WORKBOOK_FORMAT_XLSB : FM_WORKBOOK_FORMAT_XLSX;
-}
-
-// Writes `bytes` to `path` atomically: the full payload is written to a
-// sibling temp file, flushed, and closed successfully before the temp
-// replaces the target. A serialize/write failure (disk full, permission,
-// short write) therefore leaves any pre-existing output file untouched —
-// critical when input and output are the same path, where a naive
-// truncate-then-write would destroy the original on partial failure.
-//
-// The temp file lives in the target's own directory (same suffix on the
-// full path) so the final rename stays within one filesystem, keeping it
-// atomic on POSIX. Returns `kCliOutputFailed` on any open / write / rename
-// error, removing the temp file on the failure paths.
-fm_status_t write_all(const std::string& path, const std::uint8_t* bytes, std::size_t len) {
-  const std::string tmp_path = path + ".formulon-tmp";
-  {
-    std::ofstream out(tmp_path, std::ios::binary | std::ios::trunc);
-    if (!out) {
-      return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
-    }
-    if (len > 0) {
-      out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
-    }
-    out.flush();
-    if (!out) {
-      out.close();
-      std::remove(tmp_path.c_str());
-      return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
-    }
-    out.close();
-    if (out.fail()) {
-      std::remove(tmp_path.c_str());
-      return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
-    }
-  }
-
-  // Promote the temp file into place. `std::rename` replaces an existing
-  // target atomically on POSIX; on platforms whose `rename` refuses to
-  // overwrite, fall back to removing the target first (a small non-atomic
-  // window, but the freshly written bytes are already safe on disk).
-  if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {
-    std::remove(path.c_str());
-    if (std::rename(tmp_path.c_str(), path.c_str()) != 0) {
-      std::remove(tmp_path.c_str());
-      return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
-    }
-  }
-  return 0;
 }
 
 }  // namespace
@@ -224,7 +149,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   std::vector<std::uint8_t> bytes;
-  if (auto rc = read_all(input_path, bytes); rc != 0) {
+  if (auto rc = read_file(input_path, bytes); rc != 0) {
     err << "formulon: recalc: cannot read '" << input_path << "': " << std::strerror(errno) << '\n';
     return rc;
   }
@@ -236,7 +161,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   if (iterative) {
-    if (auto rc = fm_workbook_set_iterative(wb.handle, 1, 100, 0.001); rc != 0) {
+    if (auto rc = fm_workbook_set_iterative_enabled(wb.handle, 1); rc != 0) {
       emit_last_error(err, "recalc");
       return rc;
     }
@@ -254,7 +179,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return rc;
   }
 
-  if (auto rc = write_all(output_path, buf.data, buf.len); rc != 0) {
+  if (auto rc = write_file_atomically(output_path, buf.data, buf.len); rc != 0) {
     err << "formulon: recalc: cannot write '" << output_path << "': " << std::strerror(errno) << '\n';
     return rc;
   }

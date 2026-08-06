@@ -2,11 +2,11 @@
   "suite": "valuetotext_general_threshold_probes",
   "description": "Probe suite for pinning Mac Excel General-format rendering inside VALUETOTEXT(value, 0). Each case isolates one boundary so the format_double / format_excel_general implementation can be aligned to Mac. Group A: powers of ten across magnitudes (positive). Group B: negative-exponent powers of ten (when does General switch to scientific?). Group C: representative mantissas with trailing zeros. Group D: integer round-trip and very large integers. Group E: signed variants and zero. Group F: 15-significant-digit precision.\nMac probes via xlwings: the formula is typed via formula2 and read back through `range.value`, then VALUETOTEXT round-trips the cell value to text. The static oracle harness writes the literal numeric in the formula and reads back the surfaced text.\n",
   "environment": {
-    "excel_version": "16.108.2",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-01T23:25:08Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `fold_jp_text`. See `jp_fold.h` for the full mapping
 // contract; this file performs a single forward pass over `input`, decoding
@@ -60,46 +59,12 @@ std::uint32_t half_to_full_kana_or_punct(std::uint32_t cp) noexcept {
   return half_to_full_punctuation(cp);
 }
 
-// Returns the voiced (dakuten) form of full-width katakana `full_cp`, or 0
-// if no voiced form exists. The Unicode katakana block places voiced forms
-// at base+1 across the ka/sa/ta and ha rows (e.g. カ U+30AB + 1 -> ガ
-// U+30AC, ハ U+30CF + 1 -> バ U+30D0). Special-case: ウ U+30A6 voices to
-// ヴ U+30F4 — Unicode places this outside the +1 pattern.
-std::uint32_t voiced_form(std::uint32_t full_cp) {
-  if (full_cp == 0x30A6u) {
-    // ウ + ﾞ -> ヴ
-    return 0x30F4u;
-  }
-  // ka/sa/ta rows: U+30AB..U+30C9 (カ..ド). Only the unvoiced base codepoints
-  // (even offsets within ka/sa/ta) accept voicing.
-  if (full_cp >= 0x30ABu && full_cp <= 0x30C9u && ((full_cp - 0x30ABu) % 2u) == 0u) {
-    return full_cp + 1u;
-  }
-  // ha row: U+30CF..U+30DD (ハ..ポ). Voiced/semi-voiced forms occupy the
-  // +1/+2 offsets, so accept only offsets divisible by 3 from the base.
-  if (full_cp >= 0x30CFu && full_cp <= 0x30DDu && ((full_cp - 0x30CFu) % 3u) == 0u) {
-    return full_cp + 1u;
-  }
-  return 0u;
-}
-
-// Returns the semi-voiced (handakuten) form of full-width katakana
-// `full_cp`, or 0 if no semi-voiced form exists. Only the ハ row supports
-// semi-voicing; the codepoint sits at base+2 within the same row.
-std::uint32_t semi_voiced_form(std::uint32_t full_cp) {
-  if (full_cp >= 0x30CFu && full_cp <= 0x30DDu && ((full_cp - 0x30CFu) % 3u) == 0u) {
-    return full_cp + 2u;
-  }
-  return 0u;
-}
-
 // Returns true when `full_cp` is the full-width katakana mapping of a
 // half-width base (i.e. it would emerge from `half_to_full_katakana_base`).
 // Only those bases can absorb a following ﾞ / ﾟ; punctuation entries
 // (。「」、・) and the long-mark ー must not absorb voicing marks.
 bool is_voicing_base(std::uint32_t full_cp) {
-  // Voicing eligibility = `voiced_form` or `semi_voiced_form` returns nonzero.
-  return voiced_form(full_cp) != 0u || semi_voiced_form(full_cp) != 0u;
+  return voiced_full_from_base(full_cp) != 0u || semi_voiced_full_from_base(full_cp) != 0u;
 }
 
 }  // namespace
@@ -155,13 +120,13 @@ std::string fold_jp_text(std::string_view input, bool fold_fullwidth_digits, boo
         std::size_t n2 = 0;
         const std::uint32_t next = decode_utf8_step(input, i + n, &n2);
         if (next == 0xFF9Eu) {
-          if (const std::uint32_t v = voiced_form(base); v != 0u) {
+          if (const std::uint32_t v = voiced_full_from_base(base); v != 0u) {
             encode_utf8(v, &out);
             i += n + n2;
             continue;
           }
         } else if (next == 0xFF9Fu) {
-          if (const std::uint32_t s = semi_voiced_form(base); s != 0u) {
+          if (const std::uint32_t s = semi_voiced_full_from_base(base); s != 0u) {
             encode_utf8(s, &out);
             i += n + n2;
             continue;
@@ -212,13 +177,13 @@ std::string compose_jp_halfwidth_voicing(std::string_view input) {
         std::size_t n2 = 0;
         const std::uint32_t next = decode_utf8_step(input, i + n, &n2);
         if (next == 0xFF9Eu) {
-          if (const std::uint32_t v = voiced_form(base); v != 0u) {
+          if (const std::uint32_t v = voiced_full_from_base(base); v != 0u) {
             encode_utf8(v, &out);
             i += n + n2;
             continue;
           }
         } else if (next == 0xFF9Fu) {
-          if (const std::uint32_t s = semi_voiced_form(base); s != 0u) {
+          if (const std::uint32_t s = semi_voiced_full_from_base(base); s != 0u) {
             encode_utf8(s, &out);
             i += n + n2;
             continue;

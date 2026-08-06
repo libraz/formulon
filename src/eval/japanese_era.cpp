@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Japanese era classification. Anchors come from the Mac Excel 365 ja-JP
 // oracle; see header for the boundary table.

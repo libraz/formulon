@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
-//
 // Generated embind glue for the `sheet_counts` group: JsWorkbook
 // method bodies that delegate to the C ABI passthroughs.
 //

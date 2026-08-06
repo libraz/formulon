@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/groupby_pivotby/pivotby.h"
 
@@ -7,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "eval/eval_context.h"
@@ -35,17 +35,20 @@ namespace {
 // the same first-occurrence semantics.
 std::size_t find_or_add_group(const ArrayValue& keys, std::uint32_t row,
                               std::vector<std::uint32_t>* representative_rows,
-                              std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group) {
-  for (std::size_t g = 0; g < representative_rows->size(); ++g) {
-    if (group_key_equal(keys, row, (*representative_rows)[g])) {
-      (*member_rows)[g].push_back(row);
-      return g;
-    }
+                              std::vector<std::vector<std::uint32_t>>* member_rows, std::vector<bool>* is_error_group,
+                              std::unordered_map<std::string, std::size_t>* index) {
+  const std::string key = normalized_group_key(keys, row);
+  const auto existing = index->find(key);
+  if (existing != index->end()) {
+    (*member_rows)[existing->second].push_back(row);
+    return existing->second;
   }
+  const std::size_t group = representative_rows->size();
+  index->emplace(key, group);
   representative_rows->push_back(row);
   member_rows->push_back(std::vector<std::uint32_t>{row});
   is_error_group->push_back(row_key_is_error(keys, row));
-  return representative_rows->size() - 1U;
+  return group;
 }
 
 }  // namespace
@@ -141,9 +144,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 5: row_total_depth ∈ {-2,-1,0,1,2}, default +1 ------------------
   // The grand-total row (showing column totals) defaults to the BOTTOM of
-  // the result. ±2 (per-region subtotal rows) is not yet implemented and
-  // falls back to the ±1 grand-total-only layout; the fallback is recorded
-  // in tests/divergence.yaml and a diagnostic is emitted below.
+  // the result. ±2 adds one subtotal row per outer row group; with a single
+  // row-key column there is no outer level to roll up, so that shape stays
+  // on the ±1 grand-total-only layout.
   static constexpr int kTotalDepths[] = {-2, -1, 0, 1, 2};
   int row_total_depth = 1;
   if (!read_optional_int_in_set(call, 5, arity, 1, arena, registry, ctx, kTotalDepths,
@@ -162,9 +165,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 7: col_total_depth ∈ {-2,-1,0,1,2}, default 1 -------------------
   // The grand-total column (showing row totals) defaults to the RIGHT of
-  // the result. ±2 (per-region subtotal columns) is not yet implemented
-  // and falls back to the ±1 grand-total-only layout, as for
-  // row_total_depth above.
+  // the result. ±2 (per-region subtotal columns) is not implemented and
+  // falls back to the ±1 grand-total-only layout; the fallback is recorded
+  // in tests/divergence.yaml and a diagnostic is emitted below.
   int col_total_depth = 1;
   if (!read_optional_int_in_set(call, 7, arity, 1, arena, registry, ctx, kTotalDepths,
                                 sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &col_total_depth, &err)) {
@@ -177,15 +180,17 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return err;
   }
 
-  // Per-region subtotals (|row_total_depth| == 2 or |col_total_depth| == 2)
-  // require an outer/inner grouping hierarchy and subtotal row/column
-  // placement that is not yet implemented; a ±2 request falls back to the
-  // ±1 grand-total-only layout. The fallback is recorded in
-  // tests/divergence.yaml; emit a diagnostic so it is observable.
-  if (row_total_depth == 2 || row_total_depth == -2 || col_total_depth == 2 || col_total_depth == -2) {
+  // Per-region subtotal COLUMNS (|col_total_depth| == 2) would insert an
+  // extra value-wide block per outer column group, which reshapes every
+  // column index in the layout below; that is not yet built, so a ±2
+  // request on the column axis falls back to the ±1 grand-total-only
+  // layout. Subtotal rows (|row_total_depth| == 2) are implemented further
+  // down. The fallback is recorded in tests/divergence.yaml; emit a
+  // diagnostic so it is observable.
+  if (col_total_depth == 2 || col_total_depth == -2) {
     StructuredLog("eval.pivotby.subtotals_unsupported")
         .field("function", std::string_view("PIVOTBY"))
-        .field("row_total_depth", static_cast<int64_t>(row_total_depth))
+        .field("axis", std::string_view("column"))
         .field("col_total_depth", static_cast<int64_t>(col_total_depth))
         .field("fallback", std::string_view("grand_total_only"))
         .warn();
@@ -221,6 +226,10 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   std::vector<std::uint32_t> col_repr;
   std::vector<std::vector<std::uint32_t>> col_members;  // rows in each col-group
   std::vector<bool> col_is_error;
+  std::unordered_map<std::string, std::size_t> row_index;
+  std::unordered_map<std::string, std::size_t> col_index;
+  row_index.reserve(data_row_count);
+  col_index.reserve(data_row_count);
 
   // Per-row tags so we can later compute (row_g, col_g) intersections by
   // walking the data rows once.
@@ -232,8 +241,8 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       continue;
     }
     const std::uint32_t row = data_start_row + i;
-    row_tag[i] = find_or_add_group(*row_fields, row, &row_repr, &row_members, &row_is_error);
-    col_tag[i] = find_or_add_group(*col_fields, row, &col_repr, &col_members, &col_is_error);
+    row_tag[i] = find_or_add_group(*row_fields, row, &row_repr, &row_members, &row_is_error, &row_index);
+    col_tag[i] = find_or_add_group(*col_fields, row, &col_repr, &col_members, &col_is_error, &col_index);
   }
 
   if (row_repr.empty() || col_repr.empty()) {
@@ -540,10 +549,16 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return row;
   };
 
+  // A ±2 row request adds one subtotal row per outer row group — the first
+  // row-key column alone. With a single row-key column the outer level
+  // coincides with the row groups themselves, so that shape stays on the ±1
+  // layout.
+  const bool emit_row_subtotals = (row_total_depth == 2 || row_total_depth == -2) && key_cols >= 2U;
+
   // Helper: render a TOP/BOTTOM grand-total row (column totals).
   auto render_totals_row = [&]() {
     std::vector<Value> row(out_cols, Value::blank());
-    row[0] = Value::text(arena.intern(grand_total_label(ctx)));
+    row[0] = Value::text(arena.intern(emit_row_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
     // Cells [1..K-1] stay blank (the rest of the row-keys columns).
     for (std::size_t ci = 0; ci < n_cols; ++ci) {
       const std::size_t cg = col_order[ci];
@@ -601,8 +616,69 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return row;
   };
 
+  // -- Nested row subtotals (|row_total_depth| == 2) -----------------------
+  // A ±2 request adds one subtotal row per outer row group — the first row-
+  // key column alone. Each subtotal row carries the outer group's aggregate
+  // for every (col group, value col) cell, plus its total in the grand-total
+  // column.
+  OuterGrouping row_hierarchy;
+  std::vector<std::size_t> outer_row_order;
+  std::vector<std::vector<std::size_t>> row_groups_of_outer;
+  std::vector<std::vector<Value>> row_subtotal_rows;
+  if (emit_row_subtotals) {
+    row_hierarchy = build_outer_grouping(*row_fields, row_repr, row_members);
+    const std::size_t outer_count = row_hierarchy.repr_of_outer.size();
+    // The hierarchy is primary and the row sort applies within it.
+    row_groups_of_outer.resize(outer_count);
+    std::vector<bool> outer_seen(outer_count, false);
+    for (std::size_t ri = 0; ri < n_rows; ++ri) {
+      const std::size_t rg = row_order[ri];
+      const std::size_t outer = row_hierarchy.outer_of_group[rg];
+      if (!outer_seen[outer]) {
+        outer_seen[outer] = true;
+        outer_row_order.push_back(outer);
+      }
+      row_groups_of_outer[outer].push_back(rg);
+    }
+    row_subtotal_rows.reserve(outer_count);
+    for (std::size_t o = 0; o < outer_count; ++o) {
+      // Split the outer group's rows by column group once, then aggregate
+      // each bucket per value column.
+      std::vector<std::vector<std::uint32_t>> by_col_group(n_cols);
+      for (std::uint32_t row : row_hierarchy.rows_of_outer[o]) {
+        by_col_group[col_tag[row - data_start_row]].push_back(row);
+      }
+      std::vector<Value> row(out_cols, Value::blank());
+      // The subtotal row restates its outer key verbatim in the first row-key
+      // column and leaves the inner row-key columns blank.
+      row[0] = row_fields->cells[static_cast<std::size_t>(row_hierarchy.repr_of_outer[o]) * key_cols];
+      for (std::size_t ci = 0; ci < n_cols; ++ci) {
+        const std::size_t cg = col_order[ci];
+        if (by_col_group[cg].empty()) {
+          continue;  // no data at this intersection; Excel leaves it blank.
+        }
+        const std::vector<Value> cells =
+            aggregate_value_columns(*values, val_cols, by_col_group[cg], agg, arena, registry, ctx, ErrorCode::Calc);
+        const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
+        for (std::uint32_t v = 0; v < val_cols; ++v) {
+          row[base + v] = cells[v];
+        }
+      }
+      // The grand-total strip follows the body rows' rule: populated only
+      // for the single-value-column layout.
+      if (emit_row_totals_col && val_cols == 1U) {
+        const std::vector<Value> totals = aggregate_value_columns(*values, val_cols, row_hierarchy.rows_of_outer[o],
+                                                                  agg, arena, registry, ctx, ErrorCode::Calc);
+        for (std::uint32_t v = 0; v < val_cols; ++v) {
+          row[grand_total_block_start + v] = totals[v];
+        }
+      }
+      row_subtotal_rows.push_back(std::move(row));
+    }
+  }
+
   std::vector<std::vector<Value>> out_rows;
-  out_rows.reserve(static_cast<std::size_t>(col_levels) + n_rows + 3U);
+  out_rows.reserve(static_cast<std::size_t>(col_levels) + n_rows + row_subtotal_rows.size() + 3U);
   if (merged_single_col_layout) {
     // Merged single-column layout: one optional combined top row.
     if (layout.output_emits_header) {
@@ -625,9 +701,25 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (emit_col_totals_row && row_total_depth < 0) {
     out_rows.push_back(render_totals_row());
   }
-  // Body rows.
-  for (std::size_t ri = 0; ri < n_rows; ++ri) {
-    out_rows.push_back(render_body_row(row_order[ri]));
+  // Body rows. With subtotals each outer row group's rows are bracketed by
+  // its subtotal row, placed on the same side of the block as the grand
+  // total row.
+  if (emit_row_subtotals) {
+    for (std::size_t o : outer_row_order) {
+      if (row_total_depth < 0) {
+        out_rows.push_back(row_subtotal_rows[o]);
+      }
+      for (std::size_t rg : row_groups_of_outer[o]) {
+        out_rows.push_back(render_body_row(rg));
+      }
+      if (row_total_depth > 0) {
+        out_rows.push_back(row_subtotal_rows[o]);
+      }
+    }
+  } else {
+    for (std::size_t ri = 0; ri < n_rows; ++ri) {
+      out_rows.push_back(render_body_row(row_order[ri]));
+    }
   }
   // Optional BOTTOM grand-total row.
   if (emit_col_totals_row && row_total_depth > 0) {

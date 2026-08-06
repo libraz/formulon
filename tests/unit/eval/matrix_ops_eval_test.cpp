@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the linear-algebra lazy builtins (`MMULT`, `MDETERM`,
 // `MINVERSE`). Each function lives in `matrix_ops_lazy.{h,cpp}`; the

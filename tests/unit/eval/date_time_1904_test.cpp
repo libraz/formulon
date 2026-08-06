@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the 1904 date-system epoch handling added to the serial
 // <-> calendar conversion helpers. The 1904 system anchors serial 0 at

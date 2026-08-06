@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the MS-XLSB function-id mapping table.
 
@@ -35,6 +34,26 @@ TEST(XlsbFuncId, KnownIdsResolveToExpectedNames) {
     const XlsbFuncEntry* e = lookup_func_by_id(tc.id);
     ASSERT_NE(e, nullptr) << "id " << tc.id << " missing from table";
     EXPECT_STREQ(e->name, tc.name) << "id " << tc.id;
+  }
+}
+
+TEST(XlsbFuncId, Post2007BuiltinIdsResolveToExpectedNames) {
+  struct Pair {
+    std::uint16_t id;
+    const char* name;
+  };
+  const Pair cases[] = {
+      {214, "ASC"},     {215, "JIS"},         {449, "EDATE"},      {450, "EOMONTH"},
+      {471, "WORKDAY"}, {472, "NETWORKDAYS"}, {480, "IFERROR"},    {481, "COUNTIFS"},
+      {482, "SUMIFS"},  {483, "AVERAGEIF"},   {484, "AVERAGEIFS"},
+  };
+  for (const Pair& tc : cases) {
+    const XlsbFuncEntry* entry = lookup_func_by_id(tc.id);
+    ASSERT_NE(entry, nullptr) << tc.id;
+    EXPECT_STREQ(entry->name, tc.name);
+    const XlsbFuncEntry* by_name = lookup_func_by_name(tc.name);
+    ASSERT_NE(by_name, nullptr);
+    EXPECT_EQ(by_name->id, tc.id);
   }
 }
 

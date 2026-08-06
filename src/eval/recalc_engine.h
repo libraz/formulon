@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook-wide incremental recalculation engine.
 //
@@ -39,7 +38,9 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <vector>
 
+#include "eval/dep_extractor.h"
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
 #include "eval/iterative_solver.h"
@@ -118,9 +119,6 @@ struct RecalcStats {
   /// "cells touched by iterative-calc machinery" total can read the
   /// dedicated counter without double-counting plain singleton evals.
   std::uint32_t iterative_cells = 0;
-  /// Reserved for cooperative cancellation. Always false until the cancel
-  /// token surface lands.
-  bool cancelled = false;
 };
 
 /// Single-threaded incremental recalc orchestrator. Owned 1:1 by a
@@ -181,6 +179,10 @@ class RecalcEngine {
     void unregister_formula(CellNodeId cell) const;
     void clear_cell_dependencies(CellNodeId cell) const;
     void mark_dirty(CellNodeId cell) const;
+    /// Marks formulas that own a compact whole-row / whole-column
+    /// dependency covering `cell` dirty. Called alongside the ordinary
+    /// reverse-edge walk for every workbook cell mutation.
+    void mark_range_dependents_dirty(CellNodeId cell) const;
     /// Drops the entire dependency graph, volatile set, and dirty set.
     /// Used by `Workbook`'s sheet-permutation entry points, which
     /// invalidate every `CellNodeId.sheet_id` at once and must re-register
@@ -354,6 +356,7 @@ class RecalcEngine {
   void unregister_formula_locked(CellNodeId cell);
   void clear_cell_dependencies_locked(CellNodeId cell);
   void mark_dirty_locked(CellNodeId cell);
+  void mark_range_dependents_dirty_locked(CellNodeId cell);
   void reset_graph_locked();
   Expected<RecalcStats, Error> recalc_locked(Workbook& workbook, const FunctionRegistry& registry);
   Expected<RecalcStats, Error> partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,
@@ -365,6 +368,13 @@ class RecalcEngine {
   mutable std::mutex mutex_;
 
   DepGraph graph_;
+  struct RegisteredRangeDependency {
+    CellNodeId dependent;
+    CellRangeDependency range;
+  };
+  // Compact whole-row / whole-column dependencies. Unlike `graph_`, this
+  // stores one rectangle per authored range rather than one edge per cell.
+  std::vector<RegisteredRangeDependency> range_dependencies_;
   VolatileTracker volatiles_;
   DirtySet dirty_;
   // Reused across `recalc()` calls so the bump-allocator's largest chunk

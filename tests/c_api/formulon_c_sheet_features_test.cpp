@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI smoke tests for the sheet UI feature surface (merges,
 // hyperlinks, comments). Each test creates a default workbook,
@@ -10,6 +9,7 @@
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
+#include "utils/error.h"
 
 namespace {
 
@@ -87,14 +87,24 @@ TEST_F(FormulonCApiSheetFeatures, CommentSetGetAndRemove) {
   EXPECT_STREQ(got.text, "World");
   // Empty text removes.
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 1, 1, "Bob", ""), 0);
-  EXPECT_NE(fm_sheet_get_comment_at(wb_, 0, 1, 1, &got), 0);
+  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 1, 1, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+}
+
+TEST_F(FormulonCApiSheetFeatures, CommentLookupDistinguishesAbsenceFromInvalidSheet) {
+  fm_comment got{};
+  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 0, 0, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
+  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 99, 0, 0, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentRemoveViaNullText) {
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, "Alice", "x"), 0);
   ASSERT_EQ(fm_sheet_set_comment(wb_, 0, 0, 0, nullptr, nullptr), 0);
   fm_comment got{};
-  EXPECT_NE(fm_sheet_get_comment_at(wb_, 0, 0, 0, &got), 0);
+  EXPECT_EQ(fm_sheet_get_comment_at(wb_, 0, 0, 0, &got),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound));
 }
 
 TEST_F(FormulonCApiSheetFeatures, CommentEnumerateAllIncludingEmptyCell) {

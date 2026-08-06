@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared date / time text-parsing helpers used by DATEVALUE, TIMEVALUE, and
 // VALUE. The primitives here recognise the shapes that Mac Excel 365 accepts

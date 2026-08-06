@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `evaluate_cell_for_recalc`. See `cell_evaluator.h`
 // for the contract and the rationale for centralising this logic.
@@ -50,9 +49,10 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   // handles the workbook-wide ordering.
   EvalState state;
   EvalContext ctx;
-  if (opts.iterative_mode) {
+  if (opts.iterative_mode || opts.use_cached_formula_refs) {
     // Workbook-bound, state-less context: formula refs short-circuit to
-    // their cached values, which is what the solver iterates against.
+    // their cached values. This is required for iterative calculation and
+    // for the normal dependency-ordered recalc path alike.
     ctx = EvalContext::workbook_only(workbook, sheet)
               .with_excel_profile(workbook.excel_profile())
               .with_date1904(workbook.date1904())

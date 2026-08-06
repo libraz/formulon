@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for Excel's Student's t distribution family
 // (T.DIST, T.DIST.2T, T.DIST.RT, T.INV, T.INV.2T). These functions are
@@ -172,6 +171,13 @@ TEST(BuiltinsTInv, MedianIsZero) {
   const Value v = EvalSource("=T.INV(0.5, 10)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsTInv, ExtremeUpperTailExpandsBracket) {
+  // df=1 is Cauchy: tan(pi * (p - 0.5)) is far above the old 1e6 cap.
+  const Value v = EvalSource("=T.INV(0.999999999999,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 3.183e11, 5e8);
 }
 
 TEST(BuiltinsTInv, PZeroIsNum) {

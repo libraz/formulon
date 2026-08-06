@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MVP implementation of Excel's `CELL(info_type, [reference])` function.
 //
@@ -13,9 +12,8 @@
 // Coverage in this MVP:
 //   * "address", "col", "row", "contents", "type" - fully implemented
 //     against the bound cell or the reference's top-left.
-//   * "filename", "format", "color", "parentheses", "prefix", "protect",
-//     "width" - return safe fixed stubs because the engine does not yet
-//     carry style / format / column-width / lock metadata. Each stub is
+//   * "filename", "parentheses" - return safe fixed stubs because the engine
+//     does not yet carry every metadata facet. Each stub is
 //     called out at its return site with a `// no <metadata> yet` comment
 //     so it is unambiguous that the value is intentional, not a bug.
 //
@@ -68,17 +66,18 @@ class FunctionRegistry;
 ///                     top-level blank-as-zero collapse; the divergence
 ///                     is skip-oracle until the workbook gains a path
 ///                     field.
-///   * `"format"`    - always `"G"`; no style subsystem yet.
-///   * `"color"`     - always `0`; no negative-number color flag yet.
+///   * `"format"`    - Excel's built-in CELL format code (`G`, `F0`, `P2`,
+///                     `D1`, etc.) derived from the referenced cell's xf.
+///   * `"color"`     - `1` when its number format colors negative values,
+///                     otherwise `0`.
 ///   * `"parentheses"` - always `0`; no parenthesis-format flag yet.
-///   * `"prefix"`    - always `""` (Mac returns blank); no text-alignment
-///                     metadata yet. Empty text avoids the top-level
-///                     blank-as-zero collapse; skip-oracle until the
-///                     style subsystem lands.
+///   * `"prefix"`    - `"'"` for quote prefix, `"\\"` / `"^"` / `"\""`
+///                     for left / center / right alignment, otherwise empty
+///                     text (which avoids top-level blank-as-zero collapse).
 ///   * `"protect"`   - always `1`; cells are default-locked until the
 ///                     style subsystem lands.
-///   * `"width"`     - always a 1x2 array `{8, TRUE}`; no column-width
-///                     metadata yet.
+///   * `"width"`     - a 1x2 array `{effective width, is_default_width}`
+///                     resolved from sheet layout metadata.
 ///
 /// Error / arity rules:
 ///   * Unknown info_type (after lowercase fold) -> `#VALUE!`.

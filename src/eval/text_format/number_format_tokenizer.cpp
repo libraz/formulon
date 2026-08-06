@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-token scanner for the Excel TEXT() format-string engine. Walks the
 // input format byte-by-byte and produces the `Section::tokens` stream
@@ -37,6 +36,7 @@ void tokenize_section(std::string_view fmt, Section& out) {
     toks.push_back(t);
   };
 
+  bool saw_color = false;
   std::size_t i = 0;
   while (i < fmt.size()) {
     const char c = fmt[i];
@@ -59,9 +59,9 @@ void tokenize_section(std::string_view fmt, Section& out) {
     // Bracketed specifier. Recognised kinds:
     //   `[h]` / `[m]` / `[s]`   -> elapsed-time tokens (any run length).
     //   `[$...]`                -> locale-currency marker; silently dropped.
-    //   `[Red]` / `[Blue]` / ...-> named color qualifier; silently dropped
-    //                               (Mac Excel 365 / IronCalc ignore color).
-    //   `[ColorN]` (N in 1..56) -> indexed color qualifier; silently dropped.
+    //   `[赤]` / `[青]` / ...    -> named color qualifier; silently dropped
+    //                               (Excel ignores color inside TEXT).
+    //   `[色N]` (N in 1..56)     -> indexed color qualifier; silently dropped.
     // Anything else (`[>100]`, `[DBNum1]`, unknown qualifiers) still trips
     // the invalid-bracket flag and surfaces as #VALUE!.
     if (c == '[') {
@@ -122,9 +122,15 @@ void tokenize_section(std::string_view fmt, Section& out) {
         t.width = static_cast<std::uint8_t>(body.size());
         toks.push_back(t);
       } else if (is_color_specifier(body)) {
-        // Named colour (`[Red]`) or indexed colour (`[Color12]`). Mac Excel
-        // 365 and IronCalc silently discard these inside TEXT; we do the
-        // same (the rest of the section continues to format the value).
+        // Named colour (`[赤]`) or indexed colour (`[色12]`). Excel discards
+        // the colour inside TEXT, so the rest of the section still formats
+        // the value. A section may carry at most one colour, though: Excel
+        // rejects `[赤][青]0.00` with #VALUE! even though either bracket
+        // alone is inert.
+        if (saw_color) {
+          out.has_invalid_bracket = true;
+        }
+        saw_color = true;
       } else if (const int dbnum = parse_dbnum_directive(body); dbnum > 0) {
         // `[DBNum1]` / `[DBNum2]` / `[DBNum3]`: digit-substitution mode for
         // the rest of the section. Multiple directives stack last-write-wins,

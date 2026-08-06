@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the lazy-dispatched XLOOKUP and XMATCH functions.
 // Both share the `xlookup_scan` helper in `tree_walker.cpp` that linearly
@@ -70,6 +69,12 @@ void SeedColumnPair(Workbook& wb, std::initializer_list<Value> keys, std::initia
     wb.sheet(0).set_cell_value(row, 0, *kit);
     wb.sheet(0).set_cell_value(row, 1, *vit);
   }
+}
+
+TEST(BuiltinsXLookup, ArrayLiteralLookupAndReturnArrays) {
+  const Value v = EvalSource("=XLOOKUP(2,{1,2,3},{10,20,30})");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 20.0);
 }
 
 // ---------------------------------------------------------------------------

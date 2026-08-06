@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the number-format engine driving TEXT() through the
 // numeric side of Excel's format-string language. Date/time coverage lives
@@ -198,30 +197,103 @@ TEST(NumberFormatSections, FourSectionsNumericValueUsesFirst) {
   EXPECT_EQ(Render(1.0, "0.0;(0.0);\"z\";@"), "1.0");
 }
 
+TEST(NumberFormatSections, TextSectionIsReachableThroughPublicFormatter) {
+  std::string out;
+  EXPECT_EQ(apply_format(0.0, "0.0;(0.0);\"z\";\"text: \"@", "abc", out), FormatStatus::kOk);
+  EXPECT_EQ(out, "text: abc");
+}
+
 // ---------------------------------------------------------------------------
 // Bracketed specifiers: named colours tolerated, locale-currency discarded,
 // unknown qualifiers rejected.
 // ---------------------------------------------------------------------------
 
 TEST(NumberFormatBracketed, NamedColorSilentlyDropped) {
-  // Mac Excel 365 and IronCalc silently discard colour qualifiers in TEXT
-  // and format the value with the rest of the section.
-  EXPECT_EQ(Render(5.0, "[Red]0.00"), "5.00");
-  EXPECT_EQ(Render(5.0, "[Blue]0.00"), "5.00");
-  EXPECT_EQ(Render(5.0, "[green]0.00"), "5.00");
+  // Excel discards a colour qualifier in TEXT and formats the value with the
+  // rest of the section. All eight ja-JP names are recognised.
+  EXPECT_EQ(Render(5.0, "[黒]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[青]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[水]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[緑]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[紫]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[赤]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[白]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[黄]0.00"), "5.00");
+}
+
+TEST(NumberFormatBracketed, EnglishColorNameIsValueError) {
+  // A format string is read in the UI locale, so the English spellings are
+  // not colours under the ja-JP profile and fall through to the
+  // invalid-bracket path. Excel answers #VALUE! for all of them.
+  std::string out;
+  EXPECT_EQ(apply_format(5.0, "[Red]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[Blue]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[green]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[Color12]0.00", out), FormatStatus::kValueError);
+}
+
+TEST(NumberFormatBracketed, ColorNameMatchesAsAPrefix) {
+  // Anything trailing the name inside the same bracket is ignored, which is
+  // how `[水色]` and `[黄色]` come to be accepted.
+  EXPECT_EQ(Render(5.0, "[水色]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[黄色]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[赤abc]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[赤 ]0.00"), "5.00");
+}
+
+TEST(NumberFormatBracketed, LeadingBlankBeforeColorNameIsValueError) {
+  // Trailing bytes are ignored but leading ones are not.
+  std::string out;
+  EXPECT_EQ(apply_format(5.0, "[ 赤]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[　赤]0.00", out), FormatStatus::kValueError);
 }
 
 TEST(NumberFormatBracketed, IndexedColorSilentlyDropped) {
-  // `[ColorN]` for N in 1..56 is also dropped silently.
-  EXPECT_EQ(Render(5.0, "[Color12]0.00"), "5.00");
-  EXPECT_EQ(Render(5.0, "[Color1]0.00"), "5.00");
-  EXPECT_EQ(Render(5.0, "[Color56]0.00"), "5.00");
+  // `[色N]` for N in 1..56 is dropped the same way a name is.
+  EXPECT_EQ(Render(5.0, "[色1]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[色12]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[色56]0.00"), "5.00");
+  // Blanks between `色` and the index are allowed, leading zeros are fine,
+  // and the digits may be full-width.
+  EXPECT_EQ(Render(5.0, "[色 1]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[色001]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[色１]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[色５６]0.00"), "5.00");
+  // The index too matches as a prefix.
+  EXPECT_EQ(Render(5.0, "[色1x]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "[色1.0]0.00"), "5.00");
 }
 
 TEST(NumberFormatBracketed, IndexedColorOutOfRangeIsValueError) {
-  // `[Color57]` (and higher) is not a recognised colour -> invalid.
   std::string out;
-  EXPECT_EQ(apply_format(5.0, "[Color57]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[色57]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[色０]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[色00]0.00", out), FormatStatus::kValueError);
+  // The digit run is greedy, so this is index 12345 rather than index 1 with
+  // `2345` trailing.
+  EXPECT_EQ(apply_format(5.0, "[色12345]0.00", out), FormatStatus::kValueError);
+}
+
+TEST(NumberFormatBracketed, IndexedColorWithoutAnIndexIsValueError) {
+  std::string out;
+  EXPECT_EQ(apply_format(5.0, "[色]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[色x]0.00", out), FormatStatus::kValueError);
+  EXPECT_EQ(apply_format(5.0, "[色-1]0.00", out), FormatStatus::kValueError);
+}
+
+TEST(NumberFormatBracketed, SecondColorInOneSectionIsValueError) {
+  // Either bracket alone is inert, but a section carries at most one colour.
+  std::string out;
+  EXPECT_EQ(apply_format(5.0, "[赤][青]0.00", out), FormatStatus::kValueError);
+  // One per section is still fine when the sections differ.
+  EXPECT_EQ(Render(-5.0, "0.00;[赤]0.00"), "5.00");
+}
+
+TEST(NumberFormatBracketed, ColorCombinesWithOtherDirectives) {
+  // A colour does not consume the section's one conditional predicate, and
+  // it may sit anywhere in the section.
+  EXPECT_EQ(Render(5.0, "[赤][>1]0.00"), "5.00");
+  EXPECT_EQ(Render(5.0, "0.00[赤]"), "5.00");
 }
 
 TEST(NumberFormatBracketed, ConditionalGtMatch) {
@@ -239,6 +311,13 @@ TEST(NumberFormatBracketed, ConditionalLeMatchesNegative) {
   // the value is rendered verbatim (sign included).
   EXPECT_EQ(Render(-5.0, "[<=0]0.00;0.00"), "-5.00");
   EXPECT_EQ(Render(0.0, "[<=0]0.00;0.00"), "0.00");
+}
+
+TEST(NumberFormatBracketed, ConditionalExplicitMinusIsNotDoubled) {
+  // A conditional section is not inherently a negative section. Its literal
+  // minus supplies the sign itself, so the numeric renderer must use the
+  // magnitude rather than adding a second prefix.
+  EXPECT_EQ(Render(-1.5, "[<=0]-0.00;0.00"), "-1.50");
 }
 
 TEST(NumberFormatBracketed, ConditionalEqOperator) {
@@ -315,10 +394,12 @@ TEST(NumberFormatGeneral, FractionTrimmedAndScientific) {
   // 1/3 prints 9 fractional digits (exactly what Mac Excel / IronCalc
   // goldens emit), with trailing zeros trimmed.
   EXPECT_EQ(Render(1.0 / 3.0, "General"), "0.333333333");
+  EXPECT_EQ(Render(-1.0 / 3.0, "General"), "-0.333333333");
   // Large magnitudes switch to scientific with an exponent zero-padded to
   // two digits; trailing mantissa zeros still collapse.
   EXPECT_EQ(Render(250000000000.0, "General"), "2.5E+11");
   EXPECT_EQ(Render(123456789012.0, "General"), "1.23457E+11");
+  EXPECT_EQ(Render(-2.7e-18, "General"), "-2.7E-18");
 }
 
 // ---------------------------------------------------------------------------
@@ -361,6 +442,12 @@ TEST(NumberFormatFraction, ProperFractionZeroIntegerSuppressed) {
 TEST(NumberFormatFraction, MixedFractionWithIntegerOne) {
   // 1.5 -> "1 1/2": integer 1 emits, literal space, then 1/2.
   EXPECT_EQ(Render(1.5, "# ?/?"), "1 1/2");
+}
+
+TEST(NumberFormatFraction, WholeValueSuppressesFractionComponent) {
+  // An exact integer must not render the synthetic 0/1 approximation.
+  EXPECT_EQ(Render(2.0, "# ?/?"), "2");
+  EXPECT_EQ(Render(-2.0, "# ?/?"), "-2");
 }
 
 TEST(NumberFormatFraction, NegativeMixedFraction) {

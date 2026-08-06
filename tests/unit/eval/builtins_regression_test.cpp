@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the pairwise linear-regression family: CORREL,
 // COVARIANCE.P, COVARIANCE.S, SLOPE, INTERCEPT, RSQ, and

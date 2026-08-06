@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the page-break engine (`src/print/pagination`).
 //
@@ -148,6 +147,59 @@ TEST(PaginationTest, HiddenRowsAreExcludedFromPaginationExtent) {
   // Five visible rows (500 pt) fit in one A4 body; hidden rows add nothing.
   EXPECT_TRUE(result.value().h_breaks.empty());
   EXPECT_EQ(result.value().page_count, 1U);
+}
+
+TEST(PaginationTest, OutlineOnlyRowUsesDefaultHeight) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(48, 0, Value::number(2.0));
+  // 49 default rows are just beyond the A4 body. If this outline-only row
+  // were incorrectly treated as 0pt the range would fit on one page.
+  sheet.mutable_layout().row_overrides.push_back(RowLayout{24U, 0.0, false, 1U, false});
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$49", 0)});
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  // The outline-only row has no `ht`; it retains the default 15pt height
+  // rather than silently collapsing to zero.
+  EXPECT_EQ(result.value().page_count, 2U);
+  ASSERT_EQ(result.value().h_breaks.size(), 1U);
+  EXPECT_EQ(result.value().h_breaks[0], 44U);
+}
+
+TEST(PaginationTest, ExplicitVisibleRowWithoutHeightUsesDefaultHeight) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(48, 0, Value::number(2.0));
+  // This models `<row hidden="0">`: it is an explicit row override but
+  // has no `ht`, so it must not collapse during pagination.
+  sheet.mutable_layout().row_overrides.push_back(RowLayout{24U, 0.0, false, 0U, false});
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$49", 0)});
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().page_count, 2U);
+  ASSERT_EQ(result.value().h_breaks.size(), 1U);
+  EXPECT_EQ(result.value().h_breaks[0], 44U);
+}
+
+TEST(PaginationTest, FiftyThousandMetadataOnlyRowsRemainPractical) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  constexpr std::uint32_t kRows = 50'000U;
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(kRows - 1U, 0, Value::number(2.0));
+  sheet.mutable_layout().row_overrides.reserve(kRows);
+  for (std::uint32_t row = 0; row < kRows; ++row) {
+    sheet.mutable_layout().row_overrides.push_back(RowLayout{row, 0.0, false, 1U, false});
+  }
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$A$50000", 0)});
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_GT(result.value().page_count, 1U);
 }
 
 TEST(PaginationTest, ManualColumnBreakIsHonored) {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Modern text accessor family: TEXTBEFORE / TEXTAFTER. Extracted from the
 // core text TU to keep the catalog's translation units roughly balanced.

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::parse_cell_element` and `parse_a1`. The
 // tests construct `<c>` elements via pugixml `load_string` so they

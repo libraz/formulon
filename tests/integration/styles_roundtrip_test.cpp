@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test: a workbook carrying a populated `StylesTable` and
 // per-cell `xf_index` references must survive a full
@@ -202,6 +201,10 @@ TEST(StylesRoundTrip, PreservesNamedCellStyles) {
   styles.fills.emplace_back();
   styles.borders.emplace_back();
   styles.cell_xfs.emplace_back();
+  styles.cell_xfs[0].xf_id = 1;
+  styles.cell_xfs[0].apply_font = true;
+  styles.cell_xfs[0].apply_alignment = true;
+  styles.cell_xfs[0].quote_prefix = true;
 
   // Two named-style xf records: default + one with bold font (font_index
   // wraps to 0 because we did not push any extra fonts; we re-use the
@@ -240,6 +243,12 @@ TEST(StylesRoundTrip, PreservesNamedCellStyles) {
   ASSERT_EQ(rt.cell_style_xfs.size(), 2U);
   EXPECT_EQ(rt.cell_style_xfs[1].horizontal_align, 2U);
   EXPECT_TRUE(rt.cell_style_xfs[1].wrap_text);
+
+  ASSERT_FALSE(rt.cell_xfs.empty());
+  EXPECT_EQ(rt.cell_xfs[0].xf_id, 1U);
+  EXPECT_TRUE(rt.cell_xfs[0].apply_font);
+  EXPECT_TRUE(rt.cell_xfs[0].apply_alignment);
+  EXPECT_TRUE(rt.cell_xfs[0].quote_prefix);
 
   ASSERT_EQ(rt.cell_styles.size(), 2U);
   EXPECT_EQ(rt.cell_styles[0].name, "Normal");

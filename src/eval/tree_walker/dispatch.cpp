@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Function-call dispatch path of the tree-walk evaluator. Split out of
 // `tree_walker.cpp` to keep the recursive walker compile unit small;
@@ -31,6 +30,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
@@ -164,9 +164,6 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   }
   for (std::uint32_t i = 0; i < arity; ++i) {
     const Value arg = eval_node(*call_args[i], arena, registry, ctx);
-    if (arg.is_error()) {
-      return arg;
-    }
     env = env.extend(lv->params[i], arg, arena);
   }
   for (std::uint32_t i = arity; i < lv->param_count; ++i) {
@@ -224,9 +221,9 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
       views.push_back({&v, nullptr, 1U, 1U});
     }
   }
-  const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_array_value(out_rows, out_cols, arena, cells, kMaxDerivedArrayCells);
+  if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   std::vector<Value> cell_args(views.size(), Value::blank());
@@ -249,17 +246,10 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
       cells[idx] = result;
     }
   }
-  if (n == 1) {
+  if (out_rows == 1U && out_cols == 1U) {
     return cells[0];
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = out_rows;
-  arr->cols = out_cols;
-  arr->cells = cells;
-  return Value::array(arr);
+  return Value::array(out);
 }
 
 }  // namespace
@@ -353,22 +343,21 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
     // a `{a;b;c}` style literal, flatten it in row-major order exactly like
     // a RangeOp argument. This is just enough to let LARGE / SMALL /
     // PERCENTILE.INC / QUARTILE.INC accept brace literals as their "array"
-    // input; full array-aware evaluation (broadcasting, spilled output)
-    // stays deferred — a bare `={1;2;3}` outside a function call still
-    // surfaces as #VALUE! via `eval_node`'s ArrayLiteral case.
+    // input. The same literals are also first-class dynamic arrays when
+    // evaluated directly; flattening here preserves this range-aware
+    // function dispatch path.
     if (def->accepts_ranges && arg_node.kind() == parser::NodeKind::ArrayLiteral) {
       had_range_shaped_arg = true;
-      const std::uint32_t rows = arg_node.as_array_rows();
-      const std::uint32_t cols = arg_node.as_array_cols();
+      auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+      if (!resolved) {
+        return Value::error(resolved.error());
+      }
       bool short_circuit = false;
       Value propagated_err = Value::blank();
-      for (std::uint32_t r = 0; r < rows && !short_circuit; ++r) {
-        for (std::uint32_t c = 0; c < cols; ++c) {
-          Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
-          if (!append_range_sourced_value(*def, v, &values, &propagated_err)) {
-            short_circuit = true;
-            break;
-          }
+      for (const Value& value : resolved.value().cells) {
+        if (!append_range_sourced_value(*def, value, &values, &propagated_err)) {
+          short_circuit = true;
+          break;
         }
       }
       if (short_circuit) {
@@ -441,12 +430,17 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         begin_idx = wb->sheet_index_by_name(arg_node.as_ref3d_sheet_begin());
         end_idx = wb->sheet_index_by_name(arg_node.as_ref3d_sheet_end());
       }
+      const bool full_col = cell.is_full_col || (is_range && cell_end.is_full_col);
+      const bool full_row = cell.is_full_row || (is_range && cell_end.is_full_row);
+      const bool incompatible_whole_shape =
+          (full_col && full_row) ||
+          (is_range && (cell.is_full_col != cell_end.is_full_col || cell.is_full_row != cell_end.is_full_row));
       const bool corners_out_of_bounds =
-          cell.is_full_col || cell.is_full_row || cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
-          (is_range && (cell_end.is_full_col || cell_end.is_full_row || cell_end.row >= Sheet::kMaxRows ||
-                        cell_end.col >= Sheet::kMaxCols));
+          (!full_col && !full_row &&
+           (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
+            (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))));
       if (wb == nullptr || begin_idx == static_cast<std::size_t>(-1) || end_idx == static_cast<std::size_t>(-1) ||
-          corners_out_of_bounds) {
+          incompatible_whole_shape || corners_out_of_bounds) {
         const Value err = Value::error(ref3d_err);
         if (def->propagate_errors) {
           return err;
@@ -461,14 +455,56 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       // area. Excel aggregates the same rectangle from every sheet in the
       // span, so the cross-product (sheets * area cells) flows into the
       // range-aware function.
-      const std::uint32_t r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
-      const std::uint32_t r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
-      const std::uint32_t c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
-      const std::uint32_t c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
       std::vector<Value> ref3d_cells;
-      ref3d_cells.reserve((hi - lo + 1) * static_cast<std::size_t>(r_hi - r_lo + 1) * (c_hi - c_lo + 1));
       for (std::size_t s = lo; s <= hi; ++s) {
         const std::string_view sheet_name = wb->sheet(s).name();
+        const Sheet& target_sheet = wb->sheet(s);
+        std::uint32_t r_lo = 0;
+        std::uint32_t r_hi = 0;
+        std::uint32_t c_lo = 0;
+        std::uint32_t c_hi = 0;
+        if (full_col) {
+          c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
+          c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
+          bool any = false;
+          for (const auto& [row_index, cells] : target_sheet.rows()) {
+            const std::size_t upper = std::min<std::size_t>(cells.size(), static_cast<std::size_t>(c_hi) + 1U);
+            for (std::size_t c = c_lo; c < upper; ++c) {
+              if (!cells[c].formula_text.empty() || !cells[c].cached_value.is_blank()) {
+                r_hi = std::max(r_hi, row_index);
+                any = true;
+                break;
+              }
+            }
+          }
+          if (!any) {
+            continue;
+          }
+        } else if (full_row) {
+          r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
+          r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
+          bool any = false;
+          for (const auto& [row_index, cells] : target_sheet.rows()) {
+            if (row_index < r_lo || row_index > r_hi) {
+              continue;
+            }
+            for (std::size_t c = cells.size(); c-- > 0;) {
+              if (!cells[c].formula_text.empty() || !cells[c].cached_value.is_blank()) {
+                c_hi = std::max(c_hi, static_cast<std::uint32_t>(c));
+                any = true;
+                break;
+              }
+            }
+          }
+          if (!any) {
+            continue;
+          }
+        } else {
+          r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
+          r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
+          c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
+          c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
+        }
         for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
           for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
             parser::Reference per_sheet{};
@@ -627,22 +663,16 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         }
         const std::uint32_t rrows = union_rhs.row - union_lhs.row + 1u;
         const std::uint32_t rcols = union_rhs.col - union_lhs.col + 1u;
-        const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
-        Value* buffer = arena.create_array<Value>(total);
-        if (buffer == nullptr) {
+        Value* buffer = nullptr;
+        ArrayValue* arr = allocate_array_value(rrows, rcols, arena, buffer, kMaxDerivedArrayCells);
+        if (arr == nullptr) {
           return Value::error(ErrorCode::Num);
         }
+        const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
         const std::vector<Value>& ev = expanded.value();
         for (std::size_t k = 0; k < total; ++k) {
           buffer[k] = k < ev.size() ? ev[k] : Value::blank();
         }
-        ArrayValue* arr = arena.create<ArrayValue>();
-        if (arr == nullptr) {
-          return Value::error(ErrorCode::Num);
-        }
-        arr->rows = rrows;
-        arr->cols = rcols;
-        arr->cells = buffer;
         values.push_back(Value::array(arr));
         continue;
       }

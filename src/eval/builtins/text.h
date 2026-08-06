@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's text built-ins (UPPER, LOWER, TRIM, LEFT, RIGHT, MID,
 // REPT, SUBSTITUTE, FIND, SEARCH, EXACT, TEXTJOIN, UNICHAR, UNICODE, CLEAN,

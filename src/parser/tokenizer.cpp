@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the Excel formula tokenizer. See the header for
 // the high-level contract. Key implementation choices:
@@ -971,6 +970,20 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
     advance_one();
   }
 
+  // A lead byte that starts no decodable codepoint — a truncated or
+  // otherwise malformed UTF-8 sequence — leaves the loop above having
+  // consumed nothing. Emitting a zero-width token here would hand control
+  // back to the dispatcher with `byte_pos_` unmoved, and since the same
+  // byte still classifies as an identifier start the pair would spin
+  // forever, appending empty tokens until the process runs out of memory.
+  // Consume the byte as unclassifiable instead, which is how the dispatcher
+  // treats every other byte it cannot begin a token with.
+  if (byte_pos_ == start) {
+    advance_one();
+    record_error(LexerErrorCode::InvalidCharacter, start);
+    return;
+  }
+
   std::string_view run(source_.data() + start, byte_pos_ - start);
 
   // Classify: CellRef first, then Bool, otherwise Ident.
@@ -1022,12 +1035,11 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
     }
   }
 
-  // Degenerate forms: `A$` / `$A$` / other `$`-bearing runs without a row are
-  // not refs and not identifiers; flag as InvalidReference and emit Invalid
-  // so the parser doesn't try to treat them as names.
-  if (run.size() >= 2 && (run.front() == '$' || run.back() == '$')) {
-    // Allow `_xlfn.` and similar which don't contain `$`; we only reach
-    // this path if `$` is present.
+  // A run that contains `$` but did not classify as a CellRef (or the one
+  // absolute whole-column form above) is neither a legal name nor a valid
+  // reference. In particular this rejects repeated anchors such as `A$$1`;
+  // treating those as identifiers silently defers a syntax error to #NAME?.
+  if (run.find('$') != std::string_view::npos) {
     Token t;
     t.kind = TokenKind::Invalid;
     t.range = make_range();

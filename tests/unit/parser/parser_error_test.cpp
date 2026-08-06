@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Error-path tests for the Pratt parser. Covers single-error reporting on
 // the happy-failure cases as well as panic-mode recovery, parse-depth
@@ -64,6 +63,13 @@ TEST(ParserErrors, AbsoluteRowInArithmeticIsInvalidReference) {
   Parser p("=$1+1", a);
   p.parse();
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::InvalidReference));
+}
+
+TEST(ParserErrors, RepeatedAbsoluteAnchorIsInvalidReference) {
+  Arena a;
+  Parser p("=A$$1", a);
+  p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::LexerInvalidReference));
 }
 
 TEST(ParserErrors, ThreeDRangeTailParsesToRef3DRange) {
@@ -237,6 +243,13 @@ TEST(ParserErrors, InvalidRangeRhsIsLiteral) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::InvalidRange));
 }
 
+TEST(ParserErrors, InvalidRangeLhsIsLiteral) {
+  Arena a;
+  Parser p("=1:A5", a);
+  (void)p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::InvalidRange));
+}
+
 TEST(ParserErrors, RangeRhsCallIsAccepted) {
   // Reference-returning calls (`OFFSET(...)`, `INDIRECT(...)`) are valid
   // `:` endpoints in Excel 365; the parser must not flag them as
@@ -256,6 +269,21 @@ TEST(ParserErrors, NestedFormulaTooDeep) {
   Parser p("=(((((((1)))))))", a, opts);
   (void)p.parse();
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::NestedFormulaTooDeep));
+}
+
+TEST(ParserErrors, LeftAssociativeChainTooDeep) {
+  std::string formula = "=1";
+  for (std::uint32_t i = 0; i < 8; ++i) {
+    formula.append("+1");
+  }
+  Arena arena;
+  ParserOptions opts;
+  opts.max_parse_depth = 5;
+  Parser parser(formula, arena, opts);
+  AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_EQ(root->kind(), NodeKind::ErrorPlaceholder);
+  EXPECT_TRUE(HasErrorCode(parser.errors(), ParseErrorCode::NestedFormulaTooDeep));
 }
 
 TEST(ParserErrors, TooManyErrorsAppendsSentinel) {

@@ -20,13 +20,17 @@
 # two differ (Mac Excel 365 / Win Excel 365 / Formulon). PR reviewers
 # check this file's diff on any oracle-gen roll-forward.
 #
-# Schema (parsed by tools/oracle/oracle_gen.py::_load_divergence_skips):
+# Schema (parsed by tools/oracle/oracle_gen.py):
 #
 #   entries:
 #     - id: <case_id from tests/oracle/cases/*.yaml>
+#       # `ids: [...]`, `suite: <name>`, and `suites: [...]` are also
+#       # available for a shared tolerance / compare_mode policy. Skip
+#       # entries must target exactly one `id`.
 #       reason: "..."
 #       mode: skip-oracle | tolerance      # default: tolerance
 #       tolerance: { abs: 1e-10, rel: 0 }
+#       compare_mode: exact | complex_text | numeric_text | ...
 #       prefer: mac-excel-365 | win-excel-365 | formulon
 #       first_noted: YYYY-MM-DD
 #       last_verified_excel_version: "16.xx.x (Build ...)"
@@ -43,6 +47,31 @@
 #                                                     # immediately.
 
 entries:
+  # Excel preserves its 1900 serial-calendar weekday offset for dates before
+  # the fictitious 1900-02-29. Formulon intentionally returns the real
+  # proleptic-Gregorian weekday; this non-oracle unit test fixes that policy.
+  - id: weekday_pre_1900_excel_serial_bug
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_datetime_test.cpp]
+    reason: "Excel 365 ja-JP 16.111.2 returns WEEKDAY(DATE(1900,1,1),2)=7 and WEEKDAY(DATE(1900,2,28),2)=2, one day earlier than their real Gregorian weekdays. Formulon intentionally returns 1 and 3."
+    prefer: formulon
+    first_noted: 2026-08-05
+    last_verified_excel_version: "16.111.2"
+
+  # Mac xlwings reads ARRAYTOTEXT error results back as blank cells, so the
+  # primary golden cannot distinguish #N/A / #VALUE! from a real blank.
+  - ids:
+      - arraytotext_error_in_array_default
+      - arraytotext_error_in_array_strict
+      - arraytotext_only_errors_default
+      - arraytotext_arity_zero
+      - arraytotext_arity_three
+    mode: skip-oracle
+    reason: "Mac xlwings reads ARRAYTOTEXT array-error and arity-error results back as blank, losing Excel's error code. Function-level tests cover the real error contract."
+    prefer: formulon
+    first_noted: 2026-08-05
+    last_verified_excel_version: "16.108.1"
   # -- ad-hoc evaluate-formula scalar reduction (intentional API shape) ----
   # `fm_workbook_evaluate_formula` (and the WASM / Node
   # `evaluateFormulaText`) return a single scalar. When the evaluated
@@ -56,9 +85,12 @@ entries:
   # reviewers.
   - id: evaluate_formula_array_scalar_reduction
     mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/c_api/formulon_c_evaluate_formula_test.cpp]
     reason: "fm_workbook_evaluate_formula / evaluateFormulaText reduce an array result to its top-left element (Phase 1 scalar API shape); a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
     prefer: formulon
     first_noted: 2026-07-03
+    last_verified_excel_version: "16.111.2"
   # -- xlwings empty-string / blank read-back gaps -------------------------
   # The Mac xlwings driver cannot write a cell holding the empty string
   # "": assigning "" leaves the cell genuinely blank from Excel's point of
@@ -72,27 +104,31 @@ entries:
     reason: "xlwings writes \"\" as a blank cell, so Excel reports ISBLANK=TRUE even though Formulon correctly says FALSE."
     prefer: formulon
     first_noted: 2026-04-23
+    last_verified_excel_version: "16.111.2"
   - id: countif_notequal_empty_over_mixed
     mode: skip-oracle
     reason: "xlwings writes \"\" as a blank cell, so Excel's COUNTIF(range, \"<>\") over a range with a literal-\"\" cell sees one fewer populated cell than Formulon's in-memory model. Formulon returns 3, Mac records 2 due to the xlwings round-trip gap."
     prefer: formulon
     first_noted: 2026-04-25
+    last_verified_excel_version: "16.111.2"
   - id: isformula_of_literal_number_is_value
     mode: skip-oracle
     reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
     prefer: formulon
     first_noted: 2026-04-23
+    last_verified_excel_version: "16.111.2"
   - id: isformula_of_literal_text_is_value
     mode: skip-oracle
     reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
     prefer: formulon
     first_noted: 2026-04-23
+    last_verified_excel_version: "16.111.2"
 
   # -- JIS unsupported on current Mac Excel ja-JP build ------------------
-  # Mac Excel 365 16.108.1 (ja-JP) returns `#NAME?` for every `=JIS(...)`
-  # invocation in the oracle pipeline (every kana / ASCII / kanji / mixed
-  # input we tried). Re-verified 2026-04-26 via fresh probe ids — the Mac
-  # bug is still live, not just a stale capture artefact. Formulon
+  # Mac Excel 365 (ja-JP) returns `#NAME?` for every `=JIS(...)` invocation
+  # in the oracle pipeline (every kana / ASCII / kanji / mixed input we
+  # tried), most recently on 16.111.2 — the Mac bug is still live, not just
+  # a stale capture artefact. Formulon
   # implements JIS correctly per the documented half-width-to-full-width
   # mapping; the impl is Mac-verified by proxy through the dbcs_* mirror
   # cases in tests/oracle/cases/width.yaml (Formulon registers JIS and
@@ -110,78 +146,79 @@ entries:
     reason: "Mac JIS returns #NAME?; Formulon recomposes ｶﾞ → ガ correctly."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_semivoiced_row
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; Formulon handles handakuten row correctly."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_unvoiced_row
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; Formulon's plain katakana mapping is correct."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_idempotent_on_fullwidth
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; Formulon: identity on already-full-width input."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_idempotent_on_kanji
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; kanji passthrough."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_mixed_halfkata_kanji
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; mixed half-kata + kanji."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_orphan_dakuten
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; orphan ﾞ probe."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_half_punctuation
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; ASCII punctuation mapping."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_round_trip
     mode: skip-oracle
     reason: "Mac JIS returns #NAME? so ASC(JIS(...)) cannot complete."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_bool_coerces
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; bool->text coercion path."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_error_propagates
     mode: skip-oracle
     reason: "Mac JIS returns #NAME? on every input so error propagation cannot be tested."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_long_halfkana_string
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; full half-katakana table."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: asc_jis_round_trip
     mode: skip-oracle
     reason: "JIS half of round-trip returns #NAME?, so JIS(ASC(...)) cannot complete."
     prefer: formulon
     first_noted: 2026-04-26
-
-  # -- Pre-existing oracle flake: [Red] colour directive ------------------
-  # Mac Excel's read-back through xlwings has been observed to vary
-  # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell
-  # surfaces as text "5.00" (Formulon's expected output), other times as
-  # an error. Until the source of the flake is identified, skip the case
-  # so it does not block the verifier.
-  - id: text_color_red_discarded
-    mode: skip-oracle
-    reason: "xlwings read-back unstable across oracle-gen runs; Mac Excel cell display alternates between text and error."
-    prefer: formulon
-    first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
 
   # -- BESSELI: Formulon more accurate than Excel's A&S 9.8.1/9.8.2 -------
   # Excel's BESSELI uses the Abramowitz & Stegun rational polynomial
@@ -273,6 +310,8 @@ entries:
   # a real implementation and the entry below is removed.
   - id: phonetic_returns_input_text
     mode: skip-oracle
+    scope: deferred-feature
+    evidence: [tests/integration/ooxml_phonetic_roundtrip_test.cpp]
     reason: "PHONETIC currently returns the input text instead of the IME-typed kana because OOXML <rPh> annotations are not yet read into Formulon's Value model; phonetic metadata not yet modelled."
     prefer: mac-excel-365
     first_noted: 2026-04-28
@@ -288,11 +327,8 @@ entries:
   # parameter syntax is the remaining gap, captured per-case.
 
   # -- LAMBDA family (oracle-close family=lambda, 2026-04-28) ---------------
-  # The LAMBDA helper implementation is now live for anchor unwrap, MAP
-  # shape extension, and MAKEARRAY per-cell error spills. The remaining
-  # entries need evaluator-side error propagation through inline array
-  # literals / higher-order helper inputs before they can be live oracle
-  # cases.
+  # The LAMBDA helper implementation is live for anchor unwrap, MAP shape
+  # extension, and per-slot error spills.
 
   # Gap 1: LAMBDA-helper anchor unwrap — closed 2026-05-01.
   # BYROW / BYCOL / MAP / SCAN / MAKEARRAY (and SEQUENCE / TRANSPOSE in the
@@ -300,26 +336,16 @@ entries:
   # The oracle comparator now projects Array results down to their top-left
   # anchor cell (matching xlwings' read-back semantics); see
   # tests/oracle/oracle_anchor.{h,cpp} and the corresponding unit tests.
-  # Pure "anchor not unwrapped" entries have been removed below; only
-  # cases with additional Mac-side quirks remain.
-  - id: bycol_error_in_column
-    mode: skip-oracle
-    reason: "BYCOL with an errored inline-array source column should produce a per-column spill including the error. Formulon currently loses the inline-array expression error before BYCOL sees it; keep skipped until evaluator-side error propagation is fixed."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.109"
-  - id: map_error_propagation
-    mode: skip-oracle
-    reason: "MAP propagating an inline-array element error should preserve that error in the output spill. Formulon currently loses the inline-array expression error before MAP sees it; keep skipped until evaluator-side error propagation is fixed."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.109"
-  - id: scan_error_in_element
-    mode: skip-oracle
-    reason: "SCAN propagating an inline-array element error should produce downstream error spill cells. Formulon currently loses the inline-array expression error before SCAN sees it; keep skipped until evaluator-side error propagation is fixed."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.109"
+  #
+  # Stale `bycol_error_in_column` / `map_error_propagation` /
+  # `scan_error_in_element` removed: BYROW / BYCOL / SCAN no longer collapse
+  # the whole call on the first errored slot, so each helper spills the
+  # error into its own output cell (SCAN additionally carries it forward on
+  # the accumulator) exactly as Excel does. The three case formulas also
+  # moved off `1/0` inside an array constant — an expression Excel rejects
+  # at formula entry — onto the `#DIV/0!` error literal, so they now name
+  # something a live host can actually evaluate. The goldens still carry the
+  # old `skipped` marker and need a regeneration run to go live.
 
   # Gap 2 (closed 2026-04-29): Formulon parser now accepts the
   # `[optional_param]` bracket syntax in LAMBDA parameter lists. Optional
@@ -336,18 +362,24 @@ entries:
   # oracle verification.
   - id: regex_match_limit_regextest
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_regex_test.cpp]
     reason: "REGEXTEST with catastrophic backtracking pattern: Mac Excel hangs indefinitely; Formulon returns FALSE after pcre2_match_limit=1000000 iterations."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
   - id: regex_match_limit_regexextract
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_regex_test.cpp]
     reason: "REGEXEXTRACT with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! after the pcre2 match limit is exceeded."
     prefer: formulon
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
   - id: regex_match_limit_regexreplace
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_regex_test.cpp]
     reason: "REGEXREPLACE with catastrophic backtracking: Mac Excel hangs; Formulon returns #CALC! after the pcre2 match limit is exceeded."
     prefer: formulon
     first_noted: 2026-04-28
@@ -393,12 +425,11 @@ entries:
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
-  - id: forecast_ets_seasonality_linear_no_period
-    reason: "Mac Excel detrends before computing ACF, so a perfectly linear series surfaces no period (returns 0). Formulon's plain ACF picks lag 2 because all autocorrelations on a non-stationary linear series exceed the 0.3 threshold. Implementing detrending is a correctness improvement but out of scope here."
-    prefer: mac-excel-365
-    first_noted: 2026-04-28
-    last_verified_excel_version: "16.108.1"
-    mode: skip-oracle
+  # Stale `forecast_ets_seasonality_linear_no_period` removed: the
+  # seasonality detector now removes the linear trend before computing the
+  # autocorrelation, so a perfectly linear series reports no period (0) like
+  # Excel instead of picking lag 2 off a non-stationary series. The golden
+  # still carries the old `skipped` marker and needs a regeneration run.
 
   # REGEXEXTRACT spill-mode results — modes 1 (1 x N) and 2 (1 x G) are
   # now captured as full arrays by the spill-shape oracle probe. Mode 3
@@ -448,7 +479,7 @@ entries:
   # entries remain for numerically unstable perfect-fit statistics and an
   # empty-array-literal read-back quirk.
   - id: linest_univariate_stats_true
-    reason: "Perfect-fit LINEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 reports a huge finite F statistic while Formulon currently surfaces #N/A for the unstable F slot. Other stats cells are covered by unit tests."
+    reason: "Perfect-fit LINEST stats=TRUE drives the residual sum to exactly 0, so the F statistic is infinite in the limit. Both engines report a huge finite F — Formulon by flooring the residual at the squared rounding error the data's scale can still resolve, Mac Excel 16.109 by whatever residual its own arithmetic happens to leave — and the two magnitudes differ by a numerically unstable factor. Same class as logest_univariate_stats_true. Other stats cells are covered by unit tests."
     prefer: mac-excel-365
     first_noted: 2026-05-15
     last_verified_excel_version: "16.109"
@@ -556,50 +587,21 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
-  # FILTERXML is implemented in Formulon, but Mac Excel 16.109 reports the
-  # function as unavailable (#NAME?). Windows Excel oracle coverage can
-  # replace these Mac-platform divergences when available.
-  - id: filterxml_single_node_text
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML while Formulon provides a real XPath implementation for engines where FILTERXML is available."
+  # FILTERXML is unavailable in the primary Mac Excel target. Keep this
+  # entire suite out of its goldens; Windows variant goldens cover the XPath
+  # contract where the function is available.
+  - suite: filterxml
+    reason: "Mac Excel 16.108.1 does not evaluate FILTERXML through the formula2/xlwings oracle path, while Formulon implements the XPath contract and Windows Excel provides the available-host oracle."
     prefer: formulon
     first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_attribute_value
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML while Formulon provides a real XPath implementation for engines where FILTERXML is available."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_no_match_na
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XPath semantics; Formulon returns the implemented XPath no-match surface."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_malformed_xml_value
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XML parse semantics; Formulon returns the implemented parse-error surface."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_malformed_xpath_value
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before evaluating XPath parse semantics; Formulon returns the implemented parse-error surface."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
-    mode: skip-oracle
-  - id: filterxml_numeric_xml_arg_value
-    reason: "Mac Excel 16.109 returns #NAME? for FILTERXML before argument/XML semantics; Formulon returns the implemented coerced-XML parse-error surface."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
+    last_verified_excel_version: "16.108.1"
     mode: skip-oracle
 
   # Stale `external_stub_info` removed from external_stubs.yaml: INFO has
   # its own environment-bound suite (`info_function.yaml`) because it is
   # host-state-dependent rather than an unavailable fixed-error stub.
   - id: external_stub_info
+    case_alias: info_system
     reason: "INFO returns environment-specific values (locale, version, paths); answers vary by host and are not portable across the oracle harness."
     prefer: formulon
     first_noted: 2026-04-28
@@ -656,6 +658,8 @@ entries:
   # PHONETIC is a real lazy form. The remaining divergence records the
   # rPh metadata coverage gap, not an unavailable function stub.
   - id: external_stub_phonetic
+    scope: deferred-feature
+    evidence: [tests/integration/ooxml_phonetic_roundtrip_test.cpp]
     reason: "PHONETIC reads OOXML rPh annotations; Formulon's OOXML reader does not surface rPh into Value, so unannotated text passes through. Mac without rPh annotations behaves the same on text-cell input but diverges on annotated cells."
     prefer: mac-excel-365
     first_noted: 2026-04-28
@@ -691,6 +695,16 @@ entries:
     prefer: mac-excel-365
     first_noted: 2026-05-02
     last_verified_excel_version: "16.108.2"
+
+  - ids:
+      - anchorarray_resolves_sequence_sum
+      - anchorarray_resolves_sequence_rows
+      - anchorarray_offset_resolved_anchor
+    mode: skip-oracle
+    reason: "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
+    prefer: formulon
+    first_noted: 2026-08-05
+    last_verified_excel_version: "16.108.1"
 
   # -- ENCODEURL: not available in Mac Excel 365 ja-JP ----------------------
   # Mac Excel 365 ja-JP returns #NAME? for every ENCODEURL invocation:
@@ -836,26 +850,24 @@ entries:
     last_verified_excel_version: "16.0"
 
   # -- GROUPBY / PIVOTBY nested subtotals (|total_depth| == 2) -------------
-  # A ±2 total_depth requests per-outer-group subtotal rows (GROUPBY) or
-  # per-region subtotal rows/columns (PIVOTBY) in addition to the grand
-  # total. Formulon does not yet build the outer/inner grouping hierarchy
-  # and subtotal-row placement; a ±2 request falls back to the ±1
-  # grand-total-only layout and emits a structured-log warning
-  # (eval.groupby.subtotals_unsupported / eval.pivotby.subtotals_unsupported).
-  # Drop these skips and regenerate the goldens on macOS once nested
-  # subtotals are implemented.
-  - id: groupby_subtotal_depth_two
-    mode: skip-oracle
-    reason: "Nested subtotals for |total_depth|==2 not yet implemented; GROUPBY falls back to flat grouping (grand total only). Fallback is non-silent (structured-log warning)."
-    prefer: mac-excel-365
-    first_noted: 2026-06-26
-    last_verified_excel_version: "16.109"
-  - id: pivotby_row_subtotal_depth_two
-    mode: skip-oracle
-    reason: "Nested subtotals for |row_total_depth|/|col_total_depth|==2 not yet implemented; PIVOTBY falls back to flat grouping (grand total only). Fallback is non-silent (structured-log warning)."
-    prefer: mac-excel-365
-    first_noted: 2026-06-26
-    last_verified_excel_version: "16.109"
+  # A ±2 total_depth requests per-outer-group subtotal rows in addition to
+  # the grand total. Both functions now build the outer/inner hierarchy over
+  # the first key column and place a subtotal row per outer group on the
+  # same side of its block as the grand total, so
+  # `groupby_subtotal_depth_two` and `pivotby_row_subtotal_depth_two` are no
+  # longer divergences and their entries are gone; the goldens still carry
+  # the old `skipped` marker and need a regeneration run to go live. That
+  # run is also what confirms the ja-JP subtotal-row wording, which is
+  # currently derived from the grand-total label (`<key> 合計`) rather than
+  # captured from a host — see `subtotal_label` in
+  # src/eval/groupby_pivotby/common.cpp.
+  #
+  # PIVOTBY subtotal COLUMNS (|col_total_depth| == 2) remain unimplemented:
+  # they insert an extra value-wide block per outer column group, which
+  # reshapes every column index in the layout. A ±2 column request still
+  # falls back to the ±1 grand-total-only layout behind the
+  # eval.pivotby.subtotals_unsupported warning. No oracle case covers that
+  # shape yet, so there is no entry to record here.
 
   # -- XLOOKUP / XMATCH binary search over dirty (non-sorted) data --------
   # Binary search (search_mode = 2 / -2) requires the lookup vector to be
@@ -872,6 +884,8 @@ entries:
   # accepted divergence on contract-violating input.
   - id: xlookup_binary_search_dirty_data
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/builtins_xlookup_test.cpp]
     reason: "Binary search (search_mode 2/-2) is only defined on sorted input. Formulon treats incomparable cells as greater-than-target to keep the upper bound monotone, so on unsorted/dirty data a near match can be stepped over. Excel's binary search is likewise undefined on unsorted data and lands on a different cell; the divergence only occurs on contract-violating input."
     prefer: formulon
     first_noted: 2026-06-26
@@ -889,23 +903,24 @@ entries:
   # value should be returned. Remove or re-scope this entry once verified.
   - id: getpivotdata_page_axis_field_needs_verification
     mode: skip-oracle
-    reason: "GETPIVOTDATA returns #REF! for fields on the page/data axis (filter-state routing not implemented). Excel's actual surface for page/data-axis addressing is unconfirmed and needs a live oracle run; entry tracks the unverified behaviour."
+    scope: deferred-feature
+    evidence: [tests/unit/eval/getpivotdata_lazy_test.cpp]
+    reason: "GETPIVOTDATA returns #REF! for fields on the page/data axis (filter-state routing not implemented). Excel's actual surface for page/data-axis addressing is unconfirmed. Confirming it needs a PivotTable in the workbook, so it can only be observed on the workbook track's Windows primary — a macOS host cannot clear this entry, since mac-365-ja_JP is a research-only variant there."
     prefer: formulon
     first_noted: 2026-06-26
-    last_verified_excel_version: "unverified (needs live oracle run)"
+    last_verified_excel_version: "unverified (needs live oracle run on win-365-ja_JP)"
 
-  # AREAS now recurses into CHOOSE / IF reference branches, so a branch
-  # that is itself a union reports its real area count. INDIRECT of a
-  # union string is still deferred: `=AREAS(INDIRECT("A1,B2"))` is a
-  # 2-area reference union in Excel, but Formulon counts the INDIRECT call
-  # as a single opaque reference (1) because the engine has no runtime
-  # reference-union Value to parse the INDIRECT string into. See
-  # src/eval/areas_lazy.cpp.
-  - id: arg_indirect_union
-    mode: skip-oracle
-    reason: "AREAS(INDIRECT(\"A1,B2\")) is 2 areas in Excel; Formulon returns 1 because it has no runtime reference-union value to parse the INDIRECT string into. Deferred pending a reference-union runtime."
-    prefer: mac-excel-365
-    first_noted: 2026-06-26
+  # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
+  # itself a union reports its real area count.
+  #
+  # Stale `arg_indirect_union` removed: AREAS now decodes an INDIRECT call's
+  # reference text and counts the areas it names, so
+  # `=AREAS(INDIRECT("A1,B2"))` reports 2. The decode is textual, so nothing
+  # here waits on the engine being able to hold a multi-area reference as a
+  # runtime value; text the decoder does not recognise (R1C1, a defined
+  # name, malformed input) keeps the single-opaque-reference count. See
+  # src/eval/areas_lazy.cpp. The golden still carries the old `skipped`
+  # marker and needs a regeneration run to go live.
 
   # -- Circular reference with iterative calculation OFF ------------------
   # A formula cycle (e.g. A1 = =A2, A2 = =A1) with the workbook's iterative
@@ -923,6 +938,8 @@ entries:
   # both engines converge to the fixed point instead.
   - id: circular_reference_iterative_off_returns_ref
     mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/recalc_engine_test.cpp]
     reason: "A formula cycle with iterative calc OFF resolves to #REF! for every cycle-member cell in Formulon (recalc-engine SCC detection; eval_context returns ErrorCode::Ref on a re-entrant reference). Excel leaves 0 in the cells and shows a circular-reference warning banner — a UI-only surface with no computed value that the oracle harness cannot capture."
     prefer: formulon
     first_noted: 2026-07-02
@@ -939,10 +956,27 @@ entries:
   # XLSB completion work).
   - id: xlsb_pivot_getpivotdata_ref
     mode: skip-oracle
+    scope: fixture
+    evidence: [tests/unit/io/xlsb_fidelity_test.cpp]
     reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Deferred pending XLSB pivot record decoding."
     prefer: mac-excel-365
     first_noted: 2026-07-02
     last_verified_excel_version: "Excel 365 (Mac, ja-JP, 2026-07)"
+
+  # -- XLSB external-workbook defined names --------------------------------
+  # PtgNameX resolves through the external-supporting-book and external-name
+  # tables. Formulon deliberately does not invent an internal NameRef when
+  # those tables are absent: it retains Excel's cached result and exposes the
+  # unsupported-formula diagnostic instead. Decoding those binary tables is
+  # deferred XLSB work.
+  - id: xlsb_ptg_namex_external_name_deferred
+    mode: skip-oracle
+    scope: deferred-feature
+    evidence: [tests/unit/io/xlsb/ptg_test.cpp, tests/unit/io/xlsb/writer_test.cpp]
+    reason: "XLSB PtgNameX external-workbook defined names require BrtSupBookSrc and BrtSupNameStart table decoding, which is not implemented. The reader keeps the cached cell value and reports the unsupported Ptg instead of fabricating an incorrect internal defined-name reference."
+    prefer: mac-excel-365
+    first_noted: 2026-08-05
+    last_verified_excel_version: "Excel 365 (Mac, ja-JP, 16.111.2)"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

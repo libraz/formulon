@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `<c>` element parser. See cell_parser.h for the public contract.
 //
@@ -32,6 +31,7 @@
 
 #include "io/a1_ref.h"
 #include "io/iso_date.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -154,7 +154,7 @@ void ConcatInlineStringText(const pugi::xml_node& is_node, std::string& out) {
 void ConcatInlinePhoneticText(const pugi::xml_node& is_node, std::string& out) {
   for (pugi::xml_node rph = is_node.child("rPh"); rph; rph = rph.next_sibling("rPh")) {
     for (pugi::xml_node t = rph.child("t"); t; t = t.next_sibling("t")) {
-      out.append(t.text().get());
+      AppendOoxmlTextUnescaped(out, t.text().get());
     }
   }
 }
@@ -344,7 +344,11 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
     return out;
   }
   // Default / t == "n".
-  if (!value_present) {
+  // Excel and several third-party producers use an empty <v/> for a
+  // cached blank numeric cell. Treat it exactly like an absent <v>; this
+  // keeps the DOM reader aligned with the streaming reader, which has no
+  // payload to distinguish in either form.
+  if (!value_present || v_text.empty()) {
     out.value = Value::blank();
     return out;
   }

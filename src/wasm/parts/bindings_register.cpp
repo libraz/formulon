@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Single `EMSCRIPTEN_BINDINGS(formulon)` registration block: every
 // value-object, the `Workbook` class chain, and the free-function
@@ -25,7 +24,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
   using emscripten::allow_raw_pointers;
   using emscripten::class_;
   using emscripten::function;
-  using emscripten::register_vector;
   using emscripten::value_object;
 
   // ---- Value-object surface ------------------------------------------------
@@ -53,10 +51,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("value", &JsStringResult::value);
 
   // ---- Conditional-format value-objects ------------------------------------
-  // The vector-of-value-object classes below (`CfMatchVector`,
-  // `CfCellVector`) surface as iterable handles in JS with `.size()` and
-  // `.get(i)` accessors. They mirror how embind exposes
-  // `register_vector<T>` for any value-object payload.
   value_object<JsCfColor>("CfColor")
       .field("r", &JsCfColor::r)
       .field("g", &JsCfColor::g)
@@ -78,19 +72,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("barGradient", &JsCfMatch::barGradient)
       .field("iconSetName", &JsCfMatch::iconSetName)
       .field("iconIndex", &JsCfMatch::iconIndex);
-
-  register_vector<JsCfMatch>("CfMatchVector");
-
-  value_object<JsCfCellResult>("CfCellResult")
-      .field("row", &JsCfCellResult::row)
-      .field("col", &JsCfCellResult::col)
-      .field("matches", &JsCfCellResult::matches);
-
-  register_vector<JsCfCellResult>("CfCellVector");
-
-  value_object<JsCfRangeResult>("CfRangeResult")
-      .field("status", &JsCfRangeResult::status)
-      .field("cells", &JsCfRangeResult::cells);
 
   // ---- Sheet view / layout value-objects -----------------------------------
   value_object<JsSheetView>("SheetView")
@@ -139,29 +120,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
   value_object<JsSheetProtectionResult>("SheetProtectionResult")
       .field("status", &JsSheetProtectionResult::status)
       .field("protection", &JsSheetProtectionResult::protection);
-
-  value_object<JsColumnLayout>("ColumnLayout")
-      .field("first", &JsColumnLayout::first)
-      .field("last", &JsColumnLayout::last)
-      .field("width", &JsColumnLayout::width)
-      .field("hidden", &JsColumnLayout::hidden)
-      .field("outlineLevel", &JsColumnLayout::outlineLevel);
-
-  register_vector<JsColumnLayout>("ColumnLayoutVector");
-
-  value_object<JsColumnsResult>("ColumnsResult")
-      .field("status", &JsColumnsResult::status)
-      .field("columns", &JsColumnsResult::columns);
-
-  value_object<JsRowLayout>("RowLayout")
-      .field("row", &JsRowLayout::row)
-      .field("height", &JsRowLayout::height)
-      .field("hidden", &JsRowLayout::hidden)
-      .field("outlineLevel", &JsRowLayout::outlineLevel);
-
-  register_vector<JsRowLayout>("RowLayoutVector");
-
-  value_object<JsRowsResult>("RowsResult").field("status", &JsRowsResult::status).field("rows", &JsRowsResult::rows);
 
   value_object<JsAddStyleResult>("AddStyleResult")
       .field("status", &JsAddStyleResult::status)
@@ -218,7 +176,9 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getCellStyleXf", &JsWorkbook::getCellStyleXf)
       .function("getCellXf", &JsWorkbook::getCellXf)
       .function("getCellXfIndex", &JsWorkbook::getCellXfIndex)
+      .function("getCellPhonetic", &JsWorkbook::getCellPhonetic)
       .function("getComment", &JsWorkbook::getComment)
+      .function("getCommentResult", &JsWorkbook::getCommentResult)
       .function("getComments", &JsWorkbook::getComments)
       .function("getConditionalFormats", &JsWorkbook::getConditionalFormats)
       .function("getDxf", &JsWorkbook::getDxf)
@@ -241,6 +201,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("localizeFunctionName", &JsWorkbook::localizeFunctionName)
       .function("moveSheet", &JsWorkbook::moveSheet)
       .function("partialRecalc", &JsWorkbook::partialRecalc)
+      .function("paginate", &JsWorkbook::paginate)
       .function("passthroughAt", &JsWorkbook::passthroughAt)
       .function("passthroughCount", &JsWorkbook::passthroughCount)
       .function("pivotCacheCount", &JsWorkbook::pivotCacheCount)
@@ -319,6 +280,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setBool", &JsWorkbook::setBool)
       .function("setCalcMode", &JsWorkbook::setCalcMode)
       .function("setCellXfIndex", &JsWorkbook::setCellXfIndex)
+      .function("setCellPhonetic", &JsWorkbook::setCellPhonetic)
       .function("setColumnHidden", &JsWorkbook::setColumnHidden)
       .function("setColumnOutline", &JsWorkbook::setColumnOutline)
       .function("setColumnWidth", &JsWorkbook::setColumnWidth)
@@ -357,6 +319,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("versionString", &version_string);
   function("version", &version_string);
   function("statusString", &status_string);
+  function("errorDisplayName", &error_display_name);
   function("lastErrorMessage", &last_error_message);
   function("lastErrorContext", &last_error_context);
 }

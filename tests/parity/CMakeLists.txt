@@ -5,10 +5,9 @@
 # the installed Python wheel, and asserts every available channel agrees
 # at %.15g-canonicalized IEEE-754 bit granularity.
 #
-# The harness is skip-aware -- a missing channel is reported but does not
-# fail. It only fails when two or more channels disagreed on at least one
-# fixture, so this ctest entry is safe to include even when only the
-# native build has been produced.
+# The harness reports CTest's conventional SKIP when fewer than two channels
+# are available. With two or more, every channel must agree and satisfy each
+# fixture's expectation.
 
 if(FM_BUILD_TESTING)
   find_package(Python3 COMPONENTS Interpreter)
@@ -19,5 +18,11 @@ if(FM_BUILD_TESTING)
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
     set_tests_properties(parity_test PROPERTIES LABELS "PARITY")
+    set_tests_properties(parity_test PROPERTIES SKIP_RETURN_CODE 77)
+    add_test(
+      NAME parity_runner_test
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/parity/run_parity_test.py
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
   endif()
 endif()

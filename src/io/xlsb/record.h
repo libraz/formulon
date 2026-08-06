@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB record framing primitives.
 //
@@ -60,32 +59,46 @@ struct XlsbRecord {
 /// signals "skip" by reading the payload length and stepping over.
 enum class XlsbRecordType : std::uint16_t {
   // Cell records.
-  BrtRowHdr = 0,      ///< Row metadata; precedes a run of cell records.
-  BrtCellBlank = 1,   ///< Blank cell (still carries column index).
-  BrtCellRk = 2,      ///< RK-encoded numeric cell.
-  BrtCellError = 3,   ///< Error-literal cell.
-  BrtCellBool = 4,    ///< Boolean-literal cell.
-  BrtCellReal = 5,    ///< IEEE 754 double-literal cell.
-  BrtCellSt = 6,      ///< Inline-string cell.
-  BrtCellIsst = 7,    ///< Cell referencing the SST.
-  BrtFmlaString = 8,  ///< Formula cell with text result.
-  BrtFmlaNum = 9,     ///< Formula cell with numeric result.
-  BrtFmlaBool = 10,   ///< Formula cell with boolean result.
-  BrtFmlaError = 11,  ///< Formula cell with error result.
-  BrtSSTItem = 19,    ///< One entry of the shared-string table.
+  BrtRowHdr = 0,       ///< Row metadata; precedes a run of cell records.
+  BrtCellBlank = 1,    ///< Blank cell (still carries column index).
+  BrtCellRk = 2,       ///< RK-encoded numeric cell.
+  BrtCellError = 3,    ///< Error-literal cell.
+  BrtCellBool = 4,     ///< Boolean-literal cell.
+  BrtCellReal = 5,     ///< IEEE 754 double-literal cell.
+  BrtCellSt = 6,       ///< Inline-string cell.
+  BrtCellIsst = 7,     ///< Cell referencing the SST.
+  BrtFmlaString = 8,   ///< Formula cell with text result.
+  BrtFmlaNum = 9,      ///< Formula cell with numeric result.
+  BrtFmlaBool = 10,    ///< Formula cell with boolean result.
+  BrtFmlaError = 11,   ///< Formula cell with error result.
+  BrtSSTItem = 19,     ///< One entry of the shared-string table.
+  BrtCellMeta = 49,    ///< Cell metadata index (for dynamic-array anchors).
+  BrtColInfo = 60,     ///< Column width / visibility / outline span.
+  BrtMergeCell = 176,  ///< One merged-cell rectangle.
 
   // Container records (begin/end markers).
-  BrtBeginSheet = 129,      ///< Start of a worksheet stream.
-  BrtEndSheet = 130,        ///< End of a worksheet stream.
-  BrtBeginBook = 131,       ///< Start of the workbook stream.
-  BrtEndBook = 132,         ///< End of the workbook stream.
-  BrtBeginBundleShs = 143,  ///< Start of the sheet-bundle list.
-  BrtEndBundleShs = 144,    ///< End of the sheet-bundle list.
-  BrtBeginSheetData = 145,  ///< Start of `<sheetData>` equivalent.
-  BrtEndSheetData = 146,    ///< End of `<sheetData>` equivalent.
-  BrtBundleSh = 156,        ///< One entry in the sheet-bundle list.
-  BrtBeginSst = 159,        ///< Start of the shared-string table.
-  BrtEndSst = 160,          ///< End of the shared-string table.
+  BrtBeginSheet = 129,       ///< Start of a worksheet stream.
+  BrtEndSheet = 130,         ///< End of a worksheet stream.
+  BrtBeginBook = 131,        ///< Start of the workbook stream.
+  BrtEndBook = 132,          ///< End of the workbook stream.
+  BrtBeginWsViews = 133,     ///< Start of worksheet-view collection.
+  BrtEndWsViews = 134,       ///< End of worksheet-view collection.
+  BrtBeginWsView = 137,      ///< One worksheet view.
+  BrtEndWsView = 138,        ///< End of one worksheet view.
+  BrtWbProp = 153,           ///< Workbook properties, including the date system.
+  BrtBeginBundleShs = 143,   ///< Start of the sheet-bundle list.
+  BrtEndBundleShs = 144,     ///< End of the sheet-bundle list.
+  BrtBeginSheetData = 145,   ///< Start of `<sheetData>` equivalent.
+  BrtEndSheetData = 146,     ///< End of `<sheetData>` equivalent.
+  BrtWsProp = 147,           ///< Worksheet properties.
+  BrtWsDim = 148,            ///< Bounding range of non-empty worksheet cells.
+  BrtBundleSh = 156,         ///< One entry in the sheet-bundle list.
+  BrtBeginSst = 159,         ///< Start of the shared-string table.
+  BrtEndSst = 160,           ///< End of the shared-string table.
+  BrtBeginMergeCells = 177,  ///< Start of the merged-cell collection.
+  BrtEndMergeCells = 178,    ///< End of the merged-cell collection.
+  BrtBeginColInfos = 390,    ///< Start of the column-layout record collection.
+  BrtEndColInfos = 391,      ///< End of the column-layout record collection.
 
   // Defined-name / future-function-name table (workbook globals).
   BrtName = 39,  ///< One `<definedName>`-equivalent, incl. hidden
@@ -104,6 +117,8 @@ enum class XlsbRecordType : std::uint16_t {
   // record supplies them, keyed by the anchor's `(row, col)` via its
   // leading `RfX` (row/col range).
   BrtArrFmla = 426,
+  BrtWsFmtInfo = 485,  ///< Default row/column formatting for a worksheet.
+  BrtPane = 561,       ///< Split or frozen panes for a worksheet view.
 
   // Styles (`xl/styles.bin`): custom number formats and the font / fill
   // / border / xf tables `iStyleRef` (in the per-cell header) indexes

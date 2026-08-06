@@ -2,11 +2,11 @@
   "suite": "floor_ceiling_edges",
   "description": "FLOOR / CEILING edge cases mirroring IronCalc's calc_tests/FLOOR_CEILING fixture. The existing math.yaml covers (neg-num, pos-sig) sign mismatch but not the asymmetric (pos-num, neg-sig) direction, blank significance, date-text significance, or range-as-significance arguments. Each case probes a specific semantic question so we can confirm whether Mac Excel 365 (ja-JP) agrees with Formulon, with IronCalc, or with neither. The author-side `expect:` value is Formulon's current return for cross-check; the verifier compares against the Excel-observed golden once oracle-gen has run.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-25T15:24:31Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

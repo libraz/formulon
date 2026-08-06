@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tri-state helpers for XSD `boolean` attributes whose schema default is
 // a fixed value (usually `true` or `false`). OOXML relies heavily on the

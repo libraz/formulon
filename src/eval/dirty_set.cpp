@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `DirtySet` is implemented entirely as inline members in the header
 // (a thin wrapper around `std::unordered_set<CellNodeId>`). This

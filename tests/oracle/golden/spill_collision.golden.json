@@ -1,0 +1,132 @@
+{
+  "suite": "spill_collision",
+  "description": "Dynamic-array spill collision (#SPILL!). When a 365-era formula at the formula cell would spill into a rectangle whose downstream cells are not blank, Excel suppresses the spill and the formula cell itself reports #SPILL!. This suite probes the closure: clean spill (control), column blocker, row blocker, mid-rectangle blocker, and merged-cell blocker. The formula always lives at Z1 (the xlwings driver convention), so blockers are placed in cells the would-be spill rectangle covers.\n",
+  "environment": {
+    "excel_version": "16.111.2",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-08-05T01:06:33Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "spill_clean_anchor",
+      "formula": "=SEQUENCE(3)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "spill_vertical_blocked_adjacent",
+      "formula": "=SEQUENCE(3)",
+      "setup": {
+        "Z2": {
+          "kind": "text",
+          "value": "blocker"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "spill_vertical_blocked_tail",
+      "formula": "=SEQUENCE(5)",
+      "setup": {
+        "Z5": {
+          "kind": "text",
+          "value": "blocker"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "spill_horizontal_blocked",
+      "formula": "=SEQUENCE(1, 3)",
+      "setup": {
+        "AA1": {
+          "kind": "text",
+          "value": "blocker"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "spill_2d_blocked_interior",
+      "formula": "=SEQUENCE(2, 2)",
+      "setup": {
+        "AA2": {
+          "kind": "text",
+          "value": "blocker"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "spill_unique_blocked",
+      "formula": "=UNIQUE({1;2;3})",
+      "setup": {
+        "Z3": {
+          "kind": "number",
+          "value": 42.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "spill_blocked_by_formula_value",
+      "formula": "=SEQUENCE(3)",
+      "setup": {
+        "Z2": {
+          "kind": "formula",
+          "formula": "=LEN(\"x\")"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "spill_blocked_by_empty_string_formula",
+      "formula": "=SEQUENCE(3)",
+      "setup": {
+        "Z2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    }
+  ]
+}

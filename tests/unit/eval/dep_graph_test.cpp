@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the workbook-wide cell dependency graph.
 
@@ -75,6 +74,23 @@ TEST(DepGraph, SingleEdge) {
   EXPECT_EQ(g.dependents_of(b), std::vector<CellNodeId>{a});
   EXPECT_TRUE(g.dependents_of(a).empty());
   EXPECT_TRUE(g.dependencies_of(b).empty());
+  EXPECT_EQ(g.dependencies_of_ref(a), std::vector<CellNodeId>{b});
+  EXPECT_TRUE(g.dependencies_of_ref(b).empty());
+}
+
+TEST(DepGraph, ClassifiesCyclicComponents) {
+  DepGraph g;
+  const CellNodeId a = Make(0, 0, 0);
+  const CellNodeId b = Make(0, 0, 1);
+  const CellNodeId c = Make(0, 0, 2);
+  g.add_dependency(a, a);
+  g.add_dependency(b, c);
+  g.add_dependency(c, b);
+
+  EXPECT_FALSE(is_cyclic_component({}, g));
+  EXPECT_TRUE(is_cyclic_component({a}, g));
+  EXPECT_FALSE(is_cyclic_component({b}, g));
+  EXPECT_TRUE(is_cyclic_component({b, c}, g));
 }
 
 TEST(DepGraph, IdempotentAddDependency) {
@@ -143,6 +159,21 @@ TEST(DepGraph, ClearDependenciesPreservesIncomingEdges) {
   EXPECT_EQ(g.dependencies_of(c), std::vector<CellNodeId>{a});
 }
 
+TEST(DepGraph, ClearSelfLoopRemovesTheNowEmptyReverseBucket) {
+  DepGraph g;
+  const CellNodeId a = Make(0, 0, 0);
+  g.add_dependency(a, a);
+  ASSERT_FALSE(g.empty());
+  ASSERT_EQ(g.node_count(), 1u);
+
+  g.clear_dependencies_of(a);
+
+  EXPECT_TRUE(g.dependencies_of(a).empty());
+  EXPECT_TRUE(g.dependents_of(a).empty());
+  EXPECT_TRUE(g.empty());
+  EXPECT_EQ(g.node_count(), 0u);
+}
+
 TEST(DepGraph, RemoveNodeDropsAllEdges) {
   DepGraph g;
   CellNodeId a = Make(0, 0, 0);
@@ -193,6 +224,26 @@ TEST(DepGraph, TarjanLinearChainReverseTopological) {
   ASSERT_GE(idx_c, 0);
   EXPECT_LT(idx_c, idx_b);
   EXPECT_LT(idx_b, idx_a);
+}
+
+TEST(DepGraph, TarjanSubsetUsesOnlySelectedDirtyClosure) {
+  // a -> b -> c -> d. Selecting b/c must not allocate or traverse the
+  // unrelated endpoints; the induced subgraph preserves b -> c ordering.
+  DepGraph g;
+  CellNodeId a = Make(0, 0, 0);
+  CellNodeId b = Make(0, 0, 1);
+  CellNodeId c = Make(0, 0, 2);
+  CellNodeId d = Make(0, 0, 3);
+  g.add_dependency(a, b);
+  g.add_dependency(b, c);
+  g.add_dependency(c, d);
+
+  const std::unordered_set<CellNodeId, CellNodeIdHash> selected = {b, c};
+  const auto sccs = g.tarjan_scc_subset(selected);
+  ASSERT_EQ(sccs.size(), 2U);
+  EXPECT_EQ(SccIndexOf(sccs, a), -1);
+  EXPECT_EQ(SccIndexOf(sccs, d), -1);
+  EXPECT_LT(SccIndexOf(sccs, c), SccIndexOf(sccs, b));
 }
 
 TEST(DepGraph, TarjanSelfLoopIsSingleton) {

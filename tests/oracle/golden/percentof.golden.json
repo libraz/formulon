@@ -2,11 +2,11 @@
   "suite": "percentof",
   "description": "PERCENTOF ratio aggregator (Excel 365, Sep 2024 GA) — six perspectives spanning scalar ratio, array-literal subset/all, denominator-zero, the range-filter quirk that drops text inside an array literal, direct-scalar bool coercion, and left-to-right error propagation.",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T17:22:12Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

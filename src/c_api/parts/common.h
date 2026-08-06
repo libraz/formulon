@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared private helpers for the C-ABI implementation split across
 // `src/c_api/parts/*.cpp`. These leak no symbols outside the binary
@@ -15,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -95,12 +95,6 @@ constexpr std::uint32_t kMaxRangesPerCApiCall = 16384U;
 // bogus reservation.
 bool check_range_count(std::uint32_t n, const char* api);
 
-// Inserts `text` (a non-owning UTF-8 view) into `store` and returns a
-// non-owning `string_view` whose pointee is owned by `store`. Used by
-// `fm_workbook_set_text` so the view stored on the cell remains valid
-// for the lifetime of the handle.
-std::string_view intern_text(TextStore& store, std::string_view text);
-
 // Translates a `Value` into a C-side `fm_value_t`. For text variants the
 // payload is appended to `store` and the returned pointer is a stable,
 // NUL-terminated `c_str()` into it. Read-path callers pass the per-handle
@@ -138,12 +132,11 @@ fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const 
 struct fm_workbook {
   std::optional<formulon::Workbook> wb;
 
-  // Intern storage for UTF-8 strings that must live for the lifetime of
-  // the handle: cell text inputs (`fm_workbook_set_text`) and any other
-  // string whose bytes back a non-owning `Value::text` view stored inside
-  // the workbook. Entries are never removed while the handle is alive, so
-  // every view interned here stays valid until the handle is destroyed.
-  formulon::c_api::parts::TextStore text_store;
+  // Diagnostics captured only while loading an XLSB package. They remain
+  // attached to this handle so callers can inspect lossy Ptg recovery after
+  // `fm_workbook_load` returns successfully.
+  std::uint32_t xlsb_undecoded_formula_count = 0;
+  std::uint32_t xlsb_undecoded_defined_name_count = 0;
 
   // Scratch storage for strings handed back to the caller on the read
   // path (`fm_workbook_get_value` / `fm_workbook_cell_at` /
@@ -155,6 +148,16 @@ struct fm_workbook {
   // call on the same handle (or any mutation, or handle destruction) —
   // the standard C-ABI scratch contract documented in `formulon_c.h`.
   formulon::c_api::parts::TextStore read_scratch;
+
+  // Sorted coordinate cache for the `cell_count` / `cell_at` iteration
+  // pair. The associated Sheet revision invalidates it after any cell,
+  // spill, or structural mutation.
+  struct CellEnumerationCache {
+    std::size_t sheet_index = std::numeric_limits<std::size_t>::max();
+    std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> addresses;
+  };
+  mutable CellEnumerationCache cell_enumeration_cache;
 
   // Scratch buffers for `fm_sheet_cf_get_at` visual payload arrays. The
   // returned pointers follow the same read-scratch lifetime as textual

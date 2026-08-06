@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Excel-compatible AST → formula text formatter. The formatter mirrors the
 // Pratt parser's recursive structure: each kind emits its surface form and
@@ -127,9 +126,10 @@ void FormatTextLiteral(std::string_view s, std::string& out) {
 void FormatLiteral(const Value& v, std::string& out) {
   switch (v.kind()) {
     case ValueKind::Blank:
-      // Bare blank literals are not directly representable as Excel source;
-      // treat as the empty string so any round-trip stays parseable.
-      out.append("\"\"");
+      // A Blank literal represents an omitted argument. Its surrounding
+      // call/array formatter emits the separators, which preserves the empty
+      // slot (for example, FN(a,,b)). Rendering it as "" changes semantics:
+      // many Excel functions distinguish an omitted argument from empty text.
       return;
     case ValueKind::Number:
       FormatNumberLiteral(v, out);
@@ -159,51 +159,6 @@ void FormatRef(const Reference& r, std::string& out) {
   out.append(format_a1(r));
 }
 
-// Returns true iff `sheet` contains a character outside the bare
-// (unquoted) sheet-name set `[A-Za-z0-9_.]`, or is empty.
-bool SheetNameHasForbiddenChar(std::string_view sheet) noexcept {
-  if (sheet.empty()) {
-    return true;
-  }
-  for (char c : sheet) {
-    const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.';
-    if (!ok) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Returns true iff `sheet` has the exact shape of an A1-style cell
-// reference (`[A-Za-z]{1,3}[1-9][0-9]*`, e.g. `S2`, `AB12`). Such a name
-// is indistinguishable from a cell reference when left unquoted -- the
-// tokenizer resolves it to a `CellRef` token before a qualifying `!` can
-// reclassify it -- so Excel itself always quotes it. Verified against a
-// real Excel-365-produced package: a sheet literally named `S2`
-// serialises as `'S2'!A1*2`, never the bare form.
-bool SheetNameLooksLikeCellRef(std::string_view sheet) noexcept {
-  std::size_t i = 0;
-  while (i < sheet.size() && ((sheet[i] >= 'A' && sheet[i] <= 'Z') || (sheet[i] >= 'a' && sheet[i] <= 'z'))) {
-    ++i;
-  }
-  const std::size_t letters = i;
-  if (letters == 0 || letters > 3 || i >= sheet.size()) {
-    return false;
-  }
-  if (sheet[i] < '1' || sheet[i] > '9') {
-    return false;
-  }
-  ++i;
-  while (i < sheet.size() && sheet[i] >= '0' && sheet[i] <= '9') {
-    ++i;
-  }
-  return i == sheet.size();
-}
-
-bool SheetNameNeedsQuote(std::string_view sheet) noexcept {
-  return SheetNameHasForbiddenChar(sheet) || SheetNameLooksLikeCellRef(sheet);
-}
-
 // Appends `s`, doubling any embedded single quotes per Excel's escaping
 // convention.
 void AppendQuoteEscaped(std::string_view s, std::string& out) {
@@ -224,7 +179,7 @@ void FormatExternalRef(const AstNode& node, std::string& out) {
   // field. We bypass format_a1's sheet handling here because the cell sub-
   // ref's own `sheet` is normally empty (the parser strips it).
   const std::string_view sheet = node.as_external_ref_sheet();
-  if (SheetNameNeedsQuote(sheet)) {
+  if (sheet_name_needs_quoting(sheet)) {
     out.push_back('\'');
     AppendQuoteEscaped(sheet, out);
     out.push_back('\'');
@@ -247,7 +202,7 @@ void FormatRef3D(const AstNode& node, std::string& out) {
   // cell reference) serialises as `SUM('Data:S2'!B1)`.
   const std::string_view begin = node.as_ref3d_sheet_begin();
   const std::string_view end = node.as_ref3d_sheet_end();
-  if (SheetNameNeedsQuote(begin) || SheetNameNeedsQuote(end)) {
+  if (sheet_name_needs_quoting(begin) || sheet_name_needs_quoting(end)) {
     out.push_back('\'');
     AppendQuoteEscaped(begin, out);
     out.push_back(':');
@@ -265,11 +220,20 @@ void FormatRef3D(const AstNode& node, std::string& out) {
   out.append(format_a1(cell_no_sheet));
   // Range tail (`'Data:S2'!A1:B2`): append the bottom-right corner.
   if (node.as_ref3d_is_range()) {
-    out.push_back(':');
     Reference end_no_sheet = node.as_ref3d_cell_end();
     end_no_sheet.sheet = {};
     end_no_sheet.sheet_quoted = false;
-    out.append(format_a1(end_no_sheet));
+    if ((cell_no_sheet.is_full_col && end_no_sheet.is_full_col) ||
+        (cell_no_sheet.is_full_row && end_no_sheet.is_full_row)) {
+      const std::string end_ref_text = format_a1(end_no_sheet);
+      const std::size_t begin_axis_end = out.find(':', out.size() - format_a1(cell_no_sheet).size());
+      out.erase(begin_axis_end);
+      out.push_back(':');
+      out.append(end_ref_text, 0, end_ref_text.find(':'));
+    } else {
+      out.push_back(':');
+      out.append(format_a1(end_no_sheet));
+    }
   }
 }
 
@@ -937,6 +901,9 @@ struct StorageEmitter {
 }  // namespace
 
 std::string format_formula(const AstNode& node) {
+  if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
+    return "#REF!";
+  }
   std::string out;
   out.reserve(64);
   FormatNode(node, out, 0);
@@ -944,6 +911,9 @@ std::string format_formula(const AstNode& node) {
 }
 
 std::string format_formula_storage(const AstNode& node, StoragePrefixClassifier classify) {
+  if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
+    return "#REF!";
+  }
   StorageEmitter emitter{classify, {}};
   std::string out;
   out.reserve(64);

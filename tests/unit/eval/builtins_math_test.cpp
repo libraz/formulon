@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the math built-in functions: ABS, SIGN, INT, TRUNC,
 // SQRT, MOD, POWER, ROUND, ROUNDDOWN, ROUNDUP, MIN, MAX, AVERAGE, PRODUCT.
@@ -172,6 +171,40 @@ TEST(MathTrunc, ZeroArgsIsArityViolation) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// A digit count far outside `int`'s range must saturate rather than wrap.
+// Converting such a double to `int` is undefined, and the architectures
+// disagree on the result, so an unclamped cast made these truncate to a no-op
+// on one host and collapse to zero on another.
+TEST(MathTrunc, HugePositiveDigitsIsANoOp) {
+  const Value v = EvalSource("=TRUNC(1E100, 1E50)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1e100);
+
+  const Value w = EvalSource("=TRUNC(5, 9.99999E307)");
+  ASSERT_TRUE(w.is_number());
+  EXPECT_EQ(w.as_number(), 5.0);
+}
+
+TEST(MathTrunc, HugeNegativeDigitsIsZero) {
+  const Value v = EvalSource("=TRUNC(1E100, -1E50)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(MathRoundFamily, HugeDigitsSaturateConsistently) {
+  // ROUND, ROUNDDOWN and ROUNDUP read the digit count through the same helper.
+  for (const char* src : {"=ROUND(5, 1E50)", "=ROUNDDOWN(5, 1E50)", "=ROUNDUP(5, 1E50)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number()) << src;
+    EXPECT_EQ(v.as_number(), 5.0) << src;
+  }
+  for (const char* src : {"=ROUND(5, -1E50)", "=ROUNDDOWN(5, -1E50)", "=ROUNDUP(5, -1E50)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number()) << src;
+    EXPECT_EQ(v.as_number(), 0.0) << src;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // SQRT
 // ---------------------------------------------------------------------------
@@ -320,6 +353,14 @@ TEST(MathRound, OneAndAHalfRoundsUp) {
   const Value v = EvalSource("=ROUND(1.5, 0)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 2.0);
+}
+
+TEST(MathRound, ValueOutsideUlpToleranceDoesNotRoundUp) {
+  // The decimal is about 90 ULPs below 0.5. ROUND must not mistake it for
+  // arithmetic noise around a half boundary.
+  const Value v = EvalSource("=ROUND(0.49999999999999, 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 0.0);
 }
 
 TEST(MathRound, ExtremePositiveDigitsIsNoOp) {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test: sheets large enough to route through the streaming
 // SAX read path (>= kSaxThresholdBytes) must still recover the non-cell
@@ -312,6 +311,32 @@ TEST(OoxmlSaxMetadata, DomAndSaxPathsAgree) {
   // Sanity: the shared follower actually resolved (not left blank) on both.
   EXPECT_EQ(dom_or.value().workbook.sheet(0).cell_at(1U, 1U)->formula_text, "=A2*2");
   EXPECT_EQ(sax_or.value().workbook.sheet(0).cell_at(1U, 1U)->formula_text, "=A2*2");
+}
+
+TEST(OoxmlSaxMetadata, EmptyNumericValueHasSameBlankMeaningOnBothPaths) {
+  if (io::kSaxThresholdBytes == static_cast<std::size_t>(-1)) {
+    GTEST_SKIP() << "SAX path disabled in this build";
+  }
+  const std::vector<std::uint8_t> pkg = BuildPackage(
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<sheetData><row r=\"1\"><c r=\"A1\"><v/></c></row></sheetData></worksheet>");
+
+  auto dom_or = io::internal::ReadOoxmlWithSaxThresholdForTesting(SpanOf(pkg), static_cast<std::size_t>(-1));
+  auto sax_or = io::internal::ReadOoxmlWithSaxThresholdForTesting(SpanOf(pkg), 0U);
+  ASSERT_TRUE(static_cast<bool>(dom_or)) << dom_or.error().message;
+  ASSERT_TRUE(static_cast<bool>(sax_or)) << sax_or.error().message;
+
+  const Cell* dom = dom_or.value().workbook.sheet(0).cell_at(0U, 0U);
+  const Cell* sax = sax_or.value().workbook.sheet(0).cell_at(0U, 0U);
+  // Blank cells are omitted from sparse storage; whether a future storage
+  // implementation materialises them or not, both readers must agree.
+  EXPECT_EQ(dom != nullptr, sax != nullptr);
+  if (dom != nullptr) {
+    EXPECT_TRUE(dom->cached_value.is_blank());
+  }
+  if (sax != nullptr) {
+    EXPECT_TRUE(sax->cached_value.is_blank());
+  }
 }
 
 // Real Excel writes a spilling `=SEQUENCE(3)` at F6 as

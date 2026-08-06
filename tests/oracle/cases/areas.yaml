@@ -104,9 +104,7 @@ cases:
 
   # -- Reference-returning functions (likely Formulon-vs-Excel divergence) ---
   - id: arg_indirect_resolved
-    description: |
-      Excel: INDIRECT resolves to a 1-area ref → 1. Formulon: count_areas
-      sees a Call node and returns #VALUE!. Captured to expose the gap.
+    description: "INDIRECT resolves to a 1-area reference; AREAS evaluates the call and counts it."
     formula: "=AREAS(INDIRECT(\"A1\"))"
     expect: { kind: number, value: 1 }
 
@@ -143,15 +141,14 @@ cases:
     formula: "=AREAS(IF(FALSE,A1:B2,(C1,D1,E1)))"
     expect: { kind: number, value: 3 }
 
-  # -- INDIRECT of a union string (deferred) -------------------------------
+  # -- INDIRECT of a union string ------------------------------------------
   - id: arg_indirect_union
     description: |
-      Excel resolves the INDIRECT string into a 2-area reference union → 2.
-      Formulon counts the INDIRECT call as a single opaque reference (1)
-      because it has no runtime reference-union value to parse the string
-      into. Tracked as a divergence; see tests/divergence.yaml.
+      INDIRECT builds at most one rectangle, so a comma union is not a
+      reference it can return: the call itself is #REF! and AREAS reports
+      that error rather than a count of 2.
     formula: "=AREAS(INDIRECT(\"A1,B2\"))"
-    expect: { kind: number, value: 2 }
+    expect: { kind: error, code: "#REF!" }
 
   # -- Intersection operator (space) --------------------------------------
   - id: arg_intersection_operator

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end integration tests for the workbook recalc loop. These tests
 // drive the public Workbook API (`set_cell_value`, `set_cell_formula`,
@@ -65,6 +64,24 @@ TEST(WorkbookRecalc, SmallChainEndToEnd) {
   ASSERT_TRUE(a3.is_number());
   EXPECT_DOUBLE_EQ(a2.as_number(), 40.0);
   EXPECT_DOUBLE_EQ(a3.as_number(), 45.0);
+}
+
+TEST(WorkbookRecalc, ThousandCellCumulativeChainUsesDependencyOrderedCaches) {
+  Workbook wb = Workbook::create();
+  constexpr std::uint32_t kRows = 1000U;
+  for (std::uint32_t row = 0; row < kRows; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, row, 0U, Value::number(1.0))));
+    const std::string formula = (row == 0U) ? "=A1" : "=B" + std::to_string(row) + "+A" + std::to_string(row + 1U);
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 1U, formula)));
+  }
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t row = 0; row < kRows; ++row) {
+    const Cell* cell = wb.sheet(0).cell_at(row, 1U);
+    ASSERT_NE(cell, nullptr);
+    ASSERT_TRUE(cell->cached_value.is_number()) << "row=" << row + 1U;
+    EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), static_cast<double>(row + 1U)) << "row=" << row + 1U;
+  }
 }
 
 TEST(WorkbookRecalc, ValidPrefixWithTrailingGarbageIsNameError) {
@@ -214,6 +231,47 @@ TEST(WorkbookRecalc, RedefiningDefinedNameInvalidatesDependents) {
   ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
   EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 1U).as_number(), 12.0)
       << "defined-name dependent kept the stale value after retarget";
+}
+
+TEST(WorkbookRecalc, AddingDefinedNameRecalculatesNameErrorDependents) {
+  // An initially unresolved name produces #NAME?. Adding its definition must
+  // rebuild the formula graph so the already-entered formula becomes live.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=Rate*10")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_error());
+  EXPECT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Name);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Rate", "=2")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Value a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(a1.is_number());
+  EXPECT_DOUBLE_EQ(a1.as_number(), 20.0);
+}
+
+TEST(WorkbookRecalc, FormattingLiveSpillPhantomPreservesDynamicArray) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  // B1 is a live spill phantom. Applying an xf is metadata-only and must
+  // retain its value and the complete spill region.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_xf_index(0U, 0U, 1U, 7U)));
+  const Cell* b1 = wb.sheet(0).cell_at(0U, 1U);
+  ASSERT_NE(b1, nullptr);
+  EXPECT_EQ(b1->xf_index, 7U);
+
+  const Value a1 = wb.sheet(0).resolve_cell_value(0U, 0U);
+  const Value spill_b1 = wb.sheet(0).resolve_cell_value(0U, 1U);
+  const Value c1 = wb.sheet(0).resolve_cell_value(0U, 2U);
+  ASSERT_TRUE(a1.is_number());
+  ASSERT_TRUE(spill_b1.is_number());
+  ASSERT_TRUE(c1.is_number());
+  EXPECT_DOUBLE_EQ(a1.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(spill_b1.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(c1.as_number(), 3.0);
 }
 
 TEST(WorkbookRecalc, WritingIntoLiveSpillPhantomResurfacesSpillError) {

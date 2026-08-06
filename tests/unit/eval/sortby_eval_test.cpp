@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the lazy `SORTBY(array, by_array1, [order1], [by_array2, ...])`
 // builtin. Shares its TU and helpers (`sort_kind_rank`, `sort_lane_less`)

@@ -1,21 +1,18 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the `AREAS` lazy impl. The structural count of
 // rectangles in a reference argument is computed by recursing over the
 // AST: `UnionOp` children sum, `RangeOp` / `Ref` contribute 1, anything
 // else is `#VALUE!`. See `eval/areas_lazy.h` for the dispatch contract.
 //
-// Reference-returning function calls are handled in two ways. CHOOSE and
+// Reference-returning function calls are handled in three ways. CHOOSE and
 // IF return one of their reference branches, so AREAS recurses into the
 // branch that the index / condition selects and counts areas there (this
-// makes `=AREAS(CHOOSE(2, A1:B2, (C1,D1)))` return 2). Other
-// reference-returning calls (INDIRECT, OFFSET, INDEX, XLOOKUP, ...) are
-// recognised by static name and counted as 1 area. The latter is an
-// approximation: Excel can return a multi-area union via e.g.
-// `=INDIRECT("A1,B2")`, which is actually 2 areas. Resolving that would
-// require parsing / evaluating the INDIRECT string into a runtime
-// reference union, which the engine cannot represent today; see the
-// `areas-indirect-union` entry in tests/divergence.yaml.
+// makes `=AREAS(CHOOSE(2, A1:B2, (C1,D1)))` return 2). INDIRECT is actually
+// evaluated: it builds at most one rectangle, so a successful resolution is
+// 1 area and a failure — including a comma union such as `"A1,B2"`, which
+// is not a reference INDIRECT can build — surfaces through AREAS as that
+// same error. Other reference-returning calls (OFFSET, INDEX, XLOOKUP, ...)
+// are recognised by static name and counted as 1 area.
 
 #include "eval/areas_lazy.h"
 
@@ -39,9 +36,10 @@ namespace {
 // Sentinel return values used by `count_areas` to communicate non-count
 // outcomes through a single `int64_t` return. Negative values cannot be
 // confused with a real Excel area count (always >= 0).
-constexpr std::int64_t kAreasInvalid = -1;  // -> #VALUE!
-constexpr std::int64_t kAreasNull = -2;     // -> #NULL! (disjoint intersection)
-constexpr std::int64_t kAreasRef = -3;      // -> #REF! (cross-sheet intersection)
+constexpr std::int64_t kAreasInvalid = -1;    // -> #VALUE!
+constexpr std::int64_t kAreasNull = -2;       // -> #NULL! (disjoint intersection)
+constexpr std::int64_t kAreasRef = -3;        // -> #REF! (cross-sheet intersection)
+constexpr std::int64_t kAreasPropagate = -4;  // -> the error stored in `*propagated`
 
 // Function names whose return value Excel treats as a reference for the
 // purposes of AREAS but whose multi-area count we cannot determine
@@ -51,19 +49,21 @@ constexpr std::int64_t kAreasRef = -3;      // -> #REF! (cross-sheet intersectio
 // forms; AREAS arguments are matched case-insensitively below.
 bool returns_single_reference(std::string_view name) noexcept {
   using strings::case_insensitive_eq;
-  return case_insensitive_eq(name, "INDIRECT") || case_insensitive_eq(name, "OFFSET") ||
-         case_insensitive_eq(name, "IFS") || case_insensitive_eq(name, "SWITCH") ||
-         case_insensitive_eq(name, "INDEX") || case_insensitive_eq(name, "XLOOKUP");
+  return case_insensitive_eq(name, "OFFSET") || case_insensitive_eq(name, "IFS") ||
+         case_insensitive_eq(name, "SWITCH") || case_insensitive_eq(name, "INDEX") ||
+         case_insensitive_eq(name, "XLOOKUP");
 }
 
 // Recursively sums the leaf rectangles in a reference-shaped AST subtree.
 // Returns a negative sentinel on structural mismatch so callers can
-// translate it into the right Excel error without an extra out-parameter.
-// `IntersectOp` requires a runtime rectangle test (disjoint -> `#NULL!`),
-// so the `arena` / `registry` / `ctx` triple is threaded through to call
-// `compute_intersect_rect`. Other kinds answer from shape alone.
+// translate it into the right Excel error without an extra out-parameter;
+// `kAreasPropagate` is the one sentinel that needs a payload, and writes it
+// to `*propagated`. `IntersectOp` requires a runtime rectangle test
+// (disjoint -> `#NULL!`), so the `arena` / `registry` / `ctx` triple is
+// threaded through to call `compute_intersect_rect`. Other kinds answer
+// from shape alone.
 std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx) noexcept {
+                         const EvalContext& ctx, ErrorCode* propagated) noexcept {
   const parser::NodeKind k = n.kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp) {
     return 1;
@@ -72,7 +72,7 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
     std::int64_t total = 0;
     const std::uint32_t arity = n.as_union_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
-      const std::int64_t c = count_areas(n.as_union_child(i), arena, registry, ctx);
+      const std::int64_t c = count_areas(n.as_union_child(i), arena, registry, ctx, propagated);
       if (c < 0) {
         return c;  // propagate the most specific sentinel.
       }
@@ -98,10 +98,10 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
           return kAreasInvalid;
         }
         if (b.value()) {
-          return count_areas(n.as_call_arg(1), arena, registry, ctx);
+          return count_areas(n.as_call_arg(1), arena, registry, ctx, propagated);
         }
         if (fn_arity == 3U) {
-          return count_areas(n.as_call_arg(2), arena, registry, ctx);
+          return count_areas(n.as_call_arg(2), arena, registry, ctx, propagated);
         }
       }
       return 1;
@@ -121,10 +121,22 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
         }
         const std::int64_t idx = static_cast<std::int64_t>(idx_e.value());
         if (idx >= 1 && idx <= static_cast<std::int64_t>(fn_arity - 1U)) {
-          return count_areas(n.as_call_arg(static_cast<std::uint32_t>(idx)), arena, registry, ctx);
+          return count_areas(n.as_call_arg(static_cast<std::uint32_t>(idx)), arena, registry, ctx, propagated);
         }
       }
       return kAreasInvalid;
+    }
+    // INDIRECT resolves its text to at most one rectangle. A union string
+    // such as "A1,B2" is not a reference it can build, so it fails with
+    // #REF! instead of naming two areas; AREAS reports that error rather
+    // than a count.
+    if (strings::case_insensitive_eq(fname, "INDIRECT")) {
+      const Value resolved = eval_node(n, arena, registry, ctx);
+      if (resolved.is_error()) {
+        *propagated = resolved.as_error();
+        return kAreasPropagate;
+      }
+      return 1;
     }
     if (returns_single_reference(fname)) {
       return 1;
@@ -159,12 +171,16 @@ Value eval_areas_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  const std::int64_t n = count_areas(call.as_call_arg(0), arena, registry, ctx);
+  ErrorCode propagated = ErrorCode::Value;
+  const std::int64_t n = count_areas(call.as_call_arg(0), arena, registry, ctx, &propagated);
   if (n == kAreasNull) {
     return Value::error(ErrorCode::Null);
   }
   if (n == kAreasRef) {
     return Value::error(ErrorCode::Ref);
+  }
+  if (n == kAreasPropagate) {
+    return Value::error(propagated);
   }
   if (n < 0) {
     return Value::error(ErrorCode::Value);

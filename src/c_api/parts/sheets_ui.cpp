@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - sheet UI surface: hyperlinks, merges, comments, data
 // validations, and sheet protection.
@@ -239,7 +238,7 @@ extern "C" fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, std::uint32_t 
       return 0;
     }
   }
-  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_get_comment_at: no comment at cell",
+  return set_binding_error(formulon::FormulonErrorCode::kNotFound, "fm_sheet_get_comment_at: no comment at cell",
                            "row=" + std::to_string(row) + " col=" + std::to_string(col));
 }
 

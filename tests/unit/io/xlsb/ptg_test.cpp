@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the MS-XLSB Ptg dispatch table.
 
@@ -71,6 +70,15 @@ TEST(XlsbPtg, LookupRecognisesExtensionPtgIfError) {
   ASSERT_NE(p, nullptr);
   EXPECT_EQ(p->kind, PtgKind::IfError);
   EXPECT_FALSE(is_class_marked(p->kind));
+}
+
+TEST(XlsbPtg, ExternalWorkbookDefinedNamesRemainExplicitlyUnsupported) {
+  // PtgNameX must not be mistaken for an internal PtgName: resolving it
+  // requires the XLSB external-supporting-book and external-name tables.
+  const PtgInfo* p = lookup_ptg_from_wire(0x39);
+  ASSERT_NE(p, nullptr);
+  EXPECT_EQ(p->kind, PtgKind::NameX);
+  EXPECT_EQ(p->status, PtgStatus::Unsupported);
 }
 
 TEST(XlsbPtg, LookupReturnsNullForUnknownByte) {

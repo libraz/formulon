@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal header for the OOXML cell/row/sheetData builder. Lives inside
 // src/io/; not part of the public API. The unit-test friend is the only
@@ -18,11 +17,12 @@
 namespace formulon {
 class Sheet;
 namespace io {
+class SharedStrings;
 
 /// Returns the <sheetData>...</sheetData> markup for a single sheet. The
 /// caller wraps it in <worksheet>. Pure function: no I/O, no allocation
 /// outside the returned string.
-std::string BuildSheetDataXml(const Sheet& sheet);
+std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings = nullptr);
 
 /// Encodes a 0-based (row, col) into the Excel A1 address (1-based, e.g.
 /// "A1", "AA1", "XFD1048576"). Exposed for unit testing; not consumed

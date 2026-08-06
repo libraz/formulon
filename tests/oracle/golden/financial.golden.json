@@ -2,11 +2,11 @@
   "suite": "financial",
   "description": "PV / FV / PMT / NPER / NPV / IRR / RATE / IPMT / PPMT / CUMIPMT / CUMPRINC / SLN / SYD / DDB / DB — time-value-of-money and depreciation builtins",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T00:58:21Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.001,

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the ad-hoc, side-effect-free formula evaluation C
 // ABI: `fm_workbook_evaluate_formula` / `fm_workbook_evaluate_cf_formula`.

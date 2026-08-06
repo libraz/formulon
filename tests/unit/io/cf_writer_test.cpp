@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Round-trip unit tests for the OOXML conditional-formatting writer.
 // Each test builds a `cf::ConditionalFormat` model in memory, emits the

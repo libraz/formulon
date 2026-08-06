@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal header — do not include outside `src/eval/builtins/financial*`.
 //
@@ -46,15 +45,27 @@ inline Expected<double, ErrorCode> read_required_number(const Value* args, std::
   return builtins_detail::read_required_number(args, index);
 }
 
-// Reads a required date argument, truncating toward zero. Negative serials
-// are rejected as `#NUM!` (Excel's calendar builtins do the same).
+// Ceiling on how many periods a depreciation schedule may be stepped
+// through. `life` is an unconstrained double, and DB / VDB walk one
+// iteration per period, so `=DB(1, 0, 1E18, 1E18)` would otherwise spin for
+// longer than the process will live. One Excel column's worth of periods is
+// far beyond any real schedule — a period index past it could not even be
+// laid out in a worksheet — so a longer request is rejected as `#NUM!`
+// rather than accepted and never answered. DDB needs no such cap: it has a
+// closed form for the same schedule.
+inline constexpr double kMaxDepreciationPeriods = 1048576.0;
+
+// Reads a required date argument, truncating toward zero. Dates outside
+// Excel's supported serial range [0, 2958465] (9999-12-31) are rejected as
+// `#NUM!` before coupon / day-count loops consume them.
 inline Expected<double, ErrorCode> read_financial_date(const Value* args, std::uint32_t index) {
   auto raw = read_required_number(args, index);
   if (!raw) {
     return raw.error();
   }
   const double t = std::trunc(raw.value());
-  if (t < 0.0) {
+  constexpr double kExcelMaxSerial = 2958465.0;
+  if (!std::isfinite(t) || t < 0.0 || t > kExcelMaxSerial) {
     return ErrorCode::Num;
   }
   return t;

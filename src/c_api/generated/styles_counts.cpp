@@ -1,5 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
-//
 // Generated C ABI bodies for the `styles_counts` group. The public
 // declarations live in src/c_api/formulon_c.h; this TU only
 // supplies the implementations the manifest can express.

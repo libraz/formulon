@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the iterative-calc solver. The tests drive the solver
 // directly with mock `evaluate_one` / `commit` callbacks rather than
@@ -133,11 +132,11 @@ TEST(IterativeSolver, IterationLimitExhaustedWithoutConvergence) {
   EXPECT_GT(final.as_number(), 0.0);
 }
 
-TEST(IterativeSolver, DivergenceTriggersNumError) {
+TEST(IterativeSolver, DivergingSequenceRunsToIterationLimit) {
   // Strictly-monotonic-increasing recurrence: x_{n+1} = 2 * x_n + 1.
   // Starting from Blank (treated as 0), the sequence is 1, 3, 7, 15, ...
-  // Each iteration's |delta| is strictly larger than the previous, so
-  // after three observed deltas the divergence detector fires.
+  // Excel has no residual-growth cutoff, so this must consume the configured
+  // iteration budget rather than being converted to #NUM! early.
   MockStore store;
   IterativeOptions opts;
   opts.enabled = true;
@@ -154,27 +153,18 @@ TEST(IterativeSolver, DivergenceTriggersNumError) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_FALSE(out.converged);
-  EXPECT_TRUE(out.diverged);
-  // Divergence detection arms once we have d_{n-2}, d_{n-1}, d_n. With
-  // the sequence 1, 3, 7, 15, ... the deltas are 1, 2, 4, 8, ... and the
-  // monotonic-increase test fires on the third comparison (iteration 4
-  // or earlier depending on the seed transition).
-  EXPECT_LE(out.iterations_run, 100U);
-  // On divergence the solver writes #NUM! to every member.
+  EXPECT_FALSE(out.diverged);
+  EXPECT_EQ(out.iterations_run, 100U);
   Value final = store.get(kCellA);
-  ASSERT_TRUE(final.is_error());
-  EXPECT_EQ(final.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(final.is_number());
+  EXPECT_GT(final.as_number(), 0.0);
 }
 
 TEST(IterativeSolver, ValueKindFlipNeverConverges) {
   // Toggles between Text and Number every iteration. The kind change
   // forces `abs_delta = +infinity`, so no iteration ever reads as
-  // converged. The solver bails out on iteration limit; `diverged` is
-  // false because the deltas are constant (+infinity, +infinity, ...) —
-  // the divergence test requires `>=` on monotonic non-decreasing
-  // deltas, which `+inf >= +inf` satisfies, so divergence DOES fire.
-  // Exact behaviour depends on the divergence threshold check; the
-  // test pins the observable result.
+  // converged. The solver consumes the configured iteration limit without
+  // inferring divergence from the non-finite residual sequence.
   MockStore store;
   IterativeOptions opts;
   opts.enabled = true;
@@ -194,13 +184,11 @@ TEST(IterativeSolver, ValueKindFlipNeverConverges) {
 
   IterativeOutcome out = run_iterative_solve(scc, opts, eval_fn, commit_fn);
   EXPECT_FALSE(out.converged);
-  // The solver detects the constant +infinity delta sequence as
-  // divergent (3 successive non-decreasing deltas above max_change).
-  EXPECT_TRUE(out.diverged);
-  // On divergence the cell holds #NUM!.
+  EXPECT_FALSE(out.diverged);
+  EXPECT_EQ(out.iterations_run, opts.max_iterations);
   Value final = store.get(kCellA);
-  ASSERT_TRUE(final.is_error());
-  EXPECT_EQ(final.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(final.is_number());
+  EXPECT_DOUBLE_EQ(final.as_number(), 1.0);
 }
 
 TEST(IterativeSolver, MultiCellSccConverges) {

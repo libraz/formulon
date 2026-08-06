@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Order-statistic and quantile family for the statistical builtins:
 // MEDIAN, MODE / MODE.SNGL / MODE.MULT, LARGE / SMALL, PERCENTILE[.INC] /
@@ -24,6 +23,7 @@
 #include <vector>
 
 #include "eval/aggregate_kernels.h"
+#include "eval/array_alloc.h"
 #include "eval/builtins/stats/stats_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -31,6 +31,17 @@
 namespace formulon {
 namespace eval {
 namespace stats_detail {
+
+namespace {
+
+double midpoint_without_overflow(double low, double high) {
+  if (std::signbit(low) == std::signbit(high)) {
+    return low + (high - low) * 0.5;
+  }
+  return low * 0.5 + high * 0.5;
+}
+
+}  // namespace
 
 // MEDIAN(value, ...) - median of numeric values. Non-numerics are skipped;
 // an empty collection yields `#NUM!`. For an even count the result is the
@@ -45,7 +56,7 @@ Value Median(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if ((n % 2u) == 1u) {
     return Value::number(xs[n / 2u]);
   }
-  return Value::number(0.5 * (xs[n / 2u - 1u] + xs[n / 2u]));
+  return Value::number(midpoint_without_overflow(xs[n / 2u - 1u], xs[n / 2u]));
 }
 
 // MODE / MODE.SNGL(value, ...) - most-frequent numeric value. Ties resolve
@@ -85,20 +96,14 @@ Value ModeMult(const Value* args, std::uint32_t arity, Arena& arena) {
     }
   }
   const auto rows = static_cast<std::uint32_t>(modes.size());
-  Value* buffer = arena.create_array<Value>(rows);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, 1u, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t i = 0; i < modes.size(); ++i) {
     buffer[i] = Value::number(modes[i]);
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = 1u;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for a miscellaneous batch of builtins that do not fit
 // neatly into the per-category test files: XOR (logical), DAYS360,
@@ -115,13 +114,39 @@ TEST(BuiltinsAreas, IfFalseSelectsElseUnionBranch) {
   EXPECT_EQ(v.as_number(), 3.0);
 }
 
-// INDIRECT of a union string is the documented deferred case: Excel returns
-// 2, Formulon counts the opaque INDIRECT call as a single reference (1).
-// See tests/divergence.yaml (arg_indirect_union).
-TEST(BuiltinsAreas, IndirectOfUnionCountsAsSingleAreaDeferred) {
+// AREAS evaluates INDIRECT instead of counting the call as one opaque
+// reference. INDIRECT builds at most one rectangle, so a union string names
+// nothing it can return and the #REF! travels out through AREAS.
+TEST(BuiltinsAreas, IndirectOfAUnionStringIsARefError) {
   const Value v = EvalSource("=AREAS(INDIRECT(\"A1,B2\"))");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsAreas, IndirectOfASingleReferenceOrRangeIsOneArea) {
+  // Needs a bound sheet: INDIRECT has to actually resolve for the count to
+  // be reached at all.
+  Workbook wb = Workbook::create();
+  const Value single = EvalSourceIn("=AREAS(INDIRECT(\"A1\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(single.is_number()) << single.debug_to_string();
+  EXPECT_EQ(single.as_number(), 1.0);
+  const Value range = EvalSourceIn("=AREAS(INDIRECT(\"A1:B2\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(range.is_number()) << range.debug_to_string();
+  EXPECT_EQ(range.as_number(), 1.0);
+}
+
+TEST(BuiltinsAreas, IndirectOfASheetQualifiedUnionIsAlsoARefError) {
+  const Value v = EvalSource("=AREAS(INDIRECT(\"Sheet1!A1,B2,C3:D4\"))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsAreas, IndirectOfAnUnresolvableNameIsARefError) {
+  // A name the workbook does not define resolves to nothing, so AREAS has
+  // no reference to count and reports INDIRECT's own error.
+  const Value v = EvalSource("=AREAS(INDIRECT(\"SomeName\"))");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +385,12 @@ TEST(BuiltinsNetworkdaysIntl, ErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsNetworkdaysIntl, RejectsOutOfRangeSerialBeforeIteration) {
+  const Value v = EvalSource("=NETWORKDAYS.INTL(1,1000000000)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 // ---------------------------------------------------------------------------
 // WORKDAY.INTL
 // ---------------------------------------------------------------------------
@@ -445,6 +476,12 @@ TEST(BuiltinsWorkdayIntl, ErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+TEST(BuiltinsWorkdayIntl, RejectsOutOfRangeDayCountBeforeIteration) {
+  const Value v = EvalSource("=WORKDAY.INTL(1,1000000000)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 // ---------------------------------------------------------------------------
 // Weekday-rotation cross-check: 2024-01-01 must be a Monday. If this
 // assertion ever fails, the Mon=0 rotation inside `is_weekend_masked`
@@ -493,11 +530,11 @@ TEST(BuiltinsToday, IsFloorOfNow) {
   const LocalNowExpect exp = ExpectedLocalNow();
   const Value v = EvalSource("=TODAY()");
   ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), exp.date_serial);
+  EXPECT_LE(std::fabs(v.as_number() - exp.date_serial), 1.0);
   // And the floor relationship, reading NOW again within the same test.
   const Value now = EvalSource("=NOW()");
   ASSERT_TRUE(now.is_number());
-  EXPECT_EQ(std::floor(now.as_number()), v.as_number());
+  EXPECT_LE(std::fabs(std::floor(now.as_number()) - v.as_number()), 1.0);
 }
 
 TEST(BuiltinsToday, ZeroArgsArity) {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // OOXML reader orchestrator. Walks the in-memory package via
 // `ZipReader`, dispatches each part to a focused helper module, and
@@ -45,6 +44,7 @@
 #include "io/ooxml/pivot_target_reader.h"
 #include "io/ooxml/sheet_aux_rels_reader.h"
 #include "io/ooxml/workbook_rels_reader.h"
+#include "io/ooxml_defs.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
 #include "io/sheet_reader.h"
@@ -70,29 +70,55 @@ namespace formulon {
 namespace io {
 namespace {
 
+constexpr std::string_view kRelOfficeDocument =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+constexpr std::string_view kRelCoreProperties =
+    "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
+constexpr std::string_view kRelExtendedProperties =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+constexpr std::string_view kRelCustomProperties =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
+
+Expected<std::vector<UnknownRelationship>, Error> ReadUnknownPackageRels(const std::vector<std::uint8_t>& bytes) {
+  pugi::xml_document doc;
+  RETURN_IF_ERROR(load_xml_buffer(doc, bytes, "ooxml_reader", "package-level rels"));
+  const pugi::xml_node root = doc.child("Relationships");
+  if (!root) {
+    return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
+                      "context=ooxml_reader part=_rels/.rels");
+  }
+  std::vector<UnknownRelationship> result;
+  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    const std::string_view type(rel.attribute("Type").value());
+    if (type == kRelOfficeDocument || type == kRelCoreProperties || type == kRelExtendedProperties ||
+        type == kRelCustomProperties) {
+      continue;
+    }
+    const bool external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+    std::string target(rel.attribute("Target").value());
+    if (type.empty() || target.empty()) {
+      continue;
+    }
+    if (!external) {
+      if (target.front() == '/')
+        target.erase(0, 1);
+      if (!ooxml::is_safe_part_name(target)) {
+        return make_error(FormulonErrorCode::kIoZipSlip, "package relationship target escapes package root",
+                          "context=ooxml_reader part=_rels/.rels target=" + target);
+      }
+    }
+    result.push_back(
+        UnknownRelationship{std::string(rel.attribute("Id").value()), std::string(type), std::move(target), external});
+  }
+  return result;
+}
+
 // Content type for the binary printer-settings part; the orchestrator
 // stamps it onto the passthrough record when it captures a sheet's
 // printer-settings bytes (the sheet aux-rels reader only resolves the
 // path; the orchestrator owns the round-trip wrapping).
 constexpr std::string_view kCtPrinterSettings =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings";
-
-struct StringXmlWriter final : pugi::xml_writer {
-  std::string* dst = nullptr;
-  void write(const void* data, size_t size) override {
-    if (dst != nullptr) {
-      dst->append(static_cast<const char*>(data), size);
-    }
-  }
-};
-
-std::string RawXml(const pugi::xml_node& node) {
-  std::string out;
-  StringXmlWriter sink;
-  sink.dst = &out;
-  node.print(sink, /*indent=*/"", pugi::format_raw);
-  return out;
-}
 
 /// Populates the structured `PageSetup` fields from a `<pageSetup>` node.
 /// The raw XML string remains the writer's source of truth; this is an
@@ -240,6 +266,22 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   }
   wb.sheet(i).mutable_validations() = std::move(dvs_or.value());
   wb.sheet(i).mutable_protection() = read_sheet_protection(worksheet);
+  WorksheetRawExtensions& raw_extensions = wb.sheet(i).mutable_raw_extensions();
+  auto capture_raw_extension = [&worksheet](const char* name) -> std::string {
+    if (const pugi::xml_node node = worksheet.child(name)) {
+      return raw_xml(node);
+    }
+    return {};
+  };
+  raw_extensions.protected_ranges_xml = capture_raw_extension("protectedRanges");
+  raw_extensions.scenarios_xml = capture_raw_extension("scenarios");
+  raw_extensions.custom_sheet_views_xml = capture_raw_extension("customSheetViews");
+  raw_extensions.phonetic_pr_xml = capture_raw_extension("phoneticPr");
+  raw_extensions.ignored_errors_xml = capture_raw_extension("ignoredErrors");
+  raw_extensions.legacy_drawing_hf_xml = capture_raw_extension("legacyDrawingHF");
+  raw_extensions.picture_xml = capture_raw_extension("picture");
+  raw_extensions.ole_objects_xml = capture_raw_extension("oleObjects");
+  raw_extensions.controls_xml = capture_raw_extension("controls");
 
   SheetPrintSettings& print = wb.sheet(i).mutable_print_settings();
   if (pugi::xml_node sheet_pr = worksheet.child("sheetPr"); sheet_pr) {
@@ -248,28 +290,28 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
     // `<pageSetUpPr>` child, and gating on that child dropped such sheets'
     // `<sheetPr>` entirely on save. The structured `fit_to_page` view is
     // populated additionally when `<pageSetUpPr>` is present.
-    print.sheet_pr_xml = RawXml(sheet_pr);
+    print.sheet_pr_xml = raw_xml(sheet_pr);
     if (pugi::xml_node page_setup_pr = sheet_pr.child("pageSetUpPr"); page_setup_pr) {
       print.page_setup.fit_to_page = page_setup_pr.attribute("fitToPage").as_bool(false);
     }
   }
   if (pugi::xml_node page_margins = worksheet.child("pageMargins")) {
-    print.page_margins_xml = RawXml(page_margins);
+    print.page_margins_xml = raw_xml(page_margins);
     ApplyStructuredPageMargins(page_margins, print.page_margins);
   }
   if (pugi::xml_node page_setup = worksheet.child("pageSetup")) {
-    print.page_setup_xml = RawXml(page_setup);
+    print.page_setup_xml = raw_xml(page_setup);
     print.printer_settings_rid = ooxml::relationship_ref_id(page_setup);
     ApplyStructuredPageSetup(page_setup, print.page_setup);
   }
   if (pugi::xml_node print_options = worksheet.child("printOptions")) {
-    print.print_options_xml = RawXml(print_options);
+    print.print_options_xml = raw_xml(print_options);
   }
   if (pugi::xml_node header_footer = worksheet.child("headerFooter")) {
-    print.header_footer_xml = RawXml(header_footer);
+    print.header_footer_xml = raw_xml(header_footer);
   }
   if (pugi::xml_node auto_filter = worksheet.child("autoFilter")) {
-    wb.sheet(i).set_auto_filter_xml(RawXml(auto_filter));
+    wb.sheet(i).set_auto_filter_xml(raw_xml(auto_filter));
   }
   // Worksheet-level `<extLst>` holds the *data* for 2010+ extensions —
   // notably `x14:conditionalFormattings` (DataBar negative-fill / axis /
@@ -280,7 +322,7 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   // survives a save cycle unchanged. Living in this shared helper means
   // the SAX path recovers it too, via the metadata shell.
   if (pugi::xml_node ext_lst = worksheet.child("extLst")) {
-    wb.sheet(i).set_ext_lst_xml(RawXml(ext_lst));
+    wb.sheet(i).set_ext_lst_xml(raw_xml(ext_lst));
   }
   // Capture the worksheet root's extra namespace declarations so any
   // prefixed attribute carried inside a raw capture above resolves when
@@ -376,6 +418,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     return wb_path_or.error();
   }
   const std::string workbook_path = wb_path_or.value();
+  auto package_rels_or = ReadUnknownPackageRels(root_rels_or.value());
+  if (!package_rels_or) {
+    return package_rels_or.error();
+  }
 
   // 3. xl/_rels/workbook.xml.rels — load and validate. We need both the
   // sheet rId -> part-path map (for the per-sheet read loop below) and
@@ -440,7 +486,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // sheet's `r:id` attribute resolves to a part path through
   // `sheet_rels`. We need both pieces in sync so the sheet at workbook
   // index `i` is read from `sheet_part_paths[i]`.
-  const std::unordered_map<std::string, std::string>& sheet_rels = wb_rels.sheet_targets;
+  const std::unordered_map<std::string, ooxml::WorkbookRels::SheetTarget>& sheet_rels = wb_rels.sheet_targets;
   std::vector<std::string> sheet_part_paths;
   for (pugi::xml_node sn = sheets_node.child("sheet"); sn; sn = sn.next_sibling("sheet")) {
     std::string name = sn.attribute("name").value();
@@ -481,8 +527,17 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if (workbook_hides) {
       wb.sheet(wb.sheet_count() - 1U).mutable_view().tab_hidden = true;
     }
-    sheet_part_paths.push_back(it->second);
-    consumed_parts.insert(it->second);
+    const ooxml::WorkbookRels::SheetTarget& target = it->second;
+    if (target.relationship_type != kRelWorksheet) {
+      // Keep non-worksheet sheet types in their original position, but do
+      // not feed their incompatible XML through the worksheet reader. The
+      // raw part and any descendants remain unconsumed and are captured by
+      // the normal passthrough sweep below.
+      wb.sheet(wb.sheet_count() - 1U).set_opaque_ooxml_sheet(target.path, target.relationship_type);
+    } else {
+      consumed_parts.insert(target.path);
+    }
+    sheet_part_paths.push_back(target.path);
   }
 
   if (sheet_part_paths.empty()) {
@@ -520,13 +575,20 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   }
 
   // Workbook-level elements captured raw for verbatim re-emission:
-  // `<workbookPr>`, `<workbookProtection>`, `<bookViews>`. Without this,
+  // `<fileVersion>`, `<fileSharing>`, `<workbookPr>`, `<workbookProtection>`,
+  // `<bookViews>`, and trailing `<extLst>`. Without this,
   // the writer regenerates only `<sheets>` / `<definedNames>` / `<calcPr>`
   // / `<pivotCaches>` and silently drops the date system, tab-selection
   // state, and workbook protection. `<workbookPr date1904>` additionally
   // seeds the model-level `date1904` flag the date-serial conversions read.
+  if (pugi::xml_node file_version = wb_root.child("fileVersion"); file_version) {
+    wb.set_file_version_xml(raw_xml(file_version));
+  }
+  if (pugi::xml_node file_sharing = wb_root.child("fileSharing"); file_sharing) {
+    wb.set_file_sharing_xml(raw_xml(file_sharing));
+  }
   if (pugi::xml_node workbook_pr = wb_root.child("workbookPr"); workbook_pr) {
-    wb.set_workbook_pr_xml(RawXml(workbook_pr));
+    wb.set_workbook_pr_xml(raw_xml(workbook_pr));
     // Excel emits the attribute as `date1904`; some legacy producers use
     // the bare `1904` spelling. Both default to false when absent.
     const bool from_date1904 = read_xsd_bool(workbook_pr, "date1904", false);
@@ -534,10 +596,13 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     wb.set_date1904(from_date1904 || from_legacy);
   }
   if (pugi::xml_node workbook_protection = wb_root.child("workbookProtection"); workbook_protection) {
-    wb.set_workbook_protection_xml(RawXml(workbook_protection));
+    wb.set_workbook_protection_xml(raw_xml(workbook_protection));
   }
   if (pugi::xml_node book_views = wb_root.child("bookViews"); book_views) {
-    wb.set_book_views_xml(RawXml(book_views));
+    wb.set_book_views_xml(raw_xml(book_views));
+  }
+  if (pugi::xml_node ext_lst = wb_root.child("extLst"); ext_lst) {
+    wb.set_workbook_ext_lst_xml(raw_xml(ext_lst));
   }
 
   // The workbook owns the text-storage deque; readers append directly
@@ -564,7 +629,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if (!sst_bytes_or) {
       return sst_bytes_or.error();
     }
-    auto sst_or = read_shared_strings(sst_bytes_or.value(), result_text_storage);
+    auto sst_or = read_shared_strings(std::move(sst_bytes_or.value()), result_text_storage);
     if (!sst_or) {
       return sst_or.error();
     }
@@ -637,6 +702,17 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   std::vector<TableMetadata> tables_metadata;
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
+    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
+      // Ensure the relationship does not silently become dangling. The raw
+      // part stays unconsumed so it (and its own rels/dependencies) flows
+      // into passthrough unchanged.
+      if (!zip.has_entry(sheet_path)) {
+        std::string ctx("context=ooxml_reader opaque_sheet_path=");
+        ctx.append(sheet_path);
+        return make_error(FormulonErrorCode::kIoSheetCorrupt, "opaque sheet part missing from package", std::move(ctx));
+      }
+      continue;
+    }
     if (!zip.has_entry(sheet_path)) {
       // The relationship resolved to a path the package does not
       // contain. Treat as a structural error rather than silently
@@ -649,7 +725,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     if (!sheet_bytes_or) {
       return sheet_bytes_or.error();
     }
-    const std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
+    // Bound to a mutable reference because the DOM path below parses it
+    // in place; nothing else in this iteration reads the sheet bytes
+    // after that point, and `sheet_bytes_or` outlives `sheet_doc`.
+    std::vector<std::uint8_t>& sheet_bytes = sheet_bytes_or.value();
     // Choose the read path by raw XML size: small sheets stay on the
     // pugixml DOM path (familiar code, well-validated); large sheets
     // (>= `kSaxThresholdBytes`) stream through the SAX scanner so a
@@ -683,12 +762,21 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     // merges, hyperlinks, data validations, protection, and print
     // settings that the SAX path used to drop. Row overrides
     // (<row ht=/hidden=>) live inside <sheetData> and stay DOM-only.
+    //
+    // Both parses below are in place: the DOM aliases the buffer it was
+    // built from instead of pugixml holding a second full-size copy,
+    // which is what made a large sheet cost twice its own size to open.
+    // The buffers are single-use — the shell is built here and read
+    // nowhere else, `sheet_bytes` is dead once the cell reader has run.
+    // `shell` is declared ahead of `sheet_doc` so it is destroyed after
+    // it; `sheet_bytes_or` already sits further out for the same reason.
+    std::vector<std::uint8_t> shell;
     pugi::xml_document sheet_doc;
     if (sax_used) {
-      const std::vector<std::uint8_t> shell = BuildWorksheetShellBytes(sheet_bytes);
-      RETURN_IF_ERROR(load_xml_buffer(sheet_doc, shell, "ooxml_reader", "sheet*.xml (metadata shell)"));
+      shell = BuildWorksheetShellBytes(sheet_bytes);
+      RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, shell, "ooxml_reader", "sheet*.xml (metadata shell)"));
     } else {
-      RETURN_IF_ERROR(load_xml_buffer(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
+      RETURN_IF_ERROR(load_xml_buffer_inplace(sheet_doc, sheet_bytes, "ooxml_reader", "sheet*.xml"));
       auto rs = read_sheet_data(sheet_doc, i, wb, sheet_contexts[i], result_text_storage);
       if (!rs) {
         return rs.error();
@@ -773,6 +861,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         return aux_or.error();
       }
       const ooxml::SheetAuxRels& aux = aux_or.value();
+      wb.sheet(i).set_unknown_relationships(aux.unknown_rels);
       // Stitch each hyperlink's `target` from the rels lookup.
       apply_hyperlink_rels(wb.sheet(i).mutable_hyperlinks(), aux.hyperlink_rid_to_target);
 
@@ -809,6 +898,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
           return comments_or.error();
         }
         wb.sheet(i).mutable_comments() = std::move(comments_or.value());
+        wb.sheet(i).set_comment_vml_path(aux.vml_path);
         consumed_parts.insert(aux.comments_path);
       }
 
@@ -861,7 +951,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         ctx.append(" sst_size=").append(std::to_string(sst.entries.size()));
         return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared-string index out of range", std::move(ctx));
       }
-      wb.sheet(i).set_cell_cached_value(row, col, Value::text(sst.entries[idx]));
+      wb.sheet(i).set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[idx]));
       // Propagate any <rPh> annotation from the SST entry onto the cell
       // so PHONETIC() can surface the kana. The SST reader keeps
       // `phonetic_for_entries` parallel to `entries`, with empty views
@@ -971,7 +1061,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       if (!rec_bytes_or) {
         return rec_bytes_or.error();
       }
-      auto rec_status = read_pivot_cache_records(rec_bytes_or.value(), cache);
+      auto rec_status = read_pivot_cache_records(std::move(rec_bytes_or.value()), cache);
       if (!rec_status) {
         return rec_status.error();
       }
@@ -1095,15 +1185,15 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   std::sort(unknown_parts.begin(), unknown_parts.end(),
             [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
 
-  // Hand the same payload to the workbook so the writer can find it
-  // even when the caller only retains `result.workbook`. The
-  // `OoxmlReadResult::unknown_parts` view stays populated for tests and
-  // tooling that want to inspect what was preserved.
-  wb.set_passthrough_parts(unknown_parts);
+  // The workbook is the sole owner of the passthrough payload; the read
+  // result does not mirror it. Handing it over by move keeps a package
+  // with an 80 MB embedded image at one resident copy rather than two.
+  wb.set_passthrough_parts(std::move(unknown_parts));
   wb.set_unknown_workbook_rels(std::move(wb_rels.unknown_rels));
+  wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_default_content_types(std::move(default_content_types));
 
-  OoxmlReadResult result{std::move(wb), std::move(unknown_parts), pending_sst_count};
+  OoxmlReadResult result{std::move(wb), pending_sst_count};
   return result;
 }
 

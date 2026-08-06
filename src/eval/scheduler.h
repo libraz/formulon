@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Multi-threaded SCC-parallel recalc scheduler.
 //
@@ -20,8 +19,8 @@
 //   layer N -> super-nodes whose dependencies live in layers < N.
 //
 // Within a single layer no two super-nodes share a dependency edge with
-// one another, so they may be evaluated concurrently. A pool of
-// `std::thread` workers drains a per-layer queue; each worker holds its
+// one another, so they may be evaluated concurrently. A pool of OS
+// workers drains a per-layer queue; each worker holds its
 // own `EvalContext` (the type carries no globals — it is a non-owning
 // view of `Workbook` + `Sheet` + `EvalState`). The `Workbook`'s cell
 // store is mutated through a single `std::mutex`; the lock is held only
@@ -81,9 +80,8 @@ struct SchedulerStats {
   /// Layers dispatched on the worker pool (i.e. layer size >= 2 AND the
   /// pool was successfully spawned).
   std::uint64_t parallel_steps = 0;
-  /// Layers processed serially on the calling thread. Either because the
-  /// layer had <= 1 super-node, or because thread spawning failed and
-  /// the scheduler degraded gracefully.
+  /// Layers processed serially on the calling thread because the layer
+  /// had <= 1 super-node or the caller selected one worker.
   std::uint64_t serial_fallback_steps = 0;
   /// Number of cyclic SCCs successfully resolved by the iterative solver
   /// (excluding `#REF!`-fallback components).
@@ -98,10 +96,17 @@ struct SchedulerStats {
 ///
 /// `cfg` selects the worker count (see `SchedulerConfig::num_threads`).
 /// `stats` (when non-null) receives the per-pass counters. The `Expected`
-/// return slot is reserved for resource-limit failures (e.g. a fatal
-/// thread-pool error that the scheduler cannot recover from); today the
-/// function never produces an error — thread spawn failures degrade to
-/// `serial_fallback_steps` and surface as a successful return.
+/// return slot is reserved for scheduler failures.
+///
+/// `num_threads` is an upper bound, not a guarantee. Workers are started
+/// through `launch_thread`, which reports an operating-system refusal
+/// rather than throwing, so a host at its thread limit gets a smaller pool
+/// instead of a terminated process; a pass that can start no worker at all
+/// evaluates every layer on the calling thread and reports each of them in
+/// `SchedulerStats::serial_fallback_steps`. The results do not depend on
+/// how many workers were obtained. Callers that require serial execution
+/// must still set `SchedulerConfig::num_threads` to 1 rather than relying
+/// on this degradation.
 Expected<void, Error> recalc_parallel(Workbook& wb, const SchedulerConfig& cfg = {}, SchedulerStats* stats = nullptr);
 
 /// Convenience overload that runs `recalc_parallel` against a caller-

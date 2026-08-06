@@ -7,6 +7,167 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-08-06
+
+### Added
+
+- `formulon paginate`, a CLI subcommand that prints the resolved print areas,
+  row and column page breaks, and page count for one sheet. It is backed by
+  `fm_workbook_paginate` with an owned `fm_pagination_t`, and reaches WASM,
+  Node and Python as `paginate`.
+- Workbook memory-footprint estimate: `Workbook::approximate_memory_bytes()`
+  and `fm_workbook_memory_usage` report an `O(cells)` pressure signal covering
+  the cell store, the shared-string storage every `Text` value borrows from,
+  the passthrough part payloads and the workbook metadata. The Node addon
+  reports the delta to V8 as external memory on create, load, recalc and
+  handle destruction, and exposes `memoryUsage()`.
+- `fm_styles_add_batch` installs and deduplicates fonts, fills, borders, cell
+  xfs and number formats in one call, ordering the tables so an xf can
+  reference indices produced by the same batch.
+- `fm_error_display_name` (`errorDisplayName` / `error_display_name`) for the
+  Excel literal of a cell error code, and `fm_workbook_xlsb_read_diagnostics`
+  for the undecoded formula and defined-name counters captured during an XLSB
+  load.
+- Phonetic text, iterative-calculation settings, extended font records
+  carrying `vertAlign`, and `fm_workbook_save_xlsb_with_result`. All are
+  additive, so the existing ABI is unchanged. The binding surface gains
+  `getCommentResult`, conditional-format visual rules, differential formats,
+  comment enumeration and pivot cache metadata alongside them.
+- XLSB writer: a native `xl/styles.bin` emitter, round-tripped row/column
+  layout, merged rectangles and the `date1904` flag, the mandatory worksheet
+  prefix with view flags, zoom and frozen panes, and an `xl/metadata.bin`
+  carrying the dynamic-array entry. Worksheet-tail records the model does not
+  express — conditional formatting, data validation, hyperlinks, auto-filter,
+  print setup, breaks and the drawing / table part references — are retained
+  verbatim along with their sheet relationships.
+- OOXML writer interns literal text cells into a generated
+  `xl/sharedStrings.xml` and writes those cells as `t="s"`.
+- Parser accepts a 3-D whole-column (`Sheet1:Sheet3!A:A`) or whole-row span,
+  and treats a space before a quoted sheet name or a parenthesized range as
+  the intersection operator.
+- `GROUPBY` and `PIVOTBY` honour a `total_depth` of ±2, emitting one subtotal
+  row per outer group with the outer key restated in the first key column.
+  Pivot items sort by a data field's aggregate when `SortSpec::by_field` is
+  set.
+- A configurable process-wide structured-log sink and minimum severity level.
+
+### Fixed
+
+- Number-format colour names are read in the UI locale: the ja-JP profile
+  accepts the localized names and the indexed `[色N]` form, while the English
+  `[Red]` / `[ColorN]` spellings surface `#VALUE!` exactly as Excel does.
+- Dynamic-array and lambda semantics: `BYROW` / `BYCOL` spill an errored slice
+  into its own output cell instead of collapsing the call, `REDUCE` and `SCAN`
+  hand the body an errored cell verbatim so an `IFERROR` guard can recover,
+  and every `ArrayValue` allocation routes through a bounds-checked seam that
+  validates each axis against the Excel grid.
+- Numeric and statistical edge cases: `T.INV`, `F.INV` and `BETA.INV` invert
+  by bisection over an expanding bracket, `YIELD` and `ODDFYIELD` clamp to the
+  yield domain `PRICE` accepts, `DDB` / `DB` / `VDB` cap the schedule length,
+  `LINEST` reports a finite F for a perfect fit, `FORECAST.ETS` detrends
+  before detecting seasonality, and non-finite results surface as `#NUM!`.
+- Number-format rounding and text functions: a shared rounding helper replaces
+  ad hoc rounding in `FIXED`, `DOLLAR`, `BAHTTEXT` and the numeric renderer,
+  the 32,767 UTF-16 unit cap is enforced in `SUBSTITUTE`, and the half-to-full
+  katakana voicing tables are deduplicated.
+- Date builtins reject serials outside Excel's `0`..`9999-12-31` range and
+  broadcast array arguments cell by cell.
+- `AREAS` evaluates the `INDIRECT` call it is asked to count, so a resolution
+  counts as one area and a failure propagates as that error.
+- Parser: the depth limit is validated against the completed AST so a flat
+  left-associative chain is covered, a malformed UTF-8 lead byte is consumed
+  instead of spinning the tokenizer forever, and `$`-bearing identifier runs
+  such as `A$$1` are rejected.
+- Structural edits propagate across every referencing model — hyperlink
+  locations, data-validation formulas, pivot-cache sources, conditional-format
+  and table ranges — and formulas are re-indexed when an edit rewrites a
+  defined name.
+- OOXML read path preserves unmodelled parts: chart, dialog and macro sheets
+  come through as opaque sheets, package-level and per-sheet relationships of
+  unrecognised types are re-emitted with zip-slip validation, and workbook and
+  worksheet elements the model does not express survive the next save
+  verbatim. XML-invalid C0 controls are escaped per context.
+- XLSB Ptg codec emits reference-class Ptgs for cell and range arguments and
+  value-class Ptgs for function results, decodes the `PtgMem*` markers, and
+  encodes `BrtColor` with `fValidRGB` in bit 0.
+- Pivot layout projection through the C API honours the workbook's Excel
+  profile and the selected Compact, Tabular or Outline report layout, so the
+  default ja-JP profile emits localized labels instead of the legacy English
+  grid.
+- Cyclic component members are ordered by address before iterating, so the
+  Gauss-Seidel solver commits in a fixed order across standard-library
+  implementations rather than following DFS pop order.
+- A DataBar rule whose min and max thresholds are equal renders a full bar.
+- CLI: `eval`, `dump` and `recalc` share one atomic file-I/O path, exit codes
+  collapse to `{0, 1, 64}`, and `eval` runs through the read-only array C API
+  so `=A1+1` sees an empty `A1`.
+- Recalc workers launch through `launch_thread`, which returns
+  `Expected<Thread, Error>` instead of terminating when the OS refuses a
+  thread; the pool keeps whichever workers started and falls through to serial
+  evaluation when none do.
+- The evaluation and load-time arenas carry byte ceilings, so a hostile
+  formula degrades to a per-cell error instead of growing until the process or
+  the WASM host page aborts.
+
+### Performance
+
+- Whole-axis references are tracked as compact rectangle dependencies instead
+  of promoting the formula to volatile, and Tarjan runs over the induced
+  subgraph of dirty cells rather than the workbook-wide graph.
+- Recalc layer workers are pooled behind a barrier-synchronized
+  `LayerWorkerPool` for the whole parallel pass instead of being spawned and
+  joined per layer.
+- Row storage became `RowCells`, a contiguous run beginning at the row's first
+  populated column, so memory scales with content rather than used width.
+  `Sheet::read_range` appends a whole rectangle under one lock acquisition.
+- The shared-string and pivot-record parts, the OOXML worksheet parse and the
+  metadata shell parse run through an in-place XML loader, halving peak parse
+  memory, and the workbook solely owns the passthrough payload instead of
+  mirroring it.
+
+### Changed
+
+- The bytecode compiler, optimizer and VM compile only when
+  `FORMULON_BUILD_VM` is on (defaulting to `FM_BUILD_TESTING`), so release
+  CLI, WASM and binding binaries no longer carry the experimental pipeline.
+- `ZipReader` drops the per-archive cumulative extraction cap; the zip-bomb
+  guard narrows to the per-entry size, entry-count and compression-ratio caps.
+- Per-file license and copyright headers are removed; the terms live in the
+  top-level `LICENSE`.
+
+### Testing
+
+- Divergence and coverage governance: `divergence_check.py` validates every
+  entry against a real case, suite, alias or documented non-oracle scope, and
+  `golden_coverage_check.py` fails when a declared case has no golden. Each
+  secondary-oracle golden file is registered as its own ctest entry so one
+  allowlist exception can no longer mask every failure.
+- Goldens recaptured against Excel 365 ja-JP 16.111.2, with the
+  `cross_sheet_refs`, `intersect_operator`, `iterative_calc` and
+  `spill_collision` suites added.
+- The cross-language parity harness returns ctest's skip code when fewer than
+  two channels are active, instead of reporting success on one.
+- An XLSB libFuzzer target with a portable Ptg seed format, and source-seam
+  guards that fail when a second `ArrayValue` allocation site or raw-XML
+  retention implementation appears.
+
+### Build / CI
+
+- A `native-fast` job runs the fast ctest labels on develop pushes, so a red
+  develop surfaces before the promotion to main.
+- The WASM size report gates the Brotli wire size (768 KiB hard, 640 KiB soft)
+  on equal footing with the uncompressed size; a host without `brotli` on
+  `PATH` skips that half instead of failing it.
+- CI fails on `expected_flakes.txt` entries that no longer name a registered
+  test.
+
+### Documentation
+
+- The READMEs document the CLI commands, both WASM size ceilings, and the
+  WASM worksheet parsing memory profile.
+
+**Detailed Release Notes**: [GitHub Release](https://github.com/libraz/formulon/releases/tag/v0.9.7)
+
 ## [0.9.6] - 2026-07-19
 
 ### Added
@@ -269,7 +430,8 @@ See the
 [GitHub release page](https://github.com/libraz/formulon/releases/tag/v0.9.0)
 for the full auto-generated change list.
 
-[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.6...HEAD
+[Unreleased]: https://github.com/libraz/formulon/compare/v0.9.7...HEAD
+[0.9.7]: https://github.com/libraz/formulon/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/libraz/formulon/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/libraz/formulon/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/libraz/formulon/compare/v0.9.3...v0.9.4

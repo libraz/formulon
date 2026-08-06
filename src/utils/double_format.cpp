@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the shared shortest-form `double` formatter. See
 // `double_format.h` for the behavioural contract.

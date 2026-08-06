@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `formulon_cli` entry point: tiny argv dispatcher.
 //
@@ -20,27 +19,6 @@
 
 namespace {
 
-// Maps a non-zero `fm_status_t` to a POSIX-friendly exit code. We
-// avoid 0 (would mask error) and clamp the high bits because shells
-// historically truncate to 7-bit on macOS / Linux. Specific carve-outs
-// preserve the well-known `kExitUsage = 64` value.
-int status_to_exit(int rc) {
-  if (rc == 0) {
-    return 0;
-  }
-  if (rc == formulon::cli::kExitUsage) {
-    return rc;
-  }
-  const int low = rc & 0xff;
-  if (low == 0) {
-    return 1;
-  }
-  if (low > 127) {
-    return low - 128;
-  }
-  return low;
-}
-
 void print_top_usage(std::ostream& out) {
   out << "Usage: formulon <command> [options]\n"
       << "\n"
@@ -49,6 +27,8 @@ void print_top_usage(std::ostream& out) {
       << "  recalc <in> -o <out>    Load, recalc, and write a workbook.\n"
       << "  dump <in> [--formulas|--values|--sheets|--metadata]\n"
       << "                          Print a diff-friendly snapshot of a workbook.\n"
+      << "  paginate <in> [--sheet N]\n"
+      << "                          Resolve print area, page breaks, and page count.\n"
       << "\n"
       << "Common options:\n"
       << "  -h, --help              Show this help (or per-subcommand help).\n"
@@ -101,11 +81,13 @@ int main(int argc, char** argv) {
     rc = formulon::cli::run_recalc(args, std::cout, std::cerr);
   } else if (cmd == "dump") {
     rc = formulon::cli::run_dump(args, std::cout, std::cerr);
+  } else if (cmd == "paginate") {
+    rc = formulon::cli::run_paginate(args, std::cout, std::cerr);
   } else {
     std::cerr << "formulon: unknown command '" << cmd << "'\n";
     print_top_usage(std::cerr);
     return formulon::cli::kExitUsage;
   }
 
-  return status_to_exit(rc);
+  return formulon::cli::exit_code_for_status(rc);
 }

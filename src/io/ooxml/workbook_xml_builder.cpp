@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook-level OOXML part builders: `[Content_Types].xml`,
 // `_rels/.rels`, `xl/workbook.xml`, and `xl/_rels/workbook.xml.rels`.
@@ -52,6 +51,8 @@ constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-pack
 constexpr std::string_view kCtXml = "application/xml";
 constexpr std::string_view kCtWorksheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
 constexpr std::string_view kCtStyles = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+constexpr std::string_view kCtSharedStrings =
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
 constexpr std::string_view kCtTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
 constexpr std::string_view kCtPivotCacheDefinition =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml";
@@ -69,6 +70,8 @@ constexpr std::string_view kRelCoreProperties =
     "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
 constexpr std::string_view kRelExtendedProperties =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties";
+constexpr std::string_view kRelCustomProperties =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
 /// Escapes `text` and appends it as the body of an XML element. Callers
 /// that need attribute escaping should use `AppendXmlEscaped` directly.
@@ -160,10 +163,16 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   }
   AppendOverride(out, "xl/workbook.xml", workbook_kind_content_type(wb.kind()));
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
+      continue;
+    }
     const std::string sheet_path = "xl/worksheets/sheet" + std::to_string(i + 1) + ".xml";
     AppendOverride(out, sheet_path, kCtWorksheet);
   }
   AppendOverride(out, "xl/styles.xml", kCtStyles);
+  if (plan.generated_shared_strings) {
+    AppendOverride(out, "xl/sharedStrings.xml", kCtSharedStrings);
+  }
   // Per-table overrides (one per emitted table part, regardless of
   // owning sheet).
   for (const auto& per_sheet : plan.tables_by_sheet) {
@@ -210,7 +219,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-std::string BuildPackageRels(const EmissionPlan& plan) {
+std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
   std::string out;
   out.reserve(256);
   out.append(kXmlDecl);
@@ -222,6 +231,20 @@ std::string BuildPackageRels(const EmissionPlan& plan) {
   }
   if (HasPassthroughPart(plan, "docProps/app.xml")) {
     AppendRelationship(out, next_rid++, kRelExtendedProperties, "docProps/app.xml");
+  }
+  if (HasPassthroughPart(plan, "docProps/custom.xml")) {
+    AppendRelationship(out, next_rid++, kRelCustomProperties, "docProps/custom.xml");
+  }
+  for (const UnknownRelationship& r : wb.unknown_package_rels()) {
+    if (!r.target_external && !HasPassthroughPart(plan, r.target)) {
+      StructuredLog("ooxml_writer.package_rel_skipped")
+          .field("reason", std::string_view("target_part_absent"))
+          .field("type", r.type)
+          .field("target", r.target)
+          .warn();
+      continue;
+    }
+    AppendRelationship(out, next_rid++, r.type, r.target, r.target_external, /*escape_target=*/true);
   }
   out.append("</Relationships>\n");
   return out;
@@ -247,6 +270,16 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   // trip. When no raw <workbookPr> was captured but the 1904 date-system
   // flag was set programmatically, synthesise a minimal element so the
   // attribute is not lost.
+  if (!wb.file_version_xml().empty()) {
+    out.append("  ");
+    out.append(wb.file_version_xml());
+    out.push_back('\n');
+  }
+  if (!wb.file_sharing_xml().empty()) {
+    out.append("  ");
+    out.append(wb.file_sharing_xml());
+    out.push_back('\n');
+  }
   if (!wb.workbook_pr_xml().empty()) {
     out.append("  ");
     out.append(wb.workbook_pr_xml());
@@ -347,6 +380,11 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     }
     out.append("  </pivotCaches>\n");
   }
+  if (!wb.workbook_ext_lst_xml().empty()) {
+    out.append("  ");
+    out.append(wb.workbook_ext_lst_xml());
+    out.push_back('\n');
+  }
   out.append("</workbook>\n");
   return out;
 }
@@ -357,11 +395,20 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   out.append(kXmlDecl);
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    const std::string target = "worksheets/sheet" + std::to_string(i + 1) + ".xml";
-    AppendRelationship(out, static_cast<std::uint32_t>(i + 1), kRelWorksheet, target);
+    const Sheet& sheet = wb.sheet(i);
+    if (sheet.is_opaque_ooxml_sheet()) {
+      AppendRelationship(out, static_cast<std::uint32_t>(i + 1), sheet.opaque_ooxml_relationship_type(),
+                         WithoutXlPrefix(sheet.opaque_ooxml_part_path()));
+    } else {
+      const std::string target = "worksheets/sheet" + std::to_string(i + 1) + ".xml";
+      AppendRelationship(out, static_cast<std::uint32_t>(i + 1), kRelWorksheet, target);
+    }
   }
   // Styles relationship follows the worksheet relationships.
   AppendRelationship(out, static_cast<std::uint32_t>(sheet_count + 1), kRelStyles, "styles.xml");
+  if (plan.generated_shared_strings) {
+    AppendRelationship(out, static_cast<std::uint32_t>(sheet_count + 2), kRelSharedStrings, "sharedStrings.xml");
+  }
   // Pivot-cache definition relationships, one per planned cache. Targets
   // are relative to the workbook directory (`xl/`); we strip the `xl/`
   // prefix from `definition_path` so the form matches what Excel emits
@@ -380,8 +427,8 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   // these the passthrough parts they point at become orphans and Excel
   // opens the package in "needs repair" mode. Fresh deterministic rIds
   // sit past the worksheet / styles / pivot / external-link numbering.
-  std::uint32_t next_rid =
-      static_cast<std::uint32_t>(sheet_count + 2 + plan.pivot_caches.size() + plan.external_links.size());
+  std::uint32_t next_rid = static_cast<std::uint32_t>(sheet_count + 2 + (plan.generated_shared_strings ? 1U : 0U) +
+                                                      plan.pivot_caches.size() + plan.external_links.size());
   auto has_unknown_rel = [&wb](std::string_view type, std::string_view resolved_target) {
     for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
       if (!r.target_external && r.type == type && r.target == resolved_target) {
@@ -396,7 +443,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   if (HasPassthroughPart(plan, "xl/theme/theme1.xml") && !has_unknown_rel(kRelTheme, "xl/theme/theme1.xml")) {
     AppendRelationship(out, next_rid++, kRelTheme, "theme/theme1.xml");
   }
-  if (HasPassthroughPart(plan, "xl/sharedStrings.xml")) {
+  if (!plan.generated_shared_strings && HasPassthroughPart(plan, "xl/sharedStrings.xml")) {
     AppendRelationship(out, next_rid++, kRelSharedStrings, "sharedStrings.xml");
   }
   for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {

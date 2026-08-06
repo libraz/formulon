@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the x14 conditional-formatting overlay
 // reconciliation declared in `cf_overlay.h`. Operates purely on the raw
@@ -14,29 +13,11 @@
 #include <unordered_set>
 #include <vector>
 
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 
 namespace formulon::io {
 namespace {
-
-/// Serialises a node to raw (unindented) XML, mirroring the capture
-/// format the OOXML reader uses for `Sheet::ext_lst_xml()`.
-struct StringXmlWriter final : pugi::xml_writer {
-  std::string* dst = nullptr;
-  void write(const void* data, std::size_t size) override {
-    if (dst != nullptr) {
-      dst->append(static_cast<const char*>(data), size);
-    }
-  }
-};
-
-std::string RawXml(const pugi::xml_node& node) {
-  std::string out;
-  StringXmlWriter sink;
-  sink.dst = &out;
-  node.print(sink, /*indent=*/"", pugi::format_raw);
-  return out;
-}
 
 /// True when `node` has at least one element child (text / comment /
 /// PI children do not count as extension payload).
@@ -135,7 +116,7 @@ std::string reconcile_x14_cf_overlay(const std::string& ext_lst_xml,
   if (!HasElementChild(ext_lst)) {
     return std::string();
   }
-  return RawXml(ext_lst);
+  return raw_xml(ext_lst);
 }
 
 }  // namespace formulon::io

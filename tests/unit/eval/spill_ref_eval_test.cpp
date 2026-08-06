@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Evaluator tests for the spilled-range `=A1#` operator.
 //

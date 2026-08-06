@@ -2,11 +2,11 @@
   "suite": "external_stubs",
   "description": "Unavailable host-service / connection stubs. These functions are recognized by name and arity, but Formulon deliberately returns a deterministic unavailable surface because the required service, network client, runtime, or OLAP connection is outside the pure calculation engine. Real implementations (ARRAYTOTEXT/FILTERXML), environment-bound functions (INFO/CELL), and real lazy forms (GETPIVOTDATA/PHONETIC) are intentionally not part of this suite.",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-28T10:42:37Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

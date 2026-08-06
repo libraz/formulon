@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Package-level structural validation for OOXML reads. Bundles
 // `[Content_Types].xml` parsing, root-level rels lookup, and the path

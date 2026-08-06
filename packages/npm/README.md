@@ -1,8 +1,9 @@
 # @libraz/formulon
 
 Excel 365 calculation engine, compiled to WebAssembly. Evaluates formulas,
-loads and saves `.xlsx` workbooks, and aims for 1-bit compatibility with
-Mac Excel 365 (ja-JP locale).
+loads and saves `.xlsx` workbooks, and defaults to the `win-365-ja_JP`
+behavior profile. Hosts can select the separately supported
+`mac-365-ja_JP` profile when required.
 
 ## Install
 
@@ -137,6 +138,16 @@ authoritative reference. Highlights:
 
 Workbook handles wrap a native pointer; always call `wb.delete()` (in a
 `finally` block) when done.
+
+## Memory when loading a workbook
+
+`loadBytes` reads worksheet XML through the DOM parser only. The native
+CLI switches to a streaming parser for worksheets past 256 KiB; that
+implementation costs binary size the WASM budget does not have, so
+loading here needs memory proportional to the largest single worksheet's
+XML rather than a fixed window. Sheets are read one at a time, so the
+peak is per worksheet, and the practical ceiling is the 32-bit WASM
+address space. Results are identical either way.
 
 ## Project
 

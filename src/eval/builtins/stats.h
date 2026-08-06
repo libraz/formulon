@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's statistical built-ins (MEDIAN, MODE/MODE.SNGL,
 // LARGE/SMALL, PERCENTILE[.INC], QUARTILE[.INC], STDEV[.S]/STDEV.P,

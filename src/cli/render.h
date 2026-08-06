@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared value-rendering helpers used by `eval` and `dump` to produce
 // stable, diff-friendly text for `fm_value_t`. Lives next to the CLI
@@ -25,6 +24,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "c_api/formulon_c.h"
 
@@ -44,6 +44,11 @@ std::string format_a1(std::uint32_t row, std::uint32_t col);
 /// Renders `v` as a single-line plain-text string. See the header
 /// comment for the per-kind rules.
 std::string render_value(const fm_value_t& v);
+
+/// Returns `text` with JSON-style escapes for backslash, quote, and ASCII
+/// control characters, but without surrounding quotes. Use for line-oriented
+/// output such as `dump`, where embedded newlines must not create records.
+std::string escape_single_line(std::string_view text);
 
 /// Renders `v` as a JSON object: `{"kind": "...", "value": ...}`.
 /// Strings are JSON-escaped; numbers use `format_double`.

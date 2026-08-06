@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the MS-XLSB record-emission primitives. The byte
 // layout matches `io/xlsb/record.cpp` exactly so every helper is the

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `io::WorkbookKind`. Spot-checks the content-type and
 // default-extension lookups for all four variants (xlsx / xlsm / xltx /

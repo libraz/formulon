@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Top-level workbook model. The current surface owns a vector of `Sheet`
 // instances and exposes a `save()` method that serialises the workbook to
@@ -99,6 +98,28 @@ class Workbook {
   /// Number of sheets in the workbook. Always at least 1 for
   /// `create()`-constructed instances.
   std::size_t sheet_count() const noexcept { return sheets_.size(); }
+
+  /// Estimated heap bytes this workbook holds.
+  ///
+  /// Exists for hosts whose garbage collector only sees the handle and
+  /// not what hangs off it — a JS engine will happily keep thousands of
+  /// multi-megabyte workbooks alive because each one looks like a
+  /// pointer-sized object — so they can report the real weight and let
+  /// collection pressure track it.
+  ///
+  /// Counted: the cell store (materialised slots plus each cell's formula
+  /// text, owned cached text and phonetic text), the shared-string
+  /// storage every text value borrows from, the passthrough part payloads
+  /// (which embedded media dominates), and the workbook-level round-trip
+  /// metadata strings. Not counted: allocator bookkeeping, the recalc
+  /// engine's dependency graph and arenas, styles, and the pivot caches —
+  /// all of which are bounded by the counted parts in practice.
+  ///
+  /// The result is an estimate for pressure reporting, not an accounting
+  /// figure: it walks every materialised cell, so it is O(cells) and
+  /// belongs at coarse boundaries (after a load, after a recalc) rather
+  /// than in a loop.
+  std::size_t approximate_memory_bytes() const noexcept;
 
   /// Immutable access to the sheet at `index`. `index` must be `<
   /// sheet_count()`.
@@ -232,6 +253,13 @@ class Workbook {
   /// Returns `kInvalidArgument` when `sheet_index >= sheet_count()`.
   Expected<void, Error> set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col, Value value);
 
+  /// Stores a text literal whose bytes are copied into the destination cell.
+  /// This is appropriate for short-lived caller buffers; source readers that
+  /// keep a workbook-scoped shared-string store can use `set_cell_value`
+  /// with `Value::text` instead.
+  Expected<void, Error> set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                      std::string_view text);
+
   /// Stores a formula at `(row, col)` on `sheet_index` and registers its
   /// dependencies with the recalc engine.
   ///
@@ -353,6 +381,10 @@ class Workbook {
   /// archive-discovery order, which matches the per-sheet rels walk).
   const std::vector<io::TableMetadata>& tables() const noexcept { return tables_; }
 
+  /// Mutable access for structural edits that update a table's owning sheet
+  /// and A1 rectangle before the writer rebuilds its relationships.
+  std::vector<io::TableMetadata>& mutable_tables() noexcept { return tables_; }
+
   /// Replaces the workbook's table-metadata list. Move-assigns for the
   /// same reason as `set_defined_names`.
   void set_tables(std::vector<io::TableMetadata> tables) { tables_ = std::move(tables); }
@@ -384,6 +416,15 @@ class Workbook {
   void set_unknown_workbook_rels(std::vector<io::UnknownRelationship> rels) {
     unknown_workbook_rels_ = std::move(rels);
   }
+
+  /// Read-only access to unrecognised package-root relationships from
+  /// `_rels/.rels` (for example thumbnails and digital-signature origins).
+  /// Their targets reside in `passthrough_parts()`; preserving the edge keeps
+  /// those parts reachable after an OOXML read-modify-write cycle.
+  const std::vector<io::UnknownRelationship>& unknown_package_rels() const noexcept { return unknown_package_rels_; }
+
+  /// Replaces the captured package-root relationship list.
+  void set_unknown_package_rels(std::vector<io::UnknownRelationship> rels) { unknown_package_rels_ = std::move(rels); }
 
   /// Read-only access to the `<Default>` content-type registrations the
   /// reader captured from `[Content_Types].xml`. The writer re-emits the
@@ -422,6 +463,10 @@ class Workbook {
   /// Read-only access to the workbook's pivot caches in
   /// document-discovery order.
   const std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches() const noexcept { return pivot_caches_; }
+
+  /// Mutable access for workbook-structural edits that must keep a pivot
+  /// cache's worksheet source attached to its renamed sheet.
+  std::vector<std::unique_ptr<pivot::PivotCache>>& mutable_pivot_caches() noexcept { return pivot_caches_; }
 
   /// Appends a pivot cache to the workbook. Ownership transfers; no
   /// validation is performed (the OOXML reader is responsible for
@@ -525,6 +570,15 @@ class Workbook {
   /// empty.
   const std::string& workbook_protection_xml() const noexcept { return workbook_protection_xml_; }
   void set_workbook_protection_xml(std::string xml) { workbook_protection_xml_ = std::move(xml); }
+
+  /// Raw `<fileVersion>` / `<fileSharing>` and trailing `<extLst>` elements
+  /// captured from workbook.xml. They are passive round-trip metadata.
+  const std::string& file_version_xml() const noexcept { return file_version_xml_; }
+  void set_file_version_xml(std::string xml) { file_version_xml_ = std::move(xml); }
+  const std::string& file_sharing_xml() const noexcept { return file_sharing_xml_; }
+  void set_file_sharing_xml(std::string xml) { file_sharing_xml_ = std::move(xml); }
+  const std::string& workbook_ext_lst_xml() const noexcept { return workbook_ext_lst_xml_; }
+  void set_workbook_ext_lst_xml(std::string xml) { workbook_ext_lst_xml_ = std::move(xml); }
 
   /// Extra namespace declarations (and `mc:Ignorable`) captured from the
   /// source `<workbook>` root element, serialised as ` name="value"`
@@ -695,6 +749,10 @@ class Workbook {
   // vbaProject, customXml, ...). Round-trip metadata only; the parts
   // themselves live in `passthrough_parts_`.
   std::vector<io::UnknownRelationship> unknown_workbook_rels_;
+  // Package-root relationships with unrecognised Type URIs (thumbnail,
+  // digital-signature origin, and vendor extensions). Their target parts
+  // remain in `passthrough_parts_`.
+  std::vector<io::UnknownRelationship> unknown_package_rels_;
   // `<Default>` content-type registrations captured from
   // `[Content_Types].xml` (extension -> content type). Re-emitted by the
   // writer for Default-typed passthrough parts. Empty by default.
@@ -722,6 +780,9 @@ class Workbook {
   std::string workbook_pr_xml_;
   std::string book_views_xml_;
   std::string workbook_protection_xml_;
+  std::string file_version_xml_;
+  std::string file_sharing_xml_;
+  std::string workbook_ext_lst_xml_;
   // Extra `<workbook>` root namespace declarations (xmlns:mc / xmlns:xr* /
   // x15 + mc:Ignorable) captured for verbatim re-emission so namespaced
   // attributes in the raw captures above resolve. Empty by default.

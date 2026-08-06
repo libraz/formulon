@@ -2,11 +2,11 @@
   "suite": "shape",
   "description": "ROWS / COLUMNS / ROW / COLUMN / SUMPRODUCT lazy-dispatched builtins. Each requires per-argument AST shape (Ref / RangeOp / ArrayLiteral) so the eager dispatcher's Value-flattening path is bypassed.",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T02:26:57Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -149,8 +149,16 @@
       "formula": "=ROW(B2:D4)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 2.0
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -158,8 +166,16 @@
       "formula": "=COLUMN(B2:D4)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 2.0
+        "kind": "array",
+        "value": [
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
       }
     },
     {

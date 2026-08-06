@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Direct unit tests for the regularized incomplete gamma helpers
 // `p_gamma(a, x)` and `q_gamma(a, x)`. The CHISQ.* builtins lean on
@@ -112,6 +111,21 @@ TEST(SpecialFunctionsLargeA, Stable) {
   EXPECT_GT(p, 0.0);
   EXPECT_LT(p, 1.0);
   EXPECT_NEAR(p + q, 1.0, 1e-12);
+}
+
+TEST(SpecialFunctionsLargeA, ConvergesAtDistributionScale) {
+  // These shapes used to stop at the unconditional 200th term and return
+  // the partial sum as if it were a probability. At the transition point,
+  // both branches must now converge and remain complementary.
+  for (double a : {1e3, 1e4, 1e5}) {
+    const double p = p_gamma(a, a);
+    const double q = q_gamma(a, a);
+    EXPECT_TRUE(std::isfinite(p)) << "a=" << a;
+    EXPECT_TRUE(std::isfinite(q)) << "a=" << a;
+    EXPECT_GT(p, 0.0) << "a=" << a;
+    EXPECT_LT(p, 1.0) << "a=" << a;
+    EXPECT_NEAR(p + q, 1.0, 1e-12) << "a=" << a;
+  }
 }
 
 }  // namespace

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-rule-kind matching for the CF evaluator: cellIs / expression /
 // timePeriod / text-family / duplicate-unique / above-average / top10.

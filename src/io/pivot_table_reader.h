@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Reader for one OOXML `xl/pivotTables/pivotTable*.xml` part. Parses the
 // pivot-table definition into a `formulon::pivot::PivotTable`. Does NOT
@@ -82,7 +81,8 @@ namespace formulon::io {
 ///   * `kIoXmlParse` — pugixml could not parse the bytes.
 ///   * `kIoContentTypeInvalid` — root is not `<pivotTableDefinition>`.
 ///   * `kIoSheetCorrupt` — `<location ref>` missing/unparseable, or a
-///     `<dataField>` has no `name`.
+///     `<dataField>` has no `name`, or an `<item x>` index is not an unsigned
+///     32-bit integer.
 Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector<std::uint8_t>& definition_bytes);
 
 }  // namespace formulon::io

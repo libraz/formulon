@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for Excel's complex-number built-ins: COMPLEX + the 24 IM* family.
 //
@@ -435,6 +434,12 @@ TEST(BuiltinsComplex, ImExpOfZero) {
   const Value v = EvalSource("=IMEXP(\"0\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "1");
+}
+
+TEST(BuiltinsComplex, ImExpOverflowIsNum) {
+  const Value v = EvalSource("=IMEXP(\"1000\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsComplex, ImLn) {

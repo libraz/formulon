@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for the OOXML writer empty-workbook slice. Each test
 // round-trips the byte stream produced by `Workbook::save()` through miniz
@@ -17,6 +16,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
 #include "miniz.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -25,6 +25,10 @@
 
 namespace formulon {
 namespace {
+
+io::ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
+  return io::ByteSpan{bytes.data(), bytes.size()};
+}
 
 /// Extracts the entry at `name` from the ZIP in `archive_bytes`. Returns the
 /// extracted bytes as a `std::string` (binary-safe) and asserts the entry
@@ -88,6 +92,33 @@ TEST(OoxmlMinimalWriter, RoundTripContainsAllRequiredParts) {
   EXPECT_TRUE(entries.count("xl/_rels/workbook.xml.rels") == 1) << "missing xl/_rels/workbook.xml.rels";
   EXPECT_TRUE(entries.count("xl/worksheets/sheet1.xml") == 1) << "missing xl/worksheets/sheet1.xml";
   EXPECT_TRUE(entries.count("xl/styles.xml") == 1) << "missing xl/styles.xml";
+}
+
+TEST(OoxmlMinimalWriter, LiteralTextUsesDeduplicatedSharedStrings) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0U, 0U, Value::text("repeat"));
+  sheet.set_cell_value(1U, 0U, Value::text("repeat"));
+  sheet.set_cell_value(2U, 0U, Value::text("unique"));
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const std::set<std::string> entries = ListEntries(saved.value());
+  EXPECT_TRUE(entries.count("xl/sharedStrings.xml") == 1);
+
+  const std::string sst = ExtractEntry(saved.value(), "xl/sharedStrings.xml");
+  EXPECT_NE(sst.find("count=\"3\" uniqueCount=\"2\""), std::string::npos) << sst;
+  const std::string sheet_xml = ExtractEntry(saved.value(), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(sheet_xml.find("<c r=\"A1\" t=\"s\"><v>0</v></c>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"A2\" t=\"s\"><v>0</v></c>"), std::string::npos) << sheet_xml;
+  EXPECT_NE(sheet_xml.find("<c r=\"A3\" t=\"s\"><v>1</v></c>"), std::string::npos) << sheet_xml;
+  EXPECT_EQ(sheet_xml.find("inlineStr"), std::string::npos) << sheet_xml;
+
+  auto loaded = io::read_ooxml(SpanOf(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  EXPECT_EQ(loaded.value().workbook.sheet(0).cell_at(0U, 0U)->cached_value.as_text(), "repeat");
+  EXPECT_EQ(loaded.value().workbook.sheet(0).cell_at(1U, 0U)->cached_value.as_text(), "repeat");
+  EXPECT_EQ(loaded.value().workbook.sheet(0).cell_at(2U, 0U)->cached_value.as_text(), "unique");
 }
 
 TEST(OoxmlMinimalWriter, WorkbookXmlIsWellFormed) {
@@ -217,8 +248,14 @@ TEST(CellRoundTrip, UnicodeText) {
   auto result = wb.save();
   ASSERT_TRUE(static_cast<bool>(result));
 
-  const std::string body = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
-  ASSERT_NE(body.find("\xE6\x97\xA5\xE6\x9C\xAC"), std::string::npos) << body;
+  // Literal text cells are interned into the shared-string table, so the
+  // multi-byte payload lands there and the sheet carries only the `t="s"`
+  // index into it.
+  const std::string sheet = ExtractEntry(result.value(), "xl/worksheets/sheet1.xml");
+  ASSERT_NE(sheet.find("t=\"s\""), std::string::npos) << sheet;
+
+  const std::string sst = ExtractEntry(result.value(), "xl/sharedStrings.xml");
+  ASSERT_NE(sst.find("\xE6\x97\xA5\xE6\x9C\xAC"), std::string::npos) << sst;
 }
 
 TEST(SpillRoundTrip, AnchorHasArrayType) {
@@ -254,6 +291,29 @@ TEST(SpillRoundTrip, PhantomCellsAbsent) {
   EXPECT_EQ(body.find("r=\"B1\""), std::string::npos) << body;
   EXPECT_EQ(body.find("r=\"A2\""), std::string::npos) << body;
   EXPECT_EQ(body.find("r=\"B2\""), std::string::npos) << body;
+}
+
+TEST(SpillRoundTrip, ScalarReplacementRemovesArrayMarkupAndUnmasksCells) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_formula(0U, 0U, "=SEQUENCE(3)");
+  ASSERT_TRUE(wb.sheet(0).commit_spill(0U, 0U, 3U, 1U,
+                                       std::vector<Value>{Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
+
+  // This is the user-visible transition: the formula becomes scalar, then
+  // a real value is entered into a cell from its former spill footprint.
+  wb.sheet(0).set_cell_value(0U, 0U, Value::number(9.0));
+  wb.sheet(0).set_cell_value(1U, 0U, Value::number(7.0));
+  auto saved_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved_or));
+
+  const std::string body = ExtractEntry(saved_or.value(), "xl/worksheets/sheet1.xml");
+  EXPECT_EQ(body.find("t=\"array\""), std::string::npos) << body;
+
+  auto loaded_or = io::read_ooxml(SpanOf(saved_or.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
+  const Cell* a2 = loaded_or.value().workbook.sheet(0).cell_at(1U, 0U);
+  ASSERT_NE(a2, nullptr);
+  EXPECT_EQ(a2->cached_value, Value::number(7.0));
 }
 
 }  // namespace

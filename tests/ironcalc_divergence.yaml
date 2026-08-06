@@ -755,3 +755,181 @@ entries:
     prefer: mac
     first_noted: 2026-07-18
 
+  # -- Additional direct range / dependent spill cells -------------------
+  # These cells share the legacy-II vs dynamic-array distinction above. The
+  # IronCalc cache records the position-aligned element of a range, whereas
+  # Mac Excel 365 spills and dependent cells read the top-left spill value.
+  # Formulon follows Mac. Probe: implicit_intersection.golden.json.
+  - id: ironcalc_calc_tests_ARABIC_ROMAN_ARABIC.A41
+    reason: "Bare =E39:E42 at A41: IronCalc picks E41; Mac spills with anchor E39. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_ARABIC_ROMAN_ROMAN.A36
+    reason: "Bare =H34:H37 at A36: IronCalc picks H36; Mac spills with anchor H34. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_DEGREES_RADIANS_DEGREES_RADIANS.A18
+    reason: "Bare =E15:E19 uses legacy row-aligned II in IronCalc; Mac spills from E15. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_DEGREES_RADIANS_DEGREES_RADIANS.B18
+    reason: "Depends on A18's range spill: IronCalc evaluates DEGREES on its row-aligned value; Mac reads the spill anchor. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_DEGREES_RADIANS_DEGREES_RADIANS.A42
+    reason: "Bare =E39:E43 uses legacy row-aligned II in IronCalc; Mac spills from E39. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_DEGREES_RADIANS_DEGREES_RADIANS.B42
+    reason: "Depends on A42's range spill: IronCalc evaluates RADIANS on its row-aligned value; Mac reads the spill anchor. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_EVEN_ODD_EVEN_ODD.A39
+    reason: "Bare =F37:F41 uses legacy row-aligned II in IronCalc; Mac spills from F37. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_EVEN_ODD_EVEN_ODD.B39
+    reason: "Depends on A39's range spill: IronCalc applies EVEN to its row-aligned value; Mac reads the spill anchor. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_EVEN_ODD_EVEN_ODD.C39
+    reason: "Depends on A39's range spill: IronCalc applies ODD to its row-aligned value; Mac reads the spill anchor. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_FLOOR_CEILING_FLOOR.AG2
+    reason: "Bare =$AD$47:$AH$47 at AG2 uses legacy column-aligned II in IronCalc; Mac spills from AD47. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_MOD_QUOTIENT_DATEVALUE.A41
+    reason: "Bare =G39:G43 uses legacy row-aligned II in IronCalc; Mac spills from G39. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.J5
+    reason: "Bare =P2:P16 at J5 uses legacy row-aligned II in IronCalc; Mac spills from P2. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.T8
+    reason: "Bare =P1:P16 at T8 uses legacy row-aligned II in IronCalc; Mac spills from P1. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.J9
+    reason: "Bare =H1:O1 at J9 uses legacy column-aligned II in IronCalc; Mac spills from H1. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_ROW_COLUM_OFFSET.M9
+    reason: "Bare =H1:O1 at M9 uses legacy column-aligned II in IronCalc; Mac spills from H1. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.B5
+    reason: "Bare =A3:A14 at B5: IronCalc picks A5 by legacy II; Mac spills from A3. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.F15
+    reason: "Bare =$E$2:$K$2 at F15: IronCalc picks F2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.G15
+    reason: "Bare =$E$2:$K$2 at G15: IronCalc picks G2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.H15
+    reason: "Bare =$E$2:$K$2 at H15: IronCalc picks H2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.I15
+    reason: "Bare =$E$2:$K$2 at I15: IronCalc picks I2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.J15
+    reason: "Bare =$E$2:$K$2 at J15: IronCalc picks J2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+  - id: ironcalc_calc_tests_simple_functions_Implicit_Intersection.K15
+    reason: "Bare =$E$2:$K$2 at K15: IronCalc picks K2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
+    prefer: mac
+    first_noted: 2026-08-05
+
+  # -- TEXT/NUMBERS: colour names in a format string are localized -------
+  # Column I formats every value with `[Red]#.#`. A format string is read
+  # in the UI locale, so under ja-JP `[Red]` is not a colour at all and
+  # Excel rejects the bracket with #VALUE!; the localized `[赤]` is what
+  # gets accepted and discarded. IronCalc is en-US and discards `[Red]`.
+  # Formulon matches Mac.
+  # Probe: tests/oracle/golden/text_format.golden.json
+  # (text_color_english_name_rejected, text_color_localized_name_discarded).
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I3
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I4
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I5
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I6
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I7
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I8
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I9
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I10
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I11
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I12
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I13
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I14
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I15
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I16
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I17
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I18
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I19
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I20
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I21
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal header -- do not include outside `src/eval/text_format/`.
 //
@@ -110,12 +109,13 @@ enum class CondOp : std::uint8_t {
 struct Section {
   std::vector<Token> tokens;
 
-  // Set by the tokenizer when a `[...]` bracket specifier is neither one of
-  // the recognised elapsed-time markers (`[h]`, `[m]`, `[s]`) nor a
-  // recognised locale currency code (`[$...]`). Mac Excel ja-JP rejects
-  // TEXT with colour brackets (e.g. `[Red]0.00`) and other bracketed
-  // qualifiers, so `apply_format` surfaces `#VALUE!` whenever this flag
-  // is set on any section it would have rendered.
+  // Set by the tokenizer when a `[...]` bracket specifier is none of the
+  // recognised forms: the elapsed-time markers (`[h]`, `[m]`, `[s]`), a
+  // locale currency code (`[$...]`), a colour (`[赤]`, `[色12]`), a
+  // `[DBNumN]` directive, or a conditional predicate. Excel rejects TEXT
+  // with an unrecognised bracket — including a colour spelled in another
+  // locale, such as `[Red]` — so `apply_format` surfaces `#VALUE!` whenever
+  // this flag is set on any section it would have rendered.
   bool has_invalid_bracket = false;
 
   // DBNum1/2/3 digit-substitution mode. Set by the tokenizer when a

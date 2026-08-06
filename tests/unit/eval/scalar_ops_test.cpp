@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the stateless scalar-operator primitives in
 // `eval/scalar_ops.h`. The focus is `apply_unary`'s Excel-365 contract:

@@ -2,11 +2,11 @@
   "suite": "financial_accrual",
   "description": "Accrued-interest and specialized-depreciation financial builtins — ACCRINT / ACCRINTM / VDB / AMORDEGRC / AMORLINC. See `eval/builtins/financial_accrual.cpp` and `eval/builtins/financial_depreciation.cpp`.",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T03:55:40Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.001,

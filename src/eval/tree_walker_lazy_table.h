@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy-dispatch seam between `tree_walker.cpp` and the per-family lazy-impl
 // translation units.

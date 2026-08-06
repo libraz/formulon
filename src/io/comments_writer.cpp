@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `comments_writer.h`. Format details live in the
 // header; this TU is self-contained so the writer side has minimal
@@ -14,28 +13,15 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "sheet.h"
+#include "utils/a1_column.h"
+#include "utils/expected.h"
 
 namespace formulon::io {
 namespace {
 
-/// Bijective base-26 column letters, matching the cell-parser's `parse_a1`.
-void AppendColumnLetters(std::string& out, std::uint32_t col) {
-  char buf[4];
-  std::uint32_t i = 0;
-  std::uint32_t v = col + 1;
-  while (v > 0 && i < 4) {
-    const std::uint32_t rem = (v - 1) % 26U;
-    buf[i++] = static_cast<char>('A' + rem);
-    v = (v - 1) / 26U;
-  }
-  while (i > 0) {
-    out.push_back(buf[--i]);
-  }
-}
-
 /// Appends an A1 cell reference (`A1`, `XFD1048576`, ...).
 void AppendCellRef(std::string& out, std::uint32_t row, std::uint32_t col) {
-  AppendColumnLetters(out, col);
+  FM_CHECK(a1::append_column_letters(out, col), "comment column is outside Excel's grid");
   out.append(std::to_string(row + 1));
 }
 

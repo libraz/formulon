@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Negative-side test for `ooxml_reader`'s workbook-kind detection: when
 // `[Content_Types].xml` declares an Override for `/xl/workbook.xml`

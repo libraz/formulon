@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Cross-kind ordering and display helpers shared by every TU in the
 // pivot evaluator. Header-only because the comparator (`ValueLess`) is
@@ -32,6 +31,7 @@
 #include <string>
 
 #include "eval/jp_fold.h"
+#include "utils/double_format.h"
 #include "utils/error.h"
 #include "value.h"
 #include "value_sort_order.h"
@@ -79,18 +79,13 @@ inline std::string display_string(const Value& v) {
     case ValueKind::Blank:
       return std::string{};
     case ValueKind::Number: {
-      // Excel renders integers without a trailing `.0`. We don't go
-      // through the full number-format pipeline here: pivot item names
-      // are produced by the OOXML reader from cache `<n v="…"/>` /
-      // `<s v="…"/>` literals, and matching on the textual form is
-      // robust enough for MVP. A more faithful renderer can replace
-      // this when item-level filter parity is required.
-      const double d = v.as_number();
-      const auto i = static_cast<long long>(d);
-      if (static_cast<double>(i) == d) {
-        return std::to_string(i);
-      }
-      return std::to_string(d);
+      // Use the shared shortest-round-trip renderer rather than
+      // `std::to_string`, which appends six fixed decimals and used to make
+      // a numeric item named "1.5" fail to match GETPIVOTDATA's label.
+      // It also avoids casting large doubles to long long.
+      std::string out;
+      format_double(out, v.as_number());
+      return out;
     }
     case ValueKind::Bool:
       return v.as_boolean() ? "TRUE" : "FALSE";

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Smoke tests for the staged @libraz/formulon-native npm package.
 //
@@ -54,11 +53,29 @@ test('default export exposes Workbook + evalFormula + version', async () => {
   assert.equal(typeof mod.PivotCellKind, 'object');
 });
 
+test('all declared runtime constants resolve from the staged ESM entry point', async () => {
+  const mod = await getModule();
+  const declarations = await readFile(path.join(pkgRoot, 'index.d.ts'), 'utf8');
+  const names = [...declarations.matchAll(/^export const (\w+)/gm)].map((match) => match[1]);
+  assert.ok(names.length > 0, 'expected runtime constant declarations');
+  for (const name of names) {
+    assert.ok(name in mod, `missing runtime export declared in index.d.ts: ${name}`);
+  }
+  assert.equal(mod.PivotAxis.Row, 0);
+  assert.equal(mod.PIVOT_SHOW_AS_BASE_PREVIOUS, 1048828);
+});
+
 test('version() returns a non-empty string', async () => {
   const mod = await getModule();
   const v = mod.version();
   assert.equal(typeof v, 'string');
   assert.ok(v.length > 0, `expected non-empty version, got ${JSON.stringify(v)}`);
+});
+
+test('errorDisplayName returns Excel literals', async () => {
+  const mod = await getModule();
+  assert.equal(mod.errorDisplayName(1), '#DIV/0!');
+  assert.equal(mod.errorDisplayName(999), '#UNKNOWN!');
 });
 
 test("evalFormula('=1+2') returns NUMBER 3", async () => {
@@ -86,6 +103,19 @@ test('Workbook.createDefault + setNumber + getValue round-trip', async () => {
   assert.ok(r.status.ok, `getValue: ${JSON.stringify(r.status)}`);
   assert.equal(r.value.kind, mod.ValueKind.Number);
   assert.equal(r.value.number, 42);
+});
+
+test('paginate exposes a status envelope and page geometry', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+  assert.ok(wb.setNumber(0, 48, 0, 2).ok);
+  const result = wb.paginate(0);
+  assert.ok(result.status.ok, `paginate: ${JSON.stringify(result.status)}`);
+  assert.equal(result.pageCount, 2);
+  assert.deepEqual(result.printArea, []);
+  assert.deepEqual(result.horizontalBreaks, [44]);
+  assert.deepEqual(result.verticalBreaks, []);
 });
 
 test('pivotCount + pivotLayout expose PivotTable projection status', async () => {
@@ -166,6 +196,13 @@ test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
   assert.equal(r.value.number, 42);
 });
 
+test('loadBytes rejects invalid input with a fresh diagnostic', async () => {
+  const mod = await getModule();
+  const loaded = mod.Workbook.loadBytes(new Uint16Array([1]));
+  assert.equal(loaded.isValid(), false);
+  assert.match(mod.lastErrorMessage(), /NULL or empty input/);
+});
+
 // -- Expanded surface coverage -----------------------------------------
 // These tests exercise the methods the addon mirrors from the embind
 // binding. They are deliberately shallow: each call should round-trip
@@ -175,6 +212,65 @@ test('isValid returns true for a live workbook', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.isValid(), true);
+});
+
+test('dispose deterministically releases a workbook and is idempotent', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.equal(wb.isValid(), true);
+  assert.equal(wb.dispose(), undefined);
+  assert.equal(wb.isValid(), false);
+  assert.equal(wb.getValue(0, 0, 0).status.ok, false);
+  assert.equal(wb.dispose(), undefined);
+});
+
+test('memoryUsage grows with the workbook and reads zero after dispose', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+
+  const empty = wb.memoryUsage();
+  assert.ok(empty > 0, `an empty workbook still owns storage, got ${empty}`);
+
+  // Distinct strings so the shared-string storage cannot fold them into
+  // one entry and hide the growth.
+  for (let row = 0; row < 2000; row += 1) {
+    wb.setText(0, row, 0, `payload-${row}-${'x'.repeat(64)}`);
+  }
+  const filled = wb.memoryUsage();
+  assert.ok(filled > empty, `expected growth, got ${empty} -> ${filled}`);
+
+  wb.dispose();
+  assert.equal(wb.memoryUsage(), 0);
+});
+
+test('memoryUsage is stable across repeated calls and survives a recalc', async () => {
+  // The external-memory report is computed as a delta against the last
+  // reported figure, so a repeated call on an unchanged workbook must be
+  // a no-op rather than double-counting, and the operations that trigger
+  // their own report must not disturb the estimate either.
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  for (let row = 0; row < 500; row += 1) {
+    wb.setFormula(0, row, 0, `=${row}+1`);
+  }
+
+  const first = wb.memoryUsage();
+  assert.equal(wb.memoryUsage(), first);
+
+  assert.equal(wb.recalc().ok, true);
+  const afterRecalc = wb.memoryUsage();
+  assert.ok(afterRecalc >= first, `recalc must not shrink the estimate: ${first} -> ${afterRecalc}`);
+  assert.equal(wb.memoryUsage(), afterRecalc);
+
+  wb.dispose();
+});
+
+test('Workbook factories return instances of the exported Workbook class', async () => {
+  const mod = await getModule();
+  const defaultBook = mod.Workbook.createDefault();
+  const emptyBook = mod.Workbook.createEmpty();
+  assert.ok(defaultBook instanceof mod.Workbook);
+  assert.ok(emptyBook instanceof mod.Workbook);
 });
 
 test('addMerge + getMerges round-trip a single range', async () => {
@@ -202,9 +298,9 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.getHyperlinks(0).length, 0);
   // Three entries with progressively more optional fields populated.
-  assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '').ok);
-  assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '').ok);
-  assert.ok(wb.addHyperlink(0, 5, 6, 'https://example.org/x', 'See X', 'External link').ok);
+  assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '').ok);
+  assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '').ok);
+  assert.ok(wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1').ok);
   const list = wb.getHyperlinks(0);
   assert.equal(list.length, 3);
   assert.equal(list[0].row, 1);
@@ -215,9 +311,10 @@ test('addHyperlink + getHyperlinks round-trip', async () => {
   assert.equal(list[1].target, 'mailto:hello@example.com');
   assert.equal(list[1].display, 'Hello');
   assert.equal(list[2].display, 'See X');
-  assert.equal(list[2].tooltip, 'External link');
+  assert.equal(list[2].tooltip, 'Internal link');
+  assert.equal(list[2].location, 'Sheet1!A1');
   // Sheet-out-of-range is rejected.
-  assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '').ok);
+  assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '', '').ok);
   // clearHyperlinks drops everything.
   assert.ok(wb.clearHyperlinks(0).ok);
   assert.equal(wb.getHyperlinks(0).length, 0);
@@ -458,6 +555,54 @@ test('setIterativeProgress accepts a function and accepts null to clear', async 
   assert.ok(clr.ok, `setIterativeProgress(null): ${JSON.stringify(clr)}`);
 });
 
+test('setIterativeProgress keeps callbacks isolated per Workbook', async () => {
+  const mod = await getModule();
+  const first = mod.Workbook.createDefault();
+  const second = mod.Workbook.createDefault();
+  let firstCalls = 0;
+  let secondCalls = 0;
+
+  for (const wb of [first, second]) {
+    assert.ok(wb.setIterative(true, 10, 0.001).ok);
+    assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+  }
+  assert.ok(
+    first.setIterativeProgress(() => {
+      firstCalls += 1;
+      return true;
+    }).ok,
+  );
+  assert.ok(
+    second.setIterativeProgress(() => {
+      secondCalls += 1;
+      return true;
+    }).ok,
+  );
+
+  assert.ok(first.recalc().ok);
+  assert.ok(firstCalls > 0);
+  assert.equal(secondCalls, 0);
+});
+
+test('dispose is rejected while this workbook is executing its progress callback', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setIterative(true, 10, 0.001).ok);
+  assert.ok(wb.setFormula(0, 0, 0, '=(A1+10)/2').ok);
+  let calls = 0;
+  assert.ok(
+    wb.setIterativeProgress(() => {
+      calls += 1;
+      assert.throws(() => wb.dispose(), /cannot dispose a Workbook/);
+      return true;
+    }).ok,
+  );
+  assert.ok(wb.recalc().ok);
+  assert.ok(calls > 0);
+  assert.equal(wb.isValid(), true);
+  wb.dispose();
+});
+
 test('evaluateCfRange returns ok envelope with empty cells for a CF-less workbook', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -483,6 +628,23 @@ test('comments round-trip: setComment + getComment', async () => {
   // Removing surfaces null on the next read.
   assert.ok(wb.setComment(0, 1, 1, '', '').ok);
   assert.equal(wb.getComment(0, 1, 1), null);
+});
+
+test('getCommentResult distinguishes absence from an invalid sheet', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const missing = wb.getCommentResult(0, 1, 1);
+  assert.equal(missing.status.ok, false);
+  assert.equal(missing.comment, null);
+  const invalid = wb.getCommentResult(99, 1, 1);
+  assert.equal(invalid.status.ok, false);
+  assert.equal(invalid.comment, null);
+  assert.notEqual(missing.status.status, invalid.status.status);
+  assert.ok(wb.setComment(0, 1, 1, 'libraz', 'hello').ok);
+  const found = wb.getCommentResult(0, 1, 1);
+  assert.equal(found.status.ok, true);
+  assert.equal(found.comment.author, 'libraz');
+  assert.equal(found.comment.text, 'hello');
 });
 
 test('cellCount + cellAt enumerate stored cells', async () => {

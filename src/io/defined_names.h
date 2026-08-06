@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Defined-name reader. Walks `<workbook>/<definedNames>/<definedName>`
 // in the parsed `xl/workbook.xml` document and produces a flat list of

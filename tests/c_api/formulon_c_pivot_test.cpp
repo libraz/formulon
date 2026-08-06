@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI PivotTable layout tests. The workbook is loaded through the
 // C surface from a minimal OOXML package; assertions then use only C ABI
@@ -219,8 +218,8 @@ TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
   ASSERT_EQ(fm_pivot_cells_bounds(projected.handle, &top, &left, &rows, &cols), 0);
   EXPECT_EQ(top, 0U);
   EXPECT_EQ(left, 3U);
-  EXPECT_EQ(rows, 5U);
-  EXPECT_EQ(cols, 3U);
+  EXPECT_EQ(rows, 4U);
+  EXPECT_EQ(cols, 2U);
 
   std::vector<fm_pivot_cell_t> cells;
   const std::size_t cell_count = fm_pivot_cells_count(projected.handle);
@@ -230,20 +229,20 @@ TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
     ASSERT_EQ(fm_pivot_cells_at(projected.handle, i, &cells[i]), 0);
   }
 
-  const fm_pivot_cell_t* region = FindCell(cells, 1, 3);
-  ASSERT_NE(region, nullptr);
-  EXPECT_EQ(region->kind, FM_PIVOT_CELL_HEADER);
-  EXPECT_EQ(region->value.kind, FM_VAL_TEXT);
-  ASSERT_NE(region->value.u.text, nullptr);
-  EXPECT_STREQ(region->value.u.text, "Region");
+  const fm_pivot_cell_t* row_labels = FindCell(cells, 0, 3);
+  ASSERT_NE(row_labels, nullptr);
+  EXPECT_EQ(row_labels->kind, FM_PIVOT_CELL_HEADER);
+  EXPECT_EQ(row_labels->value.kind, FM_VAL_TEXT);
+  ASSERT_NE(row_labels->value.u.text, nullptr);
+  EXPECT_STREQ(row_labels->value.u.text, "行ラベル");
 
-  const fm_pivot_cell_t* north_label = FindCell(cells, 2, 3);
+  const fm_pivot_cell_t* north_label = FindCell(cells, 1, 3);
   ASSERT_NE(north_label, nullptr);
   EXPECT_EQ(north_label->kind, FM_PIVOT_CELL_ROW_LABEL);
   EXPECT_EQ(north_label->value.kind, FM_VAL_TEXT);
   EXPECT_STREQ(north_label->value.u.text, "North");
 
-  const fm_pivot_cell_t* north_sum = FindCell(cells, 2, 4);
+  const fm_pivot_cell_t* north_sum = FindCell(cells, 1, 4);
   ASSERT_NE(north_sum, nullptr);
   EXPECT_EQ(north_sum->kind, FM_PIVOT_CELL_DATA);
   EXPECT_EQ(north_sum->value.kind, FM_VAL_NUMBER);
@@ -251,7 +250,7 @@ TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
   ASSERT_NE(north_sum->field_name, nullptr);
   EXPECT_STREQ(north_sum->field_name, "Sum of Amount");
 
-  const fm_pivot_cell_t* grand_total = FindCell(cells, 4, 5);
+  const fm_pivot_cell_t* grand_total = FindCell(cells, 3, 4);
   ASSERT_NE(grand_total, nullptr);
   EXPECT_EQ(grand_total->kind, FM_PIVOT_CELL_GRAND_TOTAL);
   EXPECT_EQ(grand_total->value.kind, FM_VAL_NUMBER);
@@ -581,6 +580,37 @@ TEST(FormulonCApiPivot, PivotReportLayoutRoundTripsThroughApi) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
 }
 
+TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  ASSERT_EQ(fm_workbook_pivot_set_layout(wb.handle, 0, pivot_idx, FM_PIVOT_LAYOUT_TABULAR), 0);
+
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  ASSERT_EQ(fm_pivot_cells_bounds(projected.handle, &top, &left, &rows, &cols), 0);
+  EXPECT_EQ(cols, 2U);  // Tabular exposes its two row-field columns.
+
+  bool saw_japanese_total = false;
+  const std::size_t cell_count = fm_pivot_cells_count(projected.handle);
+  for (std::size_t i = 0; i < cell_count; ++i) {
+    fm_pivot_cell_t cell{};
+    ASSERT_EQ(fm_pivot_cells_at(projected.handle, i, &cell), 0);
+    if (cell.value.kind == FM_VAL_TEXT && cell.value.u.text != nullptr &&
+        std::string_view(cell.value.u.text) == "総計") {
+      saw_japanese_total = true;
+    }
+  }
+  EXPECT_TRUE(saw_japanese_total);
+}
+
 TEST(FormulonCApiPivot, PivotCacheErrorSettersRejectInvalidErrorCodes) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -841,4 +871,88 @@ TEST(FormulonCApiPivot, OutOfGridAnchorRejected) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   // An in-grid span still succeeds.
   EXPECT_EQ(fm_workbook_pivot_set_anchor(wb.handle, 0, pivot_idx, 0U, 0U, /*span_rows=*/3U, /*span_cols=*/2U), 0);
+}
+
+TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
+  // Exercise the C ABI setters that are not needed by the projected-layout
+  // examples above.  Each mutation is followed by the corresponding clear
+  // where one exists, which also verifies that the handle remains usable
+  // across each invalidation boundary.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  std::uint32_t id_at_zero = 0;
+  ASSERT_EQ(fm_workbook_pivot_cache_id_at(wb.handle, 0, &id_at_zero), 0);
+  EXPECT_EQ(id_at_zero, cache_id);
+
+  const char* field_name = nullptr;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_name(wb.handle, cache_id, 0, &field_name), 0);
+  EXPECT_STREQ(field_name, "Region");
+
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_number(wb.handle, cache_id, 0, 7.0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_bool(wb.handle, cache_id, 0, 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_add_shared_item_blank(wb.handle, cache_id, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_clear_shared_items(wb.handle, cache_id, 0), 0);
+  std::size_t shared_count = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_field_shared_item_count(wb.handle, cache_id, 0, &shared_count), 0);
+  EXPECT_EQ(shared_count, 0U);
+
+  std::size_t record_idx = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_record_add(wb.handle, cache_id, &record_idx), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_text(wb.handle, cache_id, record_idx, 0, "North"), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_bool(wb.handle, cache_id, record_idx, 0, 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_blank(wb.handle, cache_id, record_idx, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_error(wb.handle, cache_id, record_idx, 0, 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_record_clear(wb.handle, cache_id), 0);
+  std::size_t record_count = 99;
+  ASSERT_EQ(fm_workbook_pivot_cache_record_count(wb.handle, cache_id, &record_count), 0);
+  EXPECT_EQ(record_count, 0U);
+
+  ASSERT_EQ(fm_workbook_pivot_set_name(wb.handle, 0, pivot_idx, "Renamed"), 0);
+  ASSERT_EQ(fm_workbook_pivot_set_grand_totals(wb.handle, 0, pivot_idx, 0, 1), 0);
+  std::size_t field_count = 99;
+  ASSERT_EQ(fm_workbook_pivot_field_count(wb.handle, 0, pivot_idx, &field_count), 0);
+  ASSERT_EQ(field_count, 2U);
+
+  ASSERT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AXIS_ROW), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_set_sort(wb.handle, 0, pivot_idx, 0, 0, "Amount"), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_set_subtotal_top(wb.handle, 0, pivot_idx, 0, 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_add_aggregation(wb.handle, 0, pivot_idx, 1, FM_PIVOT_AGG_COUNT), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_clear_aggregations(wb.handle, 0, pivot_idx, 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_set_item_visible(wb.handle, 0, pivot_idx, 0, 0, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_clear_items(wb.handle, 0, pivot_idx, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_add_subtotal_fn(wb.handle, 0, pivot_idx, 0, FM_PIVOT_AGG_COUNT), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_clear_subtotal_fns(wb.handle, 0, pivot_idx, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, FM_PIVOT_DATE_YEAR,
+                                                   FM_PIVOT_CALENDAR_GREGORIAN, 2020, 2026),
+            0);
+  ASSERT_EQ(fm_workbook_pivot_field_clear_date_group(wb.handle, 0, pivot_idx, 0), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_set_number_format(wb.handle, 0, pivot_idx, 1, "#,##0.00"), 0);
+  const std::uint32_t col_order[] = {1U};
+  ASSERT_EQ(fm_workbook_pivot_set_col_field_order(wb.handle, 0, pivot_idx, col_order, 1U), 0);
+
+  ASSERT_EQ(fm_workbook_pivot_data_field_clear(wb.handle, 0, pivot_idx), 0);
+  std::size_t data_field_count = 99;
+  ASSERT_EQ(fm_workbook_pivot_data_field_count(wb.handle, 0, pivot_idx, &data_field_count), 0);
+  EXPECT_EQ(data_field_count, 0U);
+
+  fm_pivot_filter_spec_t filter{};
+  filter.axis = FM_PIVOT_AXIS_ROW;
+  filter.field_name = "Region";
+  filter.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
+  filter.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
+  filter.value_text = "N";
+  filter.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  ASSERT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &filter), 0);
+  ASSERT_EQ(fm_workbook_pivot_filter_clear(wb.handle, 0, pivot_idx), 0);
+
+  ASSERT_EQ(fm_workbook_pivot_field_clear(wb.handle, 0, pivot_idx), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_count(wb.handle, 0, pivot_idx, &field_count), 0);
+  EXPECT_EQ(field_count, 0U);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_clear(wb.handle, cache_id), 0);
+  ASSERT_EQ(fm_workbook_pivot_cache_field_count(wb.handle, cache_id, &field_count), 0);
+  EXPECT_EQ(field_count, 0U);
 }

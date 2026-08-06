@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the GETPIVOTDATA lazy form. The Ref-anchor path
 // requires a workbook + pivot fixture so it cannot be expressed via

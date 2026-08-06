@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the FORECAST.ETS family lazy impls.
 //
@@ -84,6 +83,12 @@ constexpr std::uint32_t kMaxSeasonalityArg = 8760U;
 // Minimum |ACF| magnitude required to declare a detected seasonality.
 // Below this the auto-detector returns m = 1. ORACLE-PENDING.
 constexpr double kAcfDetectionThreshold = 0.3;
+
+// Relative floor on the linear-trend residual below which the detrended
+// series is treated as pure rounding noise and no period is reported. The
+// comparison is against the raw mean-centred variance, so it scales with
+// the data instead of assuming a magnitude.
+constexpr double kDetrendedResidualEpsilon = 1e-20;
 
 // Nelder-Mead bounds clamp -- coordinates are squeezed into
 // (kBoundEps, 1 - kBoundEps) so the gradient never escapes the unit
@@ -393,37 +398,68 @@ std::uint32_t detect_seasonality(const std::vector<double>& y) {
   if (n < 4U) {
     return 1U;
   }
-  // Compute mean and total variance once.
-  double mean = 0.0;
-  for (double v : y)
-    mean += v;
-  mean /= static_cast<double>(n);
-  double var = 0.0;
-  for (double v : y) {
-    const double d = v - mean;
-    var += d * d;
+  // The autocorrelation scan runs on the linear-trend residual, not on the
+  // raw series. A trending series is non-stationary: every lag of a plain
+  // ramp autocorrelates near 1, so an un-detrended scan reports a period
+  // for data that has none. Ordinary least squares against the sample
+  // index is enough here because the resample grid is equally spaced by
+  // construction, which lets the regression sums close in one pass.
+  const double count = static_cast<double>(n);
+  double sum_y = 0.0;
+  double sum_iy = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    sum_y += y[i];
+    sum_iy += static_cast<double>(i) * y[i];
   }
-  if (var == 0.0) {
+  const double mean_y = sum_y / count;
+  const double mean_i = (count - 1.0) / 2.0;
+  // sum (i - mean_i)^2 over 0..n-1 in closed form.
+  const double sxx = count * (count * count - 1.0) / 12.0;
+  const double sxy = sum_iy - mean_i * sum_y;
+  const double slope = (sxx > 0.0) ? (sxy / sxx) : 0.0;
+
+  std::vector<double> resid(n);
+  double var = 0.0;
+  double raw_var = 0.0;
+  for (std::size_t i = 0; i < n; ++i) {
+    const double fitted = mean_y + slope * (static_cast<double>(i) - mean_i);
+    resid[i] = y[i] - fitted;
+    var += resid[i] * resid[i];
+    const double centered = y[i] - mean_y;
+    raw_var += centered * centered;
+  }
+  // A residual that is pure rounding noise carries no seasonal signal, so
+  // compare it against the scale of the original series rather than to an
+  // exact zero: a perfect ramp leaves residuals around 1e-15, whose
+  // autocorrelations are otherwise arbitrary and clear the threshold.
+  if (raw_var == 0.0 || var <= raw_var * kDetrendedResidualEpsilon) {
     return 1U;
   }
   const std::uint32_t max_lag_u = std::min<std::uint32_t>(static_cast<std::uint32_t>(n / 2U), kMaxSeasonalityDetectLag);
   if (max_lag_u < 2U) {
     return 1U;
   }
+  // The residual is mean-zero by construction, so the centring term drops
+  // out of the autocorrelation numerator.
+  //
+  // Only positive autocorrelation counts. A seasonality is a repetition,
+  // and a negative correlation at lag k says the residual flips sign every
+  // k steps — the repetition is at 2k, not k. Ranking by magnitude would
+  // let that anti-correlated lag outrank the real period.
   double best_acf = 0.0;
   std::uint32_t best_lag = 1U;
   for (std::uint32_t k = 2U; k <= max_lag_u; ++k) {
     double num = 0.0;
     for (std::size_t i = k; i < n; ++i) {
-      num += (y[i] - mean) * (y[i - k] - mean);
+      num += resid[i] * resid[i - k];
     }
     const double r = num / var;
-    if (std::fabs(r) > std::fabs(best_acf)) {
+    if (r > best_acf) {
       best_acf = r;
       best_lag = k;
     }
   }
-  if (std::fabs(best_acf) >= kAcfDetectionThreshold) {
+  if (best_acf >= kAcfDetectionThreshold) {
     return best_lag;
   }
   return 1U;

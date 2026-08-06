@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook implementation. Wires the OOXML save path and the embedded
 // recalc engine. The `RecalcEngine` is held via `unique_ptr` (PIMPL-style)
@@ -15,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_types.h"
 #include "eval/dep_graph.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
@@ -109,6 +109,7 @@ namespace {
 void reindex_all_formulas(const std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
                           const Workbook& workbook) {
   mutator.reset_graph();
+  Arena parser_arena;
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     const Sheet& sheet = sheets[sheet_idx];
     for (const auto& [row, cells] : sheet.rows()) {
@@ -123,8 +124,8 @@ void reindex_all_formulas(const std::vector<Sheet>& sheets, const eval::RecalcEn
         }
         const eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
         if (!body.empty()) {
-          Arena arena;
-          parser::AstNode* root = parser::parse_strict(body, arena);
+          parser_arena.reset();
+          parser::AstNode* root = parser::parse_strict(body, parser_arena);
           if (root != nullptr) {
             mutator.register_formula(node, *root, workbook);
           }
@@ -156,6 +157,7 @@ bool formula_references_sheet(std::string_view formula, std::string_view sheet_n
 void rewrite_cell_formulas_for_sheet_rename(std::vector<Sheet>& sheets,
                                             const eval::RecalcEngine::LockedMutator& mutator, const Workbook& workbook,
                                             std::string_view old_name, std::string_view new_name) {
+  Arena parser_arena;
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
     std::vector<std::uint32_t> row_keys;
@@ -186,8 +188,8 @@ void rewrite_cell_formulas_for_sheet_rename(std::vector<Sheet>& sheets,
           body.remove_prefix(1);
         }
         if (!body.empty()) {
-          Arena arena;
-          parser::AstNode* root = parser::parse_strict(body, arena);
+          parser_arena.reset();
+          parser::AstNode* root = parser::parse_strict(body, parser_arena);
           if (root != nullptr) {
             mutator.register_formula(node, *root, workbook);
           }
@@ -363,6 +365,124 @@ std::string replace_sheet_in_formula(std::string_view formula, std::string_view 
   return out;
 }
 
+std::string replace_sheet_in_hyperlink_location(std::string_view location, std::string_view old_name,
+                                                std::string_view new_name) {
+  if (location.empty()) {
+    return std::string(location);
+  }
+  const bool has_fragment_prefix = location.front() == '#';
+  const std::string_view formula = has_fragment_prefix ? location.substr(1) : location;
+  if (!formula_references_sheet(formula, old_name)) {
+    return std::string(location);
+  }
+  std::string rewritten = replace_sheet_in_formula(formula, old_name, new_name);
+  if (has_fragment_prefix) {
+    rewritten.insert(rewritten.begin(), '#');
+  }
+  return rewritten;
+}
+
+void rewrite_sheet_named_metadata(std::vector<Sheet>& sheets, std::vector<io::DefinedName>& defined_names,
+                                  Workbook& workbook, std::string_view old_name, std::string_view new_name) {
+  for (io::DefinedName& entry : defined_names) {
+    if (formula_references_sheet(entry.formula, old_name)) {
+      entry.formula = replace_sheet_in_formula(entry.formula, old_name, new_name);
+    }
+  }
+  for (Sheet& sheet : sheets) {
+    for (Hyperlink& hyperlink : sheet.mutable_hyperlinks()) {
+      hyperlink.location = replace_sheet_in_hyperlink_location(hyperlink.location, old_name, new_name);
+    }
+    for (DataValidation& validation : sheet.mutable_validations()) {
+      if (formula_references_sheet(validation.formula1, old_name)) {
+        validation.formula1 = replace_sheet_in_formula(validation.formula1, old_name, new_name);
+      }
+      if (formula_references_sheet(validation.formula2, old_name)) {
+        validation.formula2 = replace_sheet_in_formula(validation.formula2, old_name, new_name);
+      }
+    }
+  }
+  for (std::unique_ptr<pivot::PivotCache>& cache : workbook.mutable_pivot_caches()) {
+    if (cache == nullptr) {
+      continue;
+    }
+    pivot::WorksheetSource& source = cache->mutable_worksheet_source();
+    if (strings::case_insensitive_eq(source.sheet, old_name)) {
+      source.sheet.assign(new_name);
+    }
+    if (formula_references_sheet(source.ref, old_name)) {
+      source.ref = replace_sheet_in_formula(source.ref, old_name, new_name);
+    }
+  }
+}
+
+void freeze_cell_formulas_referencing_sheet(std::vector<Sheet>& sheets, std::uint32_t removed_index,
+                                            std::string_view removed_name) {
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    if (sheet_idx == removed_index) {
+      continue;
+    }
+    Sheet& sheet = sheets[sheet_idx];
+    for (const auto& row_entry : sheet.rows()) {
+      const std::uint32_t row = row_entry.first;
+      for (std::size_t col = 0; col < row_entry.second.size(); ++col) {
+        const Cell& cell = row_entry.second[col];
+        if (!cell.formula_text.empty() && formula_references_sheet(cell.formula_text, removed_name)) {
+          sheet.set_cell_formula(row, static_cast<std::uint32_t>(col), "=#REF!");
+        }
+      }
+    }
+  }
+}
+
+void remove_and_reindex_tables(std::vector<io::TableMetadata>& tables, std::size_t removed_sheet_index) {
+  std::vector<io::TableMetadata> retained;
+  retained.reserve(tables.size());
+  for (io::TableMetadata& table : tables) {
+    if (table.sheet_index == removed_sheet_index) {
+      continue;
+    }
+    if (table.sheet_index > removed_sheet_index) {
+      --table.sheet_index;
+    }
+    retained.push_back(std::move(table));
+  }
+  tables = std::move(retained);
+}
+
+void remove_pivot_caches_referencing_sheet(std::vector<std::unique_ptr<pivot::PivotCache>>& caches,
+                                           std::string_view removed_sheet_name) {
+  std::vector<std::unique_ptr<pivot::PivotCache>> retained;
+  retained.reserve(caches.size());
+  for (std::unique_ptr<pivot::PivotCache>& cache : caches) {
+    if (cache == nullptr) {
+      continue;
+    }
+    const pivot::WorksheetSource& source = cache->worksheet_source();
+    // A cache whose worksheet source was removed can no longer refresh and
+    // is not valid for any surviving pivot table. Source-less caches remain
+    // supported as deliberate static snapshots.
+    if (source.present && (strings::case_insensitive_eq(source.sheet, removed_sheet_name) ||
+                           formula_references_sheet(source.ref, removed_sheet_name))) {
+      continue;
+    }
+    retained.push_back(std::move(cache));
+  }
+  caches = std::move(retained);
+}
+
+void move_table_sheet_indices(std::vector<io::TableMetadata>& tables, std::size_t from_index, std::size_t to_index) {
+  for (io::TableMetadata& table : tables) {
+    if (table.sheet_index == from_index) {
+      table.sheet_index = to_index;
+    } else if (from_index < to_index && table.sheet_index > from_index && table.sheet_index <= to_index) {
+      --table.sheet_index;
+    } else if (from_index > to_index && table.sheet_index >= to_index && table.sheet_index < from_index) {
+      ++table.sheet_index;
+    }
+  }
+}
+
 }  // namespace
 
 Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string new_name) {
@@ -388,19 +508,6 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
 
   const std::string old_name = sheets_[index].name();
 
-  // Update workbook-scoped defined names whose target string mentions
-  // the renamed sheet by name. Sheet-scoped names (local_sheet_id >= 0)
-  // are unaffected: they reference sheets by ordinal index, not by
-  // name, and Excel preserves the binding across renames.
-  for (io::DefinedName& entry : defined_names_) {
-    if (entry.local_sheet_id >= 0) {
-      continue;
-    }
-    if (formula_references_sheet(entry.formula, old_name)) {
-      entry.formula = replace_sheet_in_formula(entry.formula, old_name, new_name);
-    }
-  }
-
   // Rewrite cell formulas that reference the renamed sheet, and apply the
   // sheet rename, under a single hold of the engine mutex so a concurrent
   // `recalc_parallel` never observes a half-renamed state (some formulas
@@ -410,6 +517,7 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
     std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
     rewrite_cell_formulas_for_sheet_rename(sheets_, mutator, *this, old_name, new_name);
+    rewrite_sheet_named_metadata(sheets_, defined_names_, *this, old_name, new_name);
     // Move the rename into the sheet last so the rewriter above still has
     // the pre-move name state to read from.
     sheets_[index].set_name(std::move(new_name));
@@ -440,6 +548,7 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   {
     std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    freeze_cell_formulas_referencing_sheet(sheets_, index, removed_name);
     sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
     reindex_all_formulas(sheets_, mutator, *this);
   }
@@ -458,9 +567,10 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
     if (entry.local_sheet_id == static_cast<std::int32_t>(index)) {
       continue;
     }
-    if (entry.local_sheet_id < 0 && formula_references_sheet(entry.formula, removed_name)) {
-      // Workbook-scoped name targeting the removed sheet: drop it.
-      continue;
+    if (formula_references_sheet(entry.formula, removed_name)) {
+      // Keep surviving names but freeze their target. This prevents a later
+      // newly-created sheet with the same name from silently rebinding it.
+      entry.formula = "#REF!";
     }
     if (entry.local_sheet_id > static_cast<std::int32_t>(index)) {
       entry.local_sheet_id -= 1;
@@ -468,6 +578,8 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
     retained.push_back(std::move(entry));
   }
   defined_names_ = std::move(retained);
+  remove_and_reindex_tables(tables_, index);
+  remove_pivot_caches_referencing_sheet(pivot_caches_, removed_name);
   return Expected<void, Error>::Ok();
 }
 
@@ -515,6 +627,7 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
       entry.local_sheet_id += 1;
     }
   }
+  move_table_sheet_indices(tables_, from_index, to_index);
 
   // The recalc engine's `CellNodeId.sheet_id` is the workbook-relative
   // index, so a move renumbers every sheet in the `[min..max]` window and
@@ -579,6 +692,15 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   entry.formula = std::move(formula);
   entry.local_sheet_id = local_sheet_id;
   defined_names_.push_back(std::move(entry));
+  // Adding a name can make an already-calculated #NAME? formula resolvable.
+  // Its old dependency entry was extracted without this definition, so use
+  // the same full rebuild as name updates and removals before the next
+  // recalc.
+  {
+    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    reindex_all_formulas(sheets_, mutator, *this);
+  }
   return Expected<void, Error>::Ok();
 }
 
@@ -598,6 +720,49 @@ std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept 
     }
   }
   return static_cast<std::size_t>(-1);
+}
+
+std::size_t Workbook::approximate_memory_bytes() const noexcept {
+  // Per-row cost of the cell store's hash map beyond the run itself: one
+  // node holding the key and the `RowCells` header, plus the bucket slot
+  // pointing at it. A constant is enough — the figure is a pressure
+  // signal, and no standard library exposes its real per-node overhead.
+  constexpr std::size_t kRowNodeOverheadBytes = sizeof(std::uint32_t) + 2U * sizeof(void*) + 32U;
+
+  std::size_t total = sizeof(Workbook);
+
+  for (const Sheet& sheet_ref : sheets_) {
+    total += sizeof(Sheet) + sheet_ref.name().capacity();
+    for (const auto& [row, cells] : sheet_ref.rows()) {
+      (void)row;
+      total += kRowNodeOverheadBytes + (cells.run().capacity() * sizeof(Cell));
+      for (const Cell& cell : cells.run()) {
+        total += cell.formula_text.capacity() + cell.phonetic_text.capacity();
+        if (cell.cached_text_owned != nullptr) {
+          total += sizeof(std::string) + cell.cached_text_owned->capacity();
+        }
+      }
+    }
+  }
+
+  // Every `Text` value in the workbook is a view into this deque, so the
+  // cell walk above deliberately does not add string payloads a second
+  // time.
+  for (const std::string& text : text_storage_) {
+    total += sizeof(std::string) + text.capacity();
+  }
+
+  for (const io::PassthroughPart& part : passthrough_parts_) {
+    total += sizeof(io::PassthroughPart) + part.path.capacity() + part.content_type.capacity() + part.bytes.capacity();
+  }
+
+  for (const io::DefinedName& name : defined_names_) {
+    total += sizeof(io::DefinedName) + name.name.capacity() + name.formula.capacity() + name.comment.capacity();
+  }
+
+  total += workbook_pr_xml_.capacity() + book_views_xml_.capacity() + workbook_protection_xml_.capacity();
+
+  return total;
 }
 
 void Workbook::add_pivot_cache(std::unique_ptr<pivot::PivotCache> cache) {
@@ -657,6 +822,7 @@ void mark_dependents_dirty(const eval::RecalcEngine::LockedMutator& mutator, eva
   for (eval::CellNodeId dep : mutator.dep_graph().dependents_of(cell)) {
     mutator.mark_dirty(dep);
   }
+  mutator.mark_range_dependents_dirty(cell);
 }
 
 // When `(row, col)` is a *phantom* of a committed spill region (i.e. a
@@ -722,6 +888,28 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
     mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
     sheets_[sheet_index].set_cell_value(row, col, value);
   }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
+                                              std::string_view text) {
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_text: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index) + " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  if (!Sheet::coord_in_grid(row, col)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_text: coordinate out of grid",
+                      "row=" + std::to_string(row) + " col=" + std::to_string(col));
+  }
+
+  const eval::CellNodeId node = make_node(sheet_index, row, col);
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  mutator.mark_dirty(node);
+  mark_dependents_dirty(mutator, node);
+  mutator.clear_cell_dependencies(node);
+  mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
+  sheets_[sheet_index].set_cell_text(row, col, text);
   return Expected<void, Error>::Ok();
 }
 
@@ -940,6 +1128,23 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
 void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
                                        const Workbook& workbook, std::string_view target_sheet, parser::RowColAxis axis,
                                        parser::RowColEdit edit, std::uint32_t index, std::uint32_t count) {
+  struct FormulaUpdate {
+    Sheet* sheet = nullptr;
+    eval::CellNodeId old_node;
+    eval::CellNodeId new_node;
+    bool dropped = false;
+    std::string formula;
+  };
+
+  // Collect the complete mutation set before touching the graph. A single
+  // structural edit can map an old key onto a key that is still occupied by
+  // another formula (for example, delete row 1 moves B3 -> B2 while B2 is
+  // not yet unregistered). DepGraph::remove_node is coordinate based, so
+  // interleaving unregister/register can then delete the newly registered
+  // node's edges. The two phases below make every old key absent before any
+  // new key is registered, independent of unordered_map iteration order.
+  std::vector<FormulaUpdate> updates;
+  Arena parser_arena;
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
     const bool local_means_target = strings::case_insensitive_eq(sheet.name(), target_sheet);
@@ -955,7 +1160,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
       if (it == sheet.rows().end()) {
         continue;
       }
-      const std::vector<Cell>& cells = it->second;
+      const RowCells& cells = it->second;
       for (std::size_t col = 0; col < cells.size(); ++col) {
         const Cell& cell = cells[col];
         if (cell.formula_text.empty()) {
@@ -970,13 +1175,13 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
         if (body.empty()) {
           continue;
         }
-        Arena arena;
-        parser::Parser parser(body, arena);
+        parser_arena.reset();
+        parser::Parser parser(body, parser_arena);
         parser::AstNode* root = parser.parse();
         if (root == nullptr || !parser.errors().empty()) {
           continue;  // Unparseable formula; leave alone (matches Excel "carry through unchanged").
         }
-        const parser::AstNode* shifted = parser::shift_refs(*root, arena, transform);
+        const parser::AstNode* shifted = parser::shift_refs(*root, parser_arena, transform);
         const bool ast_changed = (shifted != nullptr && shifted != root);
 
         // Resolve the cell's post-shift coordinates. Only cells on the
@@ -1000,53 +1205,121 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
           continue;  // Cell unaffected by the edit.
         }
 
-        // Rewrite the formula text only when the AST actually changed.
-        // Cells whose key shifts but whose refs are stable keep the
-        // existing text + cached value; the physical move done later
-        // by Sheet::insert_rows / delete_rows carries both into place.
+        // Keep the rewritten text alongside the key transition. It is
+        // applied only after every disappearing / moving old key has been
+        // unregistered.
+        std::string effective_formula = cell.formula_text;
         if (ast_changed) {
-          std::string rewritten;
+          effective_formula.clear();
           if (had_equals) {
-            rewritten.push_back('=');
+            effective_formula.push_back('=');
           }
-          rewritten.append(parser::format_formula(*shifted));
-          sheet.set_cell_formula(row, static_cast<std::uint32_t>(col), std::move(rewritten));
+          effective_formula.append(parser::format_formula(*shifted));
         }
 
         const eval::CellNodeId old_node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
-        if (dropped) {
-          // Cell will vanish from the sheet — drop its dep-graph node.
-          mutator.unregister_formula(old_node);
-          continue;
-        }
-
-        // Re-key the dep-graph entry from OLD to NEW coords. Even
-        // when the AST is identity, the cell's key changes so the
-        // engine must learn the new key; otherwise dirty marks and
-        // dependent edges fire against an empty / wrong slot.
-        if (cell_moves) {
-          mutator.unregister_formula(old_node);
-        }
         const eval::CellNodeId new_node{static_cast<std::uint16_t>(sheet_idx), new_row, new_col};
-        const parser::AstNode& effective_ast = ast_changed ? *shifted : *root;
-        mutator.register_formula(new_node, effective_ast, workbook);
-        mutator.mark_dirty(new_node);
+        updates.push_back(FormulaUpdate{&sheet, old_node, new_node, dropped, std::move(effective_formula)});
+      }
+    }
+  }
+
+  // Phase 1: no old graph key may survive a coordinate transition.
+  for (const FormulaUpdate& update : updates) {
+    if (update.dropped || update.old_node != update.new_node) {
+      mutator.unregister_formula(update.old_node);
+    }
+  }
+
+  // Phase 2: apply formula text and create the post-edit graph. Re-parse the
+  // stored text because the first-pass AST arenas intentionally expired
+  // before phase 1; this keeps memory bounded for large workbooks.
+  for (FormulaUpdate& update : updates) {
+    if (update.dropped) {
+      continue;
+    }
+    const Cell* current = update.sheet->cell_at(update.old_node.row, update.old_node.col);
+    if (current == nullptr || current->formula_text != update.formula) {
+      update.sheet->set_cell_formula(update.old_node.row, update.old_node.col, std::move(update.formula));
+    }
+    const Cell* formula_cell = update.sheet->cell_at(update.old_node.row, update.old_node.col);
+    if (formula_cell == nullptr || formula_cell->formula_text.empty()) {
+      continue;
+    }
+    std::string_view body = formula_cell->formula_text;
+    if (!body.empty() && body.front() == '=') {
+      body.remove_prefix(1);
+    }
+    parser_arena.reset();
+    parser::Parser parser(body, parser_arena);
+    parser::AstNode* root = parser.parse();
+    if (root == nullptr || !parser.errors().empty()) {
+      continue;
+    }
+    mutator.register_formula(update.new_node, *root, workbook);
+    mutator.mark_dirty(update.new_node);
+  }
+}
+
+/// Applies `transform` to every defined name's formula. Returns true when at
+/// least one definition changed, which means every formula that references a
+/// name now resolves to a different range than the dep graph was built from.
+bool rewrite_defined_names(std::vector<io::DefinedName>& names, const parser::RefTransform& transform) {
+  bool any_changed = false;
+  for (io::DefinedName& entry : names) {
+    FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
+    if (result.changed) {
+      entry.formula = std::move(result.text);
+      any_changed = true;
+    }
+  }
+  return any_changed;
+}
+
+void rewrite_conditional_format_formulas(std::vector<cf::ConditionalFormat>& formats,
+                                         const parser::RefTransform& transform) {
+  for (cf::ConditionalFormat& format : formats) {
+    for (cf::CFRule& rule : format.rules) {
+      if (rule.formula1.has_value()) {
+        FormulaRewriteResult result = rewrite_formula(*rule.formula1, transform);
+        if (result.changed) {
+          rule.formula1 = std::move(result.text);
+        }
+      }
+      if (rule.formula2.has_value()) {
+        FormulaRewriteResult result = rewrite_formula(*rule.formula2, transform);
+        if (result.changed) {
+          rule.formula2 = std::move(result.text);
+        }
       }
     }
   }
 }
 
-void rewrite_defined_names(std::vector<io::DefinedName>& names, const parser::RefTransform& transform) {
-  for (io::DefinedName& entry : names) {
-    FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
-    if (result.changed) {
-      entry.formula = std::move(result.text);
+void rewrite_tables_for_row_col_edit(std::vector<io::TableMetadata>& tables, std::size_t target_sheet_index,
+                                     const parser::RefTransform& transform) {
+  for (io::TableMetadata& table : tables) {
+    if (table.sheet_index != target_sheet_index) {
+      continue;
+    }
+    FormulaRewriteResult range = rewrite_formula(table.ref, transform);
+    if (range.changed) {
+      table.ref = std::move(range.text);
+    }
+    for (io::TableColumn& column : table.columns) {
+      if (!column.calculated_column_formula.empty()) {
+        FormulaRewriteResult formula = rewrite_formula(column.calculated_column_formula, transform);
+        if (formula.changed) {
+          column.calculated_column_formula = std::move(formula.text);
+        }
+      }
     }
   }
 }
 
 Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, parser::RowColAxis axis,
-                                         std::uint32_t origin, std::uint32_t count, const char* op_name) {
+                                         parser::RowColEdit edit, std::uint32_t origin, std::uint32_t count,
+                                         const char* op_name) {
   if (sheet_index >= wb.sheet_count()) {
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": sheet_index out of range",
                       "sheet_index=" + std::to_string(sheet_index));
@@ -1058,6 +1331,14 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   if (origin >= bound) {
     return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": origin out of bounds",
                       "origin=" + std::to_string(origin));
+  }
+  // Deletion helpers use `origin + count` as their exclusive endpoint.
+  // Validate against the remaining grid with subtraction so an unsigned
+  // count received through the C/WASM ABI cannot wrap and turn a delete
+  // into a corrupting row/column move.
+  if (edit == parser::RowColEdit::kDelete && count > bound - origin) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(op_name) + ": count exceeds sheet bounds",
+                      "origin=" + std::to_string(origin) + " count=" + std::to_string(count));
   }
   return Expected<void, Error>::Ok();
 }
@@ -1071,18 +1352,34 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
 // `rewrite_defined_names` does not touch the engine but is included
 // here to preserve the "defined-name table matches dep-graph state"
 // invariant for any other reader that consults both under the same
-// lock.
+// lock, and because the dep-graph re-index it can trigger has to run
+// against the rewritten table.
 Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<Sheet>& sheets,
                                                    const eval::RecalcEngine::LockedMutator& mutator,
                                                    std::vector<io::DefinedName>& defined_names, std::size_t sheet_index,
                                                    parser::RowColAxis axis, parser::RowColEdit edit,
                                                    std::uint32_t origin, std::uint32_t count, const char* op_name) {
-  RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, origin, count, op_name));
+  RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, edit, origin, count, op_name));
   const std::string target_sheet_name = sheets[sheet_index].name();
-  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
+  // Defined names are rewritten before cell formulas, and a change to any of
+  // them forces a full re-index afterwards. A formula that reaches a shifted
+  // range only through a name — `=MyRef*1` — is textually unchanged by the
+  // shift, because a `NameRef` node is the identity case for the transform.
+  // The per-formula rewriter only re-registers formulas whose text changed,
+  // so without the re-index that formula keeps dep-graph edges pointing at
+  // the range `MyRef` used to cover. `set_defined_name_scoped` and
+  // `remove_sheet` already take this fallback for the same reason.
   const parser::RowColShiftTransform name_transform(target_sheet_name, axis, edit, origin, count);
-  rewrite_defined_names(defined_names, name_transform);
+  const bool names_changed = rewrite_defined_names(defined_names, name_transform);
+  rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
+  if (names_changed) {
+    reindex_all_formulas(sheets, mutator, wb);
+  }
   Sheet& target = sheets[sheet_index];
+  const parser::RowColShiftTransform cf_transform(target_sheet_name, axis, edit, origin, count,
+                                                  /*local_means_target=*/true);
+  rewrite_conditional_format_formulas(target.mutable_conditional_formats(), cf_transform);
+  rewrite_tables_for_row_col_edit(wb.mutable_tables(), sheet_index, cf_transform);
   if (axis == parser::RowColAxis::kRow) {
     if (edit == parser::RowColEdit::kInsert) {
       target.insert_rows(origin, count);
@@ -1145,11 +1442,12 @@ Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::
     return make_error(FormulonErrorCode::kInvalidArgument, "set_cell_xf_index: coordinate out of grid",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col));
   }
-  Sheet& sheet = sheets_[sheet_index];
-  if (sheet.cell_at(row, col) == nullptr) {
-    sheet.set_cell_value(row, col, Value::blank());
-  }
-  sheet.set_cell_xf_index(row, col, xf_index);
+  // A style write can grow the sheet's sparse row store, so serialize it
+  // with recalc just like all other workbook-level cell mutations. The
+  // sheet-level setter deliberately bypasses literal-write spill invalidation
+  // so formatting a live spill phantom preserves the dynamic array.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  sheets_[sheet_index].set_cell_xf_index(row, col, xf_index);
   return Expected<void, Error>::Ok();
 }
 

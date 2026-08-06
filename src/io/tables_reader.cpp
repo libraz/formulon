@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the tables-part reader. See tables_reader.h for the
 // public contract.
@@ -8,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,22 +21,43 @@ namespace formulon {
 namespace io {
 namespace {
 
-/// Serialises a pugixml node to a raw (unindented) XML string. Local to
-/// this TU; used to capture `<tableStyleInfo>` verbatim.
-struct StringXmlWriter final : pugi::xml_writer {
-  std::string* dst = nullptr;
-  void write(const void* data, std::size_t size) override {
-    if (dst != nullptr) {
-      dst->append(static_cast<const char*>(data), size);
+void AppendEscapedAttributeValue(std::string& out, std::string_view value) {
+  for (char c : value) {
+    switch (c) {
+      case '&':
+        out.append("&amp;");
+        break;
+      case '<':
+        out.append("&lt;");
+        break;
+      case '"':
+        out.append("&quot;");
+        break;
+      default:
+        out.push_back(c);
+        break;
     }
   }
-};
+}
 
-std::string RawXml(const pugi::xml_node& node) {
+std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
   std::string out;
-  StringXmlWriter sink;
-  sink.dst = &out;
-  node.print(sink, /*indent=*/"", pugi::format_raw);
+  for (pugi::xml_attribute attr : node.attributes()) {
+    const std::string_view name(attr.name());
+    const bool is_known_column =
+        name == "id" || name == "name" || name == "totalsRowLabel" || name == "totalsRowFunction";
+    const bool is_known_root = name == "id" || name == "name" || name == "displayName" || name == "ref" ||
+                               name == "headerRowCount" || name == "totalsRowCount" || name == "xmlns";
+    const bool is_namespace = name.rfind("xmlns:", 0U) == 0U || name == "mc:Ignorable";
+    if ((root && is_known_root) || (!root && (is_known_column || is_namespace))) {
+      continue;
+    }
+    out.push_back(' ');
+    out.append(name);
+    out.append("=\"");
+    AppendEscapedAttributeValue(out, attr.value());
+    out.push_back('"');
+  }
   return out;
 }
 
@@ -56,6 +77,7 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
   table.id = attr_u32(root, "id");
   table.name = attr_str(root, "name");
   table.display_name = attr_str(root, "displayName");
+  table.root_extra_attrs = CaptureExtraAttrs(root, /*root=*/true);
 
   // `ref` is required; an absent / empty value rejects the part.
   const std::string_view ref_v = attr_str(root, "ref");
@@ -84,6 +106,7 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
       entry.name = attr_str(col, "name");
       entry.totals_label = attr_str(col, "totalsRowLabel");
       entry.totals_function = attr_str(col, "totalsRowFunction");
+      entry.extra_attrs = CaptureExtraAttrs(col, /*root=*/false);
       // Preserve <calculatedColumnFormula> verbatim. Children come
       // after attributes per the OOXML schema, so this lookup runs
       // last for the column. pugixml's `text().as_string()` already
@@ -99,7 +122,16 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
   // `<tableColumns>`. Captured verbatim; the engine does not model table
   // styles but must not drop them on save.
   if (pugi::xml_node style_info = root.child("tableStyleInfo"); style_info) {
-    table.table_style_info_xml = RawXml(style_info);
+    table.table_style_info_xml = raw_xml(style_info);
+  }
+  if (pugi::xml_node auto_filter = root.child("autoFilter"); auto_filter) {
+    table.auto_filter_xml = raw_xml(auto_filter);
+  }
+  if (pugi::xml_node sort_state = root.child("sortState"); sort_state) {
+    table.sort_state_xml = raw_xml(sort_state);
+  }
+  if (pugi::xml_node ext_lst = root.child("extLst"); ext_lst) {
+    table.ext_lst_xml = raw_xml(ext_lst);
   }
 
   return table;

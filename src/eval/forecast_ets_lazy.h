@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impls for the FORECAST.ETS family: FORECAST.ETS,
 // FORECAST.ETS.CONFINT, FORECAST.ETS.SEASONALITY, and FORECAST.ETS.STAT.

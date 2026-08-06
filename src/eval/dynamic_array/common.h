@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared helpers for the dynamic-array spilling builtins
 // (`FILTER`/`UNIQUE`/`SORT`/`SORTBY`/`HSTACK`/`VSTACK`/`CHOOSECOLS`/
@@ -24,6 +23,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -40,18 +40,17 @@ class FunctionRegistry;
 
 namespace dynamic_array {
 
+/// The dynamic-array family allocates through the shared evaluator seam; the
+/// name is re-exported here so the family's call sites keep reading in terms
+/// of their own namespace. See `eval/array_alloc.h` for the contract.
+using formulon::eval::allocate_array_value;
+
 /// Evaluate `node`, coerce to a finite number, and truncate toward zero.
 /// On error or coercion failure writes the caller-visible error to
 /// `error_out` and returns `false`. Shared by every helper that takes a
 /// numeric scalar argument (counts, indices, ignore masks, etc.).
 bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, double& out, Value& error_out);
-
-/// Allocate a `(rows, cols)` `ArrayValue` plus its backing `Value[]`
-/// buffer from `arena`. Returns nullptr on arena OOM (caller surfaces
-/// `#NUM!`). The caller never owns the buffer; both pointers live as long
-/// as the arena does.
-ArrayValue* allocate_array_value(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& out_buffer);
 
 /// Gather rows (`by_col == false`) or columns (`by_col == true`) of
 /// `src` named by the 0-based indices in `indices`, preserving the index

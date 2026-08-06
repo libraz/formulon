@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // In-memory representation of an OOXML pivot cache (pair of
 // `xl/pivotCache/cacheDefinition*.xml` and `cacheRecords*.xml`). The cache

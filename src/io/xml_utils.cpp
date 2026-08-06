@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `append_rich_text`. See header for the contract.
 
@@ -55,6 +54,24 @@ std::uint32_t parse_xml_u32_attr(const pugi::xml_attribute& attr, std::uint32_t 
   if (end == raw || *end != '\0' || errno != 0 ||
       parsed > static_cast<unsigned long>(std::numeric_limits<std::uint32_t>::max())) {
     return default_value;
+  }
+  return static_cast<std::uint32_t>(parsed);
+}
+
+std::optional<std::uint32_t> parse_xml_u32_attr_strict(const pugi::xml_attribute& attr) {
+  if (!attr) {
+    return std::nullopt;
+  }
+  const char* raw = attr.value();
+  if (raw == nullptr || *raw == '\0' || *raw == '-' || *raw == '+') {
+    return std::nullopt;
+  }
+  errno = 0;
+  char* end = nullptr;
+  const unsigned long parsed = std::strtoul(raw, &end, 10);
+  if (end == raw || *end != '\0' || errno != 0 ||
+      parsed > static_cast<unsigned long>(std::numeric_limits<std::uint32_t>::max())) {
+    return std::nullopt;
   }
   return static_cast<std::uint32_t>(parsed);
 }
@@ -146,6 +163,68 @@ void capture_unknown_attrs(const pugi::xml_node& node, std::initializer_list<std
   }
 }
 
+namespace {
+
+/// pugixml writer sink that appends straight into a caller-owned string.
+struct StringXmlWriter : pugi::xml_writer {
+  std::string* dst = nullptr;
+  void write(const void* data, std::size_t size) override {
+    if (dst != nullptr) {
+      dst->append(static_cast<const char*>(data), size);
+    }
+  }
+};
+
+}  // namespace
+
+void append_raw_xml(std::string& out, const pugi::xml_node& node) {
+  StringXmlWriter sink;
+  sink.dst = &out;
+  node.print(sink, /*indent=*/"", pugi::format_raw);
+}
+
+std::string raw_xml(const pugi::xml_node& node) {
+  std::string out;
+  append_raw_xml(out, node);
+  return out;
+}
+
+namespace {
+
+/// True when `node` is an element whose name is absent from `known`.
+bool IsUnknownElementChild(const pugi::xml_node& node, std::initializer_list<std::string_view> known) {
+  if (node.type() != pugi::node_element) {
+    return false;
+  }
+  const std::string_view name = node.name();
+  for (const std::string_view k : known) {
+    if (k == name) {
+      return false;
+    }
+  }
+  return true;
+}
+
+}  // namespace
+
+void capture_unknown_children(const pugi::xml_node& parent, std::initializer_list<std::string_view> known,
+                              std::string& out) {
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (IsUnknownElementChild(child, known)) {
+      append_raw_xml(out, child);
+    }
+  }
+}
+
+void capture_unknown_children(const pugi::xml_node& parent, std::initializer_list<std::string_view> known,
+                              std::vector<std::string>& out) {
+  for (pugi::xml_node child = parent.first_child(); child; child = child.next_sibling()) {
+    if (IsUnknownElementChild(child, known)) {
+      out.push_back(raw_xml(child));
+    }
+  }
+}
+
 void append_raw_attrs(std::string& out, const std::vector<std::pair<std::string, std::string>>& attrs) {
   for (const auto& [name, value] : attrs) {
     out.push_back(' ');
@@ -156,30 +235,56 @@ void append_raw_attrs(std::string& out, const std::vector<std::pair<std::string,
   }
 }
 
+namespace {
+
+// `parse_ws_pcdata_single` retains whitespace-only text inside leaf
+// elements (those with no element children). This is required so a
+// whitespace-only string body — e.g. `<t> </t>` in a shared-string,
+// inline-string, or comment part — reads back as the literal
+// whitespace rather than being silently dropped to "". Because it only
+// affects childless elements, it is safe for every reader that shares
+// this loader: structural parts read their data from attributes and
+// child elements, never from whitespace-only PCDATA in a leaf.
+constexpr unsigned int kPartParseFlags = pugi::parse_default | pugi::parse_ws_pcdata_single;
+
+/// Builds the `kIoXmlParse` envelope both part loaders share, so the
+/// copying and in-place paths stay indistinguishable to callers that
+/// match on the message or context.
+Expected<void, Error> PartParseResult(const pugi::xml_parse_result& parse, std::string_view reader_module,
+                                      std::string_view part_name) {
+  if (parse) {
+    return Expected<void, Error>::Ok();
+  }
+  std::string ctx("context=");
+  ctx.append(reader_module);
+  ctx.append(" part=");
+  ctx.append(part_name);
+  ctx.append(" desc=");
+  ctx.append(parse.description());
+  std::string msg(part_name);
+  msg.append(": pugixml parse failed");
+  return make_error(FormulonErrorCode::kIoXmlParse, std::move(msg), std::move(ctx));
+}
+
+}  // namespace
+
 Expected<void, Error> load_xml_buffer(pugi::xml_document& doc, const std::vector<std::uint8_t>& bytes,
                                       std::string_view reader_module, std::string_view part_name) {
-  // `parse_ws_pcdata_single` retains whitespace-only text inside leaf
-  // elements (those with no element children). This is required so a
-  // whitespace-only string body — e.g. `<t> </t>` in a shared-string,
-  // inline-string, or comment part — reads back as the literal
-  // whitespace rather than being silently dropped to "". Because it only
-  // affects childless elements, it is safe for every reader that shares
-  // this loader: structural parts read their data from attributes and
-  // child elements, never from whitespace-only PCDATA in a leaf.
-  constexpr unsigned int kParseFlags = pugi::parse_default | pugi::parse_ws_pcdata_single;
-  pugi::xml_parse_result parse = doc.load_buffer(bytes.data(), bytes.size(), kParseFlags, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=");
-    ctx.append(reader_module);
-    ctx.append(" part=");
-    ctx.append(part_name);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    std::string msg(part_name);
-    msg.append(": pugixml parse failed");
-    return make_error(FormulonErrorCode::kIoXmlParse, std::move(msg), std::move(ctx));
-  }
-  return Expected<void, Error>::Ok();
+  const pugi::xml_parse_result parse =
+      doc.load_buffer(bytes.data(), bytes.size(), kPartParseFlags, pugi::encoding_utf8);
+  return PartParseResult(parse, reader_module, part_name);
+}
+
+Expected<void, Error> load_xml_buffer_inplace(pugi::xml_document& doc, std::vector<std::uint8_t>& bytes,
+                                              std::string_view reader_module, std::string_view part_name) {
+  // `load_buffer_inplace` (as opposed to `..._own`) leaves ownership of
+  // the storage with the caller: pugixml tokenises within `bytes` and
+  // never frees it. Pinning the encoding to UTF-8 matches the copying
+  // overload and keeps pugixml out of the transcoding path, which is
+  // what would silently reintroduce a full-size private copy.
+  const pugi::xml_parse_result parse =
+      doc.load_buffer_inplace(bytes.data(), bytes.size(), kPartParseFlags, pugi::encoding_utf8);
+  return PartParseResult(parse, reader_module, part_name);
 }
 
 std::uint32_t parse_rgb_hex(std::string_view hex, std::uint32_t fallback) noexcept {
@@ -212,7 +317,7 @@ std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {
   // Direct `<t>` children: the simple inlineStr / shared-string / comment
   // shape (`<is><t>...</t></is>`).
   for (pugi::xml_node t = node.child("t"); t; t = t.next_sibling("t")) {
-    out.append(t.text().get());
+    AppendOoxmlTextUnescaped(out, t.text().get());
     ++count;
   }
 
@@ -221,7 +326,7 @@ std::size_t append_rich_text(const pugi::xml_node& node, std::string& out) {
   // plain-text only.
   for (pugi::xml_node r = node.child("r"); r; r = r.next_sibling("r")) {
     for (pugi::xml_node t = r.child("t"); t; t = t.next_sibling("t")) {
-      out.append(t.text().get());
+      AppendOoxmlTextUnescaped(out, t.text().get());
       ++count;
     }
   }
@@ -241,11 +346,7 @@ std::string capture_root_extra_ns_attrs(const pugi::xml_node& root) {
     if (name == "xmlns" || name == "xmlns:r") {
       continue;  // the writer always emits these two itself.
     }
-    out.push_back(' ');
-    out.append(name.data(), name.size());
-    out.append("=\"");
-    out.append(attr.value());
-    out.push_back('"');
+    append_xml_attr(out, name, attr.value());
   }
   return out;
 }

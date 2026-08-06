@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the date/time primitives declared in date_time.h. The
 // heavy lifting is Howard Hinnant's civil_from_days / days_from_civil pair

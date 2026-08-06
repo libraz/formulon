@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the closed-form bond-pricing built-ins:
 // PRICEDISC, PRICEMAT, YIELDDISC, YIELDMAT — and the STOCKHISTORY stub.

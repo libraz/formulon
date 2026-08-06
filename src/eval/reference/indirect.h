@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impl entry point for `INDIRECT(ref_text, [a1])`. Declared in its
 // own header so the central dispatch table (`tree_walker_lazy_table.cpp`)

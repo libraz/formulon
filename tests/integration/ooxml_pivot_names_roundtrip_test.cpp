@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test for the "real Excel" pivot shape: the pivot-table part
 // links to its cache purely by index (no `name` attribute on any

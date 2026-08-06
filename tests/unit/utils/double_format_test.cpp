@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::format_double`. The shared formatter feeds the
 // AST S-expression dumper and the tree-walk evaluator's text coercion, so

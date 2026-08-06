@@ -2,11 +2,11 @@
   "suite": "valuetotext",
   "description": "VALUETOTEXT serializes a value to text using either concise (format=0, default) or strict (format=1) formatting. Concise mode passes scalars through with default Excel rendering. Strict mode quotes text values and reports errors verbatim. Numbers and booleans render the same in both modes.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T04:34:11Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

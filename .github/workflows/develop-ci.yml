@@ -1,10 +1,19 @@
 # Formulon develop-branch CI workflow.
 #
-# Develop-branch checks layered on top of ci.yml so iteration on `main`
-# stays fast. Currently a single job:
+# Develop-branch checks layered on top of ci.yml so a red `develop` is
+# caught before it is fast-forwarded onto `main`:
 #
 #   - format : `make format-check` — clang-format (C++), ruff (Python),
 #     and biome (.mjs / .d.ts) dry-runs. Hard gate (binary check).
+#   - native-fast : Debug build + the fast ctest suite, gated by the
+#     same allowlist ci.yml uses (tools/ci/expected_flakes.txt). ci.yml's
+#     native job runs only on `main`, so without this a develop push gets
+#     no C++ test signal and a broken test can sit undetected until the
+#     main promotion. This mirrors the fast half of that gate without the
+#     coverage instrumentation, so it stays minutes not hours. Debug
+#     (-O0) matches ci.yml's build type and `make build`; a Release build
+#     OOM-kills the 2-core runner when compiling the heavy TUs in
+#     parallel.
 #
 # Pattern mirrored from ../mygram-db's develop-ci.yml: develop-only
 # checks live here, main keeps the minimal build+test signal in ci.yml.
@@ -58,3 +67,61 @@ jobs:
 
       - name: format check
         run: make format-check
+
+  native-fast:
+    name: Build and fast test (native, Linux)
+    runs-on: ubuntu-latest
+    # 60 to match ci.yml's native job. The first run on an empty build
+    # cache does a full cold Debug compile of the whole test suite on the
+    # 2-core runner, which is slow; subsequent runs reuse the cached
+    # build/ dir and only recompile changed TUs.
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build libbrotli-dev brotli
+
+      - name: Cache CMake build directory (debug)
+        uses: actions/cache@v6
+        with:
+          path: build
+          key: debug-build-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'Makefile', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            debug-build-${{ runner.os }}-
+
+      - name: Configure (debug preset)
+        run: cmake --preset debug
+
+      - name: Build
+        # Cap parallelism at 2 (the runner's physical core count).
+        # Bare `--parallel` fans out to all logical CPUs and links the
+        # heavy Debug test/bench binaries concurrently, which exhausts the
+        # 7 GB runner and gets the compilers OOM-killed (SIGTERM / 143).
+        run: cmake --build build --parallel 2
+
+      - name: Run fast tests
+        id: ctest
+        continue-on-error: true
+        working-directory: build
+        # Same label exclusion as ci.yml's native job: SLOW is the
+        # minutes-to-tens-of-minutes tier; BENCH and TSAN run out of band.
+        run: ctest -LE "SLOW|BENCH|TSAN" --output-on-failure --timeout 60 -j 4
+
+      - name: Check failures against allowlist
+        run: |
+          ctest --test-dir build --show-only=json-v1 > build/ctest-tests.json
+          if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
+            failed=build/Testing/Temporary/LastTestsFailed.log
+          else
+            failed=build/no-failures.log
+            : > "$failed"
+          fi
+          python3 tools/ci/check_test_failures.py \
+            --failed "$failed" \
+            --allowlist tools/ci/expected_flakes.txt \
+            --ctest-json build/ctest-tests.json

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `extract_deps`. See `dep_extractor.h` for the contract.
 
@@ -26,6 +25,7 @@
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/rect_iterator.h"
+#include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
@@ -79,19 +79,23 @@ void add_cell_dep(WalkState& state, CellNodeId cell) {
   }
 }
 
+void add_range_dep(WalkState& state, CellRangeDependency range) {
+  for (const CellRangeDependency& existing : state.out->range_deps) {
+    if (existing.sheet_id == range.sheet_id && existing.row_first == range.row_first &&
+        existing.row_last == range.row_last && existing.col_first == range.col_first &&
+        existing.col_last == range.col_last) {
+      return;
+    }
+  }
+  state.out->range_deps.push_back(range);
+}
+
 // Flattens the rectangle [lhs, rhs] into per-cell dependencies. Both
 // endpoints must be plain `Ref` nodes; complex ranges (OFFSET-based,
 // INDIRECT, etc.) are silently ignored — dynamic shapes cannot be statically
-// resolved here. Whole-column / whole-row endpoints promote the formula to
-// volatile status without adding individual cells, because flattening a
-// 1,048,576-row column would blow up the dep graph.
+// resolved here. Whole-column / whole-row endpoints are captured as compact
+// rectangles without flattening their 1,048,576 potential cells.
 void emit_range_cells(WalkState& state, const parser::Reference& lhs, const parser::Reference& rhs) {
-  // Whole-column / whole-row: flag volatile and skip enumeration.
-  if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
-    state.out->is_volatile = true;
-    return;
-  }
-
   // Resolve the effective sheet for the rectangle. Mirrors the policy in
   // `EvalContext::expand_range`: the parser keeps the qualifier on the LHS
   // for `Sheet2!A1:B2`, so the RHS often has an empty qualifier and inherits.
@@ -128,6 +132,20 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
   const std::uint32_t r_max = std::max(lhs.row, rhs.row);
   const std::uint32_t c_min = std::min(lhs.col, rhs.col);
   const std::uint32_t c_max = std::max(lhs.col, rhs.col);
+
+  if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
+    add_range_dep(state, CellRangeDependency{target_sheet_id, r_min, r_max, c_min, c_max});
+    return;
+  }
+
+  const std::uint64_t total = static_cast<std::uint64_t>(r_max - r_min + 1U) * (c_max - c_min + 1U);
+  if (total > kMaxRangeExpansionCells) {
+    // Preserve correctness without exploding the graph: a later recalc sees
+    // this cell in the volatile seed set, just as it does for whole rows and
+    // columns that cannot be pinned as individual graph edges.
+    state.out->is_volatile = true;
+    return;
+  }
 
   for (std::uint32_t r = r_min; r <= r_max; ++r) {
     for (std::uint32_t c = c_min; c <= c_max; ++c) {
@@ -288,9 +306,16 @@ void walk(const parser::AstNode& node, WalkState& state) {
     case parser::NodeKind::Ref: {
       const parser::Reference& ref = node.as_ref();
       // Whole-column / whole-row used as a bare scalar (rare in practice but
-      // legal): treat as volatile, do not enumerate cells.
+      // legal): retain a compact range dependency rather than enumerating it.
       if (ref.is_full_col || ref.is_full_row) {
-        state.out->is_volatile = true;
+        std::uint16_t sheet_id = state.current_sheet_id;
+        if (resolve_sheet_id(ref, state, &sheet_id)) {
+          const std::uint32_t row_first = ref.is_full_col ? 0U : ref.row;
+          const std::uint32_t row_last = ref.is_full_col ? Sheet::kMaxRows - 1U : ref.row;
+          const std::uint32_t col_first = ref.is_full_row ? 0U : ref.col;
+          const std::uint32_t col_last = ref.is_full_row ? Sheet::kMaxCols - 1U : ref.col;
+          add_range_dep(state, CellRangeDependency{sheet_id, row_first, row_last, col_first, col_last});
+        }
         return;
       }
       if (ref.row >= Sheet::kMaxRows || ref.col >= Sheet::kMaxCols) {
@@ -348,9 +373,11 @@ void walk(const parser::AstNode& node, WalkState& state) {
       const parser::Reference& cell = node.as_ref3d_cell();
       const bool is_range = node.as_ref3d_is_range();
       const parser::Reference& cell_end = node.as_ref3d_cell_end();
-      if (cell.is_full_col || cell.is_full_row || cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
-          (is_range && (cell_end.is_full_col || cell_end.is_full_row || cell_end.row >= Sheet::kMaxRows ||
-                        cell_end.col >= Sheet::kMaxCols))) {
+      const bool full_col = cell.is_full_col || (is_range && cell_end.is_full_col);
+      const bool full_row = cell.is_full_row || (is_range && cell_end.is_full_row);
+      const bool has_full_range = full_col || full_row;
+      if (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
+          (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))) {
         return;
       }
       if (state.workbook == nullptr) {
@@ -363,11 +390,17 @@ void walk(const parser::AstNode& node, WalkState& state) {
       }
       const std::size_t lo = std::min(begin_idx, end_idx);
       const std::size_t hi = std::max(begin_idx, end_idx);
-      const std::uint32_t r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
-      const std::uint32_t r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
-      const std::uint32_t c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
-      const std::uint32_t c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
+      const std::uint32_t r_lo = full_col ? 0U : (is_range ? std::min(cell.row, cell_end.row) : cell.row);
+      const std::uint32_t r_hi =
+          full_col ? Sheet::kMaxRows - 1U : (is_range ? std::max(cell.row, cell_end.row) : cell.row);
+      const std::uint32_t c_lo = full_row ? 0U : (is_range ? std::min(cell.col, cell_end.col) : cell.col);
+      const std::uint32_t c_hi =
+          full_row ? Sheet::kMaxCols - 1U : (is_range ? std::max(cell.col, cell_end.col) : cell.col);
       for (std::size_t s = lo; s <= hi; ++s) {
+        if (has_full_range) {
+          add_range_dep(state, CellRangeDependency{static_cast<std::uint16_t>(s), r_lo, r_hi, c_lo, c_hi});
+          continue;
+        }
         for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
           for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
             add_cell_dep(state, CellNodeId{static_cast<std::uint16_t>(s), r, c});

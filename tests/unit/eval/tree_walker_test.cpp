@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the tree-walk evaluator. Tests parse a formula source and
 // evaluate the AST end-to-end, except where the tested NodeKind is not easy
@@ -15,12 +14,14 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/tree_walker_lazy_table.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -64,6 +65,26 @@ TEST(TreeWalkerLiterals, BlankFromFactory) {
   ASSERT_NE(node, nullptr);
   const Value v = evaluate(*node, out_arena);
   EXPECT_TRUE(v.is_blank());
+}
+
+TEST(TreeWalkerResourceFailure, ArenaExhaustionMarksEvalState) {
+  Arena parse_arena;
+  parser::AstNode* root = parser::parse_strict("\"abc\"&\"def\"", parse_arena);
+  ASSERT_NE(root, nullptr);
+
+  // The capped arena fails before it can open its first (4 KiB) chunk. The
+  // evaluator must not turn the failed string interning into a valid empty
+  // string; it records the resource failure on the request state instead.
+  Arena eval_arena(64, 63);
+  Sheet sheet("Sheet1");
+  EvalState state;
+  const EvalContext ctx(sheet, state);
+  const Value v = evaluate(*root, eval_arena, default_registry(), ctx);
+
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_TRUE(eval_arena.exhausted());
+  EXPECT_TRUE(state.out_of_memory());
 }
 
 // ---------------------------------------------------------------------------
@@ -359,10 +380,14 @@ TEST(TreeWalkerUnsupported, UnknownCallReturnsName) {
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
 }
 
-TEST(TreeWalkerUnsupported, ArrayLiteralReturnsValue) {
+TEST(TreeWalkerUnsupported, ArrayLiteralMaterializesArray) {
   const Value v = EvalSource("={1,2}");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_array());
+  const ArrayValue* arr = v.as_array();
+  ASSERT_EQ(arr->rows, 1u);
+  ASSERT_EQ(arr->cols, 2u);
+  EXPECT_EQ(arr->cells[0], Value::number(1.0));
+  EXPECT_EQ(arr->cells[1], Value::number(2.0));
 }
 
 TEST(TreeWalkerUnsupported, RangeOpUnboundContextIsName) {
@@ -822,6 +847,17 @@ TEST(TreeWalkerXlfnPrefix, LazyDispatchName) {
   ASSERT_TRUE(bare.is_number());
   ASSERT_TRUE(tagged.is_number());
   EXPECT_EQ(bare.as_number(), tagged.as_number());
+}
+
+TEST(TreeWalkerLazyDispatch, TableIsSortedAndSearchesCaseInsensitively) {
+  const char* const* names = lazy_form_names();
+  for (std::size_t i = 1; names[i] != nullptr; ++i) {
+    EXPECT_LT(strings::case_insensitive_compare(names[i - 1], names[i]), 0) << names[i - 1] << ", " << names[i];
+  }
+  EXPECT_NE(find_lazy_impl("areas"), nullptr);
+  EXPECT_NE(find_lazy_impl("DAVERAGE"), nullptr);
+  EXPECT_NE(find_lazy_impl("irr"), nullptr);
+  EXPECT_EQ(find_lazy_impl("NOT_A_LAZY_FUNCTION"), nullptr);
 }
 
 TEST(TreeWalkerXlfnPrefix, XlwsPrefixedName) {

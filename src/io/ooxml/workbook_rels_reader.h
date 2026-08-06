@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `xl/_rels/workbook.xml.rels` reader. Walks the workbook-level
 // relationship file once and returns an aggregated lookup keyed by
@@ -36,7 +35,11 @@ namespace ooxml {
 /// keyed by relationship id. The workbook's `<pivotCaches>` element
 /// joins each `cacheId` to its definition path through this map.
 struct WorkbookRels {
-  std::unordered_map<std::string, std::string> sheet_targets;
+  struct SheetTarget {
+    std::string path;
+    std::string relationship_type;
+  };
+  std::unordered_map<std::string, SheetTarget> sheet_targets;
   std::string sst_path;
   std::string styles_path;
   std::unordered_map<std::string, std::string> pivot_cache_definition_paths_by_rid;

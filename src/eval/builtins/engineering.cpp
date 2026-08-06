@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the simple integer-only engineering built-ins:
 //   * Base conversion (BIN/OCT/HEX <-> DEC).

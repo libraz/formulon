@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Regression tests for a batch of eval-layer fixes:
 //   1. General Excel array broadcasting in `broadcast_binop` (outer product,

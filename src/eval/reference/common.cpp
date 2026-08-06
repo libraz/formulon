@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared bodies for the reference-family lazy impls. Hosts:
 //
@@ -20,6 +19,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <string>
 #include <string_view>
 
 #include "eval/a1_parse.h"
@@ -30,6 +31,7 @@
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "utils/a1_column.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -220,24 +222,15 @@ std::size_t unescape_quoted_sheet(std::string_view quoted, char* out, std::size_
 }  // namespace
 
 std::size_t column_letters(std::uint32_t col, char* out) {
-  // Excel columns encode as 1-based bijective base-26 (no "zero letter"):
-  //   1  -> A
-  //   26 -> Z
-  //   27 -> AA
-  // The classic "divmod-26" loop has to subtract 1 each round to account
-  // for the missing zero digit.
-  char buf[4] = {0, 0, 0, 0};
-  std::size_t n = 0;
-  while (col > 0 && n < 3) {
-    const std::uint32_t rem = (col - 1) % 26u;
-    buf[n++] = static_cast<char>('A' + rem);
-    col = (col - 1) / 26u;
+  if (col == 0U || out == nullptr) {
+    return 0U;
   }
-  // Written LSB-first; reverse into the caller's buffer.
-  for (std::size_t i = 0; i < n; ++i) {
-    out[i] = buf[n - 1 - i];
+  std::string letters;
+  if (!a1::append_column_letters(letters, col - 1U)) {
+    return 0U;
   }
-  return n;
+  std::memcpy(out, letters.data(), letters.size());
+  return letters.size();
 }
 
 A1Parse parse_a1_ref(std::string_view text) {

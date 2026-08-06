@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal-only entry point for the defined-names reader. Kept in a
 // separate header so the public `defined_names.h` (which carries the

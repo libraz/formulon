@@ -2,11 +2,11 @@
   "suite": "subtotal",
   "description": "SUBTOTAL is a function-code-driven aggregator. Codes 1-11 dispatch to AVERAGE / COUNT / COUNTA / MAX / MIN / PRODUCT / STDEV / STDEVP / SUM / VAR / VARP, including hidden rows. Codes 101-111 dispatch to the same aggregators but exclude rows hidden via row-level hiding (column-hide and filter-hide are handled separately). Invalid codes -> #VALUE!.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T04:34:06Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

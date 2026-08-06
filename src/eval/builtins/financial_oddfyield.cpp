@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the irregular-first-period bond yield-to-maturity
 // built-in:
@@ -195,6 +194,10 @@ Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t 
   if (std::isnan(yld) || std::isinf(yld)) {
     return ErrorCode::Num;
   }
+  // ODDFPRICE has the same yld >= 0 domain as PRICE. Premium-bond
+  // heuristics can begin below zero, so clamp to the boundary and use the
+  // one-sided derivative below rather than evaluating an invalid iterate.
+  yld = std::max(0.0, yld);
 
   constexpr int kMaxIter = 100;
   // Convergence: function tolerance scales with |pr|+1 so the
@@ -223,20 +226,31 @@ Expected<double, ErrorCode> compute_oddf_yield(const Value* args, std::uint32_t 
     if (!f_plus) {
       return f_plus.error();
     }
-    auto f_minus = price_at(args, arity, yld - h);
-    if (!f_minus) {
-      return f_minus.error();
+    double df = 0.0;
+    if (yld < h) {
+      df = (f_plus.value() - f0.value()) / h;
+    } else {
+      auto f_minus = price_at(args, arity, yld - h);
+      if (!f_minus) {
+        return f_minus.error();
+      }
+      df = (f_plus.value() - f_minus.value()) / (2.0 * h);
     }
-    const double df = (f_plus.value() - f_minus.value()) / (2.0 * h);
     if (df == 0.0 || std::isnan(df) || std::isinf(df)) {
       return ErrorCode::Num;
     }
     const double delta = residual / df;
-    const double new_yld = yld - delta;
+    double damped_delta = delta;
+    double new_yld = yld - damped_delta;
+    while (new_yld < 0.0 && std::fabs(damped_delta) >= kStepTol) {
+      damped_delta *= 0.5;
+      new_yld = yld - damped_delta;
+    }
+    new_yld = std::max(0.0, new_yld);
     if (std::isnan(new_yld) || std::isinf(new_yld)) {
       return ErrorCode::Num;
     }
-    if (std::fabs(delta) < kStepTol) {
+    if (std::fabs(damped_delta) < kStepTol) {
       return new_yld;
     }
     yld = new_yld;

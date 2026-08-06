@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared OOXML schema constants used by the reader and writer.
 // Only the relationship type URIs that BOTH sides need are hoisted

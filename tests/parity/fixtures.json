@@ -18,5 +18,5 @@
   {"id": "name_error",      "formula": "=NOTAFUNC()",    "expect": {"kind": "error", "value": "#NAME?"}},
   {"id": "num_error_sqrt",  "formula": "=SQRT(-1)",      "expect": {"kind": "error", "value": "#NUM!"}},
   {"id": "na",              "formula": "=NA()",          "expect": {"kind": "error", "value": "#N/A"}},
-  {"id": "intersect_err",   "formula": "=A1 B1",         "expect": {"kind": "error", "value": "#REF!"}}
+  {"id": "intersect_err",   "formula": "=A1 B1",         "expect": {"kind": "error", "value": "#NULL!"}}
 ]

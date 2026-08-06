@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the rank / percentile-rank lazy impls:
 // RANK (legacy), RANK.EQ, RANK.AVG, PERCENTRANK (legacy),
@@ -29,6 +28,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <variant>
 #include <vector>
 
@@ -181,7 +181,7 @@ std::variant<Value, std::int64_t> read_significance(const parser::AstNode& call,
     return std::get<Value>(raw);
   }
   const double sig_d = std::trunc(std::get<double>(raw));
-  if (sig_d < 1.0) {
+  if (sig_d < 1.0 || sig_d > static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
     return Value{Value::error(ErrorCode::Num)};
   }
   return static_cast<std::int64_t>(sig_d);
@@ -398,7 +398,8 @@ Value eval_percentrank_inc_lazy(const parser::AstNode& call, Arena& arena, const
     const double span = in.sorted[k + 1U] - in.sorted[k];
     raw = (static_cast<double>(k) + (in.x - in.sorted[k]) / span) / static_cast<double>(n - 1U);
   }
-  return Value::number(truncate_to_significance(raw, in.significance));
+  const double result = truncate_to_significance(raw, in.significance);
+  return std::isfinite(result) ? Value::number(result) : Value::error(ErrorCode::Num);
 }
 
 Value eval_percentrank_exc_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -437,7 +438,8 @@ Value eval_percentrank_exc_lazy(const parser::AstNode& call, Arena& arena, const
     const double span = in.sorted[k + 1U] - in.sorted[k];
     raw = (static_cast<double>(k + 1U) + (in.x - in.sorted[k]) / span) / denom;
   }
-  return Value::number(truncate_to_significance(raw, in.significance));
+  const double result = truncate_to_significance(raw, in.significance);
+  return std::isfinite(result) ? Value::number(result) : Value::error(ErrorCode::Num);
 }
 
 }  // namespace eval

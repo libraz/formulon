@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Internal A1-reference parser used by the formula-side evaluator
 // (`INDIRECT`, `CELL`, `INFO`, ...).

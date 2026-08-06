@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Private seam between the tree-walker's recursive node visitor
 // (`tree_walker/walker.cpp`) and the function-call dispatch path

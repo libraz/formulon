@@ -81,6 +81,7 @@ set(FORMULON_CONCURRENCY_TSAN_SOURCES
   recalc_lifetime_test.cpp
   registry_thread_safety_test.cpp
   iterative_solver_thread_test.cpp
+  pivot_getpivotdata_test.cpp
   recalc_engine_internal_test.cpp
   recalc_engine_thread_safety_test.cpp
 )

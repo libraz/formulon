@@ -72,4 +72,14 @@ Napi::Value StatusString(const Napi::CallbackInfo& info) {
   return Napi::String::New(env, s != nullptr ? s : "");
 }
 
+Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  int32_t code = 0;
+  if (info.Length() > 0) {
+    code = info[0].ToNumber().Int32Value();
+  }
+  const char* s = fm_error_display_name(static_cast<fm_error_code_t>(code));
+  return Napi::String::New(env, s != nullptr ? s : "");
+}
+
 }  // namespace formulon_node

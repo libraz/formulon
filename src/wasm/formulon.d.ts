@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Hand-written TypeScript declarations for the Formulon WASM bindings.
 //
@@ -33,6 +32,9 @@ export interface Status {
   /** Optional thread-local context string (empty on success). */
   context: string;
 }
+
+/** A JS array with the status of the list enumeration that produced it. */
+export type ListResult<T> = ReadonlyArray<T> & { readonly status: Status };
 
 /** Flattened mirror of `fm_value_t`. Only the field selected by `kind`
  *  is meaningful; the others carry default-zero values. */
@@ -96,35 +98,35 @@ export interface StringResult {
 /** Return type of `Workbook.cellAt(sheet, idx)`. */
 export interface CellEntry {
   status: Status;
-  row: number;
-  col: number;
+  row?: number;
+  col?: number;
   /** Raw formula text, or `null` for pure literals. */
-  formula: string | null;
-  value: Value;
+  formula?: string | null;
+  value?: Value;
 }
 
 /** Return type of `Workbook.definedNameAt(idx)`. */
 export interface DefinedNameEntry {
   status: Status;
-  name: string;
-  formula: string;
+  name?: string;
+  formula?: string;
   /** -1 for workbook scope; otherwise a 0-based sheet index. */
-  localSheetId: number;
+  localSheetId?: number;
 }
 
 /** Return type of `Workbook.tableAt(idx)`. */
 export interface TableEntry {
   status: Status;
-  name: string;
-  displayName: string;
-  ref: string;
-  sheetIndex: number;
+  name?: string;
+  displayName?: string;
+  ref?: string;
+  sheetIndex?: number;
 }
 
 /** Return type of `Workbook.passthroughAt(idx)`. */
 export interface PassthroughEntry {
   status: Status;
-  path: string;
+  path?: string;
 }
 
 /** PivotTable layout cell kind. Mirrors `fm_pivot_cell_kind_t`. */
@@ -393,33 +395,27 @@ export interface CfMatch {
   iconIndex: number;
 }
 
-/** Iterable handle backing a `std::vector<CfMatch>` on the C++ side.
- *  Mirrors how embind surfaces `register_vector<T>`. */
-export interface CfMatchVector {
-  size(): number;
-  get(index: number): CfMatch;
-  delete(): void;
-}
-
 /** One cell's CF result inside a viewport-range evaluation. */
 export interface CfCellResult {
   row: number;
   col: number;
-  matches: CfMatchVector;
-}
-
-/** Iterable handle backing a `std::vector<CfCellResult>`. */
-export interface CfCellVector {
-  size(): number;
-  get(index: number): CfCellResult;
-  delete(): void;
+  matches: ReadonlyArray<CfMatch>;
 }
 
 /** Return type of `Workbook.evaluateCfRange(...)`. `cells` is sparse:
  *  only cells that produced at least one match appear. */
 export interface CfRangeResult {
   status: Status;
-  cells: CfCellVector;
+  cells: ReadonlyArray<CfCellResult>;
+}
+
+/** Resolved print geometry for one worksheet. All coordinates are 0-based. */
+export interface PaginationResult {
+  status: Status;
+  printArea: Array<{ firstRow: number; firstCol: number; lastRow: number; lastCol: number }>;
+  horizontalBreaks: number[];
+  verticalBreaks: number[];
+  pageCount: number;
 }
 
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
@@ -507,17 +503,10 @@ export interface ColumnLayout {
   outlineLevel: number;
 }
 
-/** Iterable handle backing a `std::vector<ColumnLayout>`. */
-export interface ColumnLayoutVector {
-  size(): number;
-  get(index: number): ColumnLayout;
-  delete(): void;
-}
-
 /** Return type of `Workbook.getSheetColumns(sheet)`. */
 export interface ColumnsResult {
   status: Status;
-  columns: ColumnLayoutVector;
+  columns: ReadonlyArray<ColumnLayout>;
 }
 
 /** Per-row layout override. */
@@ -529,17 +518,10 @@ export interface RowLayout {
   outlineLevel: number;
 }
 
-/** Iterable handle backing a `std::vector<RowLayout>`. */
-export interface RowLayoutVector {
-  size(): number;
-  get(index: number): RowLayout;
-  delete(): void;
-}
-
 /** Return type of `Workbook.getSheetRowOverrides(sheet)`. */
 export interface RowsResult {
   status: Status;
-  rows: RowLayoutVector;
+  rows: ReadonlyArray<RowLayout>;
 }
 
 /** Inclusive cell rectangle used by `addMerge` / `getMerges`. */
@@ -556,6 +538,8 @@ export interface HyperlinkEntry {
   col: number;
   /** Absolute or relative target (URL, email, internal ref, …). */
   target: string;
+  /** In-workbook destination (empty for an external target). */
+  location: string;
   /** Display text override (empty when default). */
   display: string;
   /** Tooltip text (empty when none). */
@@ -566,6 +550,12 @@ export interface HyperlinkEntry {
 export interface CommentEntry {
   author: string;
   text: string;
+}
+
+/** Status-bearing comment lookup returned by `getCommentResult`. */
+export interface CommentResult {
+  status: Status;
+  comment: CommentEntry | null;
 }
 
 /** Sheet-wide comment entry returned by `getComments(sheet)`. Extends
@@ -884,6 +874,8 @@ export interface FontRecord {
   strike: boolean;
   /** 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting. */
   underline: number;
+  /** 0=baseline, 1=superscript, 2=subscript. */
+  vertAlign: number;
   /** AARRGGBB packed colour. */
   colorArgb: number;
 }
@@ -1098,6 +1090,8 @@ export interface Workbook {
   /** Stores a static Excel error literal; `errorCode` is an ErrorCode ordinal. */
   setError(sheet: number, row: number, col: number, errorCode: number): Status;
   setText(sheet: number, row: number, col: number, text: string): Status;
+  /** Stores (or, when empty, clears) the cell's OOXML phonetic guide (`<rPh>`). */
+  setCellPhonetic(sheet: number, row: number, col: number, phonetic: string): Status;
   setBlank(sheet: number, row: number, col: number): Status;
   setFormula(sheet: number, row: number, col: number, formula: string): Status;
 
@@ -1140,6 +1134,8 @@ export interface Workbook {
    *  formula text. Returns `kInvalidArgument` when the cell is absent
    *  or its cached value is not a lambda. */
   getLambdaText(sheet: number, row: number, col: number): LambdaTextResult;
+  /** Returns the cell's OOXML phonetic guide (`<rPh>`), or an empty string. */
+  getCellPhonetic(sheet: number, row: number, col: number): StringResult;
 
   recalc(): Status;
   /** Recalculates only cells touched by the supplied viewport. */
@@ -1370,6 +1366,9 @@ export interface Workbook {
     todaySerial: number,
   ): CfRangeResult;
 
+  /** Computes print-area page breaks and physical page count for `sheet`. */
+  paginate(sheet: number): PaginationResult;
+
   /** Reads the full per-sheet view (zoom, freeze, tab-hidden, and the
    *  display / orientation flags). */
   getSheetView(sheet: number): SheetViewResult;
@@ -1489,7 +1488,7 @@ export interface Workbook {
    *  `<externalReferences>` document order. Empty for fresh workbooks
    *  and any package whose source archive had no `<externalReferences>`
    *  block. */
-  getExternalLinks(): ReadonlyArray<ExternalLinkRecord>;
+  getExternalLinks(): ListResult<ExternalLinkRecord>;
 
   /** Adds a merge range to `sheet`. */
   addMerge(sheet: number, range: MergeRange): Status;
@@ -1500,21 +1499,29 @@ export interface Workbook {
   /** Drops every merge on `sheet`. */
   clearMerges(sheet: number): Status;
   /** Returns every merge range on `sheet` as a JS array. */
-  getMerges(sheet: number): ReadonlyArray<MergeRange>;
+  getMerges(sheet: number): ListResult<MergeRange>;
 
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): CommentEntry | null;
+  /** Returns a comment lookup result that distinguishes absence from an invalid sheet or handle. */
+  getCommentResult(sheet: number, row: number, col: number): CommentResult;
   /** Returns every comment on `sheet`, including comments anchored on
    *  cells that carry no value. */
-  getComments(sheet: number): ReadonlyArray<SheetCommentEntry>;
+  getComments(sheet: number): ListResult<SheetCommentEntry>;
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
 
-  /** Appends a hyperlink to `sheet`. Pass empty strings for `display`
-   *  or `tooltip` to mean "use the default" or "no tooltip". The
-   *  `location` field is filled implicitly (empty) and the writer mints
-   *  a fresh `rId` on save. */
-  addHyperlink(sheet: number, row: number, col: number, target: string, display: string, tooltip: string): Status;
+  /** Appends a hyperlink to `sheet`. For an in-workbook link, pass an empty
+   *  `target` and its A1 destination as `location`. */
+  addHyperlink(
+    sheet: number,
+    row: number,
+    col: number,
+    target: string,
+    display: string,
+    tooltip: string,
+    location: string,
+  ): Status;
   /** Removes every hyperlink anchored at `(row, col)`. No-op when none match. */
   removeHyperlink(sheet: number, row: number, col: number): Status;
   /** Removes the hyperlink at `index`. Returns kInvalidArgument if `index` is out of range. */
@@ -1522,13 +1529,13 @@ export interface Workbook {
   /** Drops every hyperlink on `sheet`. */
   clearHyperlinks(sheet: number): Status;
   /** Returns every hyperlink on `sheet` as a JS array. */
-  getHyperlinks(sheet: number): ReadonlyArray<HyperlinkEntry>;
+  getHyperlinks(sheet: number): ListResult<HyperlinkEntry>;
 
   /** Returns every data-validation rule on `sheet` in storage order.
    *  Each rule's `ranges` mirrors the OOXML `<dataValidation sqref=...>`
    *  cell-range list; the rule itself surfaces its raw OOXML payload
    *  (the engine does not yet evaluate validation rules). */
-  getValidations(sheet: number): ReadonlyArray<DataValidationEntry>;
+  getValidations(sheet: number): ListResult<DataValidationEntry>;
   /** Appends a data-validation rule to `sheet`. */
   addValidation(sheet: number, validation: DataValidationInput): Status;
   /** Removes the validation rule at `index`. Returns `kInvalidArgument`
@@ -1540,7 +1547,7 @@ export interface Workbook {
   /** Returns every CF rule on `sheet` in flattened priority order. The
    *  returned entries borrow rule ids from the engine's storage; treat
    *  them as immutable view objects. */
-  getConditionalFormats(sheet: number): ReadonlyArray<ConditionalFormatEntry>;
+  getConditionalFormats(sheet: number): ListResult<ConditionalFormatEntry>;
   /** Appends a new single-rule `<conditionalFormatting>` block to
    *  `sheet`, including visual rules when their payload object is supplied.
    *  `index` is the new rule's position in the sheet's flattened CF rule
@@ -1622,6 +1629,9 @@ export interface FormulonModule {
 
   /** Static description of `status` (e.g. `"kOk"`). */
   statusString(status: number): string;
+
+  /** Excel display literal for a cell error code (e.g. `"#DIV/0!"`). */
+  errorDisplayName(errorCode: number): string;
 
   /** Most-recent thread-local error message. */
   lastErrorMessage(): string;

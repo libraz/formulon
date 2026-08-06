@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Out-of-line members of the scalar `Value`. See `value.h` for the
 // class contract.

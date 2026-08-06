@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `formulon_cli` shared command surface.
 //
@@ -21,8 +20,10 @@
 //     in the C API, so the CLI surfaces the diagnostic by reading
 //     `fm_last_error_message()` and prefixing with the subcommand name.
 //   * `64` on a usage error (mirrors sysexits(3) `EX_USAGE`).
-//   * Anything outside the [0, 127] range is clamped to `1` by `main`
-//     so it survives shell encoding without misinterpretation.
+//   * Any other engine / I/O / binding failure maps to the stable
+//     generic-failure exit code `1`. The detailed `fm_status_t` remains
+//     available in the diagnostic text; it is never encoded in the
+//     process status, where it could collide after POSIX truncation.
 
 #ifndef FORMULON_CLI_CLI_H_
 #define FORMULON_CLI_CLI_H_
@@ -42,13 +43,25 @@ using ArgList = std::vector<std::string_view>;
 /// Generic usage exit code. Mirrors sysexits(3) `EX_USAGE = 64`.
 inline constexpr int kExitUsage = 64;
 
+/// Maps an internal command status to the CLI's small, stable exit-code
+/// vocabulary. `fm_status_t` values are intentionally not exposed as
+/// process statuses: POSIX shells truncate them to eight bits, making
+/// unrelated failures indistinguishable (for example 8000 and EX_USAGE).
+constexpr int exit_code_for_status(int status) {
+  if (status == 0) {
+    return 0;
+  }
+  return status == kExitUsage ? kExitUsage : 1;
+}
+
 /// `eval` handler: evaluate a single formula on a fresh empty workbook.
 ///
 /// `args` carries the post-`eval` arguments. The first non-flag argument
 /// is the formula text (with or without a leading `=`).
 ///
 /// Supported flags: `--json` (object output), `--repeat N` (re-evaluate
-/// `N` times and report timing on stderr), `-h | --help`.
+/// `N` times and report timing on stderr), `-h | --help`, and `--` to end
+/// option parsing before a formula beginning with `-`.
 int run_eval(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `recalc` handler: load `.xlsx`, recalc, save to `--output`.
@@ -68,6 +81,11 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 /// Supported flags (mutually exclusive): `--formulas` (default),
 /// `--values`, `--sheets`, `--metadata`, `-h | --help`.
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
+
+/// `paginate` handler: resolve the print geometry of one worksheet.
+///
+/// Supported flags: `--sheet INDEX` (0-based, default 0), `-h | --help`.
+int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// Prints the top-level usage banner to `out` and returns `0`.
 int print_usage(std::ostream& out);

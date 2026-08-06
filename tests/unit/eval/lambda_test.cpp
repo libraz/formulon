@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Evaluator tests for the `LAMBDA` form (`parser::NodeKind::Lambda`) and
 // immediately-invoked lambda call (`parser::NodeKind::LambdaCall`).
@@ -351,6 +350,15 @@ TEST(EvalLambda, ParserArityMismatchSurfacesValueError) {
   const Value v = EvalSource("=LAMBDA(x, y, x+y)(1)");
   ASSERT_TRUE(v.is_error()) << v.debug_to_string();
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(EvalLambda, ParserArgumentErrorCanBeCaughtInIifeBody) {
+  // =LAMBDA(x, IFERROR(x, 99))(1/0) -> 99. Lambda arguments are values,
+  // including errors: returning before binding x would make IFERROR unable to
+  // observe it, unlike an equivalent LET binding.
+  const Value v = EvalSource("=LAMBDA(x, IFERROR(x, 99))(1/0)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 99.0);
 }
 
 TEST(EvalLambda, ParserOptionalParamOmittedTakesGuardedBranch) {

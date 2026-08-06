@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Helper that "looks through" a `NameRef` AST node to its LET-bound source
 // AST when the binding has range shape. Used by every site that decides

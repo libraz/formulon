@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration tests for Bundle 2.4 metadata (defined names + tables).
 // We assemble synthetic in-memory `.xlsx` packages via miniz and feed
@@ -264,7 +263,7 @@ TEST(OoxmlMetadata, TablesLandOnWorkbookAndPartIsConsumed) {
   // unknown_parts must NOT include the table part — the reader
   // consumes tables and the writer re-emits them via the metadata
   // path, not the passthrough path.
-  const std::vector<io::PassthroughPart>& parts = result.unknown_parts;
+  const std::vector<io::PassthroughPart>& parts = result.workbook.passthrough_parts();
   const auto leaked = std::find_if(parts.begin(), parts.end(),
                                    [](const io::PassthroughPart& p) { return p.path == "xl/tables/table1.xml"; });
   EXPECT_EQ(leaked, parts.end()) << "table1.xml leaked into unknown_parts";
@@ -448,12 +447,12 @@ TEST(OoxmlMetadata, PassthroughPartRoundTripsBytesAndContentType) {
   ASSERT_TRUE(static_cast<bool>(first_or)) << "read_ooxml: " << first_or.error().message;
   const io::OoxmlReadResult& first = first_or.value();
 
-  // The theme part must surface as a passthrough entry on both views.
+  // The theme part must surface as a passthrough entry on the workbook,
+  // which is its sole owner.
   auto find_theme = [](const std::vector<io::PassthroughPart>& parts) {
     return std::find_if(parts.begin(), parts.end(),
                         [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
   };
-  ASSERT_NE(find_theme(first.unknown_parts), first.unknown_parts.end()) << "theme not on read result";
   ASSERT_NE(find_theme(first.workbook.passthrough_parts()), first.workbook.passthrough_parts().end())
       << "theme not on workbook";
 
@@ -471,12 +470,45 @@ TEST(OoxmlMetadata, PassthroughPartRoundTripsBytesAndContentType) {
   ASSERT_TRUE(static_cast<bool>(second_or)) << "second read_ooxml: " << second_or.error().message;
   const io::OoxmlReadResult& second = second_or.value();
 
-  auto theme_it = find_theme(second.unknown_parts);
-  ASSERT_NE(theme_it, second.unknown_parts.end()) << "theme dropped on second pass";
+  auto theme_it = find_theme(second.workbook.passthrough_parts());
+  ASSERT_NE(theme_it, second.workbook.passthrough_parts().end()) << "theme dropped on second pass";
   EXPECT_EQ(theme_it->content_type, "application/vnd.openxmlformats-officedocument.theme+xml");
   ASSERT_EQ(theme_it->bytes.size(), read_back.bytes.size());
   EXPECT_TRUE(std::equal(theme_it->bytes.begin(), theme_it->bytes.end(), read_back.bytes.begin()))
       << "theme bytes diverged";
+}
+
+TEST(OoxmlMetadata, PassthroughPayloadIsOwnedOnlyByTheWorkbook) {
+  // Passthrough carries every unmodelled binary in the package, so an
+  // embedded image can dominate what a read costs in memory. The read
+  // result must therefore hold no second copy: the workbook owns the
+  // payload outright and keeps it after being moved out of the result,
+  // which is what callers actually do with it.
+  const std::vector<std::uint8_t> input = BuildXlsxWithThemePart();
+
+  auto result_or = io::read_ooxml(SpanOf(input));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml: " << result_or.error().message;
+
+  const std::vector<io::PassthroughPart>& parts = result_or.value().workbook.passthrough_parts();
+  const auto theme_count = std::count_if(parts.begin(), parts.end(),
+                                         [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
+  ASSERT_EQ(theme_count, 1) << "theme captured more than once";
+  const std::vector<std::uint8_t> expected_bytes =
+      std::find_if(parts.begin(), parts.end(), [](const io::PassthroughPart& p) {
+        return p.path == "xl/theme/theme1.xml";
+      })->bytes;
+  ASSERT_FALSE(expected_bytes.empty());
+
+  Workbook moved = std::move(result_or.value().workbook);
+  const auto moved_it = std::find_if(moved.passthrough_parts().begin(), moved.passthrough_parts().end(),
+                                     [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
+  ASSERT_NE(moved_it, moved.passthrough_parts().end()) << "theme lost when the workbook was moved out";
+  EXPECT_EQ(moved_it->bytes, expected_bytes);
+
+  // And the moved-out workbook alone is enough to re-emit the part.
+  const std::vector<std::uint8_t> rewritten = SaveOrDie(moved);
+  const std::string round_tripped = ExtractEntry(rewritten, "xl/theme/theme1.xml");
+  EXPECT_EQ(round_tripped, std::string(expected_bytes.begin(), expected_bytes.end()));
 }
 
 TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
@@ -491,6 +523,7 @@ TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
   };
   add_part("docProps/core.xml", "application/vnd.openxmlformats-package.core-properties+xml", "<core/>");
   add_part("docProps/app.xml", "application/vnd.openxmlformats-officedocument.extended-properties+xml", "<app/>");
+  add_part("docProps/custom.xml", "application/vnd.openxmlformats-officedocument.custom-properties+xml", "<custom/>");
   add_part("xl/calcChain.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.calcChain+xml",
            "<calcChain/>");
   add_part("xl/sharedStrings.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml",
@@ -503,12 +536,39 @@ TEST(OoxmlMetadata, WellKnownPassthroughPartsGetRelationships) {
   EXPECT_NE(package_rels.find("Target=\"docProps/core.xml\""), std::string::npos) << package_rels;
   EXPECT_NE(package_rels.find("extended-properties"), std::string::npos) << package_rels;
   EXPECT_NE(package_rels.find("Target=\"docProps/app.xml\""), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("custom-properties"), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("Target=\"docProps/custom.xml\""), std::string::npos) << package_rels;
 
   const std::string workbook_rels = ExtractEntry(bytes, "xl/_rels/workbook.xml.rels");
   EXPECT_NE(workbook_rels.find("relationships/calcChain"), std::string::npos) << workbook_rels;
   EXPECT_NE(workbook_rels.find("Target=\"calcChain.xml\""), std::string::npos) << workbook_rels;
   EXPECT_NE(workbook_rels.find("relationships/sharedStrings"), std::string::npos) << workbook_rels;
   EXPECT_NE(workbook_rels.find("Target=\"sharedStrings.xml\""), std::string::npos) << workbook_rels;
+}
+
+TEST(OoxmlMetadata, PackageLevelPassthroughRelationshipsSurviveReadWrite) {
+  Workbook wb = Workbook::create();
+  io::PassthroughPart thumbnail;
+  thumbnail.path = "docProps/thumbnail.jpeg";
+  thumbnail.content_type = "image/jpeg";
+  thumbnail.bytes = {0xffU, 0xd8U, 0xffU, 0xd9U};
+  wb.set_passthrough_parts({thumbnail});
+  wb.set_unknown_package_rels({io::UnknownRelationship{
+      "rId9", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
+      "docProps/thumbnail.jpeg", false}});
+
+  const std::vector<std::uint8_t> first = SaveOrDie(wb);
+  auto read_or = io::read_ooxml(SpanOf(first));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const Workbook& read = read_or.value().workbook;
+  ASSERT_EQ(read.unknown_package_rels().size(), 1U);
+  EXPECT_EQ(read.unknown_package_rels()[0].target, "docProps/thumbnail.jpeg");
+
+  const std::vector<std::uint8_t> second = SaveOrDie(read);
+  const std::string package_rels = ExtractEntry(second, "_rels/.rels");
+  EXPECT_NE(package_rels.find("relationships/metadata/thumbnail"), std::string::npos) << package_rels;
+  EXPECT_NE(package_rels.find("Target=\"docProps/thumbnail.jpeg\""), std::string::npos) << package_rels;
+  EXPECT_EQ(ExtractEntry(second, "docProps/thumbnail.jpeg"), std::string("\xff\xd8\xff\xd9", 4));
 }
 
 TEST(OoxmlMetadata, WorksheetPrintSettingsRoundTrip) {
@@ -643,14 +703,15 @@ TEST(OoxmlMetadata, CombinedDefinedNamesTablesAndPassthrough) {
   EXPECT_EQ(dst.tables()[0].name, "ComboTable");
   // The writer used the source id, so the file lives at table7.xml.
   // The reader does not surface the table part as unknown.
-  for (const io::PassthroughPart& p : result.unknown_parts) {
+  for (const io::PassthroughPart& p : result.workbook.passthrough_parts()) {
     EXPECT_NE(p.path, "xl/tables/table7.xml");
   }
 
   // Passthrough part still present.
-  auto theme_it = std::find_if(result.unknown_parts.begin(), result.unknown_parts.end(),
+  const std::vector<io::PassthroughPart>& kept = result.workbook.passthrough_parts();
+  auto theme_it = std::find_if(kept.begin(), kept.end(),
                                [](const io::PassthroughPart& p) { return p.path == "xl/theme/theme1.xml"; });
-  ASSERT_NE(theme_it, result.unknown_parts.end()) << "theme dropped during combined round-trip";
+  ASSERT_NE(theme_it, kept.end()) << "theme dropped during combined round-trip";
 }
 
 TEST(OoxmlMetadata, TableCalculatedColumnFormulaRoundTrip) {

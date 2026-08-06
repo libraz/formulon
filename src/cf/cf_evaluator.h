@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Conditional-format rule evaluator. Drives a single `cf::CFRule`
 // against a cell's `Value` and returns whether the rule matches.

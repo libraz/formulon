@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Read-only ZIP archive accessor. The OOXML reader pipeline opens an
 // `.xlsx` package by handing the raw bytes to a `ZipReader`, then
@@ -56,15 +55,6 @@ inline constexpr std::size_t kMaxParts = 2048;
 /// individually small but collectively catastrophic.
 inline constexpr std::size_t kMaxRatio = 1024;
 
-/// Hard cap on the cumulative uncompressed bytes a single `ZipReader` will
-/// hand back across the lifetime of one open archive. Even with the
-/// per-entry cap of 100 MiB, an archive with thousands of entries could
-/// still walk the reader through gigabytes of allocations; this ceiling
-/// (256 MiB) is comfortably above any realistic Excel package while
-/// containing the blast radius of pathological input. The counter resets
-/// on every `open()` call.
-inline constexpr std::size_t kMaxTotalExtractedBytes = 256ULL * 1024ULL * 1024ULL;
-
 /// Read-only accessor for a ZIP archive backed by an in-memory buffer.
 ///
 /// The archive bytes are *not* copied: the buffer passed to `open()` must
@@ -111,9 +101,10 @@ class ZipReader {
 
   /// Reads the entire decompressed contents of `name` into a freshly
   /// allocated buffer. Returns `kIoFileNotFound` when the entry is
-  /// absent and `kIoZipCorrupt` on miniz extraction failure (e.g.
-  /// stored size disagrees with central directory). The returned buffer
-  /// is independent of the underlying ZIP bytes.
+  /// absent, `kIoZipEncrypted` for an encrypted entry, and
+  /// `kIoZipCorrupt` on other miniz extraction failures (e.g. stored
+  /// size disagrees with central directory). The returned buffer is
+  /// independent of the underlying ZIP bytes.
   Expected<std::vector<std::uint8_t>, Error> read_entry(std::string_view name) const;
 
   /// Returns every entry name in archive order. Convenience wrapper

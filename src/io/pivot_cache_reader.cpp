@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the pivot-cache reader pair. See
 // pivot_cache_reader.h for the public contract.
@@ -291,13 +290,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
       // Capture any `<fieldGroup>` verbatim so a grouped field round-trips
       // even though the grouping structure is not modelled.
       if (pugi::xml_node group = f.child("fieldGroup"); group) {
-        struct RawSink : pugi::xml_writer {
-          std::string* dst;
-          void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
-        };
-        RawSink sink{};
-        sink.dst = &field.field_group_xml;
-        group.print(sink, /*indent=*/"", pugi::format_raw);
+        append_raw_xml(field.field_group_xml, group);
       }
 
       // Walk `<sharedItems>` children. Any typed value child marks this
@@ -327,10 +320,11 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
   return cache;
 }
 
-Expected<void, Error> read_pivot_cache_records(const std::vector<std::uint8_t>& records_bytes,
-                                               pivot::PivotCache& cache) {
+Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache) {
+  // `doc` is a body local and `records_bytes` a parameter, so the buffer
+  // the DOM aliases is destroyed after the DOM that points into it.
   pugi::xml_document doc;
-  RETURN_IF_ERROR(load_xml_buffer(doc, records_bytes, "pivot_cache_reader", "pivotCacheRecords*.xml"));
+  RETURN_IF_ERROR(load_xml_buffer_inplace(doc, records_bytes, "pivot_cache_reader", "pivotCacheRecords*.xml"));
   pugi::xml_node root = doc.child("pivotCacheRecords");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid,

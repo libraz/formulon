@@ -45,12 +45,11 @@
 
 namespace formulon_node {
 
-/// `kBindingNullPointer` ordinal mirrors `formulon::FormulonErrorCode`
+/// `kBindingInvalidHandle` ordinal mirrors `formulon::FormulonErrorCode`
 /// in the 7000-7999 range allocated to bindings (see CLAUDE.md error
-/// code table). The C ABI itself returns this code when a NULL pointer
-/// crosses the boundary; we emit the same code from the JS side when
-/// the wrapper is asked to operate on a destroyed handle.
-constexpr fm_status_t kBindingNullPointer = 7000;
+/// code table). The C ABI itself uses 7001 for a NULL pointer; 7000
+/// identifies a wrapper whose handle was already destroyed.
+constexpr fm_status_t kBindingInvalidHandle = 7000;
 
 // ---------------------------------------------------------------------
 // Status / Value envelope builders
@@ -133,35 +132,6 @@ std::vector<uint32_t> ReadU32Array(const Napi::CallbackInfo& info, size_t idx);
 /// carries a non-null `numberFormat`.
 void BuildDataFieldSpec(const Napi::Object& spec, fm_pivot_data_field_spec_t& out, std::string& name_buf,
                         std::string& nfmt_buf, bool& has_nfmt);
-
-// ---------------------------------------------------------------------
-// JS-side iterative-progress callback slot
-// ---------------------------------------------------------------------
-//
-// The C ABI's iterative solver is synchronous: it invokes the
-// registered C callback inline from `fm_workbook_recalc` /
-// `fm_workbook_partial_recalc` on the calling thread. That means the
-// JS function we hold here is always invoked on the same thread that
-// drove recalc, and we can safely call it through the standard
-// `Napi::FunctionReference::Call` API (no thread-safe-function plumbing
-// is required).
-//
-// Mirrors the embind binding's single-slot policy: there is one JS
-// callback for the whole module, installing a new one displaces the
-// previous, and clearing it (passing `null`) reverts to the default
-// "always continue" behaviour.
-struct ProgressSlot {
-  Napi::FunctionReference fn;
-  bool installed = false;
-};
-
-/// Function-local static keeps the slot alive for the addon's lifetime
-/// without needing eager static initialisation of a Napi::Reference.
-ProgressSlot& js_progress_slot();
-
-/// C-ABI compatible trampoline that forwards into the held JS callback.
-/// Returning `false` from the JS side aborts the iterative solve.
-bool IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations, void* user_data);
 
 }  // namespace formulon_node
 

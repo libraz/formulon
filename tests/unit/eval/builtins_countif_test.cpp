@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the conditional aggregators COUNTIF, SUMIF, and
 // AVERAGEIF. All three route through the lazy dispatch table in
@@ -79,6 +78,12 @@ TEST(BuiltinsCountIf, RangeWithNumericEqCriterion) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsCountIf, ArrayLiteralUsesSharedRangeMaterialization) {
+  const Value v = EvalSource("=COUNTIF({1,2;2,3},2)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
 TEST(BuiltinsCountIf, RangeWithGtNumericCriterion) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
@@ -90,12 +95,48 @@ TEST(BuiltinsCountIf, RangeWithGtNumericCriterion) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsCountIf, SumIfOverflowIsNum) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(1.0));
+  sheet.set_cell_value(0, 1, Value::number(1.0e308));
+  sheet.set_cell_value(1, 1, Value::number(1.0e308));
+  const Value v = EvalSourceIn("=SUMIF(A1:A2, 1, B1:B2)", wb, sheet);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(BuiltinsCountIf, AverageIfOverflowIsNum) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(1.0));
+  sheet.set_cell_value(0, 1, Value::number(1.0e308));
+  sheet.set_cell_value(1, 1, Value::number(1.0e308));
+  const Value v = EvalSourceIn("=AVERAGEIF(A1:A2, 1, B1:B2)", wb, sheet);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
 TEST(BuiltinsCountIf, RangeWithLtEqNumericCriterion) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(10.0));
   wb.sheet(0).set_cell_value(2, 0, Value::number(11.0));
   const Value v = EvalSourceIn("=COUNTIF(A1:A3, \"<=10\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountIf, IntersectedRangesKeepWholeOverlap) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  // A1:C3 ∩ B1:B5 is B1:B3. Two of those values exceed 1.
+  sheet.set_cell_value(0, 1, Value::number(1.0));
+  sheet.set_cell_value(1, 1, Value::number(2.0));
+  sheet.set_cell_value(2, 1, Value::number(3.0));
+  const Value v = EvalSourceIn("=COUNTIF(A1:C3 B1:B5, \">1\")", wb, sheet);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }

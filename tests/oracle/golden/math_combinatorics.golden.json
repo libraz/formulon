@@ -2,11 +2,11 @@
   "suite": "math_combinatorics",
   "description": "Combinatorial, numeral-system, precise-rounding, and miscellaneous scalar math builtins (ARABIC, ROMAN, BASE, DECIMAL, CEILING.PRECISE, FLOOR.PRECISE, ISO.CEILING, COMBIN, COMBINA, FACT, FACTDOUBLE, GCD, LCM, MULTINOMIAL, SQRTPI). Kept in a separate suite so the existing math golden stays bit-stable and only new cases need to be populated by `make oracle-gen` on macOS.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T00:46:25Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

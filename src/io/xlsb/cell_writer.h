@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB per-cell record emitter. The sheet writer walks each
 // populated row and calls `emit_cell` for every column slot, which
@@ -12,8 +11,8 @@
 // `io::xlsb::encode_ptgs`, spliced into a `BrtFmla*` record matching the
 // cached value's kind. A formula that cannot be parsed or lowered (a
 // token outside the supported Ptg set, e.g. a defined-name or external
-// reference) is NOT silently dropped to a literal: `emit_cell` returns
-// the encode error so `write_xlsb` can propagate it to the caller.
+// reference) is written as its cached literal value instead. The caller
+// receives a downgrade count so this intentionally lossy path is visible.
 //
 // Design references:
 //   * [MS-XLSB] §2.4.x (per-cell record types)
@@ -56,15 +55,16 @@ namespace xlsb {
 ///     the parsed-and-encoded Ptg stream. `sheet_names` resolves a
 ///     qualified reference's sheet to its 0-based `ixti`.
 ///
-/// Returns `kIoXlsbUnsupportedPtg` when the formula cannot be parsed or
-/// lowered to the supported Ptg token set; the caller (`write_xlsb`)
-/// propagates the failure rather than losing the formula.
+/// On an unsupported formula, writes `cached_value` as a literal and
+/// increments `downgraded_formula_count` (when non-null) instead of
+/// aborting the whole package.
 ///
 /// `row` is used only for diagnostic logs; it does not appear in the
 /// cell payload (the enclosing `BrtRowHdr` carries the row index).
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
                                 SstBuilder& sst, const std::vector<std::string>& sheet_names,
-                                const SheetRangeTable& sheet_ranges, const NameTable& name_table);
+                                const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                std::uint32_t* downgraded_formula_count = nullptr);
 
 /// Emits the anchor cell of a spilled dynamic-array formula, matching how
 /// Excel structures one: a `BrtFmla*` "shell" record (typed by
@@ -78,7 +78,9 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell
 Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, const Value& anchor_value,
                                         std::uint32_t col, std::uint32_t anchor_row, std::uint32_t last_row,
                                         std::uint32_t last_col, const std::vector<std::string>& sheet_names,
-                                        const SheetRangeTable& sheet_ranges, const NameTable& name_table);
+                                        const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                        SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
+                                        bool* downgraded_to_literal = nullptr);
 
 /// Emits a phantom cell of a spilled dynamic-array formula: a `BrtFmla*`
 /// "shell" record (typed by `cached`, the spilled value at this position)

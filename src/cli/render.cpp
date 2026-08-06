@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `cli/render.h`. See header for contract.
 
@@ -9,27 +8,16 @@
 #include <string>
 
 #include "c_api/formulon_c.h"
+#include "utils/a1_column.h"
 #include "utils/double_format.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
 namespace cli {
 
 void append_column_letters(std::string& out, std::uint32_t col) {
-  // Excel bijective base-26: each letter is 1..26 with no zero digit.
-  // Build letters in reverse, then append flipped. Cap at 4 letters
-  // (`XFD` is the last legal column at index 16383).
-  char buf[4];
-  std::uint32_t i = 0;
-  std::uint32_t v = col + 1;
-  while (v > 0 && i < 4) {
-    const std::uint32_t rem = (v - 1) % 26U;
-    buf[i++] = static_cast<char>('A' + rem);
-    v = (v - 1) / 26U;
-  }
-  while (i > 0) {
-    out.push_back(buf[--i]);
-  }
+  FM_CHECK(a1::append_column_letters(out, col), "column is outside Excel's grid");
 }
 
 std::string format_a1(std::uint32_t row, std::uint32_t col) {
@@ -54,12 +42,9 @@ const char* error_display(std::int32_t ordinal) {
 // Appends a JSON-escaped form of `s` (without surrounding quotes) to
 // `out`. Handles the standard escape set; non-ASCII bytes pass through
 // unchanged because JSON is UTF-8 by default.
-void append_json_escaped(std::string& out, const char* s) {
-  if (s == nullptr) {
-    return;
-  }
-  for (const char* p = s; *p != '\0'; ++p) {
-    const unsigned char c = static_cast<unsigned char>(*p);
+void append_json_escaped(std::string& out, std::string_view text) {
+  for (char raw : text) {
+    const unsigned char c = static_cast<unsigned char>(raw);
     switch (c) {
       case '"':
         out.append("\\\"");
@@ -130,6 +115,13 @@ std::string render_value(const fm_value_t& v) {
   return out;
 }
 
+std::string escape_single_line(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  append_json_escaped(out, text);
+  return out;
+}
+
 std::string render_value_json(const fm_value_t& v) {
   std::string out;
   out.push_back('{');
@@ -173,7 +165,7 @@ std::string render_value_json(const fm_value_t& v) {
       break;
     case FM_VAL_TEXT:
       out.push_back('"');
-      append_json_escaped(out, v.u.text);
+      append_json_escaped(out, v.u.text != nullptr ? std::string_view(v.u.text) : std::string_view{});
       out.push_back('"');
       break;
     case FM_VAL_ERROR:

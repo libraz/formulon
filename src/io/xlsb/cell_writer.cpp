@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the per-cell XLSB record dispatcher. See
 // `io/xlsb/cell_writer.h` for the contract.
@@ -239,21 +238,23 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::uint32_t col, st
 
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell, std::uint32_t row, std::uint32_t col,
                                 SstBuilder& sst, const std::vector<std::string>& sheet_names,
-                                const SheetRangeTable& sheet_ranges, const NameTable& name_table) {
+                                const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                std::uint32_t* downgraded_formula_count) {
   // Formula cells take precedence: even if the cached_value is blank, we
   // still emit a BrtFmla* record so the formula round-trips.
   if (!cell.formula_text.empty()) {
     auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table);
     if (!formula_or) {
-      // A formula we cannot encode must NOT be silently dropped to a
-      // literal: that would lose the formula. Surface the failure so
-      // `write_xlsb` returns it to the caller.
-      StructuredLog("xlsb.writer.formula_encode_failed")
+      StructuredLog("xlsb.writer.formula_downgraded")
           .field("row", static_cast<std::int64_t>(row))
           .field("col", static_cast<std::int64_t>(col))
           .field("reason", formula_or.error().message)
           .warn();
-      return formula_or.error();
+      if (downgraded_formula_count != nullptr) {
+        ++*downgraded_formula_count;
+      }
+      EmitLiteralCellRecord(dst, col, cell.xf_index, cell.cached_value, sst);
+      return Expected<void, Error>::Ok();
     }
     EmitFormulaCellRecord(dst, col, cell.xf_index, cell.cached_value, formula_or.value());
     return Expected<void, Error>::Ok();
@@ -266,10 +267,24 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, const Cell& cell
 Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, const Cell& cell, const Value& anchor_value,
                                         std::uint32_t col, std::uint32_t anchor_row, std::uint32_t last_row,
                                         std::uint32_t last_col, const std::vector<std::string>& sheet_names,
-                                        const SheetRangeTable& sheet_ranges, const NameTable& name_table) {
+                                        const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                        SstBuilder& sst, std::uint32_t* downgraded_formula_count,
+                                        bool* downgraded_to_literal) {
   auto formula_or = EncodeCellFormula(cell, sheet_names, sheet_ranges, name_table);
   if (!formula_or) {
-    return formula_or.error();
+    StructuredLog("xlsb.writer.array_formula_downgraded")
+        .field("row", static_cast<std::int64_t>(anchor_row))
+        .field("col", static_cast<std::int64_t>(col))
+        .field("reason", formula_or.error().message)
+        .warn();
+    if (downgraded_formula_count != nullptr) {
+      ++*downgraded_formula_count;
+    }
+    if (downgraded_to_literal != nullptr) {
+      *downgraded_to_literal = true;
+    }
+    EmitLiteralCellRecord(dst, col, cell.xf_index, anchor_value, sst);
+    return Expected<void, Error>::Ok();
   }
   // The anchor's own cell record is a PtgExp shell typed by the spilled
   // value at the anchor; the real tokens go into the following BrtArrFmla.

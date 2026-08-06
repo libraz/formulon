@@ -2,11 +2,11 @@
   "suite": "comparison_rank_probes",
   "description": "Mac Excel 365 (ja-JP) probe for tie handling and edge-case argument coercion in RANK / RANK.EQ / RANK.AVG / LARGE / SMALL. Each probe targets one specific (function, edge-case) pair so the result is unambiguous. Coverage focuses on:\n  - Order-argument coercion (Bool / Text / fractional / negative).\n  - Number-argument coercion in RANK (Bool / Text rejection).\n  - Empty / filtered-empty / not-present arrays -> #N/A or #NUM!.\n  - Tie behavior at array boundaries (all-equal, all-distinct, mixed).\n  - LARGE / SMALL k-argument truncation / rounding and bounds.\n  - Range-sourced Bool / Text inclusion semantics.\n  - Error-cell-in-range propagation.\nRANK probes use cell-range setup (not array literals). Mac Excel 365 silently returns a blank cell — neither a value nor an error — for =RANK(value, {array_literal}, ...); only real range references are supported. LARGE / SMALL accept array literals for the data argument. Once the goldens are written this suite doubles as a regression fence for the chosen behaviors. No spill / no array results: every probe resolves to a single scalar so xlwings round-trips cleanly.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T12:05:04Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

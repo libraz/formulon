@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI sheet-protection regression tests. Covers the
 // `fm_sheet_get_protection` / `fm_sheet_set_protection` getter / setter

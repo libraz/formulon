@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // TEXTSPLIT — splits a text scalar into a 1D or 2D array of substrings.
 //

@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "Implicit Intersection",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-26T01:08:53Z"
+    "generated_at": "2026-08-05T00:52:41Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -66,10 +66,7 @@
           "value": "a"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "c"
-      }
+      "skipped": "Bare =A3:A14 at B5: IronCalc picks A5 by legacy II; Mac spills from A3. Probe: implicit_intersection."
     },
     {
       "id": "I14",
@@ -279,10 +276,7 @@
           "value": 4.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 5.0
-      }
+      "skipped": "Bare =$E$2:$K$2 at F15: IronCalc picks F2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
     },
     {
       "id": "G15",
@@ -317,10 +311,7 @@
           "value": 4.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 6.0
-      }
+      "skipped": "Bare =$E$2:$K$2 at G15: IronCalc picks G2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
     },
     {
       "id": "H15",
@@ -355,10 +346,7 @@
           "value": 4.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 7.0
-      }
+      "skipped": "Bare =$E$2:$K$2 at H15: IronCalc picks H2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
     },
     {
       "id": "I15",
@@ -393,10 +381,7 @@
           "value": 4.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 8.0
-      }
+      "skipped": "Bare =$E$2:$K$2 at I15: IronCalc picks I2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
     },
     {
       "id": "J15",
@@ -431,10 +416,7 @@
           "value": 4.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 9.0
-      }
+      "skipped": "Bare =$E$2:$K$2 at J15: IronCalc picks J2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
     },
     {
       "id": "K15",
@@ -469,10 +451,7 @@
           "value": 4.0
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 10.0
-      }
+      "skipped": "Bare =$E$2:$K$2 at K15: IronCalc picks K2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
     },
     {
       "id": "L15",

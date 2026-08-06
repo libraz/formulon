@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared infrastructure for the GROUPBY / PIVOTBY lazy impls. Both Excel 365
 // dynamic-array functions consume a (row_fields, values [, col_fields]) shape
@@ -22,6 +21,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -58,6 +58,33 @@ struct HeaderLayout {
 
 /// Returns the locale-appropriate "Grand Total" label.
 std::string_view grand_total_label(const EvalContext& ctx);
+
+/// Returns the label of the grand-total row for a layout that also emits
+/// subtotal rows. ja-JP names the two levels apart ("総計" above the
+/// subtotals' "合計"); locales that draw no such distinction reuse
+/// `grand_total_label`.
+std::string_view hierarchy_grand_total_label(const EvalContext& ctx);
+
+/// The outer/inner hierarchy that a `|total_depth| == 2` request needs on
+/// top of the flat composite-key grouping. The outer level is the first key
+/// column alone; every group produced by the flat pass belongs to exactly
+/// one outer group. Outer groups are numbered in first-occurrence order of
+/// their key.
+struct OuterGrouping {
+  /// Outer-group ordinal of each flat group, indexed by flat-group index.
+  std::vector<std::size_t> outer_of_group;
+  /// Every data row belonging to each outer group, for the subtotal
+  /// aggregation.
+  std::vector<std::vector<std::uint32_t>> rows_of_outer;
+  /// A representative source row per outer group, for reading its key cell.
+  std::vector<std::uint32_t> repr_of_outer;
+};
+
+/// Builds the outer/inner hierarchy over groups already produced by the flat
+/// composite-key pass. `group_repr` and `group_rows` are the per-flat-group
+/// representative row and member rows; `keys` is the key array they index.
+OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
+                                   const std::vector<std::vector<std::uint32_t>>& group_rows);
 
 /// Resolves the aggregator argument (3rd for GROUPBY, 4th for PIVOTBY) into
 /// an `AggregatorRef`. Returns true on success and writes the resolved
@@ -117,6 +144,11 @@ bool group_cell_equal(const Value& a, const Value& b);
 /// Multi-column key equality: walks each column of the keys and compares
 /// cellwise via `group_cell_equal`.
 bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t row_b);
+
+/// Builds a hashable canonical key for one row. Text cells are Japanese-folded
+/// once here; all scalar kinds retain their type tag. Values which cannot be
+/// equal under `group_cell_equal` receive a row-unique key.
+std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row);
 
 /// True iff every column of the row's key is an Error value. Error-keyed
 /// groups sort to the bottom (after all valid groups).

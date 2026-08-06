@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Surface tests for the expanded Formulon Python Workbook API.
 
 These exercise a representative sample of every method group added on top
@@ -13,20 +12,30 @@ Run via ``make python-test`` (or ``python -m unittest`` with
 
 from __future__ import annotations
 
+import subprocess
 import unittest
+from pathlib import Path
 
 import formulon
 from formulon import (
     CalcMode,
+    CfColor,
+    CfValueObject,
+    ColorScale,
     ConditionalFormatInput,
+    DataBar,
     DataValidationInput,
+    DifferentialFormat,
     FillRecord,
     FontRecord,
+    IconSet,
     MergeRange,
     PivotAggregation,
     PivotAxis,
     PivotDataFieldSpec,
     PivotFieldSpec,
+    PivotReportLayout,
+    PivotWorksheetSource,
     SheetProtection,
     ValueKind,
     Workbook,
@@ -59,6 +68,7 @@ class StructLayoutTests(unittest.TestCase):
         "FONT_RECORD": 40,
         "FILL_RECORD": 12,
         "BORDER_RECORD": 48,
+        "DXF_RECORD": 128,
         "CELL_STYLE_RECORD": 24,
         "EXTERNAL_LINK_RECORD": 24,
     }
@@ -70,6 +80,17 @@ class StructLayoutTests(unittest.TestCase):
 
     def test_pivot_cell_value_offset(self) -> None:
         self.assertEqual(S.PIVOT_CELL_VALUE_OFFSET, 8)
+
+    def test_layouts_match_c_header(self) -> None:
+        root = Path(__file__).resolve().parents[3]
+        result = subprocess.run(
+            ["python3", str(root / "tools" / "dev" / "check_binding_drift.py"), "python-struct-layouts"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class SheetStructureTests(unittest.TestCase):
@@ -225,6 +246,12 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
             self.assertEqual(c.author, "alice")
             self.assertEqual(c.text, "see note")
 
+    def test_comment_invalid_sheet_raises_instead_of_looking_absent(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(formulon.FormulonError) as ctx:
+                wb.get_comment(99, 0, 0)
+            self.assertEqual(ctx.exception.status, 2)  # kInvalidArgument
+
     def test_hyperlink_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
             wb.add_hyperlink(0, 0, 0, "https://example.com", "Example", "tip")
@@ -351,6 +378,26 @@ class StyleTests(unittest.TestCase):
             self.assertEqual(resolved.font_index, fi)
             self.assertEqual(resolved.num_fmt_id, nf)
 
+    def test_dxf_roundtrip_and_dedup(self) -> None:
+        with Workbook.create_default() as wb:
+            record = DifferentialFormat(
+                font=FontRecord(name="Arial", size=12.0, bold=True, color_argb=0xFFFF0000),
+                fill=FillRecord(pattern=1, fg_argb=0xFFFFFF00),
+                num_fmt_id=164,
+                num_fmt_code="0.00",
+            )
+            index = wb.add_dxf(record)
+            self.assertEqual(wb.add_dxf(record), index)
+            self.assertEqual(wb.dxf_count(), 1)
+            got = wb.get_dxf(index)
+            self.assertIsNotNone(got.font)
+            self.assertEqual(got.font.name, "Arial")
+            self.assertTrue(got.font.bold)
+            self.assertIsNotNone(got.fill)
+            self.assertEqual(got.fill.fg_argb, 0xFFFFFF00)
+            self.assertEqual(got.num_fmt_id, 164)
+            self.assertEqual(got.num_fmt_code, "0.00")
+
 
 class ConditionalFormatTests(unittest.TestCase):
     def test_cf_add_get_evaluate_clear(self) -> None:
@@ -385,6 +432,35 @@ class ConditionalFormatTests(unittest.TestCase):
             wb.clear_conditional_formats(0)
             self.assertEqual(wb.get_conditional_formats(0), [])
 
+    def test_visual_rules_roundtrip(self) -> None:
+        with Workbook.create_default() as wb:
+            rules = [
+                ConditionalFormatInput(
+                    sqref=[MergeRange(0, 0, 2, 0)],
+                    type=2,
+                    color_scale=ColorScale(
+                        [CfValueObject(3), CfValueObject(4)],
+                        [CfColor(255, 0, 0), CfColor(0, 255, 0)],
+                    ),
+                ),
+                ConditionalFormatInput(
+                    sqref=[MergeRange(0, 1, 2, 1)],
+                    type=3,
+                    data_bar=DataBar(CfValueObject(3), CfValueObject(4), CfColor(0, 0, 255)),
+                ),
+                ConditionalFormatInput(
+                    sqref=[MergeRange(0, 2, 2, 2)],
+                    type=4,
+                    icon_set=IconSet(0, [CfValueObject(1, "33"), CfValueObject(1, "67")]),
+                ),
+            ]
+            for rule in rules:
+                wb.add_conditional_format(0, rule)
+            got = wb.get_conditional_formats(0)
+            self.assertEqual(got[0].color_scale.colors[1], CfColor(0, 255, 0))
+            self.assertEqual(got[1].data_bar.fill, CfColor(0, 0, 255))
+            self.assertEqual(got[2].icon_set.thresholds[1].value, "67")
+
 
 class PivotTests(unittest.TestCase):
     def test_build_and_project_pivot(self) -> None:
@@ -417,6 +493,17 @@ class PivotTests(unittest.TestCase):
             numbers = [c.value.to_python() for c in layout.cells if c.value.kind == ValueKind.NUMBER]
             # The single grand total of 10 + 20 + 30 must appear.
             self.assertIn(60.0, numbers)
+
+    def test_cache_source_and_report_layout_roundtrip(self) -> None:
+        with Workbook.create_default() as wb:
+            cache = wb.pivot_cache_create()
+            wb.set_pivot_cache_worksheet_source(cache, PivotWorksheetSource(ref="A1:B9", sheet="Sheet1"))
+            self.assertEqual(wb.get_pivot_cache_worksheet_source(cache).sheet, "Sheet1")
+            pivot = wb.pivot_create(0, "Layout", cache, 0, 0)
+            wb.set_pivot_report_layout(0, pivot, PivotReportLayout.TABULAR)
+            self.assertEqual(wb.get_pivot_report_layout(0, pivot), PivotReportLayout.TABULAR)
+            wb.set_pivot_cache_worksheet_source(cache, None)
+            self.assertIsNone(wb.get_pivot_cache_worksheet_source(cache))
 
 
 class FunctionCatalogTests(unittest.TestCase):

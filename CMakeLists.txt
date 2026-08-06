@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(formulon VERSION 0.9.6 LANGUAGES CXX)
+project(formulon VERSION 0.9.7 LANGUAGES CXX)
 
 # ---------------------------------------------------------------------------
 # Language standard and global settings
@@ -40,11 +40,16 @@ option(FM_BUILD_FUZZ          "Build libFuzzer harnesses (clang only)" OFF)
 option(FM_ENABLE_COVERAGE     "Enable gcov/lcov" OFF)
 option(FM_USE_SYSTEM_DEPS     "Prefer system-installed third-party deps" OFF)
 option(FM_ENABLE_PTHREAD      "Enable multithreaded recalc" ON)
+option(FORMULON_BUILD_VM "Build the experimental bytecode VM (tests default to ON)" ${FM_BUILD_TESTING})
 # Tree-walker / VM parity harness: when ON, every `evaluate(...)` call also
 # compiles the AST through the bytecode pipeline and asserts the VM result
 # matches the tree-walker's. Defaults to OFF so production builds carry no
 # overhead; the parity sweep test (`vm_parity_test.cpp`) flips it on.
 option(FORMULON_VM_PARITY_CHECK "Enable tree-walker / VM parity assertions" OFF)
+
+if(FORMULON_VM_PARITY_CHECK AND NOT FORMULON_BUILD_VM)
+  message(FATAL_ERROR "FORMULON_VM_PARITY_CHECK requires FORMULON_BUILD_VM=ON")
+endif()
 
 include(FormulonWarnings)
 include(FormulonCommonDeps)
@@ -110,8 +115,10 @@ endif()
 # OOXML writer, and parser sources that have landed so far; new modules are
 # appended here as they are implemented.
 set(FORMULON_CORE_SOURCES
+  src/utils/a1_column.cpp
   src/utils/double_format.cpp
   src/utils/structured_log.cpp
+  src/utils/thread_launch.cpp
   src/value.cpp
   src/sheet.cpp
   src/workbook.cpp
@@ -135,6 +142,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml/cell_ref_writer.cpp
   src/io/ooxml/emission_plan.cpp
   src/io/ooxml/relationship_writer.cpp
+  src/io/ooxml/shared_strings_writer.cpp
   src/io/ooxml/sheet_xml_builder.cpp
   src/io/ooxml/workbook_xml_builder.cpp
   src/io/ooxml/zip_part_writer.cpp
@@ -163,6 +171,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/sheet_writer.cpp
   src/io/xlsb/sst_writer.cpp
   src/io/xlsb/styles_reader.cpp
+  src/io/xlsb/styles_writer.cpp
   src/io/xlsb/writer.cpp
   src/cf/cf_evaluator.cpp
   src/cf/cf_helpers.cpp
@@ -188,10 +197,8 @@ set(FORMULON_CORE_SOURCES
   src/print/page_setup.cpp
   src/print/print_area.cpp
   src/print/pagination.cpp
+  src/eval/array_alloc.cpp
   src/eval/coerce.cpp
-  src/eval/compiler.cpp
-  src/eval/optimizer.cpp
-  src/eval/vm.cpp
   src/eval/utf8_length.cpp
   src/eval/text_ops.cpp
   src/eval/rng.cpp
@@ -335,6 +342,7 @@ src/eval/aggregate_lazy.cpp
   src/c_api/parts/pivot_internal.cpp
   src/c_api/parts/pivot_layout.cpp
   src/c_api/parts/pivot_table.cpp
+  src/c_api/parts/pagination.cpp
   src/c_api/parts/sheet_layout.cpp
   src/c_api/parts/sheets_ui.cpp
   src/c_api/parts/styles.cpp
@@ -345,6 +353,17 @@ src/eval/aggregate_lazy.cpp
   src/c_api/generated/styles_counts.cpp
   src/c_api/generated/workbook_counts.cpp
 )
+
+# The bytecode compiler/optimizer/VM is an experimental parity harness, not
+# the production evaluator. Keep it out of release CLI, WASM, and binding
+# binaries unless a test or an explicit developer build asks for it.
+if(FORMULON_BUILD_VM)
+  list(APPEND FORMULON_CORE_SOURCES
+    src/eval/compiler.cpp
+    src/eval/optimizer.cpp
+    src/eval/vm.cpp
+  )
+endif()
 
 add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
 
@@ -403,6 +422,8 @@ if(FM_BUILD_CLI)
     src/cli/eval_cmd.cpp
     src/cli/recalc_cmd.cpp
     src/cli/dump_cmd.cpp
+    src/cli/paginate_cmd.cpp
+    src/cli/file_io.cpp
     src/cli/render.cpp
   )
   add_executable(formulon_cli ${FORMULON_CLI_SOURCES})

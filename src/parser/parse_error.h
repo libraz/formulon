@@ -1,12 +1,12 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Parser-level error model.
 //
 // `ParseErrorCode` consolidates lexer-level codes (promoted from
 // `LexerErrorCode`) with the syntactic parser-level codes that the Pratt
-// parser produces. The semantic codes (unknown function, unknown name,
-// arity mismatches, structured-ref / sheet validation, ...) are still
-// deferred until the FunctionRegistry and Workbook surfaces land.
+// parser produces. Semantic failures (unknown function or name, arity
+// mismatches, and workbook-dependent reference validation) belong to the
+// evaluator / FunctionRegistry boundary rather than this syntax diagnostic
+// catalogue.
 //
 // Messages are static English literals (one per code, no parameterisation).
 // The `string_view` in `ParseError::message` therefore points at program-
@@ -73,8 +73,9 @@ enum class Severity : std::uint8_t { Error = 0, Warning = 1 };
 
 /// A single parser error record.
 ///
-/// `range` is in UTF-16 code units, matching the editor position model used
-/// by every other Formulon diagnostic. `message` is a static English string
+/// `range` is in UTF-16 code units. These diagnostics are currently consumed
+/// only by internal C++ callers; stable language bindings expose a failed
+/// parse as their ordinary error status. `message` is a static English string
 /// keyed off `code`; this will be swapped for an interned, parameterised
 /// message once localisation lands.
 ///

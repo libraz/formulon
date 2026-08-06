@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the CELL(info_type, [reference]) builtin. CELL
 // is a lazy impl (see `eval/cell_lazy.{h,cpp}`) because the optional
@@ -202,18 +201,63 @@ TEST(BuiltinsCellFilename, AlwaysEmpty) {
   EXPECT_EQ(std::string(v.as_text()), "");
 }
 
-TEST(BuiltinsCellFormat, AlwaysG) {
+TEST(BuiltinsCellFormat, GeneralReturnsG) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"format\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(std::string(v.as_text()), "G");
 }
 
-TEST(BuiltinsCellColor, AlwaysZero) {
+TEST(BuiltinsCellFormat, BuiltinNumberFormatCodes) {
+  Workbook wb = Workbook::create();
+  io::StylesTable styles;
+  styles.cell_xfs.push_back(io::CellXf{});
+  io::CellXf percent{};
+  percent.num_fmt_id = 10U;
+  styles.cell_xfs.push_back(percent);
+  io::CellXf date{};
+  date.num_fmt_id = 15U;
+  styles.cell_xfs.push_back(date);
+  wb.set_styles(std::move(styles));
+  wb.sheet(0).set_cell_xf_index(0U, 0U, 1U);
+  wb.sheet(0).set_cell_xf_index(1U, 0U, 2U);
+  EXPECT_EQ(EvalSourceIn("=CELL(\"format\", A1)", wb, wb.sheet(0)).as_text(), "P2");
+  EXPECT_EQ(EvalSourceIn("=CELL(\"format\", A2)", wb, wb.sheet(0)).as_text(), "D1");
+}
+
+TEST(BuiltinsCellColor, DefaultFormatReturnsZero) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"color\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsCellColor, NegativeColorDirectiveReturnsOne) {
+  Workbook wb = Workbook::create();
+  io::StylesTable styles;
+  styles.cell_xfs.push_back(io::CellXf{});
+  styles.num_fmt_strings.push_back("0;[Red]0");
+  styles.num_fmts.push_back(io::NumFmtRecord{164U, 0U});
+  io::CellXf colored{};
+  colored.num_fmt_id = 164U;
+  styles.cell_xfs.push_back(colored);
+  wb.set_styles(std::move(styles));
+  wb.sheet(0).set_cell_xf_index(0U, 0U, 1U);
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=CELL(\"color\", A1)", wb, wb.sheet(0)).as_number(), 1.0);
+}
+
+TEST(BuiltinsCellColor, PositiveOnlyColorDirectiveReturnsZero) {
+  Workbook wb = Workbook::create();
+  io::StylesTable styles;
+  styles.cell_xfs.push_back(io::CellXf{});
+  styles.num_fmt_strings.push_back("[Red]0;0");
+  styles.num_fmts.push_back(io::NumFmtRecord{164U, 0U});
+  io::CellXf colored{};
+  colored.num_fmt_id = 164U;
+  styles.cell_xfs.push_back(colored);
+  wb.set_styles(std::move(styles));
+  wb.sheet(0).set_cell_xf_index(0U, 0U, 1U);
+  EXPECT_DOUBLE_EQ(EvalSourceIn("=CELL(\"color\", A1)", wb, wb.sheet(0)).as_number(), 0.0);
 }
 
 TEST(BuiltinsCellParentheses, AlwaysZero) {
@@ -232,6 +276,38 @@ TEST(BuiltinsCellPrefix, AlwaysEmpty) {
   const Value v = EvalSourceIn("=CELL(\"prefix\", A1)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(std::string(v.as_text()), "");
+}
+
+TEST(BuiltinsCellPrefix, QuotePrefixReturnsApostrophe) {
+  Workbook wb = Workbook::create();
+  io::StylesTable styles;
+  styles.cell_xfs.push_back(io::CellXf{});
+  io::CellXf quote_prefixed{};
+  quote_prefixed.quote_prefix = true;
+  styles.cell_xfs.push_back(quote_prefixed);
+  wb.set_styles(std::move(styles));
+  wb.sheet(0).set_cell_xf_index(0U, 0U, 1U);
+  const Value v = EvalSourceIn("=CELL(\"prefix\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "'");
+}
+
+TEST(BuiltinsCellPrefix, AlignmentPrefixesAreReported) {
+  Workbook wb = Workbook::create();
+  io::StylesTable styles;
+  styles.cell_xfs.push_back(io::CellXf{});
+  for (uint8_t alignment : {uint8_t{1}, uint8_t{2}, uint8_t{3}}) {
+    io::CellXf xf{};
+    xf.horizontal_align = alignment;
+    styles.cell_xfs.push_back(xf);
+  }
+  wb.set_styles(std::move(styles));
+  wb.sheet(0).set_cell_xf_index(0U, 0U, 1U);
+  wb.sheet(0).set_cell_xf_index(1U, 0U, 2U);
+  wb.sheet(0).set_cell_xf_index(2U, 0U, 3U);
+  EXPECT_EQ(EvalSourceIn("=CELL(\"prefix\", A1)", wb, wb.sheet(0)).as_text(), "\\");
+  EXPECT_EQ(EvalSourceIn("=CELL(\"prefix\", A2)", wb, wb.sheet(0)).as_text(), "^");
+  EXPECT_EQ(EvalSourceIn("=CELL(\"prefix\", A3)", wb, wb.sheet(0)).as_text(), "\"");
 }
 
 TEST(BuiltinsCellProtect, DefaultCellIsLocked) {
@@ -295,6 +371,15 @@ TEST(BuiltinsCellWidth, OneByTwoArrayDefaultEightTrue) {
   EXPECT_DOUBLE_EQ(arr->cells[0].as_number(), 8.0);
   ASSERT_TRUE(arr->cells[1].is_boolean());
   EXPECT_TRUE(arr->cells[1].as_boolean());
+}
+
+TEST(BuiltinsCellWidth, ExplicitColumnLayoutIsReported) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).mutable_layout().columns.push_back(ColumnLayout{0U, 0U, 12.5, false, 0U});
+  const Value v = EvalSourceIn("=CELL(\"width\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 12.5);
+  EXPECT_FALSE(v.as_array()->cells[1].as_boolean());
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for shared-formula resolution on the streaming SAX read
 // path (`io::read_sheet_data_sax`). The SAX scanner now surfaces the

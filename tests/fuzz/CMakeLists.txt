@@ -23,8 +23,18 @@ endif()
 
 message(STATUS "Formulon fuzz: enabling libFuzzer harnesses")
 
+# Sanitizer set for the harnesses. `fuzzer` is mandatory; the rest is
+# overridable because a host's ASan runtime can be unusable independently of
+# the code under test -- LLVM 18's ASan deadlocks inside its own shadow-memory
+# init against the macOS 26 dyld, so the process never reaches main. Dropping
+# to `fuzzer,undefined` keeps the harness runnable there; the nightly runner
+# stays on the full set.
+set(FM_FUZZ_SANITIZERS "fuzzer,address,undefined" CACHE STRING
+    "Comma-separated -fsanitize list for the fuzz harnesses")
+message(STATUS "Formulon fuzz: sanitizers = ${FM_FUZZ_SANITIZERS}")
+
 set(_FORMULON_FUZZ_FLAGS
-  -fsanitize=fuzzer,address,undefined
+  -fsanitize=${FM_FUZZ_SANITIZERS}
   -fno-exceptions
   -fno-rtti
 )
@@ -48,6 +58,7 @@ endfunction()
 _formulon_add_fuzz_target(parser_fuzz parser_fuzz.cpp)
 _formulon_add_fuzz_target(eval_fuzz   eval_fuzz.cpp)
 _formulon_add_fuzz_target(xlsx_fuzz   xlsx_fuzz.cpp)
+_formulon_add_fuzz_target(xlsb_fuzz   xlsb_fuzz.cpp)
 
 # Smoke tests run a handful of iterations against an empty corpus so a
 # default `ctest` invocation surfaces obvious regressions without
@@ -71,3 +82,26 @@ add_test(
   COMMAND xlsx_fuzz -runs=1000 -timeout=10
 )
 set_tests_properties(FuzzXlsxSmoke PROPERTIES LABELS "SLOW")
+
+# The real XLSB fixture exercises the recorded Ptg / function coverage from
+# the first run. `seeds/` carries committed starting inputs — including a
+# portable deep-Ptg stream whose explicit textual prefix routes it straight to
+# the Ptg decoder — as opposed to `corpus/`, which holds locally grown corpora
+# and is not tracked.
+#
+# libFuzzer takes either a list of individual inputs to replay or a list of
+# corpus directories, never a mix: naming the fixture file alongside the seeds
+# directory made it exit with "Not a directory" before running anything. So
+# the two are staged into one build-tree corpus directory and that single
+# directory is what the harness is pointed at.
+set(_FORMULON_XLSB_CORPUS "${CMAKE_CURRENT_BINARY_DIR}/corpus_xlsb_seed")
+file(MAKE_DIRECTORY "${_FORMULON_XLSB_CORPUS}")
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/seeds/xlsb/" DESTINATION "${_FORMULON_XLSB_CORPUS}")
+file(COPY "${CMAKE_SOURCE_DIR}/tests/fixtures/excel/xlsb_fidelity_base.xlsb"
+     DESTINATION "${_FORMULON_XLSB_CORPUS}")
+
+add_test(
+  NAME FuzzXlsbSmoke
+  COMMAND xlsb_fuzz -runs=1000 -timeout=10 "${_FORMULON_XLSB_CORPUS}"
+)
+set_tests_properties(FuzzXlsbSmoke PROPERTIES LABELS "SLOW")

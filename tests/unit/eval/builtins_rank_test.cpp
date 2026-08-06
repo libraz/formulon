@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the rank / percentile-rank family:
 // RANK (legacy), RANK.EQ, RANK.AVG, PERCENTRANK (legacy),
@@ -45,6 +44,14 @@ TEST(BuiltinsRank, DescendingBasic) {
   const Value v = EvalSource("=RANK(20, {30;20;10}, 0)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsRank, PercentRankExcessiveSignificanceIsNum) {
+  for (const char* formula : {"=PERCENTRANK.INC({1;2}, 1, 309)", "=PERCENTRANK.EXC({1;2}, 1, 309)"}) {
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
 }
 
 TEST(BuiltinsRank, AscendingBasic) {

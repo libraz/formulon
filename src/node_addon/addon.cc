@@ -5,8 +5,8 @@
 // declares the `NODE_API_MODULE` macro. The bindings themselves live
 // in:
 //
-//   * `parts/addon_common.{h,cc}`  -- shared translation helpers,
-//     module-global iterative-progress slot, JS-spec pullers.
+//   * `parts/addon_common.{h,cc}`  -- shared translation helpers and
+//     JS-spec pullers.
 //   * `parts/workbook_class.{h,cc}` -- `Workbook` ObjectWrap definition,
 //     ctor / dtor, static factories, argument helpers, and the
 //     `DefineClass` registration table.
@@ -48,13 +48,10 @@
 //     without code changes. Field names on returned objects are kept
 //     IDENTICAL to the embind shape.
 //
-//   * `setIterativeProgress` registers a JS callback through a static
-//     `Napi::FunctionReference` slot. The slot is module-global (one
-//     callback at a time across all workbook handles in the process),
-//     mirroring the embind binding's single-slot policy. The C ABI's
-//     iterative solver is synchronous within `recalc()` so the JS
-//     callback always runs on the same thread that invoked recalc;
-//     no thread-safe-function plumbing is required.
+//   * `setIterativeProgress` keeps its `Napi::FunctionReference` on the
+//     owning Workbook and passes that wrapper as C ABI user-data. The
+//     solver invokes it synchronously inside `recalc()`, so no
+//     thread-safe-function plumbing is required.
 
 #include "node_addon/parts/free_funcs.h"
 #include "node_addon/parts/workbook_class.h"
@@ -69,6 +66,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("lastErrorMessage", Napi::Function::New(env, &formulon_node::LastErrorMessage, "lastErrorMessage"));
   exports.Set("lastErrorContext", Napi::Function::New(env, &formulon_node::LastErrorContext, "lastErrorContext"));
   exports.Set("statusString", Napi::Function::New(env, &formulon_node::StatusString, "statusString"));
+  exports.Set("errorDisplayName", Napi::Function::New(env, &formulon_node::ErrorDisplayName, "errorDisplayName"));
   return exports;
 }
 

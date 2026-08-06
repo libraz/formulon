@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook-oracle test harness: turns a declarative workbook + pivot spec
 // (the `spec` block of a workbook golden case) into in-memory engine

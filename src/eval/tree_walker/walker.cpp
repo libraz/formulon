@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Recursive node visitor for the tree-walk evaluator. Holds the public
 // `evaluate()` overloads, the `eval_node` switch (declared with external
@@ -20,13 +19,16 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/implicit_intersection.h"
 #include "eval/iterative_solver.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
@@ -276,22 +278,16 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       }
       const std::uint32_t rrows = r2 - r1 + 1u;
       const std::uint32_t rcols = c2 - c1 + 1u;
-      const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
-      Value* buffer = arena.create_array<Value>(total);
-      if (buffer == nullptr) {
+      Value* buffer = nullptr;
+      ArrayValue* arr = allocate_array_value(rrows, rcols, arena, buffer, kMaxDerivedArrayCells);
+      if (arr == nullptr) {
         return Value::error(ErrorCode::Num);
       }
+      const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
       const std::vector<Value>& ev = expanded.value();
       for (std::size_t k = 0; k < total; ++k) {
         buffer[k] = k < ev.size() ? ev[k] : Value::blank();
       }
-      ArrayValue* arr = arena.create<ArrayValue>();
-      if (arr == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      arr->rows = rrows;
-      arr->cols = rcols;
-      arr->cells = buffer;
       return Value::array(arr);
     }
 
@@ -351,8 +347,10 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
         }
         return ctx.resolve_ref(target, arena, registry);
       }
-      // Non-range operands: identity (current pass-through behavior).
-      return eval_node(operand, arena, registry, ctx);
+      // Dynamic arrays produced by a call, spill reference, or expression no
+      // longer retain static range coordinates. Excel's `@` takes their
+      // top-left element instead of allowing the value to spill.
+      return implicit_intersect_value(eval_node(operand, arena, registry, ctx));
     }
 
     case parser::NodeKind::UnaryOp: {
@@ -432,21 +430,15 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       if (region == nullptr) {
         return Value::error(ErrorCode::Ref);
       }
-      const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
-      Value* buffer = arena.create_array<Value>(n);
-      if (buffer == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      for (std::size_t i = 0; i < n; ++i) {
-        buffer[i] = region->cells[i];
-      }
-      ArrayValue* arr = arena.create<ArrayValue>();
+      Value* buffer = nullptr;
+      ArrayValue* arr = allocate_array_value(region->rows, region->cols, arena, buffer, kMaxDerivedArrayCells);
       if (arr == nullptr) {
         return Value::error(ErrorCode::Num);
       }
-      arr->rows = region->rows;
-      arr->cols = region->cols;
-      arr->cells = buffer;
+      const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
+      for (std::size_t i = 0; i < n; ++i) {
+        buffer[i] = region->cells[i];
+      }
       return Value::array(arr);
     }
 
@@ -601,21 +593,19 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       }
       const std::uint32_t rows = rect.row_last - rect.row_first + 1u;
       const std::uint32_t cols = rect.col_last - rect.col_first + 1u;
-      const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-      Value* buffer = arena.create_array<Value>(total);
-      if (buffer == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      for (std::size_t i = 0; i < total && i < cells.value().size(); ++i) {
-        buffer[i] = cells.value()[i];
-      }
-      ArrayValue* arr = arena.create<ArrayValue>();
+      Value* buffer = nullptr;
+      ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
       if (arr == nullptr) {
         return Value::error(ErrorCode::Num);
       }
-      arr->rows = rows;
-      arr->cols = cols;
-      arr->cells = buffer;
+      // The seam hands back uninitialised storage, so every cell must be
+      // written even when the expansion returned fewer values than the
+      // rectangle covers (a clamped whole-row / whole-column endpoint).
+      const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+      const std::vector<Value>& expanded = cells.value();
+      for (std::size_t i = 0; i < total; ++i) {
+        buffer[i] = i < expanded.size() ? expanded[i] : Value::blank();
+      }
       return Value::array(arr);
     }
 
@@ -737,9 +727,29 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return ctx.resolve_ref(top_left, arena, registry);
     }
 
-    // -- Unsupported: range-producing operators / array literals ----------
+    case parser::NodeKind::ArrayLiteral: {
+      // A brace literal is a first-class dynamic array in modern Excel. The
+      // bytecode VM already lowers it to MakeArray; mirror that shape here so
+      // the tree walker can spill it, broadcast it through an operator, and
+      // let `@` reduce it through the common implicit-intersection path.
+      const std::uint32_t rows = node.as_array_rows();
+      const std::uint32_t cols = node.as_array_cols();
+      Value* cells = nullptr;
+      ArrayValue* array = allocate_array_value(rows, cols, arena, cells, kMaxDerivedArrayCells);
+      if (array == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+      for (std::uint32_t row = 0; row < rows; ++row) {
+        for (std::uint32_t col = 0; col < cols; ++col) {
+          cells[static_cast<std::size_t>(row) * cols + col] =
+              eval_node(node.as_array_element(row, col), arena, registry, ctx);
+        }
+      }
+      return Value::array(array);
+    }
+
+    // -- Unsupported range-producing operator ------------------------------
     case parser::NodeKind::UnionOp:
-    case parser::NodeKind::ArrayLiteral:
       return Value::error(ErrorCode::Value);
   }
   return Value::error(ErrorCode::Value);
@@ -782,6 +792,7 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   // on the second pass (zero delta). Only the top-level `evaluate()` call
   // drives the loop; nested re-entry (`resolve_ref`) keeps the ordinary
   // single-pass behaviour.
+  Value v = Value::blank();
   if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() && ctx.current_sheet() != nullptr &&
       ctx.workbook() != nullptr && ctx.workbook()->iterative_options().enabled) {
     const IterativeOptions& iopts = ctx.workbook()->iterative_options();
@@ -804,9 +815,15 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
       if (next.is_blank() && node.kind() != parser::NodeKind::Literal) {
         next = Value::number(0.0);
       }
-      // Convergence test: absolute change of the numeric value. A pass that
-      // produces a non-number (or flips kind) is treated as not-yet-converged
-      // so the loop keeps running until the cap.
+      // Fixed-point convergence is defined only for numeric values. A
+      // nonnumeric result cannot become convergent by repeating an otherwise
+      // independent top-level formula, so retain its first result and let the
+      // shared surface contract below render it (#CALC!, #SPILL!, etc.).
+      if (!next.is_number()) {
+        current = next;
+        break;
+      }
+      // Convergence test: absolute change of the numeric value.
       bool converged = false;
       if (next.is_number() && current.is_number()) {
         const double delta = std::fabs(next.as_number() - current.as_number());
@@ -817,10 +834,17 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
         break;
       }
     }
-    return current;
+    // Fall through to the shared top-level surface contract below.
+    v = current;
+  } else {
+    v = eval_node(node, arena, registry, ctx_with_counters);
   }
-
-  Value v = eval_node(node, arena, registry, ctx_with_counters);
+  if (arena.exhausted()) {
+    if (EvalState* state = ctx.state(); state != nullptr) {
+      state->mark_out_of_memory();
+    }
+    return Value::error(ErrorCode::Num);
+  }
   // Dynamic-array spill-collision surface contract. When a 365-era formula
   // produces a multi-cell array and is anchored at a known formula cell on
   // a resolvable sheet, Excel reports `#SPILL!` at the anchor if any cell
@@ -878,15 +902,12 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
       }
     }
     if (any_blank) {
-      Value* buffer = arena.create_array<Value>(n);
-      ArrayValue* promoted = buffer != nullptr ? arena.create<ArrayValue>() : nullptr;
+      Value* buffer = nullptr;
+      ArrayValue* promoted = allocate_array_value(arr->rows, arr->cols, arena, buffer, kMaxDerivedArrayCells);
       if (promoted != nullptr) {
         for (std::size_t i = 0; i < n; ++i) {
           buffer[i] = arr->cells[i].is_blank() ? Value::number(0.0) : arr->cells[i];
         }
-        promoted->rows = arr->rows;
-        promoted->cols = arr->cols;
-        promoted->cells = buffer;
         v = Value::array(promoted);
       }
     }

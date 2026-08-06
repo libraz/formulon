@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the OOXML cell/row/sheetData builder. Pure functions
 // only: no zip plumbing, no I/O. The orchestrating writer in
@@ -32,12 +31,14 @@
 #include "cell.h"
 #include "double-conversion/double-conversion.h"
 #include "eval/utf8_length.h"
+#include "io/ooxml/shared_strings_writer.h"
 #include "io/xlsb/func_id_table.h"
 #include "io/xml_escape.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "utils/a1_column.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -205,7 +206,8 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // span); we collapse them to a single block on round-trip because
 // PHONETIC()'s observable behaviour (the concatenated kana) is
 // preserved without per-span boundaries.
-void AppendLiteralCellBody(std::string& out, const Value& value, std::string_view phonetic) {
+void AppendLiteralCellBody(std::string& out, const Value& value, std::string_view phonetic,
+                           const SharedStrings* shared_strings) {
   if (value.is_number()) {
     // Defensive: NaN / +/-Inf must never reach AppendNumberValue, which
     // would emit `nan`/`inf` text inside `<v>` (Excel rejects this on
@@ -231,6 +233,12 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
     return;
   }
   if (value.is_text()) {
+    if (shared_strings != nullptr) {
+      out.append("\" t=\"s\"><v>");
+      out.append(std::to_string(shared_strings->index_of(value.as_text(), phonetic)));
+      out.append("</v></c>");
+      return;
+    }
     out.append("\" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
     AppendXmlEscaped(out, value.as_text());
     out.append("</t>");
@@ -273,7 +281,8 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
 // emitted with t="array" and the cached value (cells[0]) becomes the
 // <v>. Phantoms are suppressed by the caller via spill_region_covering;
 // this function trusts the caller and never re-checks.
-bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell) {
+bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
+                   const SharedStrings* shared_strings) {
   const bool has_formula = !cell.formula_text.empty();
   const bool literal_blank = !has_formula && cell.cached_value.is_blank() && cell.xf_index == 0U;
   if (literal_blank) {
@@ -472,18 +481,24 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       out.push_back(cell.cached_value.as_boolean() ? '1' : '0');
       out.append("</v></c>");
     } else if (cell.cached_value.is_text()) {
-      out.append(" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
-      AppendXmlEscaped(out, cell.cached_value.as_text());
-      out.append("</t>");
-      if (!cell.phonetic_text.empty()) {
-        const std::uint32_t eb = formulon::eval::utf16_units_in(cell.cached_value.as_text());
-        out.append("<rPh sb=\"0\" eb=\"");
-        out.append(std::to_string(eb));
-        out.append("\"><t xml:space=\"preserve\">");
-        AppendXmlEscaped(out, cell.phonetic_text);
-        out.append("</t></rPh>");
+      if (shared_strings != nullptr) {
+        out.append(" t=\"s\"><v>");
+        out.append(std::to_string(shared_strings->index_of(cell.cached_value.as_text(), cell.phonetic_text)));
+        out.append("</v></c>");
+      } else {
+        out.append(" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
+        AppendXmlEscaped(out, cell.cached_value.as_text());
+        out.append("</t>");
+        if (!cell.phonetic_text.empty()) {
+          const std::uint32_t eb = formulon::eval::utf16_units_in(cell.cached_value.as_text());
+          out.append("<rPh sb=\"0\" eb=\"");
+          out.append(std::to_string(eb));
+          out.append("\"><t xml:space=\"preserve\">");
+          AppendXmlEscaped(out, cell.phonetic_text);
+          out.append("</t></rPh>");
+        }
+        out.append("</is></c>");
       }
-      out.append("</is></c>");
     } else if (cell.cached_value.is_error()) {
       if (IsLegacyErrorCode(cell.cached_value.as_error())) {
         out.append(" t=\"e\"><v>");
@@ -500,7 +515,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     }
     return true;
   }
-  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_text);
+  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_text, shared_strings);
   return true;
 }
 
@@ -511,7 +526,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 // itself emits `customHeight="1"` alongside `ht`; we mirror that so a
 // reload reproduces the visual size.
 void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
-  if (layout.height > 0.0) {
+  if (layout.has_height || layout.height > 0.0) {
     out.append(" ht=\"");
     char buf[32];
     // %.17g is round-trip safe under IEEE 754, so a recalc-save does not
@@ -539,8 +554,8 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
 // When the row body collapses to nothing but `override_attrs` is
 // non-empty, an empty self-closing `<row r="N" .../>` is still emitted
 // so the override survives the round-trip.
-bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const std::vector<Cell>& row_cells,
-                  std::string_view override_attrs) {
+bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
+                  std::string_view override_attrs, const SharedStrings* shared_strings) {
   // Buffer the row body separately so we can tell whether anything ended
   // up inside the <row> wrapper before we commit to writing it.
   std::string body;
@@ -553,7 +568,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
       // anchor on load.
       continue;
     }
-    (void)AppendCellXml(body, sheet, row, col, row_cells[i]);
+    (void)AppendCellXml(body, sheet, row, col, row_cells[i], shared_strings);
   }
   if (body.empty() && override_attrs.empty()) {
     return false;
@@ -577,19 +592,16 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
 }  // namespace
 
 std::string EncodeA1(std::uint32_t row, std::uint32_t col) {
-  std::string col_str;
-  col_str.reserve(3U);
-  std::uint32_t c = col + 1U;  // convert 0-based to 1-based
-  while (c > 0U) {
-    col_str.push_back(static_cast<char>('A' + ((c - 1U) % 26U)));
-    c = (c - 1U) / 26U;
+  std::string out;
+  out.reserve(10U);
+  if (!a1::append_column_letters(out, col)) {
+    return {};
   }
-  std::reverse(col_str.begin(), col_str.end());
-  col_str.append(std::to_string(row + 1U));
-  return col_str;
+  out.append(std::to_string(row + 1U));
+  return out;
 }
 
-std::string BuildSheetDataXml(const Sheet& sheet) {
+std::string BuildSheetDataXml(const Sheet& sheet, const SharedStrings* shared_strings) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -624,7 +636,7 @@ std::string BuildSheetDataXml(const Sheet& sheet) {
   body.reserve((rows_map.size() + row_overrides.size()) * 64U);
   // Sentinel empty span used when a row has no override; avoids a
   // per-row default-construction of std::string.
-  static const std::vector<Cell> kEmptyRow;
+  static const RowCells kEmptyRow;
   for (std::uint32_t row : row_indices) {
     std::string override_attrs;
     auto override_it = overrides_by_row.find(row);
@@ -632,8 +644,8 @@ std::string BuildSheetDataXml(const Sheet& sheet) {
       AppendRowOverrideAttrs(override_attrs, *override_it->second);
     }
     auto cells_it = rows_map.find(row);
-    const std::vector<Cell>& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
-    AppendRowXml(body, sheet, row, row_cells, override_attrs);
+    const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
+    AppendRowXml(body, sheet, row, row_cells, override_attrs, shared_strings);
   }
 
   if (body.empty()) {

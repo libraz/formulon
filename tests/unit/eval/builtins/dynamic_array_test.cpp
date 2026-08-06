@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the dynamic-array (spilling) built-ins. Two layers:
 //
@@ -152,13 +151,13 @@ TEST(BuiltinsDynamicArray, Sequence_NonIntegerRowsTruncates) {
   EXPECT_EQ(v.as_array_cols(), 1U);
 }
 
-TEST(BuiltinsDynamicArray, Sequence_ZeroRowsReturnsValue) {
-  // SEQUENCE(0) -> #VALUE! per Mac Excel (rows must be a positive
+TEST(BuiltinsDynamicArray, Sequence_ZeroRowsReturnsCalc) {
+  // SEQUENCE(0) -> #CALC! per Excel 365 (rows must be a positive
   // integer; 0 fails the `> 0` guard).
   Arena arena;
   const Value v = CallSequence(arena, {Value::number(0.0)});
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
 }
 
 TEST(BuiltinsDynamicArray, Sequence_NegativeRowsReturnsValue) {

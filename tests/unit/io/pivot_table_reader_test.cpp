@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::read_pivot_table_definition`. Each test
 // feeds a hand-rolled OOXML byte vector into the reader and asserts the
@@ -102,6 +101,21 @@ TEST(PivotTableReader, ItemsDecodingSkipsSubtotalMarkers) {
   EXPECT_TRUE(items[0].visible);
   EXPECT_FALSE(items[1].visible);
   EXPECT_TRUE(items[2].visible);
+}
+
+TEST(PivotTableReader, ItemWithMalformedCacheIndexIsRejected) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("  <location ref=\"A1:B2\"/>");
+  xml.append("  <pivotFields count=\"1\">");
+  xml.append("    <pivotField axis=\"axisRow\"><items><item x=\"not-an-index\"/></items></pivotField>");
+  xml.append("  </pivotFields>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_FALSE(static_cast<bool>(table_or));
+  EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_NE(table_or.error().message.find("invalid x attribute"), std::string::npos);
 }
 
 TEST(PivotTableReader, RowAndColFieldOrder) {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's logical built-ins (TRUE/FALSE/NOT/AND/OR) into a
 // FunctionRegistry. Kept in its own translation unit so the logical family

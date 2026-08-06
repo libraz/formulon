@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `CELL(info_type, [reference])`. See `cell_lazy.h`
 // for the contract and the explicit list of MVP stub keys.
@@ -18,6 +17,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -234,24 +234,196 @@ Value resolve_cell_locked(std::string_view sheet, std::uint32_t row, std::uint32
   return Value::number(locked ? 1.0 : 0.0);
 }
 
-// Builds the `"width"` MVP stub: a 1x2 array containing the default
-// column width (8) and the auto-fit flag (TRUE). No column-width
-// metadata yet; the result is fixed for every cell.
-Value build_width_stub(Arena& arena) {
-  Value* cells = arena.create_array<Value>(2);
-  if (cells == nullptr) {
-    return Value::error(ErrorCode::Value);
+const io::CellXf* resolve_cell_xf(std::string_view sheet_name, std::uint32_t row, std::uint32_t col,
+                                  const EvalContext& ctx) {
+  const Workbook* workbook = ctx.workbook();
+  const Sheet* target = ctx.current_sheet();
+  if (!sheet_name.empty()) {
+    target = workbook == nullptr ? nullptr : workbook->sheet_by_name(sheet_name);
   }
-  cells[0] = Value::number(8.0);
-  cells[1] = Value::boolean(true);
-  ArrayValue* arr = arena.create<ArrayValue>();
+  if (workbook == nullptr || target == nullptr) {
+    return nullptr;
+  }
+  std::uint32_t xf_index = 0;
+  if (const Cell* cell = target->cell_at(row, col); cell != nullptr) {
+    xf_index = cell->xf_index;
+  }
+  const std::vector<io::CellXf>& xfs = workbook->styles().cell_xfs;
+  return xf_index < xfs.size() ? &xfs[xf_index] : nullptr;
+}
+
+bool section_uses_color(std::string_view section) {
+  for (std::size_t i = 0; i + 4U < section.size(); ++i) {
+    if (section[i] != '[') {
+      continue;
+    }
+    const std::size_t close = section.find(']', i + 1U);
+    if (close == std::string_view::npos) {
+      break;
+    }
+    const std::string_view tag = section.substr(i + 1U, close - i - 1U);
+    if (tag == "Red" || tag == "Blue" || tag == "Green" || tag == "Yellow" || tag == "Magenta" || tag == "Cyan" ||
+        tag.rfind("Color", 0) == 0U) {
+      return true;
+    }
+    i = close;
+  }
+  return false;
+}
+
+// CELL("color") answers whether negative values use a colour. A one-section
+// number format applies to all numbers; in the usual multi-section form the
+// second section is the negative-number section. Semicolons in quoted text or
+// bracket directives do not divide format sections.
+bool number_format_colors_negative_values(std::string_view format) {
+  bool quoted = false;
+  std::size_t bracket_depth = 0;
+  std::size_t negative_start = std::string_view::npos;
+  std::size_t negative_end = format.size();
+  for (std::size_t i = 0; i < format.size(); ++i) {
+    const char c = format[i];
+    if (c == '"') {
+      quoted = !quoted;
+    } else if (!quoted && c == '[') {
+      ++bracket_depth;
+    } else if (!quoted && c == ']' && bracket_depth != 0) {
+      --bracket_depth;
+    } else if (!quoted && bracket_depth == 0 && c == ';') {
+      if (negative_start == std::string_view::npos) {
+        negative_start = i + 1U;
+      } else {
+        negative_end = i;
+        break;
+      }
+    }
+  }
+  if (negative_start == std::string_view::npos) {
+    return section_uses_color(format);
+  }
+  return section_uses_color(format.substr(negative_start, negative_end - negative_start));
+}
+
+std::string_view cell_prefix(const io::CellXf* xf) {
+  if (xf == nullptr) {
+    return {};
+  }
+  if (xf->quote_prefix) {
+    return "'";
+  }
+  switch (xf->horizontal_align) {
+    case 1:
+      return "\\";
+    case 2:
+      return "^";
+    case 3:
+      return "\"";
+    default:
+      return {};
+  }
+}
+
+std::string_view number_format_for_xf(const io::CellXf* xf, const EvalContext& ctx) {
+  if (xf == nullptr || ctx.workbook() == nullptr) {
+    return {};
+  }
+  const io::StylesTable& styles = ctx.workbook()->styles();
+  for (const io::NumFmtRecord& custom : styles.num_fmts) {
+    if (custom.id == xf->num_fmt_id && custom.format_string_index < styles.num_fmt_strings.size()) {
+      return styles.num_fmt_strings[custom.format_string_index];
+    }
+  }
+  return io::builtin_num_fmt(xf->num_fmt_id);
+}
+
+std::string_view cell_format_code(const io::CellXf* xf) {
+  if (xf == nullptr) {
+    return "G";
+  }
+  switch (xf->num_fmt_id) {
+    case 0:
+      return "G";
+    case 1:
+      return "F0";
+    case 2:
+      return "F2";
+    case 3:
+    case 37:
+      return ",0";
+    case 4:
+    case 39:
+      return ",2";
+    case 5:
+      return "C0";
+    case 6:
+      return "C0-";
+    case 7:
+      return "C2";
+    case 8:
+      return "C2-";
+    case 9:
+      return "P0";
+    case 10:
+      return "P2";
+    case 11:
+      return "S2";
+    case 14:
+    case 22:
+      return "D4";
+    case 15:
+      return "D1";
+    case 16:
+      return "D2";
+    case 17:
+      return "D3";
+    case 18:
+      return "D7";
+    case 19:
+      return "D6";
+    case 20:
+      return "D9";
+    case 21:
+      return "D8";
+    default:
+      return "G";
+  }
+}
+
+// Builds CELL("width")'s 1x2 result. The first member is the effective
+// column width; the second tells callers whether that width came from the
+// sheet default rather than an explicit <col> override.
+Value build_width_result(const Sheet& sheet, std::uint32_t col, Arena& arena) {
+  double width = sheet.format_defaults().has_default_col_width ? sheet.format_defaults().default_col_width
+                                                               : sheet.format_defaults().base_col_width;
+  bool is_default = true;
+  for (const ColumnLayout& layout : sheet.layout().columns) {
+    if (layout.first <= col && col <= layout.last) {
+      width = layout.width;
+      is_default = false;
+    }
+  }
+  Value* cells = nullptr;
+  ArrayValue* arr = allocate_array_value(1U, 2U, arena, cells, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     return Value::error(ErrorCode::Value);
   }
-  arr->rows = 1U;
-  arr->cols = 2U;
-  arr->cells = cells;
+  cells[0] = Value::number(width);
+  cells[1] = Value::boolean(is_default);
   return Value::array(arr);
+}
+
+Value resolve_cell_width(std::string_view sheet_name, std::uint32_t col, Arena& arena, const EvalContext& ctx) {
+  const Workbook* workbook = ctx.workbook();
+  const Sheet* target = ctx.current_sheet();
+  if (!sheet_name.empty()) {
+    if (workbook == nullptr) {
+      return Value::error(ErrorCode::Ref);
+    }
+    target = workbook->sheet_by_name(sheet_name);
+  }
+  if (target == nullptr) {
+    return Value::error(ErrorCode::Ref);
+  }
+  return build_width_result(*target, col, arena);
 }
 
 // Builds the `"address"` answer: an A1 absolute address (`$Col$Row`)
@@ -360,10 +532,11 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return resolve_cell_locked(sheet, row, col, ctx);
   }
 
-  // Reference-dependent keys: address / col / row / contents / type.
+  // Reference-dependent keys: address / col / row / contents / type / width / color / prefix / format.
   // Resolve the top-left first so any reference-side error propagates
   // before we branch on the key.
-  if (key == "address" || key == "col" || key == "row" || key == "contents" || key == "type") {
+  if (key == "address" || key == "col" || key == "row" || key == "contents" || key == "type" || key == "width" ||
+      key == "color" || key == "prefix" || key == "format") {
     std::uint32_t row = 0;
     std::uint32_t col = 0;
     std::string_view sheet;
@@ -379,6 +552,20 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     }
     if (key == "row") {
       return Value::number(static_cast<double>(row + 1U));
+    }
+    if (key == "width") {
+      return resolve_cell_width(sheet, col, arena, ctx);
+    }
+    if (key == "prefix") {
+      return arena_text(arena, cell_prefix(resolve_cell_xf(sheet, row, col, ctx)));
+    }
+    if (key == "color") {
+      return Value::number(
+          number_format_colors_negative_values(number_format_for_xf(resolve_cell_xf(sheet, row, col, ctx), ctx)) ? 1.0
+                                                                                                                 : 0.0);
+    }
+    if (key == "format") {
+      return arena_text(arena, cell_format_code(resolve_cell_xf(sheet, row, col, ctx)));
     }
     // "contents" / "type" both need the resolved cell's value.
     const Value resolved = resolve_topleft_value(sheet, row, col, arena, registry, ctx);
@@ -416,30 +603,9 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     // xlwings "" read-back artifact via empty_string_readback.
     return arena_text(arena, "");
   }
-  if (key == "format") {
-    // No style metadata yet; "G" is Excel's "general format" code.
-    return arena_text(arena, "G");
-  }
-  if (key == "color") {
-    // No negative-number color flag yet.
-    return Value::number(0.0);
-  }
   if (key == "parentheses") {
     // No parenthesis-format flag yet.
     return Value::number(0.0);
-  }
-  if (key == "prefix") {
-    // No text-alignment metadata yet (apostrophe / caret / quote /
-    // backslash). Mac returns blank when no prefix character is set;
-    // we surface empty text instead so the top-level blank-as-zero rule
-    // does not collapse the result to 0. Oracle verification accepts the
-    // xlwings "" read-back artifact via empty_string_readback.
-    return arena_text(arena, "");
-  }
-  if (key == "width") {
-    // No column-width metadata yet; return the {default_width, autofit}
-    // pair as a 1x2 array.
-    return build_width_stub(arena);
   }
 
   // Unknown info_type after lowercase fold.

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `formulon_cli` end-to-end tests. Each test spawns the binary at the
 // CMake-injected `FORMULON_CLI_PATH` and asserts on (exit_code, stdout,
@@ -9,7 +8,10 @@
 // need to distinguish the streams use the explicit `--quiet` flag or
 // inspect output ordering.
 
+#include "cli/cli.h"
+
 #include <gtest/gtest.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <cstdint>
@@ -18,6 +20,7 @@
 #include <fstream>
 #include <ios>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -61,7 +64,7 @@ std::string sh_quote(const std::string& s) {
 // stderr is folded into stdout via `2>&1`; otherwise stderr is
 // captured to a temp file via `2>` and read back. The temp-file path
 // avoids races with shell escaping.
-CliRun run_cli(const std::vector<std::string>& args, bool merge_streams = false) {
+CliRun run_cli(const std::vector<std::string>& args, bool merge_streams = false, bool close_stdout = false) {
   CliRun out;
   std::string cmd = sh_quote(FORMULON_CLI_PATH);
   for (const auto& a : args) {
@@ -79,7 +82,10 @@ CliRun run_cli(const std::vector<std::string>& args, bool merge_streams = false)
     return out;
   }
   ::close(fd);
-  if (merge_streams) {
+  if (close_stdout) {
+    cmd.append(" 1>&- 2>");
+    cmd.append(sh_quote(tmpl));
+  } else if (merge_streams) {
     cmd.append(" 2>&1");
   } else {
     cmd.append(" 2>");
@@ -137,7 +143,8 @@ struct PathGuard {
 // Builds a tiny `.xlsx` workbook in memory via the C ABI and writes
 // it to `path`. Used by `recalc` and `dump` tests that need a fixture
 // on disk. Returns `true` on success.
-bool write_fixture_workbook(const std::string& path) {
+bool write_fixture_workbook(const std::string& path, std::string_view extra_text = {}, bool iterative = false,
+                            int32_t max_iterations = 100, double max_change = 0.001) {
   fm_workbook_t* wb = nullptr;
   if (fm_workbook_create(&wb) != 0) {
     return false;
@@ -151,7 +158,15 @@ bool write_fixture_workbook(const std::string& path) {
     fm_workbook_destroy(wb);
     return false;
   }
+  if (iterative && fm_workbook_set_iterative(wb, 1, max_iterations, max_change) != 0) {
+    fm_workbook_destroy(wb);
+    return false;
+  }
   if (fm_workbook_recalc(wb) != 0) {
+    fm_workbook_destroy(wb);
+    return false;
+  }
+  if (!extra_text.empty() && fm_workbook_set_text(wb, 0, 1, 0, std::string(extra_text).c_str()) != 0) {
     fm_workbook_destroy(wb);
     return false;
   }
@@ -192,6 +207,22 @@ TEST(FormulonCli, HelpExitsZero) {
   EXPECT_NE(r.stdout_text.find("Usage"), std::string::npos);
 }
 
+TEST(FormulonCli, RecalcHelpDocumentsActualSuccessStatus) {
+  CliRun r = run_cli({"recalc", "--help"});
+  EXPECT_EQ(r.exit_code, 0);
+  EXPECT_NE(r.stdout_text.find("formulon: recalc: ok, wrote M bytes to 'OUT'"), std::string::npos);
+}
+
+TEST(FormulonCli, PaginatePrintsResolvedGeometry) {
+  const std::string path = "/tmp/fm_cli_paginate.xlsx";
+  PathGuard guard(path);
+  ASSERT_TRUE(write_fixture_workbook(path));
+
+  CliRun r = run_cli({"paginate", path});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "sheet=0\npages=1\nprint_area=\nhorizontal_breaks=\nvertical_breaks=\n");
+}
+
 TEST(FormulonCli, NoArgsExits64) {
   CliRun r = run_cli({});
   EXPECT_EQ(r.exit_code, 64);
@@ -200,6 +231,14 @@ TEST(FormulonCli, NoArgsExits64) {
 TEST(FormulonCli, UnknownCommandExits64) {
   CliRun r = run_cli({"frobnicate"});
   EXPECT_EQ(r.exit_code, 64);
+}
+
+TEST(FormulonCli, ExitCodesNeverEncodeLargeInternalStatusValues) {
+  EXPECT_EQ(formulon::cli::exit_code_for_status(0), 0);
+  EXPECT_EQ(formulon::cli::exit_code_for_status(formulon::cli::kExitUsage), 64);
+  EXPECT_EQ(formulon::cli::exit_code_for_status(128), 1);
+  EXPECT_EQ(formulon::cli::exit_code_for_status(7000), 1);
+  EXPECT_EQ(formulon::cli::exit_code_for_status(8000), 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -225,15 +264,38 @@ TEST(FormulonCli, EvalConcatTextNoQuoting) {
 }
 
 TEST(FormulonCli, EvalCellLevelErrorIsStillExitZero) {
-  // `=A1+1` references an empty cell on the empty workbook. The cell
-  // value is the engine's behavior for empty refs (typically 1, since
-  // blank coerces to 0 and `0+1=1`), but the call must not fail.
+  // The ad-hoc evaluator reads A1 without first writing the expression to
+  // A1, so it sees the empty cell rather than making a self-reference cycle.
   CliRun r = run_cli({"eval", "=A1+1"});
-  // Excel cell-level errors (#REF!, etc.) print to stdout and the
-  // process exits 0. We do not pin the exact value here — the engine
-  // may evolve — but the call must succeed.
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
-  EXPECT_GT(r.stdout_text.size(), 0U);
+  EXPECT_EQ(r.stdout_text, "1\n");
+}
+
+TEST(FormulonCli, EvalSyntaxErrorFailsInsteadOfReturningNameError) {
+  CliRun r = run_cli({"eval", "=1+"});
+  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_TRUE(r.stdout_text.empty());
+  EXPECT_NE(r.stderr_text.find("invalid formula syntax"), std::string::npos);
+}
+
+TEST(FormulonCli, EvalUnknownFunctionRemainsCellLevelNameError) {
+  CliRun r = run_cli({"eval", "=NOTAREALFUNC(1,2)"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "#NAME?\n");
+}
+
+TEST(FormulonCli, EvalDynamicArrayPrintsWholeGrid) {
+  CliRun r = run_cli({"eval", "=SEQUENCE(2,3)"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "1\t2\t3\n4\t5\t6\n");
+}
+
+TEST(FormulonCli, EvalDynamicArrayJsonPrintsNestedArrays) {
+  CliRun r = run_cli({"eval", "--json", "=SEQUENCE(2,2)"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text,
+            "[[{\"kind\":\"number\",\"value\":1},{\"kind\":\"number\",\"value\":2}],"
+            "[{\"kind\":\"number\",\"value\":3},{\"kind\":\"number\",\"value\":4}]]\n");
 }
 
 TEST(FormulonCli, EvalDivByZeroSurfacesAsExcelErrorString) {
@@ -260,6 +322,12 @@ TEST(FormulonCli, EvalUnknownFlagExits64) {
   EXPECT_EQ(r.exit_code, 64);
 }
 
+TEST(FormulonCli, EvalOptionTerminatorAcceptsNegativeFormula) {
+  CliRun r = run_cli({"eval", "--", "-1+2"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_EQ(r.stdout_text, "1\n");
+}
+
 TEST(FormulonCli, EvalRepeatRunsMultipleTimes) {
   CliRun r = run_cli({"eval", "--repeat", "3", "=SUM(1,2,3)"});
   EXPECT_EQ(r.exit_code, 0);
@@ -268,9 +336,14 @@ TEST(FormulonCli, EvalRepeatRunsMultipleTimes) {
   EXPECT_NE(r.stderr_text.find("3 iterations"), std::string::npos);
 }
 
-// Each --repeat pass re-sets the formula (marking A1 dirty) and recalcs,
-// so a high repeat count still yields the correct result — the re-set must
-// not corrupt the cell between iterations.
+TEST(FormulonCli, EvalRepeatOverflowExits64) {
+  CliRun r = run_cli({"eval", "--repeat", "999999999999999999999999999999", "=1"});
+  EXPECT_EQ(r.exit_code, 64);
+  EXPECT_NE(r.stderr_text.find("positive integer"), std::string::npos);
+}
+
+// Each --repeat pass executes the ad-hoc evaluator, so a high repeat count
+// still yields the result without mutating the temporary workbook.
 TEST(FormulonCli, EvalRepeatHighCountStillCorrect) {
   CliRun r = run_cli({"eval", "--repeat", "100", "=SUM(1,2,3)"});
   EXPECT_EQ(r.exit_code, 0);
@@ -356,6 +429,77 @@ TEST(FormulonCli, RecalcInPlaceOverwritesSamePathAndLeavesNoTemp) {
   fm_workbook_destroy(wb);
 }
 
+TEST(FormulonCli, RecalcDoesNotReusePredictableLegacyTempPath) {
+  const std::string input = "/tmp/fm_cli_safe_temp_in.xlsx";
+  const std::string output = "/tmp/fm_cli_safe_temp_out.xlsx";
+  const std::string legacy_temp = output + ".formulon-tmp";
+  PathGuard g_input(input);
+  PathGuard g_output(output);
+  PathGuard g_legacy_temp(legacy_temp);
+  ASSERT_TRUE(write_fixture_workbook(input));
+  {
+    std::ofstream sentinel(legacy_temp, std::ios::binary);
+    ASSERT_TRUE(sentinel);
+    sentinel << "unrelated file";
+  }
+
+  CliRun r = run_cli({"recalc", input, "-o", output, "--quiet"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  std::ifstream sentinel(legacy_temp, std::ios::binary);
+  ASSERT_TRUE(sentinel);
+  std::string contents;
+  std::getline(sentinel, contents);
+  EXPECT_EQ(contents, "unrelated file");
+}
+
+TEST(FormulonCli, RecalcPreservesExistingOutputPermissions) {
+  std::string in = "/tmp/fm_cli_mode_in.xlsx";
+  std::string out_path = "/tmp/fm_cli_mode_out.xlsx";
+  PathGuard g_in(in);
+  PathGuard g_out(out_path);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  ASSERT_TRUE(write_fixture_workbook(out_path));
+  ASSERT_EQ(::chmod(out_path.c_str(), 0600), 0);
+
+  CliRun r = run_cli({"recalc", in, "-o", out_path, "--quiet"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+
+  struct stat saved_stat {};
+  ASSERT_EQ(::stat(out_path.c_str(), &saved_stat), 0);
+  EXPECT_EQ(saved_stat.st_mode & 0777U, 0600U);
+}
+
+TEST(FormulonCli, RecalcIterativePreservesExistingIterationSettings) {
+  std::string in = "/tmp/fm_cli_iterative_in.xlsx";
+  std::string out_path = "/tmp/fm_cli_iterative_out.xlsx";
+  PathGuard g_in(in);
+  PathGuard g_out(out_path);
+  ASSERT_TRUE(write_fixture_workbook(in, {}, /*iterative=*/true, /*max_iterations=*/500, /*max_change=*/0.01));
+
+  CliRun r = run_cli({"recalc", "--iterative", in, "-o", out_path, "--quiet"});
+  ASSERT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+
+  std::ifstream f(out_path, std::ios::binary);
+  ASSERT_TRUE(f);
+  f.seekg(0, std::ios::end);
+  const std::streamsize size = f.tellg();
+  ASSERT_GT(size, 0);
+  f.seekg(0, std::ios::beg);
+  std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
+  ASSERT_TRUE(f.read(reinterpret_cast<char*>(bytes.data()), size));
+
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  int32_t enabled = 0;
+  uint32_t max_iterations = 0;
+  double max_change = 0.0;
+  ASSERT_EQ(fm_workbook_get_iterative(wb, &enabled, &max_iterations, &max_change), 0);
+  EXPECT_EQ(enabled, 1);
+  EXPECT_EQ(max_iterations, 500U);
+  EXPECT_DOUBLE_EQ(max_change, 0.01);
+  fm_workbook_destroy(wb);
+}
+
 TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
   // `-o out.xlsb` must select the MS-XLSB writer, not silently emit an
   // OOXML package under an `.xlsb` name.
@@ -408,8 +552,7 @@ TEST(FormulonCli, RecalcMissingInputExits64) {
 
 TEST(FormulonCli, RecalcNonexistentFileFailsCleanly) {
   CliRun r = run_cli({"recalc", "/tmp/this_path_does_not_exist_abc123.xlsx", "-o", "/tmp/fm_cli_unused.xlsx"});
-  // Non-zero exit; specific code is the low byte of `kCliFileNotFound`.
-  EXPECT_NE(r.exit_code, 0);
+  EXPECT_EQ(r.exit_code, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -445,6 +588,25 @@ TEST(FormulonCli, DumpMetadataPrintsSectionHeaders) {
   EXPECT_NE(r.stdout_text.find("[defined_names]"), std::string::npos);
   EXPECT_NE(r.stdout_text.find("[tables]"), std::string::npos);
   EXPECT_NE(r.stdout_text.find("[passthrough_parts]"), std::string::npos);
+}
+
+TEST(FormulonCli, DumpWriteFailureReturnsOutputError) {
+  std::string in = "/tmp/fm_cli_dump_write_failure.xlsx";
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  CliRun r = run_cli({"dump", "--sheets", in}, /*merge_streams=*/false, /*close_stdout=*/true);
+  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
+}
+
+TEST(FormulonCli, DumpValuesEscapesEmbeddedNewlines) {
+  std::string in = "/tmp/fm_cli_dump_escaped.xlsx";
+  PathGuard guard(in);
+  ASSERT_TRUE(write_fixture_workbook(in, "first\nsecond"));
+  CliRun r = run_cli({"dump", "--values", in});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_NE(r.stdout_text.find("Sheet1!A2 first\\nsecond\n"), std::string::npos) << r.stdout_text;
+  EXPECT_EQ(r.stdout_text.find("first\nsecond"), std::string::npos) << r.stdout_text;
 }
 
 TEST(FormulonCli, DumpMissingInputExits64) {

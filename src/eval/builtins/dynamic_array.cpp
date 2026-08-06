@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's dynamic-array (spilling) built-ins.
 //
@@ -25,9 +24,11 @@
 #include <cstdint>
 #include <random>
 
+#include "eval/array_alloc.h"
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
+#include "eval/dynamic_array_limits.h"
 #include "eval/function_registry.h"
 #include "eval/rng.h"
 #include "sheet.h"
@@ -45,8 +46,6 @@ namespace {
 // reasonable spill footprint; cap at ~1M cells, the same order of magnitude
 // as Mac Excel's effective dynamic-array ceiling for a single formula. Going
 // over surfaces `#NUM!`, matching Excel's overflow code for SEQUENCE.
-constexpr std::size_t kMaxSequenceCells = 1U << 20;  // 1,048,576
-
 // SEQUENCE / RANDARRAY use the lenient pass-through variant: NaN / Inf are
 // not rejected here because the impls run their own `> 0` / `<=` shape
 // checks downstream which reject NaN by IEEE-754 rule.
@@ -102,12 +101,15 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
   const double start = start_c.value();
   const double step = step_c.value();
 
-  // Truncate-toward-zero is Mac Excel's behaviour for the row/col
-  // dimensions; e.g. SEQUENCE(3.7) yields 3 rows, SEQUENCE(-0.5) yields
-  // #VALUE! (truncates to 0, then the `<= 0` guard fires). NaN values fail
-  // the `> 0` test by IEEE-754 rule and surface as #VALUE!.
+  // Truncate-toward-zero is Excel's behaviour for the row/col dimensions.
+  // A value that truncates to zero yields #CALC!, while a strictly negative
+  // dimension yields #VALUE!. This distinction is observable for
+  // SEQUENCE(0) versus SEQUENCE(-1).
   const double rows_t = std::trunc(rows_c.value());
   const double cols_t = std::trunc(cols_d);
+  if (rows_t == 0.0 || cols_t == 0.0) {
+    return Value::error(ErrorCode::Calc);
+  }
   if (!(rows_t > 0.0) || !(cols_t > 0.0)) {
     return Value::error(ErrorCode::Value);
   }
@@ -116,28 +118,19 @@ Value Sequence(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   const auto rows = static_cast<std::uint32_t>(rows_t);
   const auto cols = static_cast<std::uint32_t>(cols_t);
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
+  if (arr == nullptr) {
+    // Rejected shape or arena OOM -- preserve the spill pipeline's invariant
+    // that a function either returns an Array with valid storage or an
+    // error. #NUM! is the closest Excel-visible analogue for "result too
+    // large".
+    return Value::error(ErrorCode::Num);
+  }
   const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  if (n > kMaxSequenceCells) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
-    // Arena OOM -- preserve the spill pipeline's invariant that a function
-    // either returns an Array with valid storage or an error. #NUM! is the
-    // closest Excel-visible analogue for "result too large".
-    return Value::error(ErrorCode::Num);
-  }
   for (std::size_t i = 0; i < n; ++i) {
     buffer[i] = Value::number(start + static_cast<double>(i) * step);
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 
@@ -205,10 +198,7 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
   }
   const auto rows = static_cast<std::uint32_t>(rows_t);
   const auto cols = static_cast<std::uint32_t>(cols_t);
-  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  if (n > kMaxSequenceCells) {
-    return Value::error(ErrorCode::Num);
-  }
+  const auto n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
 
   // Bounds validation.
   if (std::isnan(min_v) || std::isnan(max_v) || std::isinf(min_v) || std::isinf(max_v)) {
@@ -223,8 +213,9 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
     }
   }
 
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxSequenceCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   std::mt19937_64& rng = thread_local_rng();
@@ -251,13 +242,6 @@ Value RandArray(const Value* args, std::uint32_t arity, Arena& arena) {
     }
   }
 
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 
@@ -290,28 +274,18 @@ Value MUnit(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::Num);
   }
   const auto n = static_cast<std::uint32_t>(n_t);
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(n, n, arena, buffer, kMaxSequenceCells);
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
   const std::size_t total = static_cast<std::size_t>(n) * static_cast<std::size_t>(n);
-  if (total > kMaxSequenceCells) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
   for (std::size_t i = 0; i < total; ++i) {
     buffer[i] = Value::number(0.0);
   }
   for (std::uint32_t i = 0; i < n; ++i) {
     buffer[static_cast<std::size_t>(i) * n + i] = Value::number(1.0);
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = n;
-  arr->cols = n;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 

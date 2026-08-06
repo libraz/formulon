@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of workbook container-format detection. See
 // `io/format_detect.h` for the contract.

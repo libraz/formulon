@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the GETPIVOTDATA lazy form. See
 // eval/getpivotdata_lazy.h for the public contract.
@@ -282,7 +281,8 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // 4. Refresh the result cache on demand. The pivot evaluator owns
   // the lifetime of the produced text values via its `text_storage`
   // deque; we keep that result on the table for subsequent lookups.
-  if (!table->last_result().has_value()) {
+  std::shared_ptr<const pivot::PivotResult> result = table->last_result();
+  if (!result) {
     const pivot::PivotCache* cache = ctx.workbook()->find_pivot_cache(table->pivot_cache_id());
     if (cache == nullptr) {
       return Value::error(kPivotRefError);
@@ -293,9 +293,16 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
       // GETPIVOTDATA surface.
       return Value::error(kPivotRefError);
     }
-    table->mutable_last_result().emplace(std::move(evaluated.value()));
+    // Evaluation is intentionally outside the table lock. Multiple cells
+    // may compute the same immutable result, but publishing only replaces a
+    // shared snapshot; any reader that already acquired one stays valid.
+    table->set_last_result(std::move(evaluated.value()));
+    result = table->last_result();
   }
-  const pivot::PivotResult& result = *table->last_result();
+  if (!result) {
+    return Value::error(kPivotRefError);
+  }
+  const pivot::PivotResult& pivot_result = *result;
 
   // 5. Evaluate the optional (field, item) pairs and bucket them by
   // axis. Each pair is keyed by the field's depth on its axis so we
@@ -375,11 +382,11 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // the bare call is the grand total even when axis fields are
   // configured.
   if (pair_count == 0 && (!table->row_field_order().empty() || !table->col_field_order().empty())) {
-    if (df_idx < result.grand_totals.size() && !result.grand_totals[df_idx].is_blank()) {
-      return reify_in_arena(result.grand_totals[df_idx], arena);
+    if (df_idx < pivot_result.grand_totals.size() && !pivot_result.grand_totals[df_idx].is_blank()) {
+      return reify_in_arena(pivot_result.grand_totals[df_idx], arena);
     }
-    if (df_idx == 0 && !result.grand_total.is_blank()) {
-      return reify_in_arena(result.grand_total, arena);
+    if (df_idx == 0 && !pivot_result.grand_total.is_blank()) {
+      return reify_in_arena(pivot_result.grand_total, arena);
     }
     return Value::error(kPivotRefError);
   }
@@ -393,7 +400,7 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
         return Value::error(kPivotRefError);
       }
     }
-    row_leaf = walk_hierarchy<pivot::RowHierarchyNode>(result.rows, row_path);
+    row_leaf = walk_hierarchy<pivot::RowHierarchyNode>(pivot_result.rows, row_path);
     if (row_leaf == static_cast<std::size_t>(-1)) {
       return Value::error(kPivotRefError);
     }
@@ -405,17 +412,17 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
         return Value::error(kPivotRefError);
       }
     }
-    col_leaf = walk_hierarchy<pivot::ColHierarchyNode>(result.cols, col_path);
+    col_leaf = walk_hierarchy<pivot::ColHierarchyNode>(pivot_result.cols, col_path);
     if (col_leaf == static_cast<std::size_t>(-1)) {
       return Value::error(kPivotRefError);
     }
   }
 
-  if (row_leaf >= result.values.size() || col_leaf >= result.values[row_leaf].size() ||
-      df_idx >= result.values[row_leaf][col_leaf].size()) {
+  if (row_leaf >= pivot_result.values.size() || col_leaf >= pivot_result.values[row_leaf].size() ||
+      df_idx >= pivot_result.values[row_leaf][col_leaf].size()) {
     return Value::error(kPivotRefError);
   }
-  return reify_in_arena(result.values[row_leaf][col_leaf][df_idx], arena);
+  return reify_in_arena(pivot_result.values[row_leaf][col_leaf][df_idx], arena);
 }
 
 }  // namespace eval

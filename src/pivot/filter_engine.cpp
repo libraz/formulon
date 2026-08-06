@@ -1,9 +1,12 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "pivot/filter_engine.h"
 
 #include <algorithm>
+#include <array>
+#include <charconv>
 #include <cstddef>
+#include <cstdio>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -60,6 +63,46 @@ double filter_number_value(const PivotFilter& f) {
   return 0.0;
 }
 
+// Invokes `consume` with the display label for `v`, avoiding the temporary
+// std::string that the per-record filter path previously allocated. Numeric
+// formatting intentionally follows `display_string`: integral values omit
+// `.0`, while other values use the `%f` spelling used by std::to_string.
+template <typename Consume>
+bool with_display_string(const Value& v, Consume&& consume) {
+  switch (v.kind()) {
+    case ValueKind::Blank:
+      return consume({});
+    case ValueKind::Text:
+      return consume(v.as_text());
+    case ValueKind::Bool:
+      return consume(v.as_boolean() ? std::string_view{"TRUE"} : std::string_view{"FALSE"});
+    case ValueKind::Error:
+      return consume(display_name(v.as_error()));
+    case ValueKind::Number: {
+      const double d = v.as_number();
+      std::array<char, 512> buffer{};
+      if (d >= static_cast<double>(std::numeric_limits<long long>::min()) &&
+          d <= static_cast<double>(std::numeric_limits<long long>::max())) {
+        const auto i = static_cast<long long>(d);
+        if (static_cast<double>(i) == d) {
+          const auto [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), i);
+          if (ec != std::errc{}) {
+            return false;
+          }
+          return consume(std::string_view(buffer.data(), static_cast<std::size_t>(end - buffer.data())));
+        }
+      }
+      const int written = std::snprintf(buffer.data(), buffer.size(), "%f", d);
+      if (written < 0 || static_cast<std::size_t>(written) >= buffer.size()) {
+        return false;
+      }
+      return consume(std::string_view(buffer.data(), static_cast<std::size_t>(written)));
+    }
+    default:
+      return consume({});
+  }
+}
+
 // Pulls the numeric upper-bound payload of a range filter. Returns
 // `nullopt` when `value_high` is `monostate` (i.e. caller didn't set
 // it), signalling the range is unbounded above; the calling filter
@@ -95,7 +138,7 @@ bool label_date_filter_passes(const PivotFilter& f, const Value& v) {
 // Evaluates a single label-flavoured filter against `label`.
 // Value-filter types short-circuit to true: those are applied
 // post-aggregation.
-bool label_filter_passes(const PivotFilter& f, const std::string& label) {
+bool label_filter_passes(const PivotFilter& f, std::string_view label) {
   switch (f.type) {
     case FilterType::LabelContains: {
       const std::string_view needle = filter_string_value(f);
@@ -160,9 +203,14 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
       continue;
     }
     const Value v = cell_value(cache, record, fi);
-    const std::string name = display_string(v);
     for (const PivotItem& item : field.items) {
-      if (!item.visible && item.name == name) {
+      // An item whose cache index did not resolve has no trustworthy label.
+      // Treating its empty name as a hidden label accidentally filters every
+      // genuine blank source value instead of only the malformed item.
+      if (item.name.empty()) {
+        continue;
+      }
+      if (!item.visible && with_display_string(v, [&](std::string_view name) { return item.name == name; })) {
         return false;
       }
     }
@@ -181,8 +229,7 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
       }
       continue;
     }
-    const std::string label = display_string(v);
-    if (!label_filter_passes(f, label)) {
+    if (!with_display_string(v, [&](std::string_view label) { return label_filter_passes(f, label); })) {
       return false;
     }
   }

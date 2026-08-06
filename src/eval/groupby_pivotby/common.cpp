@@ -1,15 +1,16 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "eval/groupby_pivotby/common.h"
 
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
@@ -104,6 +105,44 @@ std::string_view grand_total_label(const EvalContext& ctx) {
     return "合計";
   }
   return "Grand Total";
+}
+
+std::string_view hierarchy_grand_total_label(const EvalContext& ctx) {
+  // A subtotal row carries its outer key verbatim rather than a derived
+  // label, so the grand total is what has to move out of the way: ja-JP
+  // promotes it from "合計" to "総計" once subtotals share the column.
+  if (ctx.excel_profile().locale == ExcelLocale::kJaJP) {
+    return "総計";
+  }
+  return grand_total_label(ctx);
+}
+
+OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
+                                   const std::vector<std::vector<std::uint32_t>>& group_rows) {
+  OuterGrouping out;
+  out.outer_of_group.resize(group_repr.size(), 0U);
+  // The outer level is the first key column alone. Outer groups are few
+  // relative to the data rows, so a linear scan over the representatives
+  // beats standing up a second hash index.
+  const std::uint32_t key_cols = keys.cols;
+  for (std::size_t g = 0; g < group_repr.size(); ++g) {
+    const Value& key = keys.cells[static_cast<std::size_t>(group_repr[g]) * key_cols];
+    std::size_t outer = out.repr_of_outer.size();
+    for (std::size_t o = 0; o < out.repr_of_outer.size(); ++o) {
+      const Value& existing = keys.cells[static_cast<std::size_t>(out.repr_of_outer[o]) * key_cols];
+      if (group_cell_equal(existing, key)) {
+        outer = o;
+        break;
+      }
+    }
+    if (outer == out.repr_of_outer.size()) {
+      out.repr_of_outer.push_back(group_repr[g]);
+      out.rows_of_outer.emplace_back();
+    }
+    out.outer_of_group[g] = outer;
+    out.rows_of_outer[outer].insert(out.rows_of_outer[outer].end(), group_rows[g].begin(), group_rows[g].end());
+  }
+  return out;
 }
 
 // Resolves the third argument (the aggregator) into an `AggregatorRef`.
@@ -361,6 +400,56 @@ bool group_key_equal(const ArrayValue& keys, std::uint32_t row_a, std::uint32_t 
   return true;
 }
 
+std::string normalized_group_key(const ArrayValue& keys, std::uint32_t row) {
+  std::string out;
+  out.reserve(static_cast<std::size_t>(keys.cols) * 12U);
+  for (std::uint32_t c = 0; c < keys.cols; ++c) {
+    const Value& v = keys.cells[static_cast<std::size_t>(row) * keys.cols + c];
+    out.push_back(static_cast<char>(v.kind()));
+    switch (v.kind()) {
+      case ValueKind::Blank:
+        break;
+      case ValueKind::Number: {
+        double number = v.as_number();
+        if (std::isnan(number)) {
+          // NaN never compares equal, including to itself.
+          out.append("row");
+          out.append(std::to_string(row));
+          break;
+        }
+        number = number == 0.0 ? 0.0 : number;
+        std::uint64_t bits = 0;
+        static_assert(sizeof(bits) == sizeof(number));
+        std::memcpy(&bits, &number, sizeof(bits));
+        out.append(reinterpret_cast<const char*>(&bits), sizeof(bits));
+        break;
+      }
+      case ValueKind::Bool:
+        out.push_back(v.as_boolean() ? '\x01' : '\x00');
+        break;
+      case ValueKind::Error:
+        out.append(std::to_string(static_cast<std::uint16_t>(v.as_error())));
+        out.push_back('\0');
+        break;
+      case ValueKind::Text: {
+        const std::string folded = fold_jp_text(v.as_text());
+        out.append(std::to_string(folded.size()));
+        out.push_back(':');
+        out.append(folded);
+        break;
+      }
+      default:
+        // Array / Ref / Lambda are intentionally never equal in
+        // group_cell_equal, so each row must form its own group.
+        out.append("row");
+        out.append(std::to_string(row));
+        break;
+    }
+    out.push_back('\xff');
+  }
+  return out;
+}
+
 bool row_key_is_error(const ArrayValue& keys, std::uint32_t row) {
   for (std::uint32_t c = 0; c < keys.cols; ++c) {
     const Value& v = keys.cells[static_cast<std::size_t>(row) * keys.cols + c];
@@ -377,20 +466,14 @@ const ArrayValue* build_group_slice(const ArrayValue& values, std::uint32_t valu
   if (n == 0U) {
     return nullptr;
   }
-  Value* cells = arena.create_array<Value>(n);
-  if (cells == nullptr) {
+  Value* cells = nullptr;
+  ArrayValue* arr = allocate_array_value(n, 1U, arena, cells, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return nullptr;
   }
   for (std::uint32_t i = 0; i < n; ++i) {
     cells[i] = values.cells[static_cast<std::size_t>(row_indices[i]) * values.cols + value_col];
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return nullptr;
-  }
-  arr->rows = n;
-  arr->cols = 1U;
-  arr->cells = cells;
   return arr;
 }
 
@@ -446,9 +529,9 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
     return Value::error(ErrorCode::Calc);
   }
   const std::uint32_t out_rows_n = static_cast<std::uint32_t>(rows.size());
-  const std::size_t total_cells = static_cast<std::size_t>(out_rows_n) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(total_cells);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(out_rows_n, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::uint32_t r = 0; r < out_rows_n; ++r) {
@@ -456,13 +539,6 @@ Value rows_to_array_value(const std::vector<std::vector<Value>>& rows, std::uint
       buffer[static_cast<std::size_t>(r) * out_cols + c] = rows[r][c];
     }
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = out_rows_n;
-  arr->cols = out_cols;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 

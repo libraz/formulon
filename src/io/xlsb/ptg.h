@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // MS-XLSB Ptg (Parse Tag) dispatch table. The XLSB binary formula stream
 // is a sequence of single-byte-tagged tokens; this module provides the
@@ -82,7 +81,7 @@ enum class PtgKind : std::uint8_t {
   Uplus,    ///< 0x12 — unary `+`.
   Uminus,   ///< 0x13 — unary `-`.
   Percent,  ///< 0x14 — postfix `%`.
-  Paren,    ///< 0x15 — parenthesis (writer-only).
+  Paren,    ///< 0x15 — parenthesis.
   MissArg,  ///< 0x16 — omitted argument (e.g. `IF(,x,y)`).
   Str,      ///< 0x17 — string literal.
   ElfLel,   ///< 0x18 — reserved (XLM); unsupported.
@@ -193,12 +192,10 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::Uplus, 0x12, "Uplus", PtgStatus::Full},
     {PtgKind::Uminus, 0x13, "Uminus", PtgStatus::Full},
     {PtgKind::Percent, 0x14, "Percent", PtgStatus::Full},
-    // Neither the reader nor the writer handles `Paren` despite the
-    // "writer-only" framing in `PtgKind::Paren`'s doc comment: source
-    // parenthesisation is captured structurally (via `AstNode` operator
-    // precedence / explicit grouping), and the writer never re-derives
-    // a standalone `PtgParen` byte from that structure.
-    {PtgKind::Paren, 0x15, "Paren", PtgStatus::Unsupported},
+    // PtgParen is semantically transparent. The reader consumes it after
+    // confirming an operand exists; the canonical writer represents the
+    // same grouping through AST precedence and need not emit it again.
+    {PtgKind::Paren, 0x15, "Paren", PtgStatus::Full},
     {PtgKind::MissArg, 0x16, "MissArg", PtgStatus::Full},
     {PtgKind::Str, 0x17, "Str", PtgStatus::Full},
     {PtgKind::ElfLel, 0x18, "ElfLel", PtgStatus::Unsupported},
@@ -222,14 +219,14 @@ inline constexpr std::array<PtgInfo, kPtgInfoCount> kPtgInfoTable = {{
     {PtgKind::Name, 0x23, "Name", PtgStatus::Full},
     {PtgKind::Ref, 0x24, "Ref", PtgStatus::Full},
     {PtgKind::Area, 0x25, "Area", PtgStatus::Full},
-    // `MemArea` / `MemErr` / `MemNoMem` / `MemFunc` / `RefN` / `AreaN` /
-    // `MemAreaN` / `MemNoMemN` / `NameX`: none of these has a
-    // `decode_ptgs` case (falls through to the `default:` ->
-    // `unsupported_ptg` branch) or an `encode_ptgs` emission site.
-    {PtgKind::MemArea, 0x26, "MemArea", PtgStatus::Unsupported},
-    {PtgKind::MemErr, 0x27, "MemErr", PtgStatus::Unsupported},
-    {PtgKind::MemNoMem, 0x28, "MemNoMem", PtgStatus::Unsupported},
-    {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Unsupported},
+    // Mem Ptgs are reader-only metadata around their following
+    // binary-reference expression. The decoder consumes their payload (and
+    // PtgMemArea's RgbExtra entry) then preserves the expression itself;
+    // the writer canonicalizes the AST without emitting a cache marker.
+    {PtgKind::MemArea, 0x26, "MemArea", PtgStatus::Full},
+    {PtgKind::MemErr, 0x27, "MemErr", PtgStatus::Full},
+    {PtgKind::MemNoMem, 0x28, "MemNoMem", PtgStatus::Full},
+    {PtgKind::MemFunc, 0x29, "MemFunc", PtgStatus::Full},
     // `RefErr` / `AreaErr` / `RefErr3d` / `AreaErr3d`: the reader decodes
     // these to an `#REF!` `ErrorLiteral` node (see `ptg_reader.cpp`'s
     // combined `RefErr`/`RefErr3d` and `AreaErr`/`AreaErr3d` cases). The

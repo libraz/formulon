@@ -1,17 +1,13 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared half-width-katakana to full-width-katakana base mapping. Both
 // `jp_fold` (used by lookup-key folding) and `text_width` (used by JIS /
 // DBCS / ASC) consume this table; previously each TU carried its own
 // copy of the same 56-entry block.
 //
-// Only the half-to-full *base* table is shared. The full-to-half side is
-// width-conversion-specific (entries decompose voiced forms into a base
-// codepoint plus U+FF9E / U+FF9F so the half-width output is two bytes)
-// and stays inside `text_width.cpp`. Voiced / semi-voiced composition
-// lives in each consumer because the input shape differs:
-//   * `jp_fold` peeks the next codepoint of a folding stream;
-//   * `text_width` operates on a pre-walked codepoint sequence.
+// Only the half-to-full *base* table and composition lookup tables are
+// shared. The full-to-half side is width-conversion-specific (entries
+// decompose voiced forms into a base codepoint plus U+FF9E / U+FF9F so the
+// half-width output is two codepoints) and stays inside `text_width.cpp`.
 
 #ifndef FORMULON_EVAL_JP_KANA_TABLE_H_
 #define FORMULON_EVAL_JP_KANA_TABLE_H_
@@ -32,6 +28,15 @@ std::uint32_t half_to_full_katakana_base(std::uint32_t cp) noexcept;
 /// otherwise. Provided as a separate accessor because `text_width` and
 /// `jp_fold` mix the two ranges differently in their walkers.
 std::uint32_t half_to_full_punctuation(std::uint32_t cp) noexcept;
+
+/// Returns the dakuten form of a full-width katakana base, or 0 if the base
+/// cannot take dakuten. This explicit lookup avoids assuming Unicode code
+/// point adjacency: small tsu between the sa and ta rows breaks that pattern.
+std::uint32_t voiced_full_from_base(std::uint32_t full_base) noexcept;
+
+/// Returns the handakuten form of a full-width katakana base, or 0 if the
+/// base cannot take handakuten.
+std::uint32_t semi_voiced_full_from_base(std::uint32_t full_base) noexcept;
 
 }  // namespace eval
 }  // namespace formulon

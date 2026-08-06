@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Out-of-line implementation of the shared embind helpers declared in
 // `parts/embind_common.h`. The status builders capture the thread-local
@@ -128,33 +127,28 @@ emscripten::val pivot_cell_to_val(const fm_pivot_cell_t& cell) {
 }
 
 std::vector<uint8_t> val_to_bytes(const emscripten::val& v) {
-  if (v.isNull() || v.isUndefined()) {
+  const emscripten::val uint8_array = emscripten::val::global("Uint8Array");
+  if (v.isNull() || v.isUndefined() || !v.instanceof (uint8_array)) {
     return {};
   }
-  // `length` works for both Uint8Array and plain arrays; `byteLength`
-  // is the canonical Uint8Array property. Prefer `length`.
-  const auto len_val = v["length"];
-  if (len_val.isUndefined()) {
-    return {};
-  }
-  const std::size_t len = len_val.as<std::size_t>();
+  const std::size_t len = v["length"].as<std::size_t>();
   std::vector<uint8_t> out(len);
   if (len == 0) {
     return out;
   }
-  // `emscripten::val::vecFromJSArray` copies element-by-element via
-  // `as<T>`. For a typed Uint8Array this is correct and avoids relying
-  // on heap-pointer aliasing tricks that depend on internal layout.
-  for (std::size_t i = 0; i < len; ++i) {
-    out[i] = v[i].as<uint8_t>();
-  }
+  // `typed_memory_view` gives JS a view of the vector's WASM allocation;
+  // Uint8Array#set copies the whole input in one JS operation. This avoids
+  // one embind boundary crossing per byte for workbook-sized inputs.
+  emscripten::val(emscripten::typed_memory_view(len, out.data())).call<void>("set", v);
   return out;
 }
 
 emscripten::val bytes_to_val(const uint8_t* data, std::size_t len) {
   emscripten::val u8 = emscripten::val::global("Uint8Array").new_(len);
-  for (std::size_t i = 0; i < len; ++i) {
-    u8.set(i, data[i]);
+  if (len != 0) {
+    // The destination is a standalone JS buffer; `set` copies the transient
+    // WASM view before the caller releases its C++ storage.
+    u8.call<void>("set", emscripten::val(emscripten::typed_memory_view(len, data)));
   }
   return u8;
 }

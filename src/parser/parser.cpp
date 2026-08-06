@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the Pratt parser. Driven by a single `Tokenizer` pass;
 // whitespace tokens are stripped during ingest. A leading `=` (Excel
@@ -103,6 +102,12 @@ int InfixBindingPower(TokenKind kind, int* right_bp) noexcept {
     default:
       return 0;
   }
+}
+
+bool is_range_endpoint_kind(NodeKind kind) noexcept {
+  return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::ExternalRef ||
+         kind == NodeKind::StructuredRef || kind == NodeKind::RangeOp || kind == NodeKind::Call ||
+         kind == NodeKind::ErrorPlaceholder;
 }
 
 // Maps a binary token kind to its `BinOp` enum value.
@@ -400,9 +405,13 @@ AstNode* Parser::parse() {
   // right). The Pratt parser ultimately decides whether the AST shape
   // allows the intersection: a bare-literal operand is re-rejected there,
   // so admitting Number here only widens the conservative candidate set.
-  auto is_ref_candidate = [](TokenKind k) noexcept {
-    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::RParen || k == TokenKind::RBracket ||
-           k == TokenKind::Number;
+  auto is_ref_left_candidate = [](TokenKind k) noexcept {
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::RParen ||
+           k == TokenKind::RBracket || k == TokenKind::Number;
+  };
+  auto is_ref_right_candidate = [](TokenKind k) noexcept {
+    return k == TokenKind::CellRef || k == TokenKind::Ident || k == TokenKind::SheetName || k == TokenKind::LParen ||
+           k == TokenKind::RParen || k == TokenKind::RBracket || k == TokenKind::Number;
   };
   // Walk `raw` with a sliding window over the most recent non-whitespace
   // token and the next non-whitespace token after each whitespace run. If
@@ -423,7 +432,13 @@ AstNode* Parser::parse() {
     }
     // Find the previous non-whitespace token already pushed onto `tokens_`.
     TokenKind prev_kind = tokens_.empty() ? TokenKind::Eof : tokens_.back().kind;
-    if (is_ref_candidate(prev_kind) && is_ref_candidate(next_kind)) {
+    // A cell-shaped token followed by a spaced opening parenthesis is a
+    // function name such as `LOG10 (100)`, unless it closes a range tail
+    // (`A1:A3 (B1:D1)`). The former must retain the legacy function-call
+    // disambiguation; the latter is Excel's intersection operator.
+    const bool cellref_call_space = next_kind == TokenKind::LParen && prev_kind == TokenKind::CellRef &&
+                                    (tokens_.size() < 2 || tokens_[tokens_.size() - 2].kind != TokenKind::Colon);
+    if (is_ref_left_candidate(prev_kind) && is_ref_right_candidate(next_kind) && !cellref_call_space) {
       tokens_.push_back(t);
     }
     // Otherwise: drop. Subsequent iterations resume on the next token.
@@ -491,6 +506,19 @@ AstNode* Parser::parse() {
   root_ = parse_expression(0, SyncContext::TopLevel);
   if (root_ == nullptr) {
     return nullptr;
+  }
+
+  // A left-associative chain such as `1+1+...` is assembled by the Pratt
+  // loop without adding parse_expression frames. Validate the completed tree
+  // as well, so this shape observes the same configured ceiling as nested
+  // calls and parentheses before any recursive consumer sees it.
+  if (!ast_depth_within_limit(*root_, opts_.max_parse_depth)) {
+    const TextRange range = root_->range();
+    record_error(ParseErrorCode::NestedFormulaTooDeep, range);
+    root_ = make_recovery_placeholder(range);
+    if (root_ == nullptr) {
+      return nullptr;
+    }
   }
 
   // Trailing tokens that we did not consume are an error; we surface the
@@ -834,9 +862,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       const NodeKind rk = rhs->kind();
       if (lk == NodeKind::SpillRef || rk == NodeKind::SpillRef) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
-      } else if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::ExternalRef &&
-                 rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::Call &&
-                 rk != NodeKind::ErrorPlaceholder) {
+      } else if (!is_range_endpoint_kind(lk) || !is_range_endpoint_kind(rk)) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_range_op(arena_, lhs, rhs);

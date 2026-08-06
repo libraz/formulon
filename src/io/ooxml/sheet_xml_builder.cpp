@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Worksheet-part XML builders for the OOXML writer. See header for the
 // caller contract; this TU owns all of the per-sheet body builders that
@@ -19,10 +18,12 @@
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/relationship_writer.h"
+#include "io/ooxml/shared_strings_writer.h"
 #include "io/ooxml_defs.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 
 namespace formulon {
@@ -34,9 +35,40 @@ namespace {
 // helpers; their signatures are needed up here so `BuildWorksheetXml`
 // can call them.
 std::string BuildSheetViewXml(const SheetView& view);
+std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults);
 std::string BuildColsXml(const SheetLayout& layout);
 std::string BuildSheetProtectionXml(const SheetProtection& p);
 std::string BuildDimensionXml(const Sheet& sheet);
+
+// Sheet visibility is owned by xl/workbook.xml's <sheet state="...">
+// attribute.  Older producers also put tabHidden on the worksheet's raw
+// <sheetPr>; preserving that stale flag would make a sheet hidden again after
+// an API caller explicitly re-shows it.  Strip the legacy representation on
+// every write and let WorkbookXmlBuilder emit the current model state.
+std::string BuildNormalizedSheetPrXml(std::string_view raw_sheet_pr) {
+  if (raw_sheet_pr.empty()) {
+    return {};
+  }
+
+  pugi::xml_document doc;
+  const pugi::xml_parse_result parsed = doc.load_buffer(raw_sheet_pr.data(), raw_sheet_pr.size());
+  pugi::xml_node sheet_pr = doc.document_element();
+  if (!parsed || !sheet_pr || std::string_view(sheet_pr.name()) != "sheetPr") {
+    // Raw metadata comes from a successfully parsed source workbook, but do
+    // not discard it should an unusual extension make the fragment unparsable
+    // out of its original namespace context.
+    return std::string(raw_sheet_pr);
+  }
+
+  sheet_pr.remove_attribute("tabHidden");
+  for (pugi::xml_node child = sheet_pr.child("tabHidden"); child;) {
+    const pugi::xml_node next = child.next_sibling("tabHidden");
+    sheet_pr.remove_child(child);
+    child = next;
+  }
+
+  return raw_xml(sheet_pr);
+}
 
 std::string BuildMergeCellsBlock(const Sheet& sheet) {
   if (sheet.merges().empty()) {
@@ -399,6 +431,40 @@ std::string BuildSheetViewXml(const SheetView& view) {
   return out;
 }
 
+/// Emits the modelled subset of `<sheetFormatPr>`.  Unlike explicit `<col>`
+/// and `<row>` records, these metrics apply to every un-overridden track, so
+/// silently omitting them changes pagination and visible geometry across the
+/// whole worksheet.
+std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
+  if (!defaults.has_default_col_width && !defaults.has_default_row_height &&
+      defaults.base_col_width == ooxml_defaults::kBaseColWidthChars) {
+    return std::string();
+  }
+  auto append_double = [](std::string& out, double value) {
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%.17g", value);
+    out.append(buf);
+  };
+  std::string out("<sheetFormatPr");
+  if (defaults.base_col_width != ooxml_defaults::kBaseColWidthChars) {
+    out.append(" baseColWidth=\"");
+    append_double(out, defaults.base_col_width);
+    out.push_back('"');
+  }
+  if (defaults.has_default_col_width) {
+    out.append(" defaultColWidth=\"");
+    append_double(out, defaults.default_col_width);
+    out.push_back('"');
+  }
+  if (defaults.has_default_row_height) {
+    out.append(" defaultRowHeight=\"");
+    append_double(out, defaults.default_row_height);
+    out.push_back('"');
+  }
+  out.append("/>");
+  return out;
+}
+
 /// Emits `<sheetProtection .../>` matching the structure ECMA-376
 /// §18.3.1.85 prescribes. Returns an empty string when
 /// `p.enabled == false` so the caller can drop the surrounding
@@ -567,10 +633,12 @@ std::string BuildDimensionXml(const Sheet& sheet) {
 
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
-                              std::string_view drawing_rid) {
+                              std::string_view drawing_rid, std::string_view legacy_drawing_rid,
+                              const SharedStrings* shared_strings) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
+  const std::string sheet_format_xml = BuildSheetFormatPrXml(sheet.format_defaults());
   const std::string cols_xml = BuildColsXml(sheet.layout());
-  const std::string sheet_data = BuildSheetDataXml(sheet);
+  const std::string sheet_data = BuildSheetDataXml(sheet, shared_strings);
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.
@@ -579,11 +647,13 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   const std::string dv_xml = BuildDataValidationsBlock(sheet);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
   const SheetPrintSettings& print = sheet.print_settings();
+  const WorksheetRawExtensions& raw_extensions = sheet.raw_extensions();
   const std::string page_setup_xml = PageSetupWithRelationshipId(print.page_setup_xml, printer_settings_rid);
+  const std::string sheet_pr_xml = BuildNormalizedSheetPrXml(print.sheet_pr_xml);
   std::string out;
-  out.reserve(192U + sheet_view_xml.size() + cols_xml.size() + sheet_data.size() + cf_xml.size() + merges_xml.size() +
-              dv_xml.size() + hl_xml.size() + print.sheet_pr_xml.size() + print.page_margins_xml.size() +
-              page_setup_xml.size() + sheet_tables.size() * 96);
+  out.reserve(192U + sheet_view_xml.size() + sheet_format_xml.size() + cols_xml.size() + sheet_data.size() +
+              cf_xml.size() + merges_xml.size() + dv_xml.size() + hl_xml.size() + sheet_pr_xml.size() +
+              print.page_margins_xml.size() + page_setup_xml.size() + sheet_tables.size() * 96);
   out.append(kXmlDecl);
   out.append(
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
@@ -599,9 +669,9 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // We currently emit a subset; the helpers stay quiet when their
   // underlying field is at default values so absent metadata yields no
   // extra bytes.
-  if (!print.sheet_pr_xml.empty()) {
+  if (!sheet_pr_xml.empty()) {
     out.append("  ");
-    out.append(print.sheet_pr_xml);
+    out.append(sheet_pr_xml);
     out.push_back('\n');
   }
   out.append("  ");
@@ -610,6 +680,11 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   if (!sheet_view_xml.empty()) {
     out.append("  ");
     out.append(sheet_view_xml);
+    out.push_back('\n');
+  }
+  if (!sheet_format_xml.empty()) {
+    out.append("  ");
+    out.append(sheet_format_xml);
     out.push_back('\n');
   }
   if (!cols_xml.empty()) {
@@ -631,6 +706,16 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       out.push_back('\n');
     }
   }
+  if (!raw_extensions.protected_ranges_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.protected_ranges_xml);
+    out.push_back('\n');
+  }
+  if (!raw_extensions.scenarios_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.scenarios_xml);
+    out.push_back('\n');
+  }
   // <autoFilter> sits between <sheetProtection>/<scenarios> and
   // <mergeCells> in ECMA-376 document order. Round-tripped verbatim.
   if (!sheet.auto_filter_xml().empty()) {
@@ -638,10 +723,20 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     out.append(sheet.auto_filter_xml());
     out.push_back('\n');
   }
+  if (!raw_extensions.custom_sheet_views_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.custom_sheet_views_xml);
+    out.push_back('\n');
+  }
   // Merge cells precede CF in ECMA-376 document order.
   if (!merges_xml.empty()) {
     out.append("  ");
     out.append(merges_xml);
+    out.push_back('\n');
+  }
+  if (!raw_extensions.phonetic_pr_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.phonetic_pr_xml);
     out.push_back('\n');
   }
   if (!cf_xml.empty()) {
@@ -697,6 +792,11 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       out.push_back('\n');
     }
   }
+  if (!raw_extensions.ignored_errors_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.ignored_errors_xml);
+    out.push_back('\n');
+  }
   // <drawing> precedes <tableParts> in ECMA-376 worksheet element order.
   // The referenced DrawingML part round-trips through passthrough; here
   // we only re-emit the reference so the part stays reachable.
@@ -704,6 +804,31 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     out.append("  <drawing r:id=\"");
     out.append(drawing_rid);
     out.append("\"/>\n");
+  }
+  if (!legacy_drawing_rid.empty()) {
+    out.append("  <legacyDrawing r:id=\"");
+    out.append(legacy_drawing_rid);
+    out.append("\"/>\n");
+  }
+  if (!raw_extensions.legacy_drawing_hf_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.legacy_drawing_hf_xml);
+    out.push_back('\n');
+  }
+  if (!raw_extensions.picture_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.picture_xml);
+    out.push_back('\n');
+  }
+  if (!raw_extensions.ole_objects_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.ole_objects_xml);
+    out.push_back('\n');
+  }
+  if (!raw_extensions.controls_xml.empty()) {
+    out.append("  ");
+    out.append(raw_extensions.controls_xml);
+    out.push_back('\n');
   }
   if (!sheet_tables.empty()) {
     out.append("  <tableParts count=\"");
@@ -739,6 +864,14 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
   std::uint32_t next_rid = 1;
   std::unordered_set<std::string> used_rids;
+  // Preserve unmodelled relationship ids exactly: raw worksheet XML can
+  // refer to them (for example `<oleObject r:id="rId7"/>`). Reserve them
+  // before minting ids for modelled features to avoid a collision.
+  for (const UnknownRelationship& relationship : sheet.unknown_relationships()) {
+    if (!relationship.id.empty()) {
+      used_rids.insert(relationship.id);
+    }
+  }
   auto next_unique_rid = [&]() {
     std::string rid;
     do {
@@ -806,7 +939,17 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     const std::string comments_target = "../comments" + std::to_string(comments_plan.numeric_id) + ".xml";
     const std::string vml_target = "../drawings/vmlDrawing" + std::to_string(comments_plan.numeric_id) + ".vml";
     AppendRelationship(out, next_unique_rid(), kRelComments, comments_target);
-    AppendRelationship(out, next_unique_rid(), kRelVmlDrawing, vml_target);
+    res.legacy_drawing_rid = next_unique_rid();
+    AppendRelationship(out, res.legacy_drawing_rid, kRelVmlDrawing, vml_target);
+  }
+  for (const UnknownRelationship& relationship : sheet.unknown_relationships()) {
+    if (relationship.id.empty() || (!relationship.target_external && relationship.target.empty())) {
+      continue;
+    }
+    const std::string target =
+        relationship.target_external ? relationship.target : TargetRelativeToWorksheet(relationship.target);
+    AppendRelationship(out, relationship.id, relationship.type, target, relationship.target_external,
+                       /*escape_target=*/true);
   }
   out.append("</Relationships>\n");
   return res;

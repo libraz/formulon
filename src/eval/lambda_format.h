@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Renders an `eval::LambdaValue` (the runtime closure produced by
 // evaluating a `=LAMBDA(...)` form) back into Excel formula text.

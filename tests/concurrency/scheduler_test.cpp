@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Concurrency tests for the parallel SCC-layered recalc scheduler.
 //
@@ -19,6 +18,7 @@
 
 #include "eval/scheduler.h"
 
+#include <atomic>
 #include <cstdint>
 #include <random>
 #include <string>
@@ -30,11 +30,19 @@
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
+#include "utils/thread_launch.h"
 #include "value.h"
 #include "workbook.h"
 
 namespace formulon::eval {
 namespace {
+
+/// Clears any injected thread-launch failure when the test leaves scope.
+/// Without this an assertion that aborts a degradation test mid-way would
+/// leave every later test unable to start a worker.
+struct ThreadLaunchInjection {
+  ~ThreadLaunchInjection() { clear_thread_launch_failure_injection(); }
+};
 
 Value StoredValue(const Workbook& wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
   const Sheet& s = wb.sheet(sheet_index);
@@ -42,6 +50,17 @@ Value StoredValue(const Workbook& wb, std::size_t sheet_index, std::uint32_t row
     return c->cached_value;
   }
   return Value::blank();
+}
+
+struct ProgressAbortAfter {
+  std::atomic<std::uint32_t> calls{0U};
+  std::uint32_t abort_after = 0U;
+};
+
+bool AbortIterativeSolve(std::uint32_t /*iteration*/, double /*max_residual*/, std::uint32_t /*max_iterations*/,
+                         void* user_data) {
+  auto* progress = static_cast<ProgressAbortAfter*>(user_data);
+  return progress->calls.fetch_add(1U, std::memory_order_relaxed) + 1U < progress->abort_after;
 }
 
 // Builds two sibling workbooks and applies the same edits to both. Used
@@ -82,10 +101,7 @@ void RecalcBothAndExpectEqual(WorkbookPair& wp, std::uint32_t threads = 4U) {
       for (std::uint32_t col = 0; col < cells.size(); ++col) {
         Value va = cells[col].cached_value;
         Value vb = StoredValue(wp.parallel, s, row, col);
-        EXPECT_EQ(va.kind(), vb.kind()) << "kind mismatch at (" << row << ", " << col << ")";
-        if (va.is_number() && vb.is_number()) {
-          EXPECT_DOUBLE_EQ(va.as_number(), vb.as_number()) << "value mismatch at (" << row << ", " << col << ")";
-        }
+        EXPECT_EQ(va, vb) << "value mismatch at (" << row << ", " << col << ")";
       }
     }
     (void)b;
@@ -130,6 +146,33 @@ TEST(Scheduler, SingleConstantCellEightThreads) {
   cfg.num_threads = 8U;
   ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, &stats)));
   EXPECT_EQ(stats.cells_evaluated, 0U);
+}
+
+TEST(Scheduler, ParallelIterativeProgressCallbackCanAbort) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=(A1+1000)/2")));
+
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 100U;
+  options.max_change = 1e-12;
+  wb.set_iterative_options(options);
+
+  ProgressAbortAfter progress;
+  progress.abort_after = 3U;
+  wb.recalc_engine().set_iterative_progress(&AbortIterativeSolve, &progress);
+
+  SchedulerConfig config;
+  config.num_threads = 4U;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), config, nullptr)));
+  EXPECT_EQ(progress.calls.load(std::memory_order_relaxed), 3U);
+
+  // Aborting is a "stop here", not a failure: the cell keeps whatever the
+  // last completed pass committed, exactly as iteration-limit exhaustion
+  // does. Three halvings toward the fixed point 1000 give 500, 750, 875.
+  const Value value = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(value.is_number()) << "an aborted solve must retain the last approximation";
+  EXPECT_DOUBLE_EQ(value.as_number(), 875.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +312,78 @@ TEST(Scheduler, DiamondParallelLayer) {
   EXPECT_DOUBLE_EQ(d1.as_number(), 35.0);
 
   RecalcBothAndExpectEqual(wp, 8U);
+}
+
+// ---------------------------------------------------------------------------
+// Degradation when the OS refuses worker threads
+// ---------------------------------------------------------------------------
+
+TEST(Scheduler, NoWorkerThreadsFallsBackToSerialEvaluation) {
+  // A host at its thread limit must still complete the recalc. Every
+  // launch is refused here, so the pool starts empty and each layer takes
+  // the calling-thread path; the numbers have to match what the fully
+  // parallel diamond produces.
+  ThreadLaunchInjection injection;
+  WorkbookPair wp;
+  wp.set_value(0, 0, 0, Value::number(10.0));
+  wp.set_formula(0, 0, 1, "=A1*2");
+  wp.set_formula(0, 0, 2, "=A1+5");
+  wp.set_formula(0, 0, 3, "=B1+C1");
+
+  set_thread_launch_failure_after(0U);
+  SchedulerStats stats;
+  SchedulerConfig cfg;
+  cfg.num_threads = 8U;
+  ASSERT_TRUE(static_cast<bool>(wp.parallel.recalc_parallel(default_registry(), cfg, &stats)));
+  clear_thread_launch_failure_injection();
+
+  EXPECT_EQ(stats.parallel_steps, 0U) << "no worker was started, so no layer can have been dispatched to the pool";
+  EXPECT_GE(stats.serial_fallback_steps, 1U);
+  EXPECT_EQ(stats.cells_evaluated, 3U);
+
+  Value d1 = StoredValue(wp.parallel, 0, 0, 3);
+  ASSERT_TRUE(d1.is_number());
+  EXPECT_DOUBLE_EQ(d1.as_number(), 35.0);
+}
+
+TEST(Scheduler, PartialWorkerLaunchStillDispatchesWideLayers) {
+  // Two workers out of the eight requested: the pass keeps using the pool
+  // for layers wide enough to benefit, just with less of it.
+  ThreadLaunchInjection injection;
+  WorkbookPair wp;
+  wp.set_value(0, 0, 0, Value::number(10.0));
+  wp.set_formula(0, 0, 1, "=A1*2");
+  wp.set_formula(0, 0, 2, "=A1+5");
+  wp.set_formula(0, 0, 3, "=B1+C1");
+
+  set_thread_launch_failure_after(2U);
+  SchedulerStats stats;
+  SchedulerConfig cfg;
+  cfg.num_threads = 8U;
+  ASSERT_TRUE(static_cast<bool>(wp.parallel.recalc_parallel(default_registry(), cfg, &stats)));
+  clear_thread_launch_failure_injection();
+
+  EXPECT_GE(stats.parallel_steps, 1U) << "the B/C layer should still reach the two workers that did start";
+  EXPECT_EQ(stats.cells_evaluated, 3U);
+
+  Value d1 = StoredValue(wp.parallel, 0, 0, 3);
+  ASSERT_TRUE(d1.is_number());
+  EXPECT_DOUBLE_EQ(d1.as_number(), 35.0);
+
+  // And the degraded pass agrees with a plain serial recalc cell for cell.
+  RecalcBothAndExpectEqual(wp, 8U);
+}
+
+TEST(Scheduler, MixedValueKindsMatchSerialRecalc) {
+  WorkbookPair wp;
+  wp.set_value(0, 0, 0, Value::text("hello"));
+  wp.set_value(0, 0, 1, Value::boolean(true));
+  wp.set_value(0, 0, 2, Value::error(ErrorCode::Name));
+  wp.set_formula(0, 1, 0, "=A1&\" world\"");
+  wp.set_formula(0, 1, 1, "=NOT(B1)");
+  wp.set_formula(0, 1, 2, "=C1");
+
+  RecalcBothAndExpectEqual(wp, 4U);
 }
 
 TEST(Scheduler, CycleRecoveryViaIterativeSolver) {

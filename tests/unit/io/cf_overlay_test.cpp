@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the x14 conditional-formatting overlay reconciliation
 // (`io/cf_overlay.h`). Each test feeds a raw `<extLst>` capture plus a

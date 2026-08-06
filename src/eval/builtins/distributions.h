@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers Excel's extended probability-distribution catalog: the beta,
 // gamma, Weibull, lognormal, and hypergeometric families. The normal,

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Integration test: parts declared only through `<Default Extension>` in
 // `[Content_Types].xml` (vbaProject.bin, images, drawings, VML, and

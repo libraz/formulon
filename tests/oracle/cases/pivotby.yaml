@@ -65,12 +65,12 @@ cases:
 
   # =========================================================================
   # |row_total_depth| / |col_total_depth| == 2 requests per-region subtotal
-  # rows / columns for a multi-column grouping. Formulon does not yet
-  # implement nested subtotals and falls back to the grand-total-only
-  # layout; this case is skipped via tests/divergence.yaml until the layout
-  # is built. Needs macOS golden regeneration once implemented.
+  # rows / columns for a multi-column grouping. The row axis is implemented:
+  # each subtotal row restates its outer row key and the ja-JP grand-total
+  # row moves from 合計 to 総計. Column subtotals remain unimplemented and
+  # still fall back to the grand-total-only layout.
   # =========================================================================
 
   - id: pivotby_row_subtotal_depth_two
-    description: 'PIVOTBY with row_total_depth=2 over multi-column row_fields -> per-region row subtotals (not yet implemented; falls back to grand total)'
+    description: 'PIVOTBY with row_total_depth=2 over multi-column row_fields -> per-outer-group row subtotals under a 総計 row'
     formula: '=PIVOTBY({"A","x";"A","y";"B","x"}, {"X";"Y";"X"}, {10;20;30}, SUM, 0, 2)'

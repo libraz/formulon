@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Pivot-cache rels target resolution. The cache definition part
 // (`xl/pivotCache/pivotCacheDefinition<N>.xml`) carries its own rels

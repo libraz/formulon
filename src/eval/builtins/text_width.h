@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Registers the Excel width-conversion text built-ins: ASC (full-width to
 // half-width) and JIS / DBCS (half-width to full-width). The mapping tables

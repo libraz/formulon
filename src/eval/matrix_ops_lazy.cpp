@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Linear-algebra builtins (MMULT, MDETERM, MINVERSE). See matrix_ops_lazy.h
 // for argument and error semantics. Each function:
@@ -21,6 +20,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
@@ -81,25 +81,15 @@ ArrayValue* make_double_array(const std::vector<double>& data, std::uint32_t row
   // Same overflow-defensive guard as `coerce_matrix`: on 32-bit `size_t`
   // an attacker-controlled `rows * cols >= 2^32` would wrap and request a
   // truncated arena buffer. Bail to nullptr; callers map that to `#NUM!`.
-  auto n_or = checked_mul_size_t(rows, cols);
-  if (!n_or) {
-    return nullptr;
-  }
-  const std::size_t n = n_or.value();
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
-    return nullptr;
-  }
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = Value::number(data[i]);
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     return nullptr;
   }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
+  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  for (std::size_t i = 0; i < n; ++i) {
+    buffer[i] = Value::number(data[i]);
+  }
   return arr;
 }
 

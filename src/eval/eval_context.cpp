@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `EvalContext::resolve_ref`. The contract — in particular
 // the full mapping from `Reference` shape to returned `Value` — lives in the
@@ -26,6 +25,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
@@ -408,26 +408,31 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   // push-back loop to repeatedly re-allocate / OOM. Capping at 10M cells
   // is still well above any realistic aggregator footprint and rejects
   // `A1:XFD1048576`-shaped inputs uniformly across native and WASM.
-  constexpr std::uint64_t kMaxRangeExpansionCells = 10'000'000ULL;
   if (total > kMaxRangeExpansionCells) {
     return ErrorCode::Calc;
   }
   out.reserve(static_cast<std::size_t>(total));
-  for (std::uint32_t r = r_min; r <= r_max; ++r) {
-    for (std::uint32_t c = c_min; c <= c_max; ++c) {
-      parser::Reference cell_ref{};
-      // Propagate the effective sheet qualifier so `resolve_ref` routes
-      // through the same `resolve_target_sheet` logic — this keeps the
-      // `(sheet, row, col)` cycle key for the correct target sheet even
-      // for ranges where only LHS was qualified in the source.
-      cell_ref.sheet = effective_sheet_name;
-      cell_ref.row = r;
-      cell_ref.col = c;
-      // Per-cell error Values (e.g. #DIV/0! from a formula cell, #REF!
-      // from a cycle caught by EvalState) are pushed through unchanged so
-      // the dispatcher can honour `propagate_errors`.
-      out.push_back(resolve_ref(cell_ref, arena, registry));
-    }
+  // Bulk read: one lock acquisition for the whole rectangle instead of two
+  // per cell. The sheet was already resolved above, and every coordinate is
+  // in bounds, so this reproduces what a per-cell `resolve_ref` would return
+  // for literal, phantom and absent cells. Formula cells come back as their
+  // cached value and are re-resolved below.
+  std::vector<std::size_t> formula_indices;
+  target_sheet->read_range(r_min, r_max, c_min, c_max, out, formula_indices);
+  const std::uint32_t width = c_max - c_min + 1U;
+  for (const std::size_t index : formula_indices) {
+    parser::Reference cell_ref{};
+    // Propagate the effective sheet qualifier so `resolve_ref` routes
+    // through the same `resolve_target_sheet` logic — this keeps the
+    // `(sheet, row, col)` cycle key for the correct target sheet even
+    // for ranges where only LHS was qualified in the source.
+    cell_ref.sheet = effective_sheet_name;
+    cell_ref.row = r_min + static_cast<std::uint32_t>(index / width);
+    cell_ref.col = c_min + static_cast<std::uint32_t>(index % width);
+    // Per-cell error Values (e.g. #DIV/0! from a formula cell, #REF!
+    // from a cycle caught by EvalState) are pushed through unchanged so
+    // the dispatcher can honour `propagate_errors`.
+    out[index] = resolve_ref(cell_ref, arena, registry);
   }
   set_shape(out_rows, out_cols, r_max - r_min + 1U, c_max - c_min + 1U);
   return out;

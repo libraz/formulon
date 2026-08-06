@@ -2,11 +2,11 @@
   "suite": "dynamic_array",
   "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
   "environment": {
-    "excel_version": "16.108.2",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-01T22:59:17Z"
+    "generated_at": "2026-08-05T02:43:45Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -18,8 +18,16 @@
       "formula": "=SEQUENCE(3)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -27,8 +35,19 @@
       "formula": "=SEQUENCE(2,3)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0,
+          5.0,
+          6.0
+        ],
+        "shape": [
+          2,
+          3
+        ]
       }
     },
     {
@@ -36,8 +55,17 @@
       "formula": "=SEQUENCE(2,2,10,5)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 10.0
+        "kind": "array",
+        "value": [
+          10.0,
+          15.0,
+          20.0,
+          25.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     },
     {
@@ -45,8 +73,16 @@
       "formula": "=SEQUENCE(3,1,10,-2)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 10.0
+        "kind": "array",
+        "value": [
+          10.0,
+          8.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -54,8 +90,16 @@
       "formula": "=SEQUENCE(3,1,0.5,0.25)",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 0.5
+        "kind": "array",
+        "value": [
+          0.5,
+          0.75,
+          1.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
       }
     },
     {
@@ -64,7 +108,7 @@
       "setup": {},
       "expect": {
         "kind": "error",
-        "code": "#VALUE!"
+        "code": "#CALC!"
       }
     },
     {
@@ -90,8 +134,19 @@
       "formula": "=TRANSPOSE({1,2,3;4,5,6})",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          4.0,
+          2.0,
+          5.0,
+          3.0,
+          6.0
+        ],
+        "shape": [
+          3,
+          2
+        ]
       }
     },
     {
@@ -116,8 +171,17 @@
         }
       },
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          3.0,
+          2.0,
+          4.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     },
     {
@@ -134,8 +198,17 @@
       "formula": "=TRANSPOSE({1,2,3,4})",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
       }
     },
     {
@@ -143,8 +216,17 @@
       "formula": "=TRANSPOSE({1;2;3;4})",
       "setup": {},
       "expect": {
-        "kind": "number",
-        "value": 1.0
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "shape": [
+          1,
+          4
+        ]
       }
     },
     {
@@ -152,8 +234,17 @@
       "formula": "=TRANSPOSE({\"a\",\"b\";\"c\",\"d\"})",
       "setup": {},
       "expect": {
-        "kind": "text",
-        "value": "a"
+        "kind": "array",
+        "value": [
+          "a",
+          "c",
+          "b",
+          "d"
+        ],
+        "shape": [
+          2,
+          2
+        ]
       }
     },
     {
@@ -196,10 +287,7 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 6.0
-      }
+      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
     },
     {
       "id": "anchorarray_resolves_sequence_rows",
@@ -210,10 +298,7 @@
           "formula": "=SEQUENCE(3)"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 3.0
-      }
+      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
     },
     {
       "id": "anchorarray_offset_resolved_anchor",
@@ -224,10 +309,7 @@
           "formula": "=SEQUENCE(2,2)"
         }
       },
-      "expect": {
-        "kind": "number",
-        "value": 10.0
-      }
+      "skipped": "Mac xlwings reads blank for explicit _xlfn.ANCHORARRAY formula2 probes even when the setup spill is valid. Formulon's resolved spill behavior is covered by spill_ref_eval_test.cpp."
     }
   ]
 }

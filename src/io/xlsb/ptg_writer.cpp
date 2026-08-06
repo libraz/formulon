@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the AST -> Ptg encoder. See `io/xlsb/ptg_writer.h`.
 //
@@ -52,11 +51,18 @@ namespace {
 constexpr std::uint16_t kColRelBit = 0x4000;
 constexpr std::uint16_t kRowRelBit = 0x8000;
 
-// Reference-class base bytes for the class-marked operand Ptgs we emit.
-// Cell / range references are emitted as value-class (`| 0x40`) so they
-// dereference to a value in expression context, which is what Excel does
-// for the common scalar formulas in scope here.
+// Formula arguments which denote cells and ranges use the reference-class
+// base bytes. The result of a function call, in contrast, is a value-class
+// Ptg (its low 5-bit type plus class bits `0x40`). Using `| 0x40` on the
+// already class-marked base byte had emitted array-class
+// references (for example 0x65 instead of PtgArea 0x25), while leaving
+// function results in the reference class. Excel repairs those streams.
 constexpr std::uint8_t kPtgValueClass = 0x40;
+constexpr std::uint8_t kPtgTypeMask = 0x1FU;
+
+constexpr std::uint8_t ValueClassPtg(std::uint8_t reference_class_ptg) {
+  return static_cast<std::uint8_t>((reference_class_ptg & kPtgTypeMask) | kPtgValueClass);
+}
 
 void emit_u8(std::vector<std::uint8_t>& dst, std::uint8_t v) {
   dst.push_back(v);
@@ -347,7 +353,7 @@ class Encoder {
     if (cparams > 0xFF) {
       return unsupported_node("LetBinding(too many bindings)");
     }
-    emit_u8(out_, 0x22);  // PtgFuncVar
+    emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
     emit_u8(out_, static_cast<std::uint8_t>(cparams));
     emit_u16(out_, 255);
     return Expected<void, Error>::Ok();
@@ -355,17 +361,41 @@ class Encoder {
 
   Expected<void, Error> emit_ref(const parser::Reference& ref) {
     if (ref.is_full_col || ref.is_full_row) {
-      // Whole-column / whole-row refs need the Area form with sentinel
-      // bounds; out of scope for the common-token codec.
-      return unsupported_node("Ref(full-col/row)");
+      // XLSB has no standalone whole-column / whole-row token. Encode the
+      // logical extent as an Area using Excel's grid sentinels; this is
+      // semantically identical to A:A / 1:1 and, crucially, keeps one
+      // unsupported formula from aborting the entire workbook save.
+      parser::Reference first = ref;
+      parser::Reference last = ref;
+      first.is_full_col = false;
+      first.is_full_row = false;
+      last.is_full_col = false;
+      last.is_full_row = false;
+      if (ref.is_full_col) {
+        first.row = 0;
+        last.row = 1048575U;
+      } else {
+        first.col = 0;
+        last.col = 16383U;
+      }
+      if (ref.sheet.empty()) {
+        emit_u8(out_, 0x25);  // PtgArea (reference-class argument)
+        emit_area(out_, first, last);
+        return Expected<void, Error>::Ok();
+      }
+      ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(ref.sheet));
+      emit_u8(out_, 0x3B);  // PtgArea3d (reference-class argument)
+      emit_u16(out_, ixti);
+      emit_area(out_, first, last);
+      return Expected<void, Error>::Ok();
     }
     if (ref.sheet.empty()) {
-      emit_u8(out_, 0x24 | kPtgValueClass);  // PtgRef
+      emit_u8(out_, 0x24);  // PtgRef (reference-class argument)
       emit_loc(out_, ref);
       return Expected<void, Error>::Ok();
     }
     ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_single_sheet_ixti(ref.sheet));
-    emit_u8(out_, 0x3A | kPtgValueClass);  // PtgRef3d
+    emit_u8(out_, 0x3A);  // PtgRef3d (reference-class argument)
     emit_u16(out_, ixti);
     emit_loc(out_, ref);
     return Expected<void, Error>::Ok();
@@ -514,14 +544,14 @@ class Encoder {
       const parser::Reference& b = rhs.as_ref();
       if (!a.is_full_col && !a.is_full_row && !b.is_full_col && !b.is_full_row && b.sheet.empty()) {
         if (a.sheet.empty()) {
-          emit_u8(out_, 0x25 | kPtgValueClass);  // PtgArea
+          emit_u8(out_, 0x25);  // PtgArea (reference-class argument)
           emit_area(out_, a, b);
           return Expected<void, Error>::Ok();
         }
         const int itab = resolve_ixti(sheet_names_, a.sheet);
         const int ixti = itab >= 0 ? try_resolve_range_ixti(itab, itab) : -1;
         if (ixti >= 0) {
-          emit_u8(out_, 0x3B | kPtgValueClass);  // PtgArea3d
+          emit_u8(out_, 0x3B);  // PtgArea3d (reference-class argument)
           emit_u16(out_, static_cast<std::uint16_t>(ixti));
           emit_area(out_, a, b);
           return Expected<void, Error>::Ok();
@@ -571,7 +601,7 @@ class Encoder {
       if (arity > 0xFF) {
         return unsupported_node("Call(arity>255)");
       }
-      emit_u8(out_, 0x22);  // PtgFuncVar
+      emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
       emit_u8(out_, static_cast<std::uint8_t>(arity));
       emit_u16(out_, entry->id);
     } else {
@@ -579,7 +609,7 @@ class Encoder {
         return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: fixed-arity function arity mismatch",
                           std::string("context=xlsb_ptg_writer fn=") + std::string(name));
       }
-      emit_u8(out_, 0x21);  // PtgFunc
+      emit_u8(out_, ValueClassPtg(0x21));  // PtgFunc result
       emit_u16(out_, entry->id);
     }
     return Expected<void, Error>::Ok();
@@ -610,7 +640,7 @@ class Encoder {
     if (cparams > 0xFF) {
       return unsupported_node("Call(arity>254, future function)");
     }
-    emit_u8(out_, 0x22);  // PtgFuncVar
+    emit_u8(out_, ValueClassPtg(0x22));  // PtgFuncVar result
     emit_u8(out_, static_cast<std::uint8_t>(cparams));
     emit_u16(out_, 255);
     return Expected<void, Error>::Ok();

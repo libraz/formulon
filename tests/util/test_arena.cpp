@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the test-side Arena accessors declared in
 // `test_arena.h`. The thread-local storage lives here rather than the

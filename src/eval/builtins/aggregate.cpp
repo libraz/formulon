@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Formulon's aggregate built-in functions:
 // SUM, SUMSQ, MIN, MAX, AVERAGE, PRODUCT, COUNT, COUNTA, COUNTBLANK, CONCAT,

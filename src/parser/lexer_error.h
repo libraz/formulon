@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Minimal lexer-level error record. The Pratt parser will merge a vector
 // of `LexerError` into its larger `ParseError` list; the tokenizer only

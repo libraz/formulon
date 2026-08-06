@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Extended probability-distribution catalog:
 //   BETA.DIST / BETA.INV
@@ -293,22 +292,27 @@ Value BetaInv(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (p <= 0.0 || p >= 1.0 || alpha <= 0.0 || beta_shape <= 0.0 || a >= b) {
     return Value::error(ErrorCode::Num);
   }
-  // Invert on the [0, 1] support. The bracket-then-Newton driver stays
-  // inside (0, 1) strictly because the Beta PDF is zero at the endpoints
-  // for alpha/beta >= 1 and the safeguarded step never escapes the
-  // bracket; for alpha < 1 or beta < 1 the PDF diverges at one endpoint
-  // but bisection alone still converges.
+  // Invert on the full [0, 1] support. Starting at 1e-12 silently clamps
+  // genuine extreme-tail roots (for example BETA.INV(5.77e-151, 1, 1)).
+  // A fixed, deep bisection converges uniformly for zero-tail and
+  // one-tail shapes, including cases where the PDF is singular or too
+  // small for a useful Newton update.
   const auto cdf = [alpha, beta_shape](double y) { return stats::regularized_incomplete_beta(alpha, beta_shape, y); };
-  const auto pdf = [alpha, beta_shape](double y) {
-    if (y <= 0.0 || y >= 1.0) {
-      return 0.0;
+  double lo = 0.0;
+  double hi = 1.0;
+  for (int i = 0; i < 600; ++i) {
+    const double mid = 0.5 * (lo + hi);
+    const double value = cdf(mid);
+    if (!std::isfinite(value)) {
+      return Value::error(ErrorCode::Num);
     }
-    return BetaPdfStd(y, alpha, beta_shape);
-  };
-  const double y = BracketThenNewton(cdf, pdf, 1e-12, 1.0 - 1e-12, p);
-  if (std::isnan(y)) {
-    return Value::error(ErrorCode::Num);
+    if (value < p) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
   }
+  const double y = 0.5 * (lo + hi);
   return finalize(a + y * (b - a));
 }
 
@@ -712,7 +716,7 @@ Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
     for (std::uint64_t i = start; i <= stop; ++i) {
       acc += HypgeomPmf(static_cast<double>(i), n, big_k, big_n);
     }
-    return finalize(acc);
+    return finalize(std::clamp(acc, 0.0, 1.0));
   }
   // PMF branch: 0 outside the support, otherwise the log-combination form.
   if (k < k_min || k > k_max) {

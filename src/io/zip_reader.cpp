@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `ZipReader` implementation. Wraps the miniz `mz_zip_reader_*` API in a
 // PIMPL so the header is miniz-free. All methods are non-throwing and
@@ -22,6 +21,14 @@
 namespace formulon {
 namespace io {
 
+namespace {
+
+FormulonErrorCode ErrorCodeForMiniz(mz_zip_error error) {
+  return error == MZ_ZIP_UNSUPPORTED_ENCRYPTION ? FormulonErrorCode::kIoZipEncrypted : FormulonErrorCode::kIoZipCorrupt;
+}
+
+}  // namespace
+
 struct ZipReader::Impl {
   mz_zip_archive archive{};
   bool open = false;
@@ -30,12 +37,6 @@ struct ZipReader::Impl {
   // requires a caller-supplied buffer. We keep one resident on the impl
   // so `entry_name` does not allocate per call.
   mutable std::string name_buf;
-
-  // Running total of bytes returned by successful `read_entry` calls
-  // since the last `open()`. Compared against `kMaxTotalExtractedBytes`
-  // so an archive cannot drip-feed individually-legal entries until the
-  // aggregate footprint becomes hostile.
-  mutable std::size_t total_extracted_bytes = 0;
 
   Impl() { name_buf.resize(kInitialNameCapacity); }
 
@@ -87,8 +88,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes) {
     const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
     std::string ctx("context=zip_reader miniz_error=");
     ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: mz_zip_reader_init_mem failed",
-                      std::move(ctx));
+    return make_error(ErrorCodeForMiniz(err), "ZipReader::open: mz_zip_reader_init_mem failed", std::move(ctx));
   }
 
   // Reject archives whose central directory advertises an unreasonable
@@ -108,7 +108,6 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes) {
   }
 
   impl_->open = true;
-  impl_->total_extracted_bytes = 0;
   return Expected<void, Error>::Ok();
 }
 
@@ -196,7 +195,13 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     ctx.append(c_name);
     ctx.append(" miniz_error=");
     ctx.append(std::to_string(static_cast<int>(err)));
-    return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: stat failed", std::move(ctx));
+    return make_error(ErrorCodeForMiniz(err), "ZipReader::read_entry: stat failed", std::move(ctx));
+  }
+  if (stat.m_is_encrypted) {
+    std::string ctx("context=zip_reader entry=");
+    ctx.append(c_name);
+    return make_error(FormulonErrorCode::kIoZipEncrypted, "ZipReader::read_entry: encrypted entry is unsupported",
+                      std::move(ctx));
   }
   if (stat.m_uncomp_size > static_cast<mz_uint64>(kMaxExtractedBytesPerEntry)) {
     std::string ctx("context=zip_reader limit=entry entry=");
@@ -232,23 +237,7 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     }
   }
 
-  // Reject if extracting this entry would push the cumulative footprint
-  // past the per-archive ceiling. Checked against the *advertised*
-  // uncompressed size rather than miniz's eventual heap allocation so the
-  // refusal happens before any heap pressure is exerted.
   const std::size_t advertised = static_cast<std::size_t>(stat.m_uncomp_size);
-  if (advertised > kMaxTotalExtractedBytes - impl_->total_extracted_bytes) {
-    std::string ctx("context=zip_reader limit=total entry=");
-    ctx.append(c_name);
-    ctx.append(" already_extracted=");
-    ctx.append(std::to_string(static_cast<std::uint64_t>(impl_->total_extracted_bytes)));
-    ctx.append(" entry_uncompressed_size=");
-    ctx.append(std::to_string(static_cast<std::uint64_t>(advertised)));
-    ctx.append(" cap=");
-    ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxTotalExtractedBytes)));
-    return make_error(FormulonErrorCode::kIoZipBomb,
-                      "ZipReader::read_entry: cumulative extracted bytes would exceed cap", std::move(ctx));
-  }
 
   // Extract straight into the caller-owned vector. `advertised` is the
   // stat's `m_uncomp_size`, already validated against the per-entry,
@@ -266,13 +255,9 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
       ctx.append(c_name);
       ctx.append(" miniz_error=");
       ctx.append(std::to_string(static_cast<int>(err)));
-      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::read_entry: extraction failed", std::move(ctx));
+      return make_error(ErrorCodeForMiniz(err), "ZipReader::read_entry: extraction failed", std::move(ctx));
     }
   }
-  // miniz decompressed exactly `advertised` bytes into the buffer (the
-  // stat size is authoritative for a well-formed entry); account for it
-  // so the next call sees the updated cumulative footprint.
-  impl_->total_extracted_bytes += advertised;
   return bytes;
 }
 

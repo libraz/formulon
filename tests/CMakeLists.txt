@@ -25,9 +25,11 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_cached_text_test.cpp
   unit/workbook_test.cpp
   unit/utils/checked_mul_test.cpp
+  unit/utils/a1_column_test.cpp
   unit/utils/double_format_test.cpp
   unit/utils/rect_iterator_test.cpp
   unit/utils/resource_budget_test.cpp
+  unit/utils/thread_launch_test.cpp
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
   unit/io/a1_ref_test.cpp
@@ -72,6 +74,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/reader_test.cpp
   unit/io/xlsb/record_test.cpp
   unit/io/xlsb/record_writer_test.cpp
+  unit/io/xlsb/sheet_tail_test.cpp
   unit/io/xlsb/sst_writer_test.cpp
   unit/io/xlsb/writer_test.cpp
   unit/io/xlsb_fidelity_test.cpp
@@ -134,6 +137,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/getpivotdata_lazy_test.cpp
   unit/eval/builtins_count_test.cpp
   unit/eval/builtins_shape_test.cpp
+  unit/eval/array_alloc_test.cpp
   unit/eval/array_producer_test.cpp
   unit/eval/builtins_row_column_array_test.cpp
   unit/eval/sumproduct_array_test.cpp
@@ -335,6 +339,11 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(
+    NAME binding_drift_python_struct_layouts
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-struct-layouts
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
     NAME binding_drift_dts_wasm
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-wasm
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -352,6 +361,42 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME binding_drift_dts_enums
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-enums
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # Structural invariants enforced by "exactly one implementation exists":
+  # the bounds-checked array-allocation seam (what keeps a wasm32
+  # `rows * cols` from wrapping into a short buffer) and the raw-XML
+  # retention helpers (what keeps a consumed part's unmodelled content from
+  # vanishing on save). Static regex analysis over src/.
+  add_test(
+    NAME SeamIntegrityArrayAlloc
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py array-alloc
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME SeamIntegrityXmlPassthrough
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py xml-passthrough
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME DivergenceRecordIntegrity
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME OracleVariantDivergenceIntegrity
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/divergence_check.py
+            --input ${CMAKE_SOURCE_DIR}/tests/oracle/variants/win-365-ja_JP/divergence.yaml
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME OracleGeneratorDivergenceMetadata
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.oracle_gen_metadata_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME OracleGoldenCoverage
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/golden_coverage_check.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
 endif()

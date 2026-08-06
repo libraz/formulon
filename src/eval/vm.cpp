@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stack-machine VM implementation. See `vm.h` for the public contract and
 // `bytecode.h` for the IR shape.
@@ -43,6 +42,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/bytecode.h"
 #include "eval/coerce.h"
 #include "eval/compiler_emit.h"
@@ -50,6 +50,7 @@
 #include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
+#include "eval/implicit_intersection.h"
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
@@ -193,21 +194,16 @@ Expected<Value, Error> resolve_struct_ref_op(std::string_view table_name, std::s
   }
   const std::uint32_t rows = rect.row_last - rect.row_first + 1u;
   const std::uint32_t cols = rect.col_last - rect.col_first + 1u;
-  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a structured reference");
-  }
-  for (std::size_t i = 0; i < total && i < cells.value().size(); ++i) {
-    buffer[i] = cells.value()[i];
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a structured reference");
   }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
+  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  const std::vector<Value>& expanded = cells.value();
+  for (std::size_t i = 0; i < total; ++i) {
+    buffer[i] = i < expanded.size() ? expanded[i] : Value::blank();
+  }
   return Value::array(arr);
 }
 
@@ -236,21 +232,15 @@ Expected<Value, Error> resolve_spill_ref_op(const parser::Reference& r, Arena& a
   if (region == nullptr) {
     return Value::error(ErrorCode::Ref);
   }
-  const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
-    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a spilled reference");
-  }
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = region->cells[i];
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(region->rows, region->cols, arena, buffer, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted resolving a spilled reference");
   }
-  arr->rows = region->rows;
-  arr->cols = region->cols;
-  arr->cells = buffer;
+  const std::size_t n = static_cast<std::size_t>(region->rows) * static_cast<std::size_t>(region->cols);
+  for (std::size_t i = 0; i < n; ++i) {
+    buffer[i] = region->cells[i];
+  }
   return Value::array(arr);
 }
 
@@ -272,21 +262,16 @@ Expected<Value, Error> resolve_range_op(const parser::Reference& lhs, const pars
   const std::uint32_t c2 = lhs.col < rhs.col ? rhs.col : lhs.col;
   const std::uint32_t rows = r2 - r1 + 1U;
   const std::uint32_t cols = c2 - c1 + 1U;
-  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  Value* buffer = arena.create_array<Value>(total);
-  if (buffer == nullptr) {
-    return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted expanding a range");
-  }
-  for (std::size_t i = 0; i < total && i < cells.value().size(); ++i) {
-    buffer[i] = cells.value()[i];
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted expanding a range");
   }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
+  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  const std::vector<Value>& expanded = cells.value();
+  for (std::size_t i = 0; i < total; ++i) {
+    buffer[i] = i < expanded.size() ? expanded[i] : Value::blank();
+  }
   return Value::array(arr);
 }
 
@@ -861,25 +846,19 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
       case OpCode::MakeArray: {
         const std::uint32_t rows = ins.a;
         const std::uint32_t cols = ins.b;
-        const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-        RETURN_IF_ERROR(require_stack_depth(s, n));
-        Value* buf = arena.create_array<Value>(n);
-        if (buf == nullptr) {
+        Value* buf = nullptr;
+        ArrayValue* arr = allocate_array_value(rows, cols, arena, buf, kMaxDerivedArrayCells);
+        if (arr == nullptr) {
           return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted in MakeArray");
         }
+        const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+        RETURN_IF_ERROR(require_stack_depth(s, n));
         // Row-major: oldest stack slot is (0,0); top of stack is the last
         // cell.
         for (std::size_t i = 0; i < n; ++i) {
           buf[i] = s.stack[s.stack.size() - n + i];
         }
         pop_values(s, n);
-        ArrayValue* arr = arena.create<ArrayValue>();
-        if (arr == nullptr) {
-          return make_vm_error(FormulonErrorCode::kOutOfMemory, "arena exhausted in MakeArray");
-        }
-        arr->rows = rows;
-        arr->cols = cols;
-        arr->cells = buf;
         RETURN_IF_ERROR(push_value(s, Value::array(arr)));
         ++pc;
         break;
@@ -1027,7 +1006,10 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           ++pc;
           break;
         }
-        // Non-range operand: identity pass-through (leave the operand as-is).
+        // Calls and other non-static operands retain only their value in the
+        // bytecode stream. Collapse an Array result to its top-left element
+        // so VM behavior matches the tree walker and `_xlfn.SINGLE`.
+        s.stack.back() = implicit_intersect_value(s.stack.back());
         ++pc;
         break;
       }

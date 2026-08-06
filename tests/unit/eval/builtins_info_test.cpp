@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the info / type-query built-in functions:
 // ISNUMBER, ISTEXT, ISBLANK, ISLOGICAL, ISERROR, ISERR, ISNA, N, T.
@@ -581,6 +580,12 @@ TEST(BuiltinsIsEven, ErrorPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
+TEST(BuiltinsIsEven, LargeFiniteIntegerDoesNotNarrowToInt64) {
+  const Value v = EvalSource("=ISEVEN(1E20)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_TRUE(v.as_boolean());
+}
+
 // ---------------------------------------------------------------------------
 // ISODD (analogue of ISEVEN)
 // ---------------------------------------------------------------------------
@@ -615,6 +620,12 @@ TEST(BuiltinsIsOdd, ErrorPropagates) {
   const Value v = EvalSource("=ISODD(#NAME?)");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+TEST(BuiltinsIsOdd, LargeFiniteIntegerDoesNotNarrowToInt64) {
+  const Value v = EvalSource("=ISODD(1E20)");
+  ASSERT_TRUE(v.is_boolean());
+  EXPECT_FALSE(v.as_boolean());
 }
 
 // ---------------------------------------------------------------------------

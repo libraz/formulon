@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Stage ``formulon_capi.wasm`` into the Python package's _wasm/ dir.
 
 Run via ``make python-package``. Stdlib only -- no third-party deps so

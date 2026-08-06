@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-sheet `<sheetData>` reader. Walks the rows / cells of a parsed
 // `sheet*.xml` document, decodes each `<c>` via `cell_parser`, and
@@ -54,11 +53,11 @@ struct SheetReadContext {
   /// Bundle 2.3 will iterate this list and replace the placeholder
   /// `Text("")` cells with the resolved string from the SST.
   std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>> pending_sst_cells;
-  /// Dynamic-array anchors (`<f t="array" ref=...>` spanning >1 cell)
-  /// discovered while scanning cells. After the scan the reader registers
-  /// each as a spill region so the cached spill targets do not read back
-  /// as independent literals that collide (`#SPILL!`) with the anchor's
-  /// re-spill on recalc.
+  /// Dynamic-array anchors (`<f t="array" ref=...>`) discovered while
+  /// scanning cells. After the scan the reader registers each as a spill
+  /// region so the cached spill targets do not read back as independent
+  /// literals that collide (`#SPILL!`) with the anchor's re-spill on recalc.
+  /// A one-cell region preserves dynamic-array metadata.
   std::vector<ArrayAnchor> array_anchors;
 };
 

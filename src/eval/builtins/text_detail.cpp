@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared definition of `read_int_arg` for the text builtin family. Hoisted
 // out of `text.cpp` into its own TU because the DBCS family (`text_dbcs.cpp`)

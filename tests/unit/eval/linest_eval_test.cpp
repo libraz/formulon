@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the LINEST lazy builtin (`linest_lazy.{h,cpp}`). Coverage:
 // single-variable / multivariable regression with and without an
@@ -246,6 +245,53 @@ TEST(BuiltinsLinest, StatsBlockMatchesAnalyticReference) {
   // Row 5: [ss_reg, ss_resid]
   EXPECT_NEAR(c[8].as_number(), 20.0, 1e-9);
   EXPECT_NEAR(c[9].as_number(), 1.0, 1e-9);
+}
+
+TEST(BuiltinsLinest, PerfectFitReportsAHugeFiniteFStatistic) {
+  // y == x fits exactly, so the residual sum is 0 and F is infinite in the
+  // limit. Excel's own rounding leaves a residual a few ULPs above zero and
+  // reports a huge finite F; Formulon floors the residual at the same
+  // resolution so the slot holds a number rather than #N/A. Only the
+  // magnitude class is asserted — the exact value is rounding noise.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LINEST({1;2;3;4;5}, {1;2;3;4;5}, TRUE, TRUE)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  const Value* c = v.as_array_cells();
+  // Row 3 col 1: r^2 is exactly 1 for an exact fit.
+  ASSERT_TRUE(c[4].is_number());
+  EXPECT_NEAR(c[4].as_number(), 1.0, 1e-12);
+  // Row 4 col 1: F.
+  ASSERT_TRUE(c[6].is_number()) << "F slot should not be an error on a perfect fit";
+  EXPECT_TRUE(std::isfinite(c[6].as_number()));
+  EXPECT_GT(c[6].as_number(), 1e20);
+  // Row 5 col 2: the reported residual sum stays the true 0, untouched by
+  // the floor used for F.
+  ASSERT_TRUE(c[9].is_number());
+  EXPECT_DOUBLE_EQ(c[9].as_number(), 0.0);
+}
+
+TEST(BuiltinsLinest, FlatResponseLeavesTheFStatisticUndefined) {
+  // A constant y has no regression sum of squares at all, so F is genuinely
+  // undefined rather than merely unstable; the residual floor must not
+  // manufacture a value here.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LINEST({7;7;7;7;7}, {1;2;3;4;5}, TRUE, TRUE)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  const Value* c = v.as_array_cells();
+  ASSERT_TRUE(c[6].is_error()) << "F slot should stay #N/A for a flat response";
+  EXPECT_EQ(c[6].as_error(), ErrorCode::NA);
 }
 
 TEST(BuiltinsLinest, StatsBlockTrailingSlotsAreNAForMultiVariable) {

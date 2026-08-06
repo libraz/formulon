@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Private helper for the tree-walk evaluator: a tiny RAII counter guard
 // that bounds runaway recursion through `EvalContext::resolve_ref` and

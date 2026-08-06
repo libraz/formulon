@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Reader for `xl/comments<N>.xml`. Each comments part carries a
 // per-workbook author table plus a flat list of `<comment>` elements

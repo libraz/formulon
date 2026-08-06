@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Date / time rendering for the Excel TEXT() engine. Converts the serial
 // via the shared `date_time` helpers and substitutes each `y/m/d/h/s`
@@ -61,6 +60,15 @@ const char* weekday_long(int sun0) noexcept {
     return "";
   }
   return kTable[sun0];
+}
+
+void append_elapsed_int_dbnum(std::string& out, long long value, std::uint8_t width, DbNumMode mode) {
+  const std::string digits = std::to_string(value);
+  const std::size_t min_width = static_cast<std::size_t>(width);
+  for (std::size_t i = digits.size(); i < min_width; ++i) {
+    append_digit_dbnum(out, mode, '0');
+  }
+  append_chars_dbnum(out, mode, digits);
 }
 
 // ja-JP weekday tokens (`aaa` / `aaaa`). Index 0 = Sunday to match the
@@ -264,17 +272,17 @@ void render_date(const Section& section, std::string_view fmt, double serial, st
       case Tok::DateElapsedH: {
         // Total hours since serial 0 (integer floor).
         const long long total_hours = static_cast<long long>(std::floor(serial * 24.0));
-        append_int_dbnum(out, total_hours, dbnum);
+        append_elapsed_int_dbnum(out, total_hours, tk.width, dbnum);
         break;
       }
       case Tok::DateElapsedM: {
         const long long total_minutes = static_cast<long long>(std::floor(serial * 1440.0));
-        append_int_dbnum(out, total_minutes, dbnum);
+        append_elapsed_int_dbnum(out, total_minutes, tk.width, dbnum);
         break;
       }
       case Tok::DateElapsedS: {
         const long long total_sec = static_cast<long long>(std::floor(serial * 86400.0));
-        append_int_dbnum(out, total_sec, dbnum);
+        append_elapsed_int_dbnum(out, total_sec, tk.width, dbnum);
         break;
       }
       case Tok::AmPm:

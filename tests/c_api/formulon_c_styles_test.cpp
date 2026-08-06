@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI tests for the styles surface
 // (`fm_cell_get_xf_index`, `fm_cell_set_xf_index`,
@@ -308,6 +307,27 @@ TEST(FormulonCApiStyles, AddFontGrowsTable) {
   EXPECT_DOUBLE_EQ(out.size, 12.0);
   EXPECT_EQ(out.color_argb, 0xFF112233U);
   EXPECT_EQ(out.bold, 1);
+}
+
+TEST(FormulonCApiStyles, AddFontExPreservesVerticalAlignmentWithoutChangingLegacyRecord) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_font_record_ex superscript{};
+  superscript.base = MakeArial();
+  superscript.vert_align = 1;
+  uint32_t idx = 0;
+  ASSERT_EQ(fm_styles_add_font_ex(wb.handle, superscript, &idx), 0);
+
+  fm_font_record_ex loaded{};
+  ASSERT_EQ(fm_styles_get_font_ex(wb.handle, idx, &loaded), 0);
+  EXPECT_STREQ(loaded.base.name, "Arial");
+  EXPECT_EQ(loaded.vert_align, 1U);
+
+  fm_font_record legacy{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &legacy), 0);
+  EXPECT_STREQ(legacy.name, "Arial");
+  EXPECT_EQ(legacy.underline, 0U);
 }
 
 TEST(FormulonCApiStyles, AddFillDedupReturnsExistingIndex) {
@@ -713,4 +733,36 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   ASSERT_EQ(fm_styles_get_num_fmt_string(wb2.handle, reloaded.num_fmt_id, &reloaded_fmt), 0);
   ASSERT_NE(reloaded_fmt, nullptr);
   EXPECT_STREQ(reloaded_fmt, "0.00%");
+}
+
+TEST(FormulonCApiStyles, AddBatchDeduplicatesAllStyleTables) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  const fm_font_record fonts[] = {MakeArial(), MakeArial()};
+  const fm_fill_record fills[] = {MakeRedFill(), MakeRedFill()};
+  fm_border_record border{};
+  border.left.style = 1;
+  border.left.color_argb = 0xFF000000U;
+  const fm_border_record borders[] = {border, border};
+  uint32_t font_indices[2]{};
+  uint32_t fill_indices[2]{};
+  uint32_t border_indices[2]{};
+  const char* const num_fmt_codes[] = {"0.000%", "0.000%"};
+  uint16_t num_fmt_ids[2]{};
+  fm_cell_xf xf{};
+  xf.font_index = 1U;
+  xf.fill_index = 1U;
+  xf.border_index = 1U;
+  const fm_cell_xf xfs[] = {xf, xf};
+  uint32_t xf_indices[2]{};
+  const fm_styles_batch batch{fonts, 2U, font_indices, fills,         2U, fill_indices, borders, 2U, border_indices,
+                              xfs,   2U, xf_indices,   num_fmt_codes, 2U, num_fmt_ids};
+
+  ASSERT_EQ(fm_styles_add_batch(wb.handle, &batch), 0);
+  EXPECT_EQ(font_indices[0], font_indices[1]);
+  EXPECT_EQ(fill_indices[0], fill_indices[1]);
+  EXPECT_EQ(border_indices[0], border_indices[1]);
+  EXPECT_EQ(xf_indices[0], xf_indices[1]);
+  EXPECT_EQ(num_fmt_ids[0], num_fmt_ids[1]);
 }

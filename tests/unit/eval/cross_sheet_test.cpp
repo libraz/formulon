@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit + integration tests for cross-sheet reference evaluation. Exercises
 // `Workbook::sheet_by_name`, the `Workbook`-aware `EvalContext` constructor,
@@ -380,6 +379,33 @@ TEST(EvalContextCrossSheetRange, ThreeDRangeTailAggregatesAcrossSheets) {
   const Value cnt_v = evaluate(*cnt_root, arena, default_registry(), ctx);
   ASSERT_TRUE(cnt_v.is_number());
   EXPECT_EQ(cnt_v.as_number(), 4.0);
+}
+
+TEST(EvalContextCrossSheetRange, ThreeDFullColumnAndRowAggregateAcrossSheets) {
+  Workbook wb = MakeTwoSheetWorkbook();
+  wb.add_sheet("Sheet3");
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(2.0));
+  wb.sheet(1).set_cell_value(2, 0, Value::number(3.0));
+  wb.sheet(2).set_cell_value(0, 1, Value::number(4.0));
+
+  EvalState state;
+  Arena arena;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+
+  parser::Parser col_parser("=SUM(Sheet1:Sheet3!A:A)", arena);
+  parser::AstNode* col_root = col_parser.parse();
+  ASSERT_NE(col_root, nullptr);
+  const Value col_sum = evaluate(*col_root, arena, default_registry(), ctx);
+  ASSERT_TRUE(col_sum.is_number());
+  EXPECT_EQ(col_sum.as_number(), 4.0);
+
+  parser::Parser row_parser("=SUM(Sheet1:Sheet3!1:1)", arena);
+  parser::AstNode* row_root = row_parser.parse();
+  ASSERT_NE(row_root, nullptr);
+  const Value row_sum = evaluate(*row_root, arena, default_registry(), ctx);
+  ASSERT_TRUE(row_sum.is_number());
+  EXPECT_EQ(row_sum.as_number(), 5.0);
 }
 
 TEST(EvalContextCrossSheetRange, ThreeDRangeTailSpanIncludesIntermediateSheets) {

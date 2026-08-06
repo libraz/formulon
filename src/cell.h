@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Cell-level value types used by the worksheet storage layer. A worksheet
 // owns a row-sparse, column-dense cell store keyed by 0-based row index

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Self-tests for the `tests/util/` infrastructure library. Exercises
 // each helper at least once so that breakage in the shared utility code

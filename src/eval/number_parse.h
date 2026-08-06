@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Locale-aware numeric string parsing shared by the VALUE / NUMBERVALUE
 // builtins and by the implicit text->number coercion used by arithmetic

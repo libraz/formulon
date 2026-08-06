@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // OOXML (.xlsx) package reader. The current slice extracts the workbook
 // structure (sheet names + order) and per-sheet cell contents — every
@@ -73,13 +72,14 @@ namespace io {
 /// result (and its deque) went out of scope at the end of the
 /// statement while text views were still aliasing it.
 ///
-/// `unknown_parts` carries the same passthrough payload that is also
-/// copied onto the workbook via `set_passthrough_parts`. Both views are
-/// populated; callers that only retain the workbook still get a
-/// round-trip-clean writer pass.
+/// Passthrough parts are owned solely by the workbook
+/// (`Workbook::passthrough_parts()`). This struct deliberately does not
+/// mirror them: the payload includes every unmodelled binary in the
+/// package — `xl/media/*` above all — so a second copy doubles the
+/// resident cost of opening a workbook that embeds large images, and
+/// the writer only ever reads the workbook's copy anyway.
 struct OoxmlReadResult {
   Workbook workbook;
-  std::vector<PassthroughPart> unknown_parts;
   std::uint32_t pending_sst_count = 0;
 };
 

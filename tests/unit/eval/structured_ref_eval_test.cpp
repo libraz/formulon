@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for structured (table) reference evaluation. Builds a
 // workbook with a single registered table, populates the cells, and asserts
@@ -152,6 +151,29 @@ TEST(StructuredRefResolver, ParsePayloadUnknownSpecifierIsName) {
   auto sel = parse_structured_ref_payload("#Bogus");
   ASSERT_FALSE(sel);
   EXPECT_EQ(sel.error(), ErrorCode::Name);
+}
+
+TEST(StructuredRefResolver, OneRowTableIsRejectedBeforeTotalsRangeUnderflows) {
+  Workbook wb = Workbook::create();
+  io::TableMetadata table;
+  table.id = 1;
+  table.name = "Malformed";
+  table.display_name = "Malformed";
+  table.ref = "A1:A1";
+  table.sheet_index = 0;
+  table.header_row = true;
+  table.totals_row = true;
+  io::TableColumn column;
+  column.id = 1;
+  column.name = "Value";
+  table.columns.push_back(std::move(column));
+  wb.set_tables({std::move(table)});
+
+  StructuredRefSelector selector;
+  selector.table_name = "Malformed";
+  auto resolved = resolve_structured_ref(selector, wb, 0U, 0U);
+  ASSERT_FALSE(resolved);
+  EXPECT_EQ(resolved.error(), ErrorCode::Ref);
 }
 
 // ---------------------------------------------------------------------------

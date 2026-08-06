@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // JsWorkbook sheet-view and per-sheet layout surface: zoom / freeze /
 // tabHidden, the `<sheetProtection>` get/set bridge, and the column /
@@ -14,6 +13,65 @@
 namespace formulon {
 namespace wasm {
 namespace parts {
+
+emscripten::val JsWorkbook::paginate(uint32_t sheet) const {
+  emscripten::val result = emscripten::val::object();
+  emscripten::val print_area = emscripten::val::array();
+  emscripten::val horizontal_breaks = emscripten::val::array();
+  emscripten::val vertical_breaks = emscripten::val::array();
+  if (handle_ == nullptr) {
+    result.set("status", error_status(7000));
+    result.set("printArea", print_area);
+    result.set("horizontalBreaks", horizontal_breaks);
+    result.set("verticalBreaks", vertical_breaks);
+    result.set("pageCount", 0);
+    return result;
+  }
+  fm_pagination_t* pagination = nullptr;
+  const fm_status_t rc = fm_workbook_paginate(handle_, sheet, &pagination);
+  if (rc != 0) {
+    result.set("status", error_status(rc));
+    result.set("printArea", print_area);
+    result.set("horizontalBreaks", horizontal_breaks);
+    result.set("verticalBreaks", vertical_breaks);
+    result.set("pageCount", 0);
+    return result;
+  }
+  const std::size_t area_count = fm_pagination_print_area_count(pagination);
+  for (std::size_t i = 0; i < area_count; ++i) {
+    fm_print_range_t range{};
+    if (fm_pagination_print_area_at(pagination, i, &range) != 0) {
+      continue;
+    }
+    emscripten::val item = emscripten::val::object();
+    item.set("firstRow", range.first_row);
+    item.set("firstCol", range.first_col);
+    item.set("lastRow", range.last_row);
+    item.set("lastCol", range.last_col);
+    print_area.set(i, item);
+  }
+  const std::size_t horizontal_count = fm_pagination_horizontal_break_count(pagination);
+  for (std::size_t i = 0; i < horizontal_count; ++i) {
+    uint32_t row = 0;
+    if (fm_pagination_horizontal_break_at(pagination, i, &row) == 0) {
+      horizontal_breaks.set(i, row);
+    }
+  }
+  const std::size_t vertical_count = fm_pagination_vertical_break_count(pagination);
+  for (std::size_t i = 0; i < vertical_count; ++i) {
+    uint32_t col = 0;
+    if (fm_pagination_vertical_break_at(pagination, i, &col) == 0) {
+      vertical_breaks.set(i, col);
+    }
+  }
+  result.set("status", ok_status());
+  result.set("printArea", print_area);
+  result.set("horizontalBreaks", horizontal_breaks);
+  result.set("verticalBreaks", vertical_breaks);
+  result.set("pageCount", fm_pagination_page_count(pagination));
+  fm_pagination_destroy(pagination);
+  return result;
+}
 
 JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
   JsSheetViewResult r;
@@ -184,33 +242,38 @@ JsStatus JsWorkbook::setSheetViewMode(uint32_t sheet, std::string mode) {
 
 // ---- Column layout overrides --------------------------------------------
 
-JsColumnsResult JsWorkbook::getSheetColumns(uint32_t sheet) const {
-  JsColumnsResult r;
+emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
+  emscripten::val r = emscripten::val::object();
+  emscripten::val columns = emscripten::val::array();
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.set("status", error_status(7000));
+    r.set("columns", columns);
     return r;
   }
   std::size_t count = 0;
   fm_status_t rc = fm_sheet_get_column_count(handle_, sheet, &count);
   if (rc != 0) {
-    r.status = error_status(rc);
+    r.set("status", error_status(rc));
+    r.set("columns", columns);
     return r;
   }
-  r.columns.reserve(count);
+  std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_column_layout_t entry{};
     if (fm_sheet_get_column(handle_, sheet, i, &entry) != 0) {
       continue;
     }
-    JsColumnLayout out;
-    out.first = entry.first;
-    out.last = entry.last;
-    out.width = entry.width;
-    out.hidden = entry.hidden;
-    out.outlineLevel = static_cast<int32_t>(entry.outline_level);
-    r.columns.push_back(out);
+    emscripten::val out = emscripten::val::object();
+    out.set("first", entry.first);
+    out.set("last", entry.last);
+    out.set("width", entry.width);
+    out.set("hidden", entry.hidden);
+    out.set("outlineLevel", static_cast<int32_t>(entry.outline_level));
+    columns.set(emitted, out);
+    ++emitted;
   }
-  r.status = ok_status();
+  r.set("status", ok_status());
+  r.set("columns", columns);
   return r;
 }
 
@@ -243,32 +306,37 @@ JsStatus JsWorkbook::setColumnOutline(uint32_t sheet, uint32_t first, uint32_t l
 
 // ---- Row layout overrides ----------------------------------------------
 
-JsRowsResult JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
-  JsRowsResult r;
+emscripten::val JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
+  emscripten::val r = emscripten::val::object();
+  emscripten::val rows = emscripten::val::array();
   if (handle_ == nullptr) {
-    r.status = error_status(7000);
+    r.set("status", error_status(7000));
+    r.set("rows", rows);
     return r;
   }
   std::size_t count = 0;
   fm_status_t rc = fm_sheet_get_row_override_count(handle_, sheet, &count);
   if (rc != 0) {
-    r.status = error_status(rc);
+    r.set("status", error_status(rc));
+    r.set("rows", rows);
     return r;
   }
-  r.rows.reserve(count);
+  std::size_t emitted = 0;
   for (std::size_t i = 0; i < count; ++i) {
     fm_row_layout_t entry{};
     if (fm_sheet_get_row_override(handle_, sheet, i, &entry) != 0) {
       continue;
     }
-    JsRowLayout out;
-    out.row = entry.row;
-    out.height = entry.height;
-    out.hidden = entry.hidden;
-    out.outlineLevel = static_cast<int32_t>(entry.outline_level);
-    r.rows.push_back(out);
+    emscripten::val out = emscripten::val::object();
+    out.set("row", entry.row);
+    out.set("height", entry.height);
+    out.set("hidden", entry.hidden);
+    out.set("outlineLevel", static_cast<int32_t>(entry.outline_level));
+    rows.set(emitted, out);
+    ++emitted;
   }
-  r.status = ok_status();
+  r.set("status", ok_status());
+  r.set("rows", rows);
   return r;
 }
 

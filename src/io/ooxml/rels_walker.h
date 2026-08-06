@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared walker for OOXML `.rels` files. Every per-part rels reader
 // (workbook rels, sheet aux rels, pivot cache rels, external-link rels)

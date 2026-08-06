@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // C ABI - styles surface (cell xf bindings, fonts, fills, borders, num
 // formats, cell styles, dedup-on-insert helpers).
@@ -6,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "c_api/formulon_c.h"
@@ -102,6 +102,19 @@ extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index
   out->italic = f.italic ? 1 : 0;
   out->strike = f.strike ? 1 : 0;
   out->underline = f.underline;
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_font_ex(fm_workbook_t* wb, uint32_t font_index, fm_font_record_ex* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_font_ex: out is NULL");
+  }
+  const fm_status_t rc = fm_styles_get_font(wb, font_index, &out->base);
+  if (rc != 0) {
+    return rc;
+  }
+  out->vert_align = wb->workbook().styles().fonts[font_index].vert_align;
   return 0;
 }
 
@@ -332,7 +345,7 @@ namespace {
 /// one here keeps the dedup-comparator confined to the C ABI's needs.
 bool font_records_equal(const formulon::io::FontRecord& a, const formulon::io::FontRecord& b) {
   return a.name == b.name && a.size == b.size && a.bold == b.bold && a.italic == b.italic && a.strike == b.strike &&
-         a.underline == b.underline && a.color_argb == b.color_argb;
+         a.underline == b.underline && a.vert_align == b.vert_align && a.color_argb == b.color_argb;
 }
 
 bool fill_records_equal(const formulon::io::FillRecord& a, const formulon::io::FillRecord& b) noexcept {
@@ -354,6 +367,55 @@ bool cell_xfs_equal(const formulon::io::CellXf& a, const formulon::io::CellXf& b
   return a.font_index == b.font_index && a.fill_index == b.fill_index && a.border_index == b.border_index &&
          a.num_fmt_id == b.num_fmt_id && a.horizontal_align == b.horizontal_align &&
          a.vertical_align == b.vertical_align && a.wrap_text == b.wrap_text;
+}
+
+template <typename T>
+void append_key_scalar(std::string& out, const T& value) {
+  out.append(reinterpret_cast<const char*>(&value), sizeof(value));
+}
+
+std::string font_key(const formulon::io::FontRecord& value) {
+  std::string out = value.name;
+  out.push_back('\0');
+  append_key_scalar(out, value.size);
+  append_key_scalar(out, value.bold);
+  append_key_scalar(out, value.italic);
+  append_key_scalar(out, value.strike);
+  append_key_scalar(out, value.underline);
+  append_key_scalar(out, value.vert_align);
+  append_key_scalar(out, value.color_argb);
+  return out;
+}
+
+std::string fill_key(const formulon::io::FillRecord& value) {
+  std::string out;
+  append_key_scalar(out, value.pattern);
+  append_key_scalar(out, value.fg_argb);
+  append_key_scalar(out, value.bg_argb);
+  return out;
+}
+
+std::string border_key(const formulon::io::BorderRecord& value) {
+  std::string out;
+  for (const formulon::io::BorderSide* side : {&value.left, &value.right, &value.top, &value.bottom, &value.diagonal}) {
+    append_key_scalar(out, side->style);
+    append_key_scalar(out, side->color_argb);
+  }
+  append_key_scalar(out, value.diagonal_up);
+  append_key_scalar(out, value.diagonal_down);
+  return out;
+}
+
+std::string cell_xf_key(const formulon::io::CellXf& value) {
+  std::string out;
+  append_key_scalar(out, value.font_index);
+  append_key_scalar(out, value.fill_index);
+  append_key_scalar(out, value.border_index);
+  append_key_scalar(out, value.num_fmt_id);
+  append_key_scalar(out, value.horizontal_align);
+  append_key_scalar(out, value.vertical_align);
+  append_key_scalar(out, value.wrap_text);
+  return out;
 }
 
 bool dxf_records_equal(const formulon::io::DifferentialFormat& a, const formulon::io::DifferentialFormat& b) noexcept {
@@ -394,6 +456,12 @@ formulon::io::FontRecord font_from_c(const fm_font_record& record) {
   return out;
 }
 
+formulon::io::FontRecord font_from_c_ex(const fm_font_record_ex& record) {
+  formulon::io::FontRecord out = font_from_c(record.base);
+  out.vert_align = record.vert_align;
+  return out;
+}
+
 formulon::io::FillRecord fill_from_c(const fm_fill_record& record) noexcept {
   formulon::io::FillRecord out;
   out.pattern = record.pattern;
@@ -430,6 +498,24 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   }
   formulon::io::FontRecord candidate = font_from_c(record);
 
+  formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
+    if (font_records_equal(styles.fonts[i], candidate)) {
+      *out_index = static_cast<uint32_t>(i);
+      return 0;
+    }
+  }
+  styles.fonts.push_back(std::move(candidate));
+  *out_index = static_cast<uint32_t>(styles.fonts.size() - 1);
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_add_font_ex(fm_workbook_t* wb, fm_font_record_ex record, uint32_t* out_index) {
+  clear_last_error();
+  if (wb == nullptr || out_index == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_font_ex: NULL argument");
+  }
+  formulon::io::FontRecord candidate = font_from_c_ex(record);
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
   for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
     if (font_records_equal(styles.fonts[i], candidate)) {
@@ -603,6 +689,125 @@ extern "C" fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf recor
   }
   styles.cell_xfs.push_back(candidate);
   *out_xf_index = static_cast<uint32_t>(styles.cell_xfs.size() - 1);
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_batch* batch) {
+  clear_last_error();
+  if (wb == nullptr || batch == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_batch: NULL argument");
+  }
+  if ((batch->font_count != 0U && (batch->fonts == nullptr || batch->font_indices == nullptr)) ||
+      (batch->fill_count != 0U && (batch->fills == nullptr || batch->fill_indices == nullptr)) ||
+      (batch->border_count != 0U && (batch->borders == nullptr || batch->border_indices == nullptr)) ||
+      (batch->cell_xf_count != 0U && (batch->cell_xfs == nullptr || batch->cell_xf_indices == nullptr)) ||
+      (batch->num_fmt_count != 0U && (batch->num_fmt_codes == nullptr || batch->num_fmt_ids == nullptr))) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_add_batch: non-empty array is NULL");
+  }
+
+  formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
+  ensure_default_style_roots(styles);
+  std::unordered_map<std::string, uint32_t> fonts;
+  std::unordered_map<std::string, uint32_t> fills;
+  std::unordered_map<std::string, uint32_t> borders;
+  fonts.reserve(styles.fonts.size() + batch->font_count);
+  fills.reserve(styles.fills.size() + batch->fill_count);
+  borders.reserve(styles.borders.size() + batch->border_count);
+  for (uint32_t i = 0; i < styles.fonts.size(); ++i)
+    fonts.emplace(font_key(styles.fonts[i]), i);
+  for (uint32_t i = 0; i < styles.fills.size(); ++i)
+    fills.emplace(fill_key(styles.fills[i]), i);
+  for (uint32_t i = 0; i < styles.borders.size(); ++i)
+    borders.emplace(border_key(styles.borders[i]), i);
+  for (size_t i = 0; i < batch->font_count; ++i) {
+    formulon::io::FontRecord value = font_from_c(batch->fonts[i]);
+    const std::string key = font_key(value);
+    const auto [it, inserted] = fonts.emplace(key, static_cast<uint32_t>(styles.fonts.size()));
+    if (inserted)
+      styles.fonts.push_back(std::move(value));
+    batch->font_indices[i] = it->second;
+  }
+  for (size_t i = 0; i < batch->fill_count; ++i) {
+    formulon::io::FillRecord value = fill_from_c(batch->fills[i]);
+    const std::string key = fill_key(value);
+    const auto [it, inserted] = fills.emplace(key, static_cast<uint32_t>(styles.fills.size()));
+    if (inserted)
+      styles.fills.push_back(value);
+    batch->fill_indices[i] = it->second;
+  }
+  for (size_t i = 0; i < batch->border_count; ++i) {
+    formulon::io::BorderRecord value = border_from_c(batch->borders[i]);
+    const std::string key = border_key(value);
+    const auto [it, inserted] = borders.emplace(key, static_cast<uint32_t>(styles.borders.size()));
+    if (inserted)
+      styles.borders.push_back(value);
+    batch->border_indices[i] = it->second;
+  }
+  std::unordered_map<std::string, uint16_t> num_fmts;
+  num_fmts.reserve(styles.num_fmts.size() + batch->num_fmt_count);
+  uint16_t next_num_fmt_id = 163U;
+  for (const formulon::io::NumFmtRecord& record : styles.num_fmts) {
+    if (record.format_string_index < styles.num_fmt_strings.size()) {
+      num_fmts.emplace(styles.num_fmt_strings[record.format_string_index], record.id);
+    }
+    if (record.id > next_num_fmt_id) {
+      next_num_fmt_id = record.id;
+    }
+  }
+  for (size_t i = 0; i < batch->num_fmt_count; ++i) {
+    const std::string code = batch->num_fmt_codes[i] != nullptr ? batch->num_fmt_codes[i] : "";
+    uint16_t builtin_id = 0U;
+    bool is_builtin = false;
+    for (uint16_t id = 0U; id < 164U; ++id) {
+      const char* builtin = formulon::io::builtin_num_fmt(id);
+      if (builtin != nullptr && builtin[0] != '\0' && code == builtin) {
+        builtin_id = id;
+        is_builtin = true;
+        break;
+      }
+    }
+    if (is_builtin) {
+      batch->num_fmt_ids[i] = builtin_id;
+      continue;
+    }
+    const auto [it, inserted] = num_fmts.emplace(code, static_cast<uint16_t>(next_num_fmt_id + 1U));
+    if (inserted) {
+      ++next_num_fmt_id;
+      styles.num_fmt_strings.push_back(code);
+      formulon::io::NumFmtRecord record;
+      record.id = next_num_fmt_id;
+      record.format_string_index = static_cast<uint32_t>(styles.num_fmt_strings.size() - 1U);
+      styles.num_fmts.push_back(record);
+    }
+    batch->num_fmt_ids[i] = it->second;
+  }
+  ensure_default_cell_xf(styles);
+  std::unordered_map<std::string, uint32_t> xfs;
+  xfs.reserve(styles.cell_xfs.size() + batch->cell_xf_count);
+  for (uint32_t i = 0; i < styles.cell_xfs.size(); ++i)
+    xfs.emplace(cell_xf_key(styles.cell_xfs[i]), i);
+  for (size_t i = 0; i < batch->cell_xf_count; ++i) {
+    const fm_cell_xf record = batch->cell_xfs[i];
+    if (record.font_index >= styles.fonts.size() || record.fill_index >= styles.fills.size() ||
+        record.border_index >= styles.borders.size()) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_styles_add_batch: xf style index out of range");
+    }
+    formulon::io::CellXf value;
+    value.font_index = record.font_index;
+    value.fill_index = record.fill_index;
+    value.border_index = record.border_index;
+    value.num_fmt_id = record.num_fmt_id;
+    value.horizontal_align = record.horizontal_align;
+    value.vertical_align = record.vertical_align;
+    value.wrap_text = record.wrap_text != 0;
+    const std::string key = cell_xf_key(value);
+    const auto [it, inserted] = xfs.emplace(key, static_cast<uint32_t>(styles.cell_xfs.size()));
+    if (inserted)
+      styles.cell_xfs.push_back(value);
+    batch->cell_xf_indices[i] = it->second;
+  }
   return 0;
 }
 

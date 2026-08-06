@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the multi-criteria aggregators COUNTIFS, SUMIFS,
 // AVERAGEIFS, MAXIFS, and MINIFS. All five route through the lazy
@@ -8,6 +7,7 @@
 // are iterated in lockstep rather than flattened.
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -50,6 +50,27 @@ TEST(BuiltinsCountIfs, SinglePairMatchesCountIf) {
   ASSERT_TRUE(cif.is_number());
   EXPECT_DOUBLE_EQ(ifs.as_number(), cif.as_number());
   EXPECT_DOUBLE_EQ(ifs.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountIfs, NumericAggregatesRejectNonfiniteResults) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(1, 0, Value::number(1.0));
+  sheet.set_cell_value(0, 1, Value::number(1.0e308));
+  sheet.set_cell_value(1, 1, Value::number(1.0e308));
+  for (const char* formula : {"=SUMIFS(B1:B2, A1:A2, 1)", "=AVERAGEIFS(B1:B2, A1:A2, 1)"}) {
+    const Value v = EvalSourceIn(formula, wb, sheet);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
+
+  sheet.set_cell_value(0, 1, Value::number(std::numeric_limits<double>::infinity()));
+  for (const char* formula : {"=MAXIFS(B1:B2, A1:A2, 1)", "=MINIFS(B1:B2, A1:A2, 1)"}) {
+    const Value v = EvalSourceIn(formula, wb, sheet);
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << formula;
+  }
 }
 
 TEST(BuiltinsCountIfs, TwoPairsAndLogicAcrossParallelRanges) {

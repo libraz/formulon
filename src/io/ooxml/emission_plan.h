@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-package emission plan for the OOXML writer. Centralises the
 // numbering and collision-detection logic the writer used to derive
@@ -38,6 +37,9 @@ struct ExternalLinkRecord;
 /// `AddPart` calls trivial and avoids re-deriving table numbering from
 /// two places.
 struct EmissionPlan {
+  // True when the writer generated xl/sharedStrings.xml from literal text
+  // cells. This also reserves the path from passthrough collision handling.
+  bool generated_shared_strings = false;
   // For each sheet (by 0-based index), the in-source TableMetadata
   // entries that target it, paired with the package-relative path the
   // writer assigned (`xl/tables/tableN.xml`). `(table_ref, path)` is
@@ -106,7 +108,7 @@ struct EmissionPlan {
 /// Builds the emission plan. Performs collision detection between
 /// generated and passthrough paths; collisions are logged via
 /// `StructuredLog` (warn) and the passthrough copy is dropped.
-EmissionPlan BuildEmissionPlan(const Workbook& wb);
+EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings);
 
 /// Helper: composes a path of the form `<prefix><id><suffix>` (e.g.
 /// `("xl/tables/table", 3, ".xml")` -> `"xl/tables/table3.xml"`).

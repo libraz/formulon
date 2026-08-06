@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Node-based smoke tests for the Formulon WASM bundle.
 //
@@ -257,6 +256,11 @@ async function run() {
     assert.ok(unknown.length > 0);
   });
 
+  test('errorDisplayName returns Excel literals', () => {
+    assert.equal(Module.errorDisplayName(1), '#DIV/0!');
+    assert.equal(Module.errorDisplayName(999), '#UNKNOWN!');
+  });
+
   test('evalFormula(=SUM(1,2,3)) returns NUMBER 6', () => {
     const r = Module.evalFormula('=SUM(1,2,3)');
     assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
@@ -269,6 +273,13 @@ async function run() {
     assert.ok(r.status.ok);
     assert.equal(r.value.kind, VAL.NUMBER);
     assert.equal(r.value.number, 1);
+  });
+
+  test('evalFormula evaluates intersection read-only and returns #NULL!', () => {
+    const r = Module.evalFormula('=A1 B1');
+    assert.ok(r.status.ok, `status=${JSON.stringify(r.status)}`);
+    assert.equal(r.value.kind, VAL.ERROR);
+    assert.equal(r.value.errorCode, 0); // ErrorCode::Null / #NULL!
   });
 
   test('evalFormula(=CONCAT) returns TEXT "hello world"', () => {
@@ -309,6 +320,22 @@ async function run() {
     }
   });
 
+  test('paginate exposes a status envelope and page geometry', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+      assert.ok(wb.setNumber(0, 48, 0, 2).ok);
+      const result = wb.paginate(0);
+      assert.ok(result.status.ok, `status=${JSON.stringify(result.status)}`);
+      assert.equal(result.pageCount, 2);
+      assert.deepEqual(result.printArea, []);
+      assert.deepEqual(result.horizontalBreaks, [44]);
+      assert.deepEqual(result.verticalBreaks, []);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('setText / setBool / setBlank round-trip', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -327,6 +354,26 @@ async function run() {
 
       const a3 = wb.getValue(0, 2, 0);
       assert.equal(a3.value.kind, VAL.BLANK);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('setCellPhonetic / getCellPhonetic preserve and clear a Japanese guide', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setText(0, 0, 0, '漢字').ok);
+      assert.ok(wb.setCellPhonetic(0, 0, 0, 'かんじ').ok);
+      const phonetic = wb.getCellPhonetic(0, 0, 0);
+      assert.ok(phonetic.status.ok);
+      assert.equal(phonetic.value, 'かんじ');
+
+      assert.ok(wb.setCellPhonetic(0, 0, 0, '').ok);
+      assert.equal(wb.getCellPhonetic(0, 0, 0).value, '');
+
+      assert.ok(wb.setCellPhonetic(0, 0, 0, 'かんじ').ok);
+      assert.ok(wb.setText(0, 0, 0, '文字列').ok);
+      assert.equal(wb.getCellPhonetic(0, 0, 0).value, '');
     } finally {
       wb.delete();
     }
@@ -360,6 +407,26 @@ async function run() {
       assert.equal(a1.value.number, 7);
     } finally {
       loaded.delete();
+    }
+  });
+
+  test('Workbook.loadBytes reports empty input instead of leaving stale diagnostics', () => {
+    const wb = Module.Workbook.loadBytes(new Uint8Array());
+    try {
+      assert.equal(wb.isValid(), false);
+      assert.match(Module.lastErrorMessage(), /NULL or empty input/);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('Workbook.loadBytes rejects non-Uint8Array input like the native binding', () => {
+    const wb = Module.Workbook.loadBytes(new Uint16Array([1]));
+    try {
+      assert.equal(wb.isValid(), false);
+      assert.match(Module.lastErrorMessage(), /NULL or empty input/);
+    } finally {
+      wb.delete();
     }
   });
 
@@ -519,6 +586,21 @@ async function run() {
     }
   });
 
+  test('failed entry lookups omit optional payload fields', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      for (const entry of [wb.cellAt(99, 0), wb.definedNameAt(0), wb.tableAt(0), wb.passthroughAt(0)]) {
+        assert.equal(entry.status.ok, false);
+      }
+      assert.ok(!('value' in wb.cellAt(99, 0)));
+      assert.ok(!('name' in wb.definedNameAt(0)));
+      assert.ok(!('name' in wb.tableAt(0)));
+      assert.ok(!('path' in wb.passthroughAt(0)));
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('pivotCount + pivotLayout expose PivotTable projection status', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -548,29 +630,29 @@ async function run() {
       assert.ok(layout.status.ok, `status=${JSON.stringify(layout.status)}`);
       assert.equal(layout.top, 0);
       assert.equal(layout.left, 3);
-      assert.equal(layout.rows, 5);
-      assert.equal(layout.cols, 3);
+      assert.equal(layout.rows, 4);
+      assert.equal(layout.cols, 2);
       assert.ok(layout.cells.length > 0);
 
-      const region = findPivotCell(layout, 1, 3);
-      assert.ok(region);
-      assert.equal(region.kind, PIVOT.HEADER);
-      assert.equal(region.value.kind, VAL.TEXT);
-      assert.equal(region.value.text, 'Region');
+      const rowLabels = findPivotCell(layout, 0, 3);
+      assert.ok(rowLabels);
+      assert.equal(rowLabels.kind, PIVOT.HEADER);
+      assert.equal(rowLabels.value.kind, VAL.TEXT);
+      assert.equal(rowLabels.value.text, '行ラベル');
 
-      const northLabel = findPivotCell(layout, 2, 3);
+      const northLabel = findPivotCell(layout, 1, 3);
       assert.ok(northLabel);
       assert.equal(northLabel.kind, PIVOT.ROW_LABEL);
       assert.equal(northLabel.value.text, 'North');
 
-      const northSum = findPivotCell(layout, 2, 4);
+      const northSum = findPivotCell(layout, 1, 4);
       assert.ok(northSum);
       assert.equal(northSum.kind, PIVOT.DATA);
       assert.equal(northSum.value.kind, VAL.NUMBER);
       assert.equal(northSum.value.number, 400);
       assert.equal(northSum.fieldName, 'Sum of Amount');
 
-      const grandTotal = findPivotCell(layout, 4, 5);
+      const grandTotal = findPivotCell(layout, 3, 4);
       assert.ok(grandTotal);
       assert.equal(grandTotal.kind, PIVOT.GRAND_TOTAL);
       assert.equal(grandTotal.value.kind, VAL.NUMBER);
@@ -711,6 +793,22 @@ async function run() {
     }
   });
 
+  test('addFont / getFont preserve superscript and subscript', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1 });
+      assert.ok(superscript.status.ok);
+      assert.equal(wb.getFont(superscript.index).vertAlign, 1);
+
+      const subscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 2 });
+      assert.ok(subscript.status.ok);
+      assert.notEqual(subscript.index, superscript.index);
+      assert.equal(wb.getFont(subscript.index).vertAlign, 2);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('addXf rejects out-of-range font_index', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -781,9 +879,9 @@ async function run() {
     try {
       assert.equal(wb.getHyperlinks(0).length, 0);
       // Three entries with progressively more optional fields populated.
-      assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '').ok);
-      assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '').ok);
-      assert.ok(wb.addHyperlink(0, 5, 6, 'https://example.org/x', 'See X', 'External link').ok);
+      assert.ok(wb.addHyperlink(0, 1, 2, 'https://example.com/', '', '', '').ok);
+      assert.ok(wb.addHyperlink(0, 3, 4, 'mailto:hello@example.com', 'Hello', '', '').ok);
+      assert.ok(wb.addHyperlink(0, 5, 6, '', 'See X', 'Internal link', 'Sheet1!A1').ok);
       const list = wb.getHyperlinks(0);
       assert.equal(list.length, 3);
       assert.equal(list[0].row, 1);
@@ -794,9 +892,10 @@ async function run() {
       assert.equal(list[1].target, 'mailto:hello@example.com');
       assert.equal(list[1].display, 'Hello');
       assert.equal(list[2].display, 'See X');
-      assert.equal(list[2].tooltip, 'External link');
+      assert.equal(list[2].tooltip, 'Internal link');
+      assert.equal(list[2].location, 'Sheet1!A1');
       // Sheet-out-of-range is rejected.
-      assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '').ok);
+      assert.ok(!wb.addHyperlink(999, 0, 0, 'https://x/', '', '', '').ok);
       // clearHyperlinks drops everything.
       assert.ok(wb.clearHyperlinks(0).ok);
       assert.equal(wb.getHyperlinks(0).length, 0);
@@ -836,6 +935,26 @@ async function run() {
       assert.ok(wb.setComment(0, 1, 1, '', '').ok);
       const after = wb.getComment(0, 1, 1);
       assert.equal(after, null);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('getCommentResult distinguishes absence from an invalid sheet', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const missing = wb.getCommentResult(0, 1, 1);
+      assert.equal(missing.status.ok, false);
+      assert.equal(missing.comment, null);
+      const invalid = wb.getCommentResult(99, 1, 1);
+      assert.equal(invalid.status.ok, false);
+      assert.equal(invalid.comment, null);
+      assert.notEqual(missing.status.status, invalid.status.status);
+      assert.ok(wb.setComment(0, 1, 1, 'libraz', 'hello').ok);
+      const found = wb.getCommentResult(0, 1, 1);
+      assert.equal(found.status.ok, true);
+      assert.equal(found.comment.author, 'libraz');
+      assert.equal(found.comment.text, 'hello');
     } finally {
       wb.delete();
     }
@@ -935,6 +1054,53 @@ async function run() {
       assert.ok(!wb.addValidation(999, listRule).ok);
       assert.ok(!wb.removeValidationAt(999, 0).ok);
       assert.ok(!wb.clearValidations(999).ok);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('CF and sheet-layout lists are plain JS arrays with no delete lifecycle', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const cf = wb.evaluateCfRange(0, 0, 0, 1, 1, Number.NaN);
+      assert.ok(cf.status.ok);
+      assert.ok(Array.isArray(cf.cells));
+
+      assert.ok(wb.setColumnWidth(0, 2, 2, 18).ok);
+      const columns = wb.getSheetColumns(0);
+      assert.ok(columns.status.ok);
+      assert.ok(Array.isArray(columns.columns));
+      assert.equal(columns.columns[0].first, 2);
+      assert.equal(columns.columns[0].width, 18);
+
+      assert.ok(wb.setRowHeight(0, 3, 22).ok);
+      const rows = wb.getSheetRowOverrides(0);
+      assert.ok(rows.status.ok);
+      assert.ok(Array.isArray(rows.rows));
+      assert.equal(rows.rows[0].row, 3);
+      assert.equal(rows.rows[0].height, 22);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('list getters expose failures through their array status', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      for (const list of [
+        wb.getMerges(99),
+        wb.getComments(99),
+        wb.getHyperlinks(99),
+        wb.getValidations(99),
+        wb.getConditionalFormats(99),
+      ]) {
+        assert.ok(Array.isArray(list));
+        assert.equal(list.length, 0);
+        assert.equal(list.status.ok, false);
+      }
+      const links = wb.getExternalLinks();
+      assert.ok(Array.isArray(links));
+      assert.equal(links.status.ok, true);
     } finally {
       wb.delete();
     }

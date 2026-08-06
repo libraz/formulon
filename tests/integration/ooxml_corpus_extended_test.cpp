@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // OOXML round-trip parity over a 48-book programmatically generated
 // corpus that focuses on the three subsystems the original 100-book

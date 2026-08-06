@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the styles reader. See styles_reader.h for the
 // public contract.
@@ -17,6 +16,7 @@
 #include <utility>
 
 #include "io/xml_utils.h"
+#include "io/xsd_bool.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -269,9 +269,18 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
   if (sz) {
     rec.size = sz.attribute("val").as_double(11.0);
   }
-  rec.bold = static_cast<bool>(f.child("b"));
-  rec.italic = static_cast<bool>(f.child("i"));
-  rec.strike = static_cast<bool>(f.child("strike"));
+  if (const pugi::xml_node bold = f.child("b")) {
+    rec.has_bold = true;
+    rec.bold = read_xsd_bool(bold, "val", true);
+  }
+  if (const pugi::xml_node italic = f.child("i")) {
+    rec.has_italic = true;
+    rec.italic = read_xsd_bool(italic, "val", true);
+  }
+  if (const pugi::xml_node strike = f.child("strike")) {
+    rec.has_strike = true;
+    rec.strike = read_xsd_bool(strike, "val", true);
+  }
   pugi::xml_node u = f.child("u");
   if (u) {
     // `<u/>` defaults to "single" per OOXML.
@@ -397,6 +406,14 @@ void ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec) {
   rec->fill_index = xf.attribute("fillId").as_uint(0U);
   rec->border_index = xf.attribute("borderId").as_uint(0U);
   rec->num_fmt_id = static_cast<std::uint16_t>(xf.attribute("numFmtId").as_uint(0U));
+  rec->xf_id = xf.attribute("xfId").as_uint(0U);
+  rec->apply_number_format = xf.attribute("applyNumberFormat").as_bool(false);
+  rec->apply_font = xf.attribute("applyFont").as_bool(false);
+  rec->apply_fill = xf.attribute("applyFill").as_bool(false);
+  rec->apply_border = xf.attribute("applyBorder").as_bool(false);
+  rec->apply_alignment = xf.attribute("applyAlignment").as_bool(false);
+  rec->apply_protection = xf.attribute("applyProtection").as_bool(false);
+  rec->quote_prefix = xf.attribute("quotePrefix").as_bool(false);
   pugi::xml_node align = xf.child("alignment");
   if (align) {
     rec->horizontal_align = ParseHorizontalAlign(align.attribute("horizontal").value());
@@ -464,17 +481,41 @@ void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
-/// Serialises `node` (element + subtree) to a raw XML string with no
-/// indentation, for verbatim round-trip of unmodelled dxf children.
-std::string CaptureRawXml(const pugi::xml_node& node) {
-  struct RawSink : pugi::xml_writer {
-    std::string* dst;
-    void write(const void* data, std::size_t size) override { dst->append(static_cast<const char*>(data), size); }
-  };
+std::string EscapeXmlAttribute(std::string_view value) {
   std::string out;
-  RawSink sink{};
-  sink.dst = &out;
-  node.print(sink, /*indent=*/"", pugi::format_raw);
+  out.reserve(value.size());
+  for (char c : value) {
+    switch (c) {
+      case '&':
+        out.append("&amp;");
+        break;
+      case '<':
+        out.append("&lt;");
+        break;
+      case '"':
+        out.append("&quot;");
+        break;
+      default:
+        out.push_back(c);
+        break;
+    }
+  }
+  return out;
+}
+
+std::string CaptureRootExtraAttrs(const pugi::xml_node& root) {
+  std::string out;
+  for (pugi::xml_attribute attr : root.attributes()) {
+    const std::string_view name(attr.name());
+    if (name == "xmlns" || (name.rfind("xmlns:", 0U) != 0U && name != "mc:Ignorable")) {
+      continue;
+    }
+    out.push_back(' ');
+    out.append(name);
+    out.append("=\"");
+    out.append(EscapeXmlAttribute(attr.value()));
+    out.push_back('"');
+  }
   return out;
 }
 
@@ -505,10 +546,10 @@ void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
     // `<alignment>` / `<protection>` are not modelled structurally on a
     // dxf; capture them verbatim so they round-trip.
     if (pugi::xml_node alignment = dxf.child("alignment")) {
-      rec.alignment_xml = CaptureRawXml(alignment);
+      rec.alignment_xml = raw_xml(alignment);
     }
     if (pugi::xml_node protection = dxf.child("protection")) {
-      rec.protection_xml = CaptureRawXml(protection);
+      rec.protection_xml = raw_xml(protection);
     }
     table.dxfs.push_back(std::move(rec));
   }
@@ -534,6 +575,20 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
   ReadCellXfs(root, table);
   ReadCellStyles(root, table);
   ReadDxfs(root, table);
+  table.root_extra_attrs = CaptureRootExtraAttrs(root);
+  if (pugi::xml_node colors = root.child("colors")) {
+    table.colors_xml = raw_xml(colors);
+  }
+  if (pugi::xml_node table_styles = root.child("tableStyles")) {
+    table.table_styles_xml = raw_xml(table_styles);
+  }
+  if (pugi::xml_node ext_lst = root.child("extLst")) {
+    table.ext_lst_xml = raw_xml(ext_lst);
+  }
+  capture_unknown_children(root,
+                           {"numFmts", "fonts", "fills", "borders", "cellStyleXfs", "cellXfs", "cellStyles", "dxfs",
+                            "colors", "tableStyles", "extLst"},
+                           table.unknown_top_level_xml);
   return table;
 }
 

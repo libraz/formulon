@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of `DepGraph`. See `dep_graph.h` for the public contract.
 
@@ -66,12 +65,13 @@ void DepGraph::clear_dependencies_of(CellNodeId dependent) {
       continue;
     }
     erase_first(rev_pos->second, dependent);
-    if (rev_pos->second.empty() && forward_.find(dependency) == forward_.end()) {
+    if (rev_pos->second.empty()) {
       reverse_.erase(rev_pos);
-      // `dependency` is fully gone from both maps. Skip the self-loop
-      // case (`dependency == dependent`) because the dependent's own
-      // node-count delta is handled below.
-      if (dependency != dependent) {
+      // `dependency` is fully gone from both maps only when it also has
+      // no outgoing edges. Skip the self-loop case (`dependency ==
+      // dependent`) because the dependent's own node-count delta is
+      // handled below after its forward bucket is erased.
+      if (forward_.find(dependency) == forward_.end() && dependency != dependent) {
         --node_count_;
       }
     }
@@ -146,14 +146,38 @@ std::vector<CellNodeId> DepGraph::dependents_of(CellNodeId node) const {
 }
 
 std::vector<CellNodeId> DepGraph::dependencies_of(CellNodeId node) const {
+  return dependencies_of_ref(node);
+}
+
+const std::vector<CellNodeId>& DepGraph::dependencies_of_ref(CellNodeId node) const noexcept {
+  static const std::vector<CellNodeId> kEmptyDependencies;
   auto pos = forward_.find(node);
   if (pos == forward_.end()) {
-    return {};
+    return kEmptyDependencies;
   }
   return pos->second;
 }
 
+bool is_cyclic_component(const std::vector<CellNodeId>& component, const DepGraph& graph) noexcept {
+  if (component.size() != 1U) {
+    return component.size() > 1U;
+  }
+  const CellNodeId only = component.front();
+  const std::vector<CellNodeId>& dependencies = graph.dependencies_of_ref(only);
+  return std::find(dependencies.begin(), dependencies.end(), only) != dependencies.end();
+}
+
 std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
+  return tarjan_scc_impl(nullptr);
+}
+
+std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_subset(
+    const std::unordered_set<CellNodeId, CellNodeIdHash>& nodes) const {
+  return tarjan_scc_impl(&nodes);
+}
+
+std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc_impl(
+    const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const {
   // Iterative Tarjan to avoid blowing the WASM stack on deep dependency
   // chains. Algorithm summary:
   //
@@ -174,17 +198,24 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
 
   // Collect every distinct node so the outer loop is well-defined.
   std::vector<CellNodeId> all_nodes;
-  all_nodes.reserve(forward_.size() + reverse_.size());
-  std::unordered_map<CellNodeId, char, CellNodeIdHash> seen;
-  seen.reserve(forward_.size() + reverse_.size());
-  for (const auto& entry : forward_) {
-    if (seen.emplace(entry.first, 1).second) {
-      all_nodes.push_back(entry.first);
+  if (nodes != nullptr) {
+    all_nodes.reserve(nodes->size());
+    for (CellNodeId node : *nodes) {
+      all_nodes.push_back(node);
     }
-  }
-  for (const auto& entry : reverse_) {
-    if (seen.emplace(entry.first, 1).second) {
-      all_nodes.push_back(entry.first);
+  } else {
+    all_nodes.reserve(forward_.size() + reverse_.size());
+    std::unordered_map<CellNodeId, char, CellNodeIdHash> seen;
+    seen.reserve(forward_.size() + reverse_.size());
+    for (const auto& entry : forward_) {
+      if (seen.emplace(entry.first, 1).second) {
+        all_nodes.push_back(entry.first);
+      }
+    }
+    for (const auto& entry : reverse_) {
+      if (seen.emplace(entry.first, 1).second) {
+        all_nodes.push_back(entry.first);
+      }
     }
   }
 
@@ -215,7 +246,10 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
 
   auto neighbors_of = [&](CellNodeId node) -> const std::vector<CellNodeId>& {
     auto pos = forward_.find(node);
-    return pos == forward_.end() ? kEmptyNeighbors : pos->second;
+    if (pos == forward_.end()) {
+      return kEmptyNeighbors;
+    }
+    return pos->second;
   };
 
   for (CellNodeId root : all_nodes) {
@@ -236,6 +270,9 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
       const std::vector<CellNodeId>& adj = neighbors_of(top.node);
       if (top.neighbor_idx < adj.size()) {
         CellNodeId neighbor = adj[top.neighbor_idx++];
+        if (nodes != nullptr && nodes->count(neighbor) == 0U) {
+          continue;
+        }
         if (index_of.count(neighbor) == 0U) {
           // Tree edge: descend.
           index_of[neighbor] = next_index;
@@ -276,6 +313,23 @@ std::vector<std::vector<CellNodeId>> DepGraph::tarjan_scc() const {
               break;
             }
           }
+          // Pop order follows the DFS, which starts from whatever order the
+          // hash containers enumerated the graph in — that order differs
+          // between standard-library implementations. Members of a cyclic
+          // component are committed in this order by the Gauss-Seidel
+          // iterative solver, and a tautological cycle (`A1=B1+1`,
+          // `B1=A1-1`) settles on a different pair depending on which
+          // member goes first, so the order has to be pinned. Address order
+          // also matches Excel's top-left-first calculation chain.
+          std::sort(component.begin(), component.end(), [](CellNodeId lhs, CellNodeId rhs) {
+            if (lhs.sheet_id != rhs.sheet_id) {
+              return lhs.sheet_id < rhs.sheet_id;
+            }
+            if (lhs.row != rhs.row) {
+              return lhs.row < rhs.row;
+            }
+            return lhs.col < rhs.col;
+          });
           sccs.push_back(std::move(component));
         }
 

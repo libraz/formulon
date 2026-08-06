@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // LINEST implementation. See linest_lazy.h for the user-facing
 // contract; this file owns the numerical recipe (build the design
@@ -14,9 +13,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
@@ -77,25 +79,15 @@ bool coerce_array(const ArrayValue& src, std::vector<double>& out, Value* out_er
 ArrayValue* make_double_array(const std::vector<Value>& data, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
   // Same overflow-defensive guard as `coerce_array`: bail on 32-bit
   // wrap so the arena allocation request matches what the loop expects.
-  auto n_or = checked_mul_size_t(rows, cols);
-  if (!n_or) {
-    return nullptr;
-  }
-  const std::size_t n = n_or.value();
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
-    return nullptr;
-  }
-  for (std::size_t i = 0; i < n; ++i) {
-    buffer[i] = data[i];
-  }
-  ArrayValue* arr = arena.create<ArrayValue>();
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
   if (arr == nullptr) {
     return nullptr;
   }
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
+  const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  for (std::size_t i = 0; i < n; ++i) {
+    buffer[i] = data[i];
+  }
   return arr;
 }
 
@@ -130,10 +122,6 @@ bool eval_bool_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegis
   }
   *out_err = Value::error(ErrorCode::Value);
   return false;
-}
-
-bool is_omitted_arg(const parser::AstNode& arg) {
-  return arg.kind() == parser::NodeKind::Literal && arg.as_literal().is_blank();
 }
 
 /// Solves `A * X = B` in-place via rank-aware Gauss-Jordan with partial
@@ -627,9 +615,24 @@ ArrayValue* build_stats_output(const std::vector<double>& coeffs, const std::vec
   }
 
   // Row 4: [F, df_resid, #N/A, ...]. F = (ss_reg / k) / (ss_resid / df_resid).
+  //
+  // An exact fit drives the residual to zero, which makes F infinite in the
+  // limit. Excel never lands there: its own arithmetic leaves a residual a
+  // few ULPs above zero and it reports a correspondingly huge finite F.
+  // Flooring the residual at the same place — the squared rounding error
+  // the data's own scale can still resolve — keeps a perfect fit reporting
+  // "huge and finite" instead of #N/A. The magnitude at that floor carries
+  // no statistical meaning and will not agree with Excel digit for digit;
+  // only its finiteness is contractual. A flat response (ss_total == 0)
+  // leaves the floor at zero, so F stays #N/A where it is genuinely
+  // undefined.
   if (df_ok) {
     const double ss_reg = ss_total - ss_resid;
-    const double f = (k_d > 0.0 && ss_resid > 0.0) ? (ss_reg / k_d) / (ss_resid / df_resid_d) : std::nan("");
+    constexpr double kEps = std::numeric_limits<double>::epsilon();
+    const double resid_floor = ss_total * kEps * kEps;
+    const double effective_resid = (ss_resid > resid_floor) ? ss_resid : resid_floor;
+    const double f =
+        (k_d > 0.0 && effective_resid > 0.0) ? (ss_reg / k_d) / (effective_resid / df_resid_d) : std::nan("");
     cells[3U * out_cols + 0U] = is_finite(f) ? Value::number(f) : Value::error(ErrorCode::NA);
   } else {
     cells[3U * out_cols + 0U] = Value::error(ErrorCode::NA);

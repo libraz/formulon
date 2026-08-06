@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Aggregator-context tests for ROW / COLUMN. The standalone scalar form
 // (`=ROW(A1:A5)` -> 1) is pinned in `builtins_shape_test.cpp`; this file
@@ -100,36 +99,35 @@ TEST(BuiltinsRowColumnArray, ProductOfRowAcceptsRange) {
 }
 
 // ---------------------------------------------------------------------------
-// Non-regression: scalar / non-aggregator forms must not be array-expanded.
+// Direct calls return the same dynamic arrays exposed to aggregators.
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsRowColumnArray, BinaryOpOverRowStillCollapses) {
-  // `ROW(A1:A5)*2` is a BinaryOp whose lhs is the ROW call. Without a
-  // Value::Array runtime that propagates through arithmetic, we must NOT
-  // try to broadcast — the lhs collapses to scalar 1, so SUM(ROW(...)*2)
-  // sees the single value 2. This pins that we did not over-reach into
-  // the BinaryOp path.
+TEST(BuiltinsRowColumnArray, BinaryOpOverRowBroadcasts) {
+  // `ROW(A1:A5)*2` -> {2;4;6;8;10}, whose sum is 30.
   Workbook wb = Workbook::create();
   const Value v = EvalIn("=SUM(ROW(A1:A5)*2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
 }
 
-TEST(BuiltinsRowColumnArray, StandaloneRowOverRangeStillScalarOne) {
-  // `eval_row_lazy` is unchanged: `=ROW(A1:A5)` outside an aggregator
-  // still collapses to the rectangle's first row (1) because no
-  // Value::Array exists to spill into.
+TEST(BuiltinsRowColumnArray, StandaloneRowOverRangeSpills) {
   Workbook wb = Workbook::create();
   const Value v = EvalIn("=ROW(A1:A5)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[4].as_number(), 5.0);
 }
 
-TEST(BuiltinsRowColumnArray, StandaloneColumnOverRangeStillScalarOne) {
+TEST(BuiltinsRowColumnArray, StandaloneColumnOverRangeSpills) {
   Workbook wb = Workbook::create();
   const Value v = EvalIn("=COLUMN(A1:E1)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 1U);
+  ASSERT_EQ(v.as_array_cols(), 5U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[4].as_number(), 5.0);
 }
 
 }  // namespace

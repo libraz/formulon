@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Enumeration seam for parser-integrated special forms.
 //
@@ -10,8 +9,8 @@
 //
 // The drift-detection machinery (`tests/unit/registry_catalog_test.cpp`
 // and `tools/catalog/status.py`) enumerates these names alongside the
-// registry and lazy-dispatch tables so that the catalog invariant and
-// the coverage report stay accurate for parser-only forms too.
+// registry and lazy-dispatch tables so the catalog invariant includes
+// parser-only forms too.
 
 #ifndef FORMULON_EVAL_SPECIAL_FORMS_CATALOG_H_
 #define FORMULON_EVAL_SPECIAL_FORMS_CATALOG_H_

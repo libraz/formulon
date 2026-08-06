@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Canonical Excel cross-kind ordering rank, shared by every comparator that
 // needs to sort heterogeneous `Value` kinds the way Excel's ascending value

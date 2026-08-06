@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the `EvalSource*` helpers declared in
 // `test_eval_helpers.h`. Each helper resets the relevant test arenas,

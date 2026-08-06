@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the regular-period bond yield-to-maturity built-in:
 //
@@ -207,6 +206,11 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
   if (std::isnan(yld) || std::isinf(yld)) {
     return ErrorCode::Num;
   }
+  // PRICE's public domain is yld >= 0. The approximate-yield heuristic can
+  // start below that boundary for a premium bond, so begin at the boundary
+  // and use a one-sided numerical derivative there instead of asking the
+  // price kernel to evaluate an invalid negative yield.
+  yld = std::max(0.0, yld);
 
   constexpr int kMaxIter = 100;
   // Convergence: function tolerance is scaled by |pr|+1 so the criterion
@@ -235,20 +239,31 @@ Expected<double, ErrorCode> compute_yield(const Value* args, std::uint32_t arity
     if (!f_plus) {
       return f_plus.error();
     }
-    auto f_minus = price_at(args, arity, yld - h);
-    if (!f_minus) {
-      return f_minus.error();
+    double df = 0.0;
+    if (yld < h) {
+      df = (f_plus.value() - f0.value()) / h;
+    } else {
+      auto f_minus = price_at(args, arity, yld - h);
+      if (!f_minus) {
+        return f_minus.error();
+      }
+      df = (f_plus.value() - f_minus.value()) / (2.0 * h);
     }
-    const double df = (f_plus.value() - f_minus.value()) / (2.0 * h);
     if (df == 0.0 || std::isnan(df) || std::isinf(df)) {
       return ErrorCode::Num;
     }
     const double delta = residual / df;
-    const double new_yld = yld - delta;
+    double damped_delta = delta;
+    double new_yld = yld - damped_delta;
+    while (new_yld < 0.0 && std::fabs(damped_delta) >= kStepTol) {
+      damped_delta *= 0.5;
+      new_yld = yld - damped_delta;
+    }
+    new_yld = std::max(0.0, new_yld);
     if (std::isnan(new_yld) || std::isinf(new_yld)) {
       return ErrorCode::Num;
     }
-    if (std::fabs(delta) < kStepTol) {
+    if (std::fabs(damped_delta) < kStepTol) {
       return new_yld;
     }
     yld = new_yld;

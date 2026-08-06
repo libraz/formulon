@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::read_ooxml`. The reader is paired with
 // `Workbook::save()` (the empty-workbook writer) so the test corpus is
@@ -193,7 +192,7 @@ TEST(OoxmlReader, UnknownPartsExcludesSheetAndStylesAndSst) {
 
   auto result_or = read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(result_or));
-  const std::vector<PassthroughPart>& parts = result_or.value().unknown_parts;
+  const std::vector<PassthroughPart>& parts = result_or.value().workbook.passthrough_parts();
 
   // The reader consumes sheet*.xml and xl/styles.xml. The latter is a
   // best-effort validate-only parse but still counts as consumed so the

@@ -520,6 +520,32 @@ Napi::Value Workbook::GetComment(const Napi::CallbackInfo& info) {
   return o;
 }
 
+Napi::Value Workbook::GetCommentResult(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    out.Set("comment", env.Null());
+    return out;
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  fm_comment c{};
+  const fm_status_t rc = fm_sheet_get_comment_at(handle_, sheet, row, col, &c);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    out.Set("comment", env.Null());
+    return out;
+  }
+  Napi::Object comment = Napi::Object::New(env);
+  comment.Set("author", Napi::String::New(env, c.author != nullptr ? c.author : ""));
+  comment.Set("text", Napi::String::New(env, c.text != nullptr ? c.text : ""));
+  out.Set("status", MakeOkStatus(env));
+  out.Set("comment", comment);
+  return out;
+}
+
 Napi::Value Workbook::GetComments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Array arr = Napi::Array::New(env);
@@ -573,14 +599,11 @@ Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  // Frontend signature: addHyperlink(sheet, row, col, target, display, tooltip).
-  // The `location` field is omitted and forwarded as NULL; the writer
-  // mints a fresh `rId` on save.
-  if (info.Length() < 6 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsString() ||
-      !info[4].IsString() || !info[5].IsString()) {
+  if (info.Length() < 7 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsString() ||
+      !info[4].IsString() || !info[5].IsString() || !info[6].IsString()) {
     Napi::TypeError::New(env,
                          "addHyperlink expects (sheet:number, row:number, col:number, "
-                         "target:string, display:string, tooltip:string)")
+                         "target:string, display:string, tooltip:string, location:string)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -592,11 +615,12 @@ Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
   const std::string target = ArgString(info, 3);
   const std::string display = ArgString(info, 4);
   const std::string tooltip = ArgString(info, 5);
+  const std::string location = ArgString(info, 6);
   fm_hyperlink hl{};
   hl.row = row;
   hl.col = col;
   hl.target = target.empty() ? nullptr : target.c_str();
-  hl.location = nullptr;
+  hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
   hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
   fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
@@ -624,6 +648,7 @@ Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
     item.Set("row", Napi::Number::New(env, h.row));
     item.Set("col", Napi::Number::New(env, h.col));
     item.Set("target", Napi::String::New(env, h.target != nullptr ? h.target : ""));
+    item.Set("location", Napi::String::New(env, h.location != nullptr ? h.location : ""));
     item.Set("display", Napi::String::New(env, h.display != nullptr ? h.display : ""));
     item.Set("tooltip", Napi::String::New(env, h.tooltip != nullptr ? h.tooltip : ""));
     arr.Set(static_cast<uint32_t>(emitted), item);

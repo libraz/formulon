@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Cross-language parity gate: CLI vs npm vs Python wheel.
 
 Runs every fixture in ``fixtures.json`` through every available channel
@@ -8,17 +7,20 @@ and at byte-identical UTF-8 for text/errors/booleans.
 
 Skip semantics:
   A missing channel (no native CLI binary, no node, no installed Python
-  wheel) is reported but does not fail the gate. The script fails only
-  when two or more channels were exercised and they disagreed.
+  wheel) is reported but does not fail the gate. Fewer than two active
+  channels produces CTest's conventional skip code (77), not a passing
+  parity result.
 
 Usage:
   python3 tests/parity/run_parity.py [--fixtures FILE] [--verbose]
 
 Exit codes:
-  0   -- all available channels agreed (or fewer than two channels
-         were available, which is a no-op gate).
-  1   -- two or more channels disagreed on at least one fixture.
+  0   -- at least two channels agreed with each other and every fixture
+         expectation.
+  1   -- channel evaluation failed, channels disagreed, or a channel did
+         not satisfy a fixture expectation.
   2   -- usage error (bad fixture file, missing argument, ...).
+  77  -- fewer than two channels were available; parity was skipped.
 """
 
 from __future__ import annotations
@@ -78,6 +80,7 @@ KIND_NUMBER = 1
 KIND_BOOL = 2
 KIND_TEXT = 3
 KIND_ERROR = 4
+SKIP_RETURN_CODE = 77
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +501,17 @@ def records_match(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     return a == b
 
 
+def record_matches_expect(record: Dict[str, Any], expect: Dict[str, Any]) -> bool:
+    """Return whether a normalized channel record satisfies a fixture hint."""
+    if "kind" in expect and record.get("kind") != expect["kind"]:
+        return False
+    if "value" not in expect:
+        return True
+    if expect.get("kind") == "number":
+        return record.get("bits") == number_bits(float(expect["value"]))
+    return record.get("value") == expect["value"]
+
+
 def run(fixtures: List[Dict[str, Any]], channels: List[Channel], verbose: bool) -> int:
     active = [c for c in channels if c.available()]
 
@@ -508,13 +522,13 @@ def run(fixtures: List[Dict[str, Any]], channels: List[Channel], verbose: bool) 
 
     if len(active) < 2:
         print(
-            f"parity: only {len(active)} channel(s) active; "
-            "at least 2 required for a meaningful parity check. Reporting OK."
+            f"parity: only {len(active)} channel(s) active; at least 2 required for a meaningful parity check. SKIPPED."
         )
-        return 0
+        return SKIP_RETURN_CODE
 
     divergences: List[Divergence] = []
     channel_failures: List[Tuple[str, str, str]] = []  # (fixture_id, channel, error)
+    expectation_failures: List[Tuple[str, str, Dict[str, Any], Dict[str, Any]]] = []
 
     for entry in fixtures:
         fid = entry["id"]
@@ -527,6 +541,8 @@ def run(fixtures: List[Dict[str, Any]], channels: List[Channel], verbose: bool) 
             triplet.append((ch.name, result))
             if not result.ok and result.error:
                 channel_failures.append((fid, ch.name, result.error))
+            elif result.ok and not record_matches_expect(result.record, expect):
+                expectation_failures.append((fid, ch.name, expect, result.record))
 
         # Choose the first channel that produced a record as the baseline.
         baseline_name: Optional[str] = None
@@ -572,11 +588,15 @@ def run(fixtures: List[Dict[str, Any]], channels: List[Channel], verbose: bool) 
     print()
     print(
         f"parity summary: fixtures={len(fixtures)} channels={len(active)} "
-        f"divergences={len(divergences)} channel_failures={len(channel_failures)}"
+        f"divergences={len(divergences)} channel_failures={len(channel_failures)} "
+        f"expectation_failures={len(expectation_failures)}"
     )
 
     for fid, channel, err in channel_failures:
         print(f"  channel-failure {channel:<7} on {fid}: {err}")
+
+    for fid, channel, expect, actual in expectation_failures:
+        print(f"  expectation-failure {channel:<7} on {fid}: expected {expect}, got {actual}")
 
     for div in divergences:
         print()
@@ -589,7 +609,7 @@ def run(fixtures: List[Dict[str, Any]], channels: List[Channel], verbose: bool) 
             else:
                 print(f"  {name:<7} !! {result.error}")
 
-    if divergences:
+    if divergences or channel_failures or expectation_failures:
         return 1
     return 0
 

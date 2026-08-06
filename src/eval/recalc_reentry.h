@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Per-thread re-entrancy flag shared between the serial and parallel recalc
 // entry points. A nested invocation on the same thread (typically a future

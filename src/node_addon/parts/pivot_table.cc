@@ -139,7 +139,7 @@ Napi::Value Workbook::PivotFieldAdd(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeIndexResult(env, MakeErrorStatus(env, kBindingNullPointer), 0);
+    return MakeIndexResult(env, MakeErrorStatus(env, kBindingInvalidHandle), 0);
   }
   Napi::Object spec = info[2].As<Napi::Object>();
 
@@ -402,7 +402,7 @@ Napi::Value Workbook::PivotDataFieldAdd(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeIndexResult(env, MakeErrorStatus(env, kBindingNullPointer), 0);
+    return MakeIndexResult(env, MakeErrorStatus(env, kBindingInvalidHandle), 0);
   }
   Napi::Object spec = info[2].As<Napi::Object>();
   fm_pivot_data_field_spec_t c_spec{};
@@ -438,7 +438,7 @@ Napi::Value Workbook::PivotDataFieldSet(const Napi::CallbackInfo& info) {
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t data_field_idx = static_cast<std::size_t>(ArgU32(info, 2));
   if (info.Length() < 4 || !info[3].IsObject()) {
-    return MakeErrorStatus(env, kBindingNullPointer);
+    return MakeErrorStatus(env, kBindingInvalidHandle);
   }
   Napi::Object spec = info[3].As<Napi::Object>();
   fm_pivot_data_field_spec_t c_spec{};
@@ -472,7 +472,7 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   if (info.Length() < 3 || !info[2].IsObject()) {
-    return MakeErrorStatus(env, kBindingNullPointer);
+    return MakeErrorStatus(env, kBindingInvalidHandle);
   }
   Napi::Object spec = info[2].As<Napi::Object>();
 

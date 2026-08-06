@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the regular-period bond yield-to-maturity
 // builtin: YIELD. The implementation lives in
@@ -137,6 +136,15 @@ TEST(FinancialYield, ZeroCouponBondRoundTrip) {
       "100, 2, 0)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 0.065, 1e-9);
+}
+
+TEST(FinancialYield, LowYieldLongBondRoundTrip) {
+  const Value v = EvalSource(
+      "=YIELD(DATE(2024,1,1), DATE(2054,1,1), 0.005, "
+      "PRICE(DATE(2024,1,1), DATE(2054,1,1), 0.005, 0.0125, 100, 2, 0), "
+      "100, 2, 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 0.0125, 1e-9);
 }
 
 // ---------------------------------------------------------------------------

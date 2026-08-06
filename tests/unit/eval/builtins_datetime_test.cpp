@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the date/time built-ins: DATE, TIME, YEAR, MONTH,
 // DAY, HOUR, MINUTE, SECOND, WEEKDAY, EDATE, EOMONTH, DAYS, WEEKNUM,
@@ -263,6 +262,18 @@ TEST(DateTimeYear, ExtractsFromKnownSerial) {
   EXPECT_EQ(v.as_number(), 2026.0);
 }
 
+TEST(DateTimeYear, BoundedRangeSpillsElementwise) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0U, 0U, Value::number(46135.0))));  // 2026-04-23
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1U, 0U, Value::number(45351.0))));  // 2024-02-29
+  const Value result = EvalSourceIn("=YEAR(A1:A2)", wb, wb.sheet(0));
+  ASSERT_TRUE(result.is_array());
+  ASSERT_EQ(result.as_array_rows(), 2U);
+  ASSERT_EQ(result.as_array_cols(), 1U);
+  EXPECT_EQ(result.as_array()->cells[0].as_number(), 2026.0);
+  EXPECT_EQ(result.as_array()->cells[1].as_number(), 2024.0);
+}
+
 TEST(DateTimeMonth, ExtractsFromKnownSerial) {
   const Value v = EvalSource("=MONTH(DATE(2026, 4, 23))");
   ASSERT_TRUE(v.is_number());
@@ -382,6 +393,19 @@ TEST(DateTimeWeekday, Type3MondayZero) {
   const Value v = EvalSource("=WEEKDAY(DATE(2026, 4, 23), 3)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 3.0);
+}
+
+TEST(DateTimeWeekday, PreGhostDaysUseGregorianWeekdays) {
+  // Excel's serial weekday arithmetic deliberately reports the weekday one
+  // day earlier before its fictitious 1900-02-29. Formulon keeps the real
+  // Gregorian weekday instead; the verified intentional divergence lives in
+  // tests/divergence.yaml as weekday_pre_1900_excel_serial_bug.
+  const Value jan_1 = EvalSource("=WEEKDAY(DATE(1900, 1, 1), 2)");
+  const Value feb_28 = EvalSource("=WEEKDAY(DATE(1900, 2, 28), 2)");
+  ASSERT_TRUE(jan_1.is_number());
+  ASSERT_TRUE(feb_28.is_number());
+  EXPECT_EQ(jan_1.as_number(), 1.0);   // Monday
+  EXPECT_EQ(feb_28.as_number(), 3.0);  // Wednesday
 }
 
 TEST(DateTimeWeekday, Type11MondayStart) {
@@ -666,10 +690,10 @@ TEST(DateTimeWeeknum, Iso21_2023Jan1_RollsToPrevYear) {
   EXPECT_EQ(v.as_number(), 52.0);
 }
 
-TEST(DateTimeWeeknum, InvalidReturnTypeIsNum) {
+TEST(DateTimeWeeknum, InvalidReturnTypeUsesDefault) {
   const Value v = EvalSource("=WEEKNUM(DATE(2024,1,1),99)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 1.0);
 }
 
 TEST(DateTimeWeeknum, NegativeSerialIsNum) {
@@ -894,6 +918,18 @@ TEST(DateTimeNetworkdays, ErrorPropagates) {
   const Value v = EvalSource("=NETWORKDAYS(\"abc\",DATE(2024,1,5))");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(DateTimeNetworkdays, RejectsOutOfRangeSerialBeforeIteration) {
+  const Value v = EvalSource("=NETWORKDAYS(1,1000000000)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeWorkday, RejectsOutOfRangeDayCountBeforeIteration) {
+  const Value v = EvalSource("=WORKDAY(1,1000000000)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(DateTimeWorkday, ForwardFiveDays) {

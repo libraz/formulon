@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the cell-level dynamic-array spill API on `Sheet`. The
 // tests cover registration, collision detection, deep-copy semantics for
@@ -69,6 +68,23 @@ TEST(SheetSpillTest, CommitTwoByThreeRowMajorOrderingMatches) {
   EXPECT_EQ(s.resolve_cell_value(6U, 7U), Value::number(4.0));
   EXPECT_EQ(s.resolve_cell_value(6U, 8U), Value::number(5.0));
   EXPECT_EQ(s.resolve_cell_value(6U, 9U), Value::number(6.0));
+}
+
+TEST(SheetSpillTest, LargeSpillFindsFarPhantomWithoutPerCellReverseIndex) {
+  Sheet s("Sheet1");
+  constexpr std::uint32_t kRows = 1000U;
+  constexpr std::uint32_t kCols = 100U;
+  std::vector<Value> cells(static_cast<std::size_t>(kRows) * kCols, Value::number(7.0));
+
+  ASSERT_TRUE(s.commit_spill(10U, 20U, kRows, kCols, std::move(cells)));
+  const SpillRegion* region = s.spill_region_covering(10U + kRows - 1U, 20U + kCols - 1U);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->anchor_row, 10U);
+  EXPECT_EQ(region->anchor_col, 20U);
+  EXPECT_EQ(s.resolve_cell_value(10U + kRows - 1U, 20U + kCols - 1U), Value::number(7.0));
+
+  s.clear_spill(10U, 20U);
+  EXPECT_EQ(s.spill_region_covering(10U + kRows - 1U, 20U + kCols - 1U), nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -266,25 +282,22 @@ TEST(SheetSpillTest, FormulaWriteToPhantomEagerlyClearsSpill) {
   EXPECT_EQ(phantom->formula_text, "=B1");
 }
 
-TEST(SheetSpillTest, WriteToAnchorDoesNotEagerlyClearSpill) {
-  // The eager-invalidation rule is "writing to a phantom drops the spill".
-  // Writing to the anchor itself is a separate, intentional caller action
-  // (e.g. overwriting the formula). The anchor write must succeed and the
-  // spill table is not consulted for the anchor coordinate.
+TEST(SheetSpillTest, WriteToAnchorEagerlyClearsSpill) {
+  // Replacing a dynamic-array formula with a literal invalidates the entire
+  // former spill footprint, just like a direct write to one of its phantoms.
   Sheet s("Sheet1");
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
 
   s.set_cell_value(0U, 0U, Value::number(500.0));
 
-  // Per the contract, writing to the anchor does not auto-clear; the spill
-  // table still references the original anchor.
-  EXPECT_NE(s.spill_region_at_anchor(0U, 0U), nullptr);
-  EXPECT_NE(s.spill_region_covering(1U, 0U), nullptr);
+  EXPECT_EQ(s.spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(s.spill_region_covering(1U, 0U), nullptr);
   // The anchor cell's literal value reflects the recent write.
   const Cell* anchor = s.cell_at(0U, 0U);
   ASSERT_NE(anchor, nullptr);
   EXPECT_EQ(anchor->cached_value, Value::number(500.0));
+  EXPECT_TRUE(s.resolve_cell_value(1U, 0U).is_blank());
 }
 
 // ---------------------------------------------------------------------------
@@ -414,29 +427,30 @@ TEST(SheetSpillTest, SpillPhantomAddressesIsEmptyWithoutRegions) {
 
 TEST(SheetSpillTest, CellCountIncludesPhantomsWithoutStoredSlots) {
   Sheet s("Sheet1");
-  // Anchor D1 (row 0, col 3), 3x1 spill. Committing grows row 0 to 4 slots
-  // (cols 0..3); the two phantoms D2, D3 live in rows 1 and 2, which hold no
-  // stored slots at all, so each adds one to the count.
+  // Anchor D1 (row 0, col 3), 3x1 spill. The row's run starts at column D, so
+  // committing materialises exactly one slot; the two phantoms D2, D3 live in
+  // rows 1 and 2, which hold no stored slots at all, so each adds one.
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 3U, 3U, 1U, std::move(cells)));
 
-  EXPECT_EQ(s.cell_count(), 4U + 2U);
+  EXPECT_EQ(s.cell_count(), 1U + 2U);
 }
 
 TEST(SheetSpillTest, CellCountDoesNotDoubleCountPhantomOverImplicitSlot) {
   Sheet s("Sheet1");
-  // Spill D1:D3 (phantoms at D2, D3), then populate F2 (row 1, col 5). The
-  // literal at F2 grows row 1 to 6 slots (cols 0..5), so phantom D2 (col 3)
-  // now coincides with an implicitly default-constructed slot. It must be
-  // counted once; phantom D3 (row 2) still has no slot and adds one.
+  // Spill D1:D3 (phantoms at D2, D3), then populate D2 and F2 in row 1. The
+  // literal at D2 is a phantom coordinate that now also holds a stored slot,
+  // and the write to F2 extends that row's run to cols D..F. Phantom D2 must
+  // be counted once; phantom D3 (row 2) still has no slot and adds one.
   std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
   ASSERT_TRUE(s.commit_spill(0U, 3U, 3U, 1U, std::move(cells)));
   s.set_cell_value(1U, 5U, Value::number(9.0));
+  s.set_cell_xf_index(1U, 3U, 7U);
 
-  // The write to F2 (not a phantom) leaves the spill intact.
+  // Neither write targets the anchor, so the spill stays intact.
   ASSERT_NE(s.spill_region_at_anchor(0U, 3U), nullptr);
-  // row 0: 4 slots, row 1: 6 slots, phantom D3 (row 2): +1.
-  EXPECT_EQ(s.cell_count(), 4U + 6U + 1U);
+  // row 0: 1 slot (D1), row 1: 3 slots (D2..F2), phantom D3 (row 2): +1.
+  EXPECT_EQ(s.cell_count(), 1U + 3U + 1U);
 }
 
 TEST(SheetSpillTest, CellAtIsUnchangedForPhantomCoordinates) {
@@ -453,6 +467,96 @@ TEST(SheetSpillTest, CellAtIsUnchangedForPhantomCoordinates) {
   EXPECT_EQ(s.cell_at(2U, 0U), nullptr);
   EXPECT_EQ(s.resolve_cell_value(1U, 0U), Value::number(2.0));
   EXPECT_EQ(s.resolve_cell_value(2U, 0U), Value::number(3.0));
+}
+
+// ---------------------------------------------------------------------------
+// Bulk range reads
+// ---------------------------------------------------------------------------
+//
+// `read_range` exists to take the sheet lock once for a whole rectangle
+// instead of twice per cell. These tests pin it against the per-coordinate
+// readers it replaces, because the two must not drift.
+
+TEST(SheetReadRange, MatchesResolveCellValueOverLiteralsAndGaps) {
+  Sheet s("Sheet1");
+  s.set_cell_value(1U, 1U, Value::number(1.0));
+  s.set_cell_value(1U, 3U, Value::number(2.0));
+  s.set_cell_value(3U, 2U, Value::text("x"));
+
+  std::vector<Value> bulk;
+  std::vector<std::size_t> formula_indices;
+  s.read_range(0U, 4U, 0U, 4U, bulk, formula_indices);
+
+  ASSERT_EQ(bulk.size(), 25U);
+  EXPECT_TRUE(formula_indices.empty());
+  std::size_t index = 0;
+  for (std::uint32_t row = 0; row <= 4U; ++row) {
+    for (std::uint32_t col = 0; col <= 4U; ++col, ++index) {
+      EXPECT_EQ(bulk[index], s.resolve_cell_value(row, col)) << "at (" << row << "," << col << ")";
+    }
+  }
+}
+
+TEST(SheetReadRange, SurfacesSpillPhantomValues) {
+  Sheet s("Sheet1");
+  std::vector<Value> cells = {Value::number(1.0), Value::number(2.0), Value::number(3.0)};
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 3U, 1U, std::move(cells)));
+
+  std::vector<Value> bulk;
+  std::vector<std::size_t> formula_indices;
+  s.read_range(0U, 2U, 0U, 0U, bulk, formula_indices);
+
+  ASSERT_EQ(bulk.size(), 3U);
+  EXPECT_TRUE(formula_indices.empty());
+  EXPECT_EQ(bulk[0], Value::number(1.0));
+  EXPECT_EQ(bulk[1], Value::number(2.0));
+  EXPECT_EQ(bulk[2], Value::number(3.0));
+}
+
+TEST(SheetReadRange, ReportsFormulaCoordinatesInsteadOfEvaluatingThem) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(5.0));
+  s.set_cell_formula(0U, 1U, "=A1*2");
+
+  std::vector<Value> bulk;
+  std::vector<std::size_t> formula_indices;
+  s.read_range(0U, 0U, 0U, 1U, bulk, formula_indices);
+
+  ASSERT_EQ(bulk.size(), 2U);
+  ASSERT_EQ(formula_indices.size(), 1U);
+  EXPECT_EQ(formula_indices[0], 1U);
+  // The formula slot carries only its cached value; evaluation is the
+  // caller's job because it re-enters the sheet.
+  EXPECT_TRUE(bulk[1].is_blank());
+}
+
+TEST(SheetReadRange, AppendsToTheCallersBufferAndIndexesAbsolutely) {
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=1");
+
+  std::vector<Value> bulk = {Value::number(99.0)};
+  std::vector<std::size_t> formula_indices;
+  s.read_range(0U, 0U, 0U, 0U, bulk, formula_indices);
+
+  ASSERT_EQ(bulk.size(), 2U);
+  EXPECT_EQ(bulk[0], Value::number(99.0));
+  ASSERT_EQ(formula_indices.size(), 1U);
+  EXPECT_EQ(formula_indices[0], 1U);
+}
+
+TEST(SheetReadRange, ReversedOrOutOfRangeRectangleAppendsNothing) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+
+  std::vector<Value> bulk;
+  std::vector<std::size_t> formula_indices;
+  s.read_range(2U, 1U, 0U, 0U, bulk, formula_indices);
+  s.read_range(0U, 0U, 2U, 1U, bulk, formula_indices);
+  s.read_range(0U, Sheet::kMaxRows, 0U, 0U, bulk, formula_indices);
+  s.read_range(0U, 0U, 0U, Sheet::kMaxCols, bulk, formula_indices);
+
+  EXPECT_TRUE(bulk.empty());
+  EXPECT_TRUE(formula_indices.empty());
 }
 
 }  // namespace

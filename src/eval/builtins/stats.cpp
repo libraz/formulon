@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Statistical built-ins: dispersion family (VAR.S / VAR.P / STDEV.S /
 // STDEV.P) plus the "A" variants (AVERAGEA / MAXA / MINA / VARA / VARPA /
@@ -26,6 +25,7 @@
 
 #include "eval/builtins/stats.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -213,27 +213,37 @@ Value percentile_exc_sorted(const std::vector<double>& xs, double k) {
 
 ModeFrequencies build_mode_frequencies(const std::vector<double>& xs) {
   ModeFrequencies freq;
-  freq.values.reserve(xs.size());
-  freq.counts.reserve(xs.size());
-  for (double v : xs) {
-    bool found = false;
-    for (std::size_t i = 0; i < freq.values.size(); ++i) {
-      if (freq.values[i] == v) {
-        ++freq.counts[i];
-        if (freq.counts[i] > freq.best_count) {
-          freq.best_count = freq.counts[i];
-        }
-        found = true;
-        break;
-      }
+  struct Entry {
+    double value;
+    std::size_t first;
+    std::size_t count;
+  };
+  std::vector<std::pair<double, std::size_t>> ranked;
+  ranked.reserve(xs.size());
+  for (std::size_t i = 0; i < xs.size(); ++i) {
+    ranked.emplace_back(xs[i], i);
+  }
+  std::sort(ranked.begin(), ranked.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+  std::vector<Entry> entries;
+  entries.reserve(ranked.size());
+  for (std::size_t begin = 0; begin < ranked.size();) {
+    std::size_t end = begin + 1U;
+    std::size_t first = ranked[begin].second;
+    while (end < ranked.size() && ranked[end].first == ranked[begin].first) {
+      first = std::min(first, ranked[end].second);
+      ++end;
     }
-    if (!found) {
-      freq.values.push_back(v);
-      freq.counts.push_back(1u);
-      if (freq.best_count == 0u) {
-        freq.best_count = 1u;
-      }
-    }
+    const std::size_t count = end - begin;
+    entries.push_back(Entry{ranked[begin].first, first, count});
+    freq.best_count = std::max(freq.best_count, count);
+    begin = end;
+  }
+  std::sort(entries.begin(), entries.end(), [](const Entry& lhs, const Entry& rhs) { return lhs.first < rhs.first; });
+  freq.values.reserve(entries.size());
+  freq.counts.reserve(entries.size());
+  for (const Entry& entry : entries) {
+    freq.values.push_back(entry.value);
+    freq.counts.push_back(entry.count);
   }
   return freq;
 }

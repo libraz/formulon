@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impl for Excel 365's PIVOTBY dynamic-array function. PIVOTBY is the
 // 2D analogue of GROUPBY: it introduces a column-grouping axis

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the lazy `CHOOSECOLS(array, col_num1, ...)` and
 // `CHOOSEROWS(array, row_num1, ...)` dynamic-array spilling builtins.

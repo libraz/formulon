@@ -72,6 +72,7 @@ add_library(formulon_node MODULE
   src/node_addon/parts/lifecycle.cc
   src/node_addon/parts/pivot_cache.cc
   src/node_addon/parts/pivot_table.cc
+  src/node_addon/parts/print.cc
   src/node_addon/parts/sheet.cc
   src/node_addon/parts/sheet_view.cc
   src/node_addon/parts/styles.cc

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy impl for PHONETIC. Mac Excel reads the IME-typed kana from the
 // OOXML `<rPh>` annotation attached to the source cell (either via the

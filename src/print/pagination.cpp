@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 
 #include "print/pagination.h"
 
@@ -333,6 +332,60 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     }
   }
 
+  // Build the resolved track geometry once for the union extent. The old
+  // per-track RowHeightPoints / ColumnWidthChars calls each re-scanned every
+  // layout override, turning a 50k-row pagination into O(rows * overrides).
+  // An override that carries only outline / hidden metadata has no `ht`, so
+  // it must retain the sheet default height rather than becoming a 0pt row.
+  const CellRange union_box = BoundingBox(effective_areas);
+  const SheetFormatDefaults& defaults = sheet.format_defaults();
+  const double default_row_h = defaults.has_default_row_height ? defaults.default_row_height : kStandardRowHeightPt;
+  const double default_col_w = defaults.has_default_col_width ? defaults.default_col_width : kStandardColWidthChars;
+  std::vector<double> row_heights(static_cast<std::size_t>(union_box.last_row - union_box.first_row) + 1U,
+                                  default_row_h);
+  std::vector<bool> row_overridden(row_heights.size(), false);
+  for (const RowLayout& layout : sheet.layout().row_overrides) {
+    if (layout.row < union_box.first_row || layout.row > union_box.last_row) {
+      continue;
+    }
+    const std::size_t index = static_cast<std::size_t>(layout.row - union_box.first_row);
+    if (row_overridden[index]) {
+      continue;
+    }
+    row_overridden[index] = true;
+    row_heights[index] = layout.hidden ? 0.0 : (layout.height > 0.0 ? layout.height : default_row_h);
+  }
+  std::vector<double> col_widths(static_cast<std::size_t>(union_box.last_col - union_box.first_col) + 1U,
+                                 default_col_w);
+  std::vector<bool> col_overridden(col_widths.size(), false);
+  for (const ColumnLayout& layout : sheet.layout().columns) {
+    const std::uint32_t first = std::max(layout.first, union_box.first_col);
+    const std::uint32_t last = std::min(layout.last, union_box.last_col);
+    if (first > last) {
+      continue;
+    }
+    for (std::uint32_t col = first; col <= last; ++col) {
+      const std::size_t index = static_cast<std::size_t>(col - union_box.first_col);
+      if (col_overridden[index]) {
+        continue;
+      }
+      col_overridden[index] = true;
+      col_widths[index] = layout.hidden ? 0.0 : layout.width;
+    }
+  }
+  const auto row_height = [&](std::uint32_t row) {
+    if (row >= union_box.first_row && row <= union_box.last_row) {
+      return row_heights[static_cast<std::size_t>(row - union_box.first_row)];
+    }
+    return RowHeightPoints(sheet, row);
+  };
+  const auto col_width = [&](std::uint32_t col) {
+    if (col >= union_box.first_col && col <= union_box.last_col) {
+      return col_widths[static_cast<std::size_t>(col - union_box.first_col)];
+    }
+    return ColumnWidthChars(sheet, col);
+  };
+
   // 2. Printable body area is determined once from the page setup.
   const SheetPrintSettings& settings = sheet.print_settings();
   PrintableArea body = compute_printable_area(settings.page_setup, settings.page_margins);
@@ -351,7 +404,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     const auto [first, last] = *titles.repeat_rows;
     double title_height = 0.0;
     for (std::uint32_t row = first; row <= last; ++row) {
-      title_height += RowHeightPoints(sheet, row);
+      title_height += row_height(row);
     }
     // Empirical: when print-title rows are enabled, Excel reserves a
     // minimum body band of ~5 default rows even if the actual title
@@ -360,8 +413,6 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     // raw title_height (which would yield 15 / 45 / 75 pt). Using a
     // 5-default-row floor reproduces the observed h=[39] for all three.
     constexpr double kMinTitleReserveRows = 5.0;
-    const SheetFormatDefaults& defaults = sheet.format_defaults();
-    const double default_row_h = defaults.has_default_row_height ? defaults.default_row_height : kStandardRowHeightPt;
     title_height = std::max(title_height, kMinTitleReserveRows * default_row_h);
     body.height_pt = std::max(0.0, body.height_pt - title_height);
   }
@@ -369,7 +420,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     const auto [first, last] = *titles.repeat_cols;
     double title_width = 0.0;
     for (std::uint32_t col = first; col <= last; ++col) {
-      title_width += ColumnCharsToPoints(ColumnWidthChars(sheet, col));
+      title_width += ColumnCharsToPoints(col_width(col));
     }
     body.width_pt = std::max(0.0, body.width_pt - title_width);
   }
@@ -377,14 +428,13 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // 3. The model scale factor is shared across every effective area:
   // Excel applies a single sheet-wide `<pageSetup scale>` / `fitToPage`
   // factor, so we size the factor against the union bounding box.
-  const CellRange union_box = BoundingBox(effective_areas);
   double union_total_width = 0.0;
-  for (std::uint32_t col = union_box.first_col; col <= union_box.last_col; ++col) {
-    union_total_width += ColumnCharsToPoints(ColumnWidthChars(sheet, col));
+  for (double width : col_widths) {
+    union_total_width += ColumnCharsToPoints(width);
   }
   double union_total_height = 0.0;
-  for (std::uint32_t row = union_box.first_row; row <= union_box.last_row; ++row) {
-    union_total_height += RowHeightPoints(sheet, row);
+  for (double height : row_heights) {
+    union_total_height += height;
   }
   const double scale = ComputeScaleFactor(settings.page_setup, body, union_total_width, union_total_height);
 
@@ -400,7 +450,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     std::vector<double> row_points;
     row_points.reserve(rect.last_row - rect.first_row + 1);
     for (std::uint32_t row = rect.first_row; row <= rect.last_row; ++row) {
-      row_points.push_back(RowHeightPoints(sheet, row) * scale);
+      row_points.push_back(row_height(row) * scale);
     }
     AxisInput row_axis;
     row_axis.first = rect.first_row;
@@ -423,7 +473,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     std::vector<double> col_points;
     col_points.reserve(rect.last_col - rect.first_col + 1);
     for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
-      col_points.push_back(ColumnCharsToPoints(ColumnWidthChars(sheet, col)) * scale);
+      col_points.push_back(ColumnCharsToPoints(col_width(col)) * scale);
     }
     AxisInput col_axis;
     col_axis.first = rect.first_col;

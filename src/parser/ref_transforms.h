@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Concrete `RefTransform` implementations used for whole-workbook
 // edits. The relative-shift transform lives next to the walker in
@@ -25,7 +24,7 @@ namespace parser {
 ///
 /// Matching is ASCII-case-insensitive (Excel's sheet-name comparison
 /// rule). Quoting of the new sheet name is recomputed from the new bytes:
-/// if any byte falls outside `[A-Za-z0-9_.]`, or the name is empty, the
+/// if it cannot be represented unambiguously in bare A1 syntax, the
 /// `Reference.sheet_quoted` flag is set so `format_a1` round-trips with
 /// the canonical quoted form.
 ///
@@ -56,13 +55,6 @@ class SheetRenameTransform final : public RefTransform {
   // construction time keeps `apply` allocation-free.
   bool new_name_needs_quotes_;
 };
-
-/// Returns true iff `name` must be wrapped in single quotes when written
-/// into a sheet-qualified A1 reference. Excel quotes any name containing a
-/// byte outside `[A-Za-z0-9_.]`, plus the empty name. UTF-8 bytes (high
-/// bit set) are conservatively treated as needing quoting because the
-/// tokenizer's bare-Ident rule rejects them at the start of a sheet name.
-bool sheet_name_needs_quoting(std::string_view name) noexcept;
 
 /// Direction of a row/column structural edit.
 enum class RowColEdit : std::uint8_t {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Lazy-form routing for the date1904-sensitive calendar builtins. The
 // calendar functions that interpret or produce a date serial (DATE, YEAR,
@@ -51,6 +50,10 @@ struct DateEntry {
 /// calendar builtin. Used by the VM to reuse the shared impl with
 /// `ctx.date1904()` since the VM has no call AST to drive the lazy path.
 const DateEntry* find_date_entry(std::string_view name) noexcept;
+
+/// Invokes a date-aware scalar implementation, lifting array arguments
+/// cellwise with Excel 365 broadcasting semantics.
+Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 
 /// Single tree-walker lazy impl covering the whole date1904-sensitive
 /// calendar family. Evaluates the call's arguments (scalar-only,

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `Sheet::set_cell_cached_value`'s Text deep-copy contract.
 //
@@ -18,6 +17,7 @@
 //   * Exercising the empty-string boundary.
 
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <string_view>
 
@@ -65,6 +65,22 @@ TEST(SheetCachedTextTest, OverwriteTextWithLongerString) {
   ASSERT_TRUE(cell->cached_value.is_text());
   EXPECT_EQ(cell->cached_value.as_text(), std::string_view(long_text));
   EXPECT_EQ(cell->cached_value.as_text().size(), 200U);
+}
+
+TEST(SheetCachedTextTest, BorrowedTextDoesNotDuplicateWorkbookOwnedStorage) {
+  Sheet s("Sheet1");
+  std::deque<std::string> workbook_storage;
+  workbook_storage.emplace_back("shared value");
+  const std::string_view shared = workbook_storage.back();
+
+  s.set_cell_cached_value_borrowed(0U, 0U, Value::text(shared));
+
+  const Cell* cell = s.cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  ASSERT_TRUE(cell->cached_value.is_text());
+  EXPECT_EQ(cell->cached_value.as_text(), "shared value");
+  EXPECT_EQ(cell->cached_value.as_text().data(), shared.data());
+  EXPECT_EQ(cell->cached_text_owned, nullptr);
 }
 
 TEST(SheetCachedTextTest, OverwriteTextWithNonText) {

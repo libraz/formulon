@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Workbook-level OOXML part builders: `[Content_Types].xml`,
 // `_rels/.rels`, `xl/workbook.xml`, and `xl/_rels/workbook.xml.rels`.
@@ -28,7 +27,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan);
 /// Builds the package-level `_rels/.rels` part: the relationship to the
 /// workbook part itself plus optional core / extended property
 /// relationships when the corresponding passthrough parts survived.
-std::string BuildPackageRels(const EmissionPlan& plan);
+std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan);
 
 /// Builds the `xl/workbook.xml` part: `<sheets>`, optional
 /// `<externalReferences>`, `<definedNames>`, `<calcPr>`, and

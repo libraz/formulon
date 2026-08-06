@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Pythonic wrapper around the Formulon C ABI (WASM transport).
 
 Public surface:
@@ -34,20 +33,26 @@ __all__ = [
     "CellStyle",
     "CellXf",
     "CfCellResult",
+    "CfColor",
     "CfMatch",
+    "CfValueObject",
     "ColumnLayout",
     "Comment",
     "ConditionalFormat",
     "ConditionalFormatInput",
+    "ColorScale",
+    "DataBar",
     "DataValidation",
     "DataValidationInput",
     "DefinedName",
+    "DifferentialFormat",
     "ExternalLink",
     "FillRecord",
     "FontRecord",
     "FormulonError",
     "FunctionMetadata",
     "Hyperlink",
+    "IconSet",
     "MergeRange",
     "PassthroughPart",
     "PivotAggregation",
@@ -62,7 +67,9 @@ __all__ = [
     "PivotFilterType",
     "PivotFilterValueKind",
     "PivotLayout",
+    "PivotReportLayout",
     "PivotShowValuesAs",
+    "PivotWorksheetSource",
     "RowLayout",
     "SheetProtection",
     "SheetView",
@@ -77,6 +84,10 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # Error type
 # ---------------------------------------------------------------------------
+
+# `formulon::FormulonErrorCode::kNotFound`. The C ABI intentionally exposes
+# status codes as integers, so bindings retain this matching stable ordinal.
+_STATUS_NOT_FOUND = 6
 
 
 class FormulonError(Exception):
@@ -100,8 +111,7 @@ class FormulonError(Exception):
     def __init__(self, status: int, *, op: str = "") -> None:
         self.status = int(status)
         self.status_name = LIB.read_cstr(LIB.fm_status_string(self.status))
-        self.message = LIB.read_cstr(LIB.fm_last_error_message())
-        self.context = LIB.read_cstr(LIB.fm_last_error_context())
+        self.message, self.context = LIB.last_diagnostic(self.status)
         prefix = f"{op}: " if op else ""
         text = f"{prefix}{self.status_name} ({self.status})"
         if self.message:
@@ -350,6 +360,14 @@ class PivotCellKind(IntEnum):
     BLANK = 7
 
 
+class PivotReportLayout(IntEnum):
+    """Pivot report layout setting (distinct from :class:`PivotLayout`)."""
+
+    COMPACT = 0
+    TABULAR = 1
+    OUTLINE = 2
+
+
 # Sentinel value for ``PivotDataFieldSpec.show_as_base_item`` meaning
 # "(previous)" / "(next)" (mirrors the C ABI constants).
 PIVOT_SHOW_AS_BASE_PREVIOUS = 1048828
@@ -390,6 +408,15 @@ class Hyperlink:
 class Comment:
     """A cell comment."""
 
+    author: str
+    text: str
+
+
+class CommentEntry(NamedTuple):
+    """One enumerated sheet comment, including its zero-based anchor."""
+
+    row: int
+    col: int
     author: str
     text: str
 
@@ -507,6 +534,21 @@ class RowLayout:
 
 
 @dataclass(frozen=True)
+class PaginationResult:
+    """Resolved physical pagination for one worksheet.
+
+    ``print_area`` contains inclusive, zero-based ``(first_row, first_col,
+    last_row, last_col)`` rectangles.  Break lists contain the zero-based row
+    or column a new physical page begins before.
+    """
+
+    page_count: int
+    print_area: List[tuple[int, int, int, int]]
+    horizontal_breaks: List[int]
+    vertical_breaks: List[int]
+
+
+@dataclass(frozen=True)
 class CfMatch:
     """A resolved conditional-format match for one cell.
 
@@ -540,6 +582,50 @@ class CfCellResult:
 
 
 @dataclass(frozen=True)
+class CfColor:
+    """RGBA color used by a visual conditional-format rule."""
+
+    r: int
+    g: int
+    b: int
+    a: int = 255
+
+
+@dataclass(frozen=True)
+class CfValueObject:
+    """One conditional-format threshold (``fm_cfvo_t``)."""
+
+    type: int
+    value: Optional[str] = None
+    gte: bool = True
+
+
+@dataclass(frozen=True)
+class ColorScale:
+    thresholds: List[CfValueObject]
+    colors: List[CfColor]
+
+
+@dataclass(frozen=True)
+class DataBar:
+    minimum: CfValueObject
+    maximum: CfValueObject
+    fill: CfColor
+    show_value: bool = True
+    min_length_pct: int = 10
+    max_length_pct: int = 90
+
+
+@dataclass(frozen=True)
+class IconSet:
+    name: int
+    thresholds: List[CfValueObject]
+    reverse: bool = False
+    show_value: bool = True
+    percent: bool = True
+
+
+@dataclass(frozen=True)
 class ConditionalFormat:
     """A conditional-format rule (getter result, flattened priority order)."""
 
@@ -560,14 +646,17 @@ class ConditionalFormat:
     std_dev: float
     text: str
     time_period: int
+    color_scale: Optional[ColorScale]
+    data_bar: Optional[DataBar]
+    icon_set: Optional[IconSet]
 
 
 @dataclass
 class ConditionalFormatInput:
     """Argument shape for :meth:`Workbook.add_conditional_format`.
 
-    Visual rule types (color scale / data bar / icon set) are rejected by
-    the engine; only the non-visual rule subset is creatable here.
+    Set the corresponding visual payload for color-scale, data-bar, or
+    icon-set rules. The C ABI validates each payload's cardinality.
     """
 
     sqref: List[MergeRange]
@@ -592,6 +681,9 @@ class ConditionalFormatInput:
     text: str = ""
     time_period_engaged: bool = False
     time_period: int = 0
+    color_scale: Optional[ColorScale] = None
+    data_bar: Optional[DataBar] = None
+    icon_set: Optional[IconSet] = None
 
 
 @dataclass(frozen=True)
@@ -663,6 +755,21 @@ class FillRecord:
     bg_argb: int = 0
 
 
+@dataclass
+class DifferentialFormat:
+    """An optional-style-fragment record used by conditional formats.
+
+    ``border`` uses the same dictionary shape as :meth:`Workbook.add_border`.
+    A number format is engaged when ``num_fmt_id`` is not ``None``.
+    """
+
+    font: Optional[FontRecord] = None
+    fill: Optional[FillRecord] = None
+    border: Optional[Dict[str, object]] = None
+    num_fmt_id: Optional[int] = None
+    num_fmt_code: str = ""
+
+
 @dataclass(frozen=True)
 class CellStyle:
     """A named cell style (``<cellStyle>`` entry)."""
@@ -709,6 +816,15 @@ class PivotLayout:
     rows: int
     cols: int
     cells: List[PivotCell]
+
+
+@dataclass(frozen=True)
+class PivotWorksheetSource:
+    """Optional worksheet-source metadata for a pivot cache."""
+
+    ref: Optional[str] = None
+    sheet: Optional[str] = None
+    name: Optional[str] = None
 
 
 @dataclass
@@ -1022,6 +1138,25 @@ class Workbook:
             LIB.free(value_ptr)
 
     # -- Ad-hoc array evaluation ------------------------------------------
+    def evaluate_cf_formula(
+        self, sheet: int, row: int, col: int, anchor_row: int, anchor_col: int, formula: str
+    ) -> bool:
+        """Evaluate a conditional-format formula at one cell without mutation."""
+        h = self._require()
+        formula_ptr, _ = LIB.alloc_utf8(formula)
+        value_ptr = LIB.alloc(fm_value_t_size)
+        try:
+            _check(
+                LIB.fm_workbook_evaluate_cf_formula(
+                    h, int(sheet), int(row), int(col), int(anchor_row), int(anchor_col), formula_ptr, value_ptr
+                ),
+                "fm_workbook_evaluate_cf_formula",
+            )
+            return Value._from_wasm(value_ptr).boolean is True
+        finally:
+            LIB.free(formula_ptr)
+            LIB.free(value_ptr)
+
     def evaluate_formula_array(self, sheet: int, row: int, col: int, formula: str) -> List[List[Value]]:
         """Evaluate ``formula`` as if entered at ``(sheet, row, col)`` and
         return the whole multi-cell result, without mutating the workbook.
@@ -1083,10 +1218,9 @@ class Workbook:
     def recalc(self) -> None:
         """Drive a full incremental recalc.
 
-        Under WASM this is always serial -- the parallel scheduler is
-        unavailable because the standalone reactor build is compiled
-        without ``-pthread``. Throughput is therefore lower than the
-        native CLI but result fidelity is identical.
+        Public bindings use the serial recalc contract. The internal C++
+        parallel scheduler is not exposed by the C ABI, so native CLI and
+        language bindings have the same recalculation semantics.
         """
         h = self._require()
         status = LIB.fm_workbook_recalc(h)
@@ -1162,7 +1296,8 @@ class Workbook:
         Iteration order is implementation-defined but stable for an
         unmutated workbook (sorted by ``(row, col)`` ascending per the C
         ABI). Borrowed text pointers are decoded eagerly per yielded
-        item, so consumers may freely mutate the workbook between yields.
+        item. Do not mutate the workbook while consuming this iterator: the
+        C ABI invalidates a cell enumeration after a workbook mutation.
         """
         h = self._require()
         out_count = _alloc_out_ptr()
@@ -1175,15 +1310,15 @@ class Workbook:
         # Scratch: row(4) + col(4) + formula_ptr(4) + value(16) = 28 bytes.
         # Allocate them as separate slots so the ABI's
         # individual out-parameter contract is respected.
-        for i in range(n):
-            row_ptr = LIB.alloc(4)
-            col_ptr = LIB.alloc(4)
-            formula_ptr = LIB.alloc(4)
-            value_ptr = LIB.alloc(fm_value_t_size)
+        row_ptr = LIB.alloc(4)
+        col_ptr = LIB.alloc(4)
+        formula_ptr = LIB.alloc(4)
+        value_ptr = LIB.alloc(fm_value_t_size)
+        try:
             LIB.write_bytes(row_ptr, b"\x00\x00\x00\x00")
             LIB.write_bytes(col_ptr, b"\x00\x00\x00\x00")
             LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
-            try:
+            for i in range(n):
                 status = LIB.fm_workbook_cell_at(h, sheet, i, row_ptr, col_ptr, formula_ptr, value_ptr)
                 _check(status, "fm_workbook_cell_at")
                 row = LIB.read_u32(row_ptr)
@@ -1191,12 +1326,12 @@ class Workbook:
                 formula_addr = LIB.read_u32(formula_ptr)
                 formula = LIB.read_cstr(formula_addr) if formula_addr else None
                 value = Value._from_wasm(value_ptr)
-            finally:
-                LIB.free(row_ptr)
-                LIB.free(col_ptr)
-                LIB.free(formula_ptr)
-                LIB.free(value_ptr)
-            yield Cell(row=row, col=col, formula=formula, value=value)
+                yield Cell(row=row, col=col, formula=formula, value=value)
+        finally:
+            LIB.free(row_ptr)
+            LIB.free(col_ptr)
+            LIB.free(formula_ptr)
+            LIB.free(value_ptr)
 
     def iter_defined_names(self) -> Iterator[DefinedName]:
         """Iterate over every defined name in declaration order."""
@@ -1606,9 +1741,9 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.COMMENT)
         try:
             status = LIB.fm_sheet_get_comment_at(h, int(sheet), int(row), int(col), ptr)
-            if status != 0:
-                # kInvalidArgument is the "no comment anchored here" signal.
+            if status == _STATUS_NOT_FOUND:
                 return None
+            _check(status, "fm_sheet_get_comment_at")
             d = S.COMMENT.unpack(LIB, ptr)
             return Comment(
                 author=LIB.read_cstr(d["author"]),
@@ -1631,6 +1766,32 @@ class Workbook:
         finally:
             for p in owned:
                 LIB.free(p)
+
+    def comment_count(self, sheet: int) -> int:
+        """Return the number of comments on ``sheet``."""
+        h = self._require()
+        return _read_count(LIB.fm_sheet_get_comment_count, h, int(sheet))
+
+    def get_comments(self, sheet: int) -> List[CommentEntry]:
+        """Return every comment on ``sheet`` in storage order.
+
+        Unlike :meth:`get_comment`, this discovers comments on otherwise
+        empty cells without requiring callers to scan worksheet coordinates.
+        """
+        h = self._require()
+        out: List[CommentEntry] = []
+        for index in range(self.comment_count(sheet)):
+            ptr = S.alloc_struct(LIB, S.COMMENT)
+            try:
+                _check(
+                    LIB.fm_sheet_get_comment_at_index(h, int(sheet), index, ptr),
+                    "fm_sheet_get_comment_at_index",
+                )
+                d = S.COMMENT.unpack(LIB, ptr)
+                out.append(CommentEntry(d["row"], d["col"], LIB.read_cstr(d["author"]), LIB.read_cstr(d["text"])))
+            finally:
+                LIB.free(ptr)
+        return out
 
     # -- Data validations --------------------------------------------------
     def validation_count(self, sheet: int) -> int:
@@ -1818,6 +1979,57 @@ class Workbook:
                 LIB.free(p)
 
     # -- Sheet view / layout -----------------------------------------------
+    def paginate(self, sheet: int) -> PaginationResult:
+        """Resolve the worksheet's print area, page breaks, and page count.
+
+        The result is a snapshot: later workbook or layout changes do not
+        mutate the returned lists.
+        """
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(LIB.fm_workbook_paginate(h, int(sheet), out), "fm_workbook_paginate")
+            pagination = LIB.read_u32(out)
+            if pagination == 0:
+                raise FormulonError("fm_workbook_paginate returned a null result")
+            try:
+                page_count = int(LIB.fm_pagination_page_count(pagination))
+                range_count = int(LIB.fm_pagination_print_area_count(pagination))
+                break_count = int(LIB.fm_pagination_horizontal_break_count(pagination))
+                vertical_break_count = int(LIB.fm_pagination_vertical_break_count(pagination))
+                range_ptr = LIB.alloc(16)
+                value_ptr = _alloc_out_ptr()
+                try:
+                    print_area = []
+                    for i in range(range_count):
+                        _check(
+                            LIB.fm_pagination_print_area_at(pagination, i, range_ptr),
+                            "fm_pagination_print_area_at",
+                        )
+                        print_area.append(struct.unpack("<IIII", LIB.read_bytes(range_ptr, 16)))
+                    horizontal_breaks = []
+                    for i in range(break_count):
+                        _check(
+                            LIB.fm_pagination_horizontal_break_at(pagination, i, value_ptr),
+                            "fm_pagination_horizontal_break_at",
+                        )
+                        horizontal_breaks.append(LIB.read_u32(value_ptr))
+                    vertical_breaks = []
+                    for i in range(vertical_break_count):
+                        _check(
+                            LIB.fm_pagination_vertical_break_at(pagination, i, value_ptr),
+                            "fm_pagination_vertical_break_at",
+                        )
+                        vertical_breaks.append(LIB.read_u32(value_ptr))
+                finally:
+                    LIB.free(range_ptr)
+                    LIB.free(value_ptr)
+                return PaginationResult(page_count, print_area, horizontal_breaks, vertical_breaks)
+            finally:
+                LIB.fm_pagination_destroy(pagination)
+        finally:
+            LIB.free(out)
+
     def get_sheet_view(self, sheet: int) -> SheetView:
         """Read the full per-sheet view (zoom, freeze, tab-hidden, and the
         display / orientation flags)."""
@@ -2122,6 +2334,28 @@ class Workbook:
         finally:
             LIB.free(out)
 
+    @staticmethod
+    def _decode_cfvo(ptr: int) -> CfValueObject:
+        d = S.CFVO.unpack(LIB, ptr)
+        return CfValueObject(
+            type=d["type"], value=LIB.read_cstr(d["value"]) if d["value"] else None, gte=bool(d["gte"])
+        )
+
+    @staticmethod
+    def _decode_cf_color_at(ptr: int) -> CfColor:
+        d = S.CF_COLOR.unpack(LIB, ptr)
+        return CfColor(d["r"], d["g"], d["b"], d["a"])
+
+    @staticmethod
+    def _write_cfvo(ptr: int, value: CfValueObject, owned: List[int]) -> None:
+        S.CFVO.pack(LIB, ptr, {"type": int(value.type), "gte": 1 if value.gte else 0})
+        if value.value is not None:
+            S.write_str_field(LIB, ptr, S.CFVO, "value", value.value, owned)
+
+    @staticmethod
+    def _write_cf_color(ptr: int, color: CfColor) -> None:
+        S.CF_COLOR.pack(LIB, ptr, {"r": int(color.r), "g": int(color.g), "b": int(color.b), "a": int(color.a)})
+
     def get_conditional_format_at(self, sheet: int, index: int) -> ConditionalFormat:
         """Read the ``index``-th CF rule on ``sheet`` (flattened order)."""
         h = self._require()
@@ -2145,6 +2379,40 @@ class Workbook:
                         last_col=rd["last_col"],
                     )
                 )
+            color_scale = None
+            if d["color_scale_count"]:
+                thresholds = [
+                    self._decode_cfvo(d["color_scale_thresholds"] + i * S.CFVO.size)
+                    for i in range(d["color_scale_count"])
+                ]
+                colors = [
+                    self._decode_cf_color_at(d["color_scale_colors"] + i * S.CF_COLOR.size)
+                    for i in range(d["color_scale_count"])
+                ]
+                color_scale = ColorScale(thresholds, colors)
+            offsets = S.CF_RULE.offsets
+            data_bar = None
+            if d["data_bar_engaged"]:
+                data_bar = DataBar(
+                    self._decode_cfvo(ptr + offsets["data_bar_min"][1]),
+                    self._decode_cfvo(ptr + offsets["data_bar_max"][1]),
+                    self._decode_cf_color_at(ptr + offsets["data_bar_fill"][1]),
+                    bool(d["data_bar_show_value"]),
+                    d["data_bar_min_length_pct"],
+                    d["data_bar_max_length_pct"],
+                )
+            icon_set = None
+            if d["icon_set_engaged"]:
+                icon_set = IconSet(
+                    d["icon_set_name"],
+                    [
+                        self._decode_cfvo(d["icon_set_thresholds"] + i * S.CFVO.size)
+                        for i in range(d["icon_set_threshold_count"])
+                    ],
+                    bool(d["icon_set_reverse"]),
+                    bool(d["icon_set_show_value"]),
+                    bool(d["icon_set_percent"]),
+                )
             return ConditionalFormat(
                 id=LIB.read_cstr(d["id"]),
                 type=d["type"],
@@ -2163,6 +2431,9 @@ class Workbook:
                 std_dev=d["std_dev"],
                 text=LIB.read_cstr(d["text"]),
                 time_period=d["time_period"],
+                color_scale=color_scale,
+                data_bar=data_bar,
+                icon_set=icon_set,
             )
         finally:
             LIB.free(ptr)
@@ -2225,6 +2496,43 @@ class Workbook:
             S.write_str_field(LIB, ptr, S.CF_RULE, "formula1", rule.formula1, owned)
             S.write_str_field(LIB, ptr, S.CF_RULE, "formula2", rule.formula2, owned)
             S.write_str_field(LIB, ptr, S.CF_RULE, "text", rule.text, owned)
+            if rule.color_scale is not None:
+                count = len(rule.color_scale.thresholds)
+                if count != len(rule.color_scale.colors):
+                    raise ValueError("color_scale thresholds and colors must have equal length")
+                thresholds = LIB.alloc(count * S.CFVO.size)
+                colors = LIB.alloc(count * S.CF_COLOR.size)
+                owned.extend((thresholds, colors))
+                for i, value in enumerate(rule.color_scale.thresholds):
+                    self._write_cfvo(thresholds + i * S.CFVO.size, value, owned)
+                for i, color in enumerate(rule.color_scale.colors):
+                    self._write_cf_color(colors + i * S.CF_COLOR.size, color)
+                LIB.write_bytes(ptr + ro["color_scale_thresholds"][1], struct.pack("<I", thresholds))
+                LIB.write_bytes(ptr + ro["color_scale_colors"][1], struct.pack("<I", colors))
+                LIB.write_bytes(ptr + ro["color_scale_count"][1], struct.pack("<I", count))
+            if rule.data_bar is not None:
+                data_bar = rule.data_bar
+                self._write_cfvo(ptr + ro["data_bar_min"][1], data_bar.minimum, owned)
+                self._write_cfvo(ptr + ro["data_bar_max"][1], data_bar.maximum, owned)
+                self._write_cf_color(ptr + ro["data_bar_fill"][1], data_bar.fill)
+                LIB.write_bytes(ptr + ro["data_bar_engaged"][1], struct.pack("<i", 1))
+                LIB.write_bytes(ptr + ro["data_bar_show_value"][1], struct.pack("<i", 1 if data_bar.show_value else 0))
+                LIB.write_bytes(ptr + ro["data_bar_min_length_pct"][1], struct.pack("<B", int(data_bar.min_length_pct)))
+                LIB.write_bytes(ptr + ro["data_bar_max_length_pct"][1], struct.pack("<B", int(data_bar.max_length_pct)))
+            if rule.icon_set is not None:
+                icon_set = rule.icon_set
+                count = len(icon_set.thresholds)
+                thresholds = LIB.alloc(count * S.CFVO.size)
+                owned.append(thresholds)
+                for i, value in enumerate(icon_set.thresholds):
+                    self._write_cfvo(thresholds + i * S.CFVO.size, value, owned)
+                LIB.write_bytes(ptr + ro["icon_set_thresholds"][1], struct.pack("<I", thresholds))
+                LIB.write_bytes(ptr + ro["icon_set_engaged"][1], struct.pack("<i", 1))
+                LIB.write_bytes(ptr + ro["icon_set_name"][1], struct.pack("<B", int(icon_set.name)))
+                LIB.write_bytes(ptr + ro["icon_set_threshold_count"][1], struct.pack("<I", count))
+                LIB.write_bytes(ptr + ro["icon_set_reverse"][1], struct.pack("<i", 1 if icon_set.reverse else 0))
+                LIB.write_bytes(ptr + ro["icon_set_show_value"][1], struct.pack("<i", 1 if icon_set.show_value else 0))
+                LIB.write_bytes(ptr + ro["icon_set_percent"][1], struct.pack("<i", 1 if icon_set.percent else 0))
             _check(
                 LIB.fm_sheet_cf_add_rule(h, int(sheet), ptr, out),
                 "fm_sheet_cf_add_rule",
@@ -2353,6 +2661,53 @@ class Workbook:
         finally:
             LIB.free(ptr)
 
+    @staticmethod
+    def _decode_border(ptr: int) -> Dict[str, object]:
+        d = S.BORDER_RECORD.unpack(LIB, ptr)
+        sides: Dict[str, object] = {}
+        for side in ("left", "right", "top", "bottom", "diagonal"):
+            sides[side] = {
+                "style": d[side + "_style"],
+                "color_argb": d[side + "_color_argb"],
+            }
+        sides["diagonal_up"] = bool(d["diagonal_up"])
+        sides["diagonal_down"] = bool(d["diagonal_down"])
+        return sides
+
+    def get_dxf(self, dxf_index: int) -> DifferentialFormat:
+        """Read one differential format by its conditional-format ``dxfId``."""
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.DXF_RECORD)
+        try:
+            _check(LIB.fm_styles_get_dxf(h, int(dxf_index), ptr), "fm_styles_get_dxf")
+            d = S.DXF_RECORD.unpack(LIB, ptr)
+            offsets = S.DXF_RECORD.offsets
+            font = None
+            if d["font_engaged"]:
+                fd = S.FONT_RECORD.unpack(LIB, ptr + offsets["font"][1])
+                font = FontRecord(
+                    name=LIB.read_cstr(fd["name"]),
+                    size=fd["size"],
+                    color_argb=fd["color_argb"],
+                    bold=bool(fd["bold"]),
+                    italic=bool(fd["italic"]),
+                    strike=bool(fd["strike"]),
+                    underline=fd["underline"],
+                )
+            fill = None
+            if d["fill_engaged"]:
+                fill_d = S.FILL_RECORD.unpack(LIB, ptr + offsets["fill"][1])
+                fill = FillRecord(fill_d["pattern"], fill_d["fg_argb"], fill_d["bg_argb"])
+            return DifferentialFormat(
+                font=font,
+                fill=fill,
+                border=self._decode_border(ptr + offsets["border"][1]) if d["border_engaged"] else None,
+                num_fmt_id=d["num_fmt_id"] if d["num_fmt_engaged"] else None,
+                num_fmt_code=LIB.read_cstr(d["num_fmt_code"]) if d["num_fmt_engaged"] else "",
+            )
+        finally:
+            LIB.free(ptr)
+
     def get_num_fmt(self, num_fmt_id: int) -> str:
         """Return the format code registered for ``num_fmt_id``."""
         h = self._require()
@@ -2389,6 +2744,10 @@ class Workbook:
     def cell_style_xf_count(self) -> int:
         """Return the number of ``<cellStyleXfs>`` records."""
         return self._style_count(LIB.fm_styles_get_cell_style_xf_count)
+
+    def dxf_count(self) -> int:
+        """Return the number of differential formats available to CF rules."""
+        return self._style_count(LIB.fm_styles_get_dxf_count)
 
     def _style_count(self, fn) -> int:
         h = self._require()
@@ -2511,6 +2870,69 @@ class Workbook:
         finally:
             LIB.free(ptr)
             LIB.free(out)
+
+    def add_dxf(self, record: DifferentialFormat) -> int:
+        """Add (dedup) a differential format and return its ``dxfId``."""
+        h = self._require()
+        owned: List[int] = []
+        ptr = S.alloc_struct(LIB, S.DXF_RECORD)
+        out = _alloc_out_ptr()
+        try:
+            S.DXF_RECORD.pack(
+                LIB,
+                ptr,
+                {
+                    "font_engaged": 1 if record.font is not None else 0,
+                    "fill_engaged": 1 if record.fill is not None else 0,
+                    "border_engaged": 1 if record.border is not None else 0,
+                    "num_fmt_engaged": 1 if record.num_fmt_id is not None else 0,
+                    "num_fmt_id": int(record.num_fmt_id or 0),
+                },
+            )
+            offsets = S.DXF_RECORD.offsets
+            if record.font is not None:
+                font_ptr = ptr + offsets["font"][1]
+                S.FONT_RECORD.pack(
+                    LIB,
+                    font_ptr,
+                    {
+                        "size": float(record.font.size),
+                        "color_argb": int(record.font.color_argb),
+                        "bold": 1 if record.font.bold else 0,
+                        "italic": 1 if record.font.italic else 0,
+                        "strike": 1 if record.font.strike else 0,
+                        "underline": int(record.font.underline),
+                    },
+                )
+                S.write_str_field(LIB, font_ptr, S.FONT_RECORD, "name", record.font.name, owned)
+            if record.fill is not None:
+                S.FILL_RECORD.pack(
+                    LIB,
+                    ptr + offsets["fill"][1],
+                    {
+                        "pattern": int(record.fill.pattern),
+                        "fg_argb": int(record.fill.fg_argb),
+                        "bg_argb": int(record.fill.bg_argb),
+                    },
+                )
+            if record.border is not None:
+                values: Dict[str, int] = {
+                    "diagonal_up": 1 if record.border.get("diagonal_up") else 0,
+                    "diagonal_down": 1 if record.border.get("diagonal_down") else 0,
+                }
+                for side in ("left", "right", "top", "bottom", "diagonal"):
+                    spec = record.border.get(side) or {}
+                    values[side + "_style"] = int(spec.get("style", 0))
+                    values[side + "_color_argb"] = int(spec.get("color_argb", 0))
+                S.BORDER_RECORD.pack(LIB, ptr + offsets["border"][1], values)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "num_fmt_code", record.num_fmt_code, owned)
+            _check(LIB.fm_styles_add_dxf(h, ptr, out), "fm_styles_add_dxf")
+            return LIB.read_u32(out)
+        finally:
+            LIB.free(ptr)
+            LIB.free(out)
+            for owned_ptr in owned:
+                LIB.free(owned_ptr)
 
     def get_cell_style(self, index: int) -> CellStyle:
         """Return the named cell style at ``index``."""
@@ -2658,6 +3080,57 @@ class Workbook:
             return LIB.read_u32(out)
         finally:
             LIB.free(out)
+
+    def get_pivot_cache_worksheet_source(self, cache_id: int) -> Optional[PivotWorksheetSource]:
+        """Return a cache's worksheet-source metadata, or ``None`` when absent."""
+        h = self._require()
+        present = _alloc_out_ptr()
+        out_ref = _alloc_out_ptr()
+        out_sheet = _alloc_out_ptr()
+        out_name = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_workbook_pivot_cache_get_worksheet_source(
+                    h, int(cache_id), present, out_ref, out_sheet, out_name
+                ),
+                "fm_workbook_pivot_cache_get_worksheet_source",
+            )
+            if not LIB.read_i32(present):
+                return None
+            return PivotWorksheetSource(
+                LIB.read_cstr(LIB.read_u32(out_ref)) if LIB.read_u32(out_ref) else None,
+                LIB.read_cstr(LIB.read_u32(out_sheet)) if LIB.read_u32(out_sheet) else None,
+                LIB.read_cstr(LIB.read_u32(out_name)) if LIB.read_u32(out_name) else None,
+            )
+        finally:
+            LIB.free(present)
+            LIB.free(out_ref)
+            LIB.free(out_sheet)
+            LIB.free(out_name)
+
+    def set_pivot_cache_worksheet_source(self, cache_id: int, source: Optional[PivotWorksheetSource]) -> None:
+        """Set cache worksheet-source metadata; pass ``None`` to clear it."""
+        h = self._require()
+        owned: List[int] = []
+        try:
+            values = () if source is None else (source.ref, source.sheet, source.name)
+            for value in values:
+                if value is None:
+                    owned.append(0)
+                else:
+                    pointer, _ = LIB.alloc_utf8(value)
+                    owned.append(pointer)
+            pointers = owned if source is not None else (0, 0, 0)
+            _check(
+                LIB.fm_workbook_pivot_cache_set_worksheet_source(
+                    h, int(cache_id), 0 if source is None else 1, *pointers
+                ),
+                "fm_workbook_pivot_cache_set_worksheet_source",
+            )
+        finally:
+            for pointer in owned:
+                if pointer:
+                    LIB.free(pointer)
 
     def pivot_cache_remove(self, cache_id: int) -> None:
         """Remove the pivot cache with id ``cache_id``."""
@@ -2869,6 +3342,27 @@ class Workbook:
         finally:
             LIB.free(name_ptr)
             LIB.free(out)
+
+    def get_pivot_report_layout(self, sheet: int, pivot_index: int) -> PivotReportLayout:
+        """Return the pivot's compact, tabular, or outline report layout."""
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_workbook_pivot_get_layout(h, int(sheet), int(pivot_index), out),
+                "fm_workbook_pivot_get_layout",
+            )
+            return PivotReportLayout(LIB.read_i32(out))
+        finally:
+            LIB.free(out)
+
+    def set_pivot_report_layout(self, sheet: int, pivot_index: int, layout: PivotReportLayout) -> None:
+        """Set the pivot's compact, tabular, or outline report layout."""
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_set_layout(h, int(sheet), int(pivot_index), int(layout)),
+            "fm_workbook_pivot_set_layout",
+        )
 
     def pivot_remove(self, sheet: int, pivot_index: int) -> None:
         """Remove the pivot table at ``pivot_index``."""

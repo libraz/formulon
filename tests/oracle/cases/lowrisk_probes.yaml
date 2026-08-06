@@ -69,18 +69,18 @@ cases:
     formula: "=LCM(A1:C1)"
 
   # ---------------------------------------------------------------------
-  # C) OFFSET with invalid height/width. IronCalc says #REF! for negative
-  # height/width and #REF! for the SUM(OFFSET(...)) wrapper too. Need to
-  # verify Mac agrees - particularly the fractional width 0.9 case
-  # (truncates to 0? or snaps to 1?).
+  # C) OFFSET with negative and fractional height/width. Negative dimensions
+  # reverse the corresponding rectangle axis when the result stays in bounds;
+  # zero dimensions remain #REF!. The fractional width 0.9 probe settles
+  # whether Excel truncates to zero or snaps to one.
   - id: offset_neg_height
-    description: "OFFSET(A1,2,2,-10,1) - negative height should #REF!"
+    description: "OFFSET(A1,2,2,-10,1) - negative height walks out of bounds"
     setup:
       A1: 1
     formula: "=OFFSET(A1,2,2,-10,1)"
 
   - id: offset_neg_width
-    description: "OFFSET(A1,2,2,2,-2) - negative width should #REF!"
+    description: "OFFSET(A1,2,2,2,-2) - in-bounds negative width spills a 2x2 rectangle"
     setup:
       A1: 1
     formula: "=OFFSET(A1,2,2,2,-2)"

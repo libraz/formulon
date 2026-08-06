@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for Formulon's combinatorial, numeral-system, precise-
 // rounding, and miscellaneous scalar math built-ins: ARABIC, ROMAN, BASE,
@@ -628,6 +627,12 @@ TEST(BuiltinsMath4CeilingPrecise, SigZeroIsZero) {
   EXPECT_EQ(v.as_number(), 0.0);
 }
 
+TEST(BuiltinsMath4CeilingPrecise, DecimalExactMultipleIsNotRoundedPastIt) {
+  const Value v = EvalSource("=CEILING.PRECISE(7.1, 0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.1);
+}
+
 // ---------------------------------------------------------------------------
 // FLOOR.PRECISE
 // ---------------------------------------------------------------------------
@@ -655,6 +660,12 @@ TEST(BuiltinsMath4FloorPrecise, SigZeroIsZero) {
   const Value v = EvalSource("=FLOOR.PRECISE(4.7, 0)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 0.0);
+}
+
+TEST(BuiltinsMath4FloorPrecise, DecimalExactMultipleIsNotRoundedBelowIt) {
+  const Value v = EvalSource("=FLOOR.PRECISE(7.1, 0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 7.1);
 }
 
 // ---------------------------------------------------------------------------

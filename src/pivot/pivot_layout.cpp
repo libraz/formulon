@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the PivotResult -> grid-cell projection.
 
@@ -117,7 +116,7 @@ bool labels_equal(const std::vector<std::string>& a, const std::vector<std::stri
 
 void collect_row_entries_impl(const RowHierarchyNode& node, std::vector<std::string>& path,
                               const std::vector<RowSubtotal>& subtotals, std::size_t& subtotal_cursor,
-                              std::vector<RowEntry>& rows, bool subtotal_first) {
+                              std::vector<RowEntry>& rows, const std::vector<bool>& subtotal_first_by_depth) {
   path.push_back(node.label);
   if (node.children.empty()) {
     rows.push_back({AxisLeaf{path}, false, 0});
@@ -129,6 +128,8 @@ void collect_row_entries_impl(const RowHierarchyNode& node, std::vector<std::str
     auto matches_here = [&](std::size_t idx) {
       return idx < subtotals.size() && labels_equal(subtotals[idx].labels, path);
     };
+    const std::size_t depth = path.size() - 1;
+    const bool subtotal_first = depth < subtotal_first_by_depth.size() && subtotal_first_by_depth[depth];
     if (subtotal_first) {
       while (matches_here(subtotal_cursor)) {
         rows.push_back({AxisLeaf{path}, true, subtotal_cursor});
@@ -136,7 +137,7 @@ void collect_row_entries_impl(const RowHierarchyNode& node, std::vector<std::str
       }
     }
     for (const RowHierarchyNode& child : node.children) {
-      collect_row_entries_impl(child, path, subtotals, subtotal_cursor, rows, subtotal_first);
+      collect_row_entries_impl(child, path, subtotals, subtotal_cursor, rows, subtotal_first_by_depth);
     }
     if (!subtotal_first) {
       while (matches_here(subtotal_cursor)) {
@@ -149,7 +150,7 @@ void collect_row_entries_impl(const RowHierarchyNode& node, std::vector<std::str
 }
 
 std::vector<RowEntry> collect_row_entries(const PivotResult& result, std::size_t depth, bool include_subtotals,
-                                          bool subtotal_first) {
+                                          const std::vector<bool>& subtotal_first_by_depth) {
   if (depth == 0) {
     return {RowEntry{}};
   }
@@ -164,7 +165,7 @@ std::vector<RowEntry> collect_row_entries(const PivotResult& result, std::size_t
   std::vector<std::string> path;
   std::size_t subtotal_cursor = 0;
   for (const RowHierarchyNode& root : result.rows) {
-    collect_row_entries_impl(root, path, result.row_subtotals, subtotal_cursor, entries, subtotal_first);
+    collect_row_entries_impl(root, path, result.row_subtotals, subtotal_cursor, entries, subtotal_first_by_depth);
   }
   return entries;
 }
@@ -205,7 +206,7 @@ void collect_col_entries_impl(const ColHierarchyNode& node, std::vector<std::str
     for (const ColHierarchyNode& child : node.children) {
       collect_col_entries_impl(child, path, subtotals, subtotal_cursor, cols);
     }
-    if (subtotal_cursor < subtotals.size() && labels_equal(subtotals[subtotal_cursor].labels, path)) {
+    while (subtotal_cursor < subtotals.size() && labels_equal(subtotals[subtotal_cursor].labels, path)) {
       cols.push_back({AxisLeaf{path}, true, subtotal_cursor});
       ++subtotal_cursor;
     }
@@ -287,13 +288,20 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
   std::vector<AxisLeaf> row_leaves = collect_row_leaves(result.rows, row_depth);
   std::vector<AxisLeaf> col_leaves = collect_col_leaves(result.cols, col_depth);
   const bool include_row_subtotals = !result.row_subtotals.empty();
-  // Outline places the subtotal row ABOVE the group it summarises (so
-  // the parent label / value share one row). Compact also emits the
-  // subtotal at the top of the group because Excel's compact form
-  // shows the parent label and its sum on the same row. Tabular keeps
-  // the legacy English ordering: subtotal BELOW the group.
-  const bool subtotal_first = compact || outline;
-  std::vector<RowEntry> row_entries = collect_row_entries(result, row_depth, include_row_subtotals, subtotal_first);
+  // Compact and outline layouts honour the owner field's `subtotal_top`
+  // flag. Tabular (and the historical English projection) retains its
+  // established below-group order regardless of that flag.
+  std::vector<bool> subtotal_first_by_depth(row_depth, false);
+  if (compact || outline) {
+    for (std::size_t depth = 0; depth < row_depth; ++depth) {
+      const std::uint32_t field_index = table.row_field_order()[depth];
+      if (field_index < table.fields().size()) {
+        subtotal_first_by_depth[depth] = table.fields()[field_index].subtotal_top;
+      }
+    }
+  }
+  std::vector<RowEntry> row_entries =
+      collect_row_entries(result, row_depth, include_row_subtotals, subtotal_first_by_depth);
   const bool include_col_subtotals = !result.col_subtotals.empty();
   std::vector<ColEntry> col_entries = collect_col_entries(result, col_depth, include_col_subtotals);
 
@@ -346,13 +354,17 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
     return make_error(FormulonErrorCode::kEvalPivotInvalid, "pivot layout: projected bounds exceed uint32_t",
                       "rows=" + std::to_string(total_rows) + " cols=" + std::to_string(total_cols));
   }
+  auto cell_count_or = checked_mul_size_t(total_rows, total_cols);
+  if (!cell_count_or) {
+    return cell_count_or.error();
+  }
 
   PivotCells cells;
   cells.top = table.anchor_row();
   cells.left = table.anchor_col();
   cells.rows = static_cast<std::uint32_t>(total_rows);
   cells.cols = static_cast<std::uint32_t>(total_cols);
-  cells.cells.reserve(total_rows * total_cols);
+  cells.cells.reserve(cell_count_or.value());
 
   const std::uint32_t top = cells.top;
   const std::uint32_t left = cells.left;

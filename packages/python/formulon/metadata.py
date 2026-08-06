@@ -1,4 +1,3 @@
-# Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 """Host-injected function-metadata provider seam.
 
 The calculation engine ships no human-readable function documentation:

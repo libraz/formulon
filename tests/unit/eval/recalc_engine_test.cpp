@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the workbook recalc engine. The tests drive the engine
 // indirectly through `Workbook::set_cell_*` / `Workbook::recalc` so the
@@ -64,6 +63,60 @@ TEST(RecalcEngine, UpstreamLiteralChangePropagates) {
   Value v = CellValue(wb, 0U, 1U, 0U);
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(RecalcEngine, WholeColumnDependencyTracksNewValuesAndFormulas) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A:A)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 1.0);
+
+  // A2 did not exist when B1 was registered. Its write must still dirty B1
+  // without promoting B1 to the real volatile set.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(2.0))));
+  auto value_stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(value_stats));
+  EXPECT_EQ(value_stats.value().volatile_cells, 0U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 3.0);
+
+  // A3 is a newly added formula inside the range. Registration creates an
+  // ordering edge so B1 observes its fresh value in the same recalc pass.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 2U, 0U, "=A1+A2")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 2U, 0U).as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 6.0);
+}
+
+TEST(RecalcEngine, WholeRowDependencyTracksNewValues) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SUM(1:1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 2U, Value::number(4.0))));
+  auto stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().volatile_cells, 0U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 5.0);
+}
+
+TEST(RecalcEngine, IterationLimitRetainsLastApproximation) {
+  Workbook wb = Workbook::create();
+  // A1 converges to 2 but cannot do so in one sweep. The engine must retain
+  // that first finite approximation instead of overwriting it with #NUM!.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=(A1+2)/2")));
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 1U;
+  options.max_change = 1e-12;
+  wb.set_iterative_options(options);
+
+  auto stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cycle_cells, 1U);
+  const Value value = CellValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(value.is_number());
+  EXPECT_DOUBLE_EQ(value.as_number(), 1.0);
 }
 
 TEST(RecalcEngine, DirectCycleProducesRefError) {

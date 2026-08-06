@@ -159,8 +159,32 @@ cases:
     formula: "=TEXT(1/1440, \"[s]\")"
 
   # -- TEXT: bracket passthrough (colour / locale discarded) --------------
-  - id: text_color_red_discarded
+  # A format string is read in the UI locale, so the colour names are the
+  # localized ones. The colour itself never reaches TEXT's output; what these
+  # cases pin is which spellings the parser accepts at all.
+  - id: text_color_localized_name_discarded
+    description: "[赤] is a colour under ja-JP: accepted, dropped, and the rest of the section still formats the value."
+    formula: "=TEXT(5, \"[赤]0.00\")"
+
+  - id: text_color_english_name_rejected
+    description: "[Red] is not a ja-JP colour name, so it is an unrecognised bracket rather than an inert one."
     formula: "=TEXT(5, \"[Red]0.00\")"
+
+  - id: text_color_name_matches_as_prefix
+    description: "Bytes trailing the colour name inside the same bracket are ignored, which is why [水色] parses."
+    formula: "=TEXT(5, \"[水色]0.00\")"
+
+  - id: text_color_indexed_discarded
+    description: "[色N] is the localized indexed form; N in 1..56 is accepted and dropped."
+    formula: "=TEXT(5, \"[色12]0.00\")"
+
+  - id: text_color_indexed_out_of_range_rejected
+    description: "The indexed form stops at 56."
+    formula: "=TEXT(5, \"[色57]0.00\")"
+
+  - id: text_color_two_in_one_section_rejected
+    description: "Either bracket alone is inert, but a section carries at most one colour."
+    formula: "=TEXT(5, \"[赤][青]0.00\")"
 
   - id: text_locale_prefix_discarded
     formula: "=TEXT(5, \"[$-409]0.00\")"

@@ -18,8 +18,8 @@ have Automation permission for "System Events" + "Microsoft Excel".
 - `display_alerts = False` — suppresses dialogs that would otherwise block
   the AppleEvent thread.
 - `date_1904 = False` per workbook (set after `books.add()`).
-- `enable_iterative_calculation = False` on the app. Iterative cases flip
-  this locally and restore it.
+- `iteration = False` on the app. Iterative cases flip this locally and
+  restore it.
 
 ## Batch layout
 
@@ -59,6 +59,18 @@ def _ensure_darwin() -> None:
         raise RuntimeError(
             "oracle-gen is macOS-only (xlwings drives Excel.app). Current platform: " + platform.system()
         )
+
+
+def _get_iteration(app) -> bool:
+    """Read Mac Excel's application-level iterative-calculation setting."""
+
+    return bool(app.api.iteration.get())
+
+
+def _set_iteration(app, enabled: bool) -> None:
+    """Set Mac Excel's application-level iterative-calculation setting."""
+
+    app.api.iteration.set(enabled)
 
 
 def _cell_displayed_text(cell) -> Optional[str]:
@@ -304,7 +316,7 @@ class ExcelOracle(OracleDriver):
         # Restore to False at construction time; per-suite overrides flip
         # and restore as needed.
         try:
-            self._app.api.enable_iterative_calculation = False
+            _set_iteration(self._app, False)
         except Exception:
             pass
 
@@ -387,8 +399,8 @@ class ExcelOracle(OracleDriver):
                 pass
             prior_iter = None
             try:
-                prior_iter = bool(self._app.api.enable_iterative_calculation)
-                self._app.api.enable_iterative_calculation = iterative
+                prior_iter = _get_iteration(self._app)
+                _set_iteration(self._app, iterative)
             except Exception:
                 prior_iter = None
 
@@ -454,7 +466,7 @@ class ExcelOracle(OracleDriver):
         finally:
             try:
                 if prior_iter is not None:
-                    self._app.api.enable_iterative_calculation = prior_iter
+                    _set_iteration(self._app, prior_iter)
             except Exception:
                 pass
             try:
@@ -474,8 +486,8 @@ class ExcelOracle(OracleDriver):
 
         prior_iter = None
         try:
-            prior_iter = bool(self._app.api.enable_iterative_calculation)
-            self._app.api.enable_iterative_calculation = iterative
+            prior_iter = _get_iteration(self._app)
+            _set_iteration(self._app, iterative)
         except Exception:
             prior_iter = None
         out: List[CaseResult] = []
@@ -515,7 +527,7 @@ class ExcelOracle(OracleDriver):
         finally:
             try:
                 if prior_iter is not None:
-                    self._app.api.enable_iterative_calculation = prior_iter
+                    _set_iteration(self._app, prior_iter)
             except Exception:
                 pass
 

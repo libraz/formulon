@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tiny shared helper for OOXML serialisation: escapes the five XML-critical
 // characters (`& < > " '`) into named entities. Non-ASCII bytes (UTF-8
@@ -20,23 +19,28 @@ namespace formulon {
 namespace io {
 
 // Escapes `in` for element text content: `& < > " '` become named
-// entities; TAB / LF / CR pass through verbatim (a conforming XML reader
-// preserves them unchanged in text content, so no character reference is
-// needed there).
+// entities. TAB and LF are legal XML characters that survive element text
+// unchanged, so they are written literally. CR would be folded into LF by
+// XML line-end normalisation, and every other C0 control is illegal in XML
+// 1.0 outright, so both take OOXML's `_xHHHH_` notation; a literal sequence
+// that resembles that notation is escaped as `_x005F_xHHHH_` so a
+// subsequent OOXML reader preserves it literally.
 void AppendXmlEscaped(std::string& out, std::string_view in);
 
-// Escapes `in` for an attribute value (`name="..."`). In addition to the
-// same five XML-critical characters as `AppendXmlEscaped`, TAB / LF / CR
-// are emitted as character references (`&#9;` / `&#10;` / `&#13;`).
-//
-// This differs from element-text escaping because XML attribute-value
-// normalisation (a mandatory step every conforming parser performs, e.g.
-// pugixml and Excel itself) replaces a *literal* TAB/LF/CR inside an
-// attribute value with a single space; only a character reference for
-// those code points survives normalisation intact. Without this, a
-// multi-line string written into an attribute (e.g. a defined name with
-// an embedded newline) silently loses its exact whitespace on reload.
+// Escapes `in` for an attribute value (`name="..."`). Same five
+// XML-critical characters as `AppendXmlEscaped`, but attribute-value
+// normalisation turns a literal TAB / LF / CR into a space, so those three
+// are written as the `&#9;` / `&#10;` / `&#13;` character references a
+// conforming parser restores verbatim. `_xHHHH_` is reserved here for the
+// C0 controls XML cannot represent at all: using it for a legal character
+// would leave the escape text itself in the value on reload, because
+// attribute readers see the parser's output rather than OOXML text.
 void AppendXmlAttrEscaped(std::string& out, std::string_view in);
+
+// Appends `in` after decoding OOXML `_xHHHH_` escapes. This is for text
+// payloads read from OOXML parts after XML entity decoding; it preserves a
+// literal escaped-looking sequence emitted as `_x005F_xHHHH_`.
+void AppendOoxmlTextUnescaped(std::string& out, std::string_view in);
 
 }  // namespace io
 }  // namespace formulon

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the statistical aggregators: MEDIAN, MODE /
 // MODE.SNGL, LARGE / SMALL, PERCENTILE[.INC], QUARTILE[.INC], STDEV[.S],
@@ -92,6 +91,12 @@ TEST(BuiltinsMedian, EvenCountAverageOfTwoMiddle) {
   const Value v = EvalSource("=MEDIAN(1, 2, 3, 4)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.5);
+}
+
+TEST(BuiltinsMedian, EvenCountExtremeFiniteValuesStayFinite) {
+  const Value v = EvalSource("=MEDIAN(1E308,1E308)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1E308);
 }
 
 TEST(BuiltinsMedian, NegativeValues) {
@@ -543,6 +548,12 @@ TEST(BuiltinsPercentileInc, FractionalInterpolation) {
   const Value v = EvalSource("=PERCENTILE.INC(10, 20, 30, 40, 0.5)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 25.0);
+}
+
+TEST(BuiltinsPercentileInc, OppositeExtremeFiniteEndpointsInterpolate) {
+  const Value v = EvalSource("=PERCENTILE.INC(-1E308,1E308,0.5)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
 TEST(BuiltinsPercentileInc, KAbove1IsNum) {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end round-trip tests for the XLSB package writer.
 // `read_xlsb(write_xlsb(wb))` must reproduce every cell value `wb`
@@ -14,8 +13,12 @@
 
 #include "cell.h"
 #include "gtest/gtest.h"
+#include "io/defined_names.h"
 #include "io/passthrough_part.h"
+#include "io/styles_reader.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/record.h"
+#include "io/xlsb/styles_writer.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -154,6 +157,97 @@ TEST(XlsbWriter, RoundTripsWorkbookWithoutTextCellsSkipsSstPart) {
   EXPECT_EQ(read_or.value().cells_read, 2U);
 }
 
+TEST(XlsbWriter, RowHeadersDescribeTheirEmittedCellColumns) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Spans");
+  sheet.set_cell_value(0U, 5U, Value::number(1.0));
+  sheet.set_cell_value(0U, 1024U, Value::number(2.0));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or));
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  ByteSpan cursor = SpanOf(sheet_or.value());
+  bool dimensions_found = false;
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    ASSERT_TRUE(static_cast<bool>(record_or));
+    if (record_or.value().type == static_cast<std::uint16_t>(XlsbRecordType::BrtWsDim)) {
+      ByteSpan dimensions = record_or.value().payload;
+      auto first_row = read_u32(dimensions);
+      auto last_row = read_u32(dimensions);
+      auto first_col = read_u32(dimensions);
+      auto last_col = read_u32(dimensions);
+      ASSERT_TRUE(first_row && last_row && first_col && last_col);
+      EXPECT_EQ(first_row.value(), 0U);
+      EXPECT_EQ(last_row.value(), 0U);
+      EXPECT_EQ(first_col.value(), 5U);
+      EXPECT_EQ(last_col.value(), 1024U);
+      EXPECT_EQ(dimensions.size, 0U);
+      dimensions_found = true;
+      continue;
+    }
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtRowHdr)) {
+      continue;
+    }
+    ByteSpan payload = record_or.value().payload;
+    ASSERT_GE(payload.size, 17U);
+    auto row_or = read_u32(payload);
+    ASSERT_TRUE(static_cast<bool>(row_or));
+    EXPECT_EQ(row_or.value(), 0U);
+    ASSERT_TRUE(static_cast<bool>(read_u32(payload)));  // ixfe
+    ASSERT_TRUE(static_cast<bool>(read_u16(payload)));  // miyRw
+    ASSERT_TRUE(static_cast<bool>(read_u8(payload)));   // flags1
+    ASSERT_TRUE(static_cast<bool>(read_u8(payload)));   // flags2
+    ASSERT_TRUE(static_cast<bool>(read_u8(payload)));   // fPhShow
+    auto count_or = read_u32(payload);
+    ASSERT_TRUE(static_cast<bool>(count_or));
+    ASSERT_EQ(count_or.value(), 2U);
+    auto first_start = read_u32(payload);
+    auto first_end = read_u32(payload);
+    auto second_start = read_u32(payload);
+    auto second_end = read_u32(payload);
+    ASSERT_TRUE(first_start && first_end && second_start && second_end);
+    EXPECT_EQ(first_start.value(), 5U);
+    EXPECT_EQ(first_end.value(), 5U);
+    EXPECT_EQ(second_start.value(), 1024U);
+    EXPECT_EQ(second_end.value(), 1024U);
+    EXPECT_EQ(payload.size, 0U);
+    EXPECT_TRUE(dimensions_found);
+    return;
+  }
+  FAIL() << "missing BrtRowHdr";
+}
+
+TEST(XlsbWriter, EmitsRequiredWorksheetPrefixInSpecificationOrder) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Prefix");
+  sheet.set_cell_value(0U, 0U, Value::number(1.0));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or));
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  ByteSpan cursor = SpanOf(sheet_or.value());
+  const std::vector<XlsbRecordType> expected = {
+      XlsbRecordType::BrtBeginSheet,   XlsbRecordType::BrtWsProp,      XlsbRecordType::BrtWsDim,
+      XlsbRecordType::BrtBeginWsViews, XlsbRecordType::BrtBeginWsView, XlsbRecordType::BrtEndWsView,
+      XlsbRecordType::BrtEndWsViews,   XlsbRecordType::BrtWsFmtInfo,   XlsbRecordType::BrtBeginSheetData,
+  };
+  for (const XlsbRecordType type : expected) {
+    auto record_or = read_record(cursor);
+    ASSERT_TRUE(static_cast<bool>(record_or));
+    EXPECT_EQ(record_or.value().type, static_cast<std::uint16_t>(type));
+  }
+}
+
 TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.add_sheet("S1");
@@ -170,16 +264,39 @@ TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
   const std::string body = "<?xml version=\"1.0\"?><theme xmlns=\"x\"/>";
   theme.bytes.assign(body.begin(), body.end());
   parts.push_back(std::move(theme));
+  PassthroughPart custom;
+  custom.path = "docProps/custom.xml";
+  custom.content_type = "application/vnd.openxmlformats-officedocument.custom-properties+xml";
+  custom.bytes = {'<', 'c', 'u', 's', 't', 'o', 'm', '/', '>'};
+  parts.push_back(std::move(custom));
+  PassthroughPart thumbnail;
+  thumbnail.path = "docProps/thumbnail.jpeg";
+  thumbnail.content_type = "image/jpeg";
+  thumbnail.bytes = {0xffU, 0xd8U, 0xffU, 0xd9U};
+  parts.push_back(std::move(thumbnail));
   wb.set_passthrough_parts(std::move(parts));
+  wb.set_unknown_package_rels(
+      {UnknownRelationship{"rId9", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
+                           "docProps/thumbnail.jpeg", false}});
 
   auto bytes_or = write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or));
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto package_rels_or = zip.read_entry("_rels/.rels");
+  ASSERT_TRUE(static_cast<bool>(package_rels_or));
+  const std::string package_rels(package_rels_or.value().begin(), package_rels_or.value().end());
+  EXPECT_NE(package_rels.find("custom-properties"), std::string::npos);
+  EXPECT_NE(package_rels.find("Target=\"docProps/custom.xml\""), std::string::npos);
+  EXPECT_NE(package_rels.find("relationships/metadata/thumbnail"), std::string::npos);
+  EXPECT_NE(package_rels.find("Target=\"docProps/thumbnail.jpeg\""), std::string::npos);
 
   auto read_or = read_xlsb(SpanOf(bytes_or.value()));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
 
   bool found_theme = false;
-  for (const PassthroughPart& part : read_or.value().unknown_parts) {
+  for (const PassthroughPart& part : read_or.value().workbook.passthrough_parts()) {
     if (part.path == "xl/theme/theme1.xml") {
       found_theme = true;
       EXPECT_EQ(part.content_type, "application/vnd.openxmlformats-officedocument.theme+xml");
@@ -188,6 +305,112 @@ TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
     }
   }
   EXPECT_TRUE(found_theme);
+  ASSERT_EQ(read_or.value().workbook.unknown_package_rels().size(), 1U);
+  EXPECT_EQ(read_or.value().workbook.unknown_package_rels()[0].target, "docProps/thumbnail.jpeg");
+}
+
+TEST(XlsbWriter, DropsXlsxMetadataAndItsWorkbookRelationship) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("S1");
+  sheet.set_cell_value(0U, 0U, Value::number(1.0));
+  PassthroughPart metadata;
+  metadata.path = "xl/metadata.xml";
+  metadata.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml";
+  metadata.bytes = {'<', 'm', '/', '>'};
+  wb.set_passthrough_parts({metadata});
+  wb.set_unknown_workbook_rels(
+      {UnknownRelationship{"rId7", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata",
+                           "xl/metadata.xml", false}});
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or));
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  EXPECT_FALSE(zip.has_entry("xl/metadata.xml"));
+  auto rels_or = zip.read_entry("xl/_rels/workbook.bin.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  const std::string rels(rels_or.value().begin(), rels_or.value().end());
+  EXPECT_EQ(rels.find("sheetMetadata"), std::string::npos);
+}
+
+TEST(XlsbWriter, EmitsDynamicArrayMetadataForSpillAnchors) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Spill");
+  sheet.set_cell_formula(0U, 0U, "=SEQUENCE(2)");
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  ASSERT_TRUE(zip.has_entry("xl/metadata.bin"));
+
+  auto metadata_or = zip.read_entry("xl/metadata.bin");
+  ASSERT_TRUE(static_cast<bool>(metadata_or));
+  ByteSpan metadata_cursor = SpanOf(metadata_or.value());
+  auto metadata_record_or = read_record(metadata_cursor);
+  ASSERT_TRUE(static_cast<bool>(metadata_record_or));
+  EXPECT_EQ(metadata_record_or.value().type, 332U);  // BrtBeginMetadata
+
+  auto content_types_or = zip.read_entry("[Content_Types].xml");
+  ASSERT_TRUE(static_cast<bool>(content_types_or));
+  const std::string content_types(content_types_or.value().begin(), content_types_or.value().end());
+  EXPECT_NE(content_types.find("/xl/metadata.bin"), std::string::npos);
+  EXPECT_NE(content_types.find("application/vnd.ms-excel.sheetMetadata"), std::string::npos);
+
+  auto rels_or = zip.read_entry("xl/_rels/workbook.bin.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  const std::string rels(rels_or.value().begin(), rels_or.value().end());
+  EXPECT_NE(rels.find("relationships/sheetMetadata"), std::string::npos);
+  EXPECT_NE(rels.find("Target=\"metadata.bin\""), std::string::npos);
+
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  ByteSpan sheet_cursor = SpanOf(sheet_or.value());
+  bool found_cell_metadata = false;
+  while (sheet_cursor.size > 0U) {
+    auto record_or = read_record(sheet_cursor);
+    ASSERT_TRUE(static_cast<bool>(record_or));
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta)) {
+      continue;
+    }
+    ByteSpan payload = record_or.value().payload;
+    auto index_or = read_u32(payload);
+    ASSERT_TRUE(static_cast<bool>(index_or));
+    EXPECT_EQ(index_or.value(), 1U);
+    EXPECT_EQ(payload.size, 0U);
+    found_cell_metadata = true;
+  }
+  EXPECT_TRUE(found_cell_metadata);
+}
+
+TEST(XlsbWriter, EmitsDynamicArrayMetadataForSingleCellArrayAnchors) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("SingleArray");
+  sheet.set_cell_formula(0U, 0U, "=IFS(TRUE,\"yes\")");
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 1U, 1U, {Value::text("yes")}));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  ASSERT_TRUE(zip.has_entry("xl/metadata.bin"));
+
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  ByteSpan cursor = SpanOf(sheet_or.value());
+  bool found_cell_metadata = false;
+  bool found_array_formula = false;
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    ASSERT_TRUE(static_cast<bool>(record_or));
+    found_cell_metadata =
+        found_cell_metadata || record_or.value().type == static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta);
+    found_array_formula =
+        found_array_formula || record_or.value().type == static_cast<std::uint16_t>(XlsbRecordType::BrtArrFmla);
+  }
+  EXPECT_TRUE(found_cell_metadata);
+  EXPECT_TRUE(found_array_formula);
 }
 
 TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
@@ -208,23 +431,66 @@ TEST(XlsbWriter, RealFormulaRoundTripsAsFormulaCell) {
   EXPECT_EQ(c->formula_text, "=A1+B2*3");
 }
 
-TEST(XlsbWriter, UnencodableFormulaReturnsErrorNotSilentLiteral) {
+TEST(XlsbWriter, DefinedNameWithFutureFunctionRoundTrips) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Data");
+  wb.set_defined_names({io::DefinedName{"Joined", "TEXTJOIN(\",\",TRUE,A1:A2)", -1, false, ""}});
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  ASSERT_EQ(read_or.value().workbook.defined_names().size(), 1U);
+  EXPECT_EQ(read_or.value().workbook.defined_names()[0].name, "Joined");
+  EXPECT_EQ(read_or.value().workbook.defined_names()[0].formula, "_xlfn.TEXTJOIN(\",\",TRUE,A1:A2)");
+}
+
+TEST(XlsbWriter, UnencodableFormulaDowngradesToCachedLiteralAndReportsIt) {
   // An implicit-intersection formula (`@A1:A10`) has no Ptg lowering in
   // the common-token codec (the encoder's `NodeKind::ImplicitIntersection`
   // case still returns `unsupported_node`, unlike `NodeKind::NameRef` --
   // any defined-name reference now lowers to `PtgName`, including
   // references to names that turn out not to be genuine defined names,
   // since `collect_ptg_names` registers every `NameRef` it sees as a
-  // hidden placeholder). The writer must surface the encode failure as
-  // an `Expected` failure rather than silently dropping it to a literal
-  // cell.
+  // hidden placeholder). A single unsupported formula must not make the
+  // whole workbook unsaveable: it degrades to its cached literal and the
+  // explicit result count records the loss.
   Workbook wb = Workbook::create_empty();
   Sheet& s = wb.add_sheet("F");
   s.set_cell_formula(0U, 0U, "=@A1:A10");
+  s.set_cell_cached_value(0U, 0U, Value::number(42.0));
 
-  auto bytes_or = write_xlsb(wb);
-  ASSERT_FALSE(static_cast<bool>(bytes_or));
-  EXPECT_EQ(bytes_or.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().downgraded_formula_count, 1U);
+  auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Cell* cell = read_or.value().workbook.sheet(0).cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_TRUE(cell->formula_text.empty());
+  ASSERT_TRUE(cell->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 42.0);
+}
+
+TEST(XlsbWriter, UnencodableSpillFormulaDowngradesAnchorWithoutPhantoms) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("F");
+  s.set_cell_formula(0U, 0U, "=@A1:A10");
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 1U, 2U, {Value::number(11.0), Value::number(12.0)}));
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().downgraded_formula_count, 1U);
+  auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Sheet& rt = read_or.value().workbook.sheet(0);
+  const Cell* anchor = rt.cell_at(0U, 0U);
+  ASSERT_NE(anchor, nullptr);
+  EXPECT_TRUE(anchor->formula_text.empty());
+  ASSERT_TRUE(anchor->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(anchor->cached_value.as_number(), 11.0);
+  EXPECT_EQ(rt.cell_at(0U, 1U), nullptr);
 }
 
 TEST(XlsbWriter, GeneratedPartsBeatPassthroughOnCollision) {
@@ -271,6 +537,287 @@ TEST(XlsbWriter, SheetVisibilitySurvivesRoundTrip) {
   ASSERT_EQ(rt.sheet_count(), 2U);
   EXPECT_FALSE(rt.sheet(0).view().tab_hidden);
   EXPECT_TRUE(rt.sheet(1).view().tab_hidden);
+}
+
+TEST(XlsbWriter, Date1904SurvivesRoundTrip) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Dates");
+  wb.set_date1904(true);
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  EXPECT_TRUE(read_or.value().workbook.date1904());
+}
+
+TEST(XlsbWriter, RowAndColumnLayoutSurviveRoundTrip) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Layout");
+  sheet.mutable_layout().columns.push_back(ColumnLayout{1U, 3U, 17.25, true, 2U});
+  sheet.mutable_layout().row_overrides.push_back(RowLayout{4U, 28.5, true, 3U, true});
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const SheetLayout& layout = read_or.value().workbook.sheet(0).layout();
+  ASSERT_EQ(layout.columns.size(), 1U);
+  EXPECT_EQ(layout.columns[0].first, 1U);
+  EXPECT_EQ(layout.columns[0].last, 3U);
+  EXPECT_DOUBLE_EQ(layout.columns[0].width, 17.25);
+  EXPECT_TRUE(layout.columns[0].hidden);
+  EXPECT_EQ(layout.columns[0].outline_level, 2U);
+  ASSERT_EQ(layout.row_overrides.size(), 1U);
+  EXPECT_EQ(layout.row_overrides[0].row, 4U);
+  EXPECT_DOUBLE_EQ(layout.row_overrides[0].height, 28.5);
+  EXPECT_TRUE(layout.row_overrides[0].hidden);
+  EXPECT_EQ(layout.row_overrides[0].outline_level, 3U);
+}
+
+TEST(XlsbWriter, MergedRangesSurviveRoundTrip) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Merged");
+  sheet.set_cell_value(0U, 0U, Value::text("title"));
+  sheet.mutable_merges().push_back(MergeRange{0U, 0U, 1U, 2U});
+  sheet.mutable_merges().push_back(MergeRange{4U, 3U, 4U, 5U});
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const std::vector<MergeRange>& merges = read_or.value().workbook.sheet(0).merges();
+  ASSERT_EQ(merges.size(), 2U);
+  EXPECT_EQ(merges[0].first_row, 0U);
+  EXPECT_EQ(merges[0].first_col, 0U);
+  EXPECT_EQ(merges[0].last_row, 1U);
+  EXPECT_EQ(merges[0].last_col, 2U);
+  EXPECT_EQ(merges[1].first_row, 4U);
+  EXPECT_EQ(merges[1].first_col, 3U);
+  EXPECT_EQ(merges[1].last_row, 4U);
+  EXPECT_EQ(merges[1].last_col, 5U);
+}
+
+TEST(XlsbWriter, SheetViewAndFrozenPanesSurviveRoundTrip) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("View");
+  sheet.set_cell_value(0U, 0U, Value::number(1.0));
+  SheetView& view = sheet.mutable_view();
+  view.zoom_scale = 135U;
+  view.freeze_rows = 3U;
+  view.freeze_cols = 2U;
+  view.show_grid_lines = false;
+  view.show_row_col_headers = false;
+  view.show_zeros = false;
+  view.right_to_left = true;
+  view.tab_selected = true;
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  ByteSpan records = SpanOf(sheet_or.value());
+  bool saw_pane = false;
+  while (records.size != 0U) {
+    auto rec_or = read_record(records);
+    ASSERT_TRUE(static_cast<bool>(rec_or));
+    if (rec_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtPane)) {
+      continue;
+    }
+    saw_pane = true;
+    ByteSpan pane = rec_or.value().payload;
+    ASSERT_EQ(pane.size, 29U);
+    pane.data += 16U;  // two Xnum frozen row/column counts
+    pane.size -= 16U;
+    auto top_row_or = read_u32(pane);
+    auto left_col_or = read_u32(pane);
+    auto active_pane_or = read_u32(pane);
+    auto flags_or = read_u8(pane);
+    ASSERT_TRUE(top_row_or && left_col_or && active_pane_or && flags_or);
+    EXPECT_EQ(top_row_or.value(), 3U);
+    EXPECT_EQ(left_col_or.value(), 2U);
+    EXPECT_EQ(active_pane_or.value(), 0U);
+    EXPECT_EQ(flags_or.value(), 0x02U);
+  }
+  EXPECT_TRUE(saw_pane);
+
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const SheetView& rt = read_or.value().workbook.sheet(0).view();
+  EXPECT_EQ(rt.zoom_scale, 135U);
+  EXPECT_EQ(rt.freeze_rows, 3U);
+  EXPECT_EQ(rt.freeze_cols, 2U);
+  EXPECT_FALSE(rt.show_grid_lines);
+  EXPECT_FALSE(rt.show_row_col_headers);
+  EXPECT_FALSE(rt.show_zeros);
+  EXPECT_TRUE(rt.right_to_left);
+  EXPECT_TRUE(rt.tab_selected);
+}
+
+TEST(XlsbWriter, ReportsDeferredSheetFeatures) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Deferred");
+  Hyperlink hyperlink;
+  hyperlink.target = "https://example.com";
+  sheet.mutable_hyperlinks().push_back(std::move(hyperlink));
+  sheet.mutable_validations().push_back(DataValidation{});
+  sheet.set_auto_filter_xml("<autoFilter ref=\"A1:B2\"/>");
+  sheet.mutable_view().freeze_rows = 1U;
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  // Hyperlink, validation, and auto-filter state are explicitly counted
+  // until their XLSB record emitters land; frozen panes and merges are
+  // supported and do not inflate this counter.
+  EXPECT_EQ(write_or.value().deferred_feature_count, 3U);
+}
+
+TEST(XlsbWriter, GeneratesStylesPartForModelledStyles) {
+  // XLSX/native workbooks do not have a raw styles.bin passthrough part.  The
+  // XLSB writer must therefore materialise the modelled table and expose it
+  // through both the content-type override and workbook relationship.
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Styled");
+  sheet.set_cell_value(0U, 0U, Value::number(12.5));
+
+  StylesTable styles;
+  FontRecord font;
+  font.name = "Aptos";
+  font.size = 12.0;
+  font.bold = true;
+  font.color_argb = 0xFF112233U;
+  styles.fonts.push_back(font);
+  FillRecord fill;
+  fill.pattern = 1U;
+  fill.fg_argb = 0xFFFFFF00U;
+  styles.fills.push_back(fill);
+  styles.borders.push_back(BorderRecord{});
+  styles.num_fmt_strings.push_back("0.000");
+  styles.num_fmts.push_back(NumFmtRecord{164U, 0U});
+  CellXf named;
+  named.vertical_align = 2U;
+  styles.cell_style_xfs.push_back(named);
+  CellXf xf;
+  xf.font_index = 0U;
+  xf.fill_index = 0U;
+  xf.border_index = 0U;
+  xf.num_fmt_id = 164U;
+  xf.xf_id = 0U;
+  xf.apply_number_format = true;
+  xf.apply_font = true;
+  xf.apply_fill = true;
+  styles.cell_xfs.push_back(xf);
+  wb.set_styles(std::move(styles));
+  sheet.set_cell_xf_index(0U, 0U, 0U);
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  ASSERT_TRUE(zip.has_entry("xl/styles.bin"));
+  auto rels_or = zip.read_entry("xl/_rels/workbook.bin.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  const std::string rels(rels_or.value().begin(), rels_or.value().end());
+  EXPECT_NE(rels.find("relationships/styles"), std::string::npos);
+  EXPECT_NE(rels.find("Target=\"styles.bin\""), std::string::npos);
+  auto types_or = zip.read_entry("[Content_Types].xml");
+  ASSERT_TRUE(static_cast<bool>(types_or));
+  const std::string types(types_or.value().begin(), types_or.value().end());
+  EXPECT_NE(types.find("/xl/styles.bin"), std::string::npos);
+  EXPECT_NE(types.find("application/vnd.ms-excel.styles"), std::string::npos);
+
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const StylesTable& rt = read_or.value().workbook.styles();
+  ASSERT_EQ(rt.num_fmts.size(), 1U);
+  EXPECT_EQ(rt.num_fmts[0].id, 164U);
+  ASSERT_EQ(rt.num_fmt_strings.size(), 1U);
+  EXPECT_EQ(rt.num_fmt_strings[0], "0.000");
+  ASSERT_EQ(rt.cell_xfs.size(), 1U);
+  EXPECT_EQ(rt.cell_xfs[0].num_fmt_id, 164U);
+  EXPECT_EQ(rt.cell_xfs[0].font_index, 0U);
+  EXPECT_EQ(rt.cell_xfs[0].fill_index, 0U);
+}
+
+TEST(XlsbWriter, StylesColorsUseTheBrtColorLowValidityBit) {
+  StylesTable styles;
+  FontRecord font;
+  font.name = "Aptos";
+  font.color_argb = 0xFF112233U;
+  styles.fonts.push_back(font);
+  const std::vector<std::uint8_t> bytes = write_styles_bin(styles);
+
+  ByteSpan cursor = SpanOf(bytes);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    ASSERT_TRUE(static_cast<bool>(record_or));
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtFont)) {
+      continue;
+    }
+    const ByteSpan payload = record_or.value().payload;
+    ASSERT_GE(payload.size, 20U);
+    // u16 height/flags/weight/vertAlign + underline/family/charset/reserved
+    // precede BrtColor. RGB is XColorType 2 with fValidRGB in bit 0.
+    EXPECT_EQ(payload.data[12], 0x05U);
+    EXPECT_EQ(payload.data[16], 0x11U);
+    EXPECT_EQ(payload.data[17], 0x22U);
+    EXPECT_EQ(payload.data[18], 0x33U);
+    EXPECT_EQ(payload.data[19], 0xFFU);
+    return;
+  }
+  FAIL() << "missing BrtFont";
+}
+
+TEST(XlsbWriter, PreservesRawStylesPartFromExistingXlsb) {
+  // Generated styles are for XLSX/native input only.  When an XLSB reader has
+  // retained an opaque style part, that byte stream remains authoritative so
+  // unmodelled binary formatting extensions cannot be erased on save.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("S").set_cell_value(0U, 0U, Value::number(1.0));
+  StylesTable raw_table;
+  raw_table.num_fmt_strings.push_back("0.0000");
+  raw_table.num_fmts.push_back(NumFmtRecord{164U, 0U});
+  const std::vector<std::uint8_t> raw_bytes = write_styles_bin(raw_table);
+  PassthroughPart raw_part;
+  raw_part.path = "xl/styles.bin";
+  raw_part.content_type = "application/vnd.ms-excel.styles";
+  raw_part.bytes = raw_bytes;
+  wb.set_passthrough_parts({raw_part});
+
+  // Deliberately make the in-memory table differ from the opaque source.  If
+  // the writer regenerated it, the byte comparison below would fail.
+  StylesTable changed;
+  changed.num_fmt_strings.push_back("0.0%");
+  changed.num_fmts.push_back(NumFmtRecord{165U, 0U});
+  wb.set_styles(std::move(changed));
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or));
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto styles_or = zip.read_entry("xl/styles.bin");
+  ASSERT_TRUE(static_cast<bool>(styles_or));
+  EXPECT_EQ(styles_or.value(), raw_bytes);
+}
+
+TEST(XlsbWriter, WholeColumnFormulaSavesWithoutDowngrade) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Ranges");
+  sheet.set_cell_formula(0U, 0U, "=SUM(A:A)");
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+  auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Cell* cell = read_or.value().workbook.sheet(0).cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->formula_text, "=SUM(A1:A1048576)");
 }
 
 }  // namespace

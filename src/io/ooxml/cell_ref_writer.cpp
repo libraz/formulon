@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the OOXML writer's cell-reference formatters.
 
@@ -8,22 +7,14 @@
 #include <string>
 
 #include "sheet.h"  // for MergeRange
+#include "utils/a1_column.h"
+#include "utils/expected.h"
 
 namespace formulon {
 namespace io {
 
 void AppendColumnLettersForRef(std::string& out, std::uint32_t col) {
-  char buf[4];
-  std::uint32_t i = 0;
-  std::uint32_t v = col + 1;
-  while (v > 0 && i < 4) {
-    const std::uint32_t rem = (v - 1) % 26U;
-    buf[i++] = static_cast<char>('A' + rem);
-    v = (v - 1) / 26U;
-  }
-  while (i > 0) {
-    out.push_back(buf[--i]);
-  }
+  FM_CHECK(a1::append_column_letters(out, col), "column is outside Excel's grid");
 }
 
 void AppendCellRefForRef(std::string& out, std::uint32_t row, std::uint32_t col) {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for the OOXML cell/row/sheetData builder. These exercise the
 // pure helper surface (`EncodeA1`, `BuildSheetDataXml`) directly and pin
@@ -46,6 +45,10 @@ TEST(EncodeA1, ColumnXFD) {
 
 TEST(EncodeA1, MaxCell) {
   EXPECT_EQ(EncodeA1(1048575U, 16383U), "XFD1048576");
+}
+
+TEST(EncodeA1, RejectsColumnOutsideExcelGrid) {
+  EXPECT_EQ(EncodeA1(0U, 16384U), "");
 }
 
 // ---------------------------------------------------------------------------
@@ -191,12 +194,12 @@ TEST(BuildSheetDataXml, StyledInfDowngradesToNum) {
   EXPECT_EQ(xml.find("inf"), std::string::npos) << xml;
 }
 
-TEST(BuildSheetDataXml, ControlCharacterStrippedInText) {
-  // Regression: U+0001..U+001F (excluding TAB/LF/CR) are forbidden in
-  // XML 1.0 content. AppendXmlEscaped used to pass them through, which
-  // produced bytes that pugixml refuses to re-parse on round-trip.
+TEST(BuildSheetDataXml, ControlCharacterEscapedInText) {
+  // U+0001..U+001F (excluding TAB/LF/CR) are forbidden in XML 1.0 content,
+  // so the raw byte can never appear. Excel's OOXML `_xHHHH_` notation
+  // carries it losslessly instead of dropping the character.
   Sheet s("Sheet1");
-  // "ab\x01cd\x0Bef" — \x01 (SOH) and \x0B (VT) must vanish.
+  // "ab\x01cd\x0Bef" — \x01 (SOH) and \x0B (VT) take the OOXML escape.
   s.set_cell_value(0U, 0U,
                    Value::text(std::string("ab\x01"
                                            "cd\x0B"
@@ -204,7 +207,7 @@ TEST(BuildSheetDataXml, ControlCharacterStrippedInText) {
   const std::string xml = BuildSheetDataXml(s);
   EXPECT_EQ(xml.find('\x01'), std::string::npos) << xml;
   EXPECT_EQ(xml.find('\x0B'), std::string::npos) << xml;
-  EXPECT_NE(xml.find("abcdef"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("ab_x0001_cd_x000B_ef"), std::string::npos) << xml;
 
   // Re-parse the produced XML to confirm it is well-formed.
   pugi::xml_document doc;

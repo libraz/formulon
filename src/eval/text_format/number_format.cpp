@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Public entry point for the Excel TEXT() format-string engine declared in
 // `number_format.h`. The design follows the two-phase approach described
@@ -162,6 +161,25 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
     if (chosen == 1 && sections.size() >= 2) {
       render_value = std::fabs(value);
     } else if (chosen == 2 && sections.size() >= 3) {
+      render_value = std::fabs(value);
+    }
+  } else if (value < 0.0) {
+    // Conditional sections do not imply a sign class, but an explicit
+    // literal minus in the selected section is itself the sign glyph. Feed
+    // it the magnitude so the numeric renderer does not prepend another
+    // minus (e.g. `[<=0]-0.00` must render `-1.50`, not `--1.50`).
+    bool has_explicit_minus = false;
+    for (const number_format_detail::Token& token : section.tokens) {
+      if (token.kind != number_format_detail::Tok::Literal || token.lit_end <= token.lit_begin) {
+        continue;
+      }
+      const std::string_view literal = raw_fmt.substr(token.lit_begin, token.lit_end - token.lit_begin);
+      if (literal.find('-') != std::string_view::npos) {
+        has_explicit_minus = true;
+        break;
+      }
+    }
+    if (has_explicit_minus) {
       render_value = std::fabs(value);
     }
   }

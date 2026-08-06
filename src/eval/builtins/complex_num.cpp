@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Excel's complex-number built-ins (COMPLEX + 24 IM*).
 //
@@ -305,6 +304,9 @@ std::string format_complex(double re, double im, char suffix) {
 // same. Algebraic IM* impls that operate on direct real/imag arithmetic
 // (IMDIV, IMPRODUCT, IMSUM, ...) already produce exact zeros without help.
 Value text_complex(Complex z, Arena& arena) {
+  if (!std::isfinite(z.re) || !std::isfinite(z.im)) {
+    return Value::error(ErrorCode::Num);
+  }
   return Value::text(arena.intern(format_complex(z.re, z.im, z.suffix)));
 }
 

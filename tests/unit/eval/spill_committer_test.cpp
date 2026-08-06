@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `eval::SpillCommitter`. Companion to
 // `eval_spill_dispatch_test.cpp` — that file pins the

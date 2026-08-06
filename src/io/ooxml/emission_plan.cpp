@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the OOXML writer's emission plan. Determines part
 // paths, numeric ids, and resolves collisions between writer-generated
@@ -55,15 +54,20 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
     const Workbook& wb, const std::vector<EmissionPlan::PerSheetTable>& flat_tables,
     const std::vector<EmissionPlan::PivotCachePlan>& pivot_caches,
     const std::vector<std::vector<EmissionPlan::PivotTablePlan>>& pivot_tables_by_sheet,
-    const std::vector<EmissionPlan::CommentsPlan>& comments_by_sheet) {
+    const std::vector<EmissionPlan::CommentsPlan>& comments_by_sheet, bool generated_shared_strings) {
   std::unordered_set<std::string> paths;
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
   paths.insert("xl/workbook.xml");
   paths.insert("xl/_rels/workbook.xml.rels");
   paths.insert("xl/styles.xml");
+  if (generated_shared_strings) {
+    paths.insert("xl/sharedStrings.xml");
+  }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    paths.insert("xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
+    if (!wb.sheet(i).is_opaque_ooxml_sheet()) {
+      paths.insert("xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
+    }
   }
   for (const EmissionPlan::PerSheetTable& t : flat_tables) {
     paths.insert(t.path);
@@ -102,8 +106,9 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
 
 }  // namespace
 
-EmissionPlan BuildEmissionPlan(const Workbook& wb) {
+EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings) {
   EmissionPlan plan;
+  plan.generated_shared_strings = generated_shared_strings;
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
 
   // Distribute tables to their owning sheets, assigning fallback
@@ -170,7 +175,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
     // sheets rId1..rId(sheet_count), styles rId(sheet_count+1),
     // first cache rId(sheet_count+2). Cast safe: workbook size is
     // bounded well within uint32 range.
-    entry.workbook_rid = static_cast<std::uint32_t>(wb.sheet_count() + 2 + i);
+    entry.workbook_rid = static_cast<std::uint32_t>(wb.sheet_count() + 2 + (generated_shared_strings ? 1U : 0U) + i);
     plan.pivot_caches.push_back(std::move(entry));
   }
 
@@ -206,12 +211,12 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
     entry.numeric_id = next_comments_id++;
     entry.comments_path = NumberedPartPath("xl/comments", entry.numeric_id, ".xml");
     entry.vml_path = NumberedPartPath("xl/drawings/vmlDrawing", entry.numeric_id, ".vml");
-    // Detect whether the workbook still carries the original VML bytes
-    // via passthrough. If so, prefer those bytes over the writer's
-    // stub so the round-trip stays byte-identical for unmodified
-    // sheets.
+    // Detect whether this sheet still carries its original VML bytes. Do
+    // not infer the source from a newly assigned output number: removing a
+    // preceding commented sheet renumbers output parts but must not discard
+    // the surviving sheet's shape geometry.
     for (const PassthroughPart& part : wb.passthrough_parts()) {
-      if (part.path == entry.vml_path) {
+      if (!wb.sheet(s).comment_vml_path().empty() && part.path == wb.sheet(s).comment_vml_path()) {
         entry.vml_source = &part;
         break;
       }
@@ -225,7 +230,8 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
   // through `passthrough_parts()`; only the per-link rels files are
   // generated below.
   {
-    const std::size_t base = static_cast<std::size_t>(wb.sheet_count()) + 2U + plan.pivot_caches.size();
+    const std::size_t base = static_cast<std::size_t>(wb.sheet_count()) + 2U + (generated_shared_strings ? 1U : 0U) +
+                             plan.pivot_caches.size();
     for (std::size_t i = 0; i < wb.external_links().size(); ++i) {
       EmissionPlan::ExternalLinkPlan entry;
       entry.record = &wb.external_links()[i];
@@ -236,11 +242,14 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb) {
 
   // Collision detection between generated paths and passthrough paths.
   // Generated paths win; passthrough copy is dropped with a warning.
-  std::unordered_set<std::string> generated =
-      BuildGeneratedPathSet(wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet);
+  std::unordered_set<std::string> generated = BuildGeneratedPathSet(
+      wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet, generated_shared_strings);
   // Sheet rels for sheets that own tables, pivot tables, hyperlinks,
   // comments/VML, or printer settings are also generated.
   for (std::size_t i = 0; i < plan.tables_by_sheet.size(); ++i) {
+    if (i < wb.sheet_count() && wb.sheet(i).is_opaque_ooxml_sheet()) {
+      continue;
+    }
     const bool has_tables = !plan.tables_by_sheet[i].empty();
     const bool has_pivots = i < plan.pivot_tables_by_sheet.size() && !plan.pivot_tables_by_sheet[i].empty();
     const bool has_hyperlinks = i < wb.sheet_count() && !wb.sheet(i).hyperlinks().empty();

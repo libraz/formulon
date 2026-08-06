@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Tests for the lazy `SORT(array, [sort_index], [sort_order], [by_col])`
 // builtin. Shares its TU with FILTER / UNIQUE; uses the same array-context
@@ -86,6 +85,45 @@ TEST(BuiltinsSort, DescendingNumbers) {
   ASSERT_EQ(v.as_array_cols(), 1U);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 4.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[3].as_number(), 1.0);
+}
+
+TEST(BuiltinsSort, OmittedSortIndexUsesDefaultForDescendingOrder) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(3));
+  sheet.set_cell_value(1, 0, Value::number(1));
+  sheet.set_cell_value(2, 0, Value::number(2));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=SORT(A1:A3,,-1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 1.0);
+}
+
+TEST(BuiltinsSort, OmittedSortOrderUsesDefaultWithByColumn) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  // Sorting columns by the first row ascending swaps the two columns.
+  sheet.set_cell_value(0, 0, Value::number(2));
+  sheet.set_cell_value(0, 1, Value::number(1));
+  sheet.set_cell_value(1, 0, Value::number(1));
+  sheet.set_cell_value(1, 1, Value::number(2));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=SORT(A1:B2,1,,TRUE)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 2.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 2.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[3].as_number(), 1.0);
 }
@@ -334,6 +372,21 @@ TEST(BuiltinsSort, SortIndexOutOfRangeReturnsValue) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=SORT(A1:A2, 2)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsSort, HugeSortIndexReturnsValueBeforeUnsignedConversion) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(1));
+  sheet.set_cell_value(1, 0, Value::number(2));
+
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=SORT(A1:A2,1E300)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // ThreadSanitizer-targeted tests for `RecalcEngine`'s public-API thread
 // safety. The engine's internal mutex is supposed to serialise every

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the accrual and specialized-depreciation
 // financial built-ins: ACCRINT, ACCRINTM, VDB, AMORDEGRC, AMORLINC.
@@ -397,6 +396,22 @@ TEST(FinancialAmorlinc, DefaultBasisZero) {
   const Value v = EvalSource("=AMORLINC(2400, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 360.0, 1e-2);
+}
+
+// VDB walks one iteration per integer period up to `end_period`, and its
+// switch-to-straight-line state machine has no closed form to fall back on,
+// so a schedule longer than the Excel grid's row count is refused outright
+// rather than stepping for longer than the process will live.
+TEST(FinancialVdb, HugeScheduleIsNum) {
+  const Value v = EvalSource("=VDB(2400, 300, 1E18, 0, 1E18)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialVdb, ScheduleWithinTheCapStillComputes) {
+  const Value v = EvalSource("=VDB(2400, 300, 10, 0, 10)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 2100.0, 1e-9);
 }
 
 }  // namespace

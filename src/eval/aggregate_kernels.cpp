@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the numeric aggregation kernels declared in
 // `aggregate_kernels.h`. See that header for the rationale around algorithm
@@ -6,6 +5,7 @@
 
 #include "eval/aggregate_kernels.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -145,7 +145,10 @@ Expected<double, ErrorCode> percentile_sorted_inc(const std::vector<double>& xs_
   if (frac == 0.0 || lo_index + 1U >= n) {
     return xs_sorted[lo_index];
   }
-  const double interpolated = xs_sorted[lo_index] + frac * (xs_sorted[lo_index + 1U] - xs_sorted[lo_index]);
+  // Weighted endpoints avoid overflowing `high - low` for a legitimate
+  // extreme pair such as {-1E308, 1E308}; the result remains inside the
+  // closed interval spanned by the two finite neighbours.
+  const double interpolated = (1.0 - frac) * xs_sorted[lo_index] + frac * xs_sorted[lo_index + 1U];
   if (!std::isfinite(interpolated)) {
     return ErrorCode::Num;
   }
@@ -175,7 +178,7 @@ Expected<double, ErrorCode> percentile_sorted_exc(const std::vector<double>& xs_
   if (frac == 0.0 || lo_index + 1U >= n) {
     return xs_sorted[lo_index];
   }
-  const double interpolated = xs_sorted[lo_index] + frac * (xs_sorted[lo_index + 1U] - xs_sorted[lo_index]);
+  const double interpolated = (1.0 - frac) * xs_sorted[lo_index] + frac * xs_sorted[lo_index + 1U];
   if (!std::isfinite(interpolated)) {
     return ErrorCode::Num;
   }
@@ -186,44 +189,37 @@ Expected<double, ErrorCode> mode_first_occurrence(const std::vector<double>& xs)
   if (xs.empty()) {
     return ErrorCode::NA;
   }
-  // First-occurrence-ordered frequency table. O(n^2) duplicate detection
-  // keeps the insertion order so ties resolve to the value that appears
-  // earliest in the input (Excel's MODE.SNGL rule). The input slices are
-  // bounded by Excel's 255-arg / ~1M-cell limits.
-  std::vector<double> values;
-  std::vector<std::size_t> counts;
-  values.reserve(xs.size());
-  counts.reserve(xs.size());
+  // Sort a copy by value while carrying source positions. This groups equal
+  // values in O(n log n), then the smallest source position implements
+  // Excel's first-occurrence tie rule without a quadratic frequency table.
+  std::vector<std::pair<double, std::size_t>> ranked;
+  ranked.reserve(xs.size());
+  for (std::size_t i = 0; i < xs.size(); ++i) {
+    ranked.emplace_back(xs[i], i);
+  }
+  std::sort(ranked.begin(), ranked.end(), [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
   std::size_t best_count = 0;
-  for (double v : xs) {
-    bool found = false;
-    for (std::size_t i = 0; i < values.size(); ++i) {
-      if (values[i] == v) {
-        ++counts[i];
-        if (counts[i] > best_count) {
-          best_count = counts[i];
-        }
-        found = true;
-        break;
-      }
+  std::size_t best_first = xs.size();
+  double best_value = 0.0;
+  for (std::size_t begin = 0; begin < ranked.size();) {
+    std::size_t end = begin + 1U;
+    std::size_t first = ranked[begin].second;
+    while (end < ranked.size() && ranked[end].first == ranked[begin].first) {
+      first = std::min(first, ranked[end].second);
+      ++end;
     }
-    if (!found) {
-      values.push_back(v);
-      counts.push_back(1U);
-      if (best_count == 0) {
-        best_count = 1U;
-      }
+    const std::size_t count = end - begin;
+    if (count > best_count || (count == best_count && first < best_first)) {
+      best_count = count;
+      best_first = first;
+      best_value = ranked[begin].first;
     }
+    begin = end;
   }
   if (best_count < 2U) {
     return ErrorCode::NA;
   }
-  for (std::size_t i = 0; i < values.size(); ++i) {
-    if (counts[i] == best_count) {
-      return values[i];
-    }
-  }
-  return ErrorCode::NA;
+  return best_value;
 }
 
 }  // namespace aggregate_kernels

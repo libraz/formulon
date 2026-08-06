@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Excel formula tokenizer.
 //
@@ -12,8 +11,8 @@
 //
 //   * Whitespace is *not* collapsed: the parser needs exact runs to decide
 //     whether a space is the intersection operator or ignorable indent.
-//   * Offsets are in UTF-16 code units so diagnostics are drop-in for
-//     Monaco Editor / CodeMirror 6.
+//   * Offsets are in UTF-16 code units. Diagnostics remain internal until a
+//     stable binding deliberately exposes them.
 //   * Table-qualified structured refs (`Table[@col]`, `Table[Col1]`) are
 //     *not* promoted to a dedicated token kind here; the lexer emits the
 //     component punctuation tokens (`Ident LBracket ... RBracket`) and the

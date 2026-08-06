@@ -2,11 +2,11 @@
   "suite": "value_coercion_probes",
   "description": "Mac Excel 365 (ja-JP) probe for `VALUE(text)` corner cases identified in IronCalc's `T_VALUE_VALUETOTEXT` fixture. The IronCalc golden lists expected values that we want to confirm match Mac before changing `coerce_to_number` behaviour. Each case probes one specific text shape: Euro currency suffix, hyphen-style date with mixed component order, comma-as-decimal in en-US notation (which IronCalc rejects), and slash-style M/D/YYYY date. Mac's truth becomes the reference; we use the result to decide whether `coerce_to_number` (or its date-fallback) needs adjustment.\n",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-26T10:12:40Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 0.0,

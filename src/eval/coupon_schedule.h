@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Shared coupon-schedule engine used by the COUP* family (COUPPCD /
 // COUPNCD / COUPNUM / COUPDAYBS / COUPDAYSNC / COUPDAYS) and — when the

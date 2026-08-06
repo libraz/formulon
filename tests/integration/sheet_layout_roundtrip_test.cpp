@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Sheet view / layout round-trip integration test. Builds a workbook
 // with mixed column widths, row heights, frozen panes, hidden tabs and
@@ -77,6 +76,30 @@ TEST(SheetLayoutRoundTrip, ViewStateZoomFreezeAndTabHidden) {
   EXPECT_EQ(loaded.view().freeze_rows, 3U);
   EXPECT_EQ(loaded.view().freeze_cols, 2U);
   EXPECT_TRUE(loaded.view().tab_hidden);
+}
+
+TEST(SheetLayoutRoundTrip, ReShowingSheetRemovesLegacySheetPrTabHidden) {
+  Workbook src = Workbook::create();
+  Sheet& sheet = src.sheet(0);
+  // Some older producers record visibility in sheetPr instead of in the
+  // workbook's <sheet state>.  The raw capture must not override a later
+  // explicit re-show through a binding setter.
+  sheet.mutable_print_settings().sheet_pr_xml = "<sheetPr tabHidden=\"1\"><tabHidden/></sheetPr>";
+  sheet.mutable_view().tab_hidden = true;
+
+  const std::vector<std::uint8_t> hidden_bytes = SaveOrDie(src);
+  auto hidden_or = io::read_ooxml(SpanOf(hidden_bytes));
+  ASSERT_TRUE(static_cast<bool>(hidden_or)) << hidden_or.error().message;
+  ASSERT_TRUE(hidden_or.value().workbook.sheet(0).view().tab_hidden);
+
+  hidden_or.value().workbook.sheet(0).mutable_view().tab_hidden = false;
+  const std::vector<std::uint8_t> visible_bytes = SaveOrDie(hidden_or.value().workbook);
+  const std::string visible_sheet_xml = ReadSheet1Xml(visible_bytes);
+  EXPECT_EQ(visible_sheet_xml.find("tabHidden"), std::string::npos) << visible_sheet_xml;
+
+  auto visible_or = io::read_ooxml(SpanOf(visible_bytes));
+  ASSERT_TRUE(static_cast<bool>(visible_or)) << visible_or.error().message;
+  EXPECT_FALSE(visible_or.value().workbook.sheet(0).view().tab_hidden);
 }
 
 TEST(SheetLayoutRoundTrip, ColumnWidthsHiddenAndOutline) {
@@ -160,6 +183,24 @@ TEST(SheetLayoutRoundTrip, RowHeightsHiddenAndOutline) {
   EXPECT_EQ(sorted[2].row, 12U);
   EXPECT_DOUBLE_EQ(sorted[2].height, 30.5);
   EXPECT_EQ(sorted[2].outline_level, 1U);
+}
+
+TEST(SheetLayoutRoundTrip, OutlineOnlyEmptyRowIsEmittedAndReloaded) {
+  Workbook src = Workbook::create();
+  RowLayout outline_only;
+  outline_only.row = 12U;
+  outline_only.outline_level = 3U;
+  src.sheet(0).mutable_layout().row_overrides.push_back(outline_only);
+
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+  auto result_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or));
+  const auto& rows = result_or.value().workbook.sheet(0).layout().row_overrides;
+  ASSERT_EQ(rows.size(), 1U);
+  EXPECT_EQ(rows[0].row, 12U);
+  EXPECT_DOUBLE_EQ(rows[0].height, 0.0);
+  EXPECT_FALSE(rows[0].hidden);
+  EXPECT_EQ(rows[0].outline_level, 3U);
 }
 
 TEST(SheetLayoutRoundTrip, ColumnWidthAndRowHeightPreserveFullPrecision) {

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::io::read_sheet_data`. Each test feeds the
 // reader a tiny synthetic `<worksheet>` document and asserts the
@@ -88,6 +87,36 @@ TEST(SheetReader, SimpleLiteralsAndFormulaRecalc) {
   EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 2U, 0U).as_number(), 3.0);
 }
 
+TEST(SheetReader, EmptyNumericValueElementIsBlank) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string("<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><v/></c></row></sheetData></worksheet>"));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+  EXPECT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_blank());
+}
+
+TEST(SheetReader, FormulaCachedValueSurvivesLoadBeforeRecalc) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(
+      "<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><f>UNIMPLEMENTED(1)</f><v>42</v></c>"
+      "<c r=\"B1\" t=\"str\"><f>UNIMPLEMENTED_TEXT()</f><v>Excel cache</v></c></row></sheetData></worksheet>"));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+
+  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 0U), "=UNIMPLEMENTED(1)");
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 0U).is_number());
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 0U).as_number(), 42.0);
+  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 1U), "=UNIMPLEMENTED_TEXT()");
+  ASSERT_TRUE(StoredValue(wb, 0U, 0U, 1U).is_text());
+  EXPECT_EQ(StoredValue(wb, 0U, 0U, 1U).as_text(), "Excel cache");
+}
+
 TEST(SheetReader, InlineStringCell) {
   const char* xml =
       "<worksheet><sheetData>"
@@ -162,6 +191,41 @@ TEST(SheetReader, SharedFormulaSlaveWithoutMasterErrors) {
   auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage);
   ASSERT_FALSE(static_cast<bool>(rs));
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
+TEST(SheetReader, IgnoresArrayFormulaWhoseRefDoesNotStartAtItsAnchor) {
+  // The ref's last column lies before C1. Previously this was recorded as a
+  // spill beginning at C1, so `last_col - anchor_col + 1` underflowed during
+  // registration and attempted a huge allocation.
+  const char* xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"C1\"><f t=\"array\" ref=\"A1:B2\">1</f></c></row>"
+      "</sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+
+  EXPECT_TRUE(ctx.array_anchors.empty());
+  EXPECT_EQ(StoredFormula(wb, 0U, 0U, 2U), "=1");
+}
+
+TEST(SheetReader, RetainsSingleCellArrayFormulaAnchor) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(
+      doc.load_string("<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><f t=\"array\" ref=\"A1\">IFS(TRUE,1)</f>"
+                      "<v>1</v></c></row></sheetData></worksheet>"));
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+  const SpillRegion* region = wb.sheet(0).spill_region_at_anchor(0U, 0U);
+  ASSERT_NE(region, nullptr);
+  EXPECT_EQ(region->rows, 1U);
+  EXPECT_EQ(region->cols, 1U);
 }
 
 TEST(SheetReader, PendingSstCellsCollected) {

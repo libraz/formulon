@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for Excel's Snedecor's F distribution family
 // (F.DIST, F.DIST.RT, F.INV, F.INV.RT). All four are scalar-only and
@@ -138,6 +137,12 @@ TEST(BuiltinsFDistRt, SumsWithDistToOne) {
   EXPECT_NEAR(v.as_number(), 1.0, 1e-12);
 }
 
+TEST(BuiltinsFDistRt, ExtremeFiniteXHasZeroRightTail) {
+  const Value v = EvalSource("=F.DIST.RT(1E308,5,10)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
 TEST(BuiltinsFDistRt, NegativeXIsNum) {
   const Value v = EvalSource("=F.DIST.RT(-1, 5, 10)");
   ASSERT_TRUE(v.is_error());
@@ -166,6 +171,14 @@ TEST(BuiltinsFInv, Median) {
   const Value v = EvalSource("=F.INV(0.5, 5, 10)");
   ASSERT_TRUE(v.is_number());
   EXPECT_NEAR(v.as_number(), 0.93193316085104805, 1e-6);
+}
+
+TEST(BuiltinsFInv, ExtremeUpperTailExpandsBracket) {
+  // F(1,1) is the square of a Cauchy variate. For p near one its quantile
+  // is far outside the former fixed 1e10 inverse bracket.
+  const Value v = EvalSource("=F.INV(0.999999999999,1,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 4.052e23, 5e20);
 }
 
 TEST(BuiltinsFInv, PZeroIsLeftBoundary) {

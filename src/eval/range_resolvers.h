@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Range resolvers: turn a reference-shaped AST node (Ref / RangeOp /
 // OFFSET-call / INDIRECT-call / IntersectOp) into a rectangular

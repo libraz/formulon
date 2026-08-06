@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Hand-written TypeScript declarations for @libraz/formulon-native.
 //
@@ -12,16 +11,8 @@
 // interchangeably for the methods both expose. The two notable shape
 // differences are deliberate:
 //
-//   * Vector-of-value-object types (`CfMatchVector`, `CfCellVector`,
-//     `ColumnLayoutVector`, `RowLayoutVector`) only exist in the embind
-//     binding because embind cannot return `std::vector<T>` directly to
-//     JS. The N-API binding marshals each list as a plain JS Array, so
-//     `evaluateCfRange` / `getSheetColumns` / `getSheetRowOverrides`
-//     return ReadonlyArray<...> here instead of an iterable handle.
-//
-//   * The native binding does NOT expose `delete()`. The handle is GC-
-//     finalized; consumers hold the reference for the lifetime they
-//     need the workbook.
+//   * The native binding exposes `dispose()` for deterministic release;
+//     GC finalization remains a fallback.
 
 /** `fm_value_kind_t` ordinals (mirror of `fm_value_kind_t`). */
 export const ValueKind: Readonly<{
@@ -438,6 +429,15 @@ export interface CfRangeResult {
   cells: ReadonlyArray<CfCellResult>;
 }
 
+/** Resolved print geometry for one worksheet. All coordinates are 0-based. */
+export interface PaginationResult {
+  status: Status;
+  printArea: Array<{ firstRow: number; firstCol: number; lastRow: number; lastCol: number }>;
+  horizontalBreaks: number[];
+  verticalBreaks: number[];
+  pageCount: number;
+}
+
 /** Per-sheet view: zoom (10..400, default 100), frozen-pane row/col
  *  counts, tab-hidden flag, and the display / orientation flags mirrored
  *  from OOXML `<sheetView>`. Booleans are encoded as `0`/`1` to match
@@ -549,6 +549,8 @@ export interface HyperlinkEntry {
   col: number;
   /** Absolute or relative target (URL, email, internal ref, ...). */
   target: string;
+  /** In-workbook destination (empty for an external target). */
+  location: string;
   /** Display text override (empty when default). */
   display: string;
   /** Tooltip text (empty when none). */
@@ -559,6 +561,12 @@ export interface HyperlinkEntry {
 export interface CommentEntry {
   author: string;
   text: string;
+}
+
+/** Status-bearing comment lookup returned by `getCommentResult`. */
+export interface CommentResult {
+  status: Status;
+  comment: CommentEntry | null;
 }
 
 /** Sheet-wide comment entry returned by `getComments(sheet)`. Extends
@@ -1024,9 +1032,25 @@ export type IterativeProgressCallback = (
  *  an explicit `delete()` step. Hold the reference for the lifetime
  *  you need the workbook. */
 export interface Workbook {
+  /** Deterministically releases the native workbook handle. Idempotent. */
+  dispose(): void;
+
   /** True when the wrapper holds a live native handle. False when the
    *  underlying handle has been finalised or could not be constructed. */
   isValid(): boolean;
+
+  /** Estimated heap bytes the native workbook occupies, or 0 once
+   *  disposed.
+   *
+   *  The addon reports this figure to V8 as external memory when a
+   *  workbook is created, loaded, recalculated or disposed, so a runtime
+   *  that acts on the hint can weigh workbooks that are large in native
+   *  memory but pointer-sized on the JS heap. Calling this method also
+   *  refreshes that report, which is worth doing after a long run of
+   *  cell writes. The value covers the cell store, shared strings,
+   *  passthrough parts and workbook metadata; it is an estimate, not an
+   *  allocation ledger. */
+  memoryUsage(): number;
 
   // Cell mutation.
   setNumber(sheet: number, row: number, col: number, value: number): Status;
@@ -1079,9 +1103,8 @@ export interface Workbook {
   /** Recalculates only cells touched by the supplied viewport. */
   partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
   setIterative(enabled: boolean, maxIterations: number, maxChange: number): Status;
-  /** Installs (or, when passed `null`, clears) a JS callback invoked
-   *  after each Gauss-Seidel sweep. Only one callback can be active per
-   *  addon instance -- installing a new one displaces the previous. */
+  /** Installs (or, when passed `null`, clears) this workbook's JS callback
+   *  invoked after each Gauss-Seidel sweep. */
   setIterativeProgress(callback: IterativeProgressCallback | null): Status;
   save(): SaveResult;
   /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
@@ -1309,6 +1332,9 @@ export interface Workbook {
     todaySerial: number,
   ): CfRangeResult;
 
+  /** Computes print-area page breaks and physical page count for `sheet`. */
+  paginate(sheet: number): PaginationResult;
+
   // Sheet view / layout.
   /** Reads the full per-sheet view (zoom, freeze, tab-hidden, and the
    *  display / orientation flags). */
@@ -1433,16 +1459,24 @@ export interface Workbook {
   getMerges(sheet: number): ReadonlyArray<MergeRange>;
   /** Returns the cell comment at `(sheet, row, col)`, or `null` when absent. */
   getComment(sheet: number, row: number, col: number): CommentEntry | null;
+  /** Returns a comment lookup result that distinguishes absence from an invalid sheet or handle. */
+  getCommentResult(sheet: number, row: number, col: number): CommentResult;
   /** Returns every comment on `sheet`, including comments anchored on
    *  cells that carry no value. */
   getComments(sheet: number): ReadonlyArray<SheetCommentEntry>;
   /** Sets / replaces the cell comment. Pass an empty `text` to remove. */
   setComment(sheet: number, row: number, col: number, author: string, text: string): Status;
-  /** Appends a hyperlink to `sheet`. Pass empty strings for `display`
-   *  or `tooltip` to mean "use the default" or "no tooltip". The
-   *  `location` field is filled implicitly (empty) and the writer mints
-   *  a fresh `rId` on save. */
-  addHyperlink(sheet: number, row: number, col: number, target: string, display: string, tooltip: string): Status;
+  /** Appends a hyperlink to `sheet`. For an in-workbook link, pass an empty
+   *  `target` and its A1 destination as `location`. */
+  addHyperlink(
+    sheet: number,
+    row: number,
+    col: number,
+    target: string,
+    display: string,
+    tooltip: string,
+    location: string,
+  ): Status;
   /** Removes every hyperlink anchored at `(row, col)`. No-op when none match. */
   removeHyperlink(sheet: number, row: number, col: number): Status;
   /** Removes the hyperlink at `index`. Returns kInvalidArgument if `index` is out of range. */
@@ -1528,7 +1562,7 @@ export interface WorkbookCtor {
   /** Workbook with no sheets. */
   createEmpty(): Workbook;
   /** Loads from an in-memory `.xlsx` byte buffer. The returned wrapper
-   *  may be unusable (subsequent calls return `kBindingNullPointer`)
+   *  may be unusable (subsequent calls return `kBindingInvalidHandle`)
    *  on failure; consult `lastErrorMessage()` for diagnostics. */
   loadBytes(bytes: Uint8Array): Workbook;
 }
@@ -1553,6 +1587,9 @@ export function lastErrorContext(): string;
 
 /** Static description of `status` (e.g. `"kOk"`). */
 export function statusString(status: number): string;
+
+/** Excel display literal for a cell error code (e.g. `"#DIV/0!"`). */
+export function errorDisplayName(errorCode: number): string;
 
 /** Merge a host-supplied metadata entry over the engine's structural
  *  `functionMetadata()` result. Pure and side-effect-free; it does not

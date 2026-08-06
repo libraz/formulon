@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the text built-in functions: UPPER, LOWER, TRIM,
 // LEFT, RIGHT, MID, REPT, SUBSTITUTE, FIND, SEARCH, EXACT. Each test
@@ -391,6 +390,12 @@ TEST(TextSubstitute, MultiCharNeedle) {
   const Value v = EvalSource("=SUBSTITUTE(\"foo bar foo\", \"foo\", \"baz\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "baz bar baz");
+}
+
+TEST(TextSubstitute, OutputBeyondExcelTextLimitIsValueError) {
+  const Value v = EvalSource("=SUBSTITUTE(REPT(\"a\",32767),\"a\",\"aa\")");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------

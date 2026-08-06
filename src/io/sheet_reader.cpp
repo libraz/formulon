@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `<sheetData>` walker. See sheet_reader.h for the public contract.
 //
@@ -39,6 +38,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -67,7 +67,7 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
 
   std::string source("=");
   source.append(master.text);
-  Arena arena;
+  Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
   parser::Parser parser(source, arena);
   parser::AstNode* root = parser.parse();
   if (root == nullptr || !parser.errors().empty()) {
@@ -83,26 +83,31 @@ std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint3
   return parser::format_formula(*shifted);
 }
 
-/// Records a dynamic-array anchor for a `<f t="array" ref="...">` whose
-/// `ref` spans more than the anchor cell. Single-cell refs (legacy CSE
-/// scalars) and unparseable refs are ignored. `(anchor_row, anchor_col)`
-/// is the anchor; the footprint origin is the anchor and its extent is the
-/// `ref` rectangle's bottom-right corner.
+/// Records a dynamic-array anchor for a `<f t="array" ref="...">`. The
+/// OOXML ref must be an ordered rectangle whose top-left corner is the
+/// formula cell. One-cell refs are retained because they carry dynamic-array
+/// metadata that must survive an XLSB write, even with no phantom cells.
 void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_t anchor_row,
                        std::uint32_t anchor_col) {
   const std::size_t colon = ref.find(':');
   if (colon == std::string_view::npos) {
-    return;  // single-cell array ref: no spill targets to protect.
+    auto anchor = parse_a1(ref);
+    if (anchor && anchor.value().first == anchor_row && anchor.value().second == anchor_col) {
+      ctx.array_anchors.push_back(ArrayAnchor{anchor_row, anchor_col, anchor_row, anchor_col});
+    }
+    return;
   }
   auto a = parse_a1(ref.substr(0, colon));
   auto b = parse_a1(ref.substr(colon + 1));
   if (!a || !b) {
     return;
   }
-  const std::uint32_t last_row = std::max(a.value().first, b.value().first);
-  const std::uint32_t last_col = std::max(a.value().second, b.value().second);
-  if (last_row <= anchor_row && last_col <= anchor_col) {
-    return;  // degenerate single-cell footprint.
+  const std::uint32_t first_row = a.value().first;
+  const std::uint32_t first_col = a.value().second;
+  const std::uint32_t last_row = b.value().first;
+  const std::uint32_t last_col = b.value().second;
+  if (last_row < first_row || last_col < first_col || anchor_row != first_row || anchor_col != first_col) {
+    return;
   }
   ctx.array_anchors.push_back(ArrayAnchor{anchor_row, anchor_col, last_row, last_col});
 }
@@ -116,11 +121,13 @@ void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_
 /// footprint freely.
 void RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
   for (const ArrayAnchor& a : anchors) {
-    const std::uint32_t rows = a.last_row - a.row + 1U;
-    const std::uint32_t cols = a.last_col - a.col + 1U;
-    if (static_cast<std::uint64_t>(rows) * cols <= 1U) {
+    // Keep this defensive check here as well as in RecordArrayAnchor: this
+    // helper performs unsigned extent arithmetic and may gain other callers.
+    if (a.last_row < a.row || a.last_col < a.col) {
       continue;
     }
+    const std::uint32_t rows = a.last_row - a.row + 1U;
+    const std::uint32_t cols = a.last_col - a.col + 1U;
     std::vector<Value> values;
     values.reserve(static_cast<std::size_t>(rows) * cols);
     for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
@@ -226,6 +233,13 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     auto wf = workbook.set_cell_formula(sheet_index, parsed.row, parsed.col, std::move(with_eq));
     if (!wf) {
       return wf.error();
+    }
+    // Preserve Excel's cached result until a caller explicitly recalculates.
+    // This is essential when a workbook uses functions Formulon does not yet
+    // implement: eagerly replacing a valid loaded cache with #NAME? makes a
+    // read-only inspection or save/load round-trip lose useful data.
+    if (!parsed.value.is_blank() && !parsed.is_sst_index) {
+      workbook.sheet(sheet_index).set_cell_cached_value_borrowed(parsed.row, parsed.col, parsed.value);
     }
   } else if (parsed.value.is_blank()) {
     // Skip blank-blank cells to keep the row map sparse, unless a style
@@ -530,6 +544,7 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     entry.row = static_cast<std::uint32_t>(r_v - 1);
     if (ht_attr) {
       entry.height = attr_f64(row, "ht");
+      entry.has_height = true;
     }
     if (hidden_attr) {
       entry.hidden = attr_bool(row, "hidden");
@@ -726,6 +741,7 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   entry.row = rec.row_1based - 1U;
   if (!rec.ht.empty()) {
     entry.height = std::strtod(std::string(rec.ht).c_str(), nullptr);
+    entry.has_height = true;
   }
   if (!rec.hidden.empty()) {
     entry.hidden = parse_xml_bool(rec.hidden);

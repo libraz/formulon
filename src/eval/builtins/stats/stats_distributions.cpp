@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Excel's probability-distribution builtins that share the
 // MEDIAN / STDEV argument-coercion conventions: NORM.DIST / NORM.S.DIST /
@@ -450,14 +449,19 @@ Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // domain checks readable at each callsite.
 static constexpr double kTFdfMax = 1.0e10;
 
-// Student's t CDF at `x` with `df` degrees of freedom, computed through the
-// regularized incomplete beta. The reflection handles negative `x` via
-// P(T <= x) = 1 - P(T <= -x) for x >= 0.
-static double TDistCdf(double x, double df) noexcept {
+// Student's t right tail, evaluated directly through the regularized
+// incomplete beta. Keeping this probability separate avoids cancelling it
+// from one for large x, which is essential for inverse-tail bracketing.
+static double TDistRtCore(double x, double df) noexcept {
   const double t2 = x * x;
   const double y = df / (df + t2);
   const double half = 0.5 * stats::regularized_incomplete_beta(0.5 * df, 0.5, y);
-  return (x >= 0.0) ? 1.0 - half : half;
+  return (x >= 0.0) ? half : 1.0 - half;
+}
+
+// Student's t CDF at `x` with `df` degrees of freedom.
+static double TDistCdf(double x, double df) noexcept {
+  return 1.0 - TDistRtCore(x, df);
 }
 
 // Student's t PDF at `x` with `df` degrees of freedom, computed in log
@@ -519,63 +523,40 @@ Value TDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (df < 1.0 || df > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(1.0 - TDistCdf(x, df));
+  return finite_number_result(TDistRtCore(x, df));
 }
 
-// Newton-Raphson inverter for the Student's t CDF. Assumes the caller has
-// already validated `0 < p < 1` and `df >= 1`. Uses Hill's Cornish-Fisher
-// approximation for the initial guess, falling back to bisection when
-// Newton oscillates in the steep tails.
+// Inverts the Student's t CDF through the directly evaluated right tail and
+// a dynamically expanded bracket. This admits heavy df=1 Cauchy tails whose
+// finite quantiles can exceed the previous fixed 1e6 limit.
 double TInvCore(double p, double df) noexcept {
   if (p == 0.5) {
     return 0.0;
   }
-  // Hill's approximation: starts from the standard-normal quantile and
-  // applies two correction terms in df^-1 and df^-2. Good to ~1e-3 for
-  // moderate df; for df = 1 it's off by ~10% near the tails but Newton
-  // recovers in a handful of iterations.
-  const double z = InverseStandardNormal(p);
-  const double h = z * z;
-  double x = z * (1.0 + (h + 1.0) / (4.0 * df) + ((5.0 * h + 16.0) * h + 3.0) / (96.0 * df * df));
-  // Bisection bracket for fallback: the t quantile at p in (0, 1) always
-  // lies inside [-1e6, 1e6] for df >= 1 (the mode is 0; tails are heavy
-  // but finite at any p strictly inside the open unit interval).
-  double lo = -1.0e6;
-  double hi = 1.0e6;
-  constexpr int kMaxIter = 100;
-  constexpr double kTol = 1e-10;
-  for (int i = 0; i < kMaxIter; ++i) {
-    const double cdf = TDistCdf(x, df);
-    const double err = cdf - p;
-    // Tighten the bracket as Newton progresses; if Newton escapes it we
-    // fall back to bisection below.
-    if (err < 0.0) {
-      lo = std::max(lo, x);
-    } else {
-      hi = std::min(hi, x);
-    }
-    if (std::abs(err) < kTol) {
-      return x;
-    }
-    const double pdf = TDistPdf(x, df);
-    if (pdf <= 0.0 || !std::isfinite(pdf)) {
-      // Bisect.
-      x = 0.5 * (lo + hi);
-      continue;
-    }
-    double step = err / pdf;
-    double x_new = x - step;
-    if (x_new <= lo || x_new >= hi || !std::isfinite(x_new)) {
-      // Step escaped the bracket; bisect instead. Keeps tail-steepness
-      // cases (df = 1, p near 0 or 1) from diverging.
-      x_new = 0.5 * (lo + hi);
-    }
-    if (std::abs(x_new - x) < kTol * std::max(1.0, std::abs(x))) {
-      return x_new;
-    }
-    x = x_new;
+  if (p < 0.5) {
+    return -TInvCore(1.0 - p, df);
   }
-  return std::numeric_limits<double>::quiet_NaN();
+  const double target = 1.0 - p;
+  double lo = 0.0;
+  double hi = 1.0;
+  for (int i = 0; i < 1024 && TDistRtCore(hi, df) > target; ++i) {
+    if (hi > std::numeric_limits<double>::max() * 0.5) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    hi *= 2.0;
+  }
+  for (int i = 0; i < 160; ++i) {
+    const double mid = lo + (hi - lo) * 0.5;
+    if (TDistRtCore(mid, df) > target) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+    if (hi - lo <= 1e-12 * std::max(1.0, hi)) {
+      break;
+    }
+  }
+  return lo + (hi - lo) * 0.5;
 }
 
 // T.INV(probability, deg_freedom) - inverse of Student's t CDF.
@@ -619,13 +600,27 @@ Value TInv2T(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // Snedecor's F CDF at `x >= 0` with `(d1, d2)` degrees of freedom, via
-// the regularized incomplete beta on `y = d1*x / (d1*x + d2)`.
+// the regularized incomplete beta on `y = x / (x + d2/d1)`. This is
+// algebraically identical to `d1*x / (d1*x + d2)` but retains a finite
+// ratio for large finite x instead of forming an Inf/Inf intermediate.
 static double FDistCdf(double x, double d1, double d2) noexcept {
   if (x <= 0.0) {
     return 0.0;
   }
-  const double y = (d1 * x) / (d1 * x + d2);
+  const double y = x / (x + d2 / d1);
   return stats::regularized_incomplete_beta(0.5 * d1, 0.5 * d2, y);
+}
+
+// Right tail of the F CDF, evaluated directly as the complementary
+// regularized beta.  Computing `1 - FDistCdf` loses every meaningful bit in
+// the extreme tail and prevents the inverse from bracketing its quantile.
+static double FDistRtCore(double x, double d1, double d2) noexcept {
+  if (x <= 0.0) {
+    return 1.0;
+  }
+  const double scale = d2 / d1;
+  const double z = scale / (x + scale);
+  return stats::regularized_incomplete_beta(0.5 * d2, 0.5 * d1, z);
 }
 
 // Snedecor's F PDF at `x > 0` with `(d1, d2)` degrees of freedom,
@@ -686,64 +681,43 @@ Value FDistRt(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x < 0.0 || d1 < 1.0 || d1 > kTFdfMax || d2 < 1.0 || d2 > kTFdfMax) {
     return Value::error(ErrorCode::Num);
   }
-  return finite_number_result(1.0 - FDistCdf(x, d1, d2));
+  return finite_number_result(FDistRtCore(x, d1, d2));
 }
 
-// Newton-Raphson inverter for Snedecor's F CDF. Assumes `0 < p < 1` and
-// both degrees of freedom `>= 1`. Uses a bisection sweep on [1e-6, 1e6]
-// for the first few steps to land inside the high-curvature region, then
-// switches to Newton. The F quantile at p close to 1 is steep and Newton
-// alone can oscillate; the bisection warm-up sidesteps that entirely.
+// Inverts Snedecor's F CDF with a dynamically expanded bracket. The upper
+// tail is compared directly so probabilities near one retain their useful
+// precision; fixed [1e-10, 1e10] brackets incorrectly capped valid df=1
+// quantiles around 1e23.
 static double FInvCore(double p, double d1, double d2) noexcept {
-  double lo = 1e-10;
-  double hi = 1e10;
-  // Seed with ~20 bisection iterations to isolate the quantile to a
-  // decently small interval. The F CDF is monotone on (0, inf), so
-  // sign-checking the error at (lo, mid, hi) identifies the half-interval
-  // containing the root.
-  constexpr int kBisectIter = 40;
-  for (int i = 0; i < kBisectIter; ++i) {
-    const double mid = 0.5 * (lo + hi);
-    const double cdf = FDistCdf(mid, d1, d2);
-    if (cdf < p) {
+  const bool use_right_tail = p > 0.5;
+  const double target = use_right_tail ? 1.0 - p : p;
+  double lo = 0.0;
+  double hi = 1.0;
+  for (int i = 0; i < 1024; ++i) {
+    const double probability = use_right_tail ? FDistRtCore(hi, d1, d2) : FDistCdf(hi, d1, d2);
+    const bool needs_larger = use_right_tail ? probability > target : probability < target;
+    if (!needs_larger) {
+      break;
+    }
+    if (hi > std::numeric_limits<double>::max() * 0.5) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    hi *= 2.0;
+  }
+  for (int i = 0; i < 160; ++i) {
+    const double mid = lo + (hi - lo) * 0.5;
+    const double probability = use_right_tail ? FDistRtCore(mid, d1, d2) : FDistCdf(mid, d1, d2);
+    const bool needs_larger = use_right_tail ? probability > target : probability < target;
+    if (needs_larger) {
       lo = mid;
     } else {
       hi = mid;
     }
-    if ((hi - lo) < 1e-6 * std::max(1.0, mid)) {
+    if (hi - lo <= 1e-12 * std::max(1.0, hi)) {
       break;
     }
   }
-  double x = 0.5 * (lo + hi);
-  constexpr int kNewtonIter = 100;
-  constexpr double kTol = 1e-10;
-  for (int i = 0; i < kNewtonIter; ++i) {
-    const double cdf = FDistCdf(x, d1, d2);
-    const double err = cdf - p;
-    if (err < 0.0) {
-      lo = std::max(lo, x);
-    } else {
-      hi = std::min(hi, x);
-    }
-    if (std::abs(err) < kTol) {
-      return x;
-    }
-    const double pdf = FDistPdf(x, d1, d2);
-    if (pdf <= 0.0 || !std::isfinite(pdf)) {
-      x = 0.5 * (lo + hi);
-      continue;
-    }
-    double step = err / pdf;
-    double x_new = x - step;
-    if (x_new <= lo || x_new >= hi || !std::isfinite(x_new)) {
-      x_new = 0.5 * (lo + hi);
-    }
-    if (std::abs(x_new - x) < kTol * std::max(1.0, std::abs(x))) {
-      return x_new;
-    }
-    x = x_new;
-  }
-  return std::numeric_limits<double>::quiet_NaN();
+  return lo + (hi - lo) * 0.5;
 }
 
 // F.INV(probability, d1, d2) - inverse of Snedecor's F CDF. `p` lies in

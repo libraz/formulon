@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // miniz wrappers used by the OOXML writer to add parts to the in-memory
 // zip archive. The RAII guard ensures the writer state is torn down

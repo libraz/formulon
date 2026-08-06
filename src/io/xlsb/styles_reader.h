@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `xl/styles.bin` reader. Decodes the subset of the MS-XLSB styles part
 // the engine needs to resolve a cell's number format: custom `<numFmt>`

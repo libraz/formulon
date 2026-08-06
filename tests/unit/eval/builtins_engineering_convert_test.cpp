@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the CONVERT built-in: canonical factors for each
 // category, SI / binary prefix resolution, affine temperature conversion,

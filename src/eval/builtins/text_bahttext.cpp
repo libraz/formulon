@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of Excel's BAHTTEXT function: spells out a numeric value in
 // Thai script as Thai baht and satang. The output is locale-independent: Excel
@@ -33,11 +32,13 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
+#include "eval/text_format/rounding.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -223,7 +224,18 @@ std::string format_bahttext(double n) {
   // satang components.
   const double sign = (n < 0.0) ? -1.0 : 1.0;
   const double abs_n = (n < 0.0) ? -n : n;
-  const double scaled = std::floor(abs_n * 100.0 + 0.5);  // away-from-zero on the magnitude
+  // Normalise Excel's 15-digit numeric value before scaling.  Otherwise a
+  // decimal tie such as 1.005 can arrive just below 100.5 in binary and be
+  // rounded down to 1.00 instead of away from zero to 1.01.
+  double scaled = text_format::round_to_15_significant_digits(abs_n) * 100.0;
+  // A normalised decimal tie can still land one ULP below its exact scaled
+  // value during the multiplication (1.005 * 100 -> 100.499... on binary64).
+  // Do not nudge values that are already integral: at large magnitudes their
+  // ULP is many satang and the exact integer must remain unchanged.
+  if (std::trunc(scaled) != scaled) {
+    scaled = std::nextafter(scaled, std::numeric_limits<double>::infinity());
+  }
+  scaled = std::round(scaled);
   const auto total_satang = static_cast<std::uint64_t>(scaled);
   const std::uint64_t integer_baht = total_satang / 100ull;
   const std::uint32_t satang = static_cast<std::uint32_t>(total_satang % 100ull);

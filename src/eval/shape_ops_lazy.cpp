@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the shape / geometry-inspection lazy builtins
 // (`ROWS`, `COLUMNS`, `ROW`, `COLUMN`, `SUMPRODUCT`). Each dispatches on
@@ -16,6 +15,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -122,20 +122,19 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
 bool flatten_array_literal(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx, std::vector<Value>* out_cells, std::uint32_t* out_rows,
                            std::uint32_t* out_cols, Value* out_err) {
-  const std::uint32_t rows = arg_node.as_array_rows();
-  const std::uint32_t cols = arg_node.as_array_cols();
-  *out_rows = rows;
-  *out_cols = cols;
-  out_cells->clear();
-  out_cells->reserve(static_cast<std::size_t>(rows) * cols);
-  for (std::uint32_t r = 0; r < rows; ++r) {
-    for (std::uint32_t c = 0; c < cols; ++c) {
-      Value v = eval_node(arg_node.as_array_element(r, c), arena, registry, ctx);
-      if (v.is_error()) {
-        *out_err = v;
-        return false;
-      }
-      out_cells->push_back(v);
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
+  if (!resolved) {
+    *out_err = Value::error(resolved.error());
+    return false;
+  }
+  RangeResult values = std::move(resolved.value());
+  *out_rows = values.rows;
+  *out_cols = values.cols;
+  *out_cells = std::move(values.cells);
+  for (const Value& value : *out_cells) {
+    if (value.is_error()) {
+      *out_err = value;
+      return false;
     }
   }
   return true;
@@ -157,19 +156,27 @@ double sumproduct_coerce(const Value& v) {
 // vector and shape. The cells are copied into a fresh arena buffer so the
 // caller's vector can go out of scope safely; both the buffer and the
 // `ArrayValue` header live in `arena` for the same lifetime contract as
-// `Value::Text`.
+// `Value::Text`. Returns `nullptr` when the shape is rejected or the arena
+// is exhausted; every caller maps that to `#NUM!`.
 const ArrayValue* make_array_value(Arena& arena, std::uint32_t rows, std::uint32_t cols,
                                    const std::vector<Value>& cells) {
+  Value* buffer = nullptr;
+  const ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
+    return nullptr;
+  }
   const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  Value* buffer = arena.create_array<Value>(n);
   for (std::size_t i = 0; i < n; ++i) {
     buffer[i] = cells[i];
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  arr->rows = rows;
-  arr->cols = cols;
-  arr->cells = buffer;
   return arr;
+}
+
+// `Value::array(nullptr)` is not a legal value, so every `make_array_value`
+// call site funnels its result through this guard rather than repeating the
+// null check.
+Value array_value_or_num_error(const ArrayValue* arr) {
+  return arr == nullptr ? Value::error(ErrorCode::Num) : Value::array(arr);
 }
 
 // True for the reference-shaped `Call` names that `resolve_range_arg`
@@ -241,6 +248,22 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
+  const auto index_array = [&](std::uint32_t top, std::uint32_t left, std::uint32_t bottom,
+                               std::uint32_t right) -> Value {
+    const std::uint32_t rows = bottom - top + 1U;
+    const std::uint32_t cols = right - left + 1U;
+    if (rows == 1U && cols == 1U) {
+      return Value::number(static_cast<double>((want_row ? top : left) + 1U));
+    }
+    const std::uint32_t out_rows = want_row ? rows : 1U;
+    const std::uint32_t out_cols = want_row ? 1U : cols;
+    std::vector<Value> cells;
+    cells.reserve(static_cast<std::size_t>(out_rows) * out_cols);
+    for (std::uint32_t i = 0; i < (want_row ? rows : cols); ++i) {
+      cells.push_back(Value::number(static_cast<double>((want_row ? top : left) + i + 1U)));
+    }
+    return array_value_or_num_error(make_array_value(arena, out_rows, out_cols, cells));
+  };
   const parser::AstNode& raw_arg = call.as_call_arg(0);
   // LET-binding passthrough: `=LET(r, A1:A3, ROW(r))` parses `r` as a
   // NameRef, but Mac Excel returns the first row of the bound rectangle
@@ -270,12 +293,11 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     }
     const parser::Reference& lhs = lhs_ast.as_ref();
     const parser::Reference& rhs = rhs_ast.as_ref();
-    // Excel returns the first-row / first-column of the rectangle, which
-    // is the smaller of the two endpoints after normalisation.
-    const std::uint32_t a = want_row ? lhs.row : lhs.col;
-    const std::uint32_t b = want_row ? rhs.row : rhs.col;
-    const std::uint32_t lo = a < b ? a : b;
-    return Value::number(static_cast<double>(lo + 1U));
+    const std::uint32_t top = std::min(lhs.row, rhs.row);
+    const std::uint32_t left = std::min(lhs.col, rhs.col);
+    const std::uint32_t bottom = std::max(lhs.row, rhs.row);
+    const std::uint32_t right = std::max(lhs.col, rhs.col);
+    return index_array(top, left, bottom, right);
   }
   if (k == parser::NodeKind::Call) {
     // Reference-returning builtins (INDIRECT, OFFSET) nested inside
@@ -289,6 +311,9 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     bool is_range = false;
     ErrorCode err = ErrorCode::Value;
     if (resolve_reference_call(arg, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
+      if (is_range && !strings::case_insensitive_eq(arg.as_call_name(), "INDIRECT")) {
+        return index_array(top, left, bottom, right);
+      }
       const std::uint32_t idx = want_row ? top : left;
       return Value::number(static_cast<double>(idx + 1U));
     }
@@ -512,7 +537,7 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
     for (std::size_t i = 0; i < n; ++i) {
       out.push_back(apply_unary(target.as_unary_op(), in_arr->cells[i]));
     }
-    return Value::array(make_array_value(arena, in_arr->rows, in_arr->cols, out));
+    return array_value_or_num_error(make_array_value(arena, in_arr->rows, in_arr->cols, out));
   }
 
   // Range-shaped AST: Ref / RangeOp / one of the reference-producing Calls.
@@ -525,22 +550,18 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
       return Value::error(resolved.error());
     }
     auto& rr = resolved.value();
-    return Value::array(make_array_value(arena, rr.rows, rr.cols, rr.cells));
+    return array_value_or_num_error(make_array_value(arena, rr.rows, rr.cols, rr.cells));
   }
 
   // ArrayLiteral in array context preserves per-cell errors instead of
   // short-circuiting the whole argument.
   if (k == parser::NodeKind::ArrayLiteral) {
-    std::vector<Value> cells;
-    const std::uint32_t rows = target.as_array_rows();
-    const std::uint32_t cols = target.as_array_cols();
-    cells.reserve(static_cast<std::size_t>(rows) * cols);
-    for (std::uint32_t r = 0; r < rows; ++r) {
-      for (std::uint32_t c = 0; c < cols; ++c) {
-        cells.push_back(eval_node(target.as_array_element(r, c), arena, registry, ctx));
-      }
+    auto resolved = resolve_range_arg(target, arena, registry, ctx);
+    if (!resolved) {
+      return Value::error(resolved.error());
     }
-    return Value::array(make_array_value(arena, rows, cols, cells));
+    auto& values = resolved.value();
+    return array_value_or_num_error(make_array_value(arena, values.rows, values.cols, values.cells));
   }
 
   // Scalar fallback. Evaluate normally, then wrap into a 1x1 array. Errors
@@ -555,7 +576,7 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
     return v;
   }
   const std::vector<Value> single{v};
-  return Value::array(make_array_value(arena, 1U, 1U, single));
+  return array_value_or_num_error(make_array_value(arena, 1U, 1U, single));
 }
 
 Value eval_binop_array_ctx(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -590,30 +611,28 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // `=TRANSPOSE({1,#N/A;2,3})` as an array containing #N/A at the
   // corresponding transposed position.
   if (arg.kind() == parser::NodeKind::ArrayLiteral) {
-    const std::uint32_t in_rows = arg.as_array_rows();
-    const std::uint32_t in_cols = arg.as_array_cols();
+    auto resolved = resolve_range_arg(arg, arena, registry, ctx);
+    if (!resolved) {
+      return Value::error(resolved.error());
+    }
+    const RangeResult& values = resolved.value();
+    const std::uint32_t in_rows = values.rows;
+    const std::uint32_t in_cols = values.cols;
     const std::uint32_t out_rows = in_cols;
     const std::uint32_t out_cols = in_rows;
-    const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-    Value* buffer = arena.create_array<Value>(n);
-    if (buffer == nullptr) {
+    Value* buffer = nullptr;
+    ArrayValue* arr = allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
+    if (arr == nullptr) {
       return Value::error(ErrorCode::Num);
     }
     for (std::uint32_t r = 0; r < in_rows; ++r) {
       for (std::uint32_t c = 0; c < in_cols; ++c) {
-        const Value cell = eval_node(arg.as_array_element(r, c), arena, registry, ctx);
+        const Value cell = values.cells[static_cast<std::size_t>(r) * in_cols + c];
         // Per-cell error pass-through: errors land at their transposed
         // position rather than short-circuiting the whole call.
         buffer[static_cast<std::size_t>(c) * in_rows + r] = cell;
       }
     }
-    ArrayValue* arr = arena.create<ArrayValue>();
-    if (arr == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    arr->rows = out_rows;
-    arr->cols = out_cols;
-    arr->cells = buffer;
     return Value::array(arr);
   }
 
@@ -637,26 +656,20 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
     // Defensive: the contract of `eval_node_as_array` is "Array or Error".
     // Treat any other shape as a 1x1 fall-through so TRANSPOSE remains
     // total over its input domain.
-    Value* one = arena.create_array<Value>(1);
-    if (one == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    one[0] = v;
-    ArrayValue* arr = arena.create<ArrayValue>();
+    Value* one = nullptr;
+    ArrayValue* arr = allocate_array_value(1U, 1U, arena, one, kMaxDerivedArrayCells);
     if (arr == nullptr) {
       return Value::error(ErrorCode::Num);
     }
-    arr->rows = 1U;
-    arr->cols = 1U;
-    arr->cells = one;
+    one[0] = v;
     return Value::array(arr);
   }
   const ArrayValue* src = v.as_array();
   const std::uint32_t out_rows = src->cols;
   const std::uint32_t out_cols = src->rows;
-  const std::size_t n = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
-  Value* buffer = arena.create_array<Value>(n);
-  if (buffer == nullptr) {
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   // Row-major fill: dst[c * src->rows + r] = src[r * src->cols + c]. The
@@ -667,13 +680,6 @@ Value eval_transpose_lazy(const parser::AstNode& call, Arena& arena, const Funct
       buffer[static_cast<std::size_t>(c) * src->rows + r] = src->cells[static_cast<std::size_t>(r) * src->cols + c];
     }
   }
-  ArrayValue* arr = arena.create<ArrayValue>();
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  arr->rows = out_rows;
-  arr->cols = out_cols;
-  arr->cells = buffer;
   return Value::array(arr);
 }
 

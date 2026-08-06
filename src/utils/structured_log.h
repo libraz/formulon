@@ -1,8 +1,8 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Structured logging for Formulon. Every log record is a single line of JSON
-// emitted on stderr, which keeps the dependency footprint zero (no spdlog,
-// no fmt) while staying machine-parseable.
+// emitted on stderr by default, which keeps the dependency footprint zero (no
+// spdlog, no fmt) while staying machine-parseable. Embedders can route records
+// to their own sink or suppress levels they do not need.
 //
 // Typical usage:
 //   StructuredLog("cell.evaluated")
@@ -21,6 +21,27 @@
 #include "utils/error.h"
 
 namespace formulon {
+
+/// Severity threshold used by the process-wide structured-log configuration.
+/// Records below the configured minimum are discarded before serialisation.
+enum class StructuredLogLevel : uint8_t {
+  kDebug,
+  kInfo,
+  kWarn,
+  kError,
+  kOff,
+};
+
+/// Receives one complete, newline-terminated JSON record synchronously.
+/// The `record` view is valid only for the duration of this callback.
+using StructuredLogSink = void (*)(std::string_view record, void* user_data);
+
+/// Routes subsequent records to `sink`. Passing nullptr restores stderr.
+/// The caller owns `user_data` and must keep it valid while the sink is set.
+void set_structured_log_sink(StructuredLogSink sink, void* user_data = nullptr);
+
+/// Sets the lowest severity emitted process-wide. The default is `kDebug`.
+void set_structured_log_min_level(StructuredLogLevel level);
 
 /// Fluent builder that emits a single structured log record.
 ///
@@ -65,7 +86,7 @@ class StructuredLog {
   void error();
 
  private:
-  void flush(std::string_view level);
+  void flush(StructuredLogLevel level, std::string_view level_name);
 
   std::string event_;
   std::string fields_;  // Pre-serialised `,"k":v,"k2":v2` fragment.

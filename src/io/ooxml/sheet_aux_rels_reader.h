@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `xl/worksheets/_rels/sheetN.xml.rels` reader. Splits the per-sheet
 // relationship file into three thematic lookups:
@@ -27,6 +26,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "io/unknown_relationship.h"
 #include "io/zip_reader.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -64,6 +64,9 @@ struct SheetAuxRels {
   std::string printer_settings_rid;
   std::string printer_settings_path;
   std::string drawing_path;
+  // Any relationship type not consumed by a worksheet-specific reader.
+  // Internal targets are package-relative; external targets are verbatim.
+  std::vector<UnknownRelationship> unknown_rels;
 };
 
 /// Walks `sheet_rels_path` for `kRelTable` entries and returns the

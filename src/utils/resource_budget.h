@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // `ResourceBudget` is a small request-scoped guard against unbounded work
 // driven by attacker-controlled input (cells scanned, output bytes,
@@ -23,6 +22,7 @@
 #ifndef FORMULON_UTILS_RESOURCE_BUDGET_H_
 #define FORMULON_UTILS_RESOURCE_BUDGET_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -42,6 +42,41 @@ inline constexpr std::uint64_t kMaxPivotResultCells = 4194304U;  // 2^22
 /// covers any UI redraw region while rejecting near-full-grid rectangles
 /// (~17e9 coordinates).
 inline constexpr std::uint64_t kMaxRecalcViewportCells = 1048576U;  // 2^20
+
+/// Maximum dense dynamic-array result size. This is also the historic
+/// SEQUENCE ceiling; applying it at the shared allocation seam prevents
+/// other array constructors from bypassing the same resource bound.
+inline constexpr std::uint64_t kMaxDynamicArrayCells = 1048576U;  // 2^20
+
+/// Maximum cells eagerly materialised from one rectangular reference.
+inline constexpr std::uint64_t kMaxRangeExpansionCells = 10'000'000U;
+
+/// Maximum span slots one REGEX* call may accumulate, counted as
+/// `matches * (capture_count + 1)`. PCRE2's own `match_limit` bounds the
+/// work spent inside a single match attempt but says nothing about how many
+/// matches a find-all scan retains, and each retained match carries one slot
+/// per capture group. Sized to `kMaxDynamicArrayCells` because
+/// `REGEXEXTRACT(..., 3)` projects exactly that product into an array
+/// result, so accumulating more could never produce a usable value.
+inline constexpr std::uint64_t kMaxRegexMatchSlots = kMaxDynamicArrayCells;
+
+/// Ceiling on the arena backing one evaluation, in bytes.
+///
+/// The evaluator's arena is reset between cells and every allocation site
+/// already reports `Arena::exhausted()`, so a ceiling here turns unbounded
+/// growth on a hostile formula into a `#NUM!` for that one cell instead of
+/// an out-of-memory abort that takes the whole process (or, on WASM, the
+/// host page) down. Sized at four times the largest legitimate single
+/// result — `kMaxRangeExpansionCells` cells at 24 bytes each is ~240 MB —
+/// so the intermediates of a genuinely large evaluation still fit.
+inline constexpr std::size_t kMaxEvalArenaBytes = 1024U * 1024U * 1024U;  // 1 GiB
+
+/// Ceiling on an arena backing one parse during a file load, in bytes.
+///
+/// These arenas hold the AST of a single formula read from the file, which
+/// is orders of magnitude smaller than this; the ceiling exists so a
+/// crafted formula string cannot turn a load into an allocation loop.
+inline constexpr std::size_t kMaxLoadArenaBytes = 64U * 1024U * 1024U;  // 64 MiB
 
 /// Running work-unit counter checked against a fixed ceiling.
 ///

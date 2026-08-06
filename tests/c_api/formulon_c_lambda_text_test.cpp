@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Stable C ABI tests for `fm_workbook_lambda_text_at`. The rendering
 // logic itself is pinned in `tests/unit/eval/lambda_format_test.cpp`;

@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the pivot-table-definition writer. See
 // pivot_table_writer.h for the public contract; see

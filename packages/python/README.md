@@ -7,7 +7,8 @@ hyperlinks, data validations, conditional formats, defined names, and
 PivotTables. It also exposes recalc (full and partial), dependency-graph
 tracing (precedents / dependents), dynamic-array spill info, the function
 catalog, and per-sheet view / protection settings. The goal is 1-bit
-compatibility with Excel 365 (ja-JP locale).
+compatibility with the default `win-365-ja_JP` behavior profile; callers can
+select the separately supported `mac-365-ja_JP` profile when required.
 
 ## Install
 
@@ -38,8 +39,8 @@ print(v.to_python())  # 6.0
 # Cell-level Excel errors surface as Value(kind=ValueKind.ERROR), not
 # Python exceptions.
 v = formulon.eval_formula("=1/0")
-print(v.kind)         # ValueKind.ERROR
-print(v.error_code)   # 1 (ErrorCode::Div0)
+print(v.kind)  # ValueKind.ERROR
+print(v.error_code)  # 1 (ErrorCode::Div0)
 ```
 
 ## Workbook example
@@ -48,8 +49,8 @@ print(v.error_code)   # 1 (ErrorCode::Div0)
 from formulon import Workbook
 
 with Workbook.create_default() as wb:
-    wb.set_number(0, 0, 0, 21.0)        # Sheet1!A1 = 21
-    wb.set_formula(0, 0, 1, "=A1*2")    # Sheet1!B1 = =A1*2
+    wb.set_number(0, 0, 0, 21.0)  # Sheet1!A1 = 21
+    wb.set_formula(0, 0, 1, "=A1*2")  # Sheet1!B1 = =A1*2
     wb.recalc()
 
     print(wb.get_value(0, 0, 1).to_python())  # 42.0
@@ -83,48 +84,58 @@ iter_passthrough` iterators.
 **Sheets & matrix edits**
 
 ```python
-wb.add_sheet("Data"); wb.rename_sheet(1, "Numbers"); wb.move_sheet(1, 0)
-wb.set_number(0, 0, 0, 11.0)        # A1 = 11
-wb.insert_rows(0, 0, 1)             # A1 shifts down to A2
-wb.delete_cols(0, 5, 1)            # delete column F
+wb.add_sheet("Data")
+wb.rename_sheet(1, "Numbers")
+wb.move_sheet(1, 0)
+wb.set_number(0, 0, 0, 11.0)  # A1 = 11
+wb.insert_rows(0, 0, 1)  # A1 shifts down to A2
+wb.delete_cols(0, 5, 1)  # delete column F
 ```
 
 **Defined names**
 
 ```python
-wb.set_defined_name("TaxRate", "Sheet1!$A$1")   # set / replace
-wb.set_defined_name("TaxRate", "")               # empty formula removes it
+wb.set_defined_name("TaxRate", "Sheet1!$A$1")  # set / replace
+wb.set_defined_name("TaxRate", "")  # empty formula removes it
 ```
 
 **Partial recalc** -- recompute only the closure feeding a viewport:
 
 ```python
-recomputed = wb.partial_recalc(sheet=0, first_row=0, last_row=0,
-                               first_col=0, last_col=1)
+recomputed = wb.partial_recalc(sheet=0, first_row=0, last_row=0, first_col=0, last_col=1)
 ```
 
 **Merges / comments / hyperlinks / validations**
 
 ```python
 from formulon import MergeRange, DataValidationInput
+
 wb.add_merge(0, MergeRange(0, 0, 1, 1))
 wb.set_comment(0, 0, 0, author="alice", text="see note")
 wb.add_hyperlink(0, 0, 0, "https://example.com", "Example", "tooltip")
-wb.add_validation(0, DataValidationInput(type=3, ranges=[MergeRange(0, 0, 4, 0)],
-                                         formula1='"a,b,c"'))
+wb.add_validation(0, DataValidationInput(type=3, ranges=[MergeRange(0, 0, 4, 0)], formula1='"a,b,c"'))
 ```
 
 **Styles & number formats**
 
 ```python
 from formulon import FontRecord, FillRecord, CellXf
+
 fi = wb.add_font(FontRecord(name="Calibri", size=12.0, bold=True))
 fill = wb.add_fill(FillRecord(pattern=1, fg_argb=0xFFFFFF00))
 border = wb.add_border({"left": {"style": 1, "color_argb": 0xFF000000}})
 nf = wb.add_num_fmt("0.00")
-xf = wb.add_cell_xf(CellXf(font_index=fi, fill_index=fill, border_index=border,
-                          num_fmt_id=nf, horizontal_align=0, vertical_align=0,
-                          wrap_text=False))
+xf = wb.add_cell_xf(
+    CellXf(
+        font_index=fi,
+        fill_index=fill,
+        border_index=border,
+        num_fmt_id=nf,
+        horizontal_align=0,
+        vertical_align=0,
+        wrap_text=False,
+    )
+)
 wb.set_cell_xf_index(0, 0, 0, xf)
 ```
 
@@ -132,9 +143,17 @@ wb.set_cell_xf_index(0, 0, 0, xf)
 
 ```python
 from formulon import ConditionalFormatInput, MergeRange
-wb.add_conditional_format(0, ConditionalFormatInput(
-    sqref=[MergeRange(0, 0, 9, 0)], type=1,   # cellIs
-    op_engaged=True, op=4, formula1="100"))   # greaterThan 100
+
+wb.add_conditional_format(
+    0,
+    ConditionalFormatInput(
+        sqref=[MergeRange(0, 0, 9, 0)],
+        type=1,  # cellIs
+        op_engaged=True,
+        op=4,
+        formula1="100",
+    ),
+)  # greaterThan 100
 matches = wb.evaluate_cf_range(0, 0, 0, 9, 0)  # per-cell resolved matches
 ```
 
@@ -142,6 +161,7 @@ matches = wb.evaluate_cf_range(0, 0, 0, 9, 0)  # per-cell resolved matches
 
 ```python
 from formulon import PivotFieldSpec, PivotDataFieldSpec, PivotAxis, PivotAggregation
+
 cache = wb.pivot_cache_create()
 wb.pivot_cache_field_add(cache, "Region")
 wb.pivot_cache_field_add(cache, "Amount")
@@ -151,26 +171,28 @@ wb.pivot_cache_record_set_number(cache, rec, 1, 10.0)
 pivot = wb.pivot_create(0, "Pivot1", cache, anchor_row=0, anchor_col=4)
 region = wb.pivot_field_add(0, pivot, PivotFieldSpec("Region", axis=PivotAxis.ROW))
 amount = wb.pivot_field_add(0, pivot, PivotFieldSpec("Amount", axis=PivotAxis.VALUE))
-wb.pivot_data_field_add(0, pivot, PivotDataFieldSpec("Sum of Amount", amount,
-                                                     aggregation=PivotAggregation.SUM))
-layout = wb.pivot_layout(0, pivot)   # -> PivotLayout(top, left, rows, cols, cells)
+wb.pivot_data_field_add(0, pivot, PivotDataFieldSpec("Sum of Amount", amount, aggregation=PivotAggregation.SUM))
+layout = wb.pivot_layout(0, pivot)  # -> PivotLayout(top, left, rows, cols, cells)
 ```
 
 **Dependency trace & spill**
 
 ```python
-wb.set_number(0, 0, 0, 1.0); wb.set_formula(0, 0, 1, "=A1"); wb.recalc()
-wb.precedents(0, 0, 1)   # -> [CellNode(sheet=0, row=0, col=0)]
-wb.dependents(0, 0, 0)   # -> [CellNode(sheet=0, row=0, col=1)]
-wb.set_formula(0, 5, 0, "=SEQUENCE(3)"); wb.recalc()
-wb.spill_info(0, 5, 0)   # -> SpillInfo(engaged=True, rows=3, cols=1, ...)
+wb.set_number(0, 0, 0, 1.0)
+wb.set_formula(0, 0, 1, "=A1")
+wb.recalc()
+wb.precedents(0, 0, 1)  # -> [CellNode(sheet=0, row=0, col=0)]
+wb.dependents(0, 0, 0)  # -> [CellNode(sheet=0, row=0, col=1)]
+wb.set_formula(0, 5, 0, "=SEQUENCE(3)")
+wb.recalc()
+wb.spill_info(0, 5, 0)  # -> SpillInfo(engaged=True, rows=3, cols=1, ...)
 ```
 
 **Function catalog** (static; needs no workbook handle)
 
 ```python
-Workbook.function_count()                 # number of registered functions
-Workbook.function_metadata("SUM", 0)      # FunctionMetadata or None
+Workbook.function_count()  # number of registered functions
+Workbook.function_metadata("SUM", 0)  # FunctionMetadata or None
 ```
 
 **Sheet view / protection / calc policy** -- `get_sheet_view` /
@@ -205,6 +227,14 @@ pointer that the host cannot synthesise into the WebAssembly module's
 function table through `wasmtime`. Configure iterative calculation via
 `set_iterative(enabled, max_iterations, max_change)` instead; only the
 per-sweep callback is unavailable.
+
+Worksheet XML is read through the DOM parser only. The native CLI
+switches to a streaming parser for worksheets past 256 KiB; that
+implementation costs binary size the WASM budget does not have, so
+loading a workbook here needs memory proportional to the largest single
+worksheet's XML rather than a fixed window. Sheets are read one at a
+time, so the peak is per worksheet, and the practical ceiling is the
+32-bit WASM address space. Results are identical either way.
 
 ## Building from source
 

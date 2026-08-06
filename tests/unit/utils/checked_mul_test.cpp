@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for `formulon::checked_mul_size_t`. The helper is the
 // defensive seam used by the matrix / dynamic-array / linest / pivot

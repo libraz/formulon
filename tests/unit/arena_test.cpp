@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Unit tests for utils/arena.h.
 //
@@ -108,6 +107,15 @@ TEST(ArenaTest, InternStoresCopyWithDistinctAddress) {
 TEST(ArenaTest, InternEmptyIsEmpty) {
   Arena arena(64);
   EXPECT_TRUE(arena.intern("").empty());
+}
+
+TEST(ArenaTest, AllocationLimitReportsStickyExhaustionUntilReset) {
+  Arena arena(64, 63);
+  EXPECT_EQ(nullptr, arena.allocate(1, 1));
+  EXPECT_TRUE(arena.exhausted());
+
+  arena.reset();
+  EXPECT_FALSE(arena.exhausted());
 }
 
 TEST(ArenaTest, GrowsToNewChunkWhenExhausted) {

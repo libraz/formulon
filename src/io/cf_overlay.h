@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Reconciliation of the raw worksheet-level `<extLst>` x14
 // conditional-formatting overlay against the in-memory CF model.

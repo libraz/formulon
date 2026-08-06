@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the probability-distribution family registered by
 // `register_stats_builtins`: NORM.DIST, NORM.S.DIST, NORM.INV, NORM.S.INV,
@@ -551,6 +550,14 @@ TEST(BuiltinsBetaInv, RoundTripTinyAtSupportBoundary) {
   const Value back = EvalSource(formula);
   ASSERT_TRUE(back.is_number());
   EXPECT_NEAR(back.as_number(), 1.0e-12, 5e-8);
+}
+
+TEST(BuiltinsBetaInv, ExtremeTailDoesNotClampToFixedLowerBound) {
+  // BETA(1, 1) has CDF(x) = x, making this an exact probe of the inverter's
+  // lower search bound rather than of the incomplete-beta approximation.
+  const Value v = EvalSource("=BETA.INV(5.77e-151, 1, 1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_NEAR(v.as_number(), 5.77e-151, 1e-160);
 }
 
 // ---------------------------------------------------------------------------

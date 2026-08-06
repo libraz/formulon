@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Implementation of the MS-XLSB function-id mapping. The table is a
 // flat `constexpr` array sorted by id, so a binary search lands the row
@@ -27,7 +26,7 @@ namespace {
 /// Sentinel for "no documented upper bound" used by variadic functions.
 constexpr std::uint8_t kVariadicMax = 255;
 
-constexpr std::size_t kEntriesCountConst = 257;
+constexpr std::size_t kEntriesCountConst = 268;
 using FuncEntryArray = std::array<XlsbFuncEntry, kEntriesCountConst>;
 
 constexpr FuncEntryArray kEntries = {{
@@ -176,6 +175,8 @@ constexpr FuncEntryArray kEntries = {{
     {211, "LENB", 1, 1, false},
     {212, "ROUNDUP", 2, 2, false},
     {213, "ROUNDDOWN", 2, 2, false},
+    {214, "ASC", 1, 1, false},
+    {215, "JIS", 1, 1, false},
     {216, "RANK", 2, 3, true},
     {219, "ADDRESS", 2, 5, true},
     {220, "DAYS360", 2, 3, true},
@@ -293,6 +294,15 @@ constexpr FuncEntryArray kEntries = {{
     {377, "ROUNDBAHTUP", 1, 1, false},
     {378, "THAIYEAR", 1, 1, false},
     {379, "RTD", 2, kVariadicMax, true},
+    {449, "EDATE", 2, 2, false},
+    {450, "EOMONTH", 2, 2, false},
+    {471, "WORKDAY", 2, 3, true},
+    {472, "NETWORKDAYS", 2, 3, true},
+    {480, "IFERROR", 2, 2, false},
+    {481, "COUNTIFS", 2, kVariadicMax, true},
+    {482, "SUMIFS", 3, kVariadicMax, true},
+    {483, "AVERAGEIF", 2, 3, true},
+    {484, "AVERAGEIFS", 3, kVariadicMax, true},
 }};
 
 constexpr std::size_t kEntriesCount = kEntries.size();

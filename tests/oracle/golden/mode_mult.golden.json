@@ -2,11 +2,11 @@
   "suite": "mode_mult",
   "description": "MODE.MULT vertical-array mode spill — five perspectives spanning two-way tie (2x1 spill), single-mode 1x1 spill, all-unique input ->",
   "environment": {
-    "excel_version": "16.109",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-05-15T01:14:58Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

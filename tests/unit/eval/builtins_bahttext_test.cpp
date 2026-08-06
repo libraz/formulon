@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // End-to-end tests for the BAHTTEXT builtin: spells out a number as Thai-baht
 // text. Covers each of the special Thai reading rules (the `เอ็ด` ones digit
@@ -388,6 +387,14 @@ TEST(Bahttext, RoundsAwayFromZeroAtMidpoint) {
   const Value v = EvalSource("=BAHTTEXT(1.235)");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), std::string(kOne) + kBaht + kYi + kSip + kFour + kSatang);
+}
+
+TEST(Bahttext, RoundsDecimalTieDespiteBinaryRepresentation) {
+  // 1.005 is represented just below its decimal value in IEEE-754. BAHTTEXT
+  // still applies Excel's two-decimal, half-away-from-zero rule.
+  const Value v = EvalSource("=BAHTTEXT(1.005)");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), std::string(kOne) + kBaht + kOne + kSatang);
 }
 
 // ---------------------------------------------------------------------------

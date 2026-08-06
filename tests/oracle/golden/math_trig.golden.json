@@ -2,11 +2,11 @@
   "suite": "math_trig",
   "description": "SIN / COS / TAN / ASIN / ACOS / ATAN / ATAN2 / DEGREES / RADIANS",
   "environment": {
-    "excel_version": "16.108.1",
+    "excel_version": "16.111.2",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-04-29T01:55:50Z"
+    "generated_at": "2026-08-05T01:06:33Z"
   },
   "tolerance": {
     "abs": 1e-12,

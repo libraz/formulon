@@ -1,4 +1,3 @@
-// Copyright 2026 libraz. Licensed under the Apache License, Version 2.0.
 //
 // Microbenchmark: large linear chain recalc on the single-threaded engine.
 //
@@ -21,6 +20,7 @@
 #define ANKERL_NANOBENCH_IMPLEMENT
 #include <nanobench.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -69,11 +69,29 @@ formulon::Workbook BuildChain(std::uint32_t n) {
   return wb;
 }
 
+// Builds formulas with disjoint one-cell dependencies. After the initial
+// recalc, editing one formula gives the dirty-SCC benchmark a large workbook
+// whose selected closure contains exactly that formula. The literal edge is
+// intentional: completely constant formulas are omitted from the dependency
+// graph's dirty-node set and would not exercise Tarjan at all.
+formulon::Workbook BuildIndependentFormulas(std::uint32_t n) {
+  using formulon::Value;
+  using formulon::Workbook;
+
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < n; ++r) {
+    (void)wb.set_cell_value(0U, r, 1U, Value::number(1.0));
+    (void)wb.set_cell_formula(0U, r, 0U, "=B" + std::to_string(r + 1U));
+  }
+  return wb;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
   std::uint32_t cell_count = kDefaultCellCount;
   std::string json_path;
+  bool single_cell_edit = false;
 
   for (int i = 1; i < argc; ++i) {
     if (std::strcmp(argv[i], "--cells") == 0 && i + 1 < argc) {
@@ -82,12 +100,50 @@ int main(int argc, char* argv[]) {
     } else if (std::strcmp(argv[i], "--json") == 0 && i + 1 < argc) {
       json_path = argv[i + 1];
       ++i;
+    } else if (std::strcmp(argv[i], "--single-cell-edit") == 0) {
+      single_cell_edit = true;
     }
   }
 
-  std::fprintf(stderr, "bench_recalc_1m_chain: building chain of %u cells...\n", cell_count);
-  formulon::Workbook wb = BuildChain(cell_count);
+  std::fprintf(stderr, "bench_recalc_1m_chain: building %s of %u cells...\n",
+               single_cell_edit ? "independent formulas" : "chain", cell_count);
+  if (single_cell_edit && cell_count == 0U) {
+    std::fprintf(stderr, "bench_recalc_1m_chain: --single-cell-edit requires --cells >= 1\n");
+    return 1;
+  }
+  formulon::Workbook wb = single_cell_edit ? BuildIndependentFormulas(cell_count) : BuildChain(cell_count);
+  if (single_cell_edit) {
+    auto initial = wb.recalc(formulon::eval::default_registry());
+    if (!initial) {
+      std::fprintf(stderr, "bench_recalc_1m_chain: initial recalc failed\n");
+      return 1;
+    }
+    // The final formula has no dependents, so the next pass must select and
+    // evaluate only that changed cell regardless of workbook size.
+    (void)wb.set_cell_formula(0U, cell_count - 1U, 0U, "=B" + std::to_string(cell_count) + "+1");
+  }
   std::fprintf(stderr, "bench_recalc_1m_chain: setup complete; running recalc...\n");
+
+  if (single_cell_edit) {
+    // A nanobench epoch re-invokes a sub-microsecond body many times; only
+    // its first invocation would be dirty and later ones would measure a
+    // no-op recalc. This mode instead takes exactly one wall-clock sample.
+    const auto start = std::chrono::steady_clock::now();
+    auto stats = wb.recalc(formulon::eval::default_registry());
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    if (!stats) {
+      std::fprintf(stderr, "bench_recalc_1m_chain: recalc failed\n");
+      return 1;
+    }
+    if (stats.value().cells_evaluated != 1U) {
+      std::fprintf(stderr, "bench_recalc_1m_chain: expected one evaluated cell, got %llu\n",
+                   static_cast<unsigned long long>(stats.value().cells_evaluated));
+      return 1;
+    }
+    std::fprintf(stderr, "bench_recalc_1m_chain: one-cell edit among %u formulas: %.3f ms\n", cell_count,
+                 std::chrono::duration<double, std::milli>(elapsed).count());
+    return 0;
+  }
 
   ankerl::nanobench::Bench bench;
   bench.title("recalc_1m_chain").unit("recalc").warmup(0).epochs(1).minEpochIterations(1).relative(true);
