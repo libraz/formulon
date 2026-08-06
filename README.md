@@ -49,7 +49,7 @@ Formulon deliberately does **not** cover:
 | Legacy `.xls` (BIFF8, Excel 97–2003) | Out of scope for Excel 365 compatibility. |
 | Chart / drawing rendering | Belongs to a rendering layer, not the engine. |
 | PowerQuery (M) / DAX | Separate engine, separate problem domain. |
-| Pivot cache recomputation | Structurally preserved; recomputation is out of scope. |
+| Pivot cache regeneration | The stored `pivotCacheRecords` snapshot is preserved as-is, never rebuilt from the source range. PivotTable *results* are evaluated on demand through the API. |
 | Spreadsheet UI | A thin UI integration layer is planned; rendering is yours. |
 
 These are **permanent** non-goals, not "not yet." The scope is finite on purpose.
@@ -76,12 +76,14 @@ address space.
 ## Command line
 
 After placing a release binary on `PATH`, use `eval` for a scalar formula,
-`recalc` to write a recalculated workbook, and `dump` for a text snapshot.
+`recalc` to write a recalculated workbook, `dump` for a text snapshot, and
+`paginate` to resolve the print area, page breaks, and page count.
 
 ```bash
 formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
 formulon dump output.xlsx --formulas
+formulon paginate output.xlsx --sheet 0
 ```
 
 `recalc` writes its success status to stderr as
@@ -102,11 +104,22 @@ additional category (507 + 15 = 522, not 524).
 | &nbsp;&nbsp;↳ of which environment-bound | 2 | A real implementation whose result depends on host or workbook state, so a fixed golden cannot fully describe it. Counted within the 507 above. | `INFO`, `CELL` |
 | Unavailable stub | 15 | Requires external services, network I/O, COM providers, or OLAP connections that Formulon does not embed; returns a fixed unavailable error surface. | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
-**92 oracle categories** are defined and regenerated from Mac Excel 365 ja-JP, with Windows Excel 365 ja-JP covered by the `win-365-ja_JP` variant goldens. Current local verification is `14342/14342` fast tests passing, `4026/4026` primary formula oracle cases passing with `166` documented skips. Every remaining skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 522 catalogued functions, `515` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `7` (`FILTERXML`, `ARRAYTOTEXT`, `CONCAT`, `CHAR`, `TRUE`, `GETPIVOTDATA`, `PHONETIC`) are blocked on oracle metadata gaps — missing goldens or under-specified behavior taxonomies — rather than implementation gaps.
+**97 oracle categories** are defined and regenerated from Mac Excel 365 ja-JP, with Windows Excel 365 ja-JP covered by the `win-365-ja_JP` variant goldens. Current local verification:
+
+| Check | Result |
+|-------|--------|
+| `ctest -LE "SLOW\|LOAD\|BENCH"` (the PR gate) | `11680/11680` |
+| `ctest -LE "LOAD"` (adds the `SLOW` tier) | `11932/11932` |
+| Primary formula oracle | `3942/3942` passing, `140` documented skips |
+| Conditional-formatting oracle | `23/23` |
+| Workbook oracle (pivot + print) | `63/70` passing, `7` documented skips |
+| Imported third-party engine corpus (cross-check) | `12510/12510` passing, `168` documented divergences |
+
+Every skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 522 catalogued functions, `518` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `4` (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) fail only `behaviors_declared` — their behavior taxonomy is under-specified — rather than on any implementation or golden gap.
 
 Beyond formula results, **pivot tables and print areas / pagination** have a dedicated **workbook oracle track** whose primary is `win-365-ja_JP` (reliable PivotTable automation needs Windows Excel COM). Goldens are captured end-to-end: the pivot suites close at `28/28`, and the `print_basic`, `print_pagination`, `print_fit`, and `print_matrix` suites pass `35/41` cases via the `formulon_workbook_oracle_tests` harness with `6` documented divergence-skip entries scoped to `win-365-ja_JP` for a known Excel PageBreakPreview COM quirk at `PageSetup.Zoom <= 50` (low-zoom column auto-breaks invert the intuitive shrink-to-fit rule; the engine emits no break, matching the geometric model rather than Excel's PBP overlay).
 
-New workbooks use the `win-365-ja_JP` formula profile by default; callers can switch with the profile-id API (`mac-365-ja_JP`, `win-365-ja_JP`). English-locale profiles are intentionally not exposed until matching EN oracle data and verified locale-specific behavior are available. A bytecode compiler and stack-machine VM run in parallel with the tree-walker for parity verification. The OOXML reader/writer round-trips sheets, styles, conditional formatting, comments, hyperlinks, merges, data validations, defined names, tables, and pivot tables; an MS-XLSB reader/writer covers cell values and common tokenized formulas, with styles, cross-sheet 3-D references, array-constant literals, and post-2007 "future function" IDs still limited compared to the OOXML path. Workbook operations are available through the C ABI and language bindings; the CLI deliberately exposes only `eval`, `recalc`, and `dump`.
+New workbooks use the `win-365-ja_JP` formula profile by default; callers can switch with the profile-id API (`mac-365-ja_JP`, `win-365-ja_JP`). English-locale profiles are intentionally not exposed until matching EN oracle data and verified locale-specific behavior are available. A bytecode compiler and stack-machine VM run in parallel with the tree-walker for parity verification. The OOXML reader/writer round-trips sheets, styles, conditional formatting, comments, hyperlinks, merges, data validations, defined names, tables, and pivot tables; an MS-XLSB reader/writer covers cell values, styles, cross-sheet 3-D references, and common tokenized formulas, with array-constant literals and post-2007 "future function" IDs still limited compared to the OOXML path. Workbook operations are available through the C ABI and language bindings; the CLI deliberately exposes only `eval`, `recalc`, `dump`, and `paginate`.
 
 Feedback, issue reports, and oracle divergence reports are very welcome.
 

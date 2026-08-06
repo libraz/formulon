@@ -49,7 +49,7 @@ Formulon は以下を **意図的にサポートしません**。
 | 旧 `.xls` (BIFF8 / Excel 97-2003) | Excel 365 互換というスコープの外。 |
 | グラフ / 図形のレンダリング | 描画レイヤの責務。計算エンジンの仕事ではありません。 |
 | PowerQuery (M) / DAX | 別エンジン・別問題。 |
-| Pivot キャッシュの再計算 | 構造は保持しますが、再計算は対象外。 |
+| Pivot キャッシュの再生成 | 保存済み `pivotCacheRecords` はそのまま保持し、ソース範囲から作り直すことはしません。PivotTable の計算結果自体は API から都度評価できます。 |
 | スプレッドシート UI 本体 | 薄い UI 統合 API は計画していますが、描画自体は呼び出し側の責任です。 |
 
 これらは「まだやっていない」機能ではなく、スコープ外として固定しています。
@@ -67,12 +67,14 @@ Formulon は以下を **意図的にサポートしません**。
 ## コマンドライン
 
 Release バイナリを `PATH` に置いた後、`eval` は単一数式の評価、`recalc`
-は再計算済みブックの書き出し、`dump` はテキストスナップショットに使えます。
+は再計算済みブックの書き出し、`dump` はテキストスナップショット、
+`paginate` は印刷範囲・改ページ・ページ数の解決に使えます。
 
 ```bash
 formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
 formulon dump output.xlsx --formulas
+formulon paginate output.xlsx --sheet 0
 ```
 
 `recalc` は成功時に stderr へ
@@ -91,21 +93,26 @@ formulon dump output.xlsx --formulas
 | &nbsp;&nbsp;↳ うち環境依存 | 2 | 実装済みだが、ホスト環境やワークブック状態によって値が変わるため固定 golden だけでは完全に記述できない関数。上記 507 に含まれます。 | `INFO`, `CELL` |
 | unavailable stub | 15 | Formulon が内蔵しない外部サービス、ネットワーク、COM、OLAP 接続などが必要な関数。固定のエラー面だけを返します。 | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
-oracle は **92 カテゴリ** あります。primary oracle は Mac Excel 365 ja-JP から再生成し、Windows Excel 365 ja-JP は `win-365-ja_JP` variant golden でカバーしています。
+oracle は **97 カテゴリ** あります。primary oracle は Mac Excel 365 ja-JP から再生成し、Windows Excel 365 ja-JP は `win-365-ja_JP` variant golden でカバーしています。
 
 現在のローカル検証結果:
 
-- fast test: `14342/14342` passed
-- primary formula oracle: `4026/4026` passed / `166` documented skips
-- workbook oracle (pivot + print): `35/41` passed / `6` documented skips (win-365-ja_JP scoped)
+| 検査 | 結果 |
+|------|------|
+| `ctest -LE "SLOW\|LOAD\|BENCH"` (PR ゲート) | `11680/11680` |
+| `ctest -LE "LOAD"` (`SLOW` 層を追加) | `11932/11932` |
+| primary formula oracle | `3942/3942` passed / `140` documented skips |
+| 条件付き書式 oracle | `23/23` |
+| workbook oracle (pivot + print) | `63/70` passed / `7` documented skips |
+| 取り込み済み外部エンジンコーパス (クロスチェック) | `12510/12510` passed / `168` documented divergences |
 
-残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `515` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る `7` 件 (`FILTERXML`, `ARRAYTOTEXT`, `CONCAT`, `CHAR`, `TRUE`, `GETPIVOTDATA`, `PHONETIC`) は oracle metadata 側の課題 — Excel での golden 採取がまだ、または behavior taxonomy が未整備 — であり、実装と Excel の出力が不一致というわけではありません。
+残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `518` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る `4` 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、behavior taxonomy の記述が不足しているためです。実装や golden の欠落ではありません。
 
 数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があります。信頼できる PivotTable 自動化には Windows Excel の COM が必要なため、この track の primary は `win-365-ja_JP` です。golden 採取は完了しており、pivot suite は `28/28` closure、`print_basic` / `print_pagination` / `print_fit` / `print_matrix` の 4 suite が `formulon_workbook_oracle_tests` ハーネスで `35/41` ケース pass。残り `6` ケースは Excel の PageBreakPreview に `PageSetup.Zoom <= 50` で発生する既知の COM quirk (低スケールで列の auto-break が直感に逆らって増える挙動。VBA コミュニティで documented) のため `win-365-ja_JP` scope で divergence-skip 登録しています。
 
 新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
 
-実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、parity を検証しています。OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer も実装済みです。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` のみを公開します。
+実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、parity を検証しています。OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer はセル値、スタイル、シート間 3-D 参照、および一般的なトークン化数式をカバーします。配列定数リテラルと 2007 年以降の future function ID は、OOXML 経路に比べてまだ限定的です。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` / `paginate` のみを公開します。
 
 不具合報告・oracle 差分レポート・ご意見はいつでも歓迎しています。
 
