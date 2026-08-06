@@ -609,6 +609,45 @@ TEST(TokenizerIdentBytes, MidRangeContinuationByteIsNotIdentStart) {
   EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
 }
 
+TEST(TokenizerIdentBytes, TruncatedLeadByteTerminates) {
+  // A lead byte with no continuation byte behind it decodes to nothing, so
+  // the identifier scanner consumed zero bytes and returned to a dispatcher
+  // that classified the same byte as an identifier start all over again.
+  // The tokenizer appended an empty token per turn and grew without bound;
+  // reaching Eof at all is the assertion.
+  Tokenizer tz("\xD7");
+  const std::vector<Token>& toks = tz.tokens();
+  ASSERT_FALSE(toks.empty());
+  EXPECT_EQ(toks.back().kind, TokenKind::Eof);
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+}
+
+TEST(TokenizerIdentBytes, LeadByteFollowedByNonContinuationTerminates) {
+  // Same non-progress path, reached with a 4-byte lead whose second byte is
+  // not a continuation.
+  Tokenizer tz(
+      "\xF3"
+      "\x0B");
+  const std::vector<Token>& toks = tz.tokens();
+  ASSERT_FALSE(toks.empty());
+  EXPECT_EQ(toks.back().kind, TokenKind::Eof);
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+}
+
+TEST(TokenizerIdentBytes, TruncatedLeadByteDoesNotSwallowWhatFollows) {
+  // Consuming exactly one byte keeps the rest of the formula tokenizable,
+  // so a malformed prefix degrades the input instead of destroying it.
+  Tokenizer tz(
+      "\xD7"
+      "A1");
+  const std::vector<Token>& toks = tz.tokens();
+  ASSERT_GE(toks.size(), 2U);
+  EXPECT_EQ(toks.front().kind, TokenKind::CellRef);
+  EXPECT_EQ(toks.front().lexeme, "A1");
+}
+
 TEST(TokenizerWhitespace, FullwidthSpaceIsInvalid) {
   // U+3000 is three UTF-8 bytes (E3 80 80) and must be flagged.
   Tokenizer tz(

@@ -970,6 +970,20 @@ void Tokenizer::scan_ident_or_cellref_or_bool() {
     advance_one();
   }
 
+  // A lead byte that starts no decodable codepoint — a truncated or
+  // otherwise malformed UTF-8 sequence — leaves the loop above having
+  // consumed nothing. Emitting a zero-width token here would hand control
+  // back to the dispatcher with `byte_pos_` unmoved, and since the same
+  // byte still classifies as an identifier start the pair would spin
+  // forever, appending empty tokens until the process runs out of memory.
+  // Consume the byte as unclassifiable instead, which is how the dispatcher
+  // treats every other byte it cannot begin a token with.
+  if (byte_pos_ == start) {
+    advance_one();
+    record_error(LexerErrorCode::InvalidCharacter, start);
+    return;
+  }
+
   std::string_view run(source_.data() + start, byte_pos_ - start);
 
   // Classify: CellRef first, then Bool, otherwise Ident.
