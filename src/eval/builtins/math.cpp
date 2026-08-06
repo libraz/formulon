@@ -81,7 +81,24 @@ Expected<int, ErrorCode> read_digits(const Value* args, std::uint32_t arity, std
   if (std::isnan(d) || std::isinf(d)) {
     return ErrorCode::Num;
   }
-  return static_cast<int>(std::trunc(d));
+  // Converting a double outside `int`'s range is undefined, and the two
+  // architectures disagree on what they produce: AArch64 saturates to INT_MAX
+  // while x86-64 yields INT_MIN. A digit count like `1e50` therefore read as a
+  // huge positive on one and a huge negative on the other, so the same formula
+  // truncated to a no-op or collapsed to zero depending on the host. Clamp
+  // before converting; every caller compares against thresholds (+/-308) far
+  // inside this range, so saturating carries the same meaning as the real
+  // magnitude.
+  const double truncated = std::trunc(d);
+  constexpr double kIntMax = 2147483647.0;
+  constexpr double kIntMin = -2147483648.0;
+  if (truncated >= kIntMax) {
+    return std::numeric_limits<int>::max();
+  }
+  if (truncated <= kIntMin) {
+    return std::numeric_limits<int>::min();
+  }
+  return static_cast<int>(truncated);
 }
 
 // TRUNC(value, digits?) - truncate toward zero. With no second arg or
