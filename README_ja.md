@@ -26,7 +26,7 @@ CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/release
 
 - **互換性を oracle で確認します。** 既定の profile は `win-365-ja_JP` です。primary oracle は Mac Excel 365 (ja-JP) で、Windows Excel 365 (ja-JP) は variant golden として管理しています。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
 - **C++ コア 1 本で動きます。** ブラウザ、Python、CLI のために別々の計算ロジックを持たず、同じエンジンを配布します。実装が複数に分かれて結果がずれる、という問題を避けています。
-- **WASM サイズを管理します。** CI は **3.00 MiB** の hard ceiling を強制し、**2.50 MiB** の soft ceiling を報告します。現在値は `make size-check` で確認できます。
+- **WASM サイズを管理します。** CI は非圧縮 **3.00 MiB** と Brotli **768 KiB** の hard ceiling を強制し、**2.50 MiB** / **640 KiB** の soft ceiling を報告します。実際に効いてくるのは配信時の Brotli サイズなので、非圧縮と対等に検査します。現在値は `make size-check` で確認できます。
 - **依存は小さく保っています。** ランタイム依存は `miniz` (zip/deflate)、`pugixml` (XML + XPath 1.0)、`PCRE2` (`REGEX*`)、`double-conversion` (Grisu3 `dtoa`) の 4 つです。線形代数、UTF-8 処理、数値変換の多くはリポジトリ内で実装しています。
 - **監査しやすい C++ を優先します。** `Expected<T, Error>` ベースのエラー処理、RAII、`-fno-exceptions -fno-rtti`、Google C++ Style を採用しています。
 
