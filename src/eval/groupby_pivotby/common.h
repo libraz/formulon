@@ -59,6 +59,32 @@ struct HeaderLayout {
 /// Returns the locale-appropriate "Grand Total" label.
 std::string_view grand_total_label(const EvalContext& ctx);
 
+/// Returns the label of a subtotal row for the outer group whose first key
+/// column holds `outer_key`, e.g. "East Total" / "East 合計". A key that has
+/// no text rendering (an error or blank) contributes an empty prefix.
+std::string subtotal_label(const Value& outer_key, const EvalContext& ctx);
+
+/// The outer/inner hierarchy that a `|total_depth| == 2` request needs on
+/// top of the flat composite-key grouping. The outer level is the first key
+/// column alone; every group produced by the flat pass belongs to exactly
+/// one outer group. Outer groups are numbered in first-occurrence order of
+/// their key.
+struct OuterGrouping {
+  /// Outer-group ordinal of each flat group, indexed by flat-group index.
+  std::vector<std::size_t> outer_of_group;
+  /// Every data row belonging to each outer group, for the subtotal
+  /// aggregation.
+  std::vector<std::vector<std::uint32_t>> rows_of_outer;
+  /// A representative source row per outer group, for reading its key cell.
+  std::vector<std::uint32_t> repr_of_outer;
+};
+
+/// Builds the outer/inner hierarchy over groups already produced by the flat
+/// composite-key pass. `group_repr` and `group_rows` are the per-flat-group
+/// representative row and member rows; `keys` is the key array they index.
+OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
+                                   const std::vector<std::vector<std::uint32_t>>& group_rows);
+
 /// Resolves the aggregator argument (3rd for GROUPBY, 4th for PIVOTBY) into
 /// an `AggregatorRef`. Returns true on success and writes the resolved
 /// aggregator to `*out`. Returns false on failure and writes the appropriate

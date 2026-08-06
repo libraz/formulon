@@ -107,6 +107,48 @@ std::string_view grand_total_label(const EvalContext& ctx) {
   return "Grand Total";
 }
 
+std::string subtotal_label(const Value& outer_key, const EvalContext& ctx) {
+  // The suffix mirrors the grand-total label of the same locale rather than
+  // the PivotTable layer's "総計 / 集計" pair, because GROUPBY / PIVOTBY use
+  // their own "Grand Total" / "合計" wording. The ja-JP suffix has not been
+  // confirmed against a live Excel run; it is isolated here so a single edit
+  // corrects every subtotal row once the goldens are captured.
+  const bool ja = ctx.excel_profile().locale == ExcelLocale::kJaJP;
+  const std::string_view suffix = ja ? " 合計" : " Total";
+  auto key_text = coerce_to_text(outer_key);
+  std::string label = key_text ? key_text.value() : std::string();
+  label.append(suffix);
+  return label;
+}
+
+OuterGrouping build_outer_grouping(const ArrayValue& keys, const std::vector<std::uint32_t>& group_repr,
+                                   const std::vector<std::vector<std::uint32_t>>& group_rows) {
+  OuterGrouping out;
+  out.outer_of_group.resize(group_repr.size(), 0U);
+  // The outer level is the first key column alone. Outer groups are few
+  // relative to the data rows, so a linear scan over the representatives
+  // beats standing up a second hash index.
+  const std::uint32_t key_cols = keys.cols;
+  for (std::size_t g = 0; g < group_repr.size(); ++g) {
+    const Value& key = keys.cells[static_cast<std::size_t>(group_repr[g]) * key_cols];
+    std::size_t outer = out.repr_of_outer.size();
+    for (std::size_t o = 0; o < out.repr_of_outer.size(); ++o) {
+      const Value& existing = keys.cells[static_cast<std::size_t>(out.repr_of_outer[o]) * key_cols];
+      if (group_cell_equal(existing, key)) {
+        outer = o;
+        break;
+      }
+    }
+    if (outer == out.repr_of_outer.size()) {
+      out.repr_of_outer.push_back(group_repr[g]);
+      out.rows_of_outer.emplace_back();
+    }
+    out.outer_of_group[g] = outer;
+    out.rows_of_outer[outer].insert(out.rows_of_outer[outer].end(), group_rows[g].begin(), group_rows[g].end());
+  }
+  return out;
+}
+
 // Resolves the third argument (the aggregator) into an `AggregatorRef`.
 // Returns true on success and writes the resolved aggregator to `*out`.
 // Returns false on failure and writes the appropriate scalar error to

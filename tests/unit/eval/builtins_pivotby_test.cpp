@@ -899,19 +899,82 @@ TEST(PivotBy, AggregatorReturningArrayYieldsCalcInThatCell) {
 }
 
 // ---------------------------------------------------------------------------
-// Nested-subtotal fallback (|row_total_depth| / |col_total_depth| == 2)
+// Nested subtotals (|row_total_depth| == 2); column subtotals still fall back
 // ---------------------------------------------------------------------------
 
-TEST(PivotBy, RowTotalDepthTwoEmitsNonSilentDiagnostic) {
-  // Per-region subtotals are not yet implemented; a ±2 depth falls back to
-  // the grand-total-only layout but must emit an observable warning.
+TEST(PivotBy, RowTotalDepthTwoAddsASubtotalRowPerOuterRowGroup) {
+  // Row keys are (outer, inner); the outer level is "A" (two rows) and "B"
+  // (one row). Each outer group gets a subtotal row carrying its per-column
+  // aggregates and its row total.
+  const Value v =
+      EvalSrc("=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  // Col-axis label row + 3 body rows + 2 subtotals + grand total = 7.
+  ASSERT_EQ(v.as_array_rows(), 7U);
+  // 2 row-key cols + 2 col groups + grand-total col = 5.
+  ASSERT_EQ(v.as_array_cols(), 5U);
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "x");
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 20.0);
+  // Subtotal for outer group A: 10 under X, 20 under Y, 30 in total.
+  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "A 合計");
+  EXPECT_TRUE(Cell(v, 3, 1).is_blank()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 30.0);
+  // Outer group B has no Y data, so that cell stays blank.
+  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "B 合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 2).as_number(), 30.0);
+  EXPECT_TRUE(Cell(v, 5, 3).is_blank()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 4).as_number(), 30.0);
+  // Grand total closes the block.
+  EXPECT_EQ(std::string(Cell(v, 6, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 6, 4).as_number(), 60.0);
+}
+
+TEST(PivotBy, RowTotalDepthNegativeTwoPutsEverySubtotalAboveItsGroup) {
+  const Value v =
+      EvalSrc("=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, -2)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 7U);
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "合計");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "A 合計");
+  EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "x");
+  EXPECT_EQ(std::string(Cell(v, 4, 1).as_text()), "y");
+  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "B 合計");
+}
+
+TEST(PivotBy, RowTotalDepthTwoWithOneRowKeyColumnKeepsTheGrandTotalOnlyLayout) {
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"A\";\"B\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  // 2 body rows + grand total; the merged single-column layout emits no
+  // label row when field_headers is 0.
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
+}
+
+TEST(PivotBy, RowTotalDepthTwoEmitsNoFallbackDiagnostic) {
+  // Row subtotals are implemented, so the degraded-layout warning must not
+  // fire on this path.
   testing::internal::CaptureStderr();
   const Value v =
       EvalSrc("=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)");
   const std::string captured = testing::internal::GetCapturedStderr();
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(captured.find("subtotals_unsupported"), std::string::npos)
+      << "unexpected fallback diagnostic; stderr was: " << captured;
+}
+
+TEST(PivotBy, ColTotalDepthTwoStillFallsBackAndSaysSo) {
+  // Subtotal COLUMNS are not implemented; the ±2 column request degrades to
+  // the grand-total-only layout and must announce it.
+  testing::internal::CaptureStderr();
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\",\"p\";\"X\",\"q\"}, {10;20}, SUM, 0, 1, 0, 2)");
+  const std::string captured = testing::internal::GetCapturedStderr();
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   EXPECT_NE(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos)
-      << "expected ±2 fallback diagnostic; stderr was: " << captured;
+      << "expected column-axis fallback diagnostic; stderr was: " << captured;
 }
 
 TEST(PivotBy, DefaultDepthEmitsNoSubtotalDiagnostic) {

@@ -237,44 +237,78 @@ TEST(GroupBy, TotalDepthNegativeOneGrandTotalAtTop) {
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 30.0);
 }
 
-TEST(GroupBy, TotalDepthTwoFallsBackToGrandTotalOnlyLayout) {
-  // Nested per-outer-group subtotals (|total_depth| == 2) are not yet
-  // implemented; the impl falls back to the ±1 grand-total-only layout.
-  // With all-distinct composite keys this yields three group rows plus a
-  // single grand-total row at the bottom (no intermediate subtotal rows).
+TEST(GroupBy, TotalDepthTwoAddsASubtotalRowPerOuterGroup) {
+  // The outer level is the first key column, so X covers two groups and Y
+  // one. Each outer group's rows are followed by its subtotal, and the
+  // grand total closes the block.
   const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2, 0)");
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  ASSERT_EQ(v.as_array_rows(), 4U);  // 3 group rows + 1 grand total (no subtotals)
+  ASSERT_EQ(v.as_array_rows(), 6U);  // 3 group rows + 2 subtotals + 1 grand total
   ASSERT_EQ(v.as_array_cols(), 3U);  // 2 key cols + 1 value col
   EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "X");
   EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "A");
   EXPECT_DOUBLE_EQ(Cell(v, 0, 2).as_number(), 10.0);
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 20.0);
+  // Subtotal for outer group X. The label carries the ja-JP total wording,
+  // and the remaining key columns are blank as on the grand-total row.
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "X 合計");
+  EXPECT_TRUE(Cell(v, 2, 1).is_blank()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 30.0);
-  // Grand total at the bottom; "合計" is the ja-JP grand-total label.
-  EXPECT_EQ(std::string(Cell(v, 3, 0).as_text()), "合計");
-  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 60.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 30.0);
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y 合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 2).as_number(), 30.0);
+  EXPECT_EQ(std::string(Cell(v, 5, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 5, 2).as_number(), 60.0);
 }
 
-TEST(GroupBy, TotalDepthTwoEmitsNonSilentDiagnostic) {
-  // The ±2 fallback must be observable, not silent: a structured-log
-  // warning is emitted so callers can detect the degraded layout.
+TEST(GroupBy, TotalDepthNegativeTwoPutsEverySubtotalAboveItsGroup) {
+  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, -2, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 6U);
+  EXPECT_EQ(std::string(Cell(v, 0, 0).as_text()), "合計");
+  EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "X 合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 30.0);
+  EXPECT_EQ(std::string(Cell(v, 2, 1).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "B");
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y 合計");
+}
+
+TEST(GroupBy, TotalDepthTwoWithOneKeyColumnKeepsTheGrandTotalOnlyLayout) {
+  // With a single key column every subtotal would just restate its group,
+  // so the ±1 layout stands.
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"B\"}, {10;20}, SUM, 0, 2, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 30.0);
+}
+
+TEST(GroupBy, SubtotalsKeepEachOuterGroupContiguousUnderASort) {
+  // The hierarchy is primary: sorting by the aggregate reorders groups
+  // within an outer group and reorders the outer groups themselves, but it
+  // never interleaves rows from different outer groups.
+  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"Y\",\"B\";\"X\",\"C\"}, {10;5;1}, SUM, 0, 2, 1)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 6U);
+  // Ascending by value: X/C (1) sorts first, so outer group X leads, with
+  // its own members ordered C then A.
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "C");
+  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "A");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "X 合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 11.0);
+  EXPECT_EQ(std::string(Cell(v, 3, 1).as_text()), "B");
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y 合計");
+}
+
+TEST(GroupBy, TotalDepthTwoEmitsNoFallbackDiagnostic) {
+  // The ±2 path is implemented, so it must not warn about a degraded
+  // layout the way the earlier grand-total-only fallback did.
   testing::internal::CaptureStderr();
   const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2, 0)");
   const std::string captured = testing::internal::GetCapturedStderr();
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_NE(captured.find("eval.groupby.subtotals_unsupported"), std::string::npos)
-      << "expected ±2 fallback diagnostic; stderr was: " << captured;
-}
-
-TEST(GroupBy, TotalDepthOneEmitsNoSubtotalDiagnostic) {
-  // The ordinary ±1 grand-total path must NOT emit the fallback warning.
-  testing::internal::CaptureStderr();
-  const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 1, 0)");
-  const std::string captured = testing::internal::GetCapturedStderr();
-  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(captured.find("eval.groupby.subtotals_unsupported"), std::string::npos)
-      << "unexpected fallback diagnostic on ±1 path; stderr was: " << captured;
+  EXPECT_EQ(captured.find("subtotals_unsupported"), std::string::npos)
+      << "unexpected fallback diagnostic; stderr was: " << captured;
 }
 
 TEST(GroupBy, TotalDepthOutOfRangeYieldsValueError) {
