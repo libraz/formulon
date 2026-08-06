@@ -106,9 +106,10 @@ const parser::AstNode* build_array_literal_for(const ArrayValue* arr, Arena& are
 // `nullptr` to fall back to scalar bindings.
 //
 // Strict arity match (Excel's `#VALUE!` policy). Argument errors are NOT
-// short-circuited here — the caller is expected to filter them first if
-// required (REDUCE / SCAN want to surface array-cell errors verbatim, but
-// MAP / BYROW / BYCOL pre-check). The lambda body is evaluated in the
+// short-circuited here and no caller filters them either: every helper
+// hands an errored cell to the body so an `IFERROR`-guarded lambda can
+// recover, and an unguarded one returns the error into that output slot
+// alone. The lambda body is evaluated in the
 // caller's `EvalContext` with the caller-supplied `NameEnv` swapped for
 // the freshly extended frame.
 Value invoke_lambda_with_values(const LambdaValue* lv, const Value* args, const parser::AstNode* const* ast_args,
@@ -274,7 +275,11 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     const parser::AstNode* ast_args[1] = {slice_ast};
     const Value res = invoke_lambda_with_values(lv, &arg, ast_args, 1U, arena, registry, ctx);
     if (res.is_error()) {
-      return res;
+      // Each row / column is reduced independently, so an error lands in
+      // that slice's output cell only. Short-circuiting the whole call here
+      // would hide the other slices' results, which Excel still spills.
+      out_cells[i] = res;
+      continue;
     }
     // Mac Excel anchor-unwraps a 1x1 Array lambda result (e.g.
     // `LAMBDA(row, row*10)` applied to a 1x1 row slice produces {10},
@@ -425,19 +430,14 @@ Value eval_reduce_lazy(const parser::AstNode& call, Arena& arena, const Function
   for (std::size_t i = 0; i < total; ++i) {
     args[0] = acc;
     args[1] = in->cells[i];
-    // An error in the current cell short-circuits the fold (matches Mac
-    // Excel's spill semantics: a single bad cell taints the result).
-    if (args[1].is_error()) {
-      return args[1];
-    }
+    // An errored cell reaches the lambda verbatim, matching SCAN: a body
+    // that guards with IFERROR keeps folding, and one that does not leaves
+    // the error in the accumulator, which is what the fold returns.
+    //
     // REDUCE feeds scalar (accumulator, current) per call. The accumulator
     // can be any Value but is consumed inside the body via the parameter
     // name lookup, not as a range-aware seam, so no AST hint is required.
-    const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
-    if (res.is_error()) {
-      return res;
-    }
-    acc = res;
+    acc = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
   }
   return acc;
 }
@@ -480,14 +480,18 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   for (std::size_t i = 0; i < total; ++i) {
     args[0] = acc;
     args[1] = in->cells[i];
-    if (args[1].is_error()) {
-      return args[1];
-    }
+    // An errored cell is handed to the lambda verbatim rather than
+    // short-circuited: a body that guards with IFERROR recovers, and one
+    // that does not returns the error, which then rides the accumulator
+    // into every later cell. Both outcomes are per-cell, not whole-call.
+    //
     // SCAN feeds scalar (accumulator, current) per call. No AST hint is
     // needed; the body sees both bindings as scalar Values.
     const Value res = invoke_lambda_with_values(lv, args, /*ast_args=*/nullptr, 2U, arena, registry, ctx);
     if (res.is_error()) {
-      return res;
+      acc = res;
+      out_cells[i] = res;
+      continue;
     }
     // SCAN, like BYROW / BYCOL / MAP, has a single output slot per cell;
     // a multi-cell lambda return would require nested spilling. A 1x1

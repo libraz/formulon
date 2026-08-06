@@ -123,13 +123,30 @@ TEST(LambdaHelpersByRow, MultiCellLambdaReturnYieldsCalcError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Calc);
 }
 
-TEST(LambdaHelpersByRow, ErrorInRowPropagates) {
-  // Row 2 contains an explicit `#DIV/0!` error literal; SUM over a row
-  // containing an error surfaces that error, which BYROW then propagates
-  // as the whole result.
+TEST(LambdaHelpersByRow, ErrorInRowStaysInThatRowsCell) {
+  // Row 2 contains an explicit `#DIV/0!` error literal; SUM over that row
+  // surfaces the error. Rows are reduced independently, so the error
+  // occupies its own output cell and row 1 still reports its sum.
   const Value v = EvalSrc("=BYROW({1,2;#DIV/0!,4}, LAMBDA(r, SUM(r)))");
-  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 3.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Div0);
+}
+
+TEST(LambdaHelpersByRow, GuardedLambdaRecoversFromAnErroredRow) {
+  // The errored row reaches the body rather than short-circuiting the call,
+  // so an IFERROR-guarded reduction produces a number for every row.
+  const Value v = EvalSrc("=BYROW({1,2;#DIV/0!,4}, LAMBDA(r, IFERROR(SUM(r), -1)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 3.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), -1.0);
 }
 
 TEST(LambdaHelpersByRow, NonLambdaSecondArgYieldsValueError) {
@@ -211,10 +228,15 @@ TEST(LambdaHelpersByCol, MultiCellLambdaReturnYieldsCalcError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Calc);
 }
 
-TEST(LambdaHelpersByCol, ErrorInColumnPropagates) {
+TEST(LambdaHelpersByCol, ErrorInColumnStaysInThatColumnsCell) {
   const Value v = EvalSrc("=BYCOL({1,2;3,#DIV/0!}, LAMBDA(c, SUM(c)))");
-  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 4.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Div0);
 }
 
 TEST(LambdaHelpersByCol, BycolSingleRowInputUnwrapsTo1x1) {
@@ -357,6 +379,14 @@ TEST(LambdaHelpersReduce, ErrorInArrayCellPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
+TEST(LambdaHelpersReduce, GuardedLambdaFoldsPastAnErroredCell) {
+  // REDUCE hands the errored cell to the body like SCAN does, so a guarded
+  // fold keeps accumulating instead of returning at the first bad cell.
+  const Value v = EvalSrc("=REDUCE(0, {1, #DIV/0!, 3}, LAMBDA(a, x, a + IFERROR(x, 0)))");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
 TEST(LambdaHelpersReduce, LambdaArityMismatchYieldsValueError) {
   // REDUCE requires a 2-arg lambda; passing a 1-arg lambda -> #VALUE!.
   const Value v = EvalSrc("=REDUCE(0, {1,2,3}, LAMBDA(a, a+1))");
@@ -404,10 +434,31 @@ TEST(LambdaHelpersScan, SingleCellInput) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 15.0);
 }
 
-TEST(LambdaHelpersScan, ErrorInCellPropagates) {
+TEST(LambdaHelpersScan, ErrorInCellPoisonsEveryLaterCell) {
+  // The accumulator carries the error forward, so the cells before the bad
+  // one keep their running totals and every cell from it onward is #DIV/0!.
   const Value v = EvalSrc("=SCAN(0, {1, #DIV/0!, 3}, LAMBDA(a, x, a+x))");
-  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.as_array_cells()[2].is_error());
+  EXPECT_EQ(v.as_array_cells()[2].as_error(), ErrorCode::Div0);
+}
+
+TEST(LambdaHelpersScan, GuardedLambdaKeepsScanningPastAnErroredCell) {
+  const Value v = EvalSrc("=SCAN(0, {1, #DIV/0!, 3}, LAMBDA(a, x, IFERROR(a, 0) + IFERROR(x, 0)))");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_cols(), 3U);
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    ASSERT_TRUE(v.as_array_cells()[i].is_number()) << v.debug_to_string();
+  }
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 4.0);
 }
 
 TEST(LambdaHelpersScan, TwoDimensionalInputPreservesShape) {
