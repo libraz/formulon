@@ -36,7 +36,7 @@ std::unique_ptr<pivot::PivotCache> BuildCache() {
   amount.name = "Amount";
   cache->mutable_fields().push_back(std::move(amount));
 
-  for (const auto [region_index, amount_value] :
+  for (const auto& [region_index, amount_value] :
        {std::pair{0.0, 100.0}, std::pair{0.0, 200.0}, std::pair{1.0, 300.0}, std::pair{1.0, 400.0}}) {
     pivot::PivotCacheRecord record;
     record.cells.push_back(Value::number(region_index));
