@@ -362,6 +362,38 @@ TEST(ForecastEtsSeasonality, FlatLineReturnsZero) {
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
 }
 
+TEST(ForecastEtsSeasonality, PerfectlyLinearSeriesReturnsZero) {
+  // A straight ramp is non-stationary: every lag of the raw series
+  // autocorrelates near 1, so scanning it undetrended would report a
+  // period. Removing the linear trend first leaves only rounding noise
+  // and no period is detected.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  for (int i = 0; i < 10; ++i) {
+    s.set_cell_value(static_cast<std::uint32_t>(i), 0, Value::number(static_cast<double>(i + 1)));
+    s.set_cell_value(static_cast<std::uint32_t>(i), 1, Value::number(10.0 + 2.0 * static_cast<double>(i)));
+  }
+  const Value v = EvalSourceIn("=FORECAST.ETS.SEASONALITY(B1:B10, A1:A10)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "kind=" << static_cast<int>(v.kind());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(ForecastEtsSeasonality, SeasonalPatternRidingATrendStillReportsItsPeriod) {
+  // Detrending must not swallow a real period: a period-4 cycle laid over
+  // a rising ramp still has to surface as 4.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  static constexpr double kCycle[] = {0.0, 6.0, 0.0, -6.0};
+  for (int i = 0; i < 16; ++i) {
+    s.set_cell_value(static_cast<std::uint32_t>(i), 0, Value::number(static_cast<double>(i + 1)));
+    const double level = 100.0 + 3.0 * static_cast<double>(i);
+    s.set_cell_value(static_cast<std::uint32_t>(i), 1, Value::number(level + kCycle[i % 4]));
+  }
+  const Value v = EvalSourceIn("=FORECAST.ETS.SEASONALITY(B1:B16, A1:A16)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << "kind=" << static_cast<int>(v.kind());
+  EXPECT_DOUBLE_EQ(v.as_number(), 4.0);
+}
+
 TEST(ForecastEtsSeasonality, ShortSeriesReturnsZero) {
   // n = 3 -> below the n >= 4 threshold; detector reports "no period"
   // which Mac Excel 365 surfaces as 0.
