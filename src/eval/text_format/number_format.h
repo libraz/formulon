@@ -17,8 +17,11 @@
 //   Section split:  `;` (up to 4 sections: positive; negative; zero; text),
 //                   and conditional selectors such as `[>100]`.
 //   Digit styles:    `[DBNum1]`, `[DBNum2]`, `[DBNum3]`.
-//   Discarded:      `[Red]` / `[Blue]` / ... colour specifiers, currency
+//   Discarded:      `[赤]` / `[青]` / ... colour specifiers, currency
 //                   locale prefixes like `[$-409]` (treated as inert).
+//                   Colour names follow the format string's locale, so the
+//                   English spellings are rejected under the ja-JP profile
+//                   just as Excel rejects them.
 //   Text-section:   `@` substitutes the original text input in the text
 //                   section of the format.
 //

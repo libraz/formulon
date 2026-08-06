@@ -848,3 +848,88 @@ entries:
     reason: "Bare =$E$2:$K$2 at K15: IronCalc picks K2 by legacy II; Mac spills from E2. Probe: implicit_intersection."
     prefer: mac
     first_noted: 2026-08-05
+
+  # -- TEXT/NUMBERS: colour names in a format string are localized -------
+  # Column I formats every value with `[Red]#.#`. A format string is read
+  # in the UI locale, so under ja-JP `[Red]` is not a colour at all and
+  # Excel rejects the bracket with #VALUE!; the localized `[赤]` is what
+  # gets accepted and discarded. IronCalc is en-US and discards `[Red]`.
+  # Formulon matches Mac.
+  # Probe: tests/oracle/golden/text_format.golden.json
+  # (text_color_english_name_rejected, text_color_localized_name_discarded).
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I3
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I4
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I5
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I6
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I7
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I8
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I9
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I10
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I11
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I12
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I13
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I14
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I15
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I16
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I17
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I18
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I19
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I20
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06
+  - id: ironcalc_calc_tests_TEXT_NUMBERS.I21
+    reason: "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
+    prefer: mac
+    first_noted: 2026-08-06

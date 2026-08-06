@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-06T03:57:05Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -401,10 +401,58 @@
       }
     },
     {
-      "id": "text_color_red_discarded",
+      "id": "text_color_localized_name_discarded",
+      "formula": "=TEXT(5, \"[赤]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5.00"
+      }
+    },
+    {
+      "id": "text_color_english_name_rejected",
       "formula": "=TEXT(5, \"[Red]0.00\")",
       "setup": {},
-      "skipped": "xlwings read-back unstable across oracle-gen runs; Mac Excel cell display alternates between text and error."
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_name_matches_as_prefix",
+      "formula": "=TEXT(5, \"[水色]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5.00"
+      }
+    },
+    {
+      "id": "text_color_indexed_discarded",
+      "formula": "=TEXT(5, \"[色12]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "5.00"
+      }
+    },
+    {
+      "id": "text_color_indexed_out_of_range_rejected",
+      "formula": "=TEXT(5, \"[色57]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_color_two_in_one_section_rejected",
+      "formula": "=TEXT(5, \"[赤][青]0.00\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
     },
     {
       "id": "text_locale_prefix_discarded",

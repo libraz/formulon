@@ -34,62 +34,78 @@ std::size_t scan_run(std::string_view fmt, std::size_t& i, char letter) noexcept
   return i - start;
 }
 
-bool is_color_specifier(std::string_view body) noexcept {
-  if (body.empty()) {
-    return false;
+namespace {
+
+// The eight color names a ja-JP format string may use, listed in the order
+// the English UI names them (black, blue, cyan, green, magenta, red, white,
+// yellow). Each is a single UTF-8 CJK character.
+constexpr std::string_view kColorNames[] = {"黒", "青", "水", "緑", "紫", "赤", "白", "黄"};
+
+// Localized spelling of the indexed `ColorN` form.
+constexpr std::string_view kColorIndexPrefix = "色";
+
+// Highest index the indexed form accepts; `色57` is rejected.
+constexpr int kMaxColorIndex = 56;
+
+bool starts_with(std::string_view s, std::string_view prefix) noexcept {
+  return s.size() >= prefix.size() && s.substr(0, prefix.size()) == prefix;
+}
+
+// Reads one decimal digit at `body[i]`, accepting the ASCII digits and their
+// full-width forms U+FF10..U+FF19 alike (Excel folds full-width ASCII across
+// the whole format string, and the color index inherits that). Advances `i`
+// past the digit and returns its value, or -1 when `i` is not on a digit.
+int take_digit(std::string_view body, std::size_t& i) noexcept {
+  const char c = body[i];
+  if (c >= '0' && c <= '9') {
+    ++i;
+    return c - '0';
   }
-  auto eq_ci = [](std::string_view a, const char* b) {
-    std::size_t n = 0;
-    while (b[n] != '\0') {
-      ++n;
+  if (i + 2 < body.size() && static_cast<unsigned char>(body[i]) == 0xEFU &&
+      static_cast<unsigned char>(body[i + 1]) == 0xBCU) {
+    const unsigned char lo = static_cast<unsigned char>(body[i + 2]);
+    if (lo >= 0x90U && lo <= 0x99U) {
+      i += 3;
+      return static_cast<int>(lo - 0x90U);
     }
-    if (a.size() != n) {
-      return false;
-    }
-    for (std::size_t k = 0; k < n; ++k) {
-      char ac = a[k];
-      char bc = b[k];
-      if (ac >= 'A' && ac <= 'Z') {
-        ac = static_cast<char>(ac + 32);
-      }
-      if (bc >= 'A' && bc <= 'Z') {
-        bc = static_cast<char>(bc + 32);
-      }
-      if (ac != bc) {
-        return false;
-      }
-    }
-    return true;
-  };
-  static const char* kNames[] = {"red", "blue", "green", "black", "white", "yellow", "cyan", "magenta"};
-  for (const char* name : kNames) {
-    if (eq_ci(body, name)) {
+  }
+  return -1;
+}
+
+}  // namespace
+
+bool is_color_specifier(std::string_view body) noexcept {
+  for (const std::string_view name : kColorNames) {
+    if (starts_with(body, name)) {
       return true;
     }
   }
-  // `Color` followed by an integer in 1..56.
-  if (body.size() < 6) {
+  if (!starts_with(body, kColorIndexPrefix)) {
     return false;
   }
-  const std::string_view prefix = body.substr(0, 5);
-  if (!eq_ci(prefix, "color")) {
-    return false;
-  }
-  const std::string_view num = body.substr(5);
-  if (num.empty()) {
-    return false;
+  // `色` then optional blanks then the index. Trailing bytes after the digit
+  // run are ignored the same way they are after a name.
+  std::size_t i = kColorIndexPrefix.size();
+  while (i < body.size() && (body[i] == ' ' || body[i] == '\t')) {
+    ++i;
   }
   int value = 0;
-  for (char ch : num) {
-    if (ch < '0' || ch > '9') {
-      return false;
+  int digits = 0;
+  while (i < body.size()) {
+    const int d = take_digit(body, i);
+    if (d < 0) {
+      break;
     }
-    value = value * 10 + (ch - '0');
-    if (value > 56) {
+    ++digits;
+    // The run is greedy, so a value that has already overshot can only grow:
+    // `色12345` is out of range, not index 1 with `2345` trailing.
+    value = value * 10 + d;
+    if (value > kMaxColorIndex) {
       return false;
     }
   }
-  return value >= 1 && value <= 56;
+  // Leading zeros are fine (`色001`), an index of zero is not.
+  return digits > 0 && value >= 1;
 }
 
 int parse_cond_directive(std::string_view body, CondOp* out_op, double* out_value) noexcept {

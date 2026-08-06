@@ -220,19 +220,6 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.111.2"
 
-  # -- Pre-existing oracle flake: [Red] colour directive ------------------
-  # Mac Excel's read-back through xlwings has been observed to vary
-  # between sessions for `=TEXT(5, "[Red]0.00")`: sometimes the cell
-  # surfaces as text "5.00" (Formulon's expected output), other times as
-  # an error. Until the source of the flake is identified, skip the case
-  # so it does not block the verifier.
-  - id: text_color_red_discarded
-    mode: skip-oracle
-    reason: "Color tokens in a TEXT format string are localized: ja-JP Excel accepts [赤] and rejects [Red] with #VALUE!, while Formulon's number-format parser recognises only the English names and so returns \"5.00\" for [Red] and #VALUE! for [赤] — exactly reversed. Read-back is stable across runs; the earlier instability note did not reproduce. Localized color names are unimplemented."
-    prefer: excel
-    first_noted: 2026-04-26
-    last_verified_excel_version: "16.111.2"
-
   # -- BESSELI: Formulon more accurate than Excel's A&S 9.8.1/9.8.2 -------
   # Excel's BESSELI uses the Abramowitz & Stegun rational polynomial
   # approximations (rated |epsilon| < ~1.9e-7) for I_n(x). Formulon's

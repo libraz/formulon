@@ -6,7 +6,7 @@
     "commit": "5c9f145b4a8d2b23972b5c4bea3f27d4b0604652",
     "sheet": "NUMBERS",
     "excel_locale": "unknown",
-    "generated_at": "2026-04-25T14:55:14Z"
+    "generated_at": "2026-08-06T04:04:32Z"
   },
   "tolerance": {
     "abs": 5e-08,
@@ -188,10 +188,7 @@
           "value": 12.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "12."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J3",
@@ -395,10 +392,7 @@
           "formula": "=1/3"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": ".3"
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J4",
@@ -593,10 +587,7 @@
           "value": 12345.6789
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "12345.7"
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J5",
@@ -791,10 +782,7 @@
           "value": -12.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "-12."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J6",
@@ -998,10 +986,7 @@
           "formula": "=-1/3"
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "-.3"
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J7",
@@ -1196,10 +1181,7 @@
           "value": -12345.6789
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "-12345.7"
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J8",
@@ -1394,10 +1376,7 @@
           "value": 0.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J9",
@@ -1592,10 +1571,7 @@
           "value": 123456789012.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "123456789012."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J10",
@@ -1808,10 +1784,7 @@
           "value": 1.2e-16
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J11",
@@ -2006,10 +1979,7 @@
           "value": 1.23456e+19
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "12345600000000000000."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J12",
@@ -2204,10 +2174,7 @@
           "value": 25000000000.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "25000000000."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J13",
@@ -2402,10 +2369,7 @@
           "value": 250000000000.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "250000000000."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J14",
@@ -2600,10 +2564,7 @@
           "value": 1e+16
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "10000000000000000."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J15",
@@ -2798,10 +2759,7 @@
           "value": 1e-16
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J16",
@@ -2996,10 +2954,7 @@
           "value": -2.7e-18
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J17",
@@ -3194,10 +3149,7 @@
           "value": -2.5e-10
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J18",
@@ -3392,10 +3344,7 @@
           "value": -2.5e-09
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J19",
@@ -3590,10 +3539,7 @@
           "value": -1e-08
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J20",
@@ -3788,10 +3734,7 @@
           "value": -1000000000.0
         }
       },
-      "expect": {
-        "kind": "text",
-        "value": "-1000000000."
-      }
+      "skipped": "Mac ja-JP rejects the English colour name in `[Red]#.#` with #VALUE!; IronCalc is en-US and discards it. Probe: text_format (text_color_english_name_rejected)."
     },
     {
       "id": "J21",

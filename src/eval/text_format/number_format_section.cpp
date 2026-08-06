@@ -120,7 +120,7 @@ std::vector<std::string_view> split_sections(std::string_view fmt) {
       continue;
     }
     if (c == '[') {
-      // Skip to matching `]` so e.g. `[Red]` does not interact with `;`.
+      // Skip to matching `]` so e.g. `[赤]` does not interact with `;`.
       while (i < fmt.size() && fmt[i] != ']') {
         ++i;
       }
