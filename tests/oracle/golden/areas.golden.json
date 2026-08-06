@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-06T01:53:23Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -256,7 +256,10 @@
       "id": "arg_indirect_union",
       "formula": "=AREAS(INDIRECT(\"A1,B2\"))",
       "setup": {},
-      "skipped": "AREAS(INDIRECT(\"A1,B2\")) is 2 areas in Excel; Formulon returns 1 because it has no runtime reference-union value to parse the INDIRECT string into. Deferred pending a reference-union runtime."
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
     },
     {
       "id": "arg_intersection_operator",
