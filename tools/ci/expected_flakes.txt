@@ -1,8 +1,8 @@
-# Expected-flake allowlist for the native CI job (Bundle 3.4).
+# Expected-flake allowlist for the native CI job.
 #
-# This file is a *debt registry*, not a permanent feature. Each entry below
-# names a test that the native CI job is allowed to fail. Drain the list as
-# the underlying issues are fixed -- removing an entry is equivalent to a
+# This file is a *debt registry*, not a permanent feature. Each entry names a
+# test that the native CI job is allowed to fail. Drain the list as the
+# underlying issues are fixed -- removing an entry is equivalent to a
 # regression-gate flip for that test.
 #
 # Drain procedure:
@@ -16,12 +16,11 @@
 # emits (`TestSuite.TestName`) or what ctest registers (e.g.
 # `formulon_ironcalc_oracle`).
 #
-# IMPORTANT: do not add new entries without an accompanying issue / bundle
-# reference. The allowlist must shrink monotonically across releases.
+# An entry must name a test CTest actually registers in the configuration CI
+# builds, which is Debug: `check_test_failures.py` rejects a stale name, and a
+# test compiled only under NDEBUG is invisible to that job.
+#
+# IMPORTANT: do not add new entries without a stated reason. The allowlist
+# must shrink monotonically across releases.
 
-# --- pre-existing flakes from before Bundle 1.x ----------------------------
-# Sheet spill negative-arg paths abort the subprocess instead of returning
-# Expected<...>. Tracked for the spill / array refactor.
-SheetSpillTest.ZeroRowsOrZeroColsIsRejected
-SheetSpillTest.MismatchedCellsLengthIsRejected
-SheetSpillTest.FootprintOverflowingSheetBoundsIsRejected
+# The list is currently empty: every test the native CI job runs is enforced.
