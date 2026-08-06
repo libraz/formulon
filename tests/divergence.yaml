@@ -90,6 +90,7 @@ entries:
     reason: "fm_workbook_evaluate_formula / evaluateFormulaText reduce an array result to its top-left element (Phase 1 scalar API shape); a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
     prefer: formulon
     first_noted: 2026-07-03
+    last_verified_excel_version: "16.111.2"
   # -- xlwings empty-string / blank read-back gaps -------------------------
   # The Mac xlwings driver cannot write a cell holding the empty string
   # "": assigning "" leaves the cell genuinely blank from Excel's point of
@@ -103,27 +104,31 @@ entries:
     reason: "xlwings writes \"\" as a blank cell, so Excel reports ISBLANK=TRUE even though Formulon correctly says FALSE."
     prefer: formulon
     first_noted: 2026-04-23
+    last_verified_excel_version: "16.111.2"
   - id: countif_notequal_empty_over_mixed
     mode: skip-oracle
     reason: "xlwings writes \"\" as a blank cell, so Excel's COUNTIF(range, \"<>\") over a range with a literal-\"\" cell sees one fewer populated cell than Formulon's in-memory model. Formulon returns 3, Mac records 2 due to the xlwings round-trip gap."
     prefer: formulon
     first_noted: 2026-04-25
+    last_verified_excel_version: "16.111.2"
   - id: isformula_of_literal_number_is_value
     mode: skip-oracle
     reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
     prefer: formulon
     first_noted: 2026-04-23
+    last_verified_excel_version: "16.111.2"
   - id: isformula_of_literal_text_is_value
     mode: skip-oracle
     reason: "Mac returns #VALUE!; xlwings reads it back as blank, producing a spurious kind mismatch."
     prefer: formulon
     first_noted: 2026-04-23
+    last_verified_excel_version: "16.111.2"
 
   # -- JIS unsupported on current Mac Excel ja-JP build ------------------
-  # Mac Excel 365 16.108.1 (ja-JP) returns `#NAME?` for every `=JIS(...)`
-  # invocation in the oracle pipeline (every kana / ASCII / kanji / mixed
-  # input we tried). Re-verified 2026-04-26 via fresh probe ids — the Mac
-  # bug is still live, not just a stale capture artefact. Formulon
+  # Mac Excel 365 (ja-JP) returns `#NAME?` for every `=JIS(...)` invocation
+  # in the oracle pipeline (every kana / ASCII / kanji / mixed input we
+  # tried), most recently on 16.111.2 — the Mac bug is still live, not just
+  # a stale capture artefact. Formulon
   # implements JIS correctly per the documented half-width-to-full-width
   # mapping; the impl is Mac-verified by proxy through the dbcs_* mirror
   # cases in tests/oracle/cases/width.yaml (Formulon registers JIS and
@@ -141,66 +146,79 @@ entries:
     reason: "Mac JIS returns #NAME?; Formulon recomposes ｶﾞ → ガ correctly."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_semivoiced_row
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; Formulon handles handakuten row correctly."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_unvoiced_row
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; Formulon's plain katakana mapping is correct."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_idempotent_on_fullwidth
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; Formulon: identity on already-full-width input."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_idempotent_on_kanji
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; kanji passthrough."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_mixed_halfkata_kanji
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; mixed half-kata + kanji."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_orphan_dakuten
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; orphan ﾞ probe."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_half_punctuation
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; ASCII punctuation mapping."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_round_trip
     mode: skip-oracle
     reason: "Mac JIS returns #NAME? so ASC(JIS(...)) cannot complete."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_bool_coerces
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; bool->text coercion path."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_error_propagates
     mode: skip-oracle
     reason: "Mac JIS returns #NAME? on every input so error propagation cannot be tested."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: jis_long_halfkana_string
     mode: skip-oracle
     reason: "Mac JIS returns #NAME?; full half-katakana table."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
   - id: asc_jis_round_trip
     mode: skip-oracle
     reason: "JIS half of round-trip returns #NAME?, so JIS(ASC(...)) cannot complete."
     prefer: formulon
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
 
   # -- Pre-existing oracle flake: [Red] colour directive ------------------
   # Mac Excel's read-back through xlwings has been observed to vary
@@ -210,9 +228,10 @@ entries:
   # so it does not block the verifier.
   - id: text_color_red_discarded
     mode: skip-oracle
-    reason: "xlwings read-back unstable across oracle-gen runs; Mac Excel cell display alternates between text and error."
-    prefer: formulon
+    reason: "Color tokens in a TEXT format string are localized: ja-JP Excel accepts [赤] and rejects [Red] with #VALUE!, while Formulon's number-format parser recognises only the English names and so returns \"5.00\" for [Red] and #VALUE! for [赤] — exactly reversed. Read-back is stable across runs; the earlier instability note did not reproduce. Localized color names are unimplemented."
+    prefer: excel
     first_noted: 2026-04-26
+    last_verified_excel_version: "16.111.2"
 
   # -- BESSELI: Formulon more accurate than Excel's A&S 9.8.1/9.8.2 -------
   # Excel's BESSELI uses the Abramowitz & Stegun rational polynomial
@@ -899,10 +918,10 @@ entries:
     mode: skip-oracle
     scope: deferred-feature
     evidence: [tests/unit/eval/getpivotdata_lazy_test.cpp]
-    reason: "GETPIVOTDATA returns #REF! for fields on the page/data axis (filter-state routing not implemented). Excel's actual surface for page/data-axis addressing is unconfirmed and needs a live oracle run; entry tracks the unverified behaviour."
+    reason: "GETPIVOTDATA returns #REF! for fields on the page/data axis (filter-state routing not implemented). Excel's actual surface for page/data-axis addressing is unconfirmed. Confirming it needs a PivotTable in the workbook, so it can only be observed on the workbook track's Windows primary — a macOS host cannot clear this entry, since mac-365-ja_JP is a research-only variant there."
     prefer: formulon
     first_noted: 2026-06-26
-    last_verified_excel_version: "unverified (needs live oracle run)"
+    last_verified_excel_version: "unverified (needs live oracle run on win-365-ja_JP)"
 
   # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
   # itself a union reports its real area count.

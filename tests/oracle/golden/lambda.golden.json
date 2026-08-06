@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-06T01:54:38Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -318,9 +318,22 @@
     },
     {
       "id": "bycol_error_in_column",
-      "formula": "=BYCOL({1,2;1/0,3}, LAMBDA(col, SUM(col)))",
+      "formula": "=BYCOL({1,2;#DIV/0!,3}, LAMBDA(col, SUM(col)))",
       "setup": {},
-      "skipped": "BYCOL with an errored inline-array source column should produce a per-column spill including the error. Formulon currently loses the inline-array expression error before BYCOL sees it; keep skipped until evaluator-side error propagation is fixed."
+      "expect": {
+        "kind": "array",
+        "value": [
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          5.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
     },
     {
       "id": "map_single_array_doubles",
@@ -404,9 +417,23 @@
     },
     {
       "id": "map_error_propagation",
-      "formula": "=MAP({1,1/0,3}, LAMBDA(x, x*2))",
+      "formula": "=MAP({1,#DIV/0!,3}, LAMBDA(x, x*2))",
       "setup": {},
-      "skipped": "MAP propagating an inline-array element error should preserve that error in the output spill. Formulon currently loses the inline-array expression error before MAP sees it; keep skipped until evaluator-side error propagation is fixed."
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0,
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          6.0
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "reduce_sum_from_initial",
@@ -541,9 +568,26 @@
     },
     {
       "id": "scan_error_in_element",
-      "formula": "=SCAN(0, {1,1/0,3}, LAMBDA(a, v, a+v))",
+      "formula": "=SCAN(0, {1,#DIV/0!,3}, LAMBDA(a, v, a+v))",
       "setup": {},
-      "skipped": "SCAN propagating an inline-array element error should produce downstream error spill cells. Formulon currently loses the inline-array expression error before SCAN sees it; keep skipped until evaluator-side error propagation is fixed."
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          },
+          {
+            "kind": "error",
+            "code": "#DIV/0!"
+          }
+        ],
+        "shape": [
+          1,
+          3
+        ]
+      }
     },
     {
       "id": "scan_single_element",

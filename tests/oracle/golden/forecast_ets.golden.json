@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-06T01:54:16Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -163,7 +163,10 @@
       "id": "forecast_ets_seasonality_linear_no_period",
       "formula": "=FORECAST.ETS.SEASONALITY({10;12;14;16;18;20;22;24;26;28}, {1;2;3;4;5;6;7;8;9;10})",
       "setup": {},
-      "skipped": "Mac Excel detrends before computing ACF, so a perfectly linear series surfaces no period (returns 0). Formulon's plain ACF picks lag 2 because all autocorrelations on a non-stationary linear series exceed the 0.3 threshold. Implementing detrending is a correctness improvement but out of scope here."
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
     },
     {
       "id": "forecast_ets_seasonality_too_short",
