@@ -20,6 +20,10 @@ fm_status_t read_file(const std::string& path, std::vector<std::uint8_t>& out);
 /// Atomically replaces `path` with `bytes`. The temporary file is created
 /// exclusively with a random suffix in the target directory, preserving the
 /// atomic-rename guarantee and preventing predictable-name collisions.
+///
+/// A `path` that is a symlink is resolved first, so the replace lands on
+/// the file the link names and the link itself survives. A dangling link
+/// is replaced as-is: there is no target to keep.
 fm_status_t write_file_atomically(const std::string& path, const std::uint8_t* bytes, std::size_t len);
 
 }  // namespace formulon::cli

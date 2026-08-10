@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <ios>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -450,6 +451,101 @@ TEST(FormulonCli, RecalcDoesNotReusePredictableLegacyTempPath) {
   std::string contents;
   std::getline(sentinel, contents);
   EXPECT_EQ(contents, "unrelated file");
+}
+
+TEST(FormulonCli, RecalcThroughSymlinkUpdatesTargetAndKeepsLink) {
+  // Saving through a symlink must update the file the link names. A
+  // rename onto the link path would replace the link with a regular
+  // file and leave the real workbook holding stale values -- the same
+  // silent-loss shape the atomic write exists to prevent.
+  const std::string input = "/tmp/fm_cli_symlink_in.xlsx";
+  const std::string target = "/tmp/fm_cli_symlink_target.xlsx";
+  const std::string link = "/tmp/fm_cli_symlink_link.xlsx";
+  PathGuard g_input(input);
+  PathGuard g_target(target);
+  PathGuard g_link(link);
+  ASSERT_TRUE(write_fixture_workbook(input));
+  ASSERT_TRUE(write_fixture_workbook(target));
+  std::remove(link.c_str());
+  ASSERT_EQ(::symlink(target.c_str(), link.c_str()), 0);
+
+  CliRun r = run_cli({"recalc", input, "-o", link, "--quiet"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+
+  // The link survives as a link...
+  struct stat link_stat {};
+  ASSERT_EQ(::lstat(link.c_str(), &link_stat), 0);
+  EXPECT_TRUE(S_ISLNK(link_stat.st_mode)) << "symlink was replaced by a regular file";
+
+  // ...and the file it names is the one that got rewritten.
+  std::ifstream written(target, std::ios::binary);
+  ASSERT_TRUE(written);
+  written.seekg(0, std::ios::end);
+  EXPECT_GT(written.tellg(), 0);
+
+  // No temp sidecar is left next to either path.
+  for (const std::string& sidecar : {target + ".formulon-tmp", link + ".formulon-tmp"}) {
+    std::ifstream leftover(sidecar, std::ios::binary);
+    EXPECT_FALSE(leftover.good()) << "temp sidecar left behind: " << sidecar;
+  }
+}
+
+TEST(FormulonCli, RecalcDanglingSymlinkIsReplacedInPlace) {
+  // A link with no target has nothing to preserve, so the write lands
+  // on the link path itself rather than failing.
+  const std::string input = "/tmp/fm_cli_dangling_in.xlsx";
+  const std::string link = "/tmp/fm_cli_dangling_link.xlsx";
+  PathGuard g_input(input);
+  PathGuard g_link(link);
+  ASSERT_TRUE(write_fixture_workbook(input));
+  std::remove(link.c_str());
+  ASSERT_EQ(::symlink("/tmp/fm_cli_dangling_absent.xlsx", link.c_str()), 0);
+
+  CliRun r = run_cli({"recalc", input, "-o", link, "--quiet"});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  std::ifstream written(link, std::ios::binary);
+  ASSERT_TRUE(written);
+  written.seekg(0, std::ios::end);
+  EXPECT_GT(written.tellg(), 0);
+}
+
+TEST(FormulonCli, RecalcLeavesOutputIntactWhenTheWriteCannotStart) {
+  // Stand-in for a disk-full failure: an unwritable directory makes the
+  // temp file impossible to create. The pre-existing output must be left
+  // exactly as it was, with no partial content and no sidecar.
+  const std::string dir = "/tmp/fm_cli_readonly_dir";
+  const std::string input = "/tmp/fm_cli_readonly_in.xlsx";
+  const std::string output = dir + "/out.xlsx";
+  PathGuard g_input(input);
+  ASSERT_TRUE(write_fixture_workbook(input));
+  ::rmdir(dir.c_str());
+  ASSERT_EQ(::mkdir(dir.c_str(), 0700), 0);
+  ASSERT_TRUE(write_fixture_workbook(output));
+
+  std::vector<std::uint8_t> before;
+  {
+    std::ifstream original(output, std::ios::binary);
+    ASSERT_TRUE(original);
+    before.assign(std::istreambuf_iterator<char>(original), std::istreambuf_iterator<char>());
+  }
+  ASSERT_FALSE(before.empty());
+  ASSERT_EQ(::chmod(dir.c_str(), 0500), 0);
+
+  CliRun r = run_cli({"recalc", input, "-o", output, "--quiet"});
+  EXPECT_NE(r.exit_code, 0) << "write into an unwritable directory should fail";
+
+  // Restore write permission so the fixture can be inspected and removed.
+  ASSERT_EQ(::chmod(dir.c_str(), 0700), 0);
+  std::vector<std::uint8_t> after;
+  {
+    std::ifstream survivor(output, std::ios::binary);
+    ASSERT_TRUE(survivor) << "existing output was destroyed by a failed write";
+    after.assign(std::istreambuf_iterator<char>(survivor), std::istreambuf_iterator<char>());
+  }
+  EXPECT_EQ(before, after) << "existing output was modified by a failed write";
+
+  std::remove(output.c_str());
+  ::rmdir(dir.c_str());
 }
 
 TEST(FormulonCli, RecalcPreservesExistingOutputPermissions) {

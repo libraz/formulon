@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <climits>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <ios>
 #include <limits>
@@ -38,7 +40,40 @@ fm_status_t read_file(const std::string& path, std::vector<std::uint8_t>& out) {
   return 0;
 }
 
-fm_status_t write_file_atomically(const std::string& path, const std::uint8_t* bytes, std::size_t len) {
+namespace {
+
+/// Resolves `path` to the file a symlink chain ultimately names, so an
+/// atomic replace updates that file instead of clobbering the link with
+/// a regular file. Someone who saves through a symlink expects the link
+/// to survive; replacing it also leaves the real workbook stale, which
+/// is the silent-data-loss shape this write path exists to avoid.
+///
+/// Returns `path` unchanged when it is not a symlink, when it dangles
+/// (there is no target to preserve), or when resolution fails for any
+/// other reason — in each of those cases replacing the entry itself is
+/// the correct outcome.
+///
+/// Resolving also settles the aliasing question for `recalc -o`: the
+/// input is fully read and serialized before the rename, so an output
+/// that resolves to the same inode as the input is the in-place case,
+/// which the temp-then-rename sequence already handles.
+std::string resolve_link_target(const std::string& path) {
+  struct stat link_stat {};
+  if (::lstat(path.c_str(), &link_stat) != 0 || !S_ISLNK(link_stat.st_mode)) {
+    return path;
+  }
+  std::string resolved(PATH_MAX, '\0');
+  if (::realpath(path.c_str(), resolved.data()) == nullptr) {
+    return path;
+  }
+  resolved.resize(std::char_traits<char>::length(resolved.c_str()));
+  return resolved;
+}
+
+}  // namespace
+
+fm_status_t write_file_atomically(const std::string& link_or_path, const std::uint8_t* bytes, std::size_t len) {
+  const std::string path = resolve_link_target(link_or_path);
   struct stat target_stat {};
   const bool preserve_existing_mode = ::stat(path.c_str(), &target_stat) == 0;
   std::string tmp_path = path + ".formulon-tmp.XXXXXX";
