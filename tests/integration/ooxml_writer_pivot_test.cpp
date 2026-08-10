@@ -19,6 +19,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
@@ -43,6 +44,24 @@ Value MakeText(pivot::PivotCache& cache, std::string s) {
 
 io::ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
   return io::ByteSpan{bytes.data(), bytes.size()};
+}
+
+// Reads one part out of a written package as text. Returns an empty
+// string (and fails the current test) when the part is missing, so a
+// caller can keep asserting on the result without a null check.
+std::string PartText(const std::vector<std::uint8_t>& bytes, std::string_view path) {
+  io::ZipReader zip;
+  auto open_or = zip.open(SpanOf(bytes));
+  EXPECT_TRUE(static_cast<bool>(open_or)) << "ZipReader::open failed";
+  if (!open_or) {
+    return {};
+  }
+  auto part_or = zip.read_entry(path);
+  EXPECT_TRUE(static_cast<bool>(part_or)) << "missing part: " << path;
+  if (!part_or) {
+    return {};
+  }
+  return std::string(part_or.value().begin(), part_or.value().end());
 }
 
 // Builds the canonical (Region, Amount) cache used by several tests
@@ -400,6 +419,92 @@ TEST(OoxmlWriterPivot, MultiCacheRoundTrips) {
   // "Cherry" through `cell_value`.
   EXPECT_EQ(pivot::cell_value(*b, b->records()[0], 0).as_text(), "Cherry");
   EXPECT_DOUBLE_EQ(b->records()[0].cells[1].as_number(), 42.0);
+}
+
+// ---------------------------------------------------------------------------
+// 7. Each pivot-table part carries its own rels file naming the cache
+//    definition it draws from. ECMA-376 §12.3.19 makes this relationship
+//    mandatory: a consumer that walks the package by relationship rather
+//    than by `cacheId` has no other way to reach the definition.
+// ---------------------------------------------------------------------------
+
+TEST(OoxmlWriterPivot, PivotTablePartDeclaresCacheDefinitionRelationship) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
+  wb.sheet(1).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/0U, /*anchor_row=*/0U, /*anchor_col=*/3U));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+
+  const std::string rels = PartText(bytes_or.value(), "xl/pivotTables/_rels/pivotTable1.xml.rels");
+  EXPECT_NE(rels.find("relationships/pivotCacheDefinition"), std::string::npos) << rels;
+  // The target steps out of `pivotTables/` and into the sibling
+  // `pivotCache/` directory, matching what Excel itself writes.
+  EXPECT_NE(rels.find("Target=\"../pivotCache/pivotCacheDefinition1.xml\""), std::string::npos) << rels;
+
+  // The relationship is additive: the table still names its cache by id,
+  // and the round trip still resolves through that id.
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+  const Workbook& reloaded = read_or.value().workbook;
+  ASSERT_EQ(reloaded.sheet(1).pivot_tables().size(), 1U);
+  EXPECT_EQ(reloaded.sheet(1).pivot_tables()[0]->pivot_cache_id(), 0U);
+}
+
+// ---------------------------------------------------------------------------
+// 8. With two caches in play, each table's rels file must target the
+//    definition matching its own `cacheId` -- not simply the first one.
+// ---------------------------------------------------------------------------
+
+TEST(OoxmlWriterPivot, PivotTableRelsTargetTheirOwnCacheDefinition) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  // Two caches with non-contiguous ids, so a bug that indexes by
+  // position instead of matching on `cacheId` produces a wrong target.
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/7U)));
+  // Table 1 draws from the second cache, table 2 from the first.
+  wb.sheet(0).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/7U, /*anchor_row=*/0U, /*anchor_col=*/3U));
+  wb.sheet(1).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/0U, /*anchor_row=*/0U, /*anchor_col=*/3U));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+
+  const std::string first = PartText(bytes_or.value(), "xl/pivotTables/_rels/pivotTable1.xml.rels");
+  const std::string second = PartText(bytes_or.value(), "xl/pivotTables/_rels/pivotTable2.xml.rels");
+  EXPECT_NE(first.find("Target=\"../pivotCache/pivotCacheDefinition2.xml\""), std::string::npos) << first;
+  EXPECT_NE(second.find("Target=\"../pivotCache/pivotCacheDefinition1.xml\""), std::string::npos) << second;
+
+  auto read_or = io::read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << "read_ooxml: " << read_or.error().message;
+  const Workbook& reloaded = read_or.value().workbook;
+  ASSERT_EQ(reloaded.sheet(0).pivot_tables().size(), 1U);
+  ASSERT_EQ(reloaded.sheet(1).pivot_tables().size(), 1U);
+  EXPECT_EQ(reloaded.sheet(0).pivot_tables()[0]->pivot_cache_id(), 7U);
+  EXPECT_EQ(reloaded.sheet(1).pivot_tables()[0]->pivot_cache_id(), 0U);
+}
+
+// ---------------------------------------------------------------------------
+// 9. A table whose `cacheId` matches no cache in the workbook gets no
+//    rels part at all, so the package never carries a dangling target.
+// ---------------------------------------------------------------------------
+
+TEST(OoxmlWriterPivot, PivotTableWithUnresolvableCacheIdEmitsNoRels) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(BuildRegionAmountCache(/*cache_id=*/0U)));
+  wb.sheet(0).add_pivot_table(BuildRegionAmountTable(/*cache_id=*/99U, /*anchor_row=*/0U, /*anchor_col=*/3U));
+
+  auto bytes_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << "write_ooxml: " << bytes_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  EXPECT_TRUE(zip.has_entry("xl/pivotTables/pivotTable1.xml"));
+  EXPECT_FALSE(zip.has_entry("xl/pivotTables/_rels/pivotTable1.xml.rels"));
 }
 
 }  // namespace

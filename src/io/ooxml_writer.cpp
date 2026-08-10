@@ -73,6 +73,22 @@ std::string BuildPivotCacheDefinitionRels(std::string_view records_filename) {
   return out;
 }
 
+/// Builds the `_rels` document for a pivotTable part: a single
+/// relationship of type `pivotCacheDefinition` pointing at the cache the
+/// table draws from. ECMA-376 §12.3.19 requires this relationship even
+/// though the table also names the cache by `cacheId`, so consumers that
+/// navigate the package by relationship alone can still find it. The
+/// target steps out of `xl/pivotTables/` into `xl/pivotCache/`.
+std::string BuildPivotTableRels(std::string_view cache_definition_target) {
+  std::string out;
+  out.reserve(256 + cache_definition_target.size());
+  out.append(kXmlDecl);
+  out.append("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n");
+  AppendRelationship(out, 1, kRelPivotCacheDefinition, cache_definition_target);
+  out.append("</Relationships>\n");
+  return out;
+}
+
 /// Builds the per-link rels file content for one external link.
 /// Returns an empty string when the record has no captured target —
 /// callers should skip the AddPart call in that case so the package
@@ -370,6 +386,15 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
       auto result = AddPart(writer.get(), t.path, write_pivot_table_definition(*t.table));
       if (!result) {
         return result.error();
+      }
+      // The table's own rels file names the cache definition it draws
+      // from. A table whose cache id resolved to no planned cache gets
+      // no rels part, so the package never carries a dangling target.
+      if (!t.cache_definition_target.empty()) {
+        auto rels_result = AddPart(writer.get(), t.rels_path, BuildPivotTableRels(t.cache_definition_target));
+        if (!rels_result) {
+          return rels_result.error();
+        }
       }
     }
   }

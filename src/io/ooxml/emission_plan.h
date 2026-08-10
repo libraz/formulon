@@ -68,10 +68,20 @@ struct EmissionPlan {
   // Pivot tables grouped by owning sheet. Each `numeric_id` is a
   // package-wide 1-based counter (independent of cache numbering); the
   // path is `xl/pivotTables/pivotTable<N>.xml`.
+  //
+  // ECMA-376 §12.3.19 requires each pivot-table part to declare an
+  // explicit relationship to the cache definition it draws from, so the
+  // plan also carries that part's own rels path and the package-relative
+  // target of the matching `pivotCacheDefinition<N>.xml`. The target is
+  // empty when the table's `pivot_cache_id()` matches no planned cache;
+  // the writer then skips the rels part rather than emitting a dangling
+  // relationship.
   struct PivotTablePlan {
     const pivot::PivotTable* table = nullptr;
-    std::uint32_t numeric_id = 0;  // 1-based, package-wide
-    std::string path;              // "xl/pivotTables/pivotTable1.xml"
+    std::uint32_t numeric_id = 0;         // 1-based, package-wide
+    std::string path;                     // "xl/pivotTables/pivotTable1.xml"
+    std::string rels_path;                // "xl/pivotTables/_rels/pivotTable1.xml.rels"
+    std::string cache_definition_target;  // "../pivotCache/pivotCacheDefinition1.xml"
   };
   std::vector<std::vector<PivotTablePlan>> pivot_tables_by_sheet;
   // Per-sheet comments / VML payload. `numeric_id` matches the

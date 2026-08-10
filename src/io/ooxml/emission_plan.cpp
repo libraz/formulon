@@ -79,10 +79,14 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
     paths.insert(c.records_path);
     paths.insert(c.definition_rels_path);
   }
-  // Pivot-table parts (one per pivot table, package-wide).
+  // Pivot-table parts (one per pivot table, package-wide) plus the rels
+  // file naming the cache definition each one draws from.
   for (const auto& per_sheet : pivot_tables_by_sheet) {
     for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
       paths.insert(t.path);
+      if (!t.cache_definition_target.empty()) {
+        paths.insert(t.rels_path);
+      }
     }
   }
   // Comment / VML parts (one per sheet that has at least one comment).
@@ -193,6 +197,17 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
       entry.table = tbl;
       entry.numeric_id = next_pivot_table_id++;
       entry.path = NumberedPartPath("xl/pivotTables/pivotTable", entry.numeric_id, ".xml");
+      entry.rels_path = NumberedPartPath("xl/pivotTables/_rels/pivotTable", entry.numeric_id, ".xml.rels");
+      // Resolve the cache this table draws from so its rels file can name
+      // the definition part. Both live under `xl/`, so the target steps
+      // out of `pivotTables/` and into `pivotCache/`. A table whose
+      // cache id matches nothing leaves the target empty.
+      for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
+        if (c.cache_id == tbl->pivot_cache_id()) {
+          entry.cache_definition_target = NumberedPartPath("../pivotCache/pivotCacheDefinition", c.numeric_id, ".xml");
+          break;
+        }
+      }
       plan.pivot_tables_by_sheet[s].push_back(std::move(entry));
     }
   }
