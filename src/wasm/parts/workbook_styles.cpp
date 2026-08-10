@@ -54,20 +54,22 @@ emscripten::val JsWorkbook::getCellXf(uint32_t xf_index) const {
     o.set("status", error_status(7000));
     return o;
   }
-  fm_cell_xf xf{};
-  fm_status_t rc = fm_styles_get_cell_xf(handle_, xf_index, &xf);
+  fm_cell_xf_ex xf{};
+  fm_status_t rc = fm_styles_get_cell_xf_ex(handle_, xf_index, &xf);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
   }
   o.set("status", ok_status());
-  o.set("fontIndex", xf.font_index);
-  o.set("fillIndex", xf.fill_index);
-  o.set("borderIndex", xf.border_index);
-  o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
-  o.set("horizontalAlign", static_cast<uint32_t>(xf.horizontal_align));
-  o.set("verticalAlign", static_cast<uint32_t>(xf.vertical_align));
-  o.set("wrapText", xf.wrap_text != 0);
+  o.set("fontIndex", xf.base.font_index);
+  o.set("fillIndex", xf.base.fill_index);
+  o.set("borderIndex", xf.base.border_index);
+  o.set("numFmtId", static_cast<uint32_t>(xf.base.num_fmt_id));
+  o.set("horizontalAlign", static_cast<uint32_t>(xf.base.horizontal_align));
+  o.set("verticalAlign", static_cast<uint32_t>(xf.base.vertical_align));
+  o.set("wrapText", xf.base.wrap_text != 0);
+  o.set("justifyLastLine", xf.justify_last_line != 0);
+  o.set("xfId", xf.xf_id);
   return o;
 }
 
@@ -316,16 +318,18 @@ JsAddStyleResult JsWorkbook::addXf(emscripten::val record) {
     r.status = error_status(7000);
     return r;
   }
-  fm_cell_xf xf{};
-  xf.font_index = js_pull_u32(record, "fontIndex", 0U);
-  xf.fill_index = js_pull_u32(record, "fillIndex", 0U);
-  xf.border_index = js_pull_u32(record, "borderIndex", 0U);
-  xf.num_fmt_id = js_pull_u16(record, "numFmtId", 0U);
-  xf.horizontal_align = js_pull_u8(record, "horizontalAlign", 0U);
-  xf.vertical_align = js_pull_u8(record, "verticalAlign", 0U);
-  xf.wrap_text = js_pull_bool(record, "wrapText", false) ? 1 : 0;
+  fm_cell_xf_ex xf{};
+  xf.base.font_index = js_pull_u32(record, "fontIndex", 0U);
+  xf.base.fill_index = js_pull_u32(record, "fillIndex", 0U);
+  xf.base.border_index = js_pull_u32(record, "borderIndex", 0U);
+  xf.base.num_fmt_id = js_pull_u16(record, "numFmtId", 0U);
+  xf.base.horizontal_align = js_pull_u8(record, "horizontalAlign", 0U);
+  xf.base.vertical_align = js_pull_u8(record, "verticalAlign", 0U);
+  xf.base.wrap_text = js_pull_bool(record, "wrapText", false) ? 1 : 0;
+  xf.justify_last_line = js_pull_bool(record, "justifyLastLine", false) ? 1 : 0;
+  xf.xf_id = js_pull_u32(record, "xfId", 0U);
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
+  fm_status_t rc = fm_styles_add_cell_xf_ex(handle_, xf, &idx);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
@@ -467,21 +471,51 @@ emscripten::val JsWorkbook::getCellStyleXf(uint32_t index) const {
     o.set("status", error_status(7000));
     return o;
   }
-  fm_cell_xf xf{};
-  fm_status_t rc = fm_styles_get_cell_style_xf(handle_, index, &xf);
+  fm_cell_xf_ex xf{};
+  fm_status_t rc = fm_styles_get_cell_style_xf_ex(handle_, index, &xf);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
   }
   o.set("status", ok_status());
-  o.set("fontIndex", xf.font_index);
-  o.set("fillIndex", xf.fill_index);
-  o.set("borderIndex", xf.border_index);
-  o.set("numFmtId", static_cast<uint32_t>(xf.num_fmt_id));
-  o.set("horizontalAlign", static_cast<uint32_t>(xf.horizontal_align));
-  o.set("verticalAlign", static_cast<uint32_t>(xf.vertical_align));
-  o.set("wrapText", xf.wrap_text != 0);
+  o.set("fontIndex", xf.base.font_index);
+  o.set("fillIndex", xf.base.fill_index);
+  o.set("borderIndex", xf.base.border_index);
+  o.set("numFmtId", static_cast<uint32_t>(xf.base.num_fmt_id));
+  o.set("horizontalAlign", static_cast<uint32_t>(xf.base.horizontal_align));
+  o.set("verticalAlign", static_cast<uint32_t>(xf.base.vertical_align));
+  o.set("wrapText", xf.base.wrap_text != 0);
+  o.set("justifyLastLine", xf.justify_last_line != 0);
   return o;
+}
+
+JsAddStyleResult JsWorkbook::addCellStyleXf(emscripten::val record) {
+  JsAddStyleResult out;
+  if (handle_ == nullptr) {
+    out.status = error_status(7000);
+    return out;
+  }
+  fm_cell_xf_ex xf{};
+  xf.base.font_index = js_pull_u32(record, "fontIndex", 0U);
+  xf.base.fill_index = js_pull_u32(record, "fillIndex", 0U);
+  xf.base.border_index = js_pull_u32(record, "borderIndex", 0U);
+  xf.base.num_fmt_id = js_pull_u16(record, "numFmtId", 0U);
+  xf.base.horizontal_align = js_pull_u8(record, "horizontalAlign", 0U);
+  xf.base.vertical_align = js_pull_u8(record, "verticalAlign", 0U);
+  xf.base.wrap_text = js_pull_bool(record, "wrapText", false) ? 1 : 0;
+  xf.justify_last_line = js_pull_bool(record, "justifyLastLine", false) ? 1 : 0;
+  uint32_t index = 0;
+  const fm_status_t rc = fm_styles_add_cell_style_xf_ex(handle_, xf, &index);
+  out.status = rc == 0 ? ok_status() : error_status(rc);
+  out.index = index;
+  return out;
+}
+
+JsStatus JsWorkbook::setCellStyle(const std::string& name, uint32_t xfId, uint32_t builtinId) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  return status_from_rc(fm_styles_set_cell_style(handle_, name.c_str(), xfId, builtinId));
 }
 
 }  // namespace parts

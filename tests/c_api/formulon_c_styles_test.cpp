@@ -735,6 +735,101 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   EXPECT_STREQ(reloaded_fmt, "0.00%");
 }
 
+TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cell_xf_ex xf{};
+  xf.base.horizontal_align = 7;  // distributed
+  xf.base.vertical_align = 2;    // bottom
+  xf.justify_last_line = 1;
+  uint32_t xf_idx = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex(wb.handle, xf, &xf_idx), 0);
+
+  uint32_t duplicate_idx = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex(wb.handle, xf, &duplicate_idx), 0);
+  EXPECT_EQ(duplicate_idx, xf_idx);
+
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "distributed"), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, xf_idx), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  uint32_t reread_idx = 0;
+  ASSERT_EQ(fm_cell_get_xf_index(reloaded.handle, 0, 0, 0, &reread_idx), 0);
+  fm_cell_xf_ex reread{};
+  ASSERT_EQ(fm_styles_get_cell_xf_ex(reloaded.handle, reread_idx, &reread), 0);
+  EXPECT_EQ(reread.base.horizontal_align, 7U);
+  EXPECT_EQ(reread.justify_last_line, 1);
+}
+
+TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cell_xf_ex style_xf{};
+  style_xf.base.horizontal_align = 2;
+  uint32_t xf_id = 0;
+  ASSERT_EQ(fm_styles_add_cell_style_xf_ex(wb.handle, style_xf, &xf_id), 0);
+  ASSERT_EQ(fm_styles_set_cell_style(wb.handle, "Highlight", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE), 0);
+
+  fm_cell_xf_ex cell_xf{};
+  cell_xf.base.horizontal_align = 2;
+  cell_xf.xf_id = xf_id;
+  uint32_t cell_xf_id = 0;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex(wb.handle, cell_xf, &cell_xf_id), 0);
+  ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "styled"), 0);
+  ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, cell_xf_id), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  uint32_t style_count = 0;
+  ASSERT_EQ(fm_styles_get_cell_style_count(loaded.handle, &style_count), 0);
+  ASSERT_EQ(style_count, 1U);
+  fm_cell_style_record_t style{};
+  ASSERT_EQ(fm_styles_get_cell_style(loaded.handle, 0, &style), 0);
+  EXPECT_STREQ(style.name, "Highlight");
+  uint32_t reread_cell_xf = 0;
+  ASSERT_EQ(fm_cell_get_xf_index(loaded.handle, 0, 0, 0, &reread_cell_xf), 0);
+  fm_cell_xf_ex reread{};
+  ASSERT_EQ(fm_styles_get_cell_xf_ex(loaded.handle, reread_cell_xf, &reread), 0);
+  EXPECT_EQ(reread.xf_id, style.xf_id);
+}
+
+TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  // A cell xf may only inherit from a named-style xf that already exists.
+  fm_cell_xf_ex cell_xf{};
+  cell_xf.xf_id = 3;
+  uint32_t cell_xf_index = 0;
+  EXPECT_NE(fm_styles_add_cell_xf_ex(wb.handle, cell_xf, &cell_xf_index), 0);
+
+  // The named-style table validates its own font / fill / border / numFmt
+  // references exactly like the cell-xf table does.
+  fm_cell_xf_ex style_xf{};
+  style_xf.base.font_index = 9;
+  uint32_t xf_id = 0;
+  EXPECT_NE(fm_styles_add_cell_style_xf_ex(wb.handle, style_xf, &xf_id), 0);
+
+  style_xf.base.font_index = 0;
+  style_xf.justify_last_line = 1;
+  ASSERT_EQ(fm_styles_add_cell_style_xf_ex(wb.handle, style_xf, &xf_id), 0);
+  fm_cell_xf_ex reread{};
+  ASSERT_EQ(fm_styles_get_cell_style_xf_ex(wb.handle, xf_id, &reread), 0);
+  EXPECT_EQ(reread.justify_last_line, 1);
+
+  // 0..47 is the whole OOXML ordinal space; anything else needs the sentinel.
+  EXPECT_NE(fm_styles_set_cell_style(wb.handle, "Custom", xf_id, 48), 0);
+  EXPECT_EQ(fm_styles_set_cell_style(wb.handle, "Custom", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE), 0);
+  EXPECT_NE(fm_styles_set_cell_style(wb.handle, "Custom", xf_id + 1U, FM_CELL_STYLE_BUILTIN_ID_NONE), 0);
+}
+
 TEST(FormulonCApiStyles, AddBatchDeduplicatesAllStyleTables) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

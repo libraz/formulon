@@ -875,6 +875,27 @@ FM_API size_t fm_workbook_table_count(const fm_workbook_t* wb);
 FM_API fm_status_t fm_workbook_table_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
                                         const char** out_display_name, const char** out_ref, size_t* out_sheet_index);
 
+/** Creates a worksheet table (`xl/tables/tableN.xml`). `column_names` must
+ * contain one non-empty header for every column in `ref`; each name must be
+ * unique within the table, and `column_count` must equal the width of `ref`.
+ * `style_name` may be NULL or empty to omit table styling. The table's filter
+ * definition is created automatically. When `header_row` is set, the caller
+ * still owns the header cells: Excel expects the first row of `ref` to hold
+ * exactly the column names. */
+FM_API fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_index, const char* ref, const char* name,
+                                            const char* display_name, const char* const* column_names,
+                                            size_t column_count, const char* style_name, int32_t header_row,
+                                            int32_t totals_row, size_t* out_index);
+
+/** Replaces a table's range and optional visual style. `ref` and
+ * `style_name` must not be NULL; an empty style removes `<tableStyleInfo>`.
+ * `ref` must keep the width the table's column list already describes. */
+FM_API fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index, const char* ref, const char* style_name,
+                                            int32_t header_row, int32_t totals_row);
+
+/** Removes the table at `index`. */
+FM_API fm_status_t fm_workbook_table_remove(fm_workbook_t* wb, size_t index);
+
 /**
  * @brief Returns the number of passthrough OOXML parts the reader
  *        carried through unchanged.
@@ -2852,6 +2873,33 @@ FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index
 FM_API fm_status_t fm_sheet_get_view_ex(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_ex_t* out);
 
 /**
+ * @brief Returns the complete worksheet-level `<autoFilter>` XML fragment.
+ *
+ * `*out_xml` borrows the workbook handle and remains valid until its next
+ * read or mutation. It is the empty string when the sheet has no AutoFilter.
+ * The fragment includes any filter-column criteria, sort state, and extension
+ * payload carried by the OOXML reader so callers can preserve definitions
+ * they do not otherwise interpret.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if `out_xml` is `NULL`;
+ *         `kInvalidArgument` when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
+
+/**
+ * @brief Replaces the worksheet-level `<autoFilter>` XML fragment.
+ *
+ * Pass an empty string to remove the AutoFilter. Non-empty input must be a
+ * complete `<autoFilter ...>` fragment; detailed schema validation remains
+ * with Excel/OOXML consumers because filter extensions are intentionally
+ * preserved verbatim by the engine.
+ *
+ * @return `kOk` on success; `kBindingNullPointer` if `xml` is `NULL`;
+ *         `kInvalidArgument` for a bad sheet index or malformed fragment.
+ */
+FM_API fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
+
+/**
  * @brief Sets or replaces the column width override for the inclusive
  *        column span `[first, last]`. Existing overrides whose span
  *        intersects the requested span are merged so the new width
@@ -3074,6 +3122,14 @@ typedef struct {
   int32_t wrap_text; /* 0=false, 1=true */
 } fm_cell_xf;
 
+/** Versioned cell-format record including OOXML `justifyLastLine`.
+ * `base` preserves the stable `fm_cell_xf` layout for existing ABI consumers. */
+typedef struct {
+  fm_cell_xf base;
+  int32_t justify_last_line; /* 0=false, 1=true */
+  uint32_t xf_id;            /* parent `<cellStyleXfs>` index for named styles */
+} fm_cell_xf_ex;
+
 /**
  * @brief Plain-data projection of a `formulon::io::FontRecord`.
  *
@@ -3259,6 +3315,9 @@ FM_API fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint3
  */
 FM_API fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out);
 
+/** Reads an `<xf>` including the OOXML `justifyLastLine` alignment flag. */
+FM_API fm_status_t fm_styles_get_cell_xf_ex(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf_ex* out);
+
 /**
  * @brief Reads the `font_index`-th font record from the workbook's
  *        styles table.
@@ -3418,6 +3477,11 @@ FM_API fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t
  */
 FM_API fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out);
 
+/** Reads a `<cellStyleXfs>` record including the OOXML `justifyLastLine`
+ * alignment flag. `xf_id` is always 0: the named-style table is the target
+ * of `xfId`, never a source of it. */
+FM_API fm_status_t fm_styles_get_cell_style_xf_ex(fm_workbook_t* wb, uint32_t index, fm_cell_xf_ex* out);
+
 /**
  * @brief Adds a font record to the workbook's styles table, deduplicating
  *        against existing entries.
@@ -3516,6 +3580,16 @@ FM_API fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_c
  *         `kInvalidArgument` for any out-of-range / unregistered field.
  */
 FM_API fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_index);
+
+/** Adds and deduplicates an `<xf>` including OOXML `justifyLastLine`. */
+FM_API fm_status_t fm_styles_add_cell_xf_ex(fm_workbook_t* wb, fm_cell_xf_ex record, uint32_t* out_xf_index);
+
+/** Adds a named-style xf and returns its `<cellStyleXfs>` index. */
+FM_API fm_status_t fm_styles_add_cell_style_xf_ex(fm_workbook_t* wb, fm_cell_xf_ex record, uint32_t* out_xf_id);
+
+/** Adds or replaces a named `<cellStyle>` record. `xf_id` must reference an
+ * existing named-style xf. Pass `FM_CELL_STYLE_BUILTIN_ID_NONE` for custom styles. */
+FM_API fm_status_t fm_styles_set_cell_style(fm_workbook_t* wb, const char* name, uint32_t xf_id, uint32_t builtin_id);
 
 /**
  * @brief Adds and deduplicates a batch of fonts, fills, borders, and cell xfs.

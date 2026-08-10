@@ -126,6 +126,9 @@ class JsWorkbook {
 
   uint32_t tableCount() const;
   emscripten::val tableAt(uint32_t idx) const;
+  JsAddStyleResult createTable(emscripten::val spec);
+  JsStatus updateTable(uint32_t idx, emscripten::val spec);
+  JsStatus removeTable(uint32_t idx);
 
   uint32_t passthroughCount() const;
   emscripten::val passthroughAt(uint32_t idx) const;
@@ -165,6 +168,11 @@ class JsWorkbook {
   JsStatus setRowHidden(uint32_t sheet, uint32_t row, bool hidden);
   JsStatus setRowOutline(uint32_t sheet, uint32_t row, uint32_t level);
 
+  /** Complete worksheet-level `<autoFilter>` fragment. The empty string
+   * means no filter; the status form distinguishes that from a bad sheet. */
+  emscripten::val getSheetAutoFilterXml(uint32_t sheet) const;
+  JsStatus setSheetAutoFilterXml(uint32_t sheet, const std::string& xml);
+
   // ---- Styles -------------------------------------------------------------
 
   emscripten::val getCellXfIndex(uint32_t sheet, uint32_t row, uint32_t col) const;
@@ -192,6 +200,8 @@ class JsWorkbook {
   uint32_t cellStyleXfCount() const;
   emscripten::val getCellStyle(uint32_t index) const;
   emscripten::val getCellStyleXf(uint32_t index) const;
+  JsAddStyleResult addCellStyleXf(emscripten::val record);
+  JsStatus setCellStyle(const std::string& name, uint32_t xfId, uint32_t builtinId);
 
   emscripten::val getExternalLinks() const;
 

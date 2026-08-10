@@ -18,6 +18,34 @@ namespace formulon {
 namespace wasm {
 namespace parts {
 
+// ---- AutoFilter --------------------------------------------------------
+
+emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
+  emscripten::val out = emscripten::val::object();
+  if (handle_ == nullptr) {
+    out.set("status", error_status(7000));
+    out.set("xml", std::string());
+    return out;
+  }
+  const char* xml = nullptr;
+  fm_status_t rc = fm_sheet_get_auto_filter_xml(handle_, sheet, &xml);
+  if (rc != 0) {
+    out.set("status", error_status(rc));
+    out.set("xml", std::string());
+    return out;
+  }
+  out.set("status", ok_status());
+  out.set("xml", xml != nullptr ? std::string(xml) : std::string());
+  return out;
+}
+
+JsStatus JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  return status_from_rc(fm_sheet_set_auto_filter_xml(handle_, sheet, xml.c_str()));
+}
+
 // ---- Merges ------------------------------------------------------------
 
 JsStatus JsWorkbook::addMerge(uint32_t sheet, emscripten::val range) {

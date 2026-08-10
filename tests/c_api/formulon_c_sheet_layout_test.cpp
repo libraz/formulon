@@ -19,6 +19,15 @@ struct WorkbookGuard {
   WorkbookGuard& operator=(const WorkbookGuard&) = delete;
 };
 
+struct BufferGuard {
+  uint8_t* data = nullptr;
+  size_t len = 0;
+  ~BufferGuard() { fm_buffer_free(data); }
+  BufferGuard() = default;
+  BufferGuard(const BufferGuard&) = delete;
+  BufferGuard& operator=(const BufferGuard&) = delete;
+};
+
 }  // namespace
 
 TEST(FormulonCApiSheetLayout, GetViewDefaults) {
@@ -82,6 +91,59 @@ TEST(FormulonCApiSheetLayout, SetViewExSetters) {
   EXPECT_EQ(v.tab_selected, 1);
   ASSERT_NE(v.view_mode, nullptr);
   EXPECT_STREQ(v.view_mode, "pageBreakPreview");
+}
+
+TEST(FormulonCApiSheetLayout, AutoFilterXmlRoundTripsAndClears) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  const char* xml =
+      "<autoFilter ref=\"A1:C10\"><filterColumn colId=\"1\"><filters><filter val=\"east\"/>"
+      "</filters></filterColumn></autoFilter>";
+  ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, xml), 0);
+
+  const char* actual = nullptr;
+  ASSERT_EQ(fm_sheet_get_auto_filter_xml(wb.handle, 0, &actual), 0);
+  ASSERT_NE(actual, nullptr);
+  EXPECT_STREQ(actual, xml);
+
+  ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, ""), 0);
+  ASSERT_EQ(fm_sheet_get_auto_filter_xml(wb.handle, 0, &actual), 0);
+  ASSERT_NE(actual, nullptr);
+  EXPECT_STREQ(actual, "");
+}
+
+TEST(FormulonCApiSheetLayout, AutoFilterXmlSurvivesXlsxSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const char* xml =
+      "<autoFilter ref=\"A1:C10\"><filterColumn colId=\"1\"><filters><filter val=\"east\"/>"
+      "</filters></filterColumn></autoFilter>";
+  ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, xml), 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_GT(saved.len, 0U);
+
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  const char* actual = nullptr;
+  ASSERT_EQ(fm_sheet_get_auto_filter_xml(reloaded.handle, 0, &actual), 0);
+  ASSERT_NE(actual, nullptr);
+  EXPECT_STREQ(actual, xml);
+}
+
+TEST(FormulonCApiSheetLayout, AutoFilterXmlRejectsWrongRoot) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<filterColumn colId=\"0\"/>"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, nullptr), 0);
+  // A longer element name that merely starts with "autoFilter".
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilterColumn colId=\"0\"/>"), 0);
+  // An unterminated element would break the whole worksheet part.
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\">"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter"), 0);
+  EXPECT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\"/>"), 0);
 }
 
 TEST(FormulonCApiSheetLayout, SetViewModeRejectsNullPointer) {

@@ -9,8 +9,10 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
+#include "utils/error.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
@@ -280,6 +282,71 @@ emscripten::val JsWorkbook::tableAt(uint32_t idx) const {
   o.set("ref", ref != nullptr ? std::string(ref) : std::string());
   o.set("sheetIndex", static_cast<uint32_t>(sheet_index));
   return o;
+}
+
+JsAddStyleResult JsWorkbook::createTable(emscripten::val spec) {
+  JsAddStyleResult out;
+  if (handle_ == nullptr) {
+    out.status = error_status(7000);
+    return out;
+  }
+  const uint32_t sheet = js_pull_u32(spec, "sheetIndex", 0U);
+  const std::string ref = js_pull_string(spec, "ref");
+  const std::string name = js_pull_string(spec, "name");
+  std::string display_name = js_pull_string(spec, "displayName");
+  if (display_name.empty()) {
+    display_name = name;
+  }
+  const std::string style_name = js_pull_string(spec, "styleName");
+  const bool header_row = js_pull_bool(spec, "headerRow", true);
+  const bool totals_row = js_pull_bool(spec, "totalsRow", false);
+  emscripten::val columns = spec["columns"];
+  if (!columns.isArray()) {
+    out.status = error_status(static_cast<int32_t>(formulon::FormulonErrorCode::kInvalidArgument));
+    return out;
+  }
+  const uint32_t count = columns["length"].as<uint32_t>();
+  // The pointer vector is filled in a second pass so that no `c_str()` is
+  // taken before `names` has finished growing.
+  std::vector<std::string> names;
+  names.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    names.push_back(columns[i].as<std::string>());
+  }
+  std::vector<const char*> pointers;
+  pointers.reserve(count);
+  for (const std::string& column : names) {
+    pointers.push_back(column.c_str());
+  }
+  size_t index = 0;
+  const fm_status_t rc =
+      fm_workbook_table_create(handle_, sheet, ref.c_str(), name.c_str(), display_name.c_str(), pointers.data(),
+                               pointers.size(), style_name.c_str(), header_row ? 1 : 0, totals_row ? 1 : 0, &index);
+  if (rc != 0) {
+    out.status = error_status(rc);
+    return out;
+  }
+  out.status = ok_status();
+  out.index = static_cast<uint32_t>(index);
+  return out;
+}
+
+JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  const std::string ref = js_pull_string(spec, "ref");
+  const std::string style_name = js_pull_string(spec, "styleName");
+  return status_from_rc(fm_workbook_table_update(handle_, idx, ref.c_str(), style_name.c_str(),
+                                                 js_pull_bool(spec, "headerRow", true) ? 1 : 0,
+                                                 js_pull_bool(spec, "totalsRow", false) ? 1 : 0));
+}
+
+JsStatus JsWorkbook::removeTable(uint32_t idx) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  return status_from_rc(fm_workbook_table_remove(handle_, idx));
 }
 
 emscripten::val JsWorkbook::passthroughAt(uint32_t idx) const {

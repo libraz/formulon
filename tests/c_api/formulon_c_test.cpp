@@ -70,6 +70,62 @@ TEST(FormulonCApi, CreateAndDestroy) {
   EXPECT_STREQ(name, "Sheet1");
 }
 
+TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const char* columns[] = {"Product", "Amount"};
+  size_t index = 99;
+  ASSERT_EQ(
+      fm_workbook_table_create(wb.handle, 0, "A1:B3", "Sales", "Sales", columns, 2, "TableStyleMedium2", 1, 0, &index),
+      0);
+  EXPECT_EQ(index, 0U);
+  EXPECT_EQ(fm_workbook_table_count(wb.handle), 1U);
+
+  const char* name = nullptr;
+  const char* display_name = nullptr;
+  const char* ref = nullptr;
+  size_t sheet = 99;
+  ASSERT_EQ(fm_workbook_table_at(wb.handle, index, &name, &display_name, &ref, &sheet), 0);
+  EXPECT_STREQ(name, "Sales");
+  EXPECT_STREQ(display_name, "Sales");
+  EXPECT_STREQ(ref, "A1:B3");
+  EXPECT_EQ(sheet, 0U);
+
+  ASSERT_EQ(fm_workbook_table_update(wb.handle, index, "A1:B4", "TableStyleLight9", 1, 1), 0);
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_table_at(loaded.handle, 0, &name, &display_name, &ref, &sheet), 0);
+  EXPECT_STREQ(ref, "A1:B4");
+
+  ASSERT_EQ(fm_workbook_table_remove(loaded.handle, 0), 0);
+  EXPECT_EQ(fm_workbook_table_count(loaded.handle), 0U);
+}
+
+TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const char* columns[] = {"Product", "Amount"};
+  size_t index = 99;
+
+  // Two headers cannot describe a three-column range, and a range that is
+  // not a plain A1 area has no width to check against at all.
+  EXPECT_NE(fm_workbook_table_create(wb.handle, 0, "A1:C3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
+  EXPECT_NE(fm_workbook_table_create(wb.handle, 0, "Sheet1!A1:B3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
+  EXPECT_NE(fm_workbook_table_create(wb.handle, 0, "$A$1:$B$3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
+  EXPECT_EQ(fm_workbook_table_count(wb.handle), 0U);
+
+  ASSERT_EQ(fm_workbook_table_create(wb.handle, 0, "A1:B3", "Sales", "Sales", columns, 2, "", 1, 0, &index), 0);
+  // Growing rows is fine; growing columns would orphan the column list.
+  EXPECT_EQ(fm_workbook_table_update(wb.handle, index, "A1:B9", "", 1, 0), 0);
+  EXPECT_NE(fm_workbook_table_update(wb.handle, index, "A1:C9", "", 1, 0), 0);
+
+  const char* duplicate_columns[] = {"Product", "product"};
+  EXPECT_NE(fm_workbook_table_create(wb.handle, 0, "D1:E3", "Other", "Other", duplicate_columns, 2, "", 1, 0, &index),
+            0);
+}
+
 TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

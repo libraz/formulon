@@ -123,6 +123,21 @@ export interface TableEntry {
   sheetIndex?: number;
 }
 
+/** Authoring input for a worksheet table. `columns` must have exactly one
+ * name per column in `ref`; `styleName` follows Excel's built-in TableStyle
+ * names. With `headerRow` (the default), the caller still writes the header
+ * cells: Excel expects the first row of `ref` to hold the column names. */
+export interface TableInput {
+  sheetIndex: number;
+  ref: string;
+  name: string;
+  displayName?: string;
+  columns: string[];
+  styleName?: string;
+  headerRow?: boolean;
+  totalsRow?: boolean;
+}
+
 /** Return type of `Workbook.passthroughAt(idx)`. */
 export interface PassthroughEntry {
   status: Status;
@@ -863,6 +878,11 @@ export interface CellXfResult {
   horizontalAlign: number;
   verticalAlign: number;
   wrapText: boolean;
+  /** OOXML `justifyLastLine`; effective with distributed horizontal alignment. */
+  justifyLastLine: boolean;
+  /** Index into `<cellStyleXfs>` of the named style this format inherits
+   *  from. Always 0 for a record read back from `getCellStyleXf`. */
+  xfId?: number;
 }
 
 /** Plain-data shape of a font record. Mirrors `formulon::io::FontRecord`. */
@@ -920,6 +940,12 @@ export interface CellXf {
   /** 0=top, 1=center, 2=bottom, 3=justify, 4=distributed. */
   verticalAlign: number;
   wrapText: boolean;
+  /** OOXML `justifyLastLine`; effective with distributed alignment. Defaults to false. */
+  justifyLastLine?: boolean;
+  /** Index of the named style in `<cellStyleXfs>` this format inherits from.
+   *  Only meaningful for `addXf`; must name an entry created by
+   *  `addCellStyleXf`. Defaults to 0. */
+  xfId?: number;
 }
 
 /** Return type of `Workbook.getFont(fontIndex)`. */
@@ -1053,6 +1079,13 @@ export interface PartialRecalcResult {
   status: Status;
   /** Number of cells the engine actually evaluated. */
   recomputed: number;
+}
+
+/** Result of `Workbook.getSheetAutoFilterXml`. The empty `xml` string means
+ * that the sheet has no AutoFilter definition. */
+export interface SheetAutoFilterXmlResult {
+  status: Status;
+  xml: string;
 }
 
 /** Iterative-solver progress callback. Receives the current
@@ -1189,6 +1222,17 @@ export interface Workbook {
 
   tableCount(): number;
   tableAt(idx: number): TableEntry;
+  createTable(input: TableInput): AddStyleResult;
+  /** Replaces the table's range and visual style. The new `ref` must keep
+   *  the table's existing column count; an empty `styleName` clears the
+   *  style. */
+  updateTable(idx: number, input: Pick<TableInput, 'ref' | 'styleName' | 'headerRow' | 'totalsRow'>): Status;
+  removeTable(idx: number): Status;
+
+  /** Reads the complete worksheet-level `<autoFilter>` XML fragment. */
+  getSheetAutoFilterXml(sheet: number): SheetAutoFilterXmlResult;
+  /** Replaces the worksheet-level `<autoFilter>` XML fragment; empty clears it. */
+  setSheetAutoFilterXml(sheet: number, xml: string): Status;
 
   passthroughCount(): number;
   passthroughAt(idx: number): PassthroughEntry;
@@ -1483,6 +1527,14 @@ export interface Workbook {
   /** Returns the named-style xf record at `index`. Output shape mirrors
    *  `getCellXf`. */
   getCellStyleXf(index: number): CellXfResult;
+  /** Appends (deduplicating) a named-style xf and returns its
+   *  `<cellStyleXfs>` index, which is what `setCellStyle` and
+   *  `CellXf.xfId` reference. */
+  addCellStyleXf(record: CellXf): AddStyleResult;
+  /** Adds or replaces the `<cellStyle>` entry named `name`. `builtinId` is
+   *  an OOXML ordinal `0..47`, or `0xFFFFFFFF` for a custom style; it is
+   *  required because the binding takes a fixed argument count. */
+  setCellStyle(name: string, xfId: number, builtinId: number): Status;
 
   /** Returns every external-link record carried by the workbook in
    *  `<externalReferences>` document order. Empty for fresh workbooks

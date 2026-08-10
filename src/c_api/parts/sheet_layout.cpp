@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -23,6 +24,29 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
 
 namespace {
+
+// Shallow shape check for a worksheet `<autoFilter>` fragment. Filter
+// criteria and extension payloads are preserved verbatim, so the engine
+// only confirms that the caller passed one complete `autoFilter` element
+// rather than an inner fragment or a differently named element; the
+// remaining schema validation belongs to Excel / OOXML consumers.
+bool is_auto_filter_fragment(const std::string& fragment) {
+  constexpr std::string_view kOpen = "<autoFilter";
+  constexpr std::string_view kClose = "</autoFilter>";
+  if (fragment.compare(0, kOpen.size(), kOpen) != 0) {
+    return false;
+  }
+  // The element name must end here rather than continue into another one,
+  // so `<autoFilterColumn .../>` is not mistaken for an `<autoFilter>`.
+  const char after = fragment[kOpen.size()];
+  if (after != ' ' && after != '\t' && after != '\n' && after != '\r' && after != '/' && after != '>') {
+    return false;
+  }
+  const bool self_closed = fragment.size() >= 2U && fragment.compare(fragment.size() - 2U, 2U, "/>") == 0;
+  const bool tag_closed =
+      fragment.size() >= kClose.size() && fragment.compare(fragment.size() - kClose.size(), kClose.size(), kClose) == 0;
+  return self_closed || tag_closed;
+}
 
 // Splits any pre-existing column entries that intersect `[first, last]`
 // so the resulting `columns` vector contains at most one entry whose
@@ -307,6 +331,40 @@ extern "C" fm_status_t fm_sheet_get_view_ex(const fm_workbook_t* wb, size_t shee
   out->right_to_left = v.right_to_left ? 1 : 0;
   out->tab_selected = v.tab_selected ? 1 : 0;
   out->view_mode = v.view_mode.c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml) {
+  clear_last_error();
+  if (out_xml == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_get_auto_filter_xml: NULL out_xml");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_auto_filter_xml"); rc != 0) {
+    return rc;
+  }
+  fm_workbook_t* mutable_wb = const_cast<fm_workbook_t*>(wb);
+  mutable_wb->read_scratch.clear();
+  mutable_wb->read_scratch.emplace_back(wb->workbook().sheet(sheet_index).auto_filter_xml());
+  *out_xml = mutable_wb->read_scratch.back().c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
+  clear_last_error();
+  if (xml == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_sheet_set_auto_filter_xml: NULL xml");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_set_auto_filter_xml"); rc != 0) {
+    return rc;
+  }
+  const std::string fragment(xml);
+  if (!fragment.empty() && !is_auto_filter_fragment(fragment)) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_sheet_set_auto_filter_xml: expected an autoFilter XML fragment");
+  }
+  wb->workbook().sheet(sheet_index).set_auto_filter_xml(fragment);
   return 0;
 }
 
