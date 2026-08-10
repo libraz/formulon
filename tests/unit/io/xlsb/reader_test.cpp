@@ -651,6 +651,67 @@ TEST(XlsbReader, MissingContentTypesIsContentTypeInvalid) {
   EXPECT_EQ(result.error().code, FormulonErrorCode::kIoContentTypeInvalid);
 }
 
+// ---------------------------------------------------------------------------
+// Lossy-load detection: parts typed through a content-type Default are
+// neither modelled nor captured as passthrough, so they disappear on the
+// way back out. The count is what keeps that from being silent.
+// ---------------------------------------------------------------------------
+
+TEST(XlsbReader, DefaultTypedPartsAreReportedAsDropped) {
+  std::string content_types(
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+      "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+      "<Default Extension=\"bin\" ContentType=\"application/vnd.ms-excel.sheet.binary.macroEnabled.main\"/>"
+      "<Default Extension=\"png\" ContentType=\"image/png\"/>"
+      "<Override PartName=\"/xl/workbook.bin\" "
+      "ContentType=\"application/vnd.ms-excel.sheet.binary.macroEnabled.main\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet1.bin\" "
+      "ContentType=\"application/vnd.ms-excel.binIndexWs\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet2.bin\" "
+      "ContentType=\"application/vnd.ms-excel.binIndexWs\"/>"
+      "</Types>");
+
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(content_types)});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(2.0)});
+  // Typed by the `png` Default rather than an Override: the passthrough
+  // sweep never sees it.
+  parts.push_back({"xl/media/image1.png", StringToBytes("\x89PNG\r\n\x1a\n")});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  EXPECT_EQ(result.value().dropped_part_count, 1U) << "Default-typed media part should be reported as dropped";
+  // It is genuinely absent from the model, not merely uncounted.
+  for (const PassthroughPart& part : result.value().workbook.passthrough_parts()) {
+    EXPECT_NE(part.path, "xl/media/image1.png");
+  }
+}
+
+TEST(XlsbReader, FullyModelledPackageReportsNoDroppedParts) {
+  // Every entry is either consumed by the reader or captured as an
+  // Override passthrough, so a lossless package must not raise the flag.
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(123.5)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinIsst(0)});
+  parts.push_back({"xl/sharedStrings.bin", SharedStringsBin("hello world")});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+  EXPECT_EQ(result.value().dropped_part_count, 0U);
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

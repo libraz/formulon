@@ -1767,13 +1767,55 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   }
   std::sort(unknown_parts.begin(), unknown_parts.end(),
             [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
+
+  // 8b. Lossy-load detection. The sweep above walks `[Content_Types].xml`
+  // Override entries only, so a part typed through an extension Default
+  // (media, embedded OLE, printer settings, a rels file belonging to a
+  // part the binary reader does not model) is neither understood nor
+  // captured. Saving the workbook back out then drops it with nothing to
+  // show for it. Keeping such a part needs a package inventory this
+  // reader does not maintain; counting and reporting them is what stops
+  // the loss from being silent, and gives callers a signal to refuse a
+  // save when fidelity matters.
+  std::uint32_t dropped_part_count = 0;
+  {
+    std::unordered_set<std::string> captured_parts;
+    captured_parts.reserve(unknown_parts.size());
+    for (const PassthroughPart& part : unknown_parts) {
+      captured_parts.insert(part.path);
+    }
+    std::string first_dropped;
+    for (const std::string& entry : zip.list_entries()) {
+      // Directory markers carry no payload.
+      if (entry.empty() || entry.back() == '/') {
+        continue;
+      }
+      if (consumed_parts.find(entry) != consumed_parts.end() || captured_parts.find(entry) != captured_parts.end()) {
+        continue;
+      }
+      if (dropped_part_count == 0) {
+        first_dropped = entry;
+      }
+      ++dropped_part_count;
+    }
+    if (dropped_part_count != 0) {
+      StructuredLog("xlsb.package.parts_dropped")
+          .field("count", static_cast<std::int64_t>(dropped_part_count))
+          .field("first_part", first_dropped)
+          .field("reason", std::string_view("part is not Override-typed, so it is neither modelled nor captured "
+                                            "and will not survive a save"))
+          .warn();
+    }
+  }
+
   // The workbook is the sole owner; the read result does not mirror the
   // payload. See `XlsbReadResult`.
   wb.set_passthrough_parts(std::move(unknown_parts));
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
 
-  XlsbReadResult result{std::move(wb), cells_read, undecoded_formula_count, undecoded_defined_name_count};
+  XlsbReadResult result{std::move(wb), cells_read, undecoded_formula_count, undecoded_defined_name_count,
+                        dropped_part_count};
   return result;
 }
 

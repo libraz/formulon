@@ -75,6 +75,14 @@ struct XlsbReadResult {
   std::uint32_t cells_read = 0;
   std::uint32_t undecoded_formula_count = 0;
   std::uint32_t undecoded_defined_name_count = 0;
+  /// Package entries that were neither modelled nor captured as
+  /// passthrough, and will therefore be missing if this workbook is
+  /// written back out. Non-zero means the load was lossy: the reader
+  /// only captures parts listed as `[Content_Types].xml` Overrides, so
+  /// anything typed through an extension Default (media, embedded OLE,
+  /// printer settings) falls outside it. A caller that needs fidelity
+  /// should treat a non-zero count as grounds to refuse a save.
+  std::uint32_t dropped_part_count = 0;
 };
 
 /// Reads a `.xlsb` package from in-memory bytes.
