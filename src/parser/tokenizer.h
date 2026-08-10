@@ -94,6 +94,13 @@ class Tokenizer {
   // can record an error and advance by one byte.
   CodepointInfo peek_codepoint(std::size_t i) const noexcept;
 
+  // Byte offset at which `source_` reaches `max_formula_length_utf16` code
+  // units counting from `start`, or `source_.size()` when the whole input
+  // fits. Scanning stops there so that one oversized token cannot run past
+  // the cap: the main loop only re-checks the limit between tokens, and a
+  // scanner consuming a megabyte-long string literal never re-enters it.
+  std::size_t length_capped_end(std::size_t start) const noexcept;
+
   // Advances `byte_pos_` / UTF-16 offset / line / column bookkeeping by one
   // codepoint starting at `byte_pos_`.
   void advance_one();

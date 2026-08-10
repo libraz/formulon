@@ -315,6 +315,18 @@ const std::vector<Token>& Tokenizer::tokens() {
   // Note: BOM bytes are *not* counted in UTF-16 offsets, so utf16_pos_ stays
   // at 0 here. This matches Excel's "BOM is invisible" contract.
 
+  // Bound the scan to the length cap before any scanner runs. The loop
+  // below only re-checks the cap between tokens, so an input that is one
+  // enormous token (a string literal, an identifier, a quoted sheet name)
+  // would otherwise be consumed whole no matter how long it is. Trimming
+  // the view keeps every scanner inside the budget; `source_` still points
+  // into the caller's buffer, so token lexemes stay valid.
+  const std::size_t capped_end = length_capped_end(byte_pos_);
+  const bool over_length = capped_end < source_.size();
+  if (over_length) {
+    source_ = source_.substr(0, capped_end);
+  }
+
   while (byte_pos_ < source_.size()) {
     // Enforce the UTF-16 length cap. The comparison is against the offset
     // *before* consuming the next codepoint, which means the last accepted
@@ -496,6 +508,17 @@ const std::vector<Token>& Tokenizer::tokens() {
     }
   }
 
+  // Input trimmed above but never reported: the loop records the error
+  // itself when it stops on the cap between tokens, which is the common
+  // case. It does not when the trim landed mid-token (the scanner then
+  // consumed the remainder and left the loop with nothing to check), so
+  // report it here instead of letting the truncation pass silently.
+  if (over_length && !truncated_) {
+    mark_start();
+    record_error(LexerErrorCode::ExcessiveLength, byte_pos_);
+    truncated_ = true;
+  }
+
   // Always terminate with Eof. The range is a zero-width slice at the
   // current UTF-16 offset.
   Token eof;
@@ -558,6 +581,20 @@ Tokenizer::CodepointInfo Tokenizer::peek_codepoint(std::size_t i) const noexcept
   info.utf16_units = value > 0xFFFF ? 2 : 1;
   info.valid = true;
   return info;
+}
+
+std::size_t Tokenizer::length_capped_end(std::size_t start) const noexcept {
+  std::uint32_t units = 0;
+  std::size_t pos = start;
+  while (pos < source_.size()) {
+    if (units >= opts_.max_formula_length_utf16) {
+      return pos;
+    }
+    const CodepointInfo info = peek_codepoint(pos);
+    pos += info.byte_len == 0 ? 1 : info.byte_len;
+    units += info.utf16_units;
+  }
+  return source_.size();
 }
 
 void Tokenizer::advance_one() {

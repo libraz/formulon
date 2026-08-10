@@ -505,35 +505,43 @@ TEST(RegexCrossCutting, ErrorInReplacementPropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(RegexCrossCutting, PatternTooLongIsValueError) {
-  // Build a 32 768-byte pattern (one over the cap). Use literal "a"
-  // bytes — REPT in the formula is parsed as a function call, so we
-  // construct the pattern at C++ level and feed it through a literal.
+TEST(RegexCrossCutting, PatternPastCapIsRejectedWhileLexing) {
+  // A pattern one byte past the 32 767-character cap can only be written
+  // as a literal, and that literal makes the formula longer than the
+  // tokenizer's own UTF-16 length cap. Since the cap bounds a single
+  // token as well as the token stream, the source is rejected while
+  // lexing and the pattern never reaches PCRE2 -- so the engine-side
+  // length guard is unreachable from a formula rather than untested.
   std::string pat(32768, 'a');
   std::string src = "=REGEXTEST(\"abc\", \"";
   src += pat;
   src += "\")";
-  const Value v = EvalSource(src);
+  static thread_local Arena parse_arena;
+  parse_arena.reset();
+  parser::Parser p(src, parse_arena);
+  (void)p.parse();
+  EXPECT_FALSE(p.errors().empty());
+}
+
+TEST(RegexCrossCutting, PatternPastCapIsValueError) {
+  // Build the over-long pattern at evaluation time. Writing it as a
+  // literal would push the formula source past the tokenizer's own
+  // length cap, so the engine-side guard would never see it.
+  const Value v = EvalSource("=REGEXTEST(\"abc\", REPT(\"a\", 32767) & \"a\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(RegexCrossCutting, PatternAtCapBoundaryIsAccepted) {
-  // 32 767 bytes is exactly the cap; the pattern is "a{32767}" via
-  // a literal repeating "a". PCRE2 will compile it (the actual
+  // 32 767 characters is exactly the cap. PCRE2 will compile it (the
   // resulting NFA is small because PCRE2 collapses runs at compile
   // time). The compile MAY hit other limits at this scale; allow
-  // either a successful #N/A (no match against "abc") or a #VALUE!
-  // from PCRE2's own size guards. We only assert that the pattern
-  // length cap itself is not the gating error: a 32_767-byte pattern
-  // must not be rejected at the pre-compile guard.
-  std::string pat(32767, 'a');
-  std::string src = "=REGEXTEST(\"";
-  src += pat;
-  src += "\", \"";
-  src += pat;
-  src += "\")";
-  const Value v = EvalSource(src);
+  // either a successful boolean or a #VALUE! from PCRE2's own size
+  // guards. We only assert that the pattern length cap itself is not
+  // the gating error: a 32 767-character pattern must not be rejected
+  // at the pre-compile guard. The pattern is built at evaluation time
+  // for the same reason as the test above.
+  const Value v = EvalSource("=REGEXTEST(\"abc\", REPT(\"a\", 32767))");
   // Either TRUE (the long subject matches the long pattern) or some
   // PCRE2 internal bound triggers #VALUE!. Either is acceptable; we
   // are testing the pre-compile cap, not PCRE2's internal limits.

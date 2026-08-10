@@ -715,15 +715,71 @@ TEST(TokenizerSurrogatePairOffsets, EmojiInsideString) {
 TEST(TokenizerExcessiveLength, Truncates) {
   TokenizerOptions opts;
   opts.max_formula_length_utf16 = 5;
-  // 8 ASCII chars, cap at 5 UTF-16 units. The scanner consumes the first
-  // run as a single Ident (8 bytes, 8 UTF-16 units), which does not
-  // re-enter the main loop between codepoints and therefore does not trip
-  // the cap. Use whitespace so we get multiple token boundaries that hit
-  // the cap mid-stream.
+  // Token boundaries land on the cap, so the main loop stops on it.
   Tokenizer tz("A B C D E F G H", opts);
   (void)tz.tokens();
   ASSERT_FALSE(tz.errors().empty());
   EXPECT_EQ(tz.errors().front().code, LexerErrorCode::ExcessiveLength);
+}
+
+TEST(TokenizerExcessiveLength, SingleOversizedIdentifierIsCapped) {
+  TokenizerOptions opts;
+  opts.max_formula_length_utf16 = 5;
+  // One unbroken identifier: the scanner runs to the end of the input
+  // without ever re-entering the main loop, so nothing but an up-front
+  // bound can stop it at the cap.
+  Tokenizer tz("ABCDEFGHIJKLMNOP", opts);
+  const std::vector<Token>& toks = tz.tokens();
+  ASSERT_FALSE(toks.empty());
+  EXPECT_EQ(toks.front().lexeme, "ABCDE");
+  EXPECT_EQ(toks.back().kind, TokenKind::Eof);
+  EXPECT_EQ(toks.back().range.end, 5u);
+  ASSERT_FALSE(tz.errors().empty());
+  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::ExcessiveLength);
+}
+
+TEST(TokenizerExcessiveLength, SingleOversizedStringLiteralIsCapped) {
+  TokenizerOptions opts;
+  opts.max_formula_length_utf16 = 5;
+  // Same shape through the string scanner. Cutting the literal leaves it
+  // unterminated, which is the honest reading of a formula that exceeds
+  // what Excel itself accepts.
+  Tokenizer tz("\"ABCDEFGHIJKLMNOP\"", opts);
+  (void)tz.tokens();
+  ASSERT_FALSE(tz.errors().empty());
+  bool saw_excessive_length = false;
+  for (const LexerError& err : tz.errors()) {
+    saw_excessive_length = saw_excessive_length || err.code == LexerErrorCode::ExcessiveLength;
+  }
+  EXPECT_TRUE(saw_excessive_length);
+}
+
+TEST(TokenizerExcessiveLength, MultibyteRunStopsNearTheCap) {
+  TokenizerOptions opts;
+  opts.max_formula_length_utf16 = 4;
+  // Each emoji is one codepoint but two UTF-16 units, so the cap falls on
+  // a surrogate pair. Cutting on the codepoint boundary keeps the token
+  // stream well-formed rather than splitting a character in half.
+  Tokenizer tz("\"\xF0\x9F\x98\x80\xF0\x9F\x98\x80\xF0\x9F\x98\x80\"", opts);
+  (void)tz.tokens();
+  ASSERT_FALSE(tz.errors().empty());
+  bool saw_excessive_length = false;
+  for (const LexerError& err : tz.errors()) {
+    saw_excessive_length = saw_excessive_length || err.code == LexerErrorCode::ExcessiveLength;
+  }
+  EXPECT_TRUE(saw_excessive_length);
+}
+
+TEST(TokenizerExcessiveLength, InputAtExactlyTheCapIsAccepted) {
+  TokenizerOptions opts;
+  opts.max_formula_length_utf16 = 5;
+  // The bound must not fire one unit early: an identifier of exactly the
+  // cap length is a legal formula.
+  Tokenizer tz("ABCDE", opts);
+  const std::vector<Token>& toks = tz.tokens();
+  ASSERT_GE(toks.size(), 2U);
+  EXPECT_EQ(toks.front().lexeme, "ABCDE");
+  EXPECT_TRUE(tz.errors().empty());
 }
 
 }  // namespace
