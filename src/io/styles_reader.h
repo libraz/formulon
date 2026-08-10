@@ -153,6 +153,8 @@ struct CellXf {
   /// 0=top, 1=center, 2=bottom (default), 3=justify, 4=distributed.
   std::uint8_t vertical_align = 0;
   bool wrap_text = false;
+  /// OOXML `justifyLastLine`; retained verbatim so imports round-trip.
+  bool justify_last_line = false;
   /// Whether a `<protection>` child was present on the source `<xf>`.
   /// The OOXML schema default is `locked=true`, `hidden=false`; a common
   /// form ("protected sheet, a few input cells unlocked") sets

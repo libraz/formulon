@@ -419,6 +419,7 @@ void ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec) {
     rec->horizontal_align = ParseHorizontalAlign(align.attribute("horizontal").value());
     rec->vertical_align = ParseVerticalAlign(align.attribute("vertical").value());
     rec->wrap_text = align.attribute("wrapText").as_bool(false);
+    rec->justify_last_line = align.attribute("justifyLastLine").as_bool(false);
   } else {
     // Default vertical alignment is "bottom" (ordinal 2) per OOXML.
     rec->vertical_align = 2;

@@ -612,7 +612,7 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
   append_apply("quotePrefix", xf.quote_prefix);
   const char* halign = HorizontalAlignName(xf.horizontal_align);
   const char* valign = VerticalAlignName(xf.vertical_align);
-  const bool has_alignment = halign != nullptr || valign != nullptr || xf.wrap_text;
+  const bool has_alignment = halign != nullptr || valign != nullptr || xf.wrap_text || xf.justify_last_line;
   if (!has_alignment && !xf.has_protection) {
     out.append("/>\n");
     return;
@@ -632,6 +632,9 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
     }
     if (xf.wrap_text) {
       out.append(" wrapText=\"1\"");
+    }
+    if (xf.justify_last_line) {
+      out.append(" justifyLastLine=\"1\"");
     }
     out.append("/>");
   }
