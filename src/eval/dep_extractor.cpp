@@ -157,6 +157,25 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
 // Forward decl for the recursive walker.
 void walk(const parser::AstNode& node, WalkState& state);
 
+// Walks a LAMBDA body as an *invoked* body. Parameter names are pushed
+// onto the shadow stack for the duration so a parameter that collides
+// with a workbook-scoped defined name short-circuits the `NameRef`
+// expander instead of dragging that name's dependencies in.
+//
+// Only call this where the body is genuinely evaluated. A bare lambda
+// *value* is not (see the `Lambda` case in `walk()`), and walking it
+// would invent dependencies the formula never reads.
+void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
+  const std::uint32_t param_count = lambda.as_lambda_param_count();
+  for (std::uint32_t i = 0; i < param_count; ++i) {
+    state.name_stack.push_back(strings::to_ascii_lower(lambda.as_lambda_param(i)));
+  }
+  walk(lambda.as_lambda_body(), state);
+  for (std::uint32_t i = 0; i < param_count; ++i) {
+    state.name_stack.pop_back();
+  }
+}
+
 // Expands a defined-name reference: parses its formula text in the
 // extractor-local arena and recurses into the resulting AST through the
 // shared `walk()`. Cycles (`Loop = Loop + 1`, `A = B; B = A`) are detected
@@ -520,21 +539,19 @@ void walk(const parser::AstNode& node, WalkState& state) {
         // Directly-invoked lambda (`=LAMBDA(x, x+A1)(5)`): unlike a bare
         // lambda *value*, the body IS evaluated here, so its cell refs and
         // volatile calls are genuine dependencies that must reach the graph.
-        // Walk the body with the parameter names shadowed — pushing them onto
-        // `name_stack` makes a parameter that collides with a workbook-scoped
-        // defined name short-circuit the `NameRef` expander instead of
-        // pulling in that name's dependencies.
-        const std::uint32_t param_count = callee.as_lambda_param_count();
-        for (std::uint32_t i = 0; i < param_count; ++i) {
-          state.name_stack.push_back(strings::to_ascii_lower(callee.as_lambda_param(i)));
-        }
-        walk(callee.as_lambda_body(), state);
-        for (std::uint32_t i = 0; i < param_count; ++i) {
-          state.name_stack.pop_back();
-        }
+        walk_invoked_lambda_body(callee, state);
       } else {
-        // Named / computed callee (e.g. a defined-name lambda): walk it
-        // generically so embedded refs and volatile calls still surface.
+        // Named / computed callee: walk it generically so embedded refs
+        // and volatile calls still surface.
+        //
+        // A workbook-scoped name holding a lambda (`=MyLambda(5)` where
+        // `MyLambda` is `LAMBDA(x, x+A1)`) does not arrive here at all:
+        // `Name(args)` parses as a `Call`, and the evaluator resolves a
+        // callee name against the lexical `NameEnv` only, so a defined
+        // name holding a lambda is never invoked. Tracking A1 as a
+        // dependency of such a call would describe an evaluation that
+        // does not happen; the gap to close first is on the evaluator
+        // side, not here.
         walk(callee, state);
       }
       const std::uint32_t arity = node.as_lambda_call_arity();
