@@ -56,6 +56,7 @@ TEST(PivotTypes, PivotFilterDefault) {
   EXPECT_EQ(f.axis, PivotAxis::Row);
   EXPECT_TRUE(f.field_name.empty());
   EXPECT_EQ(f.type, FilterType::ValueTop10);
+  EXPECT_EQ(f.data_field_index, 0U);
   // Variant default-constructs to its first alternative (int = 0).
   ASSERT_EQ(f.value.index(), 0u);
   EXPECT_EQ(std::get<int>(f.value), 0);

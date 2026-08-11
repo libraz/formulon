@@ -1141,6 +1141,71 @@ TEST(PivotEvaluator, ValueTop10FilterOnColAxis) {
   }
 }
 
+TEST(PivotEvaluator, ValueFilterSelectsDataFieldAndInvalidSelectorIsNoOp) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"MeasureA", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"MeasureB", {}});
+  auto add = [&](const char* region, double a, double b) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(Value::number(a));
+    rec.cells.push_back(Value::number(b));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("A", 100.0, 1.0);
+  add("B", 50.0, 100.0);
+
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  PivotField region_field;
+  region_field.source_name = "Region";
+  region_field.axis = PivotAxis::Row;
+  PivotField measure_a_field;
+  measure_a_field.source_name = "MeasureA";
+  measure_a_field.axis = PivotAxis::Value;
+  PivotField measure_b_field;
+  measure_b_field.source_name = "MeasureB";
+  measure_b_field.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(region_field));
+  table.mutable_fields().push_back(std::move(measure_a_field));
+  table.mutable_fields().push_back(std::move(measure_b_field));
+  table.mutable_row_field_order() = {0};
+  PivotDataField measure_a;
+  measure_a.name = "A";
+  measure_a.field_index = 1;
+  measure_a.aggregation = Aggregation::Sum;
+  PivotDataField measure_b;
+  measure_b.name = "B";
+  measure_b.field_index = 2;
+  measure_b.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(measure_a));
+  table.mutable_data_fields().push_back(std::move(measure_b));
+
+  PivotFilter selected;
+  selected.axis = PivotAxis::Row;
+  selected.field_name = "Region";
+  selected.type = FilterType::ValueTop10;
+  selected.value = 1;
+  selected.data_field_index = 1;
+  table.mutable_active_filters().push_back(selected);
+
+  auto selected_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(selected_or)) << selected_or.error().message;
+  ASSERT_EQ(selected_or.value().rows.size(), 1U);
+  EXPECT_EQ(selected_or.value().rows[0].label, "B");
+
+  // A direct C++ model can still contain a stale selector; evaluation must
+  // leave the report untouched rather than dropping every leaf.
+  table.mutable_active_filters()[0].data_field_index = 2;
+  auto invalid_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(invalid_or)) << invalid_or.error().message;
+  ASSERT_EQ(invalid_or.value().rows.size(), 2U);
+  EXPECT_EQ(invalid_or.value().rows[0].label, "A");
+  EXPECT_EQ(invalid_or.value().rows[1].label, "B");
+}
+
 // ---------------------------------------------------------------------------
 // 8e. Show values as (% of row / col / total / running total / index)
 // ---------------------------------------------------------------------------

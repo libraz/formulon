@@ -47,10 +47,12 @@ struct AxisScores {
 /// Sums leaf scores along the row axis (one entry per row leaf,
 /// reducing across the column axis). Used to back row-axis value
 /// filters such as `ValueTop10` and `ValueGreaterThan`.
-AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std::size_t col_count);
+AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std::size_t col_count,
+                          std::size_t data_field_index = 0);
 
 /// Mirror of `score_row_axis` for the column axis.
-AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std::size_t row_count);
+AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std::size_t row_count,
+                          std::size_t data_field_index = 0);
 
 /// Builds a per-leaf keep mask for `f`. Returns `nullopt` for filter
 /// shapes that should degrade to a no-op (e.g. unbounded `ValueBetween`).

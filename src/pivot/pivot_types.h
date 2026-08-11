@@ -152,6 +152,10 @@ struct PivotFilter {
   /// signals "unbounded above"; range filters with no upper bound
   /// degrade to a no-op.
   std::variant<std::monostate, int, double> value_high;
+  /// Index into `PivotTable::data_fields()` whose aggregate is scored by a
+  /// value filter. Label/date filters ignore this selector. Keeping the
+  /// default at zero preserves the original single-measure behaviour.
+  std::uint32_t data_field_index = 0;
 };
 
 /// Sort directive for a pivot field.

@@ -169,15 +169,15 @@ bool label_filter_passes(const PivotFilter& f, std::string_view label) {
 
 enum class ScoreAxis { Row, Col };
 
-Value leaf_score(const PivotResult& result, std::size_t r, std::size_t c) {
-  if (r >= result.values.size() || c >= result.values[r].size() || result.values[r][c].empty()) {
+Value leaf_score(const PivotResult& result, std::size_t r, std::size_t c, std::size_t data_field_index) {
+  if (r >= result.values.size() || c >= result.values[r].size() || data_field_index >= result.values[r][c].size()) {
     return Value::blank();
   }
-  return result.values[r][c][0];
+  return result.values[r][c][data_field_index];
 }
 
 AxisScores score_axis(const PivotResult& result, ScoreAxis score_axis, std::size_t axis_count,
-                      std::size_t cross_axis_count) {
+                      std::size_t cross_axis_count, std::size_t data_field_index) {
   AxisScores axis{{}, {}};
   axis.scores.assign(axis_count, 0.0);
   axis.all_blank.assign(axis_count, true);
@@ -185,7 +185,7 @@ AxisScores score_axis(const PivotResult& result, ScoreAxis score_axis, std::size
     for (std::size_t j = 0; j < cross_axis_count; ++j) {
       const std::size_t r = score_axis == ScoreAxis::Row ? i : j;
       const std::size_t c = score_axis == ScoreAxis::Row ? j : i;
-      if (auto n = numeric_aggregate_value(leaf_score(result, r, c))) {
+      if (auto n = numeric_aggregate_value(leaf_score(result, r, c, data_field_index))) {
         axis.scores[i] += *n;
         axis.all_blank[i] = false;
       }
@@ -236,12 +236,14 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
   return true;
 }
 
-AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std::size_t col_count) {
-  return score_axis(result, ScoreAxis::Row, row_count, col_count);
+AxisScores score_row_axis(const PivotResult& result, std::size_t row_count, std::size_t col_count,
+                          std::size_t data_field_index) {
+  return score_axis(result, ScoreAxis::Row, row_count, col_count, data_field_index);
 }
 
-AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std::size_t row_count) {
-  return score_axis(result, ScoreAxis::Col, col_count, row_count);
+AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std::size_t row_count,
+                          std::size_t data_field_index) {
+  return score_axis(result, ScoreAxis::Col, col_count, row_count, data_field_index);
 }
 
 std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis) {

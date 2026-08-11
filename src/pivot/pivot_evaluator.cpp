@@ -488,6 +488,13 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
     if (data_field_count == 0) {
       continue;
     }
+    // A value filter names the measure whose aggregate determines ranking.
+    // Invalid selectors are deliberately a no-op for filters constructed
+    // directly against the C++ model; public binding APIs reject them before
+    // mutation.
+    if (f.data_field_index >= data_field_count) {
+      continue;
+    }
     if (f.axis == PivotAxis::Row && !table.row_field_order().empty()) {
       // `n` is the number of row leaves (DFS pre-order), which is what
       // `result.values` is indexed by; `result.rows.size()` would be the
@@ -497,8 +504,8 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       if (n == 0) {
         continue;
       }
-      const auto keep_or =
-          build_value_filter_keep(f, score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count));
+      const auto keep_or = build_value_filter_keep(
+          f, score_row_axis(result, n, col_levels.empty() ? 1u : col_leaf_count, f.data_field_index));
       if (!keep_or) {
         continue;
       }
@@ -520,7 +527,7 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
         continue;
       }
       const std::size_t row_n = row_levels.empty() ? 1u : result.values.size();
-      const auto keep_or = build_value_filter_keep(f, score_col_axis(result, n, row_n));
+      const auto keep_or = build_value_filter_keep(f, score_col_axis(result, n, row_n, f.data_field_index));
       if (!keep_or) {
         continue;
       }
