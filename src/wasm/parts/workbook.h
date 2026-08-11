@@ -50,6 +50,8 @@ class JsWorkbook {
   /// (`fm_workbook_format_t` ordinal: 1 = xlsx, 2 = xlsb). Unknown /
   /// undocumented values return `kInvalidArgument` via `status`.
   JsSaveResult saveEx(int32_t format) const;
+  JsSaveDiagnosticsResult saveExWithDiagnostics(int32_t format) const;
+  JsXlsbReadDiagnosticsResult xlsbReadDiagnostics() const;
 
   // ---- Sheet management ---------------------------------------------------
 

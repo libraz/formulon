@@ -13,6 +13,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inflateRawSync } from 'node:zlib';
 
 // fm_value_kind_t mirror (see src/c_api/formulon_c.h).
 const VAL = Object.freeze({
@@ -131,6 +132,101 @@ function zipStore(parts) {
   pushU16(out, entries.length);
   pushU32(out, central.length);
   pushU32(out, centralOffset);
+  pushU16(out, 0);
+  return new Uint8Array(out);
+}
+
+function readZipEntryText(bytes, wantedName) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = bytes.length - 22;
+  while (eocd >= 0 && view.getUint32(eocd, true) !== 0x06054b50) eocd -= 1;
+  assert.ok(eocd >= 0, 'missing ZIP end record');
+  const count = view.getUint16(eocd + 10, true);
+  const centralSize = view.getUint32(eocd + 12, true);
+  const centralOffset = view.getUint32(eocd + 16, true);
+  const decoder = new TextDecoder();
+  let cursor = centralOffset;
+  const wanted = String(wantedName);
+  for (let i = 0; i < count; i += 1) {
+    assert.ok(cursor < centralOffset + centralSize, 'ZIP central directory exceeds its declared size');
+    assert.equal(view.getUint32(cursor, true), 0x02014b50, 'invalid ZIP central entry');
+    const method = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const uncompressedSize = view.getUint32(cursor + 24, true);
+    const nameSize = view.getUint16(cursor + 28, true);
+    const extraSize = view.getUint16(cursor + 30, true);
+    const commentSize = view.getUint16(cursor + 32, true);
+    const localOffset = view.getUint32(cursor + 42, true);
+    const name = decoder.decode(bytes.slice(cursor + 46, cursor + 46 + nameSize));
+    if (name === wanted) {
+      assert.ok(localOffset + 30 <= bytes.length);
+      const localNameSize = view.getUint16(localOffset + 26, true);
+      const localExtraSize = view.getUint16(localOffset + 28, true);
+      const start = localOffset + 30 + localNameSize + localExtraSize;
+      const compressed = bytes.slice(start, start + compressedSize);
+      const body = method === 0 ? compressed : Uint8Array.from(inflateRawSync(compressed));
+      assert.equal(body.length, uncompressedSize);
+      return decoder.decode(body);
+    }
+    cursor += 46 + nameSize + extraSize + commentSize;
+  }
+  assert.fail(`ZIP entry not found: ${wanted}`);
+}
+
+function appendEmptyZipEntry(bytes, name) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = bytes.length - 22;
+  while (eocd >= 0 && view.getUint32(eocd, true) !== 0x06054b50) eocd -= 1;
+  assert.ok(eocd >= 0, 'missing ZIP end record');
+  const count = view.getUint16(eocd + 10, true);
+  const centralSize = view.getUint32(eocd + 12, true);
+  const centralOffset = view.getUint32(eocd + 16, true);
+  const oldCentral = bytes.slice(centralOffset, centralOffset + centralSize);
+  const encodedName = utf8.encode(name);
+  const local = [];
+  pushU32(local, 0x04034b50);
+  pushU16(local, 20);
+  pushU16(local, 0);
+  pushU16(local, 0);
+  pushU16(local, 0);
+  pushU16(local, 0);
+  pushU32(local, 0);
+  pushU32(local, 0);
+  pushU32(local, 0);
+  pushU16(local, encodedName.length);
+  pushU16(local, 0);
+  pushBytes(local, encodedName);
+  const central = [];
+  pushU32(central, 0x02014b50);
+  pushU16(central, 20);
+  pushU16(central, 20);
+  pushU16(central, 0);
+  pushU16(central, 0);
+  pushU16(central, 0);
+  pushU16(central, 0);
+  pushU32(central, 0);
+  pushU32(central, 0);
+  pushU32(central, 0);
+  pushU16(central, encodedName.length);
+  pushU16(central, 0);
+  pushU16(central, 0);
+  pushU16(central, 0);
+  pushU16(central, 0);
+  pushU32(central, 0);
+  pushU32(central, centralOffset);
+  pushBytes(central, encodedName);
+  const out = [];
+  pushBytes(out, bytes.slice(0, centralOffset));
+  pushBytes(out, local);
+  pushBytes(out, oldCentral);
+  pushBytes(out, central);
+  pushU32(out, 0x06054b50);
+  pushU16(out, 0);
+  pushU16(out, 0);
+  pushU16(out, count + 1);
+  pushU16(out, count + 1);
+  pushU32(out, centralSize + central.length);
+  pushU32(out, centralOffset + local.length);
   pushU16(out, 0);
   return new Uint8Array(out);
 }
@@ -379,6 +475,64 @@ async function run() {
     }
   });
 
+  test('table update omits fields without resetting existing metadata', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const created = wb.createTable({
+        sheetIndex: 0,
+        ref: 'A1:B3',
+        name: 'Sales',
+        columns: ['Product', 'Amount'],
+        styleName: 'TableStyleMedium2',
+        headerRow: false,
+        totalsRow: true,
+      });
+      assert.ok(created.status.ok, `createTable failed: ${JSON.stringify(created.status)}`);
+      const before = wb.tableAt(created.index);
+      assert.ok(before.status.ok);
+      assert.equal(before.ref, 'A1:B3');
+
+      const beforeSaved = wb.save();
+      assert.ok(beforeSaved.status.ok);
+      const beforeXml = readZipEntryText(beforeSaved.bytes, 'xl/tables/table1.xml');
+      assert.match(beforeXml, /name="TableStyleMedium2"/);
+      assert.match(beforeXml, /headerRowCount="0"/);
+      assert.match(beforeXml, /totalsRowCount="1"/);
+
+      // An empty update object is a partial no-op. This specifically covers
+      // the WASM-to-C mapping of omitted ref/style/row flags to preservation
+      // sentinels rather than empty/false defaults.
+      assert.ok(wb.updateTable(created.index, {}).ok);
+      const after = wb.tableAt(created.index);
+      assert.ok(after.status.ok);
+      assert.equal(after.ref, before.ref);
+
+      const saved = wb.save();
+      assert.ok(saved.status.ok, `save failed: ${JSON.stringify(saved.status)}`);
+      const afterXml = readZipEntryText(saved.bytes, 'xl/tables/table1.xml');
+      assert.match(afterXml, /name="TableStyleMedium2"/);
+      assert.match(afterXml, /headerRowCount="0"/);
+      assert.match(afterXml, /totalsRowCount="1"/);
+      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      try {
+        assert.ok(loaded.isValid(), `load failed: ${Module.lastErrorMessage()}`);
+        const reloaded = loaded.tableAt(created.index);
+        assert.ok(reloaded.status.ok);
+        assert.equal(reloaded.ref, 'A1:B3');
+        const roundTripped = loaded.save();
+        assert.ok(roundTripped.status.ok);
+        const roundTrippedXml = readZipEntryText(roundTripped.bytes, 'xl/tables/table1.xml');
+        assert.match(roundTrippedXml, /name="TableStyleMedium2"/);
+        assert.match(roundTrippedXml, /headerRowCount="0"/);
+        assert.match(roundTrippedXml, /totalsRowCount="1"/);
+      } finally {
+        loaded.delete();
+      }
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('save() + Workbook.loadBytes() round-trip preserves a literal', () => {
     const wb = Module.Workbook.createDefault();
     let saved = null;
@@ -410,6 +564,66 @@ async function run() {
     }
   });
 
+  test('saveExWithDiagnostics() and xlsbReadDiagnostics() expose stable counters', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+      assert.ok(
+        wb.addValidation(0, {
+          ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+          type: 3,
+          formula1: '"Yes,No"',
+        }).ok,
+      );
+      assert.ok(
+        wb.addConditionalFormat(0, {
+          sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+          type: 1,
+          op: 5,
+          formula1: '10',
+          dxfId: 0,
+          stopIfTrue: false,
+        }).status.ok,
+      );
+      const xlsx = wb.saveExWithDiagnostics(1);
+      assert.ok(xlsx.status.ok, `xlsx save failed: ${JSON.stringify(xlsx.status)}`);
+      assert.equal(xlsx.downgradedFormulaCount, 0);
+      assert.equal(xlsx.deferredFeatureCount, 0);
+
+      const xlsb = wb.saveExWithDiagnostics(2);
+      assert.ok(xlsb.status.ok, `xlsb save failed: ${JSON.stringify(xlsb.status)}`);
+      assert.equal(xlsb.downgradedFormulaCount, 1);
+      assert.ok(xlsb.deferredFeatureCount >= 2);
+
+      const loaded = Module.Workbook.loadBytes(xlsb.bytes);
+      try {
+        const read = loaded.xlsbReadDiagnostics();
+        assert.ok(read.status.ok, `read diagnostics failed: ${JSON.stringify(read.status)}`);
+        assert.equal(read.undecodedFormulaCount, 0);
+        assert.equal(read.undecodedDefinedNameCount, 0);
+        assert.equal(read.droppedPartCount, 0);
+      } finally {
+        loaded.delete();
+      }
+      const droppedLoaded = Module.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/dropped.bin'));
+      try {
+        const dropped = droppedLoaded.xlsbReadDiagnostics();
+        assert.ok(dropped.status.ok, `dropped-part diagnostics failed: ${JSON.stringify(dropped.status)}`);
+        assert.equal(dropped.droppedPartCount, 1);
+      } finally {
+        droppedLoaded.delete();
+      }
+      const invalidSave = wb.saveExWithDiagnostics(0);
+      assert.ok(!invalidSave.status.ok, `unknown format unexpectedly succeeded: ${JSON.stringify(invalidSave)}`);
+      assert.equal(invalidSave.bytes, null);
+      assert.equal(invalidSave.downgradedFormulaCount, 0);
+      assert.equal(invalidSave.deferredFeatureCount, 0);
+      assert.ok(wb.saveEx(2).status.ok);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('Workbook.loadBytes reports empty input instead of leaving stale diagnostics', () => {
     const wb = Module.Workbook.loadBytes(new Uint8Array());
     try {
@@ -425,6 +639,19 @@ async function run() {
     try {
       assert.equal(wb.isValid(), false);
       assert.match(Module.lastErrorMessage(), /NULL or empty input/);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('invalid workbook read diagnostics return a zeroed failure envelope', () => {
+    const wb = Module.Workbook.loadBytes(new Uint8Array());
+    try {
+      const read = wb.xlsbReadDiagnostics();
+      assert.ok(!read.status.ok, `invalid handle unexpectedly succeeded: ${JSON.stringify(read)}`);
+      assert.equal(read.undecodedFormulaCount, 0);
+      assert.equal(read.undecodedDefinedNameCount, 0);
+      assert.equal(read.droppedPartCount, 0);
     } finally {
       wb.delete();
     }
@@ -768,6 +995,60 @@ async function run() {
       assert.equal(reread.fontIndex, f1.index);
       assert.equal(reread.numFmtId, custom.numFmtId);
       assert.equal(reread.wrapText, true);
+      assert.equal(reread.hasAlignment, true);
+      assert.equal(reread.hasHorizontalAlign, true);
+      assert.equal(reread.hasVerticalAlign, true);
+      assert.equal(reread.hasWrapText, true);
+      assert.equal(reread.hasJustifyLastLine, false);
+
+      const optional = wb.addXf({
+        fontIndex: f1.index,
+        fillIndex: fill.index,
+        borderIndex: border.index,
+        numFmtId: custom.numFmtId,
+        textRotation: 255,
+        indent: 0,
+        relativeIndent: -3,
+        shrinkToFit: false,
+        readingOrder: 0,
+        justifyLastLine: true,
+      });
+      assert.ok(optional.status.ok, `optional alignment: ${JSON.stringify(optional.status)}`);
+      const optionalRead = wb.getCellXf(optional.index);
+      assert.ok(optionalRead.status.ok);
+      assert.equal(optionalRead.textRotation, 255);
+      assert.equal(optionalRead.indent, 0);
+      assert.equal(optionalRead.relativeIndent, -3);
+      assert.equal(optionalRead.shrinkToFit, false);
+      assert.equal(optionalRead.readingOrder, 0);
+      assert.equal(optionalRead.justifyLastLine, true);
+      assert.equal(optionalRead.hasAlignment, true);
+      assert.equal(optionalRead.hasJustifyLastLine, true);
+      assert.equal(wb.addXf(optionalRead).index, optional.index);
+
+      const omitted = wb.addXf({
+        fontIndex: f1.index,
+        fillIndex: fill.index,
+        borderIndex: border.index,
+        numFmtId: custom.numFmtId,
+      });
+      assert.ok(omitted.status.ok);
+      const omittedRead = wb.getCellXf(omitted.index);
+      assert.ok(omittedRead.status.ok);
+      assert.equal(omittedRead.hasAlignment, false);
+
+      const explicitEmpty = wb.addXf({
+        fontIndex: f1.index,
+        fillIndex: fill.index,
+        borderIndex: border.index,
+        numFmtId: custom.numFmtId,
+        hasAlignment: true,
+      });
+      assert.ok(explicitEmpty.status.ok);
+      assert.notEqual(explicitEmpty.index, omitted.index);
+      const explicitEmptyRead = wb.getCellXf(explicitEmpty.index);
+      assert.ok(explicitEmptyRead.status.ok);
+      assert.equal(explicitEmptyRead.hasAlignment, true);
 
       const rfont = wb.getFont(f1.index);
       assert.ok(rfont.status.ok);

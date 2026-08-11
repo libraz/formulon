@@ -335,11 +335,44 @@ JsStatus JsWorkbook::updateTable(uint32_t idx, emscripten::val spec) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  const std::string ref = js_pull_string(spec, "ref");
-  const std::string style_name = js_pull_string(spec, "styleName");
-  return status_from_rc(fm_workbook_table_update(handle_, idx, ref.c_str(), style_name.c_str(),
-                                                 js_pull_bool(spec, "headerRow", true) ? 1 : 0,
-                                                 js_pull_bool(spec, "totalsRow", false) ? 1 : 0));
+
+  // The C ABI keeps `ref` non-null, so an omitted ref is resolved to the
+  // current value before forwarding the partial update. Other omitted fields
+  // use the C ABI's preservation sentinels directly.
+  emscripten::val ref_value = spec["ref"];
+  std::string ref;
+  if (ref_value.isUndefined() || ref_value.isNull()) {
+    const char* current_ref = nullptr;
+    const char* ignored_name = nullptr;
+    const char* ignored_display_name = nullptr;
+    std::size_t ignored_sheet = 0;
+    const fm_status_t lookup_rc =
+        fm_workbook_table_at(handle_, idx, &ignored_name, &ignored_display_name, &current_ref, &ignored_sheet);
+    if (lookup_rc != 0) {
+      return status_from_rc(lookup_rc);
+    }
+    ref = current_ref != nullptr ? current_ref : std::string();
+  } else {
+    ref = ref_value.as<std::string>();
+  }
+
+  emscripten::val style_value = spec["styleName"];
+  std::string style_name;
+  const char* style_name_ptr = nullptr;
+  if (!style_value.isUndefined() && !style_value.isNull()) {
+    style_name = style_value.as<std::string>();
+    style_name_ptr = style_name.c_str();
+  }
+
+  const auto optional_bool = [&spec](const char* key) {
+    const emscripten::val value = spec[key];
+    if (value.isUndefined() || value.isNull()) {
+      return int32_t{-1};
+    }
+    return value.as<bool>() ? int32_t{1} : int32_t{0};
+  };
+  return status_from_rc(fm_workbook_table_update(handle_, idx, ref.c_str(), style_name_ptr, optional_bool("headerRow"),
+                                                 optional_bool("totalsRow")));
 }
 
 JsStatus JsWorkbook::removeTable(uint32_t idx) {

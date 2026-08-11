@@ -109,6 +109,52 @@ JsSaveResult JsWorkbook::saveEx(int32_t format) const {
   return r;
 }
 
+JsSaveDiagnosticsResult JsWorkbook::saveExWithDiagnostics(int32_t format) const {
+  JsSaveDiagnosticsResult r;
+  if (handle_ == nullptr) {
+    r.status = error_status(kBindingInvalidHandle);
+    return r;
+  }
+  uint8_t* out = nullptr;
+  std::size_t len = 0;
+  std::size_t downgraded_formula_count = 0;
+  std::size_t deferred_feature_count = 0;
+  fm_status_t rc = fm_workbook_save_ex_with_diagnostics(handle_, static_cast<fm_workbook_format_t>(format), &out, &len,
+                                                        &downgraded_formula_count, &deferred_feature_count);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  r.bytes = bytes_to_val(out, len);
+  fm_buffer_free(out);
+  r.downgradedFormulaCount = static_cast<uint32_t>(downgraded_formula_count);
+  r.deferredFeatureCount = static_cast<uint32_t>(deferred_feature_count);
+  r.status = ok_status();
+  return r;
+}
+
+JsXlsbReadDiagnosticsResult JsWorkbook::xlsbReadDiagnostics() const {
+  JsXlsbReadDiagnosticsResult r;
+  if (handle_ == nullptr) {
+    r.status = error_status(kBindingInvalidHandle);
+    return r;
+  }
+  std::size_t undecoded_formula_count = 0;
+  std::size_t undecoded_defined_name_count = 0;
+  std::size_t dropped_part_count = 0;
+  fm_status_t rc = fm_workbook_xlsb_read_diagnostics_ex(handle_, &undecoded_formula_count,
+                                                        &undecoded_defined_name_count, &dropped_part_count);
+  if (rc != 0) {
+    r.status = error_status(rc);
+    return r;
+  }
+  r.undecodedFormulaCount = static_cast<uint32_t>(undecoded_formula_count);
+  r.undecodedDefinedNameCount = static_cast<uint32_t>(undecoded_defined_name_count);
+  r.droppedPartCount = static_cast<uint32_t>(dropped_part_count);
+  r.status = ok_status();
+  return r;
+}
+
 // ---- Sheet management ----------------------------------------------------
 
 JsStatus JsWorkbook::addSheet(const std::string& name) {

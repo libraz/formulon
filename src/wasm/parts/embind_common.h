@@ -92,6 +92,22 @@ struct JsSaveResult {
   emscripten::val bytes = emscripten::val::null();
 };
 
+/// Result envelope for an explicit-format save with XLSB loss counters.
+struct JsSaveDiagnosticsResult {
+  JsStatus status;
+  emscripten::val bytes = emscripten::val::null();
+  uint32_t downgradedFormulaCount = 0;
+  uint32_t deferredFeatureCount = 0;
+};
+
+/// XLSB recovery / passthrough counters captured while loading a workbook.
+struct JsXlsbReadDiagnosticsResult {
+  JsStatus status;
+  uint32_t undecodedFormulaCount = 0;
+  uint32_t undecodedDefinedNameCount = 0;
+  uint32_t droppedPartCount = 0;
+};
+
 /// Result envelope for the string-payload accessors (`sheetName`,
 /// `pivotCacheFieldName`, ...).
 struct JsStringResult {

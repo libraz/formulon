@@ -46,6 +46,18 @@ EMSCRIPTEN_BINDINGS(formulon) {
 
   value_object<JsSaveResult>("SaveResult").field("status", &JsSaveResult::status).field("bytes", &JsSaveResult::bytes);
 
+  value_object<JsSaveDiagnosticsResult>("SaveDiagnosticsResult")
+      .field("status", &JsSaveDiagnosticsResult::status)
+      .field("bytes", &JsSaveDiagnosticsResult::bytes)
+      .field("downgradedFormulaCount", &JsSaveDiagnosticsResult::downgradedFormulaCount)
+      .field("deferredFeatureCount", &JsSaveDiagnosticsResult::deferredFeatureCount);
+
+  value_object<JsXlsbReadDiagnosticsResult>("XlsbReadDiagnosticsResult")
+      .field("status", &JsXlsbReadDiagnosticsResult::status)
+      .field("undecodedFormulaCount", &JsXlsbReadDiagnosticsResult::undecodedFormulaCount)
+      .field("undecodedDefinedNameCount", &JsXlsbReadDiagnosticsResult::undecodedDefinedNameCount)
+      .field("droppedPartCount", &JsXlsbReadDiagnosticsResult::droppedPartCount);
+
   value_object<JsStringResult>("StringResult")
       .field("status", &JsStringResult::status)
       .field("value", &JsStringResult::value);
@@ -280,6 +292,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("renameSheet", &JsWorkbook::renameSheet)
       .function("save", &JsWorkbook::save)
       .function("saveEx", &JsWorkbook::saveEx)
+      .function("saveExWithDiagnostics", &JsWorkbook::saveExWithDiagnostics)
+      .function("xlsbReadDiagnostics", &JsWorkbook::xlsbReadDiagnostics)
       .function("setBlank", &JsWorkbook::setBlank)
       .function("setBool", &JsWorkbook::setBool)
       .function("setCalcMode", &JsWorkbook::setCalcMode)

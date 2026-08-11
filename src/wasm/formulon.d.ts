@@ -82,6 +82,22 @@ export interface SaveResult {
   bytes: Uint8Array | null;
 }
 
+/** Return type of `Workbook.saveExWithDiagnostics(format)`. */
+export interface SaveDiagnosticsResult extends SaveResult {
+  /** XLSB formula cells emitted as cached literals. Always zero for XLSX. */
+  downgradedFormulaCount: number;
+  /** XLSB modelled features omitted by the binary writer (data loss). */
+  deferredFeatureCount: number;
+}
+
+/** Return type of `Workbook.xlsbReadDiagnostics()`. */
+export interface XlsbReadDiagnosticsResult {
+  status: Status;
+  undecodedFormulaCount: number;
+  undecodedDefinedNameCount: number;
+  droppedPartCount: number;
+}
+
 /** `fm_workbook_format_t` ordinals: container format for `saveEx`. */
 export enum WorkbookFormat {
   Unknown = 0,
@@ -133,6 +149,17 @@ export interface TableInput {
   name: string;
   displayName?: string;
   columns: string[];
+  styleName?: string;
+  headerRow?: boolean;
+  totalsRow?: boolean;
+}
+
+/** Partial table metadata update. Omitted fields preserve their existing
+ * values; an empty `styleName` explicitly removes the table style. When
+ * omitted, `ref` also preserves the current range. `headerRow` and
+ * `totalsRow` update their flags only when supplied. */
+export interface TableUpdateInput {
+  ref?: string;
   styleName?: string;
   headerRow?: boolean;
   totalsRow?: boolean;
@@ -335,6 +362,8 @@ export interface PivotFilterSpec {
   axis: PivotAxis;
   fieldName: string;
   type: PivotFilterType;
+  /** Data-field aggregate scored by value filters. Defaults to 0. */
+  dataFieldIndex?: number;
   valueKind?: PivotFilterValueKind;
   valueInt?: number;
   valueDouble?: number;
@@ -880,6 +909,26 @@ export interface CellXfResult {
   wrapText: boolean;
   /** OOXML `justifyLastLine`; effective with distributed horizontal alignment. */
   justifyLastLine: boolean;
+  /** Whether the source `<xf>` carried an `<alignment>` child. */
+  hasAlignment: boolean;
+  /** Whether `horizontal="..."` was explicitly present. */
+  hasHorizontalAlign: boolean;
+  /** Whether `vertical="..."` was explicitly present. */
+  hasVerticalAlign: boolean;
+  /** Whether `wrapText="..."` was explicitly present. */
+  hasWrapText: boolean;
+  /** Whether `justifyLastLine="..."` was explicitly present. */
+  hasJustifyLastLine: boolean;
+  /** OOXML `textRotation`; present only when the source attribute existed. */
+  textRotation?: number;
+  /** OOXML `indent`; present only when the source attribute existed. */
+  indent?: number;
+  /** OOXML signed `relativeIndent`; present only when the source attribute existed. */
+  relativeIndent?: number;
+  /** OOXML `shrinkToFit`; present only when the source attribute existed. */
+  shrinkToFit?: boolean;
+  /** OOXML `readingOrder`; present only when the source attribute existed. */
+  readingOrder?: number;
   /** Index into `<cellStyleXfs>` of the named style this format inherits
    *  from. Always 0 for a record read back from `getCellStyleXf`. */
   xfId?: number;
@@ -942,6 +991,26 @@ export interface CellXf {
   wrapText: boolean;
   /** OOXML `justifyLastLine`; effective with distributed alignment. Defaults to false. */
   justifyLastLine?: boolean;
+  /** Whether to preserve an explicit alignment child. Omit to infer from supplied alignment fields. */
+  hasAlignment?: boolean;
+  /** Whether `horizontalAlign` was explicitly supplied; defaults to inference. */
+  hasHorizontalAlign?: boolean;
+  /** Whether `verticalAlign` was explicitly supplied; defaults to inference. */
+  hasVerticalAlign?: boolean;
+  /** Whether `wrapText` was explicitly supplied; defaults to inference. */
+  hasWrapText?: boolean;
+  /** Whether `justifyLastLine` was explicitly supplied; defaults to inference. */
+  hasJustifyLastLine?: boolean;
+  /** OOXML `textRotation` (0..180 or 255). Omitted when absent. */
+  textRotation?: number;
+  /** OOXML `indent` (0..255). Omitted when absent. */
+  indent?: number;
+  /** OOXML signed `relativeIndent`. Omitted when absent. */
+  relativeIndent?: number;
+  /** OOXML `shrinkToFit`; omitted when absent so explicit false is retained. */
+  shrinkToFit?: boolean;
+  /** OOXML `readingOrder` (0=context, 1=LTR, 2=RTL). Omitted when absent. */
+  readingOrder?: number;
   /** Index of the named style in `<cellStyleXfs>` this format inherits from.
    *  Only meaningful for `addXf`; must name an entry created by
    *  `addCellStyleXf`. Defaults to 0. */
@@ -1108,6 +1177,10 @@ export interface Workbook {
   save(): SaveResult;
   /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
   saveEx(format: WorkbookFormat | number): SaveResult;
+  /** Serialises using an explicit format and reports loss/defer counters. */
+  saveExWithDiagnostics(format: WorkbookFormat | number): SaveDiagnosticsResult;
+  /** Returns XLSB read recovery and dropped-part counters for this handle. */
+  xlsbReadDiagnostics(): XlsbReadDiagnosticsResult;
   addSheet(name: string): Status;
   /** Removes the sheet at `index`. */
   removeSheet(index: number): Status;
@@ -1223,10 +1296,10 @@ export interface Workbook {
   tableCount(): number;
   tableAt(idx: number): TableEntry;
   createTable(input: TableInput): AddStyleResult;
-  /** Replaces the table's range and visual style. The new `ref` must keep
-   *  the table's existing column count; an empty `styleName` clears the
-   *  style. */
-  updateTable(idx: number, input: Pick<TableInput, 'ref' | 'styleName' | 'headerRow' | 'totalsRow'>): Status;
+  /** Partially updates a table. Omitted fields preserve their current
+   *  values. A supplied `ref` must keep the table's existing column count;
+   *  an empty `styleName` clears the style. */
+  updateTable(idx: number, input: TableUpdateInput): Status;
   removeTable(idx: number): Status;
 
   /** Reads the complete worksheet-level `<autoFilter>` XML fragment. */
