@@ -86,8 +86,10 @@ formulon dump output.xlsx --formulas
 formulon paginate output.xlsx --sheet 0
 ```
 
-`recalc` writes its success status to stderr as
-`formulon: recalc: ok, wrote M bytes to 'OUT'`; pass `--quiet` to suppress it.
+`recalc` accepts `.xlsx` or `.xlsb` input/output. It writes its success status
+to stderr as `formulon: recalc: ok, wrote M bytes to 'OUT'`; pass `--quiet` to
+suppress that status line. XLSB data-loss warnings remain visible under
+`--quiet`.
 
 ## Status
 

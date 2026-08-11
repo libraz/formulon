@@ -7,8 +7,8 @@
 //
 //   1. Reads `in` into memory (binary mode).
 //   2. Calls `fm_workbook_load`, then `fm_workbook_recalc`, then
-//      `fm_workbook_save_ex` with a format derived from `-o`'s
-//      extension (`.xlsb` -> MS-XLSB, anything else -> `.xlsx`).
+//      `fm_workbook_save_ex_with_diagnostics` with a format derived from
+//      `-o`'s extension (`.xlsb` -> MS-XLSB, anything else -> `.xlsx`).
 //   3. Writes the saved buffer back out to `out`.
 //
 // `--iterative` enables iterative-calc while preserving any iteration cap
@@ -59,13 +59,13 @@ struct SaveBuffer {
 };
 
 void print_recalc_usage(std::ostream& out) {
-  out << "Usage: formulon recalc [--iterative] [--quiet] <in.xlsx> -o <out.xlsx>\n"
+  out << "Usage: formulon recalc [--iterative] [--quiet] <in.xlsx-or-xlsb> -o <out.xlsx-or-xlsb>\n"
       << "\n"
-      << "Load <in.xlsx>, drive a full recalc, and write the result to <out.xlsx>.\n"
+      << "Load <in.xlsx-or-xlsb>, drive a full recalc, and write the result to <out.xlsx-or-xlsb>.\n"
       << "The output format is chosen from -o's extension: '.xlsb' writes MS-XLSB,\n"
       << "any other extension (or none) writes OOXML .xlsx.\n"
       << "Status: prints \"formulon: recalc: ok, wrote M bytes to 'OUT'\" on stderr unless\n"
-      << "--quiet is supplied.\n";
+      << "--quiet is supplied; --quiet does not suppress XLSB loss warnings.\n";
 }
 
 void emit_last_error(std::ostream& err, const char* subcommand) {
@@ -77,7 +77,7 @@ void emit_last_error(std::ostream& err, const char* subcommand) {
   err << '\n';
 }
 
-// Derives the `fm_workbook_save_ex` container format from `path`'s
+// Derives the `fm_workbook_save_ex_with_diagnostics` container format from `path`'s
 // extension: `.xlsb` (case-insensitive) selects MS-XLSB; every other
 // extension (including none) selects `.xlsx` so existing callers that
 // never named `.xlsb` keep writing OOXML, matching `fm_workbook_save`'s
@@ -92,6 +92,39 @@ fm_workbook_format_t format_from_extension(const std::string& path) {
     c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   }
   return ext == "xlsb" ? FM_WORKBOOK_FORMAT_XLSB : FM_WORKBOOK_FORMAT_XLSX;
+}
+
+void emit_read_diagnostics(std::ostream& err, std::size_t undecoded_formula_count,
+                           std::size_t undecoded_defined_name_count, std::size_t dropped_part_count) {
+  if (undecoded_formula_count == 0 && undecoded_defined_name_count == 0 && dropped_part_count == 0) {
+    return;
+  }
+  err << "formulon: recalc: warning: XLSB read diagnostics";
+  if (undecoded_formula_count != 0) {
+    err << "; undecoded_formula_count=" << undecoded_formula_count;
+  }
+  if (undecoded_defined_name_count != 0) {
+    err << "; undecoded_defined_name_count=" << undecoded_defined_name_count;
+  }
+  if (dropped_part_count != 0) {
+    err << "; dropped_part_count=" << dropped_part_count;
+  }
+  err << '\n';
+}
+
+void emit_write_diagnostics(std::ostream& err, std::size_t downgraded_formula_count,
+                            std::size_t deferred_feature_count) {
+  if (downgraded_formula_count == 0 && deferred_feature_count == 0) {
+    return;
+  }
+  err << "formulon: recalc: warning: XLSB write diagnostics";
+  if (downgraded_formula_count != 0) {
+    err << "; downgraded_formula_count=" << downgraded_formula_count;
+  }
+  if (deferred_feature_count != 0) {
+    err << "; deferred_feature_count=" << deferred_feature_count;
+  }
+  err << '\n';
 }
 
 }  // namespace
@@ -160,6 +193,17 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return rc;
   }
 
+  std::size_t undecoded_formula_count = 0;
+  std::size_t undecoded_defined_name_count = 0;
+  std::size_t dropped_part_count = 0;
+  if (auto rc = fm_workbook_xlsb_read_diagnostics_ex(wb.handle, &undecoded_formula_count, &undecoded_defined_name_count,
+                                                     &dropped_part_count);
+      rc != 0) {
+    emit_last_error(err, "recalc");
+    return rc;
+  }
+  emit_read_diagnostics(err, undecoded_formula_count, undecoded_defined_name_count, dropped_part_count);
+
   if (iterative) {
     if (auto rc = fm_workbook_set_iterative_enabled(wb.handle, 1); rc != 0) {
       emit_last_error(err, "recalc");
@@ -174,10 +218,15 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   SaveBuffer buf;
   const fm_workbook_format_t format = format_from_extension(output_path);
-  if (auto rc = fm_workbook_save_ex(wb.handle, format, &buf.data, &buf.len); rc != 0) {
+  std::size_t downgraded_formula_count = 0;
+  std::size_t deferred_feature_count = 0;
+  if (auto rc = fm_workbook_save_ex_with_diagnostics(wb.handle, format, &buf.data, &buf.len, &downgraded_formula_count,
+                                                     &deferred_feature_count);
+      rc != 0) {
     emit_last_error(err, "recalc");
     return rc;
   }
+  emit_write_diagnostics(err, downgraded_formula_count, deferred_feature_count);
 
   if (auto rc = write_file_atomically(output_path, buf.data, buf.len); rc != 0) {
     err << "formulon: recalc: cannot write '" << output_path << "': " << std::strerror(errno) << '\n';

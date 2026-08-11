@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Stable XLSB read/write diagnostics across the C API, WASM, native Node,
+  Python, and CLI surfaces, including downgraded formulas, omitted features,
+  undecoded formulas/names, and dropped package parts.
+
 ## [0.9.7] - 2026-08-06
 
 ### Added

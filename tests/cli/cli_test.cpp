@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -187,6 +188,142 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
   out.close();
   fm_buffer_free(bytes);
   fm_workbook_destroy(wb);
+  return out.good();
+}
+
+bool write_lossy_xlsx_fixture(const std::string& path) {
+  fm_workbook_t* wb = nullptr;
+  if (fm_workbook_create(&wb) != 0) {
+    return false;
+  }
+  if (fm_workbook_set_formula(wb, 0, 0, 0, "=@A1:A10") != 0) {
+    fm_workbook_destroy(wb);
+    return false;
+  }
+  fm_hyperlink hyperlink{};
+  hyperlink.target = "https://example.com";
+  if (fm_sheet_add_hyperlink(wb, 0, hyperlink) != 0) {
+    fm_workbook_destroy(wb);
+    return false;
+  }
+  fm_merge_range range{0, 0, 0, 0};
+  fm_data_validation validation{};
+  validation.ranges = &range;
+  validation.range_count = 1;
+  validation.type = 3;
+  validation.formula1 = "$A$1:$A$2";
+  if (fm_sheet_add_validation(wb, 0, validation) != 0 ||
+      fm_sheet_set_auto_filter_xml(wb, 0, "<autoFilter ref=\"A1:B2\"/>") != 0) {
+    fm_workbook_destroy(wb);
+    return false;
+  }
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  if (fm_workbook_save(wb, &bytes, &len) != 0) {
+    fm_workbook_destroy(wb);
+    return false;
+  }
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  if (!out) {
+    fm_buffer_free(bytes);
+    fm_workbook_destroy(wb);
+    return false;
+  }
+  out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
+  out.close();
+  fm_buffer_free(bytes);
+  fm_workbook_destroy(wb);
+  return out.good();
+}
+
+std::vector<std::uint8_t> append_empty_zip_entry(const std::vector<std::uint8_t>& bytes, std::string_view name) {
+  const std::uint8_t sig[] = {0x50, 0x4b, 0x05, 0x06};
+  const auto it = std::find_end(bytes.begin(), bytes.end(), std::begin(sig), std::end(sig));
+  if (it == bytes.end())
+    return {};
+  const std::size_t eocd = static_cast<std::size_t>(it - bytes.begin());
+  const auto read16 = [&](std::size_t p) { return static_cast<std::uint16_t>(bytes[p] | (bytes[p + 1] << 8U)); };
+  const auto read32 = [&](std::size_t p) {
+    return static_cast<std::uint32_t>(bytes[p] | (bytes[p + 1] << 8U) | (bytes[p + 2] << 16U) | (bytes[p + 3] << 24U));
+  };
+  const std::uint16_t count = read16(eocd + 10U);
+  const std::uint32_t central_size = read32(eocd + 12U);
+  const std::uint32_t central_offset = read32(eocd + 16U);
+  const auto put16 = [](std::vector<std::uint8_t>& out, std::uint16_t x) {
+    out.push_back(static_cast<std::uint8_t>(x));
+    out.push_back(static_cast<std::uint8_t>(x >> 8U));
+  };
+  const auto put32 = [](std::vector<std::uint8_t>& out, std::uint32_t x) {
+    out.push_back(static_cast<std::uint8_t>(x));
+    out.push_back(static_cast<std::uint8_t>(x >> 8U));
+    out.push_back(static_cast<std::uint8_t>(x >> 16U));
+    out.push_back(static_cast<std::uint8_t>(x >> 24U));
+  };
+  const std::string n(name);
+  std::vector<std::uint8_t> local;
+  put32(local, 0x04034b50U);
+  put16(local, 20);
+  put16(local, 0);
+  put16(local, 0);
+  put16(local, 0);
+  put16(local, 0);
+  put32(local, 0);
+  put32(local, 0);
+  put32(local, 0);
+  put16(local, static_cast<std::uint16_t>(n.size()));
+  put16(local, 0);
+  local.insert(local.end(), n.begin(), n.end());
+  std::vector<std::uint8_t> central;
+  put32(central, 0x02014b50U);
+  put16(central, 20);
+  put16(central, 20);
+  put16(central, 0);
+  put16(central, 0);
+  put16(central, 0);
+  put16(central, 0);
+  put32(central, 0);
+  put32(central, 0);
+  put32(central, 0);
+  put16(central, static_cast<std::uint16_t>(n.size()));
+  put16(central, 0);
+  put16(central, 0);
+  put16(central, 0);
+  put16(central, 0);
+  put32(central, 0);
+  put32(central, central_offset);
+  central.insert(central.end(), n.begin(), n.end());
+  std::vector<std::uint8_t> out(bytes.begin(), bytes.begin() + central_offset);
+  out.insert(out.end(), local.begin(), local.end());
+  out.insert(out.end(), bytes.begin() + central_offset, bytes.begin() + central_offset + central_size);
+  out.insert(out.end(), central.begin(), central.end());
+  put32(out, 0x06054b50U);
+  put16(out, 0);
+  put16(out, 0);
+  put16(out, count + 1U);
+  put16(out, count + 1U);
+  put32(out, central_size + static_cast<std::uint32_t>(central.size()));
+  put32(out, central_offset + static_cast<std::uint32_t>(local.size()));
+  put16(out, 0);
+  return out;
+}
+
+bool write_dropped_xlsb_fixture(const std::string& path) {
+  fm_workbook_t* wb = nullptr;
+  if (fm_workbook_create(&wb) != 0)
+    return false;
+  std::uint8_t* raw = nullptr;
+  std::size_t len = 0;
+  const bool saved = fm_workbook_save_ex(wb, FM_WORKBOOK_FORMAT_XLSB, &raw, &len) == 0;
+  fm_workbook_destroy(wb);
+  if (!saved)
+    return false;
+  std::vector<std::uint8_t> fixture =
+      append_empty_zip_entry(std::vector<std::uint8_t>(raw, raw + len), "xl/dropped.bin");
+  fm_buffer_free(raw);
+  if (fixture.empty())
+    return false;
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  out.write(reinterpret_cast<const char*>(fixture.data()), static_cast<std::streamsize>(fixture.size()));
   return out.good();
 }
 
@@ -388,6 +525,34 @@ TEST(FormulonCli, RecalcRoundTripsFormulae) {
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
   fm_workbook_destroy(wb);
+}
+
+TEST(FormulonCli, RecalcLossWarningsAreNonfatalAndNotSuppressedByQuiet) {
+  const std::string input = "/tmp/fm_cli_lossy_input.xlsx";
+  const std::string output = "/tmp/fm_cli_lossy_output.xlsb";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  ASSERT_TRUE(write_lossy_xlsx_fixture(input));
+
+  CliRun r = run_cli({"recalc", "--quiet", input, "-o", output});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_TRUE(r.stdout_text.empty());
+  EXPECT_NE(r.stderr_text.find("warning: XLSB write diagnostics"), std::string::npos);
+  EXPECT_NE(r.stderr_text.find("downgraded_formula_count=1"), std::string::npos);
+  EXPECT_NE(r.stderr_text.find("deferred_feature_count=3"), std::string::npos);
+}
+
+TEST(FormulonCli, RecalcDroppedPartWarningIsNonfatalAndQuietStillReportsIt) {
+  const std::string input = "/tmp/fm_cli_dropped_input.xlsb";
+  const std::string output = "/tmp/fm_cli_dropped_output.xlsx";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  ASSERT_TRUE(write_dropped_xlsb_fixture(input));
+
+  CliRun r = run_cli({"recalc", "--quiet", input, "-o", output});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_NE(r.stderr_text.find("dropped_part_count=1"), std::string::npos);
+  EXPECT_NE(r.stderr_text.find("warning: XLSB read diagnostics"), std::string::npos);
 }
 
 TEST(FormulonCli, RecalcInPlaceOverwritesSamePathAndLeavesNoTemp) {
@@ -649,6 +814,7 @@ TEST(FormulonCli, RecalcMissingInputExits64) {
 TEST(FormulonCli, RecalcNonexistentFileFailsCleanly) {
   CliRun r = run_cli({"recalc", "/tmp/this_path_does_not_exist_abc123.xlsx", "-o", "/tmp/fm_cli_unused.xlsx"});
   EXPECT_EQ(r.exit_code, 1);
+  EXPECT_EQ(r.stderr_text.find("warning:"), std::string::npos);
 }
 
 // ---------------------------------------------------------------------------
