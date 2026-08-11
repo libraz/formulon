@@ -80,6 +80,41 @@ TEST(StylesReader, ReadsCellXfFields) {
   EXPECT_EQ(result_or.value().cell_xfs[2].horizontal_align, 2U);  // center
   EXPECT_EQ(result_or.value().cell_xfs[2].vertical_align, 0U);    // top
   EXPECT_TRUE(result_or.value().cell_xfs[2].wrap_text);
+  EXPECT_TRUE(result_or.value().cell_xfs[2].has_horizontal_align);
+  EXPECT_TRUE(result_or.value().cell_xfs[2].has_vertical_align);
+  EXPECT_TRUE(result_or.value().cell_xfs[2].has_wrap_text);
+}
+
+TEST(StylesReader, CollapsesXmlWhitespaceAndAcceptsSignedLexicalForms) {
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("<cellXfs count=\"1\"><xf fontId=\" +1 \" fillId=\"0\" borderId=\"0\" numFmtId=\" +14 \" ");
+  xml.append("applyFont=\" true \" quotePrefix=\" 0 \">");
+  xml.append("<alignment horizontal=\"center\" vertical=\"bottom\" wrapText=\" 0 \" ");
+  xml.append("justifyLastLine=\" false \" textRotation=\" +255 \" indent=\" +7 \" ");
+  xml.append("relativeIndent=\" +3 \" shrinkToFit=\" 0 \" readingOrder=\" +2 \"/></xf>");
+  xml.append("</cellXfs></styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const CellXf& xf = result_or.value().cell_xfs[0];
+  EXPECT_EQ(xf.font_index, 1U);
+  EXPECT_EQ(xf.num_fmt_id, 14U);
+  EXPECT_TRUE(xf.apply_font);
+  EXPECT_FALSE(xf.quote_prefix);
+  EXPECT_EQ(xf.horizontal_align, 2U);
+  EXPECT_EQ(xf.vertical_align, 2U);
+  EXPECT_FALSE(xf.wrap_text);
+  EXPECT_FALSE(xf.justify_last_line);
+  EXPECT_TRUE(xf.has_horizontal_align);
+  EXPECT_TRUE(xf.has_vertical_align);
+  EXPECT_TRUE(xf.has_wrap_text);
+  EXPECT_TRUE(xf.has_justify_last_line);
+  EXPECT_EQ(xf.text_rotation, 255U);
+  EXPECT_EQ(xf.indent, 7U);
+  EXPECT_EQ(xf.relative_indent, 3);
+  EXPECT_FALSE(xf.shrink_to_fit);
+  EXPECT_EQ(xf.reading_order, 2U);
 }
 
 TEST(StylesReader, ReadsCellXfProtection) {
@@ -105,6 +140,89 @@ TEST(StylesReader, ReadsCellXfProtection) {
   EXPECT_TRUE(table.cell_xfs[1].has_protection);
   EXPECT_FALSE(table.cell_xfs[1].locked);
   EXPECT_TRUE(table.cell_xfs[1].hidden);
+}
+
+TEST(StylesReader, ReadsOptionalAlignmentAttributesWithPresence) {
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  xml.append("  <cellXfs count=\"3\">\n");
+  xml.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/>\n");
+  xml.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\">");
+  xml.append("<alignment textRotation=\"255\" indent=\"7\" relativeIndent=\"-3\" ");
+  xml.append("shrinkToFit=\"0\" readingOrder=\"2\"/></xf>\n");
+  xml.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\">");
+  xml.append("<alignment textRotation=\"0\" indent=\"0\" relativeIndent=\"0\" ");
+  xml.append("shrinkToFit=\"1\" readingOrder=\"0\"/></xf>\n");
+  xml.append("  </cellXfs>\n</styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const auto& xfs = result_or.value().cell_xfs;
+  ASSERT_EQ(xfs.size(), 3U);
+  EXPECT_FALSE(xfs[0].has_text_rotation);
+  EXPECT_FALSE(xfs[0].has_indent);
+  EXPECT_FALSE(xfs[0].has_relative_indent);
+  EXPECT_FALSE(xfs[0].has_shrink_to_fit);
+  EXPECT_FALSE(xfs[0].has_reading_order);
+  EXPECT_TRUE(xfs[1].has_text_rotation);
+  EXPECT_EQ(xfs[1].text_rotation, 255U);
+  EXPECT_TRUE(xfs[1].has_indent);
+  EXPECT_EQ(xfs[1].indent, 7U);
+  EXPECT_TRUE(xfs[1].has_relative_indent);
+  EXPECT_EQ(xfs[1].relative_indent, -3);
+  EXPECT_TRUE(xfs[1].has_shrink_to_fit);
+  EXPECT_FALSE(xfs[1].shrink_to_fit);
+  EXPECT_TRUE(xfs[1].has_reading_order);
+  EXPECT_EQ(xfs[1].reading_order, 2U);
+  EXPECT_TRUE(xfs[2].has_text_rotation);
+  EXPECT_EQ(xfs[2].text_rotation, 0U);
+  EXPECT_TRUE(xfs[2].has_shrink_to_fit);
+  EXPECT_TRUE(xfs[2].shrink_to_fit);
+}
+
+TEST(StylesReader, PreservesEmptyAlignmentPresence) {
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("<cellXfs count=\"2\"><xf/><xf><alignment/></xf></cellXfs></styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  ASSERT_EQ(result_or.value().cell_xfs.size(), 2U);
+  EXPECT_FALSE(result_or.value().cell_xfs[0].has_alignment);
+  EXPECT_TRUE(result_or.value().cell_xfs[1].has_alignment);
+  EXPECT_EQ(result_or.value().cell_xfs[1].vertical_align, 2U);
+}
+
+TEST(StylesReader, RejectsMalformedAlignmentAttributesWithContext) {
+  const std::vector<std::string> alignments = {
+      "<alignment textRotation=\"181\"/>",
+      "<alignment textRotation=\"wat\"/>",
+      "<alignment indent=\"256\"/>",
+      "<alignment readingOrder=\"3\"/>",
+      "<alignment relativeIndent=\"2147483648\"/>",
+      "<alignment wrapText=\"yes\"/>",
+      "<alignment wrapText=\"tr ue\"/>",
+      "<alignment horizontal=\"sideways\"/>",
+      "<alignment horizontal=\" center \"/>",
+      "<alignment vertical=\" bottom \"/>",
+      "<alignment horizontal=\" center nope \"/>",
+      "<alignment textRotation=\"-1\"/>",
+      "<alignment indent=\"-1\"/>",
+      "<alignment readingOrder=\"4294967296\"/>",
+      "<alignment readingOrder=\"+\"/>",
+  };
+  for (const std::string& alignment : alignments) {
+    std::string xml(kXmlDecl);
+    xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+    xml.append("<cellXfs count=\"1\"><xf>");
+    xml.append(alignment);
+    xml.append("</xf></cellXfs></styleSheet>");
+    auto result_or = read_styles(Bytes(xml));
+    ASSERT_FALSE(static_cast<bool>(result_or)) << alignment;
+    EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoSheetCorrupt) << alignment;
+    EXPECT_NE(result_or.error().context.find("section=cellXfs"), std::string::npos) << alignment;
+    EXPECT_NE(result_or.error().context.find("index=0"), std::string::npos) << alignment;
+  }
 }
 
 TEST(StylesReader, ReadsThemeIndexedAndAutoColors) {

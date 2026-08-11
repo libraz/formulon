@@ -263,15 +263,19 @@ TEST(StylesRoundTrip, PreservesNamedCellStyles) {
   EXPECT_TRUE(rt.cell_styles[1].custom_builtin);
 }
 
-TEST(StylesRoundTrip, EmptyWorkbookHasNoNamedStyles) {
+TEST(StylesRoundTrip, EmptyWorkbookNormalizesDefaultNamedStyle) {
   Workbook src = Workbook::create();
   auto save_or = src.save();
   ASSERT_TRUE(static_cast<bool>(save_or));
   auto load_or = io::read_ooxml(SpanOf(save_or.value()));
   ASSERT_TRUE(static_cast<bool>(load_or));
   const io::StylesTable& rt = load_or.value().workbook.styles();
-  EXPECT_TRUE(rt.cell_styles.empty());
-  EXPECT_TRUE(rt.cell_style_xfs.empty());
+  ASSERT_EQ(rt.cell_style_xfs.size(), 1U);
+  EXPECT_EQ(rt.cell_style_xfs[0].font_index, 0U);
+  ASSERT_EQ(rt.cell_styles.size(), 1U);
+  EXPECT_EQ(rt.cell_styles[0].name, "Normal");
+  EXPECT_EQ(rt.cell_styles[0].xf_id, 0U);
+  EXPECT_EQ(rt.cell_styles[0].builtin_id, 0U);
 }
 
 TEST(StylesRoundTrip, EmptyWorkbookHasDefaultStyles) {
@@ -322,6 +326,125 @@ TEST(StylesRoundTrip, CellProtectReflectsRoundTrippedLockedFlag) {
   const Value a2 = EvalOn(dst, "=CELL(\"protect\", A2)", 5U, 5U);
   ASSERT_TRUE(a2.is_number());
   EXPECT_DOUBLE_EQ(a2.as_number(), 1.0);
+}
+
+TEST(StylesRoundTrip, PreservesOptionalAlignmentAttributes) {
+  Workbook src = Workbook::create();
+  io::StylesTable styles;
+  styles.fonts.emplace_back();
+  styles.fills.emplace_back();
+  styles.borders.emplace_back();
+  styles.cell_xfs.emplace_back();
+  io::CellXf vertical;
+  vertical.has_text_rotation = true;
+  vertical.text_rotation = 255;
+  vertical.has_indent = true;
+  vertical.indent = 8;
+  vertical.has_relative_indent = true;
+  vertical.relative_indent = -5;
+  vertical.has_shrink_to_fit = true;
+  vertical.shrink_to_fit = false;
+  vertical.has_reading_order = true;
+  vertical.reading_order = 2;
+  styles.cell_xfs.push_back(vertical);
+  src.set_styles(std::move(styles));
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0, 0, 0, Value::text("縦書き"))));
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_xf_index(0, 0, 0, 1)));
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  const io::StylesTable& rt = load_or.value().workbook.styles();
+  ASSERT_GE(rt.cell_xfs.size(), 2U);
+  const io::CellXf& round = rt.cell_xfs[1];
+  EXPECT_TRUE(round.has_text_rotation);
+  EXPECT_EQ(round.text_rotation, 255U);
+  EXPECT_TRUE(round.has_indent);
+  EXPECT_EQ(round.indent, 8U);
+  EXPECT_TRUE(round.has_relative_indent);
+  EXPECT_EQ(round.relative_indent, -5);
+  EXPECT_TRUE(round.has_shrink_to_fit);
+  EXPECT_FALSE(round.shrink_to_fit);
+  EXPECT_TRUE(round.has_reading_order);
+  EXPECT_EQ(round.reading_order, 2U);
+}
+
+TEST(StylesRoundTrip, PreservesCellXfPresenceProjectionAndNormalizesParentId) {
+  Workbook src = Workbook::create();
+  io::StylesTable styles;
+  styles.fonts.emplace_back();
+  styles.fills.emplace_back();
+  styles.borders.emplace_back();
+  styles.cell_style_xfs.emplace_back();
+  styles.cell_xfs.emplace_back();
+
+  io::CellXf xf;
+  xf.xf_id = 99U;  // normalized to the only named-style xf at serialization.
+  xf.apply_number_format = true;
+  xf.apply_font = true;
+  xf.apply_fill = true;
+  xf.apply_border = true;
+  xf.apply_alignment = true;
+  xf.apply_protection = true;
+  xf.quote_prefix = true;
+  xf.has_alignment = true;  // explicit child, even though every value is a default.
+  xf.has_horizontal_align = true;
+  xf.has_vertical_align = true;
+  xf.has_wrap_text = true;
+  xf.has_justify_last_line = true;
+  xf.has_text_rotation = true;
+  xf.text_rotation = 0;
+  xf.has_indent = true;
+  xf.indent = 0;
+  xf.has_relative_indent = true;
+  xf.relative_indent = -9;
+  xf.has_shrink_to_fit = true;
+  xf.shrink_to_fit = false;
+  xf.has_reading_order = true;
+  xf.reading_order = 0;
+  xf.has_protection = true;
+  xf.locked = true;
+  xf.hidden = false;
+  styles.cell_xfs.push_back(xf);
+  src.set_styles(std::move(styles));
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+  // Normalization is serialization-only; the in-memory model remains intact.
+  ASSERT_GE(src.styles().cell_xfs.size(), 2U);
+  EXPECT_EQ(src.styles().cell_xfs[1].xf_id, 99U);
+
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  ASSERT_GE(load_or.value().workbook.styles().cell_xfs.size(), 2U);
+  const io::CellXf& round = load_or.value().workbook.styles().cell_xfs[1];
+  EXPECT_EQ(round.xf_id, 0U);
+  EXPECT_TRUE(round.apply_number_format);
+  EXPECT_TRUE(round.apply_font);
+  EXPECT_TRUE(round.apply_fill);
+  EXPECT_TRUE(round.apply_border);
+  EXPECT_TRUE(round.apply_alignment);
+  EXPECT_TRUE(round.apply_protection);
+  EXPECT_TRUE(round.quote_prefix);
+  EXPECT_TRUE(round.has_alignment);
+  EXPECT_TRUE(round.has_horizontal_align);
+  EXPECT_TRUE(round.has_vertical_align);
+  EXPECT_TRUE(round.has_wrap_text);
+  EXPECT_TRUE(round.has_justify_last_line);
+  EXPECT_TRUE(round.has_text_rotation);
+  EXPECT_EQ(round.text_rotation, 0U);
+  EXPECT_TRUE(round.has_indent);
+  EXPECT_EQ(round.indent, 0U);
+  EXPECT_TRUE(round.has_relative_indent);
+  EXPECT_EQ(round.relative_indent, -9);
+  EXPECT_TRUE(round.has_shrink_to_fit);
+  EXPECT_FALSE(round.shrink_to_fit);
+  EXPECT_TRUE(round.has_reading_order);
+  EXPECT_EQ(round.reading_order, 0U);
+  EXPECT_TRUE(round.has_protection);
+  EXPECT_TRUE(round.locked);
+  EXPECT_FALSE(round.hidden);
 }
 
 }  // namespace

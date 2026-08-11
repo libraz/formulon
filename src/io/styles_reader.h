@@ -151,10 +151,36 @@ struct CellXf {
   /// 6=centerContinuous, 7=distributed.
   std::uint8_t horizontal_align = 0;
   /// 0=top, 1=center, 2=bottom (default), 3=justify, 4=distributed.
-  std::uint8_t vertical_align = 0;
+  std::uint8_t vertical_align = 2;
   bool wrap_text = false;
   /// OOXML `justifyLastLine`; retained verbatim so imports round-trip.
   bool justify_last_line = false;
+  /// Whether the source `<xf>` carried an `<alignment>` child. This is
+  /// separate from the effective alignment values because OOXML preserves
+  /// an explicitly empty `<alignment/>` and explicit defaults such as
+  /// `horizontal="general"` / `wrapText="0"`.
+  bool has_alignment = false;
+  /// Presence of the four alignment attributes whose schema defaults are
+  /// indistinguishable from their effective values. These flags preserve an
+  /// explicit default such as `horizontal="general"` or `wrapText="0"`.
+  bool has_horizontal_align = false;
+  bool has_vertical_align = false;
+  bool has_wrap_text = false;
+  bool has_justify_last_line = false;
+  /// Optional OOXML alignment attributes. The `has_*` bits are required
+  /// because the schema distinguishes an omitted attribute from an explicit
+  /// zero / false value (for example `textRotation="0"` and
+  /// `shrinkToFit="0"`).
+  bool has_text_rotation = false;
+  std::uint32_t text_rotation = 0;
+  bool has_indent = false;
+  std::uint32_t indent = 0;
+  bool has_relative_indent = false;
+  std::int32_t relative_indent = 0;
+  bool has_shrink_to_fit = false;
+  bool shrink_to_fit = false;
+  bool has_reading_order = false;
+  std::uint32_t reading_order = 0;
   /// Whether a `<protection>` child was present on the source `<xf>`.
   /// The OOXML schema default is `locked=true`, `hidden=false`; a common
   /// form ("protected sheet, a few input cells unlocked") sets
@@ -165,6 +191,35 @@ struct CellXf {
   bool locked = true;
   bool hidden = false;
 };
+
+/// Returns the canonical alignment-child presence for an xf.
+///
+/// Callers that construct a `CellXf` directly may omit `has_alignment` while
+/// still supplying a non-default alignment value. Treat those values as an
+/// explicit alignment child so writer output and C-API deduplication agree
+/// with records read from OOXML. An explicit `<alignment/>` is represented by
+/// `has_alignment=true` even when every effective value is a schema default.
+inline bool HasHorizontalAlign(const CellXf& xf) noexcept {
+  return xf.has_horizontal_align || xf.horizontal_align != 0U;
+}
+
+inline bool HasVerticalAlign(const CellXf& xf) noexcept {
+  return xf.has_vertical_align || xf.vertical_align != 2U;
+}
+
+inline bool HasWrapText(const CellXf& xf) noexcept {
+  return xf.has_wrap_text || xf.wrap_text;
+}
+
+inline bool HasJustifyLastLine(const CellXf& xf) noexcept {
+  return xf.has_justify_last_line || xf.justify_last_line;
+}
+
+inline bool HasAlignment(const CellXf& xf) noexcept {
+  return xf.has_alignment || HasHorizontalAlign(xf) || HasVerticalAlign(xf) || HasWrapText(xf) ||
+         HasJustifyLastLine(xf) || xf.has_text_rotation || xf.has_indent || xf.has_relative_indent ||
+         xf.has_shrink_to_fit || xf.has_reading_order;
+}
 
 /// One `<dxf>` differential-format record. Unlike `<xf>`, a dxf stores
 /// inline optional style fragments instead of indexes into the global
@@ -269,6 +324,9 @@ struct StylesTable {
 ///   * `kIoXmlParse` — pugixml could not parse the document.
 ///   * `kIoContentTypeInvalid` — the document parses but its root is
 ///     not `<styleSheet>`.
+///   * `kIoSheetCorrupt` — a style `<xf>` carries a malformed alignment
+///     boolean / enum / integer or an alignment value outside its OOXML
+///     range. The error context identifies the table, xf index, and attribute.
 Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles_bytes);
 
 /// Returns the format string for a built-in Excel number-format id

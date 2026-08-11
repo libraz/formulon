@@ -27,6 +27,28 @@ TEST(StylesWriter, EmitsMinimalStyleSheetForEmptyTable) {
   EXPECT_NE(xml.find("<cellXfs count=\"1\""), std::string::npos);
 }
 
+TEST(StylesWriter, NormalizesEmptyNamedStyleTablesWithoutMutatingModel) {
+  StylesTable table;
+  const std::string xml = write_styles(table);
+
+  EXPECT_NE(xml.find("<cellStyleXfs count=\"1\">"), std::string::npos);
+  EXPECT_NE(xml.find("<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/>"), std::string::npos);
+  EXPECT_NE(xml.find("<cellStyles count=\"1\">"), std::string::npos);
+  EXPECT_NE(xml.find("<cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/>"), std::string::npos);
+  EXPECT_TRUE(table.cell_style_xfs.empty());
+  EXPECT_TRUE(table.cell_styles.empty());
+
+  const std::vector<std::uint8_t> bytes(xml.begin(), xml.end());
+  auto round_or = read_styles(bytes);
+  ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
+  ASSERT_EQ(round_or.value().cell_style_xfs.size(), 1U);
+  EXPECT_EQ(round_or.value().cell_style_xfs[0].font_index, 0U);
+  ASSERT_EQ(round_or.value().cell_styles.size(), 1U);
+  EXPECT_EQ(round_or.value().cell_styles[0].name, "Normal");
+  EXPECT_EQ(round_or.value().cell_styles[0].xf_id, 0U);
+  EXPECT_EQ(round_or.value().cell_styles[0].builtin_id, 0U);
+}
+
 TEST(StylesWriter, RetainsUnmodelledTopLevelStyleSections) {
   const std::string source =
       "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
@@ -191,6 +213,101 @@ TEST(StylesWriter, EmitsCellXfAlignment) {
   EXPECT_NE(xml.find("horizontal=\"center\""), std::string::npos);
   EXPECT_NE(xml.find("vertical=\"center\""), std::string::npos);
   EXPECT_NE(xml.find("wrapText=\"1\""), std::string::npos);
+}
+
+TEST(StylesWriter, EmitsExplicitEmptyAlignment) {
+  StylesTable table;
+  table.cell_xfs.emplace_back();
+  table.cell_xfs[0].has_alignment = true;
+  const std::string xml = write_styles(table);
+  EXPECT_NE(xml.find("<alignment/>"), std::string::npos);
+  auto round_or = read_styles(std::vector<std::uint8_t>(xml.begin(), xml.end()));
+  ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
+  ASSERT_EQ(round_or.value().cell_xfs.size(), 1U);
+  EXPECT_TRUE(round_or.value().cell_xfs[0].has_alignment);
+}
+
+TEST(StylesWriter, EmitsExplicitAlignmentDefaults) {
+  StylesTable table;
+  CellXf xf;
+  xf.has_horizontal_align = true;
+  xf.has_vertical_align = true;
+  xf.has_wrap_text = true;
+  xf.has_justify_last_line = true;
+  table.cell_xfs.push_back(xf);
+
+  const std::string xml = write_styles(table);
+  EXPECT_NE(xml.find("horizontal=\"general\""), std::string::npos);
+  EXPECT_NE(xml.find("vertical=\"bottom\""), std::string::npos);
+  EXPECT_NE(xml.find("wrapText=\"0\""), std::string::npos);
+  EXPECT_NE(xml.find("justifyLastLine=\"0\""), std::string::npos);
+  auto round_or = read_styles(std::vector<std::uint8_t>(xml.begin(), xml.end()));
+  ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
+  const CellXf& round = round_or.value().cell_xfs[0];
+  EXPECT_TRUE(round.has_horizontal_align);
+  EXPECT_TRUE(round.has_vertical_align);
+  EXPECT_TRUE(round.has_wrap_text);
+  EXPECT_TRUE(round.has_justify_last_line);
+}
+
+TEST(StylesWriter, NormalizesDanglingXfIdsWithoutMutatingModel) {
+  StylesTable table;
+  table.cell_style_xfs.emplace_back();
+  CellXf cell_xf;
+  cell_xf.xf_id = 99U;
+  table.cell_xfs.push_back(cell_xf);
+  CellStyleRecord style;
+  style.name = "Custom";
+  style.xf_id = 99U;
+  table.cell_styles.push_back(style);
+
+  const std::string xml = write_styles(table);
+  EXPECT_NE(xml.find("<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"), std::string::npos);
+  EXPECT_NE(xml.find("<cellStyle name=\"Custom\" xfId=\"0\""), std::string::npos);
+  EXPECT_EQ(table.cell_xfs[0].xf_id, 99U);
+  EXPECT_EQ(table.cell_styles[0].xf_id, 99U);
+}
+
+TEST(StylesWriter, RoundTripsOptionalAlignmentAttributesIncludingExplicitDefaults) {
+  StylesTable original;
+  CellXf absent;
+  original.cell_xfs.push_back(absent);
+  CellXf xf;
+  xf.has_text_rotation = true;
+  xf.text_rotation = 0;
+  xf.has_indent = true;
+  xf.indent = 0;
+  xf.has_relative_indent = true;
+  xf.relative_indent = -4;
+  xf.has_shrink_to_fit = true;
+  xf.shrink_to_fit = false;
+  xf.has_reading_order = true;
+  xf.reading_order = 0;
+  original.cell_xfs.push_back(xf);
+
+  const std::string xml = write_styles(original);
+  EXPECT_NE(xml.find("textRotation=\"0\""), std::string::npos);
+  EXPECT_NE(xml.find("indent=\"0\""), std::string::npos);
+  EXPECT_NE(xml.find("relativeIndent=\"-4\""), std::string::npos);
+  EXPECT_NE(xml.find("shrinkToFit=\"0\""), std::string::npos);
+  EXPECT_NE(xml.find("readingOrder=\"0\""), std::string::npos);
+
+  std::vector<std::uint8_t> bytes(xml.begin(), xml.end());
+  auto round_or = read_styles(bytes);
+  ASSERT_TRUE(static_cast<bool>(round_or)) << round_or.error().message;
+  ASSERT_EQ(round_or.value().cell_xfs.size(), 2U);
+  EXPECT_FALSE(round_or.value().cell_xfs[0].has_text_rotation);
+  const CellXf& round = round_or.value().cell_xfs[1];
+  EXPECT_TRUE(round.has_text_rotation);
+  EXPECT_EQ(round.text_rotation, 0U);
+  EXPECT_TRUE(round.has_indent);
+  EXPECT_EQ(round.indent, 0U);
+  EXPECT_TRUE(round.has_relative_indent);
+  EXPECT_EQ(round.relative_indent, -4);
+  EXPECT_TRUE(round.has_shrink_to_fit);
+  EXPECT_FALSE(round.shrink_to_fit);
+  EXPECT_TRUE(round.has_reading_order);
+  EXPECT_EQ(round.reading_order, 0U);
 }
 
 TEST(StylesWriter, RoundTripsThroughReader) {

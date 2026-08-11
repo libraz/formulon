@@ -201,6 +201,12 @@ void AppendUint(std::string& out, std::uint64_t v) {
   out.append(buf);
 }
 
+void AppendInt(std::string& out, std::int64_t v) {
+  char buf[24];
+  std::snprintf(buf, sizeof(buf), "%lld", static_cast<long long>(v));
+  out.append(buf);
+}
+
 void AppendDouble(std::string& out, double v) {
   char buf[32];
   // %.17g is round-trip safe under IEEE 754, so a font size such as 10.5
@@ -284,8 +290,9 @@ const char* HorizontalAlignName(std::uint8_t v) {
       return "centerContinuous";
     case 7:
       return "distributed";
+    case 0:
     default:
-      return nullptr;  // 0 = general; omit attribute.
+      return "general";
   }
 }
 
@@ -301,7 +308,7 @@ const char* VerticalAlignName(std::uint8_t v) {
       return "distributed";
     case 2:
     default:
-      return nullptr;  // 2 = bottom (default); omit attribute.
+      return "bottom";
   }
 }
 
@@ -581,7 +588,7 @@ void AppendBorders(std::string& out, const StylesTable& table) {
   out.append("  </borders>\n");
 }
 
-void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
+void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, std::size_t style_xf_count) {
   out.append("    <xf numFmtId=\"");
   AppendUint(out, xf.num_fmt_id);
   out.append("\" fontId=\"");
@@ -593,7 +600,10 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
   out.append("\"");
   if (emit_xf_id) {
     out.append(" xfId=\"");
-    AppendUint(out, xf.xf_id);
+    // A malformed in-memory reference must not produce a dangling OOXML
+    // relationship. Keep this normalization local to serialization so the
+    // caller's model remains byte-for-byte unchanged.
+    AppendUint(out, xf.xf_id < style_xf_count ? xf.xf_id : 0U);
     out.append("\"");
   }
   auto append_apply = [&out](const char* name, bool value) {
@@ -612,7 +622,7 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
   append_apply("quotePrefix", xf.quote_prefix);
   const char* halign = HorizontalAlignName(xf.horizontal_align);
   const char* valign = VerticalAlignName(xf.vertical_align);
-  const bool has_alignment = halign != nullptr || valign != nullptr || xf.wrap_text || xf.justify_last_line;
+  const bool has_alignment = HasAlignment(xf);
   if (!has_alignment && !xf.has_protection) {
     out.append("/>\n");
     return;
@@ -620,21 +630,46 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
   out.append(">");
   if (has_alignment) {
     out.append("<alignment");
-    if (halign != nullptr) {
+    if (HasHorizontalAlign(xf) && halign != nullptr) {
       out.append(" horizontal=\"");
       out.append(halign);
       out.append("\"");
     }
-    if (valign != nullptr) {
+    if (HasVerticalAlign(xf) && valign != nullptr) {
       out.append(" vertical=\"");
       out.append(valign);
       out.append("\"");
     }
-    if (xf.wrap_text) {
-      out.append(" wrapText=\"1\"");
+    if (HasWrapText(xf)) {
+      out.append(xf.wrap_text ? " wrapText=\"1\"" : " wrapText=\"0\"");
     }
-    if (xf.justify_last_line) {
-      out.append(" justifyLastLine=\"1\"");
+    if (HasJustifyLastLine(xf)) {
+      out.append(xf.justify_last_line ? " justifyLastLine=\"1\"" : " justifyLastLine=\"0\"");
+    }
+    if (xf.has_text_rotation) {
+      out.append(" textRotation=\"");
+      AppendUint(out, xf.text_rotation);
+      out.append("\"");
+    }
+    if (xf.has_indent) {
+      out.append(" indent=\"");
+      AppendUint(out, xf.indent);
+      out.append("\"");
+    }
+    if (xf.has_relative_indent) {
+      out.append(" relativeIndent=\"");
+      AppendInt(out, xf.relative_indent);
+      out.append("\"");
+    }
+    if (xf.has_shrink_to_fit) {
+      out.append(" shrinkToFit=\"");
+      out.append(xf.shrink_to_fit ? "1" : "0");
+      out.append("\"");
+    }
+    if (xf.has_reading_order) {
+      out.append(" readingOrder=\"");
+      AppendUint(out, xf.reading_order);
+      out.append("\"");
     }
     out.append("/>");
   }
@@ -652,14 +687,21 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id) {
 }
 
 void AppendCellStyleXfs(std::string& out, const StylesTable& table) {
+  // OOXML packages produced by Excel always carry the base named-style xf,
+  // even when the in-memory model has never declared a named style. Keep
+  // this normalization local to the writer so serializing a table remains a
+  // const operation and callers can still observe an empty model afterwards.
   if (table.cell_style_xfs.empty()) {
+    out.append("  <cellStyleXfs count=\"1\">\n");
+    out.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/>\n");
+    out.append("  </cellStyleXfs>\n");
     return;
   }
   out.append("  <cellStyleXfs count=\"");
   AppendUint(out, table.cell_style_xfs.size());
   out.append("\">\n");
   for (const CellXf& xf : table.cell_style_xfs) {
-    AppendXfBody(out, xf, /*emit_xf_id=*/false);
+    AppendXfBody(out, xf, /*emit_xf_id=*/false, table.cell_style_xfs.size());
   }
   out.append("  </cellStyleXfs>\n");
 }
@@ -673,24 +715,40 @@ void AppendCellXfs(std::string& out, const StylesTable& table) {
     out.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>\n");
   } else {
     for (const CellXf& xf : table.cell_xfs) {
-      AppendXfBody(out, xf, /*emit_xf_id=*/true);
+      const std::size_t style_xf_count = table.cell_style_xfs.empty() ? 1U : table.cell_style_xfs.size();
+      AppendXfBody(out, xf, /*emit_xf_id=*/true, style_xf_count);
     }
   }
   out.append("  </cellXfs>\n");
 }
 
 void AppendCellStyles(std::string& out, const StylesTable& table) {
-  if (table.cell_styles.empty()) {
+  // A synthesized cellStyleXfs base requires a matching Normal style. If
+  // callers supplied other styles while leaving the xf table empty, retain
+  // those records and append Normal so their source ordering is unchanged.
+  const bool synthesize_normal = table.cell_style_xfs.empty();
+  bool has_normal = false;
+  if (synthesize_normal) {
+    for (const CellStyleRecord& cs : table.cell_styles) {
+      if (cs.name == "Normal") {
+        has_normal = true;
+        break;
+      }
+    }
+  }
+  if (table.cell_styles.empty() && !synthesize_normal) {
     return;
   }
+  const std::size_t extra = synthesize_normal && !has_normal ? 1U : 0U;
   out.append("  <cellStyles count=\"");
-  AppendUint(out, table.cell_styles.size());
+  AppendUint(out, table.cell_styles.size() + extra);
   out.append("\">\n");
   for (const CellStyleRecord& cs : table.cell_styles) {
     out.append("    <cellStyle name=\"");
     AppendXmlAttrEscaped(out, cs.name);
     out.append("\" xfId=\"");
-    AppendUint(out, cs.xf_id);
+    const std::size_t style_xf_count = table.cell_style_xfs.empty() ? 1U : table.cell_style_xfs.size();
+    AppendUint(out, cs.xf_id < style_xf_count ? cs.xf_id : 0U);
     out.append("\"");
     if (cs.builtin_id != CellStyleRecord::kBuiltinIdNone) {
       out.append(" builtinId=\"");
@@ -709,6 +767,9 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
       out.append(" customBuiltin=\"1\"");
     }
     out.append("/>\n");
+  }
+  if (extra != 0U) {
+    out.append("    <cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/>\n");
   }
   out.append("  </cellStyles>\n");
 }

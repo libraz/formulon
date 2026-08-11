@@ -10,8 +10,12 @@
 //   numFmts -> fonts -> fills -> borders -> cellStyleXfs -> cellXfs ->
 //   cellStyles.
 //
-// `cellStyleXfs` and `cellStyles` are emitted only when non-empty;
-// freshly-created or never-named-styled workbooks omit both.
+// When `cellStyleXfs` is empty, the writer emits a synthesized default
+// `cellStyleXfs` record and a built-in `Normal` `cellStyles` entry. This is a
+// writer-only normalization: the input table is never modified. Existing
+// non-empty named-style tables retain their source ordering. Dangling
+// `xfId` references are emitted as `0` against the effective style-xf table;
+// this normalization is also writer-only.
 //
 // Design references:
 //   * src/io/styles_reader.h (sister reader; canonical schema)
@@ -37,8 +41,12 @@ namespace io {
 ///
 /// Empty input (default-constructed `StylesTable`) yields a
 /// minimal-but-valid styles document with one default font / fill /
-/// border / cellXf record. This is the same shape Excel emits for a
-/// freshly-created workbook.
+/// border / cellXf record, plus the default `Normal` named-style pair. This
+/// is the same shape Excel emits for a freshly-created workbook.
+/// Explicitly present but empty `<alignment/>` children are retained via
+/// `CellXf::has_alignment`, including when all alignment values are defaults.
+/// The four `CellXf::has_*` alignment-attribute flags likewise preserve
+/// explicit schema defaults such as `horizontal="general"` and `wrapText="0"`.
 std::string write_styles(const StylesTable& table);
 
 }  // namespace io

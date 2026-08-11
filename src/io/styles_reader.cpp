@@ -9,10 +9,13 @@
 
 #include "io/styles_reader.h"
 
+#include <charconv>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 #include "io/xml_utils.h"
@@ -211,54 +214,6 @@ std::uint8_t ParseFillPattern(std::string_view s) {
   return 0;
 }
 
-std::uint8_t ParseHorizontalAlign(std::string_view s) {
-  if (s.empty() || s == "general") {
-    return 0;
-  }
-  if (s == "left") {
-    return 1;
-  }
-  if (s == "center") {
-    return 2;
-  }
-  if (s == "right") {
-    return 3;
-  }
-  if (s == "fill") {
-    return 4;
-  }
-  if (s == "justify") {
-    return 5;
-  }
-  if (s == "centerContinuous") {
-    return 6;
-  }
-  if (s == "distributed") {
-    return 7;
-  }
-  return 0;
-}
-
-std::uint8_t ParseVerticalAlign(std::string_view s) {
-  if (s == "top") {
-    return 0;
-  }
-  if (s == "center") {
-    return 1;
-  }
-  // "bottom" is the OOXML default; treat empty as bottom too.
-  if (s.empty() || s == "bottom") {
-    return 2;
-  }
-  if (s == "justify") {
-    return 3;
-  }
-  if (s == "distributed") {
-    return 4;
-  }
-  return 2;
-}
-
 FontRecord ParseFontNode(const pugi::xml_node& f) {
   FontRecord rec;
   pugi::xml_node name = f.child("name");
@@ -401,66 +356,288 @@ void ReadNumFmts(const pugi::xml_node& root, StylesTable& table) {
   }
 }
 
-void ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec) {
-  rec->font_index = xf.attribute("fontId").as_uint(0U);
-  rec->fill_index = xf.attribute("fillId").as_uint(0U);
-  rec->border_index = xf.attribute("borderId").as_uint(0U);
-  rec->num_fmt_id = static_cast<std::uint16_t>(xf.attribute("numFmtId").as_uint(0U));
-  rec->xf_id = xf.attribute("xfId").as_uint(0U);
-  rec->apply_number_format = xf.attribute("applyNumberFormat").as_bool(false);
-  rec->apply_font = xf.attribute("applyFont").as_bool(false);
-  rec->apply_fill = xf.attribute("applyFill").as_bool(false);
-  rec->apply_border = xf.attribute("applyBorder").as_bool(false);
-  rec->apply_alignment = xf.attribute("applyAlignment").as_bool(false);
-  rec->apply_protection = xf.attribute("applyProtection").as_bool(false);
-  rec->quote_prefix = xf.attribute("quotePrefix").as_bool(false);
-  pugi::xml_node align = xf.child("alignment");
-  if (align) {
-    rec->horizontal_align = ParseHorizontalAlign(align.attribute("horizontal").value());
-    rec->vertical_align = ParseVerticalAlign(align.attribute("vertical").value());
-    rec->wrap_text = align.attribute("wrapText").as_bool(false);
-    rec->justify_last_line = align.attribute("justifyLastLine").as_bool(false);
-  } else {
-    // Default vertical alignment is "bottom" (ordinal 2) per OOXML.
-    rec->vertical_align = 2;
+std::string XfContext(std::string_view section, std::size_t index, std::string_view attr, std::string_view value) {
+  std::string context = "context=styles_reader part=xl/styles.xml section=";
+  context.append(section);
+  context.append(" index=");
+  context.append(std::to_string(index));
+  context.append(" attribute=");
+  context.append(attr);
+  context.append(" value=");
+  context.append(value);
+  return context;
+}
+
+Error InvalidXfAttribute(std::string_view section, std::size_t index, std::string_view attr, std::string_view value) {
+  return make_error(FormulonErrorCode::kIoSheetCorrupt, "styles.xml: invalid style xf attribute",
+                    XfContext(section, index, attr, value));
+}
+
+std::string CollapseXmlWhitespace(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  bool pending_space = false;
+  for (const char ch : text) {
+    const bool is_space = ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
+    if (is_space) {
+      if (!out.empty()) {
+        pending_space = true;
+      }
+      continue;
+    }
+    if (pending_space) {
+      out.push_back(' ');
+      pending_space = false;
+    }
+    out.push_back(ch);
   }
-  if (pugi::xml_node protection = xf.child("protection")) {
+  return out;
+}
+
+template <typename T>
+Expected<T, Error> ParseIntegerAttribute(const pugi::xml_attribute& attr, T default_value, std::string_view section,
+                                         std::size_t index) {
+  if (!attr) {
+    return default_value;
+  }
+  const std::string collapsed = CollapseXmlWhitespace(attr.value());
+  std::string_view text(collapsed);
+  if (text.empty()) {
+    return InvalidXfAttribute(section, index, attr.name(), text);
+  }
+  if constexpr (std::is_unsigned_v<T>) {
+    if (text.front() == '-') {
+      return InvalidXfAttribute(section, index, attr.name(), text);
+    }
+    if (text.front() == '+') {
+      text.remove_prefix(1U);
+      if (text.empty()) {
+        return InvalidXfAttribute(section, index, attr.name(), text);
+      }
+    }
+  } else if (!text.empty() && text.front() == '+') {
+    text.remove_prefix(1U);
+    if (text.empty()) {
+      return InvalidXfAttribute(section, index, attr.name(), text);
+    }
+  }
+  T value{};
+  const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+  if (parsed.ec != std::errc() || parsed.ptr != text.data() + text.size()) {
+    return InvalidXfAttribute(section, index, attr.name(), text);
+  }
+  return value;
+}
+
+Expected<std::uint32_t, Error> ParseU32Attribute(const pugi::xml_attribute& attr, std::uint32_t default_value,
+                                                 std::string_view section, std::size_t index) {
+  return ParseIntegerAttribute<std::uint32_t>(attr, default_value, section, index);
+}
+
+Expected<std::int32_t, Error> ParseI32Attribute(const pugi::xml_attribute& attr, std::int32_t default_value,
+                                                std::string_view section, std::size_t index) {
+  return ParseIntegerAttribute<std::int32_t>(attr, default_value, section, index);
+}
+
+Expected<std::uint16_t, Error> ParseU16Attribute(const pugi::xml_attribute& attr, std::uint16_t default_value,
+                                                 std::string_view section, std::size_t index) {
+  auto parsed = ParseU32Attribute(attr, default_value, section, index);
+  if (!parsed) {
+    return parsed.error();
+  }
+  if (parsed.value() > std::numeric_limits<std::uint16_t>::max()) {
+    return InvalidXfAttribute(section, index, attr.name(), attr.value());
+  }
+  return static_cast<std::uint16_t>(parsed.value());
+}
+
+Expected<bool, Error> ParseBoolAttribute(const pugi::xml_attribute& attr, bool default_value, std::string_view section,
+                                         std::size_t index) {
+  if (!attr) {
+    return default_value;
+  }
+  const std::string text = CollapseXmlWhitespace(attr.value());
+  if (text == "0" || text == "false") {
+    return false;
+  }
+  if (text == "1" || text == "true") {
+    return true;
+  }
+  return InvalidXfAttribute(section, index, attr.name(), text);
+}
+
+Expected<std::uint8_t, Error> ParseHorizontalAlignStrict(const pugi::xml_attribute& attr, std::string_view section,
+                                                         std::size_t index) {
+  if (!attr) {
+    return static_cast<std::uint8_t>(0);
+  }
+  // ST_HorizontalAlignment is an xsd:string-derived lexical type.  Unlike
+  // numeric and boolean attributes, its whitespace is significant: XML
+  // values such as ` center ` are not the `center` token.
+  const std::string_view value(attr.value());
+  if (value == "general") {
+    return static_cast<std::uint8_t>(0);
+  }
+  if (value == "left") {
+    return static_cast<std::uint8_t>(1);
+  }
+  if (value == "center") {
+    return static_cast<std::uint8_t>(2);
+  }
+  if (value == "right") {
+    return static_cast<std::uint8_t>(3);
+  }
+  if (value == "fill") {
+    return static_cast<std::uint8_t>(4);
+  }
+  if (value == "justify") {
+    return static_cast<std::uint8_t>(5);
+  }
+  if (value == "centerContinuous") {
+    return static_cast<std::uint8_t>(6);
+  }
+  if (value == "distributed") {
+    return static_cast<std::uint8_t>(7);
+  }
+  return InvalidXfAttribute(section, index, attr.name(), value);
+}
+
+Expected<std::uint8_t, Error> ParseVerticalAlignStrict(const pugi::xml_attribute& attr, std::string_view section,
+                                                       std::size_t index) {
+  if (!attr) {
+    return static_cast<std::uint8_t>(2);
+  }
+  // ST_VerticalAlignment is also xsd:string-derived; preserve its lexical
+  // whitespace and reject padded tokens.
+  const std::string_view value(attr.value());
+  if (value == "bottom") {
+    return static_cast<std::uint8_t>(2);
+  }
+  if (value == "top") {
+    return static_cast<std::uint8_t>(0);
+  }
+  if (value == "center") {
+    return static_cast<std::uint8_t>(1);
+  }
+  if (value == "justify") {
+    return static_cast<std::uint8_t>(3);
+  }
+  if (value == "distributed") {
+    return static_cast<std::uint8_t>(4);
+  }
+  return InvalidXfAttribute(section, index, attr.name(), value);
+}
+
+Expected<void, Error> ParseCellXfNode(const pugi::xml_node& xf, CellXf* rec, std::string_view section,
+                                      std::size_t index) {
+  ASSIGN_OR_RETURN(rec->font_index, ParseU32Attribute(xf.attribute("fontId"), 0U, section, index));
+  ASSIGN_OR_RETURN(rec->fill_index, ParseU32Attribute(xf.attribute("fillId"), 0U, section, index));
+  ASSIGN_OR_RETURN(rec->border_index, ParseU32Attribute(xf.attribute("borderId"), 0U, section, index));
+  ASSIGN_OR_RETURN(rec->num_fmt_id, ParseU16Attribute(xf.attribute("numFmtId"), 0U, section, index));
+  ASSIGN_OR_RETURN(rec->xf_id, ParseU32Attribute(xf.attribute("xfId"), 0U, section, index));
+  ASSIGN_OR_RETURN(rec->apply_number_format,
+                   ParseBoolAttribute(xf.attribute("applyNumberFormat"), false, section, index));
+  ASSIGN_OR_RETURN(rec->apply_font, ParseBoolAttribute(xf.attribute("applyFont"), false, section, index));
+  ASSIGN_OR_RETURN(rec->apply_fill, ParseBoolAttribute(xf.attribute("applyFill"), false, section, index));
+  ASSIGN_OR_RETURN(rec->apply_border, ParseBoolAttribute(xf.attribute("applyBorder"), false, section, index));
+  ASSIGN_OR_RETURN(rec->apply_alignment, ParseBoolAttribute(xf.attribute("applyAlignment"), false, section, index));
+  ASSIGN_OR_RETURN(rec->apply_protection, ParseBoolAttribute(xf.attribute("applyProtection"), false, section, index));
+  ASSIGN_OR_RETURN(rec->quote_prefix, ParseBoolAttribute(xf.attribute("quotePrefix"), false, section, index));
+
+  const pugi::xml_node align = xf.child("alignment");
+  rec->has_alignment = static_cast<bool>(align);
+  if (align) {
+    if (const pugi::xml_attribute attr = align.attribute("horizontal")) {
+      rec->has_horizontal_align = true;
+      ASSIGN_OR_RETURN(rec->horizontal_align, ParseHorizontalAlignStrict(attr, section, index));
+    }
+    if (const pugi::xml_attribute attr = align.attribute("vertical")) {
+      rec->has_vertical_align = true;
+      ASSIGN_OR_RETURN(rec->vertical_align, ParseVerticalAlignStrict(attr, section, index));
+    }
+    if (const pugi::xml_attribute attr = align.attribute("wrapText")) {
+      rec->has_wrap_text = true;
+      ASSIGN_OR_RETURN(rec->wrap_text, ParseBoolAttribute(attr, false, section, index));
+    }
+    if (const pugi::xml_attribute attr = align.attribute("justifyLastLine")) {
+      rec->has_justify_last_line = true;
+      ASSIGN_OR_RETURN(rec->justify_last_line, ParseBoolAttribute(attr, false, section, index));
+    }
+
+    if (const pugi::xml_attribute attr = align.attribute("textRotation")) {
+      rec->has_text_rotation = true;
+      ASSIGN_OR_RETURN(rec->text_rotation, ParseU32Attribute(attr, 0U, section, index));
+      if (rec->text_rotation > 180U && rec->text_rotation != 255U) {
+        return InvalidXfAttribute(section, index, "textRotation", attr.value());
+      }
+    }
+    if (const pugi::xml_attribute attr = align.attribute("indent")) {
+      rec->has_indent = true;
+      ASSIGN_OR_RETURN(rec->indent, ParseU32Attribute(attr, 0U, section, index));
+      if (rec->indent > 255U) {
+        return InvalidXfAttribute(section, index, "indent", attr.value());
+      }
+    }
+    if (const pugi::xml_attribute attr = align.attribute("relativeIndent")) {
+      rec->has_relative_indent = true;
+      ASSIGN_OR_RETURN(rec->relative_indent, ParseI32Attribute(attr, 0, section, index));
+    }
+    if (const pugi::xml_attribute attr = align.attribute("shrinkToFit")) {
+      rec->has_shrink_to_fit = true;
+      ASSIGN_OR_RETURN(rec->shrink_to_fit, ParseBoolAttribute(attr, false, section, index));
+    }
+    if (const pugi::xml_attribute attr = align.attribute("readingOrder")) {
+      rec->has_reading_order = true;
+      ASSIGN_OR_RETURN(rec->reading_order, ParseU32Attribute(attr, 0U, section, index));
+      if (rec->reading_order > 2U) {
+        return InvalidXfAttribute(section, index, "readingOrder", attr.value());
+      }
+    }
+  }
+  if (const pugi::xml_node protection = xf.child("protection")) {
     rec->has_protection = true;
     // Schema defaults: locked=true, hidden=false. A cell is only
     // unlocked when it explicitly carries locked="0".
-    rec->locked = protection.attribute("locked").as_bool(true);
-    rec->hidden = protection.attribute("hidden").as_bool(false);
+    ASSIGN_OR_RETURN(rec->locked, ParseBoolAttribute(protection.attribute("locked"), true, section, index));
+    ASSIGN_OR_RETURN(rec->hidden, ParseBoolAttribute(protection.attribute("hidden"), false, section, index));
   }
+  return Expected<void, Error>::Ok();
 }
 
-void ReadCellStyleXfs(const pugi::xml_node& root, StylesTable& table) {
+Expected<void, Error> ReadCellStyleXfs(const pugi::xml_node& root, StylesTable& table) {
   pugi::xml_node xfs = root.child("cellStyleXfs");
   if (!xfs) {
-    return;
+    return Expected<void, Error>::Ok();
   }
+  std::size_t index = 0;
   for (pugi::xml_node xf = xfs.child("xf"); xf; xf = xf.next_sibling("xf")) {
     CellXf rec;
-    ParseCellXfNode(xf, &rec);
+    RETURN_IF_ERROR(ParseCellXfNode(xf, &rec, "cellStyleXfs", index));
     table.cell_style_xfs.push_back(rec);
+    ++index;
   }
+  return Expected<void, Error>::Ok();
 }
 
-void ReadCellXfs(const pugi::xml_node& root, StylesTable& table) {
+Expected<void, Error> ReadCellXfs(const pugi::xml_node& root, StylesTable& table) {
   pugi::xml_node xfs = root.child("cellXfs");
   if (!xfs) {
     table.cell_xfs.emplace_back();
-    return;
+    return Expected<void, Error>::Ok();
   }
+  std::size_t index = 0;
   for (pugi::xml_node xf = xfs.child("xf"); xf; xf = xf.next_sibling("xf")) {
     CellXf rec;
-    ParseCellXfNode(xf, &rec);
+    RETURN_IF_ERROR(ParseCellXfNode(xf, &rec, "cellXfs", index));
     table.cell_xfs.push_back(rec);
+    ++index;
   }
   if (table.cell_xfs.empty()) {
     CellXf def;
     def.vertical_align = 2;
     table.cell_xfs.push_back(def);
   }
+  return Expected<void, Error>::Ok();
 }
 
 void ReadCellStyles(const pugi::xml_node& root, StylesTable& table) {
@@ -572,8 +749,8 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
   ReadFonts(root, table);
   ReadFills(root, table);
   ReadBorders(root, table);
-  ReadCellStyleXfs(root, table);
-  ReadCellXfs(root, table);
+  RETURN_IF_ERROR(ReadCellStyleXfs(root, table));
+  RETURN_IF_ERROR(ReadCellXfs(root, table));
   ReadCellStyles(root, table);
   ReadDxfs(root, table);
   table.root_extra_attrs = CaptureRootExtraAttrs(root);
