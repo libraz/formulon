@@ -460,4 +460,67 @@ Napi::Value Workbook::SaveEx(const Napi::CallbackInfo& info) {
   return out;
 }
 
+Napi::Value Workbook::SaveExWithDiagnostics(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "saveExWithDiagnostics requires 1 argument (format)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("bytes", env.Null());
+  out.Set("downgradedFormulaCount", Napi::Number::New(env, 0));
+  out.Set("deferredFeatureCount", Napi::Number::New(env, 0));
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const auto format = static_cast<fm_workbook_format_t>(info[0].As<Napi::Number>().Int32Value());
+  uint8_t* buf = nullptr;
+  std::size_t len = 0;
+  std::size_t downgraded_formula_count = 0;
+  std::size_t deferred_feature_count = 0;
+  fm_status_t rc = fm_workbook_save_ex_with_diagnostics(handle_, format, &buf, &len, &downgraded_formula_count,
+                                                        &deferred_feature_count);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  Napi::Uint8Array dst = Napi::Uint8Array::New(env, len);
+  if (len != 0 && buf != nullptr) {
+    std::memcpy(dst.Data(), buf, len);
+  }
+  fm_buffer_free(buf);
+  out.Set("status", MakeOkStatus(env));
+  out.Set("bytes", dst);
+  out.Set("downgradedFormulaCount", Napi::Number::New(env, static_cast<double>(downgraded_formula_count)));
+  out.Set("deferredFeatureCount", Napi::Number::New(env, static_cast<double>(deferred_feature_count)));
+  return out;
+}
+
+Napi::Value Workbook::XlsbReadDiagnostics(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("undecodedFormulaCount", Napi::Number::New(env, 0));
+  out.Set("undecodedDefinedNameCount", Napi::Number::New(env, 0));
+  out.Set("droppedPartCount", Napi::Number::New(env, 0));
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  std::size_t undecoded_formula_count = 0;
+  std::size_t undecoded_defined_name_count = 0;
+  std::size_t dropped_part_count = 0;
+  fm_status_t rc = fm_workbook_xlsb_read_diagnostics_ex(handle_, &undecoded_formula_count,
+                                                        &undecoded_defined_name_count, &dropped_part_count);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("undecodedFormulaCount", Napi::Number::New(env, static_cast<double>(undecoded_formula_count)));
+  out.Set("undecodedDefinedNameCount", Napi::Number::New(env, static_cast<double>(undecoded_defined_name_count)));
+  out.Set("droppedPartCount", Napi::Number::New(env, static_cast<double>(dropped_part_count)));
+  return out;
+}
+
 }  // namespace formulon_node

@@ -480,7 +480,7 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   const bool has_text = SpecHas(spec, "valueText");
   const std::string value_text = has_text ? spec.Get("valueText").ToString().Utf8Value() : std::string();
 
-  fm_pivot_filter_spec_t c_spec{};
+  fm_pivot_filter_spec_ex_t c_spec{};
   c_spec.axis = static_cast<fm_pivot_axis_t>(SpecPullU32(spec, "axis", 0U));
   c_spec.field_name = field_name.c_str();
   c_spec.type = static_cast<fm_pivot_filter_type_t>(SpecPullU32(spec, "type", 0U));
@@ -491,8 +491,9 @@ Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   c_spec.value_high_kind = static_cast<fm_pivot_filter_value_kind_t>(SpecPullInt32(spec, "valueHighKind", -1));
   c_spec.value_high_int = SpecPullInt32(spec, "valueHighInt", 0);
   c_spec.value_high_double = SpecPullDouble(spec, "valueHighDouble", 0.0);
+  c_spec.data_field_index = SpecPullU32(spec, "dataFieldIndex", 0U);
 
-  fm_status_t rc = fm_workbook_pivot_filter_add(handle_, sheet, pivot_idx, &c_spec);
+  fm_status_t rc = fm_workbook_pivot_filter_add_ex(handle_, sheet, pivot_idx, &c_spec);
   return MakeStatus(env, rc);
 }
 

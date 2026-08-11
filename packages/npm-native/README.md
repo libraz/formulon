@@ -24,15 +24,17 @@ Why prefer the native build:
 
 ## Surface parity
 
-This package exposes the full `Workbook` surface of the WASM-backed
+This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register the same 179 instance methods plus the three static factories.
-The `Workbook` methods use the same `{ status, value }` envelopes
-and result shapes; switching packages still requires updating the module
-import and validating the target platform's native prebuild. The
-native-only differences are operational (native threads, no V8 ↔ WASM heap
-copies, no 4 GiB ceiling), not API-shaped.
+register 181 instance methods plus the three static factories. Of those
+instance methods, 179 are shared with WASM; nine remain WASM-only, while
+`dispose()` and `memoryUsage()` are native-only lifecycle helpers.
+The shared `Workbook` methods use the same status-bearing result envelopes
+and field shapes; switching packages still requires updating the module
+import and validating the target platform's native prebuild. The additional
+native-only methods are operational helpers; the nine
+WASM-only methods remain available through the WASM package.
 
 Two methods exist only here, both because a native workbook lives outside
 the JS heap in a way the WASM build's does not: `dispose()` releases the
@@ -53,7 +55,8 @@ Cells & recalc
   dispose
   setNumber, setBool, setText, setBlank, setFormula
   getValue, getLambdaText
-  recalc, partialRecalc, setIterative, setIterativeProgress, save
+  recalc, partialRecalc, setIterative, setIterativeProgress, save,
+  saveEx, saveExWithDiagnostics, xlsbReadDiagnostics
 
 Workbook policy / catalog
   calcMode, setCalcMode, excelProfileId, setExcelProfileId

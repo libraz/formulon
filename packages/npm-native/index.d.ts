@@ -84,6 +84,22 @@ export interface SaveResult {
   bytes: Uint8Array | null;
 }
 
+/** Return type of saveExWithDiagnostics(format). */
+export interface SaveDiagnosticsResult extends SaveResult {
+  /** XLSB formula cells emitted as cached literals. Always zero for XLSX. */
+  downgradedFormulaCount: number;
+  /** XLSB modelled features omitted by the binary writer (data loss). */
+  deferredFeatureCount: number;
+}
+
+/** Return type of xlsbReadDiagnostics(). */
+export interface XlsbReadDiagnosticsResult {
+  status: Status;
+  undecodedFormulaCount: number;
+  undecodedDefinedNameCount: number;
+  droppedPartCount: number;
+}
+
 /** `fm_workbook_format_t` ordinals: container format for `saveEx`. */
 export const WorkbookFormat: Readonly<{
   Unknown: 0;
@@ -303,6 +319,8 @@ export interface PivotFilterSpec {
   fieldName: string;
   /** One of `PivotFilterType.*`. */
   type: number;
+  /** Data-field aggregate scored by value filters. Defaults to 0. */
+  dataFieldIndex?: number;
   /** One of `PivotFilterValueKind.*`. */
   valueKind?: number;
   valueInt?: number;
@@ -653,6 +671,30 @@ export interface CellXfResult {
   horizontalAlign: number;
   verticalAlign: number;
   wrapText: boolean;
+  /** OOXML `justifyLastLine`; effective with distributed horizontal alignment. */
+  justifyLastLine: boolean;
+  /** Whether the source `<xf>` carried an `<alignment>` child. */
+  hasAlignment: boolean;
+  /** Whether `horizontal="..."` was explicitly present. */
+  hasHorizontalAlign: boolean;
+  /** Whether `vertical="..."` was explicitly present. */
+  hasVerticalAlign: boolean;
+  /** Whether `wrapText="..."` was explicitly present. */
+  hasWrapText: boolean;
+  /** Whether `justifyLastLine="..."` was explicitly present. */
+  hasJustifyLastLine: boolean;
+  /** OOXML `textRotation`; present only when the source attribute existed. */
+  textRotation?: number;
+  /** OOXML `indent`; present only when the source attribute existed. */
+  indent?: number;
+  /** OOXML signed `relativeIndent`; present only when the source attribute existed. */
+  relativeIndent?: number;
+  /** OOXML `shrinkToFit`; present only when the source attribute existed. */
+  shrinkToFit?: boolean;
+  /** OOXML `readingOrder`; present only when the source attribute existed. */
+  readingOrder?: number;
+  /** Index into `<cellStyleXfs>` for this cell format. */
+  xfId?: number;
 }
 
 /** Plain-data shape of a font record. Mirrors `formulon::io::FontRecord`. */
@@ -704,6 +746,30 @@ export interface CellXf {
   horizontalAlign: number;
   verticalAlign: number;
   wrapText: boolean;
+  /** OOXML `justifyLastLine`; effective with distributed alignment. */
+  justifyLastLine?: boolean;
+  /** Whether to preserve an explicit alignment child. Omit to infer from supplied alignment fields. */
+  hasAlignment?: boolean;
+  /** Whether `horizontalAlign` was explicitly supplied; defaults to inference. */
+  hasHorizontalAlign?: boolean;
+  /** Whether `verticalAlign` was explicitly supplied; defaults to inference. */
+  hasVerticalAlign?: boolean;
+  /** Whether `wrapText` was explicitly supplied; defaults to inference. */
+  hasWrapText?: boolean;
+  /** Whether `justifyLastLine` was explicitly supplied; defaults to inference. */
+  hasJustifyLastLine?: boolean;
+  /** OOXML `textRotation` (0..180 or 255). Omitted when absent. */
+  textRotation?: number;
+  /** OOXML `indent` (0..255). Omitted when absent. */
+  indent?: number;
+  /** OOXML signed `relativeIndent`. Omitted when absent. */
+  relativeIndent?: number;
+  /** OOXML `shrinkToFit`; omitted when absent so explicit false is retained. */
+  shrinkToFit?: boolean;
+  /** OOXML `readingOrder` (0=context, 1=LTR, 2=RTL). Omitted when absent. */
+  readingOrder?: number;
+  /** Index of the named style in `<cellStyleXfs>` this format inherits from. */
+  xfId?: number;
 }
 
 /** Return type of `Workbook.getFont(fontIndex)`. */
@@ -1109,6 +1175,10 @@ export interface Workbook {
   save(): SaveResult;
   /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
   saveEx(format: number): SaveResult;
+  /** Serialises using an explicit format and reports loss/defer counters. */
+  saveExWithDiagnostics(format: number): SaveDiagnosticsResult;
+  /** Returns XLSB read recovery and dropped-part counters for this handle. */
+  xlsbReadDiagnostics(): XlsbReadDiagnosticsResult;
 
   // Workbook-level calc policy / behaviour profile.
   /** Workbook-level calc mode (Excel `<calcPr calcMode>` policy). The

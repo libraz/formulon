@@ -21,10 +21,12 @@ Checks:
   dts-node        packages/npm-native/index.d.ts (Workbook /
                   WorkbookCtor / free-function surface) matches what is
                   registered in src/node_addon/parts/workbook_class.cc
-                  and src/node_addon/addon.cc.
+                  and src/node_addon/addon.cc. It also enforces the exact
+                  intentional WASM-only / Node-only method allowlists.
   readme-counts   The instance-method count quoted in
-                  packages/npm-native/README.md matches the actual
-                  count registered in workbook_class.cc.
+                  packages/npm-native/README.md matches the actual count
+                  registered in workbook_class.cc and its shared/WASM-only
+                  projection is current.
   dts-enums       Every `export enum` in src/wasm/formulon.d.ts that
                   mirrors a C/C++ enum (embind passes these through as
                   plain numbers rather than registering a real
@@ -69,6 +71,22 @@ PYTHON_STRUCTS = PYTHON_PKG_DIR / "_structs.py"
 # corresponding `.function(...)` registration, so it must be excluded before
 # comparing the WASM Workbook interface against bindings_register.cpp.
 WASM_AUTO_METHODS = {"delete"}
+
+# Intentional binding differences are kept exact. This makes a newly added
+# method or a removed method fail drift checking instead of becoming a stale
+# exception in one binding.
+WASM_ONLY_METHODS = {
+    "addCellStyleXf",
+    "createTable",
+    "getCellPhonetic",
+    "getSheetAutoFilterXml",
+    "removeTable",
+    "setCellPhonetic",
+    "setCellStyle",
+    "setSheetAutoFilterXml",
+    "updateTable",
+}
+NODE_ONLY_METHODS = {"dispose", "memoryUsage"}
 
 # Pure-JS free functions declared in packages/npm-native/index.d.ts that are
 # intentionally NOT backed by a native `exports.Set(...)` registration -- they
@@ -236,6 +254,19 @@ def check_python_struct_layouts() -> List[str]:
         "fm_fill_record": (12, 4),
         "fm_border_record": (48, 4),
     }
+    # Versioned style records embed the stable ``fm_cell_xf`` prefix rather
+    # than repeating its fields. Expand that nested POD here so the Python
+    # marshaller can keep its flat field map while still checking the exact
+    # C offsets and final size.
+    embedded_cell_xf = [
+        ("font_index", 4, 4),
+        ("fill_index", 4, 4),
+        ("border_index", 4, 4),
+        ("num_fmt_id", 2, 2),
+        ("horizontal_align", 1, 1),
+        ("vertical_align", 1, 1),
+        ("wrap_text", 4, 4),
+    ]
     problems: List[str] = []
     for layout in (value for value in vars(module).values() if isinstance(value, module.Struct)):
         body = blocks.get(layout.name)
@@ -258,6 +289,9 @@ def check_python_struct_layouts() -> List[str]:
                 size, align = 4, 4
             else:
                 ctype = ctype.replace("const ", "").strip()
+                if ctype == "fm_cell_xf":
+                    c_fields.extend(embedded_cell_xf)
+                    continue
                 if ctype == "fm_cf_color_t":
                     if name in py_field_names:
                         c_fields.append((name, 4, 1))
@@ -348,6 +382,27 @@ def check_dts_node() -> List[str]:
     free_dts = set(re.findall(r"^export function ([A-Za-z0-9_]+)\(", dts_text, re.MULTILINE))
     free_dts -= NODE_PURE_JS_FREE_FUNCTIONS
 
+    wasm_cpp_text = _read(WASM_BINDINGS_CPP)
+    wasm_instance = set(re.findall(r'\.function\("([^"]+)"', wasm_cpp_text))
+    actual_wasm_only = wasm_instance - instance_cc
+    actual_node_only = instance_cc - wasm_instance
+    if actual_wasm_only != WASM_ONLY_METHODS:
+        problems.append(
+            "dts-node: WASM-only instance-method allowlist mismatch; "
+            f"actual={sorted(actual_wasm_only)}, allowlist={sorted(WASM_ONLY_METHODS)}"
+        )
+    if actual_node_only != NODE_ONLY_METHODS:
+        problems.append(
+            "dts-node: Node-only instance-method allowlist mismatch; "
+            f"actual={sorted(actual_node_only)}, allowlist={sorted(NODE_ONLY_METHODS)}"
+        )
+    stale_wasm_only = WASM_ONLY_METHODS - actual_wasm_only
+    stale_node_only = NODE_ONLY_METHODS - actual_node_only
+    if stale_wasm_only:
+        problems.append(f"dts-node: stale WASM-only allowlist entries: {sorted(stale_wasm_only)}")
+    if stale_node_only:
+        problems.append(f"dts-node: stale Node-only allowlist entries: {sorted(stale_node_only)}")
+
     for label, cc_set, dts_set in (
         ("Workbook instance methods", instance_cc, instance_dts),
         ("Workbook static factories", static_cc, static_dts),
@@ -383,7 +438,8 @@ _NUMBER_WORDS = {
     "ten": 10,
 }
 
-_README_COUNT_RE = re.compile(r"the same (\d+) instance methods plus the\s+(\w+) static factories")
+_README_COUNT_RE = re.compile(r"register (\d+) instance methods plus the\s+(\w+) static factories")
+_README_SHARED_COUNT_RE = re.compile(r"instance methods, (\d+) are shared with WASM; (\w+) remain WASM-only")
 
 
 def check_readme_counts() -> List[str]:
@@ -415,6 +471,31 @@ def check_readme_counts() -> List[str]:
             f"readme-counts: {NODE_README.relative_to(REPO_ROOT)} claims {match.group(2)!r} static factories, "
             f"actual count in {NODE_WORKBOOK_CLASS_CC.relative_to(REPO_ROOT)} is {actual_static}"
         )
+
+    wasm_cpp_text = _read(WASM_BINDINGS_CPP)
+    wasm_instance = set(re.findall(r'\.function\("([^"]+)"', wasm_cpp_text))
+    actual_node_methods = set(re.findall(r'InstanceMethod<[^>]+>\("([^"]+)"\)', cc_text))
+    actual_shared = len(wasm_instance & actual_node_methods)
+    actual_wasm_only = len(wasm_instance - actual_node_methods)
+    shared_match = _README_SHARED_COUNT_RE.search(readme_text)
+    if not shared_match:
+        problems.append(
+            f"readme-counts: could not find the shared/WASM-only method-count sentence in "
+            f"{NODE_README.relative_to(REPO_ROOT)}"
+        )
+    else:
+        quoted_shared = int(shared_match.group(1))
+        quoted_wasm_only = _NUMBER_WORDS.get(shared_match.group(2).lower())
+        if quoted_shared != actual_shared:
+            problems.append(
+                f"readme-counts: {NODE_README.relative_to(REPO_ROOT)} claims {quoted_shared} shared methods, "
+                f"actual shared count is {actual_shared}"
+            )
+        if quoted_wasm_only is None or quoted_wasm_only != actual_wasm_only:
+            problems.append(
+                f"readme-counts: {NODE_README.relative_to(REPO_ROOT)} claims {shared_match.group(2)!r} WASM-only methods, "
+                f"actual count is {actual_wasm_only}"
+            )
 
     return problems
 

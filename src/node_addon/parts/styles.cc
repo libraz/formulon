@@ -97,20 +97,42 @@ Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
     return out;
   }
   const uint32_t xf_index = ArgU32(info, 0);
-  fm_cell_xf xf{};
-  fm_status_t rc = fm_styles_get_cell_xf(handle_, xf_index, &xf);
+  fm_cell_xf_ex2 xf{};
+  fm_status_t rc = fm_styles_get_cell_xf_ex2(handle_, xf_index, &xf);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
   out.Set("status", MakeOkStatus(env));
-  out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
-  out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
-  out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
-  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
-  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.horizontal_align)));
-  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.vertical_align)));
-  out.Set("wrapText", Napi::Boolean::New(env, xf.wrap_text != 0));
+  out.Set("fontIndex", Napi::Number::New(env, xf.base.font_index));
+  out.Set("fillIndex", Napi::Number::New(env, xf.base.fill_index));
+  out.Set("borderIndex", Napi::Number::New(env, xf.base.border_index));
+  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.base.num_fmt_id)));
+  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.base.horizontal_align)));
+  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.base.vertical_align)));
+  out.Set("wrapText", Napi::Boolean::New(env, xf.base.wrap_text != 0));
+  out.Set("justifyLastLine", Napi::Boolean::New(env, xf.justify_last_line != 0));
+  out.Set("hasAlignment", Napi::Boolean::New(env, xf.has_alignment != 0));
+  out.Set("hasHorizontalAlign", Napi::Boolean::New(env, xf.has_horizontal_align != 0));
+  out.Set("hasVerticalAlign", Napi::Boolean::New(env, xf.has_vertical_align != 0));
+  out.Set("hasWrapText", Napi::Boolean::New(env, xf.has_wrap_text != 0));
+  out.Set("hasJustifyLastLine", Napi::Boolean::New(env, xf.has_justify_last_line != 0));
+  out.Set("xfId", Napi::Number::New(env, xf.xf_id));
+  if (xf.has_text_rotation != 0) {
+    out.Set("textRotation", Napi::Number::New(env, xf.text_rotation));
+  }
+  if (xf.has_indent != 0) {
+    out.Set("indent", Napi::Number::New(env, xf.indent));
+  }
+  if (xf.has_relative_indent != 0) {
+    out.Set("relativeIndent", Napi::Number::New(env, xf.relative_indent));
+  }
+  if (xf.has_shrink_to_fit != 0) {
+    out.Set("shrinkToFit", Napi::Boolean::New(env, xf.shrink_to_fit != 0));
+  }
+  if (xf.has_reading_order != 0) {
+    out.Set("readingOrder", Napi::Number::New(env, xf.reading_order));
+  }
   return out;
 }
 
@@ -371,18 +393,61 @@ Napi::Value Workbook::AddXf(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
-  fm_cell_xf xf{};
-  xf.font_index = record.Has("fontIndex") ? record.Get("fontIndex").ToNumber().Uint32Value() : 0U;
-  xf.fill_index = record.Has("fillIndex") ? record.Get("fillIndex").ToNumber().Uint32Value() : 0U;
-  xf.border_index = record.Has("borderIndex") ? record.Get("borderIndex").ToNumber().Uint32Value() : 0U;
-  xf.num_fmt_id = record.Has("numFmtId") ? static_cast<uint16_t>(record.Get("numFmtId").ToNumber().Uint32Value()) : 0U;
-  xf.horizontal_align =
+  fm_cell_xf_ex2 xf{};
+  xf.base.font_index = record.Has("fontIndex") ? record.Get("fontIndex").ToNumber().Uint32Value() : 0U;
+  xf.base.fill_index = record.Has("fillIndex") ? record.Get("fillIndex").ToNumber().Uint32Value() : 0U;
+  xf.base.border_index = record.Has("borderIndex") ? record.Get("borderIndex").ToNumber().Uint32Value() : 0U;
+  xf.base.num_fmt_id =
+      record.Has("numFmtId") ? static_cast<uint16_t>(record.Get("numFmtId").ToNumber().Uint32Value()) : 0U;
+  xf.base.horizontal_align =
       record.Has("horizontalAlign") ? static_cast<uint8_t>(record.Get("horizontalAlign").ToNumber().Uint32Value()) : 0U;
-  xf.vertical_align =
-      record.Has("verticalAlign") ? static_cast<uint8_t>(record.Get("verticalAlign").ToNumber().Uint32Value()) : 0U;
-  xf.wrap_text = (record.Has("wrapText") && record.Get("wrapText").ToBoolean().Value()) ? 1 : 0;
+  xf.base.vertical_align =
+      record.Has("verticalAlign") ? static_cast<uint8_t>(record.Get("verticalAlign").ToNumber().Uint32Value()) : 2U;
+  xf.base.wrap_text = (record.Has("wrapText") && record.Get("wrapText").ToBoolean().Value()) ? 1 : 0;
+  xf.justify_last_line = SpecPullBool(record, "justifyLastLine", false) ? 1 : 0;
+  xf.xf_id = SpecPullU32(record, "xfId", 0U);
+  xf.has_horizontal_align = SpecHas(record, "hasHorizontalAlign")
+                                ? (SpecPullBool(record, "hasHorizontalAlign", false) ? 1 : 0)
+                                : (SpecHas(record, "horizontalAlign") ? 1 : 0);
+  xf.has_vertical_align = SpecHas(record, "hasVerticalAlign")
+                              ? (SpecPullBool(record, "hasVerticalAlign", false) ? 1 : 0)
+                              : (SpecHas(record, "verticalAlign") ? 1 : 0);
+  xf.has_wrap_text = SpecHas(record, "hasWrapText") ? (SpecPullBool(record, "hasWrapText", false) ? 1 : 0)
+                                                    : (SpecHas(record, "wrapText") ? 1 : 0);
+  xf.has_justify_last_line = SpecHas(record, "hasJustifyLastLine")
+                                 ? (SpecPullBool(record, "hasJustifyLastLine", false) ? 1 : 0)
+                                 : (SpecHas(record, "justifyLastLine") ? 1 : 0);
+  const bool has_explicit_alignment = SpecHas(record, "hasAlignment");
+  const bool has_supplied_alignment =
+      SpecHas(record, "horizontalAlign") || SpecHas(record, "verticalAlign") || SpecHas(record, "wrapText") ||
+      SpecHas(record, "justifyLastLine") || SpecHas(record, "textRotation") || SpecHas(record, "indent") ||
+      SpecHas(record, "relativeIndent") || SpecHas(record, "shrinkToFit") || SpecHas(record, "readingOrder") ||
+      SpecHas(record, "hasHorizontalAlign") || SpecHas(record, "hasVerticalAlign") || SpecHas(record, "hasWrapText") ||
+      SpecHas(record, "hasJustifyLastLine");
+  xf.has_alignment =
+      has_explicit_alignment ? (SpecPullBool(record, "hasAlignment", false) ? 1 : 0) : (has_supplied_alignment ? 1 : 0);
+  if (SpecHas(record, "textRotation")) {
+    xf.has_text_rotation = 1;
+    xf.text_rotation = SpecPullU32(record, "textRotation", 0U);
+  }
+  if (SpecHas(record, "indent")) {
+    xf.has_indent = 1;
+    xf.indent = SpecPullU32(record, "indent", 0U);
+  }
+  if (SpecHas(record, "relativeIndent")) {
+    xf.has_relative_indent = 1;
+    xf.relative_indent = SpecPullInt32(record, "relativeIndent", 0);
+  }
+  if (SpecHas(record, "shrinkToFit")) {
+    xf.has_shrink_to_fit = 1;
+    xf.shrink_to_fit = SpecPullBool(record, "shrinkToFit", false) ? 1 : 0;
+  }
+  if (SpecHas(record, "readingOrder")) {
+    xf.has_reading_order = 1;
+    xf.reading_order = SpecPullU32(record, "readingOrder", 0U);
+  }
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_cell_xf(handle_, xf, &idx);
+  fm_status_t rc = fm_styles_add_cell_xf_ex2(handle_, xf, &idx);
   if (rc != 0) {
     return MakeNumberFieldResult(env, MakeErrorStatus(env, rc), "index", 0);
   }
@@ -595,20 +660,41 @@ Napi::Value Workbook::GetCellStyleXf(const Napi::CallbackInfo& info) {
     return out;
   }
   const uint32_t index = ArgU32(info, 0);
-  fm_cell_xf xf{};
-  fm_status_t rc = fm_styles_get_cell_style_xf(handle_, index, &xf);
+  fm_cell_xf_ex2 xf{};
+  fm_status_t rc = fm_styles_get_cell_style_xf_ex2(handle_, index, &xf);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
   out.Set("status", MakeOkStatus(env));
-  out.Set("fontIndex", Napi::Number::New(env, xf.font_index));
-  out.Set("fillIndex", Napi::Number::New(env, xf.fill_index));
-  out.Set("borderIndex", Napi::Number::New(env, xf.border_index));
-  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.num_fmt_id)));
-  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.horizontal_align)));
-  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.vertical_align)));
-  out.Set("wrapText", Napi::Boolean::New(env, xf.wrap_text != 0));
+  out.Set("fontIndex", Napi::Number::New(env, xf.base.font_index));
+  out.Set("fillIndex", Napi::Number::New(env, xf.base.fill_index));
+  out.Set("borderIndex", Napi::Number::New(env, xf.base.border_index));
+  out.Set("numFmtId", Napi::Number::New(env, static_cast<uint32_t>(xf.base.num_fmt_id)));
+  out.Set("horizontalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.base.horizontal_align)));
+  out.Set("verticalAlign", Napi::Number::New(env, static_cast<uint32_t>(xf.base.vertical_align)));
+  out.Set("wrapText", Napi::Boolean::New(env, xf.base.wrap_text != 0));
+  out.Set("justifyLastLine", Napi::Boolean::New(env, xf.justify_last_line != 0));
+  out.Set("hasAlignment", Napi::Boolean::New(env, xf.has_alignment != 0));
+  out.Set("hasHorizontalAlign", Napi::Boolean::New(env, xf.has_horizontal_align != 0));
+  out.Set("hasVerticalAlign", Napi::Boolean::New(env, xf.has_vertical_align != 0));
+  out.Set("hasWrapText", Napi::Boolean::New(env, xf.has_wrap_text != 0));
+  out.Set("hasJustifyLastLine", Napi::Boolean::New(env, xf.has_justify_last_line != 0));
+  if (xf.has_text_rotation != 0) {
+    out.Set("textRotation", Napi::Number::New(env, xf.text_rotation));
+  }
+  if (xf.has_indent != 0) {
+    out.Set("indent", Napi::Number::New(env, xf.indent));
+  }
+  if (xf.has_relative_indent != 0) {
+    out.Set("relativeIndent", Napi::Number::New(env, xf.relative_indent));
+  }
+  if (xf.has_shrink_to_fit != 0) {
+    out.Set("shrinkToFit", Napi::Boolean::New(env, xf.shrink_to_fit != 0));
+  }
+  if (xf.has_reading_order != 0) {
+    out.Set("readingOrder", Napi::Number::New(env, xf.reading_order));
+  }
   return out;
 }
 

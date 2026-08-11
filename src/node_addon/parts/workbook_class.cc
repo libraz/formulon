@@ -317,6 +317,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::RenameSheet>("renameSheet"),
           InstanceMethod<&Workbook::Save>("save"),
           InstanceMethod<&Workbook::SaveEx>("saveEx"),
+          InstanceMethod<&Workbook::SaveExWithDiagnostics>("saveExWithDiagnostics"),
+          InstanceMethod<&Workbook::XlsbReadDiagnostics>("xlsbReadDiagnostics"),
           InstanceMethod<&Workbook::SetBlank>("setBlank"),
           InstanceMethod<&Workbook::SetBool>("setBool"),
           InstanceMethod<&Workbook::SetCalcMode>("setCalcMode"),
