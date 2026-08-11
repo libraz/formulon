@@ -74,6 +74,7 @@ from .workbook import (
     PivotShowValuesAs,
     PivotWorksheetSource,
     RowLayout,
+    SaveDiagnostics,
     SheetProtection,
     SheetView,
     SpillInfo,
@@ -81,6 +82,7 @@ from .workbook import (
     Value,
     Workbook,
     WorkbookFormat,
+    XlsbReadDiagnostics,
 )
 
 
@@ -183,6 +185,7 @@ __all__ = [
     "PivotShowValuesAs",
     "PivotWorksheetSource",
     "RowLayout",
+    "SaveDiagnostics",
     "SheetProtection",
     "SheetView",
     "SpillInfo",
@@ -191,6 +194,7 @@ __all__ = [
     "ValueKind",
     "Workbook",
     "WorkbookFormat",
+    "XlsbReadDiagnostics",
     "__version__",
     "error_display_name",
     "eval_formula",

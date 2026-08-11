@@ -70,6 +70,23 @@ class FormulonError(Exception):
     context: str
     def __init__(self, status: int, *, op: str = ...) -> None: ...
 
+class SaveDiagnostics:
+    bytes: bytes
+    downgraded_formula_count: int
+    deferred_feature_count: int
+    def __init__(self, bytes: bytes, downgraded_formula_count: int, deferred_feature_count: int) -> None: ...
+
+class XlsbReadDiagnostics:
+    undecoded_formula_count: int
+    undecoded_defined_name_count: int
+    dropped_part_count: int
+    def __init__(
+        self,
+        undecoded_formula_count: int,
+        undecoded_defined_name_count: int,
+        dropped_part_count: int,
+    ) -> None: ...
+
 # ---------------------------------------------------------------------------
 # Enumerations
 # ---------------------------------------------------------------------------
@@ -504,6 +521,18 @@ class CellXf:
     horizontal_align: int
     vertical_align: int
     wrap_text: bool
+    has_alignment: Optional[bool]
+    justify_last_line: bool
+    xf_id: int
+    text_rotation: Optional[int]
+    indent: Optional[int]
+    relative_indent: Optional[int]
+    shrink_to_fit: Optional[bool]
+    reading_order: Optional[int]
+    has_horizontal_align: Optional[bool]
+    has_vertical_align: Optional[bool]
+    has_wrap_text: Optional[bool]
+    has_justify_last_line: Optional[bool]
     def __init__(
         self,
         font_index: int,
@@ -513,6 +542,18 @@ class CellXf:
         horizontal_align: int,
         vertical_align: int,
         wrap_text: bool,
+        has_alignment: Optional[bool] = ...,
+        justify_last_line: bool = ...,
+        xf_id: int = ...,
+        text_rotation: Optional[int] = ...,
+        indent: Optional[int] = ...,
+        relative_indent: Optional[int] = ...,
+        shrink_to_fit: Optional[bool] = ...,
+        reading_order: Optional[int] = ...,
+        has_horizontal_align: Optional[bool] = ...,
+        has_vertical_align: Optional[bool] = ...,
+        has_wrap_text: Optional[bool] = ...,
+        has_justify_last_line: Optional[bool] = ...,
     ) -> None: ...
 
 class FontRecord:
@@ -643,6 +684,7 @@ class PivotFilterSpec:
     value_high_kind: int
     value_high_int: int
     value_high_double: float
+    data_field_index: int
     def __init__(
         self,
         axis: int,
@@ -655,6 +697,7 @@ class PivotFilterSpec:
         value_high_kind: int = ...,
         value_high_int: int = ...,
         value_high_double: float = ...,
+        data_field_index: int = ...,
     ) -> None: ...
 
 # ---------------------------------------------------------------------------
@@ -723,6 +766,8 @@ class Workbook:
     # Save.
     def save(self) -> bytes: ...
     def save_ex(self, fmt: int) -> bytes: ...
+    def save_ex_with_diagnostics(self, fmt: int) -> SaveDiagnostics: ...
+    def xlsb_read_diagnostics(self) -> XlsbReadDiagnostics: ...
 
     # Iteration.
     def iter_cells(self, sheet: int) -> Iterator[Cell]: ...

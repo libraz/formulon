@@ -344,6 +344,25 @@ PIVOT_FILTER_SPEC = Struct(
     ],
 )
 
+# ABI-safe extension of ``fm_pivot_filter_spec_t``. Keep the legacy layout
+# above unchanged; the extra selector is appended for the ``*_add_ex`` call.
+PIVOT_FILTER_SPEC_EX = Struct(
+    "fm_pivot_filter_spec_ex_t",
+    [
+        ("axis", I32),
+        ("field_name", PTR),
+        ("type", I32),
+        ("value_kind", I32),
+        ("value_int", I32),
+        ("value_double", F64),
+        ("value_text", PTR),
+        ("value_high_kind", I32),
+        ("value_high_int", I32),
+        ("value_high_double", F64),
+        ("data_field_index", U32),
+    ],
+)
+
 SPILL_INFO = Struct(
     "fm_spill_info_t",
     [
@@ -424,6 +443,39 @@ CELL_XF = Struct(
         ("horizontal_align", U8),
         ("vertical_align", U8),
         ("wrap_text", I32),
+    ],
+)
+
+# ABI-safe superset of ``fm_cell_xf_ex``. Keep ``CELL_XF`` and the legacy
+# C struct unchanged; every optional alignment attribute has an explicit
+# presence flag so zero / false values can be round-tripped.
+CELL_XF_EX2 = Struct(
+    "fm_cell_xf_ex2",
+    [
+        ("font_index", U32),
+        ("fill_index", U32),
+        ("border_index", U32),
+        ("num_fmt_id", U16),
+        ("horizontal_align", U8),
+        ("vertical_align", U8),
+        ("wrap_text", I32),
+        ("justify_last_line", I32),
+        ("xf_id", U32),
+        ("has_alignment", I32),
+        ("has_text_rotation", I32),
+        ("text_rotation", U32),
+        ("has_indent", I32),
+        ("indent", U32),
+        ("has_relative_indent", I32),
+        ("relative_indent", I32),
+        ("has_shrink_to_fit", I32),
+        ("shrink_to_fit", I32),
+        ("has_reading_order", I32),
+        ("reading_order", U32),
+        ("has_horizontal_align", I32),
+        ("has_vertical_align", I32),
+        ("has_wrap_text", I32),
+        ("has_justify_last_line", I32),
     ],
 )
 

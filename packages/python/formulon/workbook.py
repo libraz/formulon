@@ -71,6 +71,7 @@ __all__ = [
     "PivotShowValuesAs",
     "PivotWorksheetSource",
     "RowLayout",
+    "SaveDiagnostics",
     "SheetProtection",
     "SheetView",
     "SpillInfo",
@@ -78,6 +79,7 @@ __all__ = [
     "Value",
     "ValueKind",
     "Workbook",
+    "XlsbReadDiagnostics",
 ]
 
 
@@ -119,6 +121,24 @@ class FormulonError(Exception):
         if self.context:
             text += f" [{self.context}]"
         super().__init__(text)
+
+
+@dataclass(frozen=True)
+class SaveDiagnostics:
+    """Bytes and loss counters returned by ``save_ex_with_diagnostics``."""
+
+    bytes: bytes
+    downgraded_formula_count: int
+    deferred_feature_count: int
+
+
+@dataclass(frozen=True)
+class XlsbReadDiagnostics:
+    """Loss and recovery counters captured while loading an XLSB workbook."""
+
+    undecoded_formula_count: int
+    undecoded_defined_name_count: int
+    dropped_part_count: int
 
 
 def _check(status: int, op: str) -> None:
@@ -720,6 +740,21 @@ class FunctionMetadata:
     description: Optional[str]
 
 
+def _cell_xf_has_alignment(record: "CellXf") -> bool:
+    return (
+        record.has_alignment is True
+        or (record.has_horizontal_align if record.has_horizontal_align is not None else record.horizontal_align != 0)
+        or (record.has_vertical_align if record.has_vertical_align is not None else record.vertical_align != 2)
+        or (record.has_wrap_text if record.has_wrap_text is not None else record.wrap_text)
+        or (record.has_justify_last_line if record.has_justify_last_line is not None else record.justify_last_line)
+        or record.text_rotation is not None
+        or record.indent is not None
+        or record.relative_indent is not None
+        or record.shrink_to_fit is not None
+        or record.reading_order is not None
+    )
+
+
 @dataclass(frozen=True)
 class CellXf:
     """A resolved ``<xf>`` style record."""
@@ -731,6 +766,21 @@ class CellXf:
     horizontal_align: int
     vertical_align: int
     wrap_text: bool
+    #: ``None`` infers presence from explicitly supplied alignment values;
+    #: ``False`` requests omission when all alignment values are defaults.
+    #: Non-default values still imply that an alignment child is required.
+    has_alignment: Optional[bool] = None
+    justify_last_line: bool = False
+    xf_id: int = 0
+    text_rotation: Optional[int] = None
+    indent: Optional[int] = None
+    relative_indent: Optional[int] = None
+    shrink_to_fit: Optional[bool] = None
+    reading_order: Optional[int] = None
+    has_horizontal_align: Optional[bool] = None
+    has_vertical_align: Optional[bool] = None
+    has_wrap_text: Optional[bool] = None
+    has_justify_last_line: Optional[bool] = None
 
 
 @dataclass
@@ -868,6 +918,7 @@ class PivotFilterSpec:
     value_high_kind: int = PivotFilterValueKind.NONE
     value_high_int: int = 0
     value_high_double: float = 0.0
+    data_field_index: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -1288,6 +1339,62 @@ class Workbook:
         finally:
             LIB.free(out_ptr_ptr)
             LIB.free(out_len_ptr)
+
+    def save_ex_with_diagnostics(self, fmt: "WorkbookFormat | int") -> SaveDiagnostics:
+        """Serialise the workbook and return XLSB loss/defer counters.
+
+        XLSX saves return zero counters. The returned bytes are an
+        independent copy and the underlying WASM allocation is released
+        before this method returns.
+        """
+        h = self._require()
+        scratch: list[int] = []
+        try:
+            for _ in range(4):
+                ptr = LIB.alloc(4)
+                scratch.append(ptr)
+                LIB.write_bytes(ptr, b"\x00\x00\x00\x00")
+            out_ptr_ptr, out_len_ptr, downgraded_ptr, deferred_ptr = scratch
+            status = LIB.fm_workbook_save_ex_with_diagnostics(
+                h, int(fmt), out_ptr_ptr, out_len_ptr, downgraded_ptr, deferred_ptr
+            )
+            _check(status, "fm_workbook_save_ex_with_diagnostics")
+            data_ptr = LIB.read_u32(out_ptr_ptr)
+            data_len = LIB.read_u32(out_len_ptr)
+            try:
+                data = b"" if data_len == 0 or data_ptr == 0 else LIB.read_bytes(data_ptr, data_len)
+            finally:
+                if data_ptr:
+                    LIB.fm_buffer_free(data_ptr)
+            return SaveDiagnostics(
+                bytes=data,
+                downgraded_formula_count=LIB.read_u32(downgraded_ptr),
+                deferred_feature_count=LIB.read_u32(deferred_ptr),
+            )
+        finally:
+            for ptr in scratch:
+                LIB.free(ptr)
+
+    def xlsb_read_diagnostics(self) -> XlsbReadDiagnostics:
+        """Return recovery and dropped-part counters captured on load."""
+        h = self._require()
+        scratch: list[int] = []
+        try:
+            for _ in range(3):
+                ptr = LIB.alloc(4)
+                scratch.append(ptr)
+                LIB.write_bytes(ptr, b"\x00\x00\x00\x00")
+            formula_ptr, name_ptr, dropped_ptr = scratch
+            status = LIB.fm_workbook_xlsb_read_diagnostics_ex(h, formula_ptr, name_ptr, dropped_ptr)
+            _check(status, "fm_workbook_xlsb_read_diagnostics_ex")
+            return XlsbReadDiagnostics(
+                undecoded_formula_count=LIB.read_u32(formula_ptr),
+                undecoded_defined_name_count=LIB.read_u32(name_ptr),
+                dropped_part_count=LIB.read_u32(dropped_ptr),
+            )
+        finally:
+            for ptr in scratch:
+                LIB.free(ptr)
 
     # -- Iteration ---------------------------------------------------------
     def iter_cells(self, sheet: int) -> Iterator[Cell]:
@@ -2581,7 +2688,7 @@ class Workbook:
 
     @staticmethod
     def _decode_cell_xf(ptr: int) -> CellXf:
-        d = S.CELL_XF.unpack(LIB, ptr)
+        d = S.CELL_XF_EX2.unpack(LIB, ptr)
         return CellXf(
             font_index=d["font_index"],
             fill_index=d["fill_index"],
@@ -2590,16 +2697,28 @@ class Workbook:
             horizontal_align=d["horizontal_align"],
             vertical_align=d["vertical_align"],
             wrap_text=bool(d["wrap_text"]),
+            has_alignment=bool(d["has_alignment"]),
+            justify_last_line=bool(d["justify_last_line"]),
+            xf_id=d["xf_id"],
+            text_rotation=d["text_rotation"] if d["has_text_rotation"] else None,
+            indent=d["indent"] if d["has_indent"] else None,
+            relative_indent=d["relative_indent"] if d["has_relative_indent"] else None,
+            shrink_to_fit=bool(d["shrink_to_fit"]) if d["has_shrink_to_fit"] else None,
+            reading_order=d["reading_order"] if d["has_reading_order"] else None,
+            has_horizontal_align=bool(d["has_horizontal_align"]),
+            has_vertical_align=bool(d["has_vertical_align"]),
+            has_wrap_text=bool(d["has_wrap_text"]),
+            has_justify_last_line=bool(d["has_justify_last_line"]),
         )
 
     def get_cell_xf(self, xf_index: int) -> CellXf:
         """Return the resolved ``<xf>`` record at ``xf_index``."""
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.CELL_XF)
+        ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
         try:
             _check(
-                LIB.fm_styles_get_cell_xf(h, int(xf_index), ptr),
-                "fm_styles_get_cell_xf",
+                LIB.fm_styles_get_cell_xf_ex2(h, int(xf_index), ptr),
+                "fm_styles_get_cell_xf_ex2",
             )
             return self._decode_cell_xf(ptr)
         finally:
@@ -2849,10 +2968,10 @@ class Workbook:
     def add_cell_xf(self, record: CellXf) -> int:
         """Add (dedup) an ``<xf>`` record; return its index."""
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.CELL_XF)
+        ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
         out = _alloc_out_ptr()
         try:
-            S.CELL_XF.pack(
+            S.CELL_XF_EX2.pack(
                 LIB,
                 ptr,
                 {
@@ -2863,9 +2982,48 @@ class Workbook:
                     "horizontal_align": int(record.horizontal_align),
                     "vertical_align": int(record.vertical_align),
                     "wrap_text": 1 if record.wrap_text else 0,
+                    "has_alignment": 1
+                    if (record.has_alignment if record.has_alignment is not None else _cell_xf_has_alignment(record))
+                    else 0,
+                    "justify_last_line": 1 if record.justify_last_line else 0,
+                    "xf_id": int(record.xf_id),
+                    "has_text_rotation": 1 if record.text_rotation is not None else 0,
+                    "text_rotation": int(record.text_rotation or 0),
+                    "has_indent": 1 if record.indent is not None else 0,
+                    "indent": int(record.indent or 0),
+                    "has_relative_indent": 1 if record.relative_indent is not None else 0,
+                    "relative_indent": int(record.relative_indent or 0),
+                    "has_shrink_to_fit": 1 if record.shrink_to_fit is not None else 0,
+                    "shrink_to_fit": 1 if record.shrink_to_fit else 0,
+                    "has_reading_order": 1 if record.reading_order is not None else 0,
+                    "reading_order": int(record.reading_order or 0),
+                    "has_horizontal_align": 1
+                    if (
+                        record.has_horizontal_align
+                        if record.has_horizontal_align is not None
+                        else record.horizontal_align != 0
+                    )
+                    else 0,
+                    "has_vertical_align": 1
+                    if (
+                        record.has_vertical_align
+                        if record.has_vertical_align is not None
+                        else record.vertical_align != 2
+                    )
+                    else 0,
+                    "has_wrap_text": 1
+                    if (record.has_wrap_text if record.has_wrap_text is not None else record.wrap_text)
+                    else 0,
+                    "has_justify_last_line": 1
+                    if (
+                        record.has_justify_last_line
+                        if record.has_justify_last_line is not None
+                        else record.justify_last_line
+                    )
+                    else 0,
                 },
             )
-            _check(LIB.fm_styles_add_cell_xf(h, ptr, out), "fm_styles_add_cell_xf")
+            _check(LIB.fm_styles_add_cell_xf_ex2(h, ptr, out), "fm_styles_add_cell_xf_ex2")
             return LIB.read_u32(out)
         finally:
             LIB.free(ptr)
@@ -2958,11 +3116,11 @@ class Workbook:
     def get_cell_style_xf(self, index: int) -> CellXf:
         """Return the named-style xf record at ``index``."""
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.CELL_XF)
+        ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
         try:
             _check(
-                LIB.fm_styles_get_cell_style_xf(h, int(index), ptr),
-                "fm_styles_get_cell_style_xf",
+                LIB.fm_styles_get_cell_style_xf_ex2(h, int(index), ptr),
+                "fm_styles_get_cell_style_xf_ex2",
             )
             return self._decode_cell_xf(ptr)
         finally:
@@ -3754,14 +3912,15 @@ class Workbook:
         """Append an active filter to the pivot."""
         h = self._require()
         owned: List[int] = []
-        ptr = S.alloc_struct(LIB, S.PIVOT_FILTER_SPEC)
+        ptr = S.alloc_struct(LIB, S.PIVOT_FILTER_SPEC_EX)
         try:
-            S.PIVOT_FILTER_SPEC.pack(
+            S.PIVOT_FILTER_SPEC_EX.pack(
                 LIB,
                 ptr,
                 {
                     "axis": int(spec.axis),
                     "type": int(spec.type),
+                    "data_field_index": int(spec.data_field_index),
                     "value_kind": int(spec.value_kind),
                     "value_int": int(spec.value_int),
                     "value_double": float(spec.value_double),
@@ -3770,11 +3929,11 @@ class Workbook:
                     "value_high_double": float(spec.value_high_double),
                 },
             )
-            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "field_name", spec.field_name, owned)
-            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_text", spec.value_text, owned)
+            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC_EX, "field_name", spec.field_name, owned)
+            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC_EX, "value_text", spec.value_text, owned)
             _check(
-                LIB.fm_workbook_pivot_filter_add(h, int(sheet), int(pivot_index), ptr),
-                "fm_workbook_pivot_filter_add",
+                LIB.fm_workbook_pivot_filter_add_ex(h, int(sheet), int(pivot_index), ptr),
+                "fm_workbook_pivot_filter_add_ex",
             )
         finally:
             LIB.free(ptr)

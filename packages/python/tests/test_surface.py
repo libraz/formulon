@@ -12,9 +12,11 @@ Run via ``make python-test`` (or ``python -m unittest`` with
 
 from __future__ import annotations
 
+import struct
 import subprocess
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import formulon
 from formulon import (
@@ -36,11 +38,59 @@ from formulon import (
     PivotFieldSpec,
     PivotReportLayout,
     PivotWorksheetSource,
+    SaveDiagnostics,
     SheetProtection,
     ValueKind,
     Workbook,
+    WorkbookFormat,
+    XlsbReadDiagnostics,
 )
 from formulon import _structs as S
+
+
+def _append_empty_zip_entry(data: bytes, name: str) -> bytes:
+    """Add one deterministic, empty stored entry without recompressing XLSB."""
+    eocd = data.rfind(b"PK\x05\x06")
+    if eocd < 0:
+        raise AssertionError("missing ZIP end record")
+    _disk_count, count, central_size, central_offset = struct.unpack_from("<HHII", data, eocd + 8)
+    encoded_name = name.encode("utf-8")
+    local = struct.pack("<IHHHHHIIIHH", 0x04034B50, 20, 0, 0, 0, 0, 0, 0, 0, len(encoded_name), 0) + encoded_name
+    central = (
+        struct.pack(
+            "<IHHHHHHIIIHHHHHII",
+            0x02014B50,
+            20,
+            20,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            len(encoded_name),
+            0,
+            0,
+            0,
+            0,
+            0,
+            central_offset,
+        )
+        + encoded_name
+    )
+    new_eocd = struct.pack(
+        "<IHHHHIIH",
+        0x06054B50,
+        0,
+        0,
+        count + 1,
+        count + 1,
+        central_size + len(central),
+        central_offset + len(local),
+        0,
+    )
+    return data[:central_offset] + local + data[central_offset : central_offset + central_size] + central + new_eocd
 
 
 class StructLayoutTests(unittest.TestCase):
@@ -65,6 +115,7 @@ class StructLayoutTests(unittest.TestCase):
         "COLUMN_LAYOUT": 24,
         "ROW_LAYOUT": 24,
         "CELL_XF": 20,
+        "CELL_XF_EX2": 88,
         "FONT_RECORD": 40,
         "FILL_RECORD": 12,
         "BORDER_RECORD": 48,
@@ -370,6 +421,12 @@ class StyleTests(unittest.TestCase):
                     horizontal_align=0,
                     vertical_align=0,
                     wrap_text=False,
+                    text_rotation=255,
+                    indent=0,
+                    relative_indent=-3,
+                    shrink_to_fit=False,
+                    reading_order=0,
+                    justify_last_line=True,
                 )
             )
             wb.set_cell_xf_index(0, 0, 0, xf)
@@ -377,6 +434,46 @@ class StyleTests(unittest.TestCase):
             resolved = wb.get_cell_xf(xf)
             self.assertEqual(resolved.font_index, fi)
             self.assertEqual(resolved.num_fmt_id, nf)
+            self.assertEqual(resolved.text_rotation, 255)
+            self.assertTrue(resolved.has_alignment)
+            self.assertEqual(resolved.indent, 0)
+            self.assertEqual(resolved.relative_indent, -3)
+            self.assertIs(resolved.shrink_to_fit, False)
+            self.assertEqual(resolved.reading_order, 0)
+            self.assertIs(resolved.justify_last_line, True)
+            self.assertFalse(resolved.has_horizontal_align)
+            self.assertTrue(resolved.has_vertical_align)
+            self.assertFalse(resolved.has_wrap_text)
+            self.assertTrue(resolved.has_justify_last_line)
+            self.assertEqual(wb.add_cell_xf(resolved), xf)
+
+            omitted = wb.add_cell_xf(
+                CellXf(
+                    font_index=fi,
+                    fill_index=fill,
+                    border_index=border,
+                    num_fmt_id=nf,
+                    horizontal_align=0,
+                    vertical_align=2,
+                    wrap_text=False,
+                )
+            )
+            self.assertFalse(wb.get_cell_xf(omitted).has_alignment)
+
+            explicit_empty = wb.add_cell_xf(
+                CellXf(
+                    font_index=fi,
+                    fill_index=fill,
+                    border_index=border,
+                    num_fmt_id=nf,
+                    horizontal_align=0,
+                    vertical_align=2,
+                    wrap_text=False,
+                    has_alignment=True,
+                )
+            )
+            self.assertNotEqual(explicit_empty, omitted)
+            self.assertTrue(wb.get_cell_xf(explicit_empty).has_alignment)
 
     def test_dxf_roundtrip_and_dedup(self) -> None:
         with Workbook.create_default() as wb:
@@ -574,6 +671,84 @@ class ExternalLinkTests(unittest.TestCase):
             self.assertEqual(wb.get_external_links(), [])
 
 
+class XlsbDiagnosticsTests(unittest.TestCase):
+    def test_unknown_save_format_raises_formulon_error(self) -> None:
+        with Workbook.create_default() as wb:
+            with self.assertRaises(formulon.FormulonError) as ctx:
+                wb.save_ex_with_diagnostics(WorkbookFormat.UNKNOWN)
+            self.assertIn("unsupported format", str(ctx.exception))
+
+    def test_save_and_read_diagnostics_preserve_old_save_shape(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_formula(0, 0, 0, "=@A1:A10")
+            wb.add_validation(
+                0,
+                DataValidationInput(
+                    type=3,
+                    ranges=[MergeRange(0, 0, 0, 0)],
+                    formula1='"Yes,No"',
+                ),
+            )
+            wb.add_conditional_format(
+                0,
+                ConditionalFormatInput(
+                    sqref=[MergeRange(0, 0, 0, 0)],
+                    type=1,
+                    op_engaged=True,
+                    op=5,
+                    formula1="10",
+                ),
+            )
+
+            xlsx = wb.save_ex_with_diagnostics(WorkbookFormat.XLSX)
+            self.assertIsInstance(xlsx, SaveDiagnostics)
+            self.assertIsInstance(xlsx.bytes, bytes)
+            self.assertEqual(xlsx.downgraded_formula_count, 0)
+            self.assertEqual(xlsx.deferred_feature_count, 0)
+
+            xlsb = wb.save_ex_with_diagnostics(WorkbookFormat.XLSB)
+            self.assertEqual(xlsb.downgraded_formula_count, 1)
+            self.assertGreaterEqual(xlsb.deferred_feature_count, 2)
+
+            # The legacy API remains a plain bytes return value.
+            self.assertIsInstance(wb.save_ex(WorkbookFormat.XLSB), bytes)
+
+            with Workbook.load(xlsb.bytes) as loaded:
+                read = loaded.xlsb_read_diagnostics()
+                self.assertIsInstance(read, XlsbReadDiagnostics)
+                self.assertEqual(read.undecoded_formula_count, 0)
+                self.assertEqual(read.undecoded_defined_name_count, 0)
+                self.assertEqual(read.dropped_part_count, 0)
+
+            with Workbook.load(_append_empty_zip_entry(xlsb.bytes, "xl/dropped.bin")) as dropped_loaded:
+                dropped = dropped_loaded.xlsb_read_diagnostics()
+                self.assertEqual(dropped.dropped_part_count, 1)
+
+    def test_diagnostic_scratch_is_freed_when_a_later_allocation_fails(self) -> None:
+        with Workbook.create_default() as wb:
+            original_alloc = formulon.workbook.LIB.alloc
+            for method, args, expected_frees in (
+                (wb.save_ex_with_diagnostics, (WorkbookFormat.XLSB,), 1),
+                (wb.xlsb_read_diagnostics, (), 1),
+            ):
+                calls = 0
+
+                def alloc_then_fail(size: int) -> int:
+                    nonlocal calls
+                    calls += 1
+                    if calls == 2:
+                        raise RuntimeError("synthetic allocation failure")
+                    return original_alloc(size)
+
+                with (
+                    mock.patch.object(formulon.workbook.LIB, "alloc", side_effect=alloc_then_fail),
+                    mock.patch.object(formulon.workbook.LIB, "free", wraps=formulon.workbook.LIB.free) as free,
+                ):
+                    with self.assertRaises(RuntimeError):
+                        method(*args)
+                self.assertEqual(free.call_count, expected_frees)
+
+
 class SurfaceParityTests(unittest.TestCase):
     """Every advertised method must exist on the Workbook class."""
 
@@ -698,6 +873,8 @@ class SurfaceParityTests(unittest.TestCase):
         "external_link_count",
         "get_external_link_at",
         "get_external_links",
+        "save_ex_with_diagnostics",
+        "xlsb_read_diagnostics",
     ]
 
     def test_all_methods_present(self) -> None:
