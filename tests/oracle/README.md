@@ -3,16 +3,18 @@
 Oracle testing surface for Formulon. The primary oracle is **Mac Excel 365
 (ja-JP locale)**, captured through `tools/oracle/` and committed here as
 golden JSON. Additional Excel environments are checked in under
-`variants/<target>/`; the active Windows reference target is
-`win-365-ja_JP`.
+`variants/<target>/`. The `win-365-ja_JP` directory currently has
+`status: wanted` and is reference-only: its historical files are retained
+for comparison but are not active CTest or coverage evidence for Microsoft
+365.
 
 Current local status (2026-05-15):
 
 - Unit suite: `5788/5788` passed.
 - Primary oracle: `3843` passed, `80` documented skips.
-- Refreshed `win-365-ja_JP` focus set (`ENCODEURL`, `FILTERXML`, `GROUPBY`,
-  `PIVOTBY`, `REGEX*`, `JIS` width probes): `130` passed, `22` documented
-  skips.
+- Historical Windows focus files remain on disk for comparison; they are not
+  counted until a Microsoft 365 Windows host passes the provenance sentinel
+  and writes `PROVENANCE.json` with `active_ctest: true`.
 
 The remaining skips are explicit entries in `tests/divergence.yaml` or a
 variant `divergence.yaml`: volatile/environment-bound results, host-service
@@ -37,9 +39,14 @@ tests/oracle/
 │   └── datetime.yaml
 ├── golden/                       primary (Mac/ja-JP) Excel output — commit this
 │   └── <suite>.golden.json
+├── cases_cf/ + golden_cf/         conditional-formatting track
+│   ├── <suite>.case.json/.yaml    declarative CF cases
+│   ├── <suite>.golden.json        Mac Excel capture / reference golden
+│   └── PROVENANCE.json            hash + case-count capture record
 └── variants/                     opt-in additional environments — commit per-target
     └── <target>/                 e.g. win-365-ja_JP
         ├── ENVIRONMENT.md
+        ├── PROVENANCE.json       status/product evidence for CTest admission
         ├── divergence.yaml       (optional) per-variant overrides
         └── golden/
             └── <suite>.golden.json
@@ -57,6 +64,16 @@ tests/oracle/
 - `make oracle-gen` — regenerates every `golden/*.golden.json` from YAML
   by driving Excel on the configured target. Writes `ENVIRONMENT.md` with
   the Excel version and locale used.
+- `make oracle-gen-cf` — regenerates the manifest-selected
+  `tracks.cf.primary` capture (currently `mac-365-ja_JP`) and writes
+  `golden_cf/PROVENANCE.json` with the Excel build, capture id, case counts,
+  and SHA-256 for each golden. A legacy/reference marker is not active
+  coverage; use `tools/oracle/.venv/bin/python tools/oracle/provenance.py
+  cf-active` when an active verified capture is required.
+- Workbook closure is pending-aware in normal `oracle` metadata tests. The
+  strict external-capture check (`--require-active`) is registered only with
+  `-DFORMULON_ORACLE_RELEASE_GATES=ON`; a label alone never adds it to
+  default CTest.
 - `make oracle-verify` — builds the `formulon_oracle_tests` binary and
   runs it under ctest. Never starts Excel. Safe to run in CI.
 
@@ -140,10 +157,10 @@ Variants under `variants/<target>/` capture the same case set under a
 different Excel environment (Windows Excel, alternative locales, ...).
 They never gate primary CI — they exist for divergence research and for
 pinning host-specific behavior that is unavailable on the primary Mac
-target. The `win-365-ja_JP` variant currently carries live Windows coverage
-for cases such as `ENCODEURL` and `FILTERXML`, plus variant-specific
-divergence entries where Formulon deliberately keeps the documented engine
-behavior rather than matching an unavailable or compact-form Excel quirk.
+target. The `win-365-ja_JP` target is currently `wanted`; its historical
+files are reference-only and do not count as live Windows coverage. A target
+enters CTest only after its `PROVENANCE.json` records a verified product and
+`active_ctest: true`.
 
 Build the variant test binary by enabling the CMake option:
 

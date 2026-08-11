@@ -84,23 +84,27 @@ enum class RowColAxis : std::uint8_t {
 ///
 /// Delete: coordinates strictly less than `index` are unchanged; coords
 /// in `[index, index + count)` collapse to `#REF!`; coords at or past
-/// `index + count` shift down by `count`.
-///
-/// Range endpoint clamping (Excel's "shrink the range" behaviour for
-/// deletes that catch one endpoint but not the other) is a follow-up
-/// enhancement; the simple per-endpoint policy here matches Excel for
-/// every range whose endpoints are both inside or both outside the
-/// affected interval, and falls back to `#REF!` for the clamp case.
+/// `index + count` shift down by `count`. For a range whose endpoints are
+/// both in this transform's scope, a deletion that catches one endpoint
+/// shrinks the surviving interval just as Excel does; the whole range becomes
+/// `#REF!` only when every coordinate in it is deleted.
 class RowColShiftTransform final : public RefTransform {
  public:
   RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit, std::uint32_t index,
                        std::uint32_t count, bool local_means_target = false) noexcept;
 
   std::optional<Reference> apply(const Reference& ref) const override;
+  std::optional<std::pair<Reference, Reference>> apply_range(const Reference& lhs, const Reference& rhs) const override;
+  bool preserves_ref3d_coordinates() const noexcept override { return true; }
 
  private:
   // Returns the rewritten coordinate, or std::nullopt for #REF!.
   std::optional<std::uint32_t> shift_axis(std::uint32_t coord, std::uint32_t bound) const noexcept;
+
+  // Rewrites an inclusive interval on the edited axis. Unlike shift_axis,
+  // this clamps an interval around a deletion to its surviving coordinates.
+  std::optional<std::pair<std::uint32_t, std::uint32_t>> shift_interval(std::uint32_t first,
+                                                                        std::uint32_t last) const noexcept;
 
   // True iff `ref.sheet` falls within the transform's scope.
   bool sheet_in_scope(std::string_view sheet) const noexcept;

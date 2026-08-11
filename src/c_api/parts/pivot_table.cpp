@@ -49,7 +49,7 @@ fm_pivot_layout_t pivot_layout_to_fm(formulon::pivot::PivotLayout layout) {
   }
 }
 
-formulon::pivot::PivotLayout pivot_layout_from_fm(fm_pivot_layout_t layout) {
+formulon::pivot::PivotLayout pivot_layout_from_fm(std::int32_t layout) {
   switch (layout) {
     case FM_PIVOT_LAYOUT_TABULAR:
       return formulon::pivot::PivotLayout::Tabular;
@@ -59,6 +59,15 @@ formulon::pivot::PivotLayout pivot_layout_from_fm(fm_pivot_layout_t layout) {
     default:
       return formulon::pivot::PivotLayout::Compact;
   }
+}
+
+fm_status_t reject_invalid_pivot_enum(const char* fn, const char* name, std::int32_t value, std::int32_t max) {
+  if (value >= 0 && value <= max) {
+    return 0;
+  }
+  return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                           (std::string(fn) + ": invalid " + name).c_str(),
+                           name + std::string("=") + std::to_string(value));
 }
 
 }  // namespace
@@ -193,7 +202,7 @@ extern "C" fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, std
 }
 
 extern "C" fm_status_t fm_workbook_pivot_set_layout(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                    fm_pivot_layout_t layout) {
+                                                    std::int32_t layout) {
   clear_last_error();
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
@@ -305,15 +314,23 @@ formulon::pivot::PivotField* lookup_pivot_field_mut(fm_workbook_t* wb, std::size
 
 extern "C" fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, std::size_t sheet_index,
                                                         std::size_t pivot_index, std::size_t field_idx,
-                                                        fm_pivot_axis_t axis) {
+                                                        std::int32_t axis) {
   clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_set_axis: wb is NULL");
+  }
+  fm_status_t enum_status = reject_invalid_pivot_enum("fm_workbook_pivot_field_set_axis", "axis", axis, 3);
+  if (enum_status != 0) {
+    return enum_status;
+  }
   formulon::pivot::PivotTable* table = nullptr;
   auto* field =
       lookup_pivot_field_mut(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_set_axis", &table);
   if (field == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  field->axis = pivot_axis_from_fm(axis);
+  field->axis = pivot_axis_from_fm(static_cast<fm_pivot_axis_t>(axis));
   invalidate_pivot_result(*table);
   return 0;
 }
@@ -351,15 +368,24 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_subtotal_top(fm_workbook_t* w
 
 extern "C" fm_status_t fm_workbook_pivot_field_add_aggregation(fm_workbook_t* wb, std::size_t sheet_index,
                                                                std::size_t pivot_index, std::size_t field_idx,
-                                                               fm_pivot_aggregation_t agg) {
+                                                               std::int32_t agg) {
   clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_add_aggregation: wb is NULL");
+  }
+  fm_status_t enum_status =
+      reject_invalid_pivot_enum("fm_workbook_pivot_field_add_aggregation", "aggregation", agg, 10);
+  if (enum_status != 0) {
+    return enum_status;
+  }
   formulon::pivot::PivotTable* table = nullptr;
   auto* field = lookup_pivot_field_mut(wb, sheet_index, pivot_index, field_idx,
                                        "fm_workbook_pivot_field_add_aggregation", &table);
   if (field == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  field->aggregations.push_back(pivot_agg_from_fm(agg));
+  field->aggregations.push_back(pivot_agg_from_fm(static_cast<fm_pivot_aggregation_t>(agg)));
   invalidate_pivot_result(*table);
   return 0;
 }
@@ -436,15 +462,24 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_item_visible(fm_workbook_t* w
 
 extern "C" fm_status_t fm_workbook_pivot_field_add_subtotal_fn(fm_workbook_t* wb, std::size_t sheet_index,
                                                                std::size_t pivot_index, std::size_t field_idx,
-                                                               fm_pivot_aggregation_t agg) {
+                                                               std::int32_t agg) {
   clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_add_subtotal_fn: wb is NULL");
+  }
+  fm_status_t enum_status =
+      reject_invalid_pivot_enum("fm_workbook_pivot_field_add_subtotal_fn", "aggregation", agg, 10);
+  if (enum_status != 0) {
+    return enum_status;
+  }
   formulon::pivot::PivotTable* table = nullptr;
   auto* field = lookup_pivot_field_mut(wb, sheet_index, pivot_index, field_idx,
                                        "fm_workbook_pivot_field_add_subtotal_fn", &table);
   if (field == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
-  field->subtotal_fns.push_back(pivot_subtotal_from_fm(agg));
+  field->subtotal_fns.push_back(pivot_subtotal_from_fm(static_cast<fm_pivot_aggregation_t>(agg)));
   invalidate_pivot_result(*table);
   return 0;
 }
@@ -465,11 +500,23 @@ extern "C" fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t*
 
 extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, std::size_t sheet_index,
                                                               std::size_t pivot_index, std::size_t field_idx,
-                                                              fm_pivot_date_grouping_t granularity,
-                                                              fm_pivot_calendar_t calendar,
+                                                              std::int32_t granularity, std::int32_t calendar,
                                                               std::int32_t start_year_or_neg1,
                                                               std::int32_t end_year_or_neg1) {
   clear_last_error();
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_field_set_date_group: wb is NULL");
+  }
+  fm_status_t enum_status =
+      reject_invalid_pivot_enum("fm_workbook_pivot_field_set_date_group", "granularity", granularity, 7);
+  if (enum_status != 0) {
+    return enum_status;
+  }
+  enum_status = reject_invalid_pivot_enum("fm_workbook_pivot_field_set_date_group", "calendar", calendar, 1);
+  if (enum_status != 0) {
+    return enum_status;
+  }
   formulon::pivot::PivotTable* table = nullptr;
   auto* field =
       lookup_pivot_field_mut(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_set_date_group", &table);
@@ -477,8 +524,8 @@ extern "C" fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb,
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   formulon::pivot::PivotDateGroup grp;
-  grp.granularity = pivot_date_grouping_from_fm(granularity);
-  grp.calendar = pivot_calendar_from_fm(calendar);
+  grp.granularity = pivot_date_grouping_from_fm(static_cast<fm_pivot_date_grouping_t>(granularity));
+  grp.calendar = pivot_calendar_from_fm(static_cast<fm_pivot_calendar_t>(calendar));
   if (start_year_or_neg1 != -1) {
     grp.start_year = start_year_or_neg1;
   }

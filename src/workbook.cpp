@@ -6,6 +6,7 @@
 
 #include "workbook.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -846,6 +847,71 @@ void mark_spill_anchor_dirty_if_covered(const eval::RecalcEngine::LockedMutator&
   mutator.mark_dirty(make_node(sheet_index, covering->anchor_row, covering->anchor_col));
 }
 
+// A failed dynamic-array commit keeps its attempted rectangle even though no
+// phantom cells were materialised.  A mutation that vacates any one cell in
+// that rectangle must wake the blocked producer so it can retry on the next
+// recalc pass.  The Sheet query returns coordinate copies while holding its
+// own lock; marking happens after that lock is released, preserving the
+// workbook's engine-mutex -> sheet/spill-mutex order.
+void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
+                                             const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
+  for (const CellAddress anchor : sheets[sheet_index].blocked_spill_anchors_intersecting(row, col, 1U, 1U)) {
+    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
+  }
+}
+
+void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
+                                             const std::vector<Sheet>& sheets, const BlockedSpillFootprint& rectangle) {
+  for (const CellAddress anchor : sheets[sheet_index].blocked_spill_anchors_intersecting(
+           rectangle.anchor_row, rectangle.anchor_col, rectangle.rows, rectangle.cols)) {
+    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
+  }
+}
+
+void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::LockedMutator& mutator,
+                                                 std::size_t sheet_index, const std::vector<Sheet>& sheets,
+                                                 std::uint32_t row, std::uint32_t col) {
+  // A write into an existing spill clears the entire committed rectangle,
+  // not just the addressed cell. Snapshot that rectangle before the write and
+  // wake every pending producer intersecting it.
+  if (const auto rectangle = sheets[sheet_index].committed_spill_footprint_covering(row, col); rectangle.has_value()) {
+    mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, *rectangle);
+  }
+  mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, row, col);
+}
+
+void mark_blocked_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutator& mutator,
+                                                   std::size_t sheet_index, const std::vector<Sheet>& sheets,
+                                                   const MergeRange& merge) {
+  if (merge.first_row > merge.last_row || merge.first_col > merge.last_col ||
+      !Sheet::coord_in_grid(merge.first_row, merge.first_col) ||
+      !Sheet::coord_in_grid(merge.last_row, merge.last_col)) {
+    return;
+  }
+  const std::uint32_t rows = merge.last_row - merge.first_row + 1U;
+  const std::uint32_t cols = merge.last_col - merge.first_col + 1U;
+  for (const CellAddress anchor :
+       sheets[sheet_index].blocked_spill_anchors_intersecting(merge.first_row, merge.first_col, rows, cols)) {
+    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
+  }
+}
+
+void mark_committed_spill_anchors_intersecting_merge(const eval::RecalcEngine::LockedMutator& mutator,
+                                                     std::size_t sheet_index, const std::vector<Sheet>& sheets,
+                                                     const MergeRange& merge) {
+  if (merge.first_row > merge.last_row || merge.first_col > merge.last_col ||
+      !Sheet::coord_in_grid(merge.first_row, merge.first_col) ||
+      !Sheet::coord_in_grid(merge.last_row, merge.last_col)) {
+    return;
+  }
+  const std::uint32_t rows = merge.last_row - merge.first_row + 1U;
+  const std::uint32_t cols = merge.last_col - merge.first_col + 1U;
+  for (const CellAddress anchor :
+       sheets[sheet_index].committed_spill_anchors_intersecting(merge.first_row, merge.first_col, rows, cols)) {
+    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
+  }
+}
+
 }  // namespace
 
 Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
@@ -884,6 +950,7 @@ Expected<void, Error> Workbook::set_cell_value(std::size_t sheet_index, std::uin
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
     mutator.mark_dirty(node);
     mark_dependents_dirty(mutator, node);
+    mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets_, row, col);
     mutator.clear_cell_dependencies(node);
     mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
     sheets_[sheet_index].set_cell_value(row, col, value);
@@ -907,6 +974,7 @@ Expected<void, Error> Workbook::set_cell_text(std::size_t sheet_index, std::uint
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   mutator.mark_dirty(node);
   mark_dependents_dirty(mutator, node);
+  mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets_, row, col);
   mutator.clear_cell_dependencies(node);
   mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
   sheets_[sheet_index].set_cell_text(row, col, text);
@@ -962,6 +1030,7 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
     // Query the covering spill BEFORE the sheet write clears it, so a write
     // into a live spill's phantom re-dirties the anchor.
     mark_spill_anchor_dirty_if_covered(mutator, sheet_index, sheets_, row, col);
+    mark_blocked_spill_anchors_released_by_cell(mutator, sheet_index, sheets_, row, col);
     // Persist the formula text on the sheet first so a later `recalc()`
     // reads what the user actually typed. This also resets `cached_value`
     // to blank.
@@ -981,6 +1050,65 @@ Expected<void, Error> Workbook::set_cell_formula(std::size_t sheet_index, std::u
     mutator.mark_dirty(node);
     mark_dependents_dirty(mutator, node);
   }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::add_merge(std::size_t sheet_index, MergeRange merge) {
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "add_merge: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  sheets_[sheet_index].add_merge(merge);
+  // A merge added over a committed spill becomes a blocker for the next
+  // evaluation. Keep the anchor dirty so recalc clears the old rectangle and
+  // records the resulting #SPILL! state under the normal commit contract.
+  mark_committed_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, merge);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::remove_merges_intersecting(std::size_t sheet_index, MergeRange merge) {
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "remove_merges_intersecting: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  const std::vector<MergeRange> removed = sheets_[sheet_index].remove_merges_intersecting(merge);
+  for (const MergeRange& erased : removed) {
+    mark_blocked_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, erased);
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::remove_merge_at(std::size_t sheet_index, std::size_t index) {
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "remove_merge_at: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  MergeRange removed;
+  if (!sheets_[sheet_index].remove_merge_at(index, &removed)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "remove_merge_at: index out of range",
+                      "index=" + std::to_string(index));
+  }
+  mark_blocked_spill_anchors_intersecting_merge(mutator, sheet_index, sheets_, removed);
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> Workbook::clear_merges(std::size_t sheet_index) {
+  if (sheet_index >= sheets_.size()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "clear_merges: sheet_index out of range",
+                      "sheet_index=" + std::to_string(sheet_index));
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  for (const CellAddress anchor : sheets_[sheet_index].blocked_spill_anchors()) {
+    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
+  }
+  sheets_[sheet_index].clear_merges();
   return Expected<void, Error>::Ok();
 }
 
@@ -1276,6 +1404,54 @@ bool rewrite_defined_names(std::vector<io::DefinedName>& names, const parser::Re
   return any_changed;
 }
 
+// Re-register the owners of Ref3D spans after the target sheet's cell store
+// has completed its physical move. Their shared inner coordinates intentionally
+// remain unchanged, so the ordinary AST rewrite cannot wake them. The owner
+// snapshot is taken before rewrite/unregister; map only owners that survive
+// the edit, then parse the final formula text against the final workbook
+// coordinates so defined-name and nested-Lambda expansion follows the same
+// extractor path as ordinary registration.
+void reregister_three_d_span_owners_after_row_col_edit(const std::vector<eval::CellNodeId>& owners,
+                                                       std::vector<Sheet>& sheets,
+                                                       const eval::RecalcEngine::LockedMutator& mutator,
+                                                       const Workbook& workbook, std::size_t edited_sheet_index,
+                                                       parser::RowColAxis axis, parser::RowColEdit edit,
+                                                       std::uint32_t index, std::uint32_t count) {
+  Arena parser_arena;
+  for (const eval::CellNodeId owner : owners) {
+    eval::CellNodeId mapped = owner;
+    if (owner.sheet_id == edited_sheet_index) {
+      const CellShift shift = shift_cell_coords_for_row_col_edit(axis, edit, index, count, owner.row, owner.col);
+      if (!shift.kept) {
+        continue;
+      }
+      mapped.row = shift.new_row;
+      mapped.col = shift.new_col;
+    }
+    if (mapped.sheet_id >= sheets.size()) {
+      continue;
+    }
+    const Cell* formula_cell = sheets[mapped.sheet_id].cell_at(mapped.row, mapped.col);
+    if (formula_cell == nullptr || formula_cell->formula_text.empty()) {
+      continue;
+    }
+    std::string_view body = formula_cell->formula_text;
+    if (!body.empty() && body.front() == '=') {
+      body.remove_prefix(1);
+    }
+    if (body.empty()) {
+      continue;
+    }
+    parser_arena.reset();
+    parser::AstNode* root = parser::parse_strict(body, parser_arena);
+    if (root == nullptr) {
+      continue;
+    }
+    mutator.register_formula(mapped, *root, workbook);
+    mutator.mark_dirty(mapped);
+  }
+}
+
 void rewrite_conditional_format_formulas(std::vector<cf::ConditionalFormat>& formats,
                                          const parser::RefTransform& transform) {
   for (cf::ConditionalFormat& format : formats) {
@@ -1315,6 +1491,37 @@ void rewrite_tables_for_row_col_edit(std::vector<io::TableMetadata>& tables, std
       }
     }
   }
+}
+
+std::vector<BlockedSpillFootprint> remap_blocked_spill_footprints(const std::vector<BlockedSpillFootprint>& footprints,
+                                                                  parser::RowColAxis axis, parser::RowColEdit edit,
+                                                                  std::uint32_t index, std::uint32_t count) {
+  std::vector<BlockedSpillFootprint> mapped;
+  mapped.reserve(footprints.size());
+  const std::uint32_t bound = axis == parser::RowColAxis::kRow ? Sheet::kMaxRows : Sheet::kMaxCols;
+  const std::uint64_t delete_end = static_cast<std::uint64_t>(index) + count;
+  for (const BlockedSpillFootprint& original : footprints) {
+    std::uint32_t coordinate = axis == parser::RowColAxis::kRow ? original.anchor_row : original.anchor_col;
+    if (edit == parser::RowColEdit::kDelete) {
+      if (static_cast<std::uint64_t>(coordinate) >= index && static_cast<std::uint64_t>(coordinate) < delete_end) {
+        continue;
+      }
+      if (static_cast<std::uint64_t>(coordinate) >= delete_end) {
+        coordinate -= count;
+      }
+    } else if (coordinate >= index) {
+      const std::uint64_t shifted = static_cast<std::uint64_t>(coordinate) + count;
+      if (shifted >= bound) {
+        continue;
+      }
+      coordinate = static_cast<std::uint32_t>(shifted);
+    }
+    BlockedSpillFootprint next = original;
+    next.anchor_row = axis == parser::RowColAxis::kRow ? coordinate : original.anchor_row;
+    next.anchor_col = axis == parser::RowColAxis::kRow ? original.anchor_col : coordinate;
+    mapped.push_back(next);
+  }
+  return mapped;
 }
 
 Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, parser::RowColAxis axis,
@@ -1361,6 +1568,9 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
                                                    std::uint32_t origin, std::uint32_t count, const char* op_name) {
   RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, edit, origin, count, op_name));
   const std::string target_sheet_name = sheets[sheet_index].name();
+  const std::vector<eval::CellNodeId> three_d_owners =
+      sheet_index <= 0xFFFFU ? mutator.three_d_span_owners_covering_sheet(static_cast<std::uint16_t>(sheet_index))
+                             : std::vector<eval::CellNodeId>{};
   // Defined names are rewritten before cell formulas, and a change to any of
   // them forces a full re-index afterwards. A formula that reaches a shifted
   // range only through a name — `=MyRef*1` — is textually unchanged by the
@@ -1371,11 +1581,16 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   // `remove_sheet` already take this fallback for the same reason.
   const parser::RowColShiftTransform name_transform(target_sheet_name, axis, edit, origin, count);
   const bool names_changed = rewrite_defined_names(defined_names, name_transform);
+  // Snapshot the pending-footprint records before formula text rewrites.
+  // `Sheet::set_cell_formula` quite correctly clears a user-overwritten
+  // blocked anchor; a structural rewrite of that same formula is not a user
+  // overwrite, so restore the mapped record after the physical move below.
+  Sheet& target = sheets[sheet_index];
+  const std::vector<BlockedSpillFootprint> blocked_before = target.blocked_spill_footprints();
   rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
   if (names_changed) {
     reindex_all_formulas(sheets, mutator, wb);
   }
-  Sheet& target = sheets[sheet_index];
   const parser::RowColShiftTransform cf_transform(target_sheet_name, axis, edit, origin, count,
                                                   /*local_means_target=*/true);
   rewrite_conditional_format_formulas(target.mutable_conditional_formats(), cf_transform);
@@ -1390,6 +1605,28 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
     target.insert_cols(origin, count);
   } else {
     target.delete_cols(origin, count);
+  }
+  reregister_three_d_span_owners_after_row_col_edit(three_d_owners, sheets, mutator, wb, sheet_index, axis, edit,
+                                                    origin, count);
+  std::vector<BlockedSpillFootprint> blocked_mapped =
+      remap_blocked_spill_footprints(blocked_before, axis, edit, origin, count);
+  // Do not resurrect a record whose formula anchor was deleted or moved past
+  // the grid. The cell store has already completed the physical move, so a
+  // formula check is stable while the engine mutex is held.
+  blocked_mapped.erase(std::remove_if(blocked_mapped.begin(), blocked_mapped.end(),
+                                      [&](const auto& footprint) {
+                                        const Cell* cell = target.cell_at(footprint.anchor_row, footprint.anchor_col);
+                                        return cell == nullptr || cell->formula_text.empty();
+                                      }),
+                       blocked_mapped.end());
+  target.restore_blocked_spill_footprints(std::move(blocked_mapped));
+  // Sheet-local row/column edits remap the pending spill-footprint reverse
+  // index alongside formula cells.  Dirty the surviving anchors at their new
+  // coordinates; the next recalc retries each formula against the moved
+  // blocker/footprint. Anchors deleted or shifted past the grid were dropped
+  // by the Sheet remap and therefore do not appear here.
+  for (const CellAddress anchor : target.blocked_spill_anchors()) {
+    mutator.mark_dirty(make_node(sheet_index, anchor.row, anchor.col));
   }
   return Expected<void, Error>::Ok();
 }

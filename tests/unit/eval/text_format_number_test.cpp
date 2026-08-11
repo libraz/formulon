@@ -44,6 +44,11 @@ TEST(NumberFormatIntegers, MixedHashZero) {
   EXPECT_EQ(Render(5.0, "##0"), "5");
 }
 
+TEST(NumberFormatIntegers, PadPlaceholderUsesSpace) {
+  // `?` reserves a position without zero-padding it.
+  EXPECT_EQ(Render(5.0, "?0"), " 5");
+}
+
 TEST(NumberFormatIntegers, ThousandsSeparator) {
   EXPECT_EQ(Render(1234567.0, "#,##0"), "1,234,567");
 }
@@ -166,6 +171,55 @@ TEST(NumberFormatLiteral, BackslashEscape) {
 
 TEST(NumberFormatLiteral, BangEscape) {
   EXPECT_EQ(Render(10.0, "!@0"), "@10");
+}
+
+// Mac Excel 16.111.3 (ja-JP) accepts the syntax-bearing full-width forms
+// below. The normalizer intentionally folds only those forms outside opaque
+// quoted/escaped payloads; a full-width A remains a literal.
+TEST(NumberFormatJaJpFullWidth, NumericPlaceholdersAndPunctuation) {
+  EXPECT_EQ(Render(5.0, "０.００"), "5.00");
+  EXPECT_EQ(Render(5.0, "１0"), "15");
+  EXPECT_EQ(Render(5.0, "０１"), "51");
+  EXPECT_EQ(Render(5.0, "＃0"), "5");
+  EXPECT_EQ(Render(5.0, "？0"), " 5");
+  EXPECT_EQ(Render(5.0, "０％"), "500%");
+  EXPECT_EQ(Render(1234.0, "＃，＃＃０"), "1,234");
+  EXPECT_EQ(Render(5.0, "Ａ0"), "Ａ5");
+}
+
+TEST(NumberFormatJaJpFullWidth, SectionsAndBracketOperators) {
+  EXPECT_EQ(Render(5.0, "０．０；(０．０)"), "5.0");
+  EXPECT_EQ(Render(-5.0, "０．０；(０．０)"), "(5.0)");
+  EXPECT_EQ(Render(5.0, "［＞１］０；０"), "5");
+  EXPECT_EQ(Render(0.5, "０．００；［＜１］０"), "0.50");
+}
+
+TEST(NumberFormatJaJpFullWidth, DBNumDirective) {
+  // Full-width DBNum spelling is syntax inside a bracket directive. DBNum3
+  // emits full-width Arabic digits in the existing ja-JP renderer.
+  EXPECT_EQ(Render(123.0, "［ＤＢＮｕｍ３］０"), "１２３");
+}
+
+TEST(NumberFormatJaJpFullWidth, EscapesQuotesAndMultibytePayloads) {
+  EXPECT_EQ(Render(5.0, "\"＃０\"0"), "＃０5");
+  EXPECT_EQ(Render(5.0, "\\円0"), "円5");
+  EXPECT_EQ(Render(5.0, "＼０"), "０");
+  EXPECT_EQ(Render(5.0, "＿円0"), " 5");
+  EXPECT_EQ(Render(5.0, "＊円0"), "5");
+}
+
+TEST(NumberFormatJaJpFullWidth, ScientificAndMalformedUtf8) {
+  EXPECT_EQ(Render(12345.0, "０．００Ｅ＋００"), "1.23E+04");
+  EXPECT_EQ(Render(0.0001234, "０．００Ｅ－００"), "1.23E-04");
+
+  std::string malformed;
+  malformed.push_back(static_cast<char>(0xC3));
+  malformed.push_back('0');
+  std::string out;
+  EXPECT_EQ(apply_format(5.0, malformed, out), FormatStatus::kOk);
+  ASSERT_EQ(out.size(), 2U);
+  EXPECT_EQ(static_cast<unsigned char>(out[0]), 0xC3U);
+  EXPECT_EQ(out[1], '5');
 }
 
 // Note: per-digit-position literals (e.g. "000-0000" for phone number

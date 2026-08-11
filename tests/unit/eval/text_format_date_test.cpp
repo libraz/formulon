@@ -127,6 +127,24 @@ TEST(DateFormatTime, AShortMarker) {
   EXPECT_EQ(Render(frac, "h:mm A/P"), "9:30 A");
 }
 
+// Mac Excel 16.111.3 (ja-JP) accepts full-width date/time syntax while
+// keeping quoted/escaped text opaque. The implementation normalises the
+// syntax before tokenisation so date disambiguation remains unchanged.
+TEST(DateFormatJaJpFullWidth, DateAndTimeRuns) {
+  EXPECT_EQ(Render(45366.0, "ｙｙｙｙ－ｍｍ－ｄｄ"), "2024-03-15");
+  const double frac = (13.0 * 3600.0 + 30.0 * 60.0 + 45.0) / 86400.0;
+  EXPECT_EQ(Render(frac, "ｈ：ｍｍ：ｓｓ"), "13:30:45");
+  EXPECT_EQ(Render(45366.0, "ｙｙｙｙ‘ｍｍ’ｄｄ"), "2024‘03’15");
+}
+
+TEST(DateFormatJaJpFullWidth, AmPmAndWeekdayMarkers) {
+  const double morning = 9.5 / 24.0;
+  const double afternoon = 13.5 / 24.0;
+  EXPECT_EQ(Render(morning, "ｈ：ｍｍ ＡＭ／ＰＭ"), "9:30 AM");
+  EXPECT_EQ(Render(afternoon, "ｈ：ｍｍ Ａ／Ｐ"), "1:30 P");
+  EXPECT_EQ(Render(45292.0, "ｙｙｙｙ－ｍｍ－ｄｄ ａａａ"), "2024-01-01 月");
+}
+
 // ---------------------------------------------------------------------------
 // Minute disambiguation
 // ---------------------------------------------------------------------------

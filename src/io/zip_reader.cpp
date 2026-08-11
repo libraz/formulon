@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -105,6 +106,56 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes) {
     ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxParts)));
     return make_error(FormulonErrorCode::kIoZipBomb, "ZipReader::open: archive entry count exceeds cap",
                       std::move(ctx));
+  }
+
+  // Preflight the complete central directory before exposing the archive to
+  // callers. Duplicate non-directory names are rejected: miniz's lookup
+  // policy for duplicate catalogue records is not a safe content-addressing
+  // contract, and accepting first/last-wins ambiguity would let an attacker
+  // swap the bytes of a critical or passthrough part between inventory and
+  // extraction. Per-entry size and compression-ratio policies remain in
+  // `read_entry`, where the returned buffer is actually allocated.
+  std::unordered_set<std::string> seen_names;
+  seen_names.reserve(static_cast<std::size_t>(num_files));
+  for (mz_uint i = 0; i < num_files; ++i) {
+    mz_zip_archive_file_stat stat{};
+    if (mz_zip_reader_file_stat(&impl_->archive, i, &stat) == MZ_FALSE) {
+      const mz_zip_error err = mz_zip_get_last_error(&impl_->archive);
+      mz_zip_reader_end(&impl_->archive);
+      std::string ctx("context=zip_reader preflight miniz_error=");
+      ctx.append(std::to_string(static_cast<int>(err)));
+      return make_error(ErrorCodeForMiniz(err), "ZipReader::open: central-directory preflight failed", std::move(ctx));
+    }
+    if (stat.m_is_directory) {
+      continue;
+    }
+    const mz_uint needed = mz_zip_reader_get_filename(&impl_->archive, i, nullptr, 0);
+    if (needed == 0U) {
+      mz_zip_reader_end(&impl_->archive);
+      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: central-directory entry has no filename",
+                        "context=zip_reader preflight");
+    }
+    if (impl_->name_buf.size() < needed) {
+      impl_->name_buf.resize(needed);
+    }
+    const mz_uint written = mz_zip_reader_get_filename(&impl_->archive, i, impl_->name_buf.data(),
+                                                       static_cast<mz_uint>(impl_->name_buf.size()));
+    if (written == 0U) {
+      mz_zip_reader_end(&impl_->archive);
+      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: central-directory filename lookup failed",
+                        "context=zip_reader preflight");
+    }
+    std::size_t name_len = written;
+    if (name_len > 0U && impl_->name_buf[name_len - 1U] == '\0') {
+      --name_len;
+    }
+    if (!seen_names.emplace(impl_->name_buf.data(), name_len).second) {
+      std::string ctx("context=zip_reader duplicate_entry=");
+      ctx.append(impl_->name_buf.data(), name_len);
+      mz_zip_reader_end(&impl_->archive);
+      return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: duplicate non-directory entry name",
+                        std::move(ctx));
+    }
   }
 
   impl_->open = true;
@@ -240,8 +291,8 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
   const std::size_t advertised = static_cast<std::size_t>(stat.m_uncomp_size);
 
   // Extract straight into the caller-owned vector. `advertised` is the
-  // stat's `m_uncomp_size`, already validated against the per-entry,
-  // ratio, and cumulative caps above. Sizing the destination once and
+  // stat's `m_uncomp_size`, already validated against the per-entry and
+  // ratio caps above. Sizing the destination once and
   // decompressing into it avoids the second full-size buffer that
   // `extract_to_heap` + `memcpy` + `mz_free` would hold simultaneously,
   // halving the extraction's peak footprint.

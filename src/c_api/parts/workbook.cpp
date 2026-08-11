@@ -216,7 +216,7 @@ fm_status_t xlsb_read_diagnostics_impl(const fm_workbook_t* wb, size_t* out_unde
   return 0;
 }
 
-fm_status_t save_ex_with_diagnostics_impl(const fm_workbook_t* wb, fm_workbook_format_t format, uint8_t** out_bytes,
+fm_status_t save_ex_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
                                           size_t* out_len, size_t* out_downgraded_formula_count,
                                           size_t* out_deferred_feature_count, const char* api_name) {
   clear_last_error();
@@ -406,7 +406,7 @@ extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_b
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_save_ex_with_diagnostics(const fm_workbook_t* wb, fm_workbook_format_t format,
+extern "C" fm_status_t fm_workbook_save_ex_with_diagnostics(const fm_workbook_t* wb, std::int32_t format,
                                                             uint8_t** out_bytes, size_t* out_len,
                                                             size_t* out_downgraded_formula_count,
                                                             size_t* out_deferred_feature_count) {
@@ -414,7 +414,7 @@ extern "C" fm_status_t fm_workbook_save_ex_with_diagnostics(const fm_workbook_t*
                                        out_deferred_feature_count, "fm_workbook_save_ex_with_diagnostics");
 }
 
-extern "C" fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, fm_workbook_format_t format, uint8_t** out_bytes,
+extern "C" fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
                                            size_t* out_len) {
   size_t downgraded_formula_count = 0;
   size_t deferred_feature_count = 0;
@@ -859,7 +859,7 @@ extern "C" fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mo
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode_t mode) {
+extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t mode) {
   clear_last_error();
   if (wb == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_set_calc_mode: wb is NULL");

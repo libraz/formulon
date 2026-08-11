@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "eval/compat.h"
+#include "eval/spill_committer.h"
 #include "parser/reference.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -357,6 +358,15 @@ class EvalContext {
     return copy;
   }
 
+  /// Installs the recalc-owned observer used to queue blocked anchors when a
+  /// committed spill rectangle is released during evaluation.
+  EvalContext with_spill_release_callback(SpillReleaseCallback callback, void* user_data) const noexcept {
+    EvalContext copy = *this;
+    copy.spill_release_callback_ = callback;
+    copy.spill_release_user_data_ = user_data;
+    return copy;
+  }
+
   /// Returns the 0-based row of the formula cell that owns the currently
   /// evaluated expression, or `kNoFormulaCell` when no cell is bound (e.g.
   /// ad-hoc expression evaluation in the CLI).
@@ -440,6 +450,8 @@ class EvalContext {
   // `current_sheet_` so that ad-hoc / read-only contexts (CLI eval, tests
   // that only resolve refs) cannot accidentally mutate the sheet.
   Sheet* mutable_sheet_ = nullptr;
+  SpillReleaseCallback spill_release_callback_ = nullptr;
+  void* spill_release_user_data_ = nullptr;
   std::uint32_t formula_row_ = kNoFormulaCell;
   std::uint32_t formula_col_ = kNoFormulaCell;
   // Non-owning pointers to caller-stack-allocated depth counters. The

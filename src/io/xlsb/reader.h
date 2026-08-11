@@ -24,10 +24,11 @@
 // the already-decoded cached value is preserved instead of a fabricated
 // formula that would recalc to `#NAME?`.
 //
-// Default-typed binary parts (images, OLE) are NOT captured here; only
-// Override-listed parts the reader does not consume flow into
-// `XlsbReadResult::unknown_parts` and `Workbook::passthrough_parts()`,
-// matching the OOXML reader's contract.
+// Parts the reader does not model use the same passthrough contract as the
+// OOXML reader. Override-listed parts retain their explicit content type;
+// parts resolved through a `<Default>` entry carry an empty
+// `PassthroughPart::content_type`, while the workbook retains the source
+// default registry in `Workbook::default_content_types()`.
 
 #ifndef FORMULON_IO_XLSB_READER_H_
 #define FORMULON_IO_XLSB_READER_H_
@@ -75,13 +76,10 @@ struct XlsbReadResult {
   std::uint32_t cells_read = 0;
   std::uint32_t undecoded_formula_count = 0;
   std::uint32_t undecoded_defined_name_count = 0;
-  /// Package entries that were neither modelled nor captured as
-  /// passthrough, and will therefore be missing if this workbook is
-  /// written back out. Non-zero means the load was lossy: the reader
-  /// only captures parts listed as `[Content_Types].xml` Overrides, so
-  /// anything typed through an extension Default (media, embedded OLE,
-  /// printer settings) falls outside it. A caller that needs fidelity
-  /// should treat a non-zero count as grounds to refuse a save.
+  /// Package entries whose content type could not be resolved by either an
+  /// Override or a Default registration. Such entries are dropped because
+  /// they cannot be emitted safely; a non-zero count means the load was
+  /// lossy.
   std::uint32_t dropped_part_count = 0;
 };
 

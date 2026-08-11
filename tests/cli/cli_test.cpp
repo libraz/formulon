@@ -318,7 +318,7 @@ bool write_dropped_xlsb_fixture(const std::string& path) {
   if (!saved)
     return false;
   std::vector<std::uint8_t> fixture =
-      append_empty_zip_entry(std::vector<std::uint8_t>(raw, raw + len), "xl/dropped.bin");
+      append_empty_zip_entry(std::vector<std::uint8_t>(raw, raw + len), "xl/dropped.unknown");
   fm_buffer_free(raw);
   if (fixture.empty())
     return false;

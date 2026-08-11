@@ -24,6 +24,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   ooxml_writer_pivot_test.cpp
   real_excel_fixture_smoke_test.cpp
   recalc_text_lifetime_test.cpp
+  xlsb_default_passthrough_test.cpp
   sheet_features_roundtrip_test.cpp
   sheet_layout_roundtrip_test.cpp
   sheet_print_geometry_roundtrip_test.cpp

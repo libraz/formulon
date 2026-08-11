@@ -74,8 +74,11 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
 ///   * `xl/sharedStrings.bin`          — only when at least one cell
 ///                                       interns a text value.
 ///   * Passthrough parts                — every entry in
-///                                       `workbook.passthrough_parts()`
-///                                       that does not collide with a
+///                                       `workbook.passthrough_parts()`;
+///                                       Default-typed entries reuse the
+///                                       matching registrations from
+///                                       `workbook.default_content_types()`;
+///                                       entries that do not collide with a
 ///                                       generated path. Collisions are
 ///                                       resolved in favour of the
 ///                                       generated copy with a

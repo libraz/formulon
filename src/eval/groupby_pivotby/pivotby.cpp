@@ -16,13 +16,20 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
-#include "utils/structured_log.h"
 #include "value.h"
 
 namespace formulon {
 namespace eval {
 
 namespace {
+
+enum class ColSlotKind { Leaf, OuterSubtotal, GrandTotal };
+
+struct ColSlot {
+  ColSlotKind kind = ColSlotKind::Leaf;
+  std::size_t col_group = 0;
+  std::size_t outer_group = 0;
+};
 
 // Maps a single row's group key to its group index, appending a new group on
 // first occurrence. `keys` is the source key array (row_fields or
@@ -101,16 +108,19 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   //           or is suppressed entirely when output_emits_header is
   //           false — preserved for backwards compatibility with the
   //           original single-column impl]
-  //   cols = K + nC * V + (emit_row_totals_col ? V : 0)
+  //   cols = K + S * V + (emit_row_totals_col ? V : 0), where S is the
+  //          physical column-slot count (leaf groups plus one outer subtotal
+  //          slot per outer group when |col_total_depth| == 2)
   //
   // Layout summary, in row order:
-  //   1. L col-axis label rows: cells [0..K-1] are blank; cells
-  //      [K..K+nC*V-1] hold col_fields' L-th-level keys tiled V times per
-  //      col group; the optional grand-total block holds "Grand Total" on
-  //      the outermost level only and is blank on inner levels.
+  //   1. L col-axis label rows: cells [0..K-1] are blank; each physical
+  //      column slot occupies V tiled cells. Leaf slots hold col_fields'
+  //      keys, subtotal slots hold the outer key on level 0 and blanks on
+  //      inner levels; the optional grand-total block holds "Grand Total"
+  //      on the outermost level only and is blank on inner levels.
   //   2. Optional header row: cells [0..K-1] hold the row_fields header
-  //      labels (or "Field N" synth); cells [K..K+nC*V-1] hold the values
-  //      header labels (V cells) tiled per col group; the optional grand-
+  //      labels (or "Field N" synth); each physical slot holds the values
+  //      header labels (V cells) tiled per slot; the optional grand-
   //      total block holds the same V values-header tile.
   //   3. Optional TOP grand-total row (when row_total_depth < 0): "Grand
   //      Total" label, blanks across the row keys, col totals, then the
@@ -165,9 +175,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
 
   // -- arg 7: col_total_depth ∈ {-2,-1,0,1,2}, default 1 -------------------
   // The grand-total column (showing row totals) defaults to the RIGHT of
-  // the result. ±2 (per-region subtotal columns) is not implemented and
-  // falls back to the ±1 grand-total-only layout; the fallback is recorded
-  // in tests/divergence.yaml and a diagnostic is emitted below.
+  // the result. ±2 adds one subtotal block per outer column group when the
+  // column axis has at least two levels; a one-level column axis retains the
+  // ordinary ±1 layout because there is no inner level to roll up.
   int col_total_depth = 1;
   if (!read_optional_int_in_set(call, 7, arity, 1, arena, registry, ctx, kTotalDepths,
                                 sizeof(kTotalDepths) / sizeof(kTotalDepths[0]), &col_total_depth, &err)) {
@@ -178,22 +188,6 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   int col_sort_order = 0;
   if (!read_optional_int(call, 8, arity, 0, arena, registry, ctx, &col_sort_order, &err)) {
     return err;
-  }
-
-  // Per-region subtotal COLUMNS (|col_total_depth| == 2) would insert an
-  // extra value-wide block per outer column group, which reshapes every
-  // column index in the layout below; that is not yet built, so a ±2
-  // request on the column axis falls back to the ±1 grand-total-only
-  // layout. Subtotal rows (|row_total_depth| == 2) are implemented further
-  // down. The fallback is recorded in tests/divergence.yaml; emit a
-  // diagnostic so it is observable.
-  if (col_total_depth == 2 || col_total_depth == -2) {
-    StructuredLog("eval.pivotby.subtotals_unsupported")
-        .field("function", std::string_view("PIVOTBY"))
-        .field("axis", std::string_view("column"))
-        .field("col_total_depth", static_cast<int64_t>(col_total_depth))
-        .field("fallback", std::string_view("grand_total_only"))
-        .warn();
   }
 
   // Determine header row layout. Same as GROUPBY but the header / output
@@ -414,9 +408,80 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     });
   }
 
+  // A two-level column axis can expose one value-wide subtotal block for
+  // every outer key. Build the physical block plan once and let all of the
+  // renderers below consume it; keeping the plan explicit avoids the fixed
+  // `ci * val_cols` assumption that the ordinary leaf-only layout uses.
+  const bool emit_col_subtotals = (col_total_depth == 2 || col_total_depth == -2) && col_levels >= 2U;
+  OuterGrouping col_hierarchy;
+  std::vector<std::size_t> outer_col_order;
+  std::vector<ColSlot> col_slots;
+  if (emit_col_subtotals) {
+    col_hierarchy = build_outer_grouping(*col_fields, col_repr, col_members);
+    std::vector<bool> outer_seen(col_hierarchy.repr_of_outer.size(), false);
+    for (const std::size_t cg : col_order) {
+      const std::size_t outer = col_hierarchy.outer_of_group[cg];
+      if (!outer_seen[outer]) {
+        outer_seen[outer] = true;
+        outer_col_order.push_back(outer);
+      }
+    }
+    for (const std::size_t outer : outer_col_order) {
+      if (col_total_depth < 0) {
+        col_slots.push_back({ColSlotKind::OuterSubtotal, 0U, outer});
+      }
+      for (const std::size_t cg : col_order) {
+        if (col_hierarchy.outer_of_group[cg] == outer) {
+          col_slots.push_back({ColSlotKind::Leaf, cg, outer});
+        }
+      }
+      if (col_total_depth > 0) {
+        col_slots.push_back({ColSlotKind::OuterSubtotal, 0U, outer});
+      }
+    }
+  } else {
+    col_slots.reserve(n_cols);
+    for (const std::size_t cg : col_order) {
+      col_slots.push_back({ColSlotKind::Leaf, cg, 0U});
+    }
+  }
+
+  // Subtotal cells are the intersection of one flat row group and one outer
+  // column group. Empty intersections stay blank, just like ordinary pivot
+  // body cells; an aggregator error is retained in that one cell.
+  std::vector<std::vector<std::vector<Value>>> col_subtotal_body;
+  std::vector<std::vector<Value>> col_subtotal_totals;
+  if (emit_col_subtotals) {
+    const std::size_t outer_count = col_hierarchy.repr_of_outer.size();
+    col_subtotal_body.assign(
+        n_rows, std::vector<std::vector<Value>>(outer_count, std::vector<Value>(val_cols, Value::blank())));
+    for (std::size_t rg = 0; rg < n_rows; ++rg) {
+      for (std::size_t outer = 0; outer < outer_count; ++outer) {
+        std::vector<std::uint32_t> intersection;
+        for (const std::uint32_t row : row_members[rg]) {
+          const std::size_t offset = static_cast<std::size_t>(row - data_start_row);
+          if (offset < col_tag.size() && col_hierarchy.outer_of_group[col_tag[offset]] == outer) {
+            intersection.push_back(row);
+          }
+        }
+        if (!intersection.empty()) {
+          col_subtotal_body[rg][outer] =
+              aggregate_value_columns(*values, val_cols, intersection, agg, arena, registry, ctx, ErrorCode::Calc);
+        }
+      }
+    }
+    if (emit_col_totals_row) {
+      col_subtotal_totals.assign(outer_count, std::vector<Value>(val_cols, Value::blank()));
+      for (std::size_t outer = 0; outer < outer_count; ++outer) {
+        col_subtotal_totals[outer] = aggregate_value_columns(*values, val_cols, col_hierarchy.rows_of_outer[outer], agg,
+                                                             arena, registry, ctx, ErrorCode::Calc);
+      }
+    }
+  }
+
   // -- Assemble output ----------------------------------------------------
-  // The output has K row-key columns on the left, nC*V body columns in the
-  // middle (V cells per col group), and an optional V-wide grand-total
+  // The output has K row-key columns on the left, one V-wide block per
+  // physical column slot in the middle, and an optional V-wide grand-total
   // block on either the LEFT (col_total_depth < 0) or RIGHT (positive).
   //
   // Vertically: L col-axis label rows, then optional header row, then
@@ -424,14 +489,14 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // totals row.
   const bool grand_total_left = emit_row_totals_col && (col_total_depth < 0);
 
-  // Column index helpers. Body block is laid out as
+  // Column index helpers. The body block is laid out as
   //   [K key cols][optional V grand-total cols if left]
-  //   [nC * V body cols][optional V grand-total cols if right]
+  //   [col_slots.size() * V blocks][optional V grand-total cols if right].
   const std::uint32_t body_block_start = key_cols + (grand_total_left ? val_cols : 0U);
   const std::uint32_t grand_total_block_start =
-      grand_total_left ? key_cols : (key_cols + static_cast<std::uint32_t>(n_cols) * val_cols);
+      grand_total_left ? key_cols : (key_cols + static_cast<std::uint32_t>(col_slots.size()) * val_cols);
   const std::uint32_t out_cols =
-      key_cols + static_cast<std::uint32_t>(n_cols) * val_cols + (emit_row_totals_col ? val_cols : 0U);
+      key_cols + static_cast<std::uint32_t>(col_slots.size()) * val_cols + (emit_row_totals_col ? val_cols : 0U);
 
   // Resolve the values-header label cells (V wide) once. With
   // field_headers ∈ {1,3} we copy values->cells[v] for v=0..V-1 (the
@@ -458,9 +523,20 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   auto render_col_axis_row = [&](std::uint32_t level) {
     std::vector<Value> row(out_cols, Value::blank());
     // Cells [0..K-1] stay blank.
-    for (std::size_t ci = 0; ci < n_cols; ++ci) {
-      const std::size_t cg = col_order[ci];
-      const Value& label = col_fields->cells[static_cast<std::size_t>(col_repr[cg]) * col_levels + level];
+    for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
+      const ColSlot& slot = col_slots[ci];
+      Value label = Value::blank();
+      if (slot.kind == ColSlotKind::Leaf) {
+        label = col_fields->cells[static_cast<std::size_t>(col_repr[slot.col_group]) * col_levels + level];
+      } else if (slot.kind == ColSlotKind::OuterSubtotal) {
+        // A subtotal is identified by the outer key on level 0; its inner
+        // header cells remain blank. This is the shape observed in Excel's
+        // PIVOTBY column subtotal output.
+        if (level == 0U) {
+          label =
+              col_fields->cells[static_cast<std::size_t>(col_hierarchy.repr_of_outer[slot.outer_group]) * col_levels];
+        }
+      }
       const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
       // Tile the label V times across the body cells for this col group.
       for (std::uint32_t v = 0; v < val_cols; ++v) {
@@ -468,10 +544,12 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       }
     }
     if (emit_row_totals_col) {
-      // Outermost level (level == 0): "Grand Total" tiled V times. Inner
-      // levels: blank V times.
+      // Outermost level (level == 0): the grand-total label tiled V times.
+      // With nested subtotals Excel promotes this label to the hierarchy
+      // form (総計 in ja-JP); inner levels remain blank.
       if (level == 0U) {
-        const Value gt = Value::text(arena.intern(grand_total_label(ctx)));
+        const Value gt =
+            Value::text(arena.intern(emit_col_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
         for (std::uint32_t v = 0; v < val_cols; ++v) {
           row[grand_total_block_start + v] = gt;
         }
@@ -496,8 +574,9 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
         row[c] = Value::text(arena.intern(label));
       }
     }
-    // Values-header labels tiled V cells per col group.
-    for (std::size_t ci = 0; ci < n_cols; ++ci) {
+    // Values-header labels tiled V cells per physical column slot. Subtotal
+    // blocks carry the same values-header tile as their leaf siblings.
+    for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
       const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
       for (std::uint32_t v = 0; v < val_cols; ++v) {
         row[base + v] = values_header_labels[v];
@@ -530,12 +609,16 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     for (std::uint32_t c = 0; c < key_cols; ++c) {
       row[c] = row_fields->cells[static_cast<std::size_t>(row_repr[rg]) * key_cols + c];
     }
-    // Body cells: per (col group in sorted order, value column).
-    for (std::size_t ci = 0; ci < n_cols; ++ci) {
-      const std::size_t cg = col_order[ci];
+    // Body cells: per physical column slot, value column.
+    for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
+      const ColSlot& slot = col_slots[ci];
       const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
       for (std::uint32_t v = 0; v < val_cols; ++v) {
-        row[base + v] = body[rg][cg][v];
+        if (slot.kind == ColSlotKind::Leaf) {
+          row[base + v] = body[rg][slot.col_group][v];
+        } else if (slot.kind == ColSlotKind::OuterSubtotal) {
+          row[base + v] = col_subtotal_body[rg][slot.outer_group][v];
+        }
       }
     }
     // Grand-total block: row totals per value column. Mac Excel ja-JP only
@@ -560,11 +643,15 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
     std::vector<Value> row(out_cols, Value::blank());
     row[0] = Value::text(arena.intern(emit_row_subtotals ? hierarchy_grand_total_label(ctx) : grand_total_label(ctx)));
     // Cells [1..K-1] stay blank (the rest of the row-keys columns).
-    for (std::size_t ci = 0; ci < n_cols; ++ci) {
-      const std::size_t cg = col_order[ci];
+    for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
+      const ColSlot& slot = col_slots[ci];
       const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
       for (std::uint32_t v = 0; v < val_cols; ++v) {
-        row[base + v] = col_totals[cg][v];
+        if (slot.kind == ColSlotKind::Leaf) {
+          row[base + v] = col_totals[slot.col_group][v];
+        } else if (slot.kind == ColSlotKind::OuterSubtotal) {
+          row[base + v] = col_subtotal_totals[slot.outer_group][v];
+        }
       }
     }
     // Grand-total block: the bottom-right grand total, populated only for
@@ -652,13 +739,25 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
       // The subtotal row restates its outer key verbatim in the first row-key
       // column and leaves the inner row-key columns blank.
       row[0] = row_fields->cells[static_cast<std::size_t>(row_hierarchy.repr_of_outer[o]) * key_cols];
-      for (std::size_t ci = 0; ci < n_cols; ++ci) {
-        const std::size_t cg = col_order[ci];
-        if (by_col_group[cg].empty()) {
+      for (std::size_t ci = 0; ci < col_slots.size(); ++ci) {
+        const ColSlot& slot = col_slots[ci];
+        std::vector<std::uint32_t> intersection;
+        if (slot.kind == ColSlotKind::Leaf) {
+          intersection = by_col_group[slot.col_group];
+        } else if (slot.kind == ColSlotKind::OuterSubtotal) {
+          // Row and column subtotals intersect at their two outer keys.
+          for (const std::uint32_t source_row : row_hierarchy.rows_of_outer[o]) {
+            const std::size_t offset = static_cast<std::size_t>(source_row - data_start_row);
+            if (offset < col_tag.size() && col_hierarchy.outer_of_group[col_tag[offset]] == slot.outer_group) {
+              intersection.push_back(source_row);
+            }
+          }
+        }
+        if (intersection.empty()) {
           continue;  // no data at this intersection; Excel leaves it blank.
         }
         const std::vector<Value> cells =
-            aggregate_value_columns(*values, val_cols, by_col_group[cg], agg, arena, registry, ctx, ErrorCode::Calc);
+            aggregate_value_columns(*values, val_cols, intersection, agg, arena, registry, ctx, ErrorCode::Calc);
         const std::uint32_t base = body_block_start + static_cast<std::uint32_t>(ci) * val_cols;
         for (std::uint32_t v = 0; v < val_cols; ++v) {
           row[base + v] = cells[v];

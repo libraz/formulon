@@ -2,7 +2,9 @@
 // Stable C ABI function-catalog metadata tests.
 
 #include <cctype>
+#include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <unordered_set>
 
@@ -66,6 +68,26 @@ TEST(FormulonCApiFunctionMetadata, NullArgsReturnBindingNullPointer) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(fm_function_metadata("SUM", FM_LOCALE_EN_US, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+}
+
+TEST(FormulonCApiFunctionMetadata, RawLocaleValuesAreRejectedWithoutMutation) {
+  const std::int32_t invalid_locales[] = {99, std::numeric_limits<std::int32_t>::min(),
+                                          std::numeric_limits<std::int32_t>::max()};
+  const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  for (const std::int32_t raw : invalid_locales) {
+    fm_function_metadata_t md{};
+    md.canonical_name = "sentinel";
+    EXPECT_EQ(fm_function_metadata("SUM", raw, &md), expected);
+    EXPECT_EQ(md.canonical_name, nullptr);
+
+    const char* localized = "sentinel";
+    EXPECT_EQ(fm_function_localize("SUM", raw, &localized), expected);
+    EXPECT_EQ(localized, nullptr);
+
+    const char* canonical = "sentinel";
+    EXPECT_EQ(fm_function_canonicalize("SUM", raw, &canonical), expected);
+    EXPECT_EQ(canonical, nullptr);
+  }
 }
 
 TEST(FormulonCApiFunctionMetadata, FunctionCountIsPositive) {

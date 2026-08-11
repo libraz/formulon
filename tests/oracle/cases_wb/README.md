@@ -65,8 +65,11 @@ Per-case field reference:
   (`"A"`, `"A:D"`) to a positive width number.
 - `row_heights` -- optional mapping of a row number (`"1"`) to a
   positive height number.
-- `pivot` -- optional feature block; validated as an opaque mapping
-  (the pivot builder is the authority on its shape). See "Pivot suites".
+- `pivot` -- optional feature block. `row_fields`, `col_fields`, and
+  `page_fields` name source fields. `formula_probes` is an optional
+  post-build list of `{id, cell, formula}` records; the Windows driver
+  writes those formulas after `RefreshTable` and records their scalar
+  result. See "Pivot suites".
 - `print` -- optional feature block with a checked shape. See "Print
   suites".
 
@@ -89,11 +92,12 @@ Per-case field reference:
 
 ## Target
 
-The workbook track uses `win-365-ja_JP` as its primary, declared in the
-`tracks.workbook` section of `tools/oracle/targets.yaml`. Reliable
-PivotTable COM automation is only available through Windows Excel, so
-the workbook track diverges from the function track's Mac primary.
-`mac-365-ja_JP` is registered as a workbook-track variant.
+Reliable PivotTable COM automation is only available through Windows Excel,
+so the workbook track is prepared for `win-365-ja_JP` but remains
+external-pending while that target is `wanted`. The old workbook goldens are
+marked `reference-only` and excluded from active CTest/coverage; they must
+not be described as Microsoft 365 verified. `mac-365-ja_JP` remains the
+formula-track primary.
 
 ## Adding a case
 
@@ -107,7 +111,8 @@ the workbook track diverges from the function track's Mac primary.
        [tests/oracle/golden_wb/<suite>.golden.json]
    ```
    The golden argument is optional -- omit it until the golden exists.
-4. On a Windows + Excel host, generate the golden:
+4. On a product-verified Microsoft 365 Windows + Excel host, generate the
+   golden:
    ```
    python3 tools/oracle/cli.py workbook --suite <suite>
    ```
@@ -144,6 +149,13 @@ pivot:
   filters:                     # optional manual item filters
     - {field: Region, hide: [South]}
 ```
+
+`page_fields` places source fields on Excel's report-filter/page axis. The
+optional `formula_probes` list contains `{id, cell, formula}` records. The
+Windows driver writes those formulas after `RefreshTable` and records their
+scalar results, allowing GETPIVOTDATA page/data-axis routing to be checked
+independently of the rendered pivot grid. The C++ verifier consumes the same
+probe schema once an external, product-verified golden exists.
 
 `agg` accepts: `Sum`, `Count`, `Average`, `Max`, `Min`, `Product`,
 `CountNumbers`, `StdDev`, `StdDevP`, `Var`, `VarP`.
@@ -230,7 +242,8 @@ The pivot and print scaffolding and verifiers are in place: schema
 validator, generator entry point (Windows COM driver + best-effort
 macOS driver), the declarative workbook builder, the C++ runner +
 parameterized test, and CMake wiring. The Windows-host Excel automation
-that produces the goldens runs separately. Until the goldens are
-generated on a Windows + Excel host, `golden_wb/` holds no goldens, so
-`workbook_oracle_test.cpp` registers zero cases and the build stays
-green; feature-less cases are skipped.
+that produces the goldens runs separately. The checked-in workbook files
+are historical and marked `reference-only`; until a product-verified
+Microsoft 365 capture opts in through `PROVENANCE.json`,
+`workbook_oracle_test.cpp` registers zero golden cases and the build stays
+green. The local builder and formula-probe unit tests remain active.

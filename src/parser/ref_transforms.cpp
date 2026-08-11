@@ -1,9 +1,11 @@
 
 #include "parser/ref_transforms.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 #include "parser/reference.h"
 #include "sheet.h"
@@ -82,10 +84,70 @@ std::optional<std::uint32_t> RowColShiftTransform::shift_axis(std::uint32_t coor
   if (coord < index_) {
     return coord;
   }
-  if (coord < index_ + count_) {
+  const std::uint64_t delete_end = static_cast<std::uint64_t>(index_) + count_;
+  if (static_cast<std::uint64_t>(coord) < delete_end) {
     return std::nullopt;
   }
   return coord - count_;
+}
+
+std::optional<std::pair<std::uint32_t, std::uint32_t>> RowColShiftTransform::shift_interval(
+    std::uint32_t first, std::uint32_t last) const noexcept {
+  if (edit_ == RowColEdit::kInsert || count_ == 0) {
+    const std::optional<std::uint32_t> shifted_first =
+        shift_axis(first, axis_ == RowColAxis::kRow ? Sheet::kMaxRows : Sheet::kMaxCols);
+    if (!shifted_first.has_value()) {
+      return std::nullopt;
+    }
+    const std::optional<std::uint32_t> shifted_last =
+        shift_axis(last, axis_ == RowColAxis::kRow ? Sheet::kMaxRows : Sheet::kMaxCols);
+    if (!shifted_last.has_value()) {
+      return std::nullopt;
+    }
+    return std::make_pair(*shifted_first, *shifted_last);
+  }
+
+  const std::uint32_t bound = axis_ == RowColAxis::kRow ? Sheet::kMaxRows : Sheet::kMaxCols;
+  const std::uint32_t low = std::min(first, last);
+  const std::uint32_t high = std::max(first, last);
+  const std::uint64_t delete_begin = index_;
+  const std::uint64_t delete_end = delete_begin + count_;
+
+  // An interval wholly before or wholly after the deletion has no surviving
+  // gap to clamp; endpoint mapping gives the ordinary structural shift.
+  if (static_cast<std::uint64_t>(high) < delete_begin || static_cast<std::uint64_t>(low) >= delete_end) {
+    const std::optional<std::uint32_t> shifted_first = shift_axis(first, bound);
+    if (!shifted_first.has_value()) {
+      return std::nullopt;
+    }
+    const std::optional<std::uint32_t> shifted_last = shift_axis(last, bound);
+    if (!shifted_last.has_value()) {
+      return std::nullopt;
+    }
+    return std::make_pair(*shifted_first, *shifted_last);
+  }
+
+  // The deletion intersects the interval. Keep the first survivor from the
+  // original prefix, if any, otherwise the first coordinate after the
+  // deleted span. Do the symmetric calculation for the final survivor.
+  const bool has_prefix = static_cast<std::uint64_t>(low) < delete_begin;
+  const bool has_suffix = static_cast<std::uint64_t>(high) >= delete_end;
+  if (!has_prefix && !has_suffix) {
+    return std::nullopt;  // every coordinate in the interval was deleted
+  }
+
+  const std::uint64_t survivor_low = has_prefix ? low : delete_end - count_;
+  const std::uint64_t survivor_high = has_suffix ? static_cast<std::uint64_t>(high) - count_ : delete_begin - 1U;
+  if (survivor_low >= bound || survivor_high >= bound || survivor_low > survivor_high) {
+    return std::nullopt;
+  }
+
+  const std::uint32_t out_low = static_cast<std::uint32_t>(survivor_low);
+  const std::uint32_t out_high = static_cast<std::uint32_t>(survivor_high);
+  if (first <= last) {
+    return std::make_pair(out_low, out_high);
+  }
+  return std::make_pair(out_high, out_low);
 }
 
 std::optional<Reference> RowColShiftTransform::apply(const Reference& ref) const {
@@ -117,6 +179,47 @@ std::optional<Reference> RowColShiftTransform::apply(const Reference& ref) const
   }
   out.col = *shifted;
   return out;
+}
+
+std::optional<std::pair<Reference, Reference>> RowColShiftTransform::apply_range(const Reference& lhs,
+                                                                                 const Reference& rhs) const {
+  // A range-level clamp is meaningful only for a single sheet and a
+  // well-formed pair of matching whole-axis flags. If either endpoint is
+  // outside scope (including a cross-sheet range), retain the base contract:
+  // transform each endpoint independently and let a deleted endpoint poison
+  // the range.
+  if (!strings::case_insensitive_eq(lhs.sheet, rhs.sheet) || !sheet_in_scope(lhs.sheet) ||
+      lhs.is_full_col != rhs.is_full_col || lhs.is_full_row != rhs.is_full_row) {
+    return RefTransform::apply_range(lhs, rhs);
+  }
+  // A whole-column range is independent of row edits, and a whole-row range
+  // is independent of column edits. Endpoint application is equivalent and
+  // keeps this hook conservative for malformed mixed ranges.
+  if ((axis_ == RowColAxis::kRow && lhs.is_full_col) || (axis_ == RowColAxis::kCol && lhs.is_full_row)) {
+    return RefTransform::apply_range(lhs, rhs);
+  }
+
+  if (edit_ == RowColEdit::kInsert) {
+    return RefTransform::apply_range(lhs, rhs);
+  }
+
+  const std::uint32_t first = axis_ == RowColAxis::kRow ? lhs.row : lhs.col;
+  const std::uint32_t last = axis_ == RowColAxis::kRow ? rhs.row : rhs.col;
+  const std::optional<std::pair<std::uint32_t, std::uint32_t>> shifted = shift_interval(first, last);
+  if (!shifted.has_value()) {
+    return std::nullopt;
+  }
+
+  Reference out_lhs = lhs;
+  Reference out_rhs = rhs;
+  if (axis_ == RowColAxis::kRow) {
+    out_lhs.row = shifted->first;
+    out_rhs.row = shifted->second;
+  } else {
+    out_lhs.col = shifted->first;
+    out_rhs.col = shifted->second;
+  }
+  return std::make_pair(out_lhs, out_rhs);
 }
 
 }  // namespace parser

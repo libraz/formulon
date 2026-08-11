@@ -34,10 +34,26 @@
  *   * `fm_status_string()` and `fm_version_string()` are pure functions
  *     and are safe to call concurrently.
  *
+ * Pointer-view vocabulary:
+ *   * A **model-backed view** points into workbook-owned model storage. Its
+ *     lifetime ends at the invalidating mutation named by that API, or when
+ *     `fm_workbook_destroy` releases the handle. A read on the same handle
+ *     does not invalidate a model-backed view.
+ *   * A **read-scratch-backed view** points into transient per-handle read
+ *     storage. The next successful scratch-backed read on the same handle
+ *     may invalidate it; a validation-rejected call does not refresh this
+ *     storage. Mutations and handle destruction also invalidate it. Callers
+ *     must copy strings or arrays before making another call when they need
+ *     to retain the value.
+ *   * An **owned snapshot** is returned through a separately owned opaque
+ *     result handle and stays valid until that result is destroyed. A
+ *     **static view** points at process-static storage and has program
+ *     lifetime. Each individual API below names which view it returns.
+ *
  * Memory model:
- *   * Every `out_*` pointer borrowed from a workbook handle is valid
- *     until the next mutation on that handle, or until the handle is
- *     destroyed.
+ *   * Workbook-backed views are never allocated for the caller and must not
+ *     be freed. Their exact invalidation boundary is part of each API's
+ *     contract below; do not infer it from the C pointer type alone.
  *   * Buffers returned through `fm_workbook_save`,
  *     `fm_workbook_save_ex`, `fm_workbook_save_ex_with_diagnostics`, and
  *     `fm_workbook_save_xlsb_with_result` are heap-allocated by the library
@@ -138,10 +154,11 @@ typedef enum {
  *                        ordinal (Null=0, Div0=1, Value=2, ...). The
  *                        full enumeration is `formulon::ErrorCode`
  *                        in `src/value.h`.
- *   * `FM_VAL_TEXT`    — `u.text` is a NUL-terminated UTF-8 view
- *                        owned by the originating workbook handle.
- *                        The view is valid until the next mutation of
- *                        the handle or until the handle is destroyed.
+ *   * `FM_VAL_TEXT`    — `u.text` is a NUL-terminated UTF-8 view. Its
+ *                        backing category is specified by the API that
+ *                        writes the `fm_value_t`: cell/evaluation getters
+ *                        use a read-scratch-backed view, while an owned
+ *                        result handle may provide an owned snapshot.
  *   * `FM_VAL_ARRAY`   — array passthrough is reserved for a later
  *                        bundle. The current ABI surfaces the kind
  *                        but does not expose the payload.
@@ -305,6 +322,9 @@ typedef enum {
  * `FM_WORKBOOK_FORMAT_XLSX` produces the same bytes as
  * `fm_workbook_save`. `FM_WORKBOOK_FORMAT_XLSB` produces an MS-XLSB
  * package via the `.xlsb` writer.
+ * `format` is a raw signed 32-bit ordinal so FFI callers can probe unknown
+ * values without constructing an out-of-domain C enum; unknown values return
+ * `kInvalidArgument`.
  *
  * On success the caller receives a heap-allocated buffer that MUST be
  * released with `fm_buffer_free` (NOT `free`). This applies to every save
@@ -323,8 +343,7 @@ typedef enum {
  *         or otherwise undocumented;
  *         a `kIo*` code on archive / writer failure.
  */
-FM_API fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, fm_workbook_format_t format, uint8_t** out_bytes,
-                                       size_t* out_len);
+FM_API fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, int32_t format, uint8_t** out_bytes, size_t* out_len);
 
 /**
  * @brief Serialises `wb` and reports format-specific loss/defer counters.
@@ -334,12 +353,13 @@ FM_API fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, fm_workbook_form
  * features omitted by the current XLSB writer (data loss). All output
  * parameters are reset to zero
  * / `NULL` before validation, including on failure.
+ * `format` uses the same raw signed 32-bit ordinal contract as
+ * `fm_workbook_save_ex`.
  * The returned `out_bytes` buffer follows the `fm_buffer_free` ownership
  * rule documented above.
  */
-FM_API fm_status_t fm_workbook_save_ex_with_diagnostics(const fm_workbook_t* wb, fm_workbook_format_t format,
-                                                        uint8_t** out_bytes, size_t* out_len,
-                                                        size_t* out_downgraded_formula_count,
+FM_API fm_status_t fm_workbook_save_ex_with_diagnostics(const fm_workbook_t* wb, int32_t format, uint8_t** out_bytes,
+                                                        size_t* out_len, size_t* out_downgraded_formula_count,
                                                         size_t* out_deferred_feature_count);
 
 /**
@@ -386,9 +406,10 @@ FM_API size_t fm_workbook_sheet_count(const fm_workbook_t* wb);
 /**
  * @brief Returns the display name of the sheet at `index` (UTF-8).
  *
- * The returned pointer is owned by the workbook and is valid until
- * the next mutation that touches the sheet list (for example
- * `fm_workbook_add_sheet`) or until the handle is destroyed.
+ * The returned pointer is a model-backed view into the workbook. It remains
+ * valid until a mutation that touches the sheet list (for example
+ * `fm_workbook_add_sheet`) or until the handle is destroyed. Reads on the
+ * same handle, including read-scratch-backed reads, do not invalidate it.
  *
  * @param wb         Workbook handle. Must be non-NULL.
  * @param index      0-based sheet index. Must be `< sheet_count`.
@@ -628,13 +649,13 @@ FM_API fm_status_t fm_workbook_set_formula(fm_workbook_t* wb, size_t sheet_index
  * The cell value reflects the most recent recalc. Callers that just
  * mutated cells should invoke `fm_workbook_recalc` first.
  *
- * For `FM_VAL_TEXT`, `out->u.text` borrows a NUL-terminated UTF-8
- * pointer into the workbook handle's read scratch. The pointer is valid
- * only until the next read on this handle (`fm_workbook_get_value`,
- * `fm_workbook_cell_at`, or `fm_workbook_lambda_text_at`), the next
- * mutation, or until the handle is destroyed: the read scratch is reset
- * on each read so a long-lived read loop does not accumulate memory.
- * Callers that need to retain the string must copy it.
+ * For `FM_VAL_TEXT`, `out->u.text` is a read-scratch-backed view into the
+ * handle's transient read storage. It may be invalidated by the next
+ * successful scratch-backed read on this handle; a validation-rejected call
+ * does not refresh the storage. It is also invalid after a mutation or
+ * handle destruction. The scratch is reset on each successful producer so a
+ * long-lived read loop does not accumulate memory. Callers that need to
+ * retain the string must copy it before another call.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -647,9 +668,11 @@ FM_API fm_status_t fm_workbook_get_value(const fm_workbook_t* wb, size_t sheet_i
  * @brief Reads the cell's phonetic guide (OOXML `<rPh>`), or an empty string
  *        when the cell has no guide.
  *
- * `*out_text` borrows a NUL-terminated UTF-8 string from the handle's read
- * scratch. It remains valid until the next read or mutation on the handle,
- * or until the handle is destroyed. Copy it when it must outlive that window.
+ * `*out_text` is a read-scratch-backed view into the handle's transient read
+ * storage. It may be invalidated by the next successful scratch-backed read
+ * on this handle; a validation-rejected call does not refresh the storage.
+ * It is also invalid after a mutation or handle destruction. Copy it before
+ * another call when it must outlive that window.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `out_text` is `NULL`;
@@ -669,13 +692,13 @@ FM_API fm_status_t fm_workbook_get_cell_phonetic(const fm_workbook_t* wb, size_t
  * is the full surface form `LAMBDA(p1,p2,body)` (no leading `=`),
  * suitable for re-parsing through `fm_workbook_set_formula`.
  *
- * On success `*out_text` borrows a NUL-terminated UTF-8 pointer into the
- * workbook handle's read scratch. The pointer is valid only until the
- * next read on this handle (`fm_workbook_get_value`,
- * `fm_workbook_cell_at`, or another `fm_workbook_lambda_text_at`), the
- * next mutation, or until the handle is destroyed: the read scratch is
- * reset on each read so a long-lived handle does not accumulate memory.
- * Callers that need to retain the string must copy it.
+ * On success `*out_text` is a read-scratch-backed view into the handle's
+ * transient read storage. It may be invalidated by the next successful
+ * scratch-backed read on this handle; a validation-rejected call does not
+ * refresh the storage. It is also invalid after a mutation or handle
+ * destruction. The scratch is reset on each successful producer so a
+ * long-lived handle does not accumulate memory. Callers that need to retain
+ * the string must copy it before another call.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -709,9 +732,11 @@ FM_API fm_status_t fm_workbook_lambda_text_at(fm_workbook_t* wb, size_t sheet_in
  * returns the whole array). To recover the full multi-cell result instead,
  * use `fm_workbook_evaluate_formula_array` + `_array_cell`.
  *
- * For `FM_VAL_TEXT`, `out->u.text` borrows the handle's read scratch and
- * is valid only until the next read on this handle (see
- * `fm_workbook_get_value`); copy it if you need to retain it.
+ * For `FM_VAL_TEXT`, `out->u.text` is a read-scratch-backed view and may be
+ * invalidated by the next successful scratch-backed read on this handle;
+ * a validation-rejected call does not refresh the storage. Mutation and
+ * handle destruction also invalidate it; copy it before another call if you
+ * need to retain it.
  *
  * @note Because the ad-hoc formula is never inserted into the dependency
  *       graph, a self-reference such as `=A1` anchored at A1's own address
@@ -771,10 +796,13 @@ FM_API fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, size
  *
  * Two-step protocol: call this to evaluate + learn the dimensions, then call
  * `fm_workbook_evaluate_formula_array_cell` for each row-major index in
- * `[0, (*out_rows) * (*out_cols))`. The stash — and therefore every pointer
- * a subsequent `_array_cell` call surfaces — remains valid until the next
- * `fm_workbook_evaluate_formula_array` call or any mutation on this handle,
- * whichever comes first.
+ * `[0, (*out_rows) * (*out_cols))`. The handle's private array stash remains
+ * available until the next `fm_workbook_evaluate_formula_array` call or any
+ * mutation on this handle, whichever comes first. Text returned by each
+ * `_array_cell` call is a read-scratch-backed view and may be invalidated by
+ * the next successful scratch-backed read on this handle; a
+ * validation-rejected call does not refresh the storage. Copy it before
+ * another call when retaining it.
  *
  * A degenerate empty array result (which producers should never emit)
  * surfaces as a single `#VALUE!` cell with `*out_rows = *out_cols = 1`,
@@ -800,9 +828,12 @@ FM_API fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* wb, s
  * dimensions the producing `fm_workbook_evaluate_formula_array` call
  * returned; cell `(r, c)` is at `index = r * cols + c`.
  *
- * For a `FM_VAL_TEXT` cell, `out->u.text` borrows the handle's read scratch
- * (cleared on each read, exactly like `fm_workbook_cell_at`) and is valid
- * only until the next read on this handle; copy it if you need to retain it.
+ * For a `FM_VAL_TEXT` cell, `out->u.text` is a read-scratch-backed view
+ * (scratch is refreshed by each successful producer, exactly like
+ * `fm_workbook_cell_at`) and may be invalidated by the next successful
+ * scratch-backed read on this handle. A validation-rejected call does not
+ * refresh the storage; mutation and handle destruction also invalidate it.
+ * Copy it before another call if you need to retain it.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb` or `out` is `NULL`;
@@ -846,14 +877,16 @@ FM_API fm_status_t fm_workbook_cell_count(const fm_workbook_t* wb, size_t sheet_
  * On success the call writes `*out_row`, `*out_col`, `*out_value`, and
  * — if `out_formula != NULL` — points `*out_formula` at the cell's raw
  * formula text (or `NULL` when the cell is a pure literal). The
- * formula pointer borrows from the cell's own storage and is valid
- * until the next mutation that touches the sheet's cell store or until
- * the handle is destroyed.
+ * formula pointer is a model-backed view into the cell's own storage and is
+ * valid until the next mutation that touches the sheet's cell store or until
+ * the handle is destroyed. Reads on the same handle do not invalidate it.
  *
- * A `FM_VAL_TEXT` payload in `*out_value`, by contrast, borrows from the
- * handle's read scratch and is valid only until the next read on this
- * handle (see `fm_workbook_get_value`); the scratch is reset on each
- * read so iterating `cell_at` does not accumulate memory.
+ * A `FM_VAL_TEXT` payload in `*out_value`, by contrast, is a
+ * read-scratch-backed view and may be invalidated by the next successful
+ * scratch-backed read on this handle; a validation-rejected call does not
+ * refresh the storage. Mutation and handle destruction also invalidate it.
+ * The scratch is refreshed by each successful producer so iterating
+ * `cell_at` does not accumulate memory.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `out_row`, `out_col`, or
@@ -878,9 +911,10 @@ FM_API size_t fm_workbook_defined_name_count(const fm_workbook_t* wb);
 /**
  * @brief Reads the `idx`-th defined name.
  *
- * On success `*out_name` and `*out_formula` borrow NUL-terminated UTF-8
- * pointers from the workbook handle. Both are valid until the next
- * mutation of the defined-name list or until the handle is destroyed.
+ * On success `*out_name` and `*out_formula` are model-backed views into the
+ * workbook handle. Both are valid until the next mutation of the
+ * defined-name list or until the handle is destroyed. Reads do not
+ * invalidate them.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -910,8 +944,8 @@ FM_API size_t fm_workbook_table_count(const fm_workbook_t* wb);
 /**
  * @brief Reads the `idx`-th table's identifying metadata.
  *
- * On success `*out_name`, `*out_display_name`, and `*out_ref` borrow
- * NUL-terminated UTF-8 pointers from the workbook handle. Same lifetime
+ * On success `*out_name`, `*out_display_name`, and `*out_ref` are
+ * model-backed views into the workbook handle. They have the same lifetime
  * contract as `fm_workbook_defined_name_at`.
  *
  * @return `kOk` on success;
@@ -957,6 +991,11 @@ FM_API size_t fm_workbook_passthrough_count(const fm_workbook_t* wb);
 /**
  * @brief Reads the `idx`-th passthrough part's path.
  *
+ * On success `*out_path` is a model-backed view into the workbook's
+ * passthrough-part list. It remains valid until the passthrough list is
+ * replaced by a reader/writer round-trip, another invalidating workbook
+ * mutation, or handle destruction. Reads do not invalidate it.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kInvalidArgument` when `idx` is out of range.
@@ -979,9 +1018,10 @@ typedef struct {
 
 /**
  * @brief Hyperlink descriptor. String fields are NUL-terminated UTF-8
- *        pointers borrowed from the workbook handle; they are valid
+ *        model-backed views into the workbook handle; they are valid
  *        until the next mutation that touches the sheet's hyperlink
- *        list or until the handle is destroyed. Newly-added entries
+ *        list or until the handle is destroyed. Reads do not invalidate
+ *        them. Newly-added entries
  *        accept NULL for any of `target`, `display`, `tooltip`,
  *        `location` to mean "empty".
  */
@@ -995,8 +1035,8 @@ typedef struct {
 } fm_hyperlink;
 
 /**
- * @brief Comment descriptor. `author` and `text` are borrowed UTF-8
- *        pointers with the same lifetime contract as `fm_hyperlink`.
+ * @brief Comment descriptor. `author` and `text` are model-backed UTF-8
+ *        views with the same lifetime contract as `fm_hyperlink`.
  */
 typedef struct {
   uint32_t row;
@@ -1088,10 +1128,10 @@ FM_API fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, uint32_t sheet);
  *        comment is anchored there, and `kInvalidArgument` when `sheet` is
  *        out of range.
  *
- * `out->author` and `out->text` borrow NUL-terminated UTF-8 pointers
- * from the workbook handle. Both are valid until the next mutation
- * that touches the sheet's comment list or until the handle is
- * destroyed.
+ * `out->author` and `out->text` are model-backed views into the workbook
+ * handle. Both are valid until the next mutation that touches the sheet's
+ * comment list or until the handle is destroyed. Reads do not invalidate
+ * them.
  */
 FM_API fm_status_t fm_sheet_get_comment_at(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                            fm_comment* out);
@@ -1113,9 +1153,8 @@ FM_API fm_status_t fm_sheet_get_comment_count(fm_workbook_t* wb, uint32_t sheet,
  *        a value, so callers can discover comments without already
  *        knowing their `(row, col)`.
  *
- * `out->author` and `out->text` borrow NUL-terminated UTF-8 pointers from
- * the workbook handle, with the same lifetime contract as
- * `fm_sheet_get_comment_at`.
+ * `out->author` and `out->text` are model-backed views into the workbook
+ * handle, with the same lifetime contract as `fm_sheet_get_comment_at`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -1126,7 +1165,7 @@ FM_API fm_status_t fm_sheet_get_comment_at_index(fm_workbook_t* wb, uint32_t she
 /**
  * @brief Reads the `index`-th hyperlink on `sheet` into `out`.
  *
- * String fields in `out` are borrowed pointers (see `fm_hyperlink`).
+ * String fields in `out` are model-backed views (see `fm_hyperlink`).
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -1163,9 +1202,10 @@ FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint3
  *
  * Mirrors `formulon::DataValidation`:
  *   * `ranges` / `range_count` — the cell-range list this rule applies to.
- *     For getter results the pointer is borrowed from the workbook handle
- *     (see `fm_sheet_get_validation_at` for the lifetime contract). For
- *     `fm_sheet_add_validation` the caller owns the buffer and must keep
+ *     For getter results the pointer is a model-backed view into the
+ *     workbook handle (see `fm_sheet_get_validation_at` for the lifetime
+ *     contract). For `fm_sheet_add_validation` the caller owns the buffer and
+ *     must keep
  *     it alive for the duration of the call only; the implementation
  *     deep-copies every range into the sheet's owned storage.
  *   * `type` — 0 none, 1 whole, 2 decimal, 3 list, 4 date, 5 time,
@@ -1180,8 +1220,9 @@ FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint3
  *     OOXML `showDropDown` XML attribute, which the reader/writer already
  *     translate.
  *   * `formula1` / `formula2` / `error_title` / `error_message` /
- *     `prompt_title` / `prompt_message` — borrowed NUL-terminated UTF-8
- *     strings. On the input path (`fm_sheet_add_validation`) `NULL`
+ *     `prompt_title` / `prompt_message` — model-backed views on getter
+ *     results, and caller-owned input strings on the add path. On the input
+ *     path (`fm_sheet_add_validation`) `NULL`
  *     means "absent" and is treated as the empty string. Getters always
  *     return non-NULL pointers (possibly pointing at an empty string).
  */
@@ -1215,9 +1256,9 @@ FM_API fm_status_t fm_sheet_get_validation_count(fm_workbook_t* wb, uint32_t she
 /**
  * @brief Reads the `index`-th data-validation rule on `sheet` into `out`.
  *
- * Every borrowed pointer in `*out` (`ranges` and the six string fields)
- * is owned by the workbook handle and remains valid until the next
- * mutation that touches the sheet's validation list (any of
+ * Every pointer in `*out` (`ranges` and the six string fields) is a
+ * model-backed view owned by the workbook handle. It remains valid until the
+ * next mutation that touches the sheet's validation list (any of
  * `fm_sheet_add_validation`, `fm_sheet_remove_validation_at`,
  * `fm_sheet_clear_validations`, or any reader / writer round-trip), or
  * until the handle is destroyed. Callers that need to retain the
@@ -1356,14 +1397,16 @@ FM_API fm_status_t fm_workbook_calc_mode(const fm_workbook_t* wb, fm_calc_mode_t
 /**
  * @brief Sets the workbook's calc mode.
  *
- * Plain metadata — does not affect evaluation. Unknown enum values
- * (outside the documented range) return `kInvalidArgument`.
+ * Plain metadata — does not affect evaluation. The value is a raw signed
+ * 32-bit enum ordinal so FFI callers can pass an arbitrary value without
+ * first constructing an out-of-domain C enum. Unknown values (outside the
+ * documented range) return `kInvalidArgument`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` if `mode` is not a documented value.
  */
-FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode_t mode);
+FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, int32_t mode);
 
 /* -------------------------------------------------------------------------- */
 /* Excel formula compatibility profile                                        */
@@ -1372,7 +1415,7 @@ FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, fm_calc_mode_t m
 /**
  * @brief Returns the workbook's active Excel formula profile id.
  *
- * The returned pointer is borrowed from Formulon's static profile table and
+ * The returned pointer is a static view into Formulon's profile table and
  * remains valid for the process lifetime. Current ids are:
  * `mac-365-ja_JP`, `win-365-ja_JP`.
  *
@@ -1402,9 +1445,10 @@ FM_API fm_status_t fm_workbook_set_excel_profile_id(fm_workbook_t* wb, const cha
  *        §18.3.1.85 `<sheetProtection>`).
  *
  * Strings are NUL-terminated UTF-8. On the read path
- * (`fm_sheet_get_protection`) the pointers reference the workbook's
- * own storage and remain valid until the next mutation of the same
- * sheet's protection record. On the write path
+ * (`fm_sheet_get_protection`) the pointers are model-backed views into the
+ * workbook's own storage and remain valid until the next mutation of the
+ * same sheet's protection record or handle destruction. Reads do not
+ * invalidate them. On the write path
  * (`fm_sheet_set_protection`) the strings are copied into the
  * workbook; the caller's buffers may be released after the call. Pass
  * `NULL` for any string field to leave it empty.
@@ -1448,9 +1492,10 @@ typedef struct {
  *
  * @param wb           Workbook handle. Must not be NULL.
  * @param sheet_index  Sheet index, 0-based.
- * @param out          Populated on success. String pointers reference
- *                     the workbook's storage and remain valid until
- *                     the next protection mutation on this sheet.
+ * @param out          Populated on success. String pointers are
+ *                     model-backed views into the workbook's storage and
+ *                     remain valid until the next protection mutation on
+ *                     this sheet or handle destruction.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `out` is NULL;
@@ -1747,9 +1792,12 @@ typedef struct {
  *
  * Wide POD covering both differential-format rules and visual rules.
  * `fm_sheet_cf_add_rule` deep-copies every pointer-backed payload into
- * the engine model. `fm_sheet_cf_get_at` returns borrowed views for the
- * selected rule; pointer-backed visual payloads use the workbook handle's
- * read scratch.
+ * the engine model. `fm_sheet_cf_get_at` returns a mixed view for the
+ * selected rule: ids, sqref ranges, and ordinary formula/text strings are
+ * model-backed; visual threshold arrays and their value strings are
+ * read-scratch-backed and may be invalidated by the next successful
+ * scratch-backed read on the same handle. A validation-rejected call does
+ * not refresh the scratch storage.
  *
  * Active fields by `type`:
  *   - `Expression` (0): `formula1`.
@@ -1772,16 +1820,18 @@ typedef struct {
  *     `icon_set_thresholds`.
  *
  * String fields use C-string convention: `NULL` means "absent",
- * non-`NULL` is a NUL-terminated borrowed view. On the input path
+ * non-`NULL` is a NUL-terminated view. On the input path
  * (`fm_sheet_cf_add_rule`) the caller owns the buffer until the call
- * returns; on the output path (`fm_sheet_cf_get_at`) the engine owns
- * the buffer and the view is valid until the next mutation that
- * touches the sheet's CF list.
+ * returns; on the output path (`fm_sheet_cf_get_at`) model-backed fields
+ * remain valid until the next CF-list mutation or handle destruction, while
+ * read-scratch-backed visual fields may be invalidated by the next successful
+ * scratch-backed read on the same handle as well. A validation-rejected call
+ * does not refresh the scratch storage.
  */
 typedef struct {
   /* Stable rule id (matches OOXML `<x14:cfRule id="...">`). On input,
-   * pass `NULL` or `""` to auto-generate one. On output, always
-   * non-NULL. */
+   * pass `NULL` or `""` to auto-generate one. On output, always a
+   * model-backed, non-NULL view. */
   const char* id;
   uint8_t type;        /* `formulon::cf::RuleType` ordinal */
   uint8_t op;          /* `formulon::cf::CellIsOperator` ordinal */
@@ -1793,8 +1843,8 @@ typedef struct {
   uint32_t dxf_id;
 
   /* sqref union — at least one entry. On input, must be non-NULL with
-   * range_count >= 1. On output, points to the engine's internal
-   * vector buffer for the containing block. */
+   * range_count >= 1. On output, points to the engine's model-backed vector
+   * buffer for the containing block. */
   const fm_cf_cell_range_t* sqref;
   uint32_t sqref_count;
 
@@ -1863,11 +1913,14 @@ FM_API fm_status_t fm_sheet_cf_count(const fm_workbook_t* wb, size_t sheet_index
 /**
  * @brief Reads the `idx`-th CF rule (in flattened order) into `out`.
  *
- * String and sqref-array views in `*out` borrow from engine storage or
- * the workbook handle's read scratch. They are valid until the next read
- * call on the same handle, the next CF mutation on the same sheet
- * (`fm_sheet_cf_add_rule`, `fm_sheet_cf_remove_at`, `fm_sheet_cf_clear`),
- * any reader/writer round-trip, or handle destruction.
+ * Model-backed string and sqref-array views in `*out` remain valid until the
+ * next CF mutation on the same sheet (`fm_sheet_cf_add_rule`,
+ * `fm_sheet_cf_remove_at`, `fm_sheet_cf_clear`), any reader/writer
+ * round-trip, or handle destruction. Visual threshold arrays and their
+ * value strings are read-scratch-backed and may also be invalidated by the
+ * next successful scratch-backed read on the same handle. A
+ * validation-rejected call does not refresh the scratch storage. Copy every
+ * field that must survive another call.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -2360,8 +2413,9 @@ FM_API fm_status_t fm_workbook_pivot_cache_remove(fm_workbook_t* wb, uint32_t ca
  * @brief Reads the cache's worksheet source metadata.
  *
  * `out_present` is non-zero when a `<worksheetSource>` is present.
- * `out_ref`, `out_sheet`, and `out_name` are borrowed strings owned by
- * the workbook handle and remain valid until the cache is mutated.
+ * `out_ref`, `out_sheet`, and `out_name` are model-backed strings owned by
+ * the workbook handle and remain valid until the cache is mutated or the
+ * handle is destroyed. Reads do not invalidate them.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_get_worksheet_source(const fm_workbook_t* wb, uint32_t cache_id,
                                                                 int32_t* out_present, const char** out_ref,
@@ -2380,9 +2434,10 @@ FM_API fm_status_t fm_workbook_pivot_cache_set_worksheet_source(fm_workbook_t* w
 FM_API fm_status_t fm_workbook_pivot_cache_field_count(const fm_workbook_t* wb, uint32_t cache_id, size_t* out_count);
 
 /**
- * @brief Reads the name of the cache field at `field_idx`. The pointer
- *        is borrowed from the workbook handle and remains valid until
- *        the cache field list is mutated.
+ * @brief Reads the name of the cache field at `field_idx`. The pointer is a
+ *        model-backed view into the workbook handle and remains valid until
+ *        the cache field list is mutated or the handle is destroyed. Reads
+ *        do not invalidate it.
  */
 FM_API fm_status_t fm_workbook_pivot_cache_field_name(const fm_workbook_t* wb, uint32_t cache_id, size_t field_idx,
                                                       const char** out_utf8);
@@ -2500,9 +2555,15 @@ FM_API fm_status_t fm_workbook_pivot_set_grand_totals(fm_workbook_t* wb, size_t 
 FM_API fm_status_t fm_workbook_pivot_get_layout(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                 fm_pivot_layout_t* out_layout);
 
-/** @brief Sets the pivot's compact / tabular / outline report layout. */
+/**
+ * @brief Sets the pivot's compact / tabular / outline report layout.
+ *
+ * `layout` is a raw signed 32-bit ordinal. Unknown values return
+ * `kInvalidArgument`; callers do not need to construct an out-of-domain
+ * `fm_pivot_layout_t` value.
+ */
 FM_API fm_status_t fm_workbook_pivot_set_layout(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                fm_pivot_layout_t layout);
+                                                int32_t layout);
 
 /** @brief Number of fields configured on the pivot. */
 FM_API fm_status_t fm_workbook_pivot_field_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -2519,9 +2580,14 @@ FM_API fm_status_t fm_workbook_pivot_field_add(fm_workbook_t* wb, size_t sheet_i
 /** @brief Drops every field from the pivot. */
 FM_API fm_status_t fm_workbook_pivot_field_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
 
-/** @brief Sets the axis of pivot field `field_idx`. */
+/**
+ * @brief Sets the axis of pivot field `field_idx`.
+ *
+ * `axis` is a raw signed 32-bit ordinal; unknown values return
+ * `kInvalidArgument`.
+ */
 FM_API fm_status_t fm_workbook_pivot_field_set_axis(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                    size_t field_idx, fm_pivot_axis_t axis);
+                                                    size_t field_idx, int32_t axis);
 
 /**
  * @brief Sets the sort directive on pivot field `field_idx`. Pass
@@ -2536,10 +2602,11 @@ FM_API fm_status_t fm_workbook_pivot_field_set_subtotal_top(fm_workbook_t* wb, s
 
 /**
  * @brief Appends an aggregation to pivot field `field_idx`. Only
- *        meaningful for value-axis fields.
+ *        meaningful for value-axis fields. `agg` is a raw signed 32-bit
+ *        ordinal; unknown values return `kInvalidArgument`.
  */
 FM_API fm_status_t fm_workbook_pivot_field_add_aggregation(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                           size_t field_idx, fm_pivot_aggregation_t agg);
+                                                           size_t field_idx, int32_t agg);
 
 /** @brief Drops every aggregation from pivot field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_field_clear_aggregations(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -2560,9 +2627,14 @@ FM_API fm_status_t fm_workbook_pivot_field_clear_items(fm_workbook_t* wb, size_t
 FM_API fm_status_t fm_workbook_pivot_field_set_item_visible(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                             size_t field_idx, size_t item_idx, int32_t visible);
 
-/** @brief Appends a subtotal-fn entry to pivot field `field_idx`. */
+/**
+ * @brief Appends a subtotal-fn entry to pivot field `field_idx`.
+ *
+ * `agg` is a raw signed 32-bit ordinal; unknown values return
+ * `kInvalidArgument`.
+ */
 FM_API fm_status_t fm_workbook_pivot_field_add_subtotal_fn(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                           size_t field_idx, fm_pivot_aggregation_t agg);
+                                                           size_t field_idx, int32_t agg);
 
 /** @brief Drops every subtotal-fn entry from pivot field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -2571,12 +2643,12 @@ FM_API fm_status_t fm_workbook_pivot_field_clear_subtotal_fns(fm_workbook_t* wb,
 /**
  * @brief Configures date-grouping on pivot field `field_idx`. Pass
  *        `start_year_or_neg1 == -1` (and likewise `end_year_or_neg1`)
- *        to leave the bound unset.
+ *        to leave the bound unset. `granularity` and `calendar` are raw
+ *        signed 32-bit ordinals; unknown values return `kInvalidArgument`.
  */
 FM_API fm_status_t fm_workbook_pivot_field_set_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                          size_t field_idx, fm_pivot_date_grouping_t granularity,
-                                                          fm_pivot_calendar_t calendar, int32_t start_year_or_neg1,
-                                                          int32_t end_year_or_neg1);
+                                                          size_t field_idx, int32_t granularity, int32_t calendar,
+                                                          int32_t start_year_or_neg1, int32_t end_year_or_neg1);
 
 /** @brief Removes the date-grouping config from pivot field `field_idx`. */
 FM_API fm_status_t fm_workbook_pivot_field_clear_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -2756,13 +2828,14 @@ typedef enum { FM_LOCALE_EN_US = 0, FM_LOCALE_JA_JP = 1 } fm_locale_t;
  *
  * `name` is matched case-insensitively against the canonical name. On
  * success, `*out` receives a view into the catalog's static storage;
- * the views are valid for the lifetime of the process.
+ * the views are valid for the lifetime of the process. `locale` is a raw
+ * signed 32-bit ordinal; unknown values return `kInvalidArgument`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `name` or `out` is `NULL`;
  *         `kInvalidArgument` when no function matches `name`.
  */
-FM_API fm_status_t fm_function_metadata(const char* name, fm_locale_t locale, fm_function_metadata_t* out);
+FM_API fm_status_t fm_function_metadata(const char* name, int32_t locale, fm_function_metadata_t* out);
 
 /**
  * @brief Returns the total number of registered Formulon functions.
@@ -2775,7 +2848,8 @@ FM_API size_t fm_function_count(void);
  * @brief Returns the canonical name of the `idx`-th registered function.
  *
  * Order is sorted ascending so consumers can build deterministic UI
- * lists. `*out_name` borrows the catalog's static storage.
+ * lists. `*out_name` is a static view into the catalog's process-static
+ * storage.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `out_name` is `NULL`;
@@ -2788,18 +2862,19 @@ FM_API fm_status_t fm_function_name_at(size_t idx, const char** out_name);
  *        `locale`, or `canonical_name` itself when no alias is
  *        registered.
  *
- * `*out_localized` borrows process-static storage and must not be
- * freed. For locales that are not the workbook's primary locale
+ * `*out_localized` is a static view into process-static storage and must not
+ * be freed. For locales that are not the workbook's primary locale
  * (`FM_LOCALE_EN_US`), the alias table is currently empty (the
  * `data/function_names_<locale>.csv` curation is pending) and the
- * function falls through to `canonical_name`.
+ * function falls through to `canonical_name`. `locale` is a raw signed
+ * 32-bit ordinal; unknown values return `kInvalidArgument`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;
  *         `kInvalidArgument` when `canonical_name` does not match a
  *           registered function.
  */
-FM_API fm_status_t fm_function_localize(const char* canonical_name, fm_locale_t locale, const char** out_localized);
+FM_API fm_status_t fm_function_localize(const char* canonical_name, int32_t locale, const char** out_localized);
 
 /**
  * @brief Returns the canonical (English UPPERCASE) name for the
@@ -2808,13 +2883,14 @@ FM_API fm_status_t fm_function_localize(const char* canonical_name, fm_locale_t 
  * `localized_name` is matched exactly (case-sensitive for non-ASCII
  * locales). When the locale's alias table is empty (currently the case
  * for non-`en-US` locales), this falls through to a case-insensitive
- * match against the canonical name list.
+ * match against the canonical name list. `locale` is a raw signed 32-bit
+ * ordinal; unknown values return `kInvalidArgument`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when any pointer argument is `NULL`;
  *         `kInvalidArgument` when no function matches.
  */
-FM_API fm_status_t fm_function_canonicalize(const char* localized_name, fm_locale_t locale, const char** out_canonical);
+FM_API fm_status_t fm_function_canonicalize(const char* localized_name, int32_t locale, const char** out_canonical);
 
 /* -------------------------------------------------------------------------- */
 /* Sheet view / layout (viewport, frozen panes, column / row overrides)       */
@@ -2844,10 +2920,12 @@ typedef struct {
  * `fm_workbook_defined_name_at` / `fm_workbook_defined_name_at_ex`
  * convention).
  *
- * `view_mode` borrows a NUL-terminated UTF-8 pointer from the workbook
- * handle (same lifetime contract as other borrowed string fields in
- * this header, e.g. `fm_hyperlink_t::target`); it is `""` for the
- * OOXML-default "normal" view, `"pageBreakPreview"`, or `"pageLayout"`.
+ * `view_mode` is a model-backed NUL-terminated UTF-8 view from the workbook
+ * handle. It remains valid until a mutation of this sheet's view record
+ * (including `fm_sheet_set_view_mode` or another sheet-view setter) or
+ * handle destruction; reads, including scratch-backed reads, do not
+ * invalidate it. It is `""` for the OOXML-default "normal" view,
+ * `"pageBreakPreview"`, or `"pageLayout"`.
  */
 typedef struct {
   uint32_t zoom_scale;
@@ -2952,8 +3030,11 @@ FM_API fm_status_t fm_sheet_get_view_ex(const fm_workbook_t* wb, size_t sheet_in
 /**
  * @brief Returns the complete worksheet-level `<autoFilter>` XML fragment.
  *
- * `*out_xml` borrows the workbook handle and remains valid until its next
- * read or mutation. It is the empty string when the sheet has no AutoFilter.
+ * `*out_xml` is a read-scratch-backed view and may be invalidated by the
+ * next successful scratch-backed read on the same handle; a
+ * validation-rejected call does not refresh the storage. Mutation and
+ * handle destruction also invalidate it. It is the empty string when the
+ * sheet has no AutoFilter.
  * The fragment includes any filter-column criteria, sort state, and extension
  * payload carried by the OOXML reader so callers can preserve definitions
  * they do not otherwise interpret.
@@ -3146,7 +3227,9 @@ FM_API fm_status_t fm_sheet_set_view_mode(fm_workbook_t* wb, size_t sheet_index,
  * @brief Returns the most recent error message produced by an API
  *        call on the current thread.
  *
- * The pointer is valid until the next API call on the same thread.
+ * The pointer is a thread-local diagnostic view and is valid until the next
+ * API call on the same thread. Copy it before making another call when it
+ * must be retained.
  * Returns an empty string (never `NULL`) when no error has been
  * recorded yet.
  */
@@ -3247,12 +3330,12 @@ typedef struct {
 /**
  * @brief Plain-data projection of a `formulon::io::FontRecord`.
  *
- * `name` is a NUL-terminated UTF-8 pointer borrowed from the
- * workbook's styles table; it is valid until the next mutation that
- * replaces the styles table or until the handle is destroyed.
+ * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
+ * styles table; it is valid until the next mutation that replaces the
+ * styles table or until the handle is destroyed. Reads do not invalidate it.
  */
 typedef struct {
-  const char* name; /* NUL-terminated UTF-8, borrowed */
+  const char* name; /* NUL-terminated UTF-8, model-backed view */
   double size;
   uint32_t color_argb;
   int32_t bold;      /* 0=false, 1=true */
@@ -3342,9 +3425,9 @@ typedef struct {
  * @brief Plain-data projection of one OOXML `<dxf>` differential format.
  *
  * Each `*_engaged` flag mirrors whether the corresponding child element
- * exists in the source `<dxf>`. `num_fmt_code` borrows storage owned by
- * the workbook's styles table and is valid until the next mutation that
- * replaces the styles table or until the handle is destroyed.
+ * exists in the source `<dxf>`. `num_fmt_code` is a model-backed view into
+ * storage owned by the workbook's styles table and is valid until the next
+ * mutation that replaces the styles table or until the handle is destroyed.
  */
 typedef struct {
   int32_t font_engaged; /* 0=false, 1=true */
@@ -3366,9 +3449,9 @@ typedef struct {
  * @brief Plain-data projection of a `formulon::io::CellStyleRecord`
  *        (one OOXML `<cellStyle>` entry).
  *
- * `name` is a NUL-terminated UTF-8 pointer borrowed from the workbook's
- * styles table; it is valid until the next styles-replacing mutation
- * or until the handle is destroyed. `xf_id` indexes into the parallel
+ * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
+ * styles table; it is valid until the next styles-replacing mutation or
+ * until the handle is destroyed. `xf_id` indexes into the parallel
  * `<cellStyleXfs>` table (queryable via
  * `fm_styles_get_cell_style_xf_count` / `fm_styles_get_cell_style_xf`).
  *
@@ -3453,11 +3536,11 @@ FM_API fm_status_t fm_styles_get_font_ex(fm_workbook_t* wb, uint32_t font_index,
  * @brief Looks up the format string for `num_fmt_id` (built-in 0..163
  *        or custom >= 164).
  *
- * On success `*out` borrows a NUL-terminated UTF-8 pointer. Built-in
- * ids resolve to a static `.rodata` string with program lifetime;
- * custom ids resolve to storage owned by the workbook's styles table
- * (valid until the next styles-replacing mutation or until the handle
- * is destroyed). Returns `kInvalidArgument` when `num_fmt_id` is
+ * On success `*out` is either a static view or a model-backed view. Built-in
+ * ids resolve to a static `.rodata` string with program lifetime; custom ids
+ * resolve to storage owned by the workbook's styles table (valid until the
+ * next styles-replacing mutation or until the handle is destroyed). Returns
+ * `kInvalidArgument` when `num_fmt_id` is
  * neither a documented built-in nor a registered custom id.
  *
  * @return `kOk` on success;
@@ -3566,8 +3649,8 @@ FM_API fm_status_t fm_styles_get_cell_xf_count(fm_workbook_t* wb, uint32_t* out_
 FM_API fm_status_t fm_styles_get_cell_style_count(fm_workbook_t* wb, uint32_t* out_count);
 
 /**
- * @brief Reads the `index`-th named cell style. The returned `name`
- *        borrows storage owned by the workbook; see
+ * @brief Reads the `index`-th named cell style. The returned `name` is a
+ *        model-backed view into storage owned by the workbook; see
  *        `fm_cell_style_record_t` for lifetime rules.
  *
  * @return `kOk` on success;
@@ -3760,9 +3843,9 @@ FM_API fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_batch*
 /**
  * @brief Plain-data projection of `formulon::io::ExternalLinkRecord`.
  *
- * `rel_id`, `part_path`, and `target` are NUL-terminated UTF-8 pointers
- * borrowed from the workbook's external-links table; they remain valid
- * until the workbook is destroyed or the external-links table is
+ * `rel_id`, `part_path`, and `target` are NUL-terminated UTF-8
+ * model-backed views into the workbook's external-links table; they remain
+ * valid until the workbook is destroyed or the external-links table is
  * replaced (currently only the OOXML reader replaces it; there is no
  * mutator on this surface). `target_external` follows the wide-POD
  * convention used elsewhere on this surface.
@@ -3799,8 +3882,8 @@ FM_API fm_status_t fm_workbook_external_link_count(fm_workbook_t* wb, uint32_t* 
  * @brief Reads the `index`-th external-link record (1-based document
  *        order minus one — i.e. `0` is the first `<externalReference>`).
  *
- * The returned string pointers borrow workbook-owned storage; see
- * `fm_external_link_record_t` for lifetime rules.
+ * The returned string pointers are model-backed views into workbook-owned
+ * storage; see `fm_external_link_record_t` for lifetime rules.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;

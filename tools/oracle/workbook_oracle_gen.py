@@ -10,8 +10,8 @@ diffs against.
 
 Target resolution reads the `tracks.workbook` section of
 `tools/oracle/targets.yaml`. The workbook track uses `win-365-ja_JP` as
-its primary because reliable PivotTable automation is only available
-through Windows COM; the formula track keeps its Mac primary.
+its candidate because reliable PivotTable automation is only available
+through Windows COM; eligibility is always read from the target manifest.
 
 Golden JSON shape (one file per suite):
 
@@ -28,12 +28,8 @@ Golden JSON shape (one file per suite):
       ]
     }
 
-This entry point wires the full orchestration -- target resolution, suite
-discovery, golden write-out -- but the Excel automation itself is stubbed:
-`OracleDriver.run_workbook_case` raises `NotImplementedError` until a
-later phase fills in `build_workbook` / `build_pivot` / `apply_print`.
-Running this script today therefore fails cleanly with a clear message
-rather than crashing.
+This entry point wires target resolution, suite discovery, provenance-safe
+staging, and golden write-out around the concrete driver implementations.
 
 Usage:
     python3 tools/oracle/workbook_oracle_gen.py [--target NAME]
@@ -46,9 +42,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import json
+import os
 import platform
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -61,6 +60,10 @@ except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from drivers import select_driver  # type: ignore
     from oracle_gen import _load_divergence_skips  # type: ignore
+try:
+    from tools.oracle import workbook_case_schema
+except ImportError:  # pragma: no cover
+    import workbook_case_schema  # type: ignore
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -68,12 +71,6 @@ DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_wb"
 DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden_wb"
 DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
-
-# The workbook track's primary target. Used as the fallback when
-# `targets.yaml` does not declare a `tracks.workbook` section. Windows
-# Excel drives PivotTable COM automation reliably; the formula track's
-# Mac primary cannot.
-_WORKBOOK_PRIMARY_DEFAULT = "win-365-ja_JP"
 
 
 def _load_targets(path: Path) -> Dict[str, Any]:
@@ -96,12 +93,7 @@ def _load_targets(path: Path) -> Dict[str, Any]:
 
 
 def _workbook_primary(targets_doc: Dict[str, Any]) -> str:
-    """Returns the workbook track's primary target name.
-
-    Reads `tracks.workbook.primary`; falls back to the documented default
-    when the section is missing so a stripped-down `targets.yaml` still
-    works.
-    """
+    """Return the manifest-declared workbook primary, failing closed."""
 
     tracks = targets_doc.get("tracks")
     if isinstance(tracks, dict):
@@ -110,7 +102,7 @@ def _workbook_primary(targets_doc: Dict[str, Any]) -> str:
             primary = workbook.get("primary")
             if isinstance(primary, str) and primary:
                 return primary
-    return _WORKBOOK_PRIMARY_DEFAULT
+    raise RuntimeError("targets.yaml: tracks.workbook.primary is required")
 
 
 def _workbook_track_targets(targets_doc: Dict[str, Any]) -> List[str]:
@@ -232,7 +224,7 @@ def _suite_name(case_doc: Dict[str, Any], path: Path) -> str:
     return stem[:-5] if stem.endswith(".case") else stem
 
 
-def _env_to_json(env: Any, iso_now: str) -> Dict[str, Any]:
+def _env_to_json(env: Any, iso_now: str, capture_id: str) -> Dict[str, Any]:
     """Shapes an EnvironmentInfo snapshot into the golden's environment block."""
 
     return {
@@ -241,7 +233,17 @@ def _env_to_json(env: Any, iso_now: str) -> Dict[str, Any]:
         "date1904": getattr(env, "date1904", False),
         "iterative": getattr(env, "iterative", False),
         "generated_at": iso_now,
+        "capture_id": capture_id,
     }
+
+
+def _display_path(path: Path) -> str:
+    """Render repository paths compactly while supporting external staging."""
+
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _write_golden(
@@ -274,7 +276,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         help=(
             "Oracle target from tools/oracle/targets.yaml. When omitted, the "
             "target is auto-detected from the host OS: a Windows / WSL2 host "
-            f"resolves to the workbook primary ({_WORKBOOK_PRIMARY_DEFAULT}), "
+            "resolves to the manifest-declared workbook primary, "
             "a macOS host to the mac variant."
         ),
     )
@@ -325,7 +327,24 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"workbook-oracle-gen: {exc}", file=sys.stderr)
         return 2
 
+    if target.get("status") == "wanted" and args.golden_dir is None:
+        print(
+            "workbook-oracle-gen: status=wanted requires explicit external --golden-dir; refusing repository output",
+            file=sys.stderr,
+        )
+        return 2
     if args.golden_dir is not None:
+        resolved = args.golden_dir.resolve()
+        try:
+            resolved.relative_to(REPO_ROOT)
+            inside_repo = True
+        except ValueError:
+            inside_repo = False
+        if target.get("status") == "wanted" and inside_repo:
+            print(
+                "workbook-oracle-gen: wanted target staging directory must be outside the repository", file=sys.stderr
+            )
+            return 2
         golden_dir = args.golden_dir
     else:
         golden_dir = _golden_dir_for_target(targets_doc, target)
@@ -345,6 +364,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     except (RuntimeError, json.JSONDecodeError) as exc:
         print(f"workbook-oracle-gen: {exc}", file=sys.stderr)
         return 2
+    required_suites = sorted(_suite_name(doc, path) for path, doc in suites)
     if args.suite:
         wanted = set(args.suite)
         suites = [(p, d) for (p, d) in suites if _suite_name(d, p) in wanted]
@@ -372,9 +392,18 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 2
 
         env = oracle.probe_environment()
-        env_json = _env_to_json(env, iso_now)
-
+        declared_locale = target.get("locale")
+        if not isinstance(declared_locale, str) or not declared_locale or env.excel_locale != declared_locale:
+            print(
+                f"workbook-oracle-gen: target locale {declared_locale!r} does not match Excel locale {env.excel_locale!r}",
+                file=sys.stderr,
+            )
+            return 2
+        capture_id = f"{target['_name']}:{env.excel_version}:{env.excel_locale}:{iso_now}"
+        env_json = _env_to_json(env, iso_now, capture_id)
+        golden_dir.mkdir(parents=True, exist_ok=True)
         exit_code = 0
+        inventory: List[Dict[str, Any]] = []
         for path, case_doc in suites:
             suite_name = _suite_name(case_doc, path)
             raw_cases = case_doc.get("cases") or []
@@ -401,9 +430,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         skipped_here += 1
                         continue
                     # The driver evaluates the declarative workbook spec
-                    # and returns the observed pivot / print result. This
-                    # call raises NotImplementedError until a later phase
-                    # fills in the Excel automation.
+                    # and returns the observed pivot / print result.
                     expect = oracle.run_workbook_case(case)
                     out_cases.append(
                         {
@@ -416,18 +443,54 @@ def main(argv: Optional[List[str]] = None) -> int:
                     print(f"  ! {skipped_here} case(s) skipped by divergence.yaml (see golden 'skipped' fields)")
                 out_path = golden_dir / f"{suite_name}.golden.json"
                 _write_golden(out_path, suite_name, env_json, out_cases)
-                print(f"  -> {out_path.relative_to(REPO_ROOT)}")
+                case_ids, _ = workbook_case_schema.validate_pair(path, out_path)
+                if len(case_ids) != len(out_cases) or not out_cases:
+                    raise RuntimeError(f"{suite_name}: generated golden is empty or incomplete")
+                inventory.append(
+                    {
+                        "suite": suite_name,
+                        "case_count": len(out_cases),
+                        "sha256": hashlib.sha256(out_path.read_bytes()).hexdigest(),
+                        "capture_id": capture_id,
+                    }
+                )
+                print(f"  -> {_display_path(out_path)}")
             except NotImplementedError:
                 exit_code = 1
                 print(
-                    f"  ! workbook driver not yet implemented for target "
-                    f"{target['_name']!r}; golden generation is stubbed "
-                    "until a later phase lands the pivot/print driver.",
+                    f"  ! workbook driver unavailable for target {target['_name']!r}",
                     file=sys.stderr,
                 )
             except Exception as exc:  # pragma: no cover - per-suite guard
                 exit_code = 1
                 print(f"  ! failed: {exc}", file=sys.stderr)
+        captured_suites = sorted(item["suite"] for item in inventory)
+        if exit_code == 0 and captured_suites == required_suites:
+            candidate = {
+                "target": target["_name"],
+                "status": target.get("status"),
+                "classification": "candidate",
+                "verified": True,
+                "active_ctest": False,
+                "capture_id": capture_id,
+                "all_suites_same_capture": True,
+                "product": env.excel_version,
+                "locale": env.excel_locale,
+                "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
+                "required_suites": required_suites,
+                "captured_suites": captured_suites,
+                "suite_inventory": inventory,
+            }
+            candidate_path = golden_dir / "PROVENANCE.candidate.json"
+            with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=golden_dir, prefix=".PROVENANCE.candidate.", delete=False
+            ) as temp:
+                temp.write(json.dumps(candidate, indent=2, ensure_ascii=False) + "\n")
+                temp_path = Path(temp.name)
+            os.replace(temp_path, candidate_path)
+            print(f"  -> {_display_path(candidate_path)} (verified candidate)")
+        elif exit_code == 0:
+            print("  ! partial suite capture; no provenance candidate emitted", file=sys.stderr)
     return exit_code
 
 

@@ -335,9 +335,10 @@ void render_numeric(const Section& section, std::string_view fmt, double value, 
     negative = scaled < 0.0;
   }
 
-  // Pad integer digits to the required minimum (zero + pad digits). Leading
-  // `#` tokens above the actual digit count drop silently.
-  const int int_min = section.integer_zero_digits + section.integer_pad_digits;
+  // Pad integer digits to the required minimum imposed by `0` placeholders.
+  // `?` reserves a visual position but must render a space rather than a zero
+  // when the value has fewer integer digits (e.g. `TEXT(5,"?0")` -> ` 5`).
+  const int int_min = section.integer_zero_digits;
   if (static_cast<int>(int_digits.size()) < int_min) {
     int_digits.insert(0, static_cast<std::size_t>(int_min) - int_digits.size(), '0');
   }

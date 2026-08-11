@@ -135,9 +135,9 @@ Napi::Value Workbook::FunctionMetadata(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   const std::string name = ArgString(info, 0);
-  const uint32_t locale = ArgU32(info, 1);
+  const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_function_metadata(name.c_str(), static_cast<fm_locale_t>(locale), &md);
+  fm_status_t rc = fm_function_metadata(name.c_str(), locale, &md);
   if (rc != 0) {
     out.Set("ok", Napi::Boolean::New(env, false));
     return out;
@@ -181,9 +181,9 @@ Napi::Value Workbook::FunctionNames(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::LocalizeFunctionName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const std::string canonical = ArgString(info, 0);
-  const uint32_t locale = ArgU32(info, 1);
+  const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
   const char* out = nullptr;
-  if (fm_function_localize(canonical.c_str(), static_cast<fm_locale_t>(locale), &out) != 0 || out == nullptr) {
+  if (fm_function_localize(canonical.c_str(), locale, &out) != 0 || out == nullptr) {
     return Napi::String::New(env, "");
   }
   return Napi::String::New(env, out);
@@ -192,9 +192,9 @@ Napi::Value Workbook::LocalizeFunctionName(const Napi::CallbackInfo& info) {
 Napi::Value Workbook::CanonicalizeFunctionName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   const std::string localized = ArgString(info, 0);
-  const uint32_t locale = ArgU32(info, 1);
+  const std::int32_t locale = info.Length() > 1 ? info[1].ToNumber().Int32Value() : 0;
   const char* out = nullptr;
-  if (fm_function_canonicalize(localized.c_str(), static_cast<fm_locale_t>(locale), &out) != 0 || out == nullptr) {
+  if (fm_function_canonicalize(localized.c_str(), locale, &out) != 0 || out == nullptr) {
     return Napi::String::New(env, "");
   }
   return Napi::String::New(env, out);

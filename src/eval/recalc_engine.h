@@ -188,6 +188,11 @@ class RecalcEngine {
     /// invalidate every `CellNodeId.sheet_id` at once and must re-register
     /// every formula from scratch rather than patch individual edges.
     void reset_graph() const;
+    /// Returns the formula owners whose extracted Ref3D span includes
+    /// `edited_sheet`. The caller receives a stable snapshot while the
+    /// workbook mutation lock is held; callers may then remap owners after
+    /// the physical row/column move.
+    std::vector<CellNodeId> three_d_span_owners_covering_sheet(std::uint16_t edited_sheet) const;
     const DepGraph& dep_graph() const noexcept;
 
    private:
@@ -375,6 +380,14 @@ class RecalcEngine {
   // Compact whole-row / whole-column dependencies. Unlike `graph_`, this
   // stores one rectangle per authored range rather than one edge per cell.
   std::vector<RegisteredRangeDependency> range_dependencies_;
+  struct RegisteredThreeDSpan {
+    CellNodeId owner;
+    ThreeDSheetSpanDependency span;
+  };
+  // Ref3D metadata is kept separately from cell/range edges so structural
+  // edits can wake every owner whose shared coordinates read the edited
+  // sheet, including spans reached through defined-name expansion.
+  std::vector<RegisteredThreeDSpan> three_d_span_dependencies_;
   VolatileTracker volatiles_;
   DirtySet dirty_;
   // Reused across `recalc()` calls so the bump-allocator's largest chunk

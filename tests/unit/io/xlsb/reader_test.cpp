@@ -652,12 +652,12 @@ TEST(XlsbReader, MissingContentTypesIsContentTypeInvalid) {
 }
 
 // ---------------------------------------------------------------------------
-// Lossy-load detection: parts typed through a content-type Default are
-// neither modelled nor captured as passthrough, so they disappear on the
-// way back out. The count is what keeps that from being silent.
+// Default-typed residual parts are captured as empty-content-type
+// passthrough entries; only entries with no resolvable Override/Default
+// declaration remain lossy and contribute to dropped_part_count.
 // ---------------------------------------------------------------------------
 
-TEST(XlsbReader, DefaultTypedPartsAreReportedAsDropped) {
+TEST(XlsbReader, DefaultTypedPartsAreCapturedAsPassthrough) {
   std::string content_types(
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
       "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
@@ -687,11 +687,17 @@ TEST(XlsbReader, DefaultTypedPartsAreReportedAsDropped) {
   auto result = read_xlsb(SpanOf(archive));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
 
-  EXPECT_EQ(result.value().dropped_part_count, 1U) << "Default-typed media part should be reported as dropped";
-  // It is genuinely absent from the model, not merely uncounted.
+  EXPECT_EQ(result.value().dropped_part_count, 0U);
+  bool saw_png = false;
   for (const PassthroughPart& part : result.value().workbook.passthrough_parts()) {
-    EXPECT_NE(part.path, "xl/media/image1.png");
+    if (part.path == "xl/media/image1.png") {
+      saw_png = true;
+      EXPECT_TRUE(part.content_type.empty());
+      EXPECT_EQ(part.bytes, StringToBytes("\x89PNG\r\n\x1a\n"));
+    }
   }
+  EXPECT_TRUE(saw_png);
+  ASSERT_EQ(result.value().workbook.default_content_types().size(), 3U);
 }
 
 TEST(XlsbReader, FullyModelledPackageReportsNoDroppedParts) {

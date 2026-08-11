@@ -605,11 +605,12 @@ async function run() {
       } finally {
         loaded.delete();
       }
-      const droppedLoaded = Module.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/dropped.bin'));
+      const droppedLoaded = Module.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/dropped.unknown'));
       try {
         const dropped = droppedLoaded.xlsbReadDiagnostics();
         assert.ok(dropped.status.ok, `dropped-part diagnostics failed: ${JSON.stringify(dropped.status)}`);
-        assert.equal(dropped.droppedPartCount, 1);
+        // Unknown package parts are retained as passthrough data.
+        assert.equal(dropped.droppedPartCount, 0);
       } finally {
         droppedLoaded.delete();
       }

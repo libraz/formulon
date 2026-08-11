@@ -112,8 +112,8 @@ Napi::Value Workbook::PivotSetLayout(const Napi::CallbackInfo& info) {
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
-  const uint32_t layout = ArgU32(info, 2);
-  fm_status_t rc = fm_workbook_pivot_set_layout(handle_, sheet, pivot_idx, static_cast<fm_pivot_layout_t>(layout));
+  const std::int32_t layout = info.Length() > 2 ? info[2].ToNumber().Int32Value() : 0;
+  fm_status_t rc = fm_workbook_pivot_set_layout(handle_, sheet, pivot_idx, layout);
   return MakeStatus(env, rc);
 }
 
@@ -183,9 +183,8 @@ Napi::Value Workbook::PivotFieldSetAxis(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  const uint32_t axis = ArgU32(info, 3);
-  fm_status_t rc =
-      fm_workbook_pivot_field_set_axis(handle_, sheet, pivot_idx, field_idx, static_cast<fm_pivot_axis_t>(axis));
+  const std::int32_t axis = info.Length() > 3 ? info[3].ToNumber().Int32Value() : 0;
+  fm_status_t rc = fm_workbook_pivot_field_set_axis(handle_, sheet, pivot_idx, field_idx, axis);
   return MakeStatus(env, rc);
 }
 
@@ -225,9 +224,8 @@ Napi::Value Workbook::PivotFieldAddAggregation(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  const uint32_t agg = ArgU32(info, 3);
-  fm_status_t rc = fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivot_idx, field_idx,
-                                                           static_cast<fm_pivot_aggregation_t>(agg));
+  const std::int32_t agg = info.Length() > 3 ? info[3].ToNumber().Int32Value() : 0;
+  fm_status_t rc = fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivot_idx, field_idx, agg);
   return MakeStatus(env, rc);
 }
 
@@ -293,9 +291,8 @@ Napi::Value Workbook::PivotFieldAddSubtotalFn(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  const uint32_t agg = ArgU32(info, 3);
-  fm_status_t rc = fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivot_idx, field_idx,
-                                                           static_cast<fm_pivot_aggregation_t>(agg));
+  const std::int32_t agg = info.Length() > 3 ? info[3].ToNumber().Int32Value() : 0;
+  fm_status_t rc = fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivot_idx, field_idx, agg);
   return MakeStatus(env, rc);
 }
 
@@ -319,13 +316,12 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
   const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
   const std::size_t field_idx = static_cast<std::size_t>(ArgU32(info, 2));
-  const uint32_t granularity = ArgU32(info, 3);
-  const uint32_t calendar = ArgU32(info, 4);
+  const std::int32_t granularity = info.Length() > 3 ? info[3].ToNumber().Int32Value() : 0;
+  const std::int32_t calendar = info.Length() > 4 ? info[4].ToNumber().Int32Value() : 0;
   const int32_t start_year = info.Length() > 5 ? info[5].As<Napi::Number>().Int32Value() : -1;
   const int32_t end_year = info.Length() > 6 ? info[6].As<Napi::Number>().Int32Value() : -1;
-  fm_status_t rc = fm_workbook_pivot_field_set_date_group(
-      handle_, sheet, pivot_idx, field_idx, static_cast<fm_pivot_date_grouping_t>(granularity),
-      static_cast<fm_pivot_calendar_t>(calendar), start_year, end_year);
+  fm_status_t rc = fm_workbook_pivot_field_set_date_group(handle_, sheet, pivot_idx, field_idx, granularity, calendar,
+                                                          start_year, end_year);
   return MakeStatus(env, rc);
 }
 

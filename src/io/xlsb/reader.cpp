@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
 #include "io/passthrough_part.h"
 #include "io/unknown_relationship.h"
@@ -170,7 +171,27 @@ Expected<void, Error> VisitRelationshipNodes(const ZipReader& zip, std::string_v
 /// list so callers can compute passthrough parts.
 struct ContentTypesView {
   std::vector<std::pair<std::string, std::string>> overrides;  // (part_name, content_type)
+  std::vector<DefaultContentType> defaults;
 };
+
+std::string LowercaseExtension(std::string_view extension) {
+  std::string out(extension);
+  for (char& c : out) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+  return out;
+}
+
+std::string ExtensionOfPart(std::string_view path) {
+  const std::size_t slash = path.find_last_of('/');
+  const std::size_t dot = path.find_last_of('.');
+  if (dot == std::string_view::npos || dot == path.size() - 1U || (slash != std::string_view::npos && dot < slash)) {
+    return {};
+  }
+  return LowercaseExtension(path.substr(dot + 1U));
+}
 
 Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_t>& ct_bytes) {
   pugi::xml_document doc;
@@ -202,6 +223,22 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
       if (strings::case_insensitive_eq(ext, "bin") && (ct == kCtWorkbookXlsb || ct == kCtWorkbookXlsbAlt)) {
         saw_workbook = true;
       }
+      if (ext.empty()) {
+        continue;
+      }
+      const std::string normalized_ext = LowercaseExtension(ext);
+      auto existing = std::find_if(
+          view.defaults.begin(), view.defaults.end(),
+          [&normalized_ext](const DefaultContentType& value) { return value.extension == normalized_ext; });
+      if (existing != view.defaults.end()) {
+        if (existing->content_type != ct) {
+          return make_error(FormulonErrorCode::kIoContentTypeInvalid,
+                            "[Content_Types].xml: conflicting Default content types for extension " + normalized_ext,
+                            "context=xlsb_reader part=[Content_Types].xml extension=" + normalized_ext);
+        }
+        continue;
+      }
+      view.defaults.push_back(DefaultContentType{normalized_ext, std::string(ct)});
       continue;
     }
     if (node_name != "Override") {
@@ -214,6 +251,17 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
     std::string ct = node.attribute("ContentType").value();
     if (ct == kCtWorkbookXlsb || ct == kCtWorkbookXlsbAlt) {
       saw_workbook = true;
+    }
+    auto existing = std::find_if(
+        view.overrides.begin(), view.overrides.end(),
+        [&part_name](const std::pair<std::string, std::string>& value) { return value.first == part_name; });
+    if (existing != view.overrides.end()) {
+      if (existing->second != ct) {
+        return make_error(FormulonErrorCode::kIoContentTypeInvalid,
+                          "[Content_Types].xml: conflicting Override content types for part " + part_name,
+                          "context=xlsb_reader part=[Content_Types].xml override=" + part_name);
+      }
+      continue;
     }
     view.overrides.emplace_back(std::move(part_name), std::move(ct));
   }
@@ -444,30 +492,54 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
 }
 
 /// Decodes a UTF-16LE name of `units` code units starting at `cursor`,
-/// advancing it past the name. Shares `read_xlwidestring`'s decode logic
-/// via a synthetic length-prefixed buffer rather than duplicating the
-/// surrogate-pair handling; `units` is caller-known (from a fixed-size
-/// header field), unlike `read_xlwidestring`'s self-describing length.
-Expected<std::string, Error> ReadFixedWideString(ByteSpan& cursor, std::uint32_t units) {
-  const std::size_t byte_len = static_cast<std::size_t>(units) * 2;
-  if (byte_len > cursor.size) {
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb fixed-length wide string truncated",
-                      "context=xlsb_reader");
+/// advancing it past the name. `units` is caller-known (from a fixed-size
+/// header field), unlike `read_xlwidestring`'s self-describing length. This
+/// path intentionally avoids Expected<std::string, Error>: malformed
+/// workbook names are common fuzz inputs, and libc++'s variant dispatch
+/// under UBSan must not turn recoverable input errors into a process abort.
+bool ReadFixedWideString(ByteSpan& cursor, std::uint32_t units, std::string& out) {
+  // Check in the destination width before multiplying. On wasm32, a hostile
+  // u32 `units` value can wrap `units * 2` back below cursor.size otherwise.
+  if (units > cursor.size / 2U) {
+    return false;
   }
-  std::vector<std::uint8_t> framed(4 + byte_len);
-  framed[0] = static_cast<std::uint8_t>(units & 0xFFU);
-  framed[1] = static_cast<std::uint8_t>((units >> 8) & 0xFFU);
-  framed[2] = static_cast<std::uint8_t>((units >> 16) & 0xFFU);
-  framed[3] = static_cast<std::uint8_t>((units >> 24) & 0xFFU);
-  std::memcpy(framed.data() + 4, cursor.data, byte_len);
-  ByteSpan framed_span{framed.data(), framed.size()};
-  auto out = read_xlwidestring(framed_span);
-  if (!out) {
-    return out.error();
+  const std::size_t byte_len = static_cast<std::size_t>(units) * 2U;
+  out.clear();
+  out.reserve(byte_len);
+  for (std::uint32_t i = 0; i < units; ++i) {
+    const std::size_t offset = static_cast<std::size_t>(i) * 2U;
+    const std::uint16_t cu = static_cast<std::uint16_t>(static_cast<std::uint16_t>(cursor.data[offset]) |
+                                                        (static_cast<std::uint16_t>(cursor.data[offset + 1U]) << 8));
+    std::uint32_t cp = cu;
+    if (cu >= 0xD800U && cu <= 0xDBFFU && i + 1 < units) {
+      const std::size_t low_offset = static_cast<std::size_t>(i + 1U) * 2U;
+      const std::uint16_t low =
+          static_cast<std::uint16_t>(static_cast<std::uint16_t>(cursor.data[low_offset]) |
+                                     (static_cast<std::uint16_t>(cursor.data[low_offset + 1U]) << 8));
+      if (low >= 0xDC00U && low <= 0xDFFFU) {
+        cp = 0x10000U + ((static_cast<std::uint32_t>(cu) - 0xD800U) << 10) + (low - 0xDC00U);
+        ++i;
+      }
+    }
+    if (cp < 0x80U) {
+      out.push_back(static_cast<char>(cp));
+    } else if (cp < 0x800U) {
+      out.push_back(static_cast<char>(0xC0U | (cp >> 6)));
+      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    } else if (cp < 0x10000U) {
+      out.push_back(static_cast<char>(0xE0U | (cp >> 12)));
+      out.push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
+      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    } else {
+      out.push_back(static_cast<char>(0xF0U | (cp >> 18)));
+      out.push_back(static_cast<char>(0x80U | ((cp >> 12) & 0x3FU)));
+      out.push_back(static_cast<char>(0x80U | ((cp >> 6) & 0x3FU)));
+      out.push_back(static_cast<char>(0x80U | (cp & 0x3FU)));
+    }
   }
   cursor.data += byte_len;
   cursor.size -= byte_len;
-  return out;
+  return true;
 }
 
 /// Decodes the workbook-scope `BrtName` table from `xl/workbook.bin`:
@@ -509,13 +581,14 @@ Expected<std::vector<XlsbName>, Error> DecodeWorkbookNames(const std::vector<std
     if (!cch_or) {
       return cch_or.error();
     }
-    auto name_or = ReadFixedWideString(p, cch_or.value());
-    if (!name_or) {
-      return name_or.error();
+    std::string name;
+    if (!ReadFixedWideString(p, cch_or.value(), name)) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb fixed-length wide string truncated",
+                        "context=xlsb_reader");
     }
     XlsbName entry;
     entry.itab = static_cast<std::int32_t>(itab_or.value());
-    entry.name = std::move(name_or.value());
+    entry.name = std::move(name);
     entry.hidden = (flags_or.value() & 0x0001U) != 0;
     names.push_back(std::move(entry));
   }
@@ -1540,7 +1613,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   if (!ct_view_or) {
     return ct_view_or.error();
   }
-  const ContentTypesView& ct_view = ct_view_or.value();
+  ContentTypesView ct_view = ct_view_or.take();
 
   // 2. _rels/.rels — locate the workbook part path.
   if (!zip.has_entry("_rels/.rels")) {
@@ -1736,14 +1809,21 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     }
   }
 
-  // 8. Passthrough parts: every Override-listed part the reader did
-  // not consume, captured raw so a future writer can re-emit it
-  // verbatim. Default-typed binary parts are out of scope per the
-  // OOXML reader's contract.
+  // 8. Passthrough parts. First capture every Override-listed part the
+  // reader did not consume, retaining its explicit content type. A second
+  // residual sweep resolves the remaining entries through the source
+  // Default registry. Default-typed parts intentionally carry an empty
+  // content_type; the registry itself travels on the Workbook and the
+  // writer re-emits the matching Default entry.
   std::vector<PassthroughPart> unknown_parts;
   unknown_parts.reserve(ct_view.overrides.size());
+  std::unordered_set<std::string> captured_parts;
+  captured_parts.reserve(ct_view.overrides.size());
   for (const auto& [part_name, content_type] : ct_view.overrides) {
     if (consumed_parts.find(part_name) != consumed_parts.end()) {
+      continue;
+    }
+    if (captured_parts.find(part_name) != captured_parts.end()) {
       continue;
     }
     // Refuse a traversal-shaped passthrough name so a round-tripped .xlsb
@@ -1764,53 +1844,76 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     part.content_type = content_type;
     part.bytes = std::move(bytes_or.value());
     unknown_parts.push_back(std::move(part));
+    captured_parts.insert(part_name);
   }
-  std::sort(unknown_parts.begin(), unknown_parts.end(),
-            [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
 
-  // 8b. Lossy-load detection. The sweep above walks `[Content_Types].xml`
-  // Override entries only, so a part typed through an extension Default
-  // (media, embedded OLE, printer settings, a rels file belonging to a
-  // part the binary reader does not model) is neither understood nor
-  // captured. Saving the workbook back out then drops it with nothing to
-  // show for it. Keeping such a part needs a package inventory this
-  // reader does not maintain; counting and reporting them is what stops
-  // the loss from being silent, and gives callers a signal to refuse a
-  // save when fidelity matters.
-  std::uint32_t dropped_part_count = 0;
-  {
-    std::unordered_set<std::string> captured_parts;
-    captured_parts.reserve(unknown_parts.size());
-    for (const PassthroughPart& part : unknown_parts) {
-      captured_parts.insert(part.path);
+  auto default_content_type_for = [&ct_view](std::string_view path) -> const DefaultContentType* {
+    const std::string extension = ExtensionOfPart(path);
+    if (extension.empty()) {
+      return nullptr;
     }
-    std::string first_dropped;
-    for (const std::string& entry : zip.list_entries()) {
-      // Directory markers carry no payload.
-      if (entry.empty() || entry.back() == '/') {
-        continue;
-      }
-      if (consumed_parts.find(entry) != consumed_parts.end() || captured_parts.find(entry) != captured_parts.end()) {
-        continue;
-      }
-      if (dropped_part_count == 0) {
+    const auto it =
+        std::find_if(ct_view.defaults.begin(), ct_view.defaults.end(),
+                     [&extension](const DefaultContentType& value) { return value.extension == extension; });
+    return it == ct_view.defaults.end() ? nullptr : &*it;
+  };
+
+  std::uint32_t dropped_part_count = 0;
+  std::string first_dropped;
+  for (const std::string& entry : zip.list_entries()) {
+    // Directory markers are not OPC parts. Skip them before path validation:
+    // ZIP producers commonly record a trailing-slash directory entry, and
+    // the trailing slash is intentionally not a canonical OPC part name.
+    // Payload entries are validated below, including consumed paths, so a
+    // hostile ZIP catalogue cannot hide a traversal-shaped name behind the
+    // modelled path set.
+    if (entry.empty() || entry.back() == '/') {
+      continue;
+    }
+    if (!ooxml::is_safe_part_name(entry)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "archive entry name escapes package root; refusing to load",
+                        "context=xlsb_reader part=" + entry);
+    }
+    if (consumed_parts.find(entry) != consumed_parts.end() || captured_parts.find(entry) != captured_parts.end()) {
+      continue;
+    }
+    const DefaultContentType* default_type = default_content_type_for(entry);
+    if (default_type == nullptr || default_type->content_type.empty()) {
+      if (dropped_part_count == 0U) {
         first_dropped = entry;
       }
       ++dropped_part_count;
+      continue;
     }
-    if (dropped_part_count != 0) {
-      StructuredLog("xlsb.package.parts_dropped")
-          .field("count", static_cast<std::int64_t>(dropped_part_count))
-          .field("first_part", first_dropped)
-          .field("reason", std::string_view("part is not Override-typed, so it is neither modelled nor captured "
-                                            "and will not survive a save"))
-          .warn();
+    auto bytes_or = zip.read_entry(entry);
+    if (!bytes_or) {
+      return bytes_or.error();
     }
+    PassthroughPart part;
+    part.path = entry;
+    // Default-typed parts deliberately do not copy the effective content
+    // type into the per-part record. This keeps Override and Default
+    // semantics distinguishable on the write side.
+    part.bytes = std::move(bytes_or.value());
+    unknown_parts.push_back(std::move(part));
+    captured_parts.insert(entry);
+  }
+
+  std::sort(unknown_parts.begin(), unknown_parts.end(),
+            [](const PassthroughPart& a, const PassthroughPart& b) { return a.path < b.path; });
+
+  if (dropped_part_count != 0U) {
+    StructuredLog("xlsb.package.parts_dropped")
+        .field("count", static_cast<std::int64_t>(dropped_part_count))
+        .field("first_part", first_dropped)
+        .field("reason", std::string_view("part content type could not be resolved from Override or Default"))
+        .warn();
   }
 
   // The workbook is the sole owner; the read result does not mirror the
   // payload. See `XlsbReadResult`.
   wb.set_passthrough_parts(std::move(unknown_parts));
+  wb.set_default_content_types(std::move(ct_view.defaults));
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
 

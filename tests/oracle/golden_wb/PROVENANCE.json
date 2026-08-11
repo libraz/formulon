@@ -1,0 +1,11 @@
+{
+  "track": "workbook",
+  "target": "win-365-ja_JP",
+  "status": "wanted",
+  "classification": "reference-only",
+  "verified": false,
+  "locale": "ja-JP",
+  "product": "unknown Excel 16.0 capture",
+  "reason": "The workbook goldens predate the provenance guard and do not carry a product-level Microsoft 365 check. They remain useful for local research but are excluded from active CTest coverage.",
+  "active_ctest": false
+}

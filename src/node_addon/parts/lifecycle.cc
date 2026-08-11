@@ -244,8 +244,8 @@ Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return NullHandleError(env);
   }
-  const uint32_t mode = ArgU32(info, 0);
-  fm_status_t rc = fm_workbook_set_calc_mode(handle_, static_cast<fm_calc_mode_t>(mode));
+  const std::int32_t mode = info.Length() > 0 ? info[0].ToNumber().Int32Value() : 0;
+  fm_status_t rc = fm_workbook_set_calc_mode(handle_, mode);
   return MakeStatus(env, rc);
 }
 
@@ -441,7 +441,7 @@ Napi::Value Workbook::SaveEx(const Napi::CallbackInfo& info) {
     out.Set("bytes", env.Null());
     return out;
   }
-  const auto format = static_cast<fm_workbook_format_t>(info[0].As<Napi::Number>().Int32Value());
+  const std::int32_t format = info[0].As<Napi::Number>().Int32Value();
   uint8_t* buf = nullptr;
   std::size_t len = 0;
   fm_status_t rc = fm_workbook_save_ex(handle_, format, &buf, &len);
@@ -474,7 +474,7 @@ Napi::Value Workbook::SaveExWithDiagnostics(const Napi::CallbackInfo& info) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  const auto format = static_cast<fm_workbook_format_t>(info[0].As<Napi::Number>().Int32Value());
+  const std::int32_t format = info[0].As<Napi::Number>().Int32Value();
   uint8_t* buf = nullptr;
   std::size_t len = 0;
   std::size_t downgraded_formula_count = 0;

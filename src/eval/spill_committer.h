@@ -32,6 +32,12 @@ class Sheet;
 
 namespace eval {
 
+/// Observes a committed spill rectangle immediately before it is released.
+/// The callback must not mutate the sheet; it is used by recalc to queue
+/// blocked anchors for a subsequent dependency-ordered wave.
+using SpillReleaseCallback = void (*)(void*, const Sheet&, std::uint32_t, std::uint32_t, std::uint32_t,
+                                      std::uint32_t) noexcept;
+
 /// Anchored writer that commits dynamic-array spill values for the
 /// formula cell at `(row, col)` on `sheet`. See file header for the
 /// rationale and lifetime requirements.
@@ -46,7 +52,13 @@ class SpillCommitter {
   /// returns the supplied `Value` unchanged. This is convenient for
   /// read-only evaluation contexts that still want a uniform commit-call
   /// surface.
-  SpillCommitter(Sheet* sheet, std::uint32_t row, std::uint32_t col) noexcept : sheet_(sheet), row_(row), col_(col) {}
+  SpillCommitter(Sheet* sheet, std::uint32_t row, std::uint32_t col, SpillReleaseCallback release_callback = nullptr,
+                 void* release_user_data = nullptr) noexcept
+      : sheet_(sheet),
+        row_(row),
+        col_(col),
+        release_callback_(release_callback),
+        release_user_data_(release_user_data) {}
 
   /// Builds a no-op committer. Equivalent to `SpillCommitter(nullptr, 0, 0)`
   /// — every `commit()` call returns its argument unchanged.
@@ -72,9 +84,13 @@ class SpillCommitter {
   Value commit(Value v) const;
 
  private:
+  void notify_release() const noexcept;
+
   Sheet* sheet_ = nullptr;
   std::uint32_t row_ = 0;
   std::uint32_t col_ = 0;
+  SpillReleaseCallback release_callback_ = nullptr;
+  void* release_user_data_ = nullptr;
 };
 
 }  // namespace eval

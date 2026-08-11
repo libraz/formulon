@@ -240,6 +240,27 @@ std::vector<std::uint8_t> BuildSingleEntryZip(const std::string& name, const std
   return out;
 }
 
+/// Builds a structurally valid ZIP whose central directory contains the same
+/// non-directory name twice. The production reader rejects this before any
+/// caller can observe miniz's ambiguous first/last-match behaviour.
+std::vector<std::uint8_t> BuildDuplicateEntryZip() {
+  mz_zip_archive archive{};
+  std::memset(&archive, 0, sizeof(archive));
+  EXPECT_EQ(mz_zip_writer_init_heap(&archive, 0, 0), MZ_TRUE);
+  const std::array<std::uint8_t, 3> first{{'o', 'n', 'e'}};
+  const std::array<std::uint8_t, 3> second{{'t', 'w', 'o'}};
+  EXPECT_EQ(mz_zip_writer_add_mem(&archive, "duplicate.bin", first.data(), first.size(), MZ_NO_COMPRESSION), MZ_TRUE);
+  EXPECT_EQ(mz_zip_writer_add_mem(&archive, "duplicate.bin", second.data(), second.size(), MZ_NO_COMPRESSION), MZ_TRUE);
+  void* heap = nullptr;
+  std::size_t heap_size = 0;
+  EXPECT_EQ(mz_zip_writer_finalize_heap_archive(&archive, &heap, &heap_size), MZ_TRUE);
+  EXPECT_EQ(mz_zip_writer_end(&archive), MZ_TRUE);
+  std::vector<std::uint8_t> out(heap_size);
+  std::memcpy(out.data(), heap, heap_size);
+  mz_free(heap);
+  return out;
+}
+
 /// Builds an in-memory ZIP containing `count` empty entries named
 /// `entry_<n>.bin`. Used to drive the per-archive entry-count cap check.
 std::vector<std::uint8_t> BuildManyEmptyEntriesZip(std::size_t count) {
@@ -264,9 +285,8 @@ std::vector<std::uint8_t> BuildManyEmptyEntriesZip(std::size_t count) {
 }
 
 /// Builds an in-memory ZIP containing `count` entries that each carry the
-/// same `payload`. All entries share the supplied compression level so
-/// the per-entry cumulative-cap test can drive the running total without
-/// hitting the per-entry size cap.
+/// same `payload`. All entries share the supplied compression level so the
+/// sequential extraction test exercises independent per-entry allocations.
 std::vector<std::uint8_t> BuildMultiEntryZip(std::size_t count, const std::vector<std::uint8_t>& payload,
                                              mz_uint compression = static_cast<mz_uint>(MZ_NO_COMPRESSION)) {
   mz_zip_archive archive{};
@@ -333,6 +353,16 @@ TEST(ZipReader, OpenRejectsTooManyParts) {
   // The reader must surface as not-open after a refused open(); subsequent
   // reads return a not-open / not-found error rather than aliasing into a
   // half-initialised miniz handle.
+  EXPECT_EQ(zip.entry_count(), 0U);
+}
+
+TEST(ZipReader, OpenRejectsDuplicateNonDirectoryNames) {
+  const std::vector<std::uint8_t> bytes = BuildDuplicateEntryZip();
+  ZipReader zip;
+  auto result = zip.open(SpanOf(bytes));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipCorrupt);
+  EXPECT_NE(result.error().context.find("duplicate_entry=duplicate.bin"), std::string::npos);
   EXPECT_EQ(zip.entry_count(), 0U);
 }
 

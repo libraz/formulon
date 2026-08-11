@@ -151,7 +151,7 @@
 
 <header>
   <h1>Formulon Oracle Compliance Status
-    <span class="badge ok">IMPLEMENTATION COMPLETE</span>
+    <span class="badge warn">EXTERNAL M365 PROBE PENDING</span>
   </h1>
   <div class="meta">
     Snapshot: 2026-05-17 (test capture) &middot;
@@ -162,9 +162,12 @@
 
 <div class="summary">
   <strong>結論: </strong>
-  Win/Mac 両 oracle に対して、Formulon 側の C++ 実装で可能な対応は全て完了。
-  残る 7件の OPEN closure は <em>「実装と Excel の挙動が一致していない」</em> ではなく、
-  <em>「Excel での golden 採取がまだ / behavior taxonomy が未整理」</em> という oracle メタデータ側の課題。
+  Mac primary の確認範囲と workbook probe の実装は整備済み。CF track も
+  <code>tracks.cf.primary: mac-365-ja_JP</code> と hash / case-count provenance を持つ。
+  `win-365-ja_JP` は <code>status: wanted</code> のままで、過去の Office 2019 /
+  バージョン不明ファイルは <em>reference-only</em> として保持し、Microsoft 365 の
+  verified golden や active CTest coverage とは数えない。残る page/data-axis
+  GETPIVOTDATA の結果確認には、製品確認済み Windows Microsoft 365 host が必要。
 </div>
 
 <section>
@@ -197,8 +200,8 @@
     </div>
     <div class="stat">
       <div class="label">Workbook track test</div>
-      <div class="value ok">41 / 41</div>
-      <div class="note">100% pass (6 skip = win-365 PBP COM quirk)</div>
+      <div class="value warn">external pending</div>
+      <div class="note">歴史的 golden は reference-only。Windows M365 probe 待ち</div>
     </div>
   </div>
 </section>
@@ -223,9 +226,9 @@
       </tr>
       <tr>
         <td><span class="pill win">win-365-ja_JP</span></td>
-        <td>Workbook track primary (pivot / print)</td>
-        <td><span class="badge ok">準拠</span></td>
-        <td>PageBreakPreview の scale&le;50 列 auto-break 逆スケーリング挙動 (COM quirk、6件)</td>
+        <td>Workbook track candidate (pivot / print)</td>
+        <td><span class="badge warn">wanted / 外部検証待ち</span></td>
+        <td>歴史的 capture は reference-only。製品確認済み Microsoft 365 Windows host で再採取するまで active CTest / coverage に入れない。page/data-axis probe と直接 #REF 回帰を用意済み。</td>
       </tr>
       <tr>
         <td><span class="pill both">共通</span></td>
@@ -346,11 +349,11 @@
     </tbody>
   </table>
 
-  <h3>Workbook track skip (41 中 6)</h3>
+  <h3>Historical workbook reference (not active coverage)</h3>
   <table>
     <thead><tr><th>Case</th><th>Suite</th><th>理由</th></tr></thead>
     <tbody>
-      <tr><td><code>scale_50_shrinks_breaks</code></td><td>print_fit</td><td rowspan="6">Excel PageBreakPreview の <strong>scale&le;50 列 auto-break 逆スケーリング</strong> COM quirk。VBA 界隈で documented (mrexcel / tek-tips 等)、driver 側で公開済 workaround は全て適用済だが Excel の出力自体が非幾何的。</td></tr>
+      <tr><td><code>scale_50_shrinks_breaks</code></td><td>print_fit</td><td rowspan="6">過去の capture は Office 製品/version の provenance が確認できないため <strong>reference-only</strong>。PageBreakPreview の scale&le;50 列 auto-break quirk は補足情報として保持するが、Microsoft 365 verified coverage とは数えない。</td></tr>
       <tr><td><code>scale_25_extreme_shrink</code></td><td>print_fit</td></tr>
       <tr><td><code>zoom_50_dense_fit_off</code></td><td>print_matrix</td></tr>
       <tr><td><code>zoom_25_dense_fit_off</code></td><td>print_matrix</td></tr>
@@ -398,9 +401,10 @@
   <h2>「準拠」の意味するもの</h2>
   <p>Formulon プロジェクトの "1-bit compatibility with Excel 365" の運用上の意味:</p>
   <ul>
-    <li><strong>Primary oracle</strong>: 各 track に primary target を 1つ持つ
-      (formula: <code>mac-365-ja_JP</code>, workbook: <code>win-365-ja_JP</code>)。
-      CI gate はこの primary に対してのみ評価される。</li>
+    <li><strong>Primary oracle</strong>: formula track の primary は
+      <code>mac-365-ja_JP</code>。workbook track の Windows candidate
+      <code>win-365-ja_JP</code> は <code>wanted</code> であり、製品確認済み
+      M365 capture が完了するまで primary / CI evidence として扱わない。</li>
     <li><strong>Variant oracle</strong>: 追加 target は <code>tests/oracle/variants/&lt;target&gt;/</code> に opt-in で配置、
       <code>FORMULON_ORACLE_VARIANTS=ON</code> で有効化。Research 用、CI gate 対象外。</li>
     <li><strong>Divergence</strong>: <code>tests/divergence.yaml</code> で per-target scope (<code>applies_to:</code>) を持って documented。
@@ -408,22 +412,26 @@
     <li><strong>Closure</strong>: 関数毎に 6条件 (behaviors_declared / cases_cover_behaviors / golden_present /
       divergence_documented / not_in_pilot / behavior_drift) で評価。</li>
   </ul>
-  <p>つまり「Mac/Win 両準拠」の達成基準は <em>「primary oracle で 100% pass、それ以外は documented divergence で説明可能」</em>。
-  現状はこの基準を達成している。</p>
+  <p>したがって「Mac/Win 両準拠」を主張できるのは、各 target の provenance が
+  製品・version を確認し、active CTest に明示的に opt-in した後です。現状は
+  Mac primary の範囲を維持し、Windows page/data-axis 結果は external pending とします。</p>
 </section>
 
 <section>
   <h2>今後の作業 (実装外)</h2>
-  <p>oracle 準拠の観点では <em>完了</em> だが、closure 100% を狙うなら以下が残:</p>
+  <p>oracle の基盤と記録は整備済みだが、workbook track の外部観測と closure 100% は未完了。通常 CTest は pending-aware 検査のみを実行し、strict な <code>--require-active</code> gate は <code>FORMULON_ORACLE_RELEASE_GATES=ON</code> の release 用設定で明示的に有効化する。以下が残:</p>
   <ol>
     <li><strong>FILTERXML golden 採取</strong> (PCRE2 spill 出力の Excel 比較 pipeline 整備)
       &rArr; FILTERXML / CHAR / CONCAT / TRUE 4関数の OPEN が同時に閉じる</li>
     <li><strong>Behavior taxonomy 整備</strong> (ARRAYTOTEXT / GETPIVOTDATA / PHONETIC を 5件以上に拡充)
       &rArr; 残り 3関数の OPEN が閉じる &rArr; 522/522 closure</li>
-    <li><strong>Variant target 拡充</strong> (mac-365 workbook、win-365 formula 等の対照採取)
-      &rArr; cross-target drift の体系的観測</li>
+    <li><strong>Windows M365 workbook probe</strong>: 製品確認済み host で
+      <code>tools/oracle/provenance.py check</code> 後、
+      <code>tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden</code>
+      を実行し、page/data-axis formula-probe golden を採取する。
+      Office 2019 / version 不明 capture の値は代用しない。</li>
   </ol>
-  <p>いずれも <strong>Excel 側のキャプチャ作業 / 分類作業</strong> であり、Formulon の C++ 実装変更は不要。</p>
+  <p>いずれもまず <strong>Excel 側のキャプチャ作業 / 分類作業</strong> が必要。実測結果が現在の #REF! 想定と異なる場合は、Formulon の C++ 実装を観測結果に合わせて修正する。</p>
 </section>
 
 <footer>

@@ -67,6 +67,16 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
                     const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// Invokes an AST-backed runtime lambda with arguments that have already
+/// been evaluated. This is the safe bridge used by the bytecode VM when a
+/// direct `Call` names a workbook-defined LAMBDA: VM argument values are
+/// copied into the lambda environment and the AST body is then evaluated by
+/// the tree walker. The helper deliberately accepts only the normal
+/// AST-backed LambdaValue representation; VM-internal closure records never
+/// pass through this interface.
+Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Value* args, Arena& arena,
+                           const FunctionRegistry& registry, const EvalContext& ctx);
+
 }  // namespace eval
 }  // namespace formulon
 

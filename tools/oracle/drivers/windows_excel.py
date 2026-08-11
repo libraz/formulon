@@ -663,9 +663,9 @@ class WindowsExcelOracle(OracleDriver):
         wb = self._app.books.add()
         try:
             self._build_workbook_sheets(wb, case)
-            anchor = _build_pivot_table(wb, pivot_spec)
-            grid, rows, cols = _read_pivot_grid(wb, anchor)
-            return {
+            pivot = _build_pivot_table(wb, pivot_spec)
+            grid, rows, cols = _read_pivot_grid(wb, pivot.TableRange2)
+            expect: Dict[str, Any] = {
                 "pivot": {
                     "anchor": pivot_spec.get("anchor", ""),
                     "rows": rows,
@@ -673,6 +673,10 @@ class WindowsExcelOracle(OracleDriver):
                     "grid": grid,
                 }
             }
+            probes = pivot_spec.get("formula_probes")
+            if probes:
+                expect["formula_probes"] = _run_formula_probes(wb, probes)
+            return expect
         except Exception as exc:
             raise RuntimeError(
                 f"pivot automation failed for case {case.get('id')!r}: {_format_com_error(exc)}"
@@ -852,9 +856,10 @@ _PIVOT_LAYOUT_MODES = {
 def _build_pivot_table(wb, pivot_spec: Dict[str, Any]):
     """Creates a PivotTable in ``wb`` from a declarative ``pivot`` block.
 
-    Returns the ``PivotTable.TableRange2`` COM range so the caller can
-    read the rendered grid back. The ``pivot`` block shape is documented
-    on ``tests/oracle/workbook_builder.h``.
+    Returns the materialised ``PivotTable`` COM object. The caller reads
+    ``TableRange2`` for the rendered grid and may then run post-build
+    formula probes. The ``pivot`` block shape is documented on
+    ``tests/oracle/workbook_builder.h``.
     """
 
     source = pivot_spec.get("source")
@@ -909,6 +914,8 @@ def _build_pivot_table(wb, pivot_spec: Dict[str, Any]):
         pivot.PivotFields(field_name).Orientation = _XL_ORIENT_ROW
     for field_name in pivot_spec.get("col_fields") or []:
         pivot.PivotFields(field_name).Orientation = _XL_ORIENT_COLUMN
+    for field_name in pivot_spec.get("page_fields") or []:
+        pivot.PivotFields(field_name).Orientation = _XL_ORIENT_PAGE
 
     for data_field in pivot_spec.get("data_fields") or []:
         field_name = data_field.get("field")
@@ -944,7 +951,62 @@ def _build_pivot_table(wb, pivot_spec: Dict[str, Any]):
             pivot.ColumnGrand = bool(grand["cols"])
 
     pivot.RefreshTable()
-    return pivot.TableRange2
+    return pivot
+
+
+def _run_formula_probes(wb, probes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Write and read post-build formulas against a materialised PivotTable.
+
+    Formula probes are intentionally evaluated only after ``RefreshTable``.
+    A rendered PivotTable grid cannot exercise GETPIVOTDATA's page/data-axis
+    routing, whereas a formula cell can.  The result shape matches the
+    scalar grid records: ``{"kind": ..., "value": ...}`` or
+    ``{"kind": "error", "code": "#REF!"}``.
+    """
+
+    if not isinstance(probes, list) or not probes:
+        return []
+    out: List[Dict[str, Any]] = []
+    for probe in probes:
+        if not isinstance(probe, dict):
+            raise RuntimeError("pivot formula_probes entries must be objects")
+        probe_id = probe.get("id")
+        cell_ref = probe.get("cell")
+        formula = probe.get("formula")
+        if not isinstance(probe_id, str) or not probe_id:
+            raise RuntimeError("pivot formula probe missing string 'id'")
+        if not isinstance(cell_ref, str) or "!" not in cell_ref:
+            raise RuntimeError(f"formula probe {probe_id!r} needs sheet-qualified cell")
+        if not isinstance(formula, str) or not formula:
+            raise RuntimeError(f"formula probe {probe_id!r} missing string 'formula'")
+        sheet_name, bare_addr = _split_sheet_qualified_addr(cell_ref)
+        target = None
+        for sht in wb.sheets:
+            if sht.name.casefold() == sheet_name.casefold():
+                target = sht
+                break
+        if target is None:
+            raise RuntimeError(f"formula probe {probe_id!r} references unknown sheet {sheet_name!r}")
+        result_cell = target.range(bare_addr)
+        try:
+            result_cell.formula2 = formula
+        except Exception:
+            result_cell.formula = formula
+
+    try:
+        wb.app.calculate()
+    except Exception as exc:
+        # Do not silently emit stale values from a prior probe. A formula
+        # result such as #REF! is a normal cell value and does not raise here;
+        # a COM calculation failure is a driver failure and must be visible.
+        raise RuntimeError(f"Excel failed to calculate formula probes: {_format_com_error(exc)}") from exc
+
+    for probe in probes:
+        sheet_name, bare_addr = _split_sheet_qualified_addr(probe["cell"])
+        target = next(sht for sht in wb.sheets if sht.name.casefold() == sheet_name.casefold())
+        result = _classify_value(_CellAdapter(target.range(bare_addr).api))
+        out.append({"id": probe["id"], "cell": probe["cell"], "result": _grid_value_record(result)})
+    return out
 
 
 # Excel `XlPageOrientation` constants.

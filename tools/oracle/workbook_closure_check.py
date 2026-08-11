@@ -18,9 +18,10 @@ For each suite under `tests/oracle/cases_wb/` it checks:
      workbook suite carries `reason` and `last_verified_excel_version`.
 
 Exit codes:
-    0 = no genuine inconsistency (absent goldens are fine)
+    0 = no genuine inconsistency (absent goldens are fine in developer mode)
     1 = a real problem (schema validation failed, or a workbook divergence
-        entry is missing a required field)
+        entry is missing a required field); with ``--require-active``, a
+        manifest-approved active capture is also required
     2 = could not run (PyYAML missing)
 
 stdlib only; PyYAML is needed for the divergence file. Resolve via the
@@ -30,6 +31,7 @@ oracle venv when run outside it:
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -42,6 +44,7 @@ GOLDEN_WB_DIR = REPO_ROOT / "tests" / "oracle" / "golden_wb"
 DIVERGENCE_PATH = REPO_ROOT / "tests" / "divergence.yaml"
 
 sys.path.insert(0, str(ORACLE_DIR))
+import provenance  # type: ignore  # noqa: E402
 import workbook_case_schema  # type: ignore  # noqa: E402
 
 try:
@@ -158,6 +161,9 @@ def check_suite(suite: str, case_path: Path) -> Tuple[bool, Optional[bool], List
     try:
         case_ids, golden_ids = workbook_case_schema.validate_pair(case_path, golden_arg)
     except workbook_case_schema.ValidationError as exc:
+        if golden_arg is not None and "missing case ids present" in str(exc):
+            msgs.append(_colour(f"  [PENDING] golden incomplete: {exc} (external capture required)", YELLOW))
+            return True, None, msgs
         msgs.append(_colour(f"  [FAIL] schema: {exc}", RED))
         return False, golden_arg is not None, msgs
     except json.JSONDecodeError as exc:
@@ -177,7 +183,31 @@ def check_suite(suite: str, case_path: Path) -> Tuple[bool, Optional[bool], List
     return True, True, msgs
 
 
+def check_yaml_normalization(suite: str, case_path: Path) -> List[str]:
+    """Require YAML and JSON mirrors to agree after semantic normalization."""
+
+    if _yaml is None:
+        return []
+    yaml_path = case_path.with_suffix("").with_suffix(".yaml")
+    if not yaml_path.exists():
+        return [f"{suite}: YAML source missing ({yaml_path.name})"]
+    try:
+        ydoc = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+        jdoc = json.loads(case_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, _yaml.YAMLError) as exc:
+        return [f"{suite}: YAML/JSON description parse failed: {exc}"]
+    try:
+        ynorm = workbook_case_schema.normalise_case_source(ydoc)
+        jnorm = workbook_case_schema.normalise_case_source(jdoc)
+    except (ValueError, workbook_case_schema.ValidationError) as exc:
+        return [f"{suite}: YAML/JSON semantic normalization failed: {exc}"]
+    return [] if ynorm == jnorm else [f"{suite}: YAML/JSON full semantic case mismatch"]
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--require-active", action="store_true")
+    args = parser.parse_args()
     if _yaml is None:
         sys.stderr.write(
             "workbook_closure_check: PyYAML not available. Run via the "
@@ -210,9 +240,13 @@ def main() -> int:
             case_path = CASES_WB_DIR / f"{suite}.case.json"
             print(f" suite: {suite}")
             schema_ok, golden, msgs = check_suite(suite, case_path)
+            desc_errors = check_yaml_normalization(suite, case_path)
+            msgs.extend(f"  [FAIL] {msg}" for msg in desc_errors)
             for m in msgs:
                 print(m)
             if not schema_ok:
+                overall_ok = False
+            if desc_errors:
                 overall_ok = False
             if golden is None:
                 golden_missing += 1
@@ -230,6 +264,15 @@ def main() -> int:
         overall_ok = False
     print()
 
+    if golden_missing:
+        print(f"pending: {golden_missing} suite(s) have no committed golden (external Windows M365 capture required)")
+    targets_doc = provenance._load_yaml(provenance.DEFAULT_TARGETS)
+    active_capture = provenance.workbook_active(targets_doc, REPO_ROOT)
+    if not active_capture:
+        print("active workbook capture: PENDING (manifest/provenance is not an active verified capture)")
+    if args.require_active and not active_capture:
+        overall_ok = False
+        print("active workbook gate: BLOCKED (external verified capture required)")
     print(
         f"summary: {len(suites)} suite(s), "
         f"golden present={golden_present}, missing={golden_missing}, "

@@ -62,6 +62,13 @@ struct DefinedNameFrame {
 const io::DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t current_sheet_id,
                                          std::string_view name) noexcept;
 
+/// Finds the defined name visible from an evaluator context. This is the
+/// single context-aware lookup used by both ordinary NameRef evaluation and
+/// named-LAMBDA call dispatch; it returns nullptr when the context is
+/// unbound, its current sheet is not owned by the workbook, or no definition
+/// is visible.
+const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept;
+
 /// Resolves the defined name `name` by parsing and evaluating its definition
 /// in `ctx`. The definition may be a constant (`=0.1`), a reference
 /// (`=Sheet1!$A$1`), or an arbitrary formula (`=A1*2`).

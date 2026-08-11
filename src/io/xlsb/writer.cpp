@@ -15,12 +15,14 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
 #include "io/passthrough_part.h"
 #include "io/xlsb/ptg_writer.h"
@@ -59,6 +61,7 @@ constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" 
 // content type Excel for Mac actually writes — the other variant is
 // accepted for compatibility on input only.
 constexpr std::string_view kCtPackageRels = "application/vnd.openxmlformats-package.relationships+xml";
+constexpr std::string_view kCtXml = "application/xml";
 constexpr std::string_view kCtWorkbookXlsb = "application/vnd.ms-excel.sheet.binary.macroEnabled.main";
 // Worksheet part content type. This is the worksheet data part, NOT the
 // binary-index part (`application/vnd.ms-excel.binIndexWs`); mislabelling it as
@@ -106,6 +109,15 @@ constexpr std::uint16_t kBrtEndBookViews = 136;
 
 struct EmissionPlan {
   std::vector<const PassthroughPart*> passthrough_kept;
+  /// Source Default registrations, lower-case by extension and unique. They
+  /// remain available even when a source archive contains no current part of
+  /// a given extension: keeping the registry avoids changing the meaning of
+  /// any Default-typed part a caller may add before the next save.
+  std::vector<DefaultContentType> default_content_types;
+  /// When a source `bin` Default describes an embedded OLE/VBA payload (or
+  /// any other non-workbook binary), the generated workbook must override
+  /// that Default with the canonical XLSB workbook type.
+  bool workbook_bin_override = false;
   bool has_text_cells = false;  // gates emission of xl/sharedStrings.bin
   bool has_generated_styles = false;
   bool has_generated_dynamic_metadata = false;
@@ -159,6 +171,25 @@ bool IsBinaryIndexPart(const std::string& path) {
 // deliberately out of the XLSB package.
 bool IsXlsxOnlyMetadataPart(const std::string& path) {
   return path == "xl/metadata.xml";
+}
+
+std::string LowercaseExtension(std::string_view extension) {
+  std::string out(extension);
+  for (char& c : out) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+  return out;
+}
+
+std::string ExtensionOfPart(std::string_view path) {
+  const std::size_t slash = path.find_last_of('/');
+  const std::size_t dot = path.find_last_of('.');
+  if (dot == std::string_view::npos || dot == path.size() - 1U || (slash != std::string_view::npos && dot < slash)) {
+    return {};
+  }
+  return LowercaseExtension(path.substr(dot + 1U));
 }
 
 bool HasRawStylesPart(const Workbook& wb) {
@@ -283,7 +314,7 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   return paths;
 }
 
-EmissionPlan BuildEmissionPlan(const Workbook& wb, bool sst_present) {
+Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
   // Existing XLSB packages retain their original styles bytes verbatim.  This
@@ -298,7 +329,31 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool sst_present) {
 
   const std::unordered_set<std::string> generated =
       BuildGeneratedPathSet(wb, sst_present, plan.has_generated_styles, plan.has_generated_dynamic_metadata);
+
+  // The reader rejects conflicting defaults, but Workbook is also a public
+  // construction surface. Validate that hand-built workbooks cannot produce
+  // ambiguous extension semantics on write.
+  std::unordered_map<std::string, std::string> source_defaults;
+  source_defaults.reserve(wb.default_content_types().size());
+  for (const DefaultContentType& source : wb.default_content_types()) {
+    if (source.extension.empty() || source.content_type.empty()) {
+      continue;
+    }
+    const std::string extension = LowercaseExtension(source.extension);
+    auto [it, inserted] = source_defaults.emplace(extension, source.content_type);
+    if (!inserted && it->second != source.content_type) {
+      return make_error(FormulonErrorCode::kIoContentTypeInvalid,
+                        "workbook has conflicting Default content types for extension " + extension,
+                        "context=write_xlsb extension=" + extension);
+    }
+  }
+
+  std::unordered_set<std::string> kept_paths;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (!ooxml::is_safe_part_name(part.path)) {
+      return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
+                        "context=write_xlsb part=" + part.path);
+    }
     if (generated.count(part.path) != 0U) {
       StructuredLog("xlsb.writer.passthrough_collision")
           .field("path", part.path)
@@ -323,8 +378,32 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool sst_present) {
       }
       continue;
     }
+    if (!kept_paths.insert(part.path).second) {
+      StructuredLog("xlsb.writer.passthrough_collision")
+          .field("path", part.path)
+          .field("reason", std::string_view("duplicate_passthrough_path"))
+          .warn();
+      continue;
+    }
+    if (part.content_type.empty()) {
+      const std::string extension = ExtensionOfPart(part.path);
+      const auto default_it = source_defaults.find(extension);
+      if (extension.empty() || default_it == source_defaults.end()) {
+        return make_error(FormulonErrorCode::kIoContentTypeInvalid,
+                          "Default-typed passthrough part has no matching Default registration",
+                          "context=write_xlsb part=" + part.path + " extension=" + extension);
+      }
+    }
     plan.passthrough_kept.push_back(&part);
   }
+  for (const auto& [extension, content_type] : source_defaults) {
+    plan.default_content_types.push_back(DefaultContentType{extension, content_type});
+    if (extension == "bin" && content_type != kCtWorkbookXlsb) {
+      plan.workbook_bin_override = true;
+    }
+  }
+  std::sort(plan.default_content_types.begin(), plan.default_content_types.end(),
+            [](const DefaultContentType& a, const DefaultContentType& b) { return a.extension < b.extension; });
   return plan;
 }
 
@@ -337,19 +416,78 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   out.reserve(512 + wb.sheet_count() * 128 + plan.passthrough_kept.size() * 128);
   out.append(kXmlDecl);
   out.append("<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n");
-  out.append("  <Default Extension=\"rels\" ContentType=\"");
-  out.append(kCtPackageRels);
-  out.append("\"/>\n");
-  out.append("  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n");
-  // Default for `bin` is the workbook content type — matches what the
-  // reader test fixture uses and lets passthrough binary parts (e.g.
-  // `xl/theme/theme1.xml` is XML, but binary parts like images would
-  // ride this Default in a real xlsb).
-  out.append("  <Default Extension=\"bin\" ContentType=\"");
-  out.append(kCtWorkbookXlsb);
-  out.append("\"/>\n");
-  // No Override for `/xl/workbook.bin`: it already resolves to the `bin`
-  // Default above, and real Excel omits the redundant Override.
+  auto append_default = [&out](std::string_view extension, std::string_view content_type) {
+    out.append("  <Default Extension=\"");
+    AppendXmlEscaped(out, extension);
+    out.append("\" ContentType=\"");
+    AppendXmlEscaped(out, content_type);
+    out.append("\"/>\n");
+  };
+  auto append_override = [&out](std::string_view path, std::string_view content_type) {
+    out.append("  <Override PartName=\"/");
+    AppendXmlEscaped(out, path);
+    out.append("\" ContentType=\"");
+    AppendXmlEscaped(out, content_type);
+    out.append("\"/>\n");
+  };
+  std::string_view rels_default = kCtPackageRels;
+  std::string_view xml_default = kCtXml;
+  // `bin` is commonly registered as the workbook type, but a real package
+  // may use the same extension for OLE/VBA payloads. Preserve the source
+  // Default when a kept binary passthrough needs it, and add a canonical
+  // workbook Override so `xl/workbook.bin` remains unambiguous.
+  std::string_view bin_default = kCtWorkbookXlsb;
+  for (const DefaultContentType& def : plan.default_content_types) {
+    if (def.extension == "rels") {
+      rels_default = def.content_type;
+    } else if (def.extension == "xml") {
+      xml_default = def.content_type;
+    } else if (def.extension == "bin") {
+      bin_default = def.content_type;
+    }
+  }
+  append_default("rels", rels_default);
+  append_default("xml", xml_default);
+  append_default("bin", bin_default);
+  for (const DefaultContentType& def : plan.default_content_types) {
+    if (def.extension == "rels" || def.extension == "xml" || def.extension == "bin") {
+      continue;
+    }
+    append_default(def.extension, def.content_type);
+  }
+  if (plan.workbook_bin_override) {
+    out.append("  <Override PartName=\"/xl/workbook.bin\" ContentType=\"");
+    AppendXmlEscaped(out, kCtWorkbookXlsb);
+    out.append("\"/>\n");
+  }
+  // A source `rels` Default may use a vendor-specific type. Generated
+  // relationship parts still need their canonical OPC semantics, so pin
+  // those generated paths with Overrides while leaving the source Default
+  // available for retained opaque parts of the same extension. The special
+  // `[Content_Types].xml` part intentionally remains Default-typed when the
+  // source registry uses a noncanonical `xml` type; adding an Override for
+  // that part would change the source registry's meaning.
+  if (rels_default != kCtPackageRels) {
+    append_override("_rels/.rels", kCtPackageRels);
+    append_override("xl/_rels/workbook.bin.rels", kCtPackageRels);
+    for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+      bool has_emitted_sheet_rels = false;
+      for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
+        if (rel.target_external) {
+          has_emitted_sheet_rels = true;
+          break;
+        }
+        if (std::any_of(plan.passthrough_kept.begin(), plan.passthrough_kept.end(),
+                        [&rel](const PassthroughPart* part) { return part->path == rel.target; })) {
+          has_emitted_sheet_rels = true;
+          break;
+        }
+      }
+      if (has_emitted_sheet_rels) {
+        append_override("xl/worksheets/_rels/sheet" + std::to_string(i + 1U) + ".bin.rels", kCtPackageRels);
+      }
+    }
+  }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     out.append("  <Override PartName=\"/xl/worksheets/sheet");
     out.append(std::to_string(i + 1));
@@ -1010,7 +1148,11 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   const bool emit_sst_part = !sst.empty();
 
-  const EmissionPlan plan = BuildEmissionPlan(workbook, emit_sst_part);
+  auto plan_or = BuildEmissionPlan(workbook, emit_sst_part);
+  if (!plan_or) {
+    return plan_or.error();
+  }
+  const EmissionPlan plan = plan_or.take();
 
   ZipWriterGuard writer;
   if (!writer.init()) {

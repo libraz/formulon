@@ -26,6 +26,7 @@
 #include "eval/compat.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "eval/scheduler.h"
 #include "gtest/gtest.h"
 #include "io/tables_reader.h"
 #include "sheet.h"
@@ -250,6 +251,315 @@ TEST(SpillCollision, ClearBlocker2DRecoversSpill) {
   EXPECT_DOUBLE_EQ(c3.as_number(), 9.0);
 
   EXPECT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+}
+
+TEST(SpillCollision, ClearBlockerRecoversWithoutRetypingFormula) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(7.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Spill);
+  ASSERT_EQ(wb.sheet(0).blocked_spill_anchors().size(), 1U);
+
+  // Clearing the blocker itself re-dirties the producer from its remembered
+  // footprint. No formula edit/re-registration is needed.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::blank())));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(2U, 0U).as_number(), 3.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, Clear2DBlockerRecoversWithoutRetypingFormula) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 2U, Value::number(100.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Spill);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 2U, Value::blank())));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(2U, 2U).as_number(), 9.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, ClearingAnotherSpillAnchorReleasesPendingFootprint) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SEQUENCE(1,3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const bool a1_blocked =
+      StoredValue(wb, 0U, 0U, 0U).is_error() && StoredValue(wb, 0U, 0U, 0U).as_error() == ErrorCode::Spill;
+  const std::uint32_t blocked_col = a1_blocked ? 0U : 1U;
+  const std::uint32_t winning_col = a1_blocked ? 1U : 0U;
+  ASSERT_EQ(wb.sheet(0).blocked_spill_anchors().size(), 1U);
+
+  // Overwriting the winning anchor clears its committed phantoms. The
+  // pending neighbour is re-dirtied because its remembered rectangle
+  // intersected the removed spill anchor.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, winning_col, Value::blank())));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, blocked_col).as_number(), 1.0);
+  EXPECT_NE(wb.sheet(0).spill_region_at_anchor(0U, blocked_col), nullptr);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, DeleteBlockerRowRecoversPendingSpill) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(7.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Spill);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0U, 1U, 1U)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 1.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, DeleteBlockerColumnRecoversPendingSpill) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(7.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1,3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Spill);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0U, 1U, 1U)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 1.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, StructuralFormulaRewritePreservesBlockedFootprint) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  // A2's footprint is blocked by A3. Inserting a row at the top moves the
+  // formula to A3 and rewrites its A1 reference to A2; the pending footprint
+  // must survive that formula-text rewrite at the old coordinate.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 2U, 0U, Value::number(99.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(A1,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 1U, 0U).as_error(), ErrorCode::Spill);
+  ASSERT_EQ(wb.sheet(0).blocked_spill_anchors().size(), 1U);
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0U, 0U, 1U)));
+  ASSERT_EQ(wb.sheet(0).blocked_spill_anchors().size(), 1U);
+  EXPECT_EQ(wb.sheet(0).blocked_spill_anchors()[0], (CellAddress{2U, 0U}));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(StoredValue(wb, 0U, 2U, 0U).as_error(), ErrorCode::Spill);
+}
+
+TEST(SpillCollision, RemovingMergeRecoversPendingSpill) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.add_merge(0U, MergeRange{1U, 0U, 2U, 0U})));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Spill);
+  ASSERT_EQ(wb.sheet(0).blocked_spill_anchors().size(), 1U);
+
+  ASSERT_TRUE(static_cast<bool>(wb.remove_merges_intersecting(0U, MergeRange{1U, 0U, 2U, 0U})));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(2U, 0U).as_number(), 3.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, OverwritingBlockedAnchorDropsRememberedFootprint) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(7.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(wb.sheet(0).blocked_spill_anchors().size(), 1U);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(42.0))));
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::blank())));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 42.0);
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+}
+
+TEST(SpillCollision, ClearingCommittedAnchorReleasesWholeOldFootprint) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 0U, 1U).as_error(), ErrorCode::Spill);
+
+  // The write removes A2:B4, while the pending B1:C3 footprint only
+  // intersects the removed rectangle at B2:B3. A1 itself is not enough to
+  // describe the release; the complete old spill rectangle must be queried.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::blank())));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 1U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(2U, 2U).as_number(), 6.0);
+}
+
+TEST(SpillCollision, SpillScalarAndErrorResultsClearPriorRegion) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IFERROR(FILTER(A2:A2,B2:B2),42)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(0.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_number(), 42.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=FILTER(A2:A2,B2:B2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(0.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 0U).as_error(), ErrorCode::Calc);
+}
+
+TEST(SpillCollision, ShapeShrinkRetriesBlockedAnchorInNextWave) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SEQUENCE(E1,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 1U, 0U).as_error(), ErrorCode::Spill);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(1U, 0U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(3U, 1U).as_number(), 6.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, ShapeShrinkRetriesBlockedAnchorInParallelNextWave) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  eval::SchedulerConfig cfg;
+  cfg.num_threads = 2U;
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SEQUENCE(E1,2)")));
+  ASSERT_TRUE(static_cast<bool>(eval::recalc_parallel(wb, cfg)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(eval::recalc_parallel(wb, cfg)));
+  ASSERT_EQ(StoredValue(wb, 0U, 1U, 0U).as_error(), ErrorCode::Spill);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(eval::recalc_parallel(wb, cfg)));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(1U, 0U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(3U, 1U).as_number(), 6.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(SpillCollision, RemovingMergeWakesUsingActualRemovedRectangle) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.add_merge(0U, MergeRange{1U, 0U, 3U, 1U})));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 0U, 1U).as_error(), ErrorCode::Spill);
+
+  // The query removes only A2, which intersects the merge but not B1:C3.
+  // Dirtying from the actual erased A2:B4 rectangle is required.
+  ASSERT_TRUE(static_cast<bool>(wb.remove_merges_intersecting(0U, MergeRange{1U, 0U, 1U, 0U})));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(2U, 2U).as_number(), 6.0);
+}
+
+TEST(SpillCollision, AddingMergeWakesCommittedSpillAndSurfacesCollision) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+
+  ASSERT_TRUE(static_cast<bool>(wb.add_merge(0U, MergeRange{0U, 1U, 1U, 2U})));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Spill);
+}
+
+void AssertCycleClearsOldSpill(Workbook& wb, bool parallel, bool partial) {
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(B1)")));
+  if (parallel) {
+    eval::SchedulerConfig cfg;
+    cfg.num_threads = 2U;
+    ASSERT_TRUE(static_cast<bool>(eval::recalc_parallel(wb, cfg)));
+  } else {
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  }
+  ASSERT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1")));
+
+  if (partial) {
+    eval::SheetCellRange viewport;
+    viewport.sheet_id = 0U;
+    viewport.first_row = 0U;
+    viewport.last_row = 0U;
+    viewport.first_col = 0U;
+    viewport.last_col = 1U;
+    ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(eval::default_registry(), viewport)));
+  } else if (parallel) {
+    eval::SchedulerConfig cfg;
+    cfg.num_threads = 2U;
+    ASSERT_TRUE(static_cast<bool>(eval::recalc_parallel(wb, cfg)));
+  } else {
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  }
+
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(StoredValue(wb, 0U, 0U, 0U).as_error(), ErrorCode::Ref);
+  EXPECT_EQ(StoredValue(wb, 0U, 0U, 1U).as_error(), ErrorCode::Ref);
+  EXPECT_TRUE(wb.sheet(0).resolve_cell_value(1U, 0U).is_blank());
+}
+
+TEST(SpillCollision, CycleDisabledSerialClearsOldSpillBeforeRef) {
+  Workbook wb = Workbook::create();
+  AssertCycleClearsOldSpill(wb, false, false);
+}
+
+TEST(SpillCollision, CycleDisabledPartialClearsOldSpillBeforeRef) {
+  Workbook wb = Workbook::create();
+  AssertCycleClearsOldSpill(wb, false, true);
+}
+
+TEST(SpillCollision, CycleDisabledParallelClearsOldSpillBeforeRef) {
+  Workbook wb = Workbook::create();
+  AssertCycleClearsOldSpill(wb, true, false);
+}
+
+TEST(SpillCollision, VolatileSpillWithPersistentBlockerDoesNotLoopRecoveryWaves) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=RANDARRAY(2,1)")));
+  // The explicit A1 dependency makes the producer order deterministic while
+  // keeping A2's dynamic-array footprint blocked by A1's committed spill.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(2,1)+A1*0")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(StoredValue(wb, 0U, 1U, 0U).as_error(), ErrorCode::Spill);
+
+  // RANDARRAY is volatile, so it is evaluated again in the same recovery
+  // pass. Recommitting an unchanged, collision-free footprint must not keep
+  // waking A2 until the bounded-wave guard fires.
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(StoredValue(wb, 0U, 1U, 0U).as_error(), ErrorCode::Spill);
+  EXPECT_EQ(wb.sheet(0).blocked_spill_anchors().size(), 1U);
 }
 
 // ---------------------------------------------------------------------------

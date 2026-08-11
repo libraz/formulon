@@ -50,10 +50,11 @@ void tokenize_section(std::string_view fmt, Section& out) {
       i = j < fmt.size() ? j + 1 : j;
       continue;
     }
-    // Escape `\x` or `!x` -> next byte is a literal.
+    // Escape `\x` or `!x` -> next UTF-8 scalar is a literal.
     if ((c == '\\' || c == '!') && i + 1 < fmt.size()) {
-      push_literal(i + 1, i + 2);
-      i += 2;
+      const std::size_t payload_width = utf8_scalar_width(fmt, i + 1);
+      push_literal(i + 1, i + 1 + payload_width);
+      i += 1 + payload_width;
       continue;
     }
     // Bracketed specifier. Recognised kinds:
@@ -177,7 +178,7 @@ void tokenize_section(std::string_view fmt, Section& out) {
       Token t;
       t.kind = Tok::Space;
       toks.push_back(t);
-      i += 2;
+      i += 1 + utf8_scalar_width(fmt, i + 1);
       continue;
     }
     // Asterisk-fill `*X`: in cell formats this pads the cell with `X` to
@@ -186,7 +187,7 @@ void tokenize_section(std::string_view fmt, Section& out) {
     // `*` is the last byte of the format with nothing following, fall
     // through to the single-byte literal path.
     if (c == '*' && i + 1 < fmt.size()) {
-      i += 2;
+      i += 1 + utf8_scalar_width(fmt, i + 1);
       continue;
     }
     // `General` keyword (case-insensitive). Must be a standalone "word":
@@ -420,11 +421,12 @@ void tokenize_section(std::string_view fmt, Section& out) {
       default:
         break;
     }
-    // Fallback: single byte literal. Note UTF-8 multi-byte characters are
-    // handled one byte at a time; the output is the same as the input
-    // bytes so no decoding is required.
-    push_literal(i, i + 1);
-    ++i;
+    // Fallback: preserve one complete UTF-8 scalar as a literal. Malformed
+    // input is consumed one byte at a time by `utf8_scalar_width`, so it is
+    // still copied without crashing or swallowing following syntax.
+    const std::size_t literal_width = utf8_scalar_width(fmt, i);
+    push_literal(i, i + literal_width);
+    i += literal_width;
   }
 }
 

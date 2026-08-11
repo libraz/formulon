@@ -268,6 +268,121 @@ TEST(DefinedNameResolve, SingleCellNameStaysScalar) {
   EXPECT_DOUBLE_EQ(v.as_number(), 7.0);
 }
 
+// A workbook-defined LAMBDA is callable through the ordinary `Name(args)`
+// syntax. The authored name and call lexeme are matched case-insensitively,
+// and the body executes in the caller's workbook context.
+TEST(DefinedNameResolve, WorkbookNamedLambdaCallIsCaseInsensitive) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(10.0));  // A1
+  wb.set_defined_names({io::DefinedName{"AddA1", "LAMBDA(x,x+A1)", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=adda1(5)", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 15.0);
+}
+
+TEST(DefinedNameResolve, SheetNamedLambdaShadowsWorkbookLambda) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.add_sheet("Sheet2");
+  const Sheet& s1 = wb.sheet(0);
+  const Sheet& s2 = wb.sheet(1);
+  wb.set_defined_names({
+      io::DefinedName{"Adder", "LAMBDA(x,x+1)", -1, false, ""},
+      io::DefinedName{"ADDER", "LAMBDA(x,x+10)", 0, false, ""},
+  });
+
+  EvalState state1;
+  EvalContext ctx1(wb, s1, state1);
+  Arena a1;
+  const Value local = EvalOrDie("=Adder(2)", a1, ctx1);
+  ASSERT_TRUE(local.is_number()) << local.debug_to_string();
+  EXPECT_DOUBLE_EQ(local.as_number(), 12.0);
+
+  EvalState state2;
+  EvalContext ctx2(wb, s2, state2);
+  Arena a2;
+  const Value global = EvalOrDie("=aDdEr(2)", a2, ctx2);
+  ASSERT_TRUE(global.is_number()) << global.debug_to_string();
+  EXPECT_DOUBLE_EQ(global.as_number(), 3.0);
+}
+
+TEST(DefinedNameResolve, LexicalLambdaShadowsDefinedLambda) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({io::DefinedName{"f", "LAMBDA(x,x+100)", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=LET(F,LAMBDA(x,x+1),f(2))", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(DefinedNameResolve, NamedLambdaNonLambdaAndArityErrors) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({
+      io::DefinedName{"Constant", "7", -1, false, ""},
+      io::DefinedName{"Pair", "LAMBDA(x,y,x+y)", -1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+
+  Arena non_lambda_arena;
+  const Value non_lambda = EvalOrDie("=Constant(2)", non_lambda_arena, ctx);
+  ASSERT_TRUE(non_lambda.is_error());
+  EXPECT_EQ(non_lambda.as_error(), ErrorCode::Value);
+
+  Arena arity_arena;
+  const Value wrong_arity = EvalOrDie("=Pair(1)", arity_arena, ctx);
+  ASSERT_TRUE(wrong_arity.is_error());
+  EXPECT_EQ(wrong_arity.as_error(), ErrorCode::Value);
+}
+
+TEST(DefinedNameResolve, NamedLambdaParseFailureIsNameError) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({io::DefinedName{"Broken", "LAMBDA(x,x+)", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Broken(1)", a, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Name);
+}
+
+TEST(DefinedNameResolve, NamedLambdaSupportsNamedRecursion) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({
+      io::DefinedName{"Fact", "LAMBDA(n,IF(n<=1,1,n*Fact(n-1)))", -1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=fact(5)", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 120.0);
+}
+
+TEST(DefinedNameResolve, NamedLambdaRunawayRecursionHitsCalcCap) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({
+      io::DefinedName{"LoopFn", "LAMBDA(n,LoopFn(n+1))", -1, false, ""},
+  });
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=loopfn(0)", a, ctx);
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Calc);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

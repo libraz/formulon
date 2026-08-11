@@ -23,6 +23,13 @@ tracks:
     # the Mac primary. Variants surface cross-environment divergences.
     primary: win-365-ja_JP
     variants: [mac-365-ja_JP]
+  cf:
+    # Conditional-formatting capture uses the same product-verified Mac
+    # Excel 365 ja-JP install as the formula track.  Keep this explicit per
+    # track so the CF generator cannot silently fall back to an unrelated
+    # target or to a historical Office 2019 directory.
+    primary: mac-365-ja_JP
+    variants: []
 
 targets:
   mac-365-ja_JP:
@@ -49,6 +56,15 @@ targets:
     # `win-2019-ja_JP` (see below); this slot stays `wanted` until a
     # real M365 install regenerates them.
     status: wanted
+    # This directory is retained as a historical capture only.  It is not
+    # evidence of a Microsoft 365 installation and is excluded from the
+    # default CTest / coverage surface until a fresh, product-verified
+    # capture is donated.
+    provenance:
+      classification: reference-only
+      verified: false
+      product: Office Professional Plus 2019 Retail (historical capture)
+      source: tests/oracle/reference/win-2019-ja_JP
     driver: windows_excel
     runs_on: [Windows, Linux]
     locale: ja-JP

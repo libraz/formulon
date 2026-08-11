@@ -29,6 +29,19 @@ std::optional<Reference> RefTransform::apply_external(std::uint32_t /*book_id*/,
   return apply(cell);
 }
 
+std::optional<std::pair<Reference, Reference>> RefTransform::apply_range(const Reference& lhs,
+                                                                         const Reference& rhs) const {
+  const std::optional<Reference> rewritten_lhs = apply(lhs);
+  if (!rewritten_lhs.has_value()) {
+    return std::nullopt;
+  }
+  const std::optional<Reference> rewritten_rhs = apply(rhs);
+  if (!rewritten_rhs.has_value()) {
+    return std::nullopt;
+  }
+  return std::make_pair(*rewritten_lhs, *rewritten_rhs);
+}
+
 std::optional<std::string_view> RefTransform::transform_external_sheet(std::uint32_t /*book_id*/,
                                                                        std::string_view /*sheet*/) const {
   return std::nullopt;
@@ -116,15 +129,34 @@ bool SameReference(const Reference& lhs, const Reference& rhs) {
 
 const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransform& transform) {
   const Reference& first = node.as_ref3d_cell();
-  std::optional<Reference> rewritten_first = transform.apply(first);
-  if (!rewritten_first.has_value()) {
-    return MakeRefError(arena);
-  }
   const bool is_range = node.as_ref3d_is_range();
   const Reference& last = node.as_ref3d_cell_end();
-  std::optional<Reference> rewritten_last = is_range ? transform.apply(last) : std::optional<Reference>(last);
-  if (!rewritten_last.has_value()) {
-    return MakeRefError(arena);
+  std::optional<Reference> rewritten_first;
+  std::optional<Reference> rewritten_last;
+  if (transform.preserves_ref3d_coordinates()) {
+    // A 3-D reference applies one coordinate rectangle across a sheet span.
+    // Excel leaves that shared tail unchanged for row/column structural
+    // edits, even when the edited sheet is inside the span or owns the
+    // formula. The transform can still rename the span endpoints below.
+    rewritten_first = first;
+    rewritten_last = last;
+  } else if (is_range) {
+    // A 3-D range tail is one rectangle even though its sheet span lives
+    // outside the two Reference values. Give structural transforms the same
+    // pair-level hook used by ordinary RangeOp nodes so deleting one tail
+    // endpoint shrinks the surviving interval instead of poisoning it.
+    const std::optional<std::pair<Reference, Reference>> rewritten_range = transform.apply_range(first, last);
+    if (!rewritten_range.has_value()) {
+      return MakeRefError(arena);
+    }
+    rewritten_first = rewritten_range->first;
+    rewritten_last = rewritten_range->second;
+  } else {
+    rewritten_first = transform.apply(first);
+    if (!rewritten_first.has_value()) {
+      return MakeRefError(arena);
+    }
+    rewritten_last = last;
   }
 
   // Ref3D stores its sheet span outside Reference, as ExternalRef does. A
@@ -182,6 +214,51 @@ const AstNode* TransformRange(const AstNode& node, Arena& arena, const RefTransf
   // is untouched.
   const AstNode& lhs_node = node.as_range_lhs();
   const AstNode& rhs_node = node.as_range_rhs();
+
+  // A normal A1 range is represented by two Ref nodes. Give the transform a
+  // chance to rewrite the pair as one interval before falling back to the
+  // recursive endpoint walk. This is important for structural deletions:
+  // Excel shrinks `A1:A3` to `A1:A2` when row 1 is deleted instead of
+  // poisoning the whole range because its first endpoint disappeared.
+  //
+  // As with the endpoint walk below, a sheet qualifier on the lhs is
+  // implicitly inherited by a sheet-less rhs. The synthetic qualifier is
+  // stripped after the transform so formatting retains Excel's canonical
+  // `Sheet1!A1:A10` form.
+  if (lhs_node.kind() == NodeKind::Ref && rhs_node.kind() == NodeKind::Ref) {
+    const Reference& lhs_orig = lhs_node.as_ref();
+    const Reference& rhs_orig = rhs_node.as_ref();
+    const bool inherit_rhs_sheet = !lhs_orig.sheet.empty() && rhs_orig.sheet.empty();
+    Reference rhs_for_transform = rhs_orig;
+    if (inherit_rhs_sheet) {
+      rhs_for_transform.sheet = lhs_orig.sheet;
+      rhs_for_transform.sheet_quoted = lhs_orig.sheet_quoted;
+    }
+
+    const std::optional<std::pair<Reference, Reference>> rewritten = transform.apply_range(lhs_orig, rhs_for_transform);
+    if (!rewritten.has_value()) {
+      return MakeRefError(arena);
+    }
+    Reference rewritten_lhs = rewritten->first;
+    Reference rewritten_rhs = rewritten->second;
+    if (inherit_rhs_sheet && rewritten_rhs.sheet == rewritten_lhs.sheet) {
+      rewritten_rhs.sheet = {};
+      rewritten_rhs.sheet_quoted = false;
+    }
+
+    const bool lhs_unchanged = SameReference(lhs_orig, rewritten_lhs);
+    const bool rhs_unchanged = SameReference(rhs_orig, rewritten_rhs);
+    if (lhs_unchanged && rhs_unchanged) {
+      return &node;
+    }
+    AstNode* lhs = make_ref(arena, rewritten_lhs);
+    AstNode* rhs = make_ref(arena, rewritten_rhs);
+    if (lhs == nullptr || rhs == nullptr) {
+      return nullptr;
+    }
+    return make_range_op(arena, lhs, rhs);
+  }
+
   const AstNode* lhs = TransformNode(lhs_node, arena, transform);
   if (lhs == nullptr) {
     return nullptr;

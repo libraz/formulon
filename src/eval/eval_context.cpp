@@ -270,13 +270,11 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     const EvalContext child_ctx = this->with_formula_cell(prefix.row, prefix.col);
     result = evaluate(*root, arena, registry, child_ctx);
 
-    // If the recursive formula produced an Array AND the target cell lives
-    // on the sheet we are authorised to mutate, commit the spill now and
-    // memoise the resulting scalar (anchor cell value, or #SPILL! on
-    // collision). Cross-sheet recursive arrays are intentionally left
-    // un-spilled here: spill commits across sheets are out of scope and
-    // would mutate a sheet the caller did not opt in to.
-    if (mutable_sheet_ != nullptr && prefix.target_sheet == mutable_sheet_ && result.is_array()) {
+    // Route every mutable recursive result through SpillCommitter. Arrays are
+    // committed as usual; scalar/error results clear any previously committed
+    // or blocked state at the referenced formula anchor. Cross-sheet results
+    // remain read-only because spill commits across sheets are out of scope.
+    if (mutable_sheet_ != nullptr && prefix.target_sheet == mutable_sheet_) {
       result = child_ctx.dispatch_array_result(result);
     }
   }
@@ -294,7 +292,8 @@ Value EvalContext::dispatch_array_result(Value v) const {
   // cell anchor produces an inactive committer, which passes the array
   // through unchanged — preserving the historical behaviour exactly.
   Sheet* anchor_sheet = (mutable_sheet_ != nullptr && has_formula_cell()) ? mutable_sheet_ : nullptr;
-  return SpillCommitter(anchor_sheet, formula_row_, formula_col_).commit(std::move(v));
+  return SpillCommitter(anchor_sheet, formula_row_, formula_col_, spill_release_callback_, spill_release_user_data_)
+      .commit(std::move(v));
 }
 
 Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::Reference& lhs,

@@ -141,10 +141,15 @@ const std::vector<std::string>& sorted_function_names() {
 
 }  // namespace
 
-extern "C" fm_status_t fm_function_metadata(const char* name, fm_locale_t /*locale*/, fm_function_metadata_t* out) {
+extern "C" fm_status_t fm_function_metadata(const char* name, std::int32_t locale, fm_function_metadata_t* out) {
   clear_last_error();
   if (name == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_metadata: NULL argument");
+  }
+  *out = fm_function_metadata_t{};
+  if (locale < FM_LOCALE_EN_US || locale > FM_LOCALE_JA_JP) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_metadata: invalid locale",
+                             "locale=" + std::to_string(locale));
   }
   const auto& reg = formulon::eval::default_registry();
   const auto* def = reg.lookup(std::string_view(name));
@@ -199,11 +204,16 @@ extern "C" fm_status_t fm_function_name_at(std::size_t idx, const char** out_nam
   return 0;
 }
 
-extern "C" fm_status_t fm_function_localize(const char* canonical_name, fm_locale_t /*locale*/,
+extern "C" fm_status_t fm_function_localize(const char* canonical_name, std::int32_t locale,
                                             const char** out_localized) {
   clear_last_error();
   if (canonical_name == nullptr || out_localized == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_function_localize: NULL argument");
+  }
+  *out_localized = nullptr;
+  if (locale < FM_LOCALE_EN_US || locale > FM_LOCALE_JA_JP) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_localize: invalid locale",
+                             "locale=" + std::to_string(locale));
   }
   const char* canonical = resolve_canonical_name(std::string_view(canonical_name));
   if (canonical == nullptr) {
@@ -217,12 +227,17 @@ extern "C" fm_status_t fm_function_localize(const char* canonical_name, fm_local
   return 0;
 }
 
-extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, fm_locale_t /*locale*/,
+extern "C" fm_status_t fm_function_canonicalize(const char* localized_name, std::int32_t locale,
                                                 const char** out_canonical) {
   clear_last_error();
   if (localized_name == nullptr || out_canonical == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_function_canonicalize: NULL argument");
+  }
+  *out_canonical = nullptr;
+  if (locale < FM_LOCALE_EN_US || locale > FM_LOCALE_JA_JP) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_function_canonicalize: invalid locale",
+                             "locale=" + std::to_string(locale));
   }
   // Alias table not yet populated - fall through to a case-insensitive
   // canonical-name match across the registry, lazy, and special-form

@@ -10,7 +10,9 @@
 #include <vector>
 
 #include "eval/compat.h"
+#include "eval/function_registry.h"
 #include "eval/pivot_locale.h"
+#include "eval/recalc_engine.h"
 #include "io/a1_ref.h"
 #include "io/defined_names.h"
 #include "tests/oracle/oracle_runner.h"
@@ -340,6 +342,7 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
   // --- table: fields + axes ------------------------------------------------
   ASSIGN_OR_RETURN(std::vector<std::string> row_fields, string_list(pivot, "row_fields"));
   ASSIGN_OR_RETURN(std::vector<std::string> col_fields, string_list(pivot, "col_fields"));
+  ASSIGN_OR_RETURN(std::vector<std::string> page_fields, string_list(pivot, "page_fields"));
 
   PivotTable table;
   table.set_pivot_cache_id(kBuilderCacheId);
@@ -408,6 +411,16 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
     }
     table.mutable_fields()[idx].axis = PivotAxis::Col;
     table.mutable_col_field_order().push_back(idx);
+  }
+  for (const std::string& name : page_fields) {
+    const std::uint32_t idx = header_index(headers, name);
+    if (idx >= headers.size()) {
+      return invalid("pivot 'page_fields' names a non-source field '" + name + "'");
+    }
+    if (table.mutable_fields()[idx].axis == PivotAxis::Row || table.mutable_fields()[idx].axis == PivotAxis::Col) {
+      return invalid("pivot 'page_fields' overlaps a row/column field '" + name + "'");
+    }
+    table.mutable_fields()[idx].axis = PivotAxis::Page;
   }
 
   // Excel's compact layout (the default) implicitly shows a subtotal
@@ -505,6 +518,120 @@ Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec) {
   out.workbook = std::move(workbook);
   out.cache = std::move(cache);
   out.table = std::move(table);
+  return out;
+}
+
+Expected<std::vector<FormulaProbeResult>, Error> evaluate_pivot_formula_probes(BuiltPivot* built,
+                                                                               const JsonValue& spec) {
+  if (built == nullptr || built->workbook == nullptr) {
+    return invalid("formula probes require a live BuiltPivot workbook");
+  }
+  const JsonValue* pivot_v = spec.find("pivot");
+  if (pivot_v == nullptr || !pivot_v->is_object()) {
+    return invalid("formula probes require a pivot block");
+  }
+  const JsonValue* probes_v = pivot_v->find("formula_probes");
+  if (probes_v == nullptr || probes_v->is_null()) {
+    return std::vector<FormulaProbeResult>();
+  }
+  if (!probes_v->is_array() || probes_v->as_array().empty()) {
+    return invalid("pivot 'formula_probes' must be a non-empty array");
+  }
+
+  struct PendingProbe {
+    std::string id;
+    std::string sheet;
+    std::string address;
+    std::string formula;
+    std::uint32_t row = 0;
+    std::uint32_t col = 0;
+  };
+  std::vector<PendingProbe> pending;
+  pending.reserve(probes_v->as_array().size());
+  std::vector<std::string> seen_ids;
+  for (std::size_t i = 0; i < probes_v->as_array().size(); ++i) {
+    const JsonValue& probe = probes_v->as_array()[i];
+    const std::string where = "pivot/formula_probes/" + std::to_string(i);
+    if (!probe.is_object()) {
+      return invalid(where + ": expected an object");
+    }
+    const JsonValue* id_v = probe.find("id");
+    const JsonValue* cell_v = probe.find("cell");
+    const JsonValue* formula_v = probe.find("formula");
+    if (id_v == nullptr || !id_v->is_string() || id_v->as_string().empty() || cell_v == nullptr ||
+        !cell_v->is_string() || cell_v->as_string().empty() || formula_v == nullptr || !formula_v->is_string() ||
+        formula_v->as_string().empty()) {
+      return invalid(where + ": requires non-empty string id, cell, and formula");
+    }
+    if (std::find(seen_ids.begin(), seen_ids.end(), id_v->as_string()) != seen_ids.end()) {
+      return invalid(where + ": duplicate id '" + id_v->as_string() + "'");
+    }
+    seen_ids.push_back(id_v->as_string());
+    auto [sheet, address] = split_sheet_qualified_addr(cell_v->as_string());
+    if (sheet.empty()) {
+      return invalid(where + "/cell must be sheet-qualified (Sheet!A1)");
+    }
+    PendingProbe item;
+    item.id = id_v->as_string();
+    item.sheet = std::move(sheet);
+    item.address = std::move(address);
+    item.formula = formula_v->as_string();
+    if (!a1_to_row_col(item.address, &item.row, &item.col)) {
+      return invalid(where + "/cell has a malformed A1 address");
+    }
+    pending.push_back(std::move(item));
+  }
+
+  const JsonValue* anchor_v = pivot_v->find("anchor");
+  if (anchor_v == nullptr || !anchor_v->is_string()) {
+    return invalid("pivot block missing string 'anchor'");
+  }
+  auto [anchor_sheet_name, anchor_address] = split_sheet_qualified_addr(anchor_v->as_string());
+  std::uint32_t anchor_row = 0;
+  std::uint32_t anchor_col = 0;
+  if (anchor_sheet_name.empty() || !a1_to_row_col(anchor_address, &anchor_row, &anchor_col)) {
+    return invalid("pivot 'anchor' has a malformed sheet-qualified A1 address");
+  }
+  const std::size_t anchor_sheet = built->workbook->sheet_index_by_name(anchor_sheet_name);
+  if (anchor_sheet == static_cast<std::size_t>(-1)) {
+    return invalid("pivot 'anchor' names an unknown sheet '" + anchor_sheet_name + "'");
+  }
+  for (const PendingProbe& probe : pending) {
+    if (built->workbook->sheet_index_by_name(probe.sheet) == static_cast<std::size_t>(-1)) {
+      return invalid("formula probe '" + probe.id + "' names an unknown sheet '" + probe.sheet + "'");
+    }
+  }
+
+  // The declarative builder leaves span rows/cols at zero because the grid
+  // verifier derives the extent from the rendered result. GETPIVOTDATA's
+  // anchor lookup is structural, so give the attached table the remaining
+  // sheet rectangle; this mirrors Excel's PivotTable range for all probes
+  // without hard-coding a fixture-specific output size.
+  built->table.set_anchor(anchor_row, anchor_col, Sheet::kMaxRows - anchor_row, Sheet::kMaxCols - anchor_col);
+  auto cache = std::make_unique<PivotCache>(std::move(built->cache));
+  auto table = std::make_unique<PivotTable>(std::move(built->table));
+  built->workbook->add_pivot_cache(std::move(cache));
+  built->workbook->sheet(anchor_sheet).add_pivot_table(std::move(table));
+
+  for (const PendingProbe& probe : pending) {
+    const std::size_t sheet_index = built->workbook->sheet_index_by_name(probe.sheet);
+    auto stored = built->workbook->set_cell_formula(sheet_index, probe.row, probe.col, probe.formula);
+    if (!stored) {
+      return invalid("formula probe '" + probe.id + "' could not be stored: " + stored.error().message);
+    }
+  }
+  auto recalculated = built->workbook->recalc(eval::default_registry());
+  if (!recalculated) {
+    return invalid("formula probe recalc failed: " + recalculated.error().message);
+  }
+
+  std::vector<FormulaProbeResult> out;
+  out.reserve(pending.size());
+  for (const PendingProbe& probe : pending) {
+    const std::size_t sheet_index = built->workbook->sheet_index_by_name(probe.sheet);
+    const Value value = built->workbook->sheet(sheet_index).resolve_cell_value(probe.row, probe.col);
+    out.push_back(FormulaProbeResult{probe.id, value});
+  }
   return out;
 }
 

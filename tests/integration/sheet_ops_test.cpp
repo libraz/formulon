@@ -817,6 +817,243 @@ TEST(WorkbookRowColEdits, DeleteRowsCollapsesReferencesInsideInterval) {
   EXPECT_EQ(s.cell_at(0, 1)->formula_text, "=A5+A2");
 }
 
+TEST(WorkbookRowColEdits, DeleteRowsShrinksRangeAtFirstLastAndMiddle) {
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 10, 0, "=SUM(A1:A3)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/0, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(9, 0), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(9, 0)->formula_text, "=SUM(A1:A2)");
+  }
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 10, 0, "=SUM(A1:A3)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/2, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(9, 0), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(9, 0)->formula_text, "=SUM(A1:A2)");
+  }
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 10, 0, "=SUM(A1:A5)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/2, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(9, 0), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(9, 0)->formula_text, "=SUM(A1:A4)");
+  }
+}
+
+TEST(WorkbookRowColEdits, DeleteRowsCollapsesSingletonAndShrinksWholeRowRange) {
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 10, 0, "=SUM(A2:A2)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/1, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(9, 0), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(9, 0)->formula_text, "=SUM(#REF!)");
+  }
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 10, 0, "=SUM(1:4)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/1, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(9, 0), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(9, 0)->formula_text, "=SUM(1:3)");
+  }
+}
+
+TEST(WorkbookRowColEdits, DeleteRowsCollapsesFullyDeletedMultiCellRange) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 10, 0, "=SUM(A2:A4)")));
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/1, /*count=*/3)));
+  ASSERT_NE(wb.sheet(0).cell_at(7, 0), nullptr);
+  EXPECT_EQ(wb.sheet(0).cell_at(7, 0)->formula_text, "=SUM(#REF!)");
+}
+
+TEST(WorkbookRowColEdits, DeleteRowsShrunkRangeRecalculatesAfterSurvivorChange) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(20.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 2, 0, Value::number(30.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 3, 0, Value::number(40.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 6, 3, "=SUM(A1:A4)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(wb.sheet(0).cell_at(6, 3)->cached_value.as_number(), 100.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/0, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0).cell_at(5, 3), nullptr);
+  EXPECT_EQ(wb.sheet(0).cell_at(5, 3)->formula_text, "=SUM(A1:A3)");
+  EXPECT_EQ(wb.sheet(0).cell_at(5, 3)->cached_value.as_number(), 90.0);
+
+  // The surviving dependency at A2 must still point at the moved formula;
+  // changing it and recalculating proves the structural edit rebuilt the
+  // dependency graph rather than merely changing formula text.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(50.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(5, 3)->cached_value.as_number(), 110.0);
+}
+
+TEST(WorkbookRowColEdits, RowDeletesPreserveThreeDReferenceCoordinates) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "First")));
+  wb.add_sheet("Second");
+  wb.add_sheet("Summary");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 9, 0, "=SUM(First:Second!A1:A3)")));
+
+  // Excel 365 16.111.3 keeps the shared 3-D coordinate tail unchanged when
+  // a sheet inside the span is edited.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/0, /*count=*/1)));
+  ASSERT_NE(wb.sheet(2).cell_at(9, 0), nullptr);
+  EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->formula_text, "=SUM(First:Second!A1:A3)");
+
+  // Editing the formula owner moves the formula cell, but still does not
+  // rewrite the 3-D tail.
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(2, /*row=*/0, /*count=*/1)));
+  ASSERT_NE(wb.sheet(2).cell_at(8, 0), nullptr);
+  EXPECT_EQ(wb.sheet(2).cell_at(8, 0)->formula_text, "=SUM(First:Second!A1:A3)");
+}
+
+TEST(WorkbookRowColEdits, ThreeDRowEditsDirtySpanMembersOnly) {
+  auto make_workbook = [] {
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("First");
+    wb.add_sheet("Second");
+    wb.add_sheet("Summary");
+    wb.add_sheet("Outside");
+    for (std::uint32_t row = 0; row < 4U; ++row) {
+      EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0, row, 0, Value::number(static_cast<double>(row + 1U)))));
+    }
+    for (std::uint32_t row = 0; row < 3U; ++row) {
+      EXPECT_TRUE(
+          static_cast<bool>(wb.set_cell_value(1, row, 0, Value::number(static_cast<double>((row + 1U) * 10U)))));
+    }
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 9, 0, "=SUM(First:Second!A1:A3)")));
+    EXPECT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 66.0);
+    return wb;
+  };
+
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/0, /*count=*/1)));
+    auto stats = wb.recalc(eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(stats));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->formula_text, "=SUM(First:Second!A1:A3)");
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 69.0);
+    EXPECT_EQ(stats.value().cells_evaluated, 1U);
+  }
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(1, /*row=*/0, /*count=*/1)));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 56.0);
+  }
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, /*row=*/0, /*count=*/1)));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 63.0);
+  }
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.insert_rows(1, /*row=*/0, /*count=*/1)));
+    auto stats = wb.recalc(eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(stats));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 36.0);
+    EXPECT_EQ(stats.value().cells_evaluated, 1U);
+  }
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.insert_rows(3, /*row=*/0, /*count=*/1)));
+    auto stats = wb.recalc(eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(stats));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 66.0);
+    EXPECT_EQ(stats.value().cells_evaluated, 0U);
+  }
+}
+
+TEST(WorkbookRowColEdits, ThreeDDefinedNamesAndNamedLambdasRecalculateAfterRowEdit) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("First");
+  wb.add_sheet("Second");
+  wb.add_sheet("Summary");
+  wb.set_defined_names({
+      io::DefinedName{"Inner", "SUM(First:Second!A1:A3)", -1, false, ""},
+      io::DefinedName{"Outer", "Inner+0", -1, false, ""},
+      io::DefinedName{"F", "LAMBDA(x,Outer+x)", -1, false, ""},
+  });
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, row, 0, Value::number(static_cast<double>(row + 1U)))));
+  }
+  for (std::uint32_t row = 0; row < 3U; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, row, 0, Value::number(static_cast<double>((row + 1U) * 10U)))));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 9, 0, "=Outer")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 10, 0, "=F(2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 11, 0, "=A10+A11")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(2).cell_at(9, 0)->cached_value.is_number())
+      << wb.sheet(2).cell_at(9, 0)->cached_value.debug_to_string();
+  ASSERT_TRUE(wb.sheet(2).cell_at(10, 0)->cached_value.is_number())
+      << wb.sheet(2).cell_at(10, 0)->cached_value.debug_to_string();
+  ASSERT_TRUE(wb.sheet(2).cell_at(11, 0)->cached_value.is_number())
+      << wb.sheet(2).cell_at(11, 0)->cached_value.debug_to_string();
+  EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 66.0);
+  EXPECT_EQ(wb.sheet(2).cell_at(10, 0)->cached_value.as_number(), 68.0);
+  EXPECT_EQ(wb.sheet(2).cell_at(11, 0)->cached_value.as_number(), 134.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/0, /*count=*/1)));
+  auto stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 69.0);
+  EXPECT_EQ(wb.sheet(2).cell_at(10, 0)->cached_value.as_number(), 71.0);
+  EXPECT_EQ(wb.sheet(2).cell_at(11, 0)->cached_value.as_number(), 140.0);
+  EXPECT_EQ(stats.value().cells_evaluated, 3U);
+}
+
+TEST(WorkbookRowColEdits, ThreeDOwnerMoveReordersMovedSourceAndDownstream) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("First");
+  wb.add_sheet("Second");
+  wb.add_sheet("Summary");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 2, 0, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 3, 0, "=1+3")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 5, 0, "=SUM(First:Second!A1:A3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 0, 0, "=First!A6*2")));
+  for (std::uint32_t row = 0; row < 3U; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, row, 0, Value::number(static_cast<double>((row + 1U) * 10U)))));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(wb.sheet(0).cell_at(5, 0)->cached_value.as_number(), 66.0);
+  ASSERT_EQ(wb.sheet(2).cell_at(0, 0)->cached_value.as_number(), 132.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/0, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(4, 0)->formula_text, "=SUM(First:Second!A1:A3)");
+  EXPECT_EQ(wb.sheet(0).cell_at(4, 0)->cached_value.as_number(), 69.0);
+  EXPECT_EQ(wb.sheet(2).cell_at(0, 0)->formula_text, "=First!A5*2");
+  EXPECT_EQ(wb.sheet(2).cell_at(0, 0)->cached_value.as_number(), 138.0);
+}
+
+TEST(WorkbookRowColEdits, ThreeDOwnerDeletedByEditIsDroppedFromRegistry) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("First");
+  wb.add_sheet("Second");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 1, 0, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 2, 0, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 3, 0, "=SUM(First:Second!A1:A3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 0, 0, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 1, 0, Value::number(20.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1, 2, 0, Value::number(30.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(wb.sheet(0).cell_at(3, 0)->cached_value.as_number(), 66.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/3, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  const Cell* deleted = wb.sheet(0).cell_at(3, 0);
+  EXPECT_TRUE(deleted == nullptr || deleted->formula_text.empty());
+}
+
 TEST(WorkbookRowColEdits, InsertColsShiftsCellsAcrossRow) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(1.0))));
@@ -853,6 +1090,178 @@ TEST(WorkbookRowColEdits, DeleteColsRewritesFormulaAndDropsCell) {
   // to #REF! because every range / sum endpoint that lands inside the
   // deletion poisons its enclosing expression.
   EXPECT_EQ(s.cell_at(0, 3)->formula_text, "=#REF!+#REF!+C1");
+}
+
+TEST(WorkbookRowColEdits, DeleteColsShrinksRangeAtFirstLastAndMiddle) {
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 10, "=SUM(A1:D1)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/0, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(0, 9), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(0, 9)->formula_text, "=SUM(A1:C1)");
+  }
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 10, "=SUM(A1:D1)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/3, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(0, 9), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(0, 9)->formula_text, "=SUM(A1:C1)");
+  }
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 10, "=SUM(A1:F1)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/2, /*count=*/2)));
+    ASSERT_NE(wb.sheet(0).cell_at(0, 8), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(0, 8)->formula_text, "=SUM(A1:D1)");
+  }
+}
+
+TEST(WorkbookRowColEdits, DeleteColsCollapsesSingletonAndShrinksWholeColumnRange) {
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 10, "=SUM(B1:B1)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/1, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(0, 9), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(0, 9)->formula_text, "=SUM(#REF!)");
+  }
+  {
+    Workbook wb = Workbook::create();
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 10, "=SUM(A:D)")));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/1, /*count=*/1)));
+    ASSERT_NE(wb.sheet(0).cell_at(0, 9), nullptr);
+    EXPECT_EQ(wb.sheet(0).cell_at(0, 9)->formula_text, "=SUM(A:C)");
+  }
+}
+
+TEST(WorkbookRowColEdits, DeleteColsCollapsesFullyDeletedMultiCellRange) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0, 10, "=SUM(B1:D1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/1, /*count=*/3)));
+  ASSERT_NE(wb.sheet(0).cell_at(0, 7), nullptr);
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 7)->formula_text, "=SUM(#REF!)");
+}
+
+TEST(WorkbookRowColEdits, ThreeDColumnEditsDirtySpanMembersOnly) {
+  auto make_workbook = [] {
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("First");
+    wb.add_sheet("Second");
+    wb.add_sheet("Summary");
+    wb.add_sheet("Outside");
+    for (std::uint32_t col = 0; col < 4U; ++col) {
+      EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, col, Value::number(static_cast<double>(col + 1U)))));
+    }
+    for (std::uint32_t col = 0; col < 3U; ++col) {
+      EXPECT_TRUE(
+          static_cast<bool>(wb.set_cell_value(1, 0, col, Value::number(static_cast<double>((col + 1U) * 10U)))));
+    }
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 9, 0, "=SUM(First:Second!A1:C1)")));
+    EXPECT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 66.0);
+    return wb;
+  };
+
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/0, /*count=*/1)));
+    auto stats = wb.recalc(eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(stats));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->formula_text, "=SUM(First:Second!A1:C1)");
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 69.0);
+    EXPECT_EQ(stats.value().cells_evaluated, 1U);
+  }
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cols(1, /*col=*/0, /*count=*/1)));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 56.0);
+  }
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.insert_cols(0, /*col=*/0, /*count=*/1)));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 63.0);
+  }
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.insert_cols(1, /*col=*/0, /*count=*/1)));
+    auto stats = wb.recalc(eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(stats));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 36.0);
+    EXPECT_EQ(stats.value().cells_evaluated, 1U);
+  }
+  {
+    Workbook wb = make_workbook();
+    ASSERT_TRUE(static_cast<bool>(wb.insert_cols(3, /*col=*/0, /*count=*/1)));
+    auto stats = wb.recalc(eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(stats));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 66.0);
+    EXPECT_EQ(stats.value().cells_evaluated, 0U);
+  }
+}
+
+TEST(WorkbookRowColEdits, ThreeDWholeAxisEditsRecalculate) {
+  {
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("First");
+    wb.add_sheet("Second");
+    wb.add_sheet("Summary");
+    for (std::uint32_t row = 0; row < 4U; ++row) {
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, row, 0, Value::number(static_cast<double>(row + 1U)))));
+    }
+    for (std::uint32_t row = 0; row < 3U; ++row) {
+      ASSERT_TRUE(
+          static_cast<bool>(wb.set_cell_value(1, row, 0, Value::number(static_cast<double>((row + 1U) * 10U)))));
+    }
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 9, 0, "=SUM(First:Second!A:A)")));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    ASSERT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 70.0);
+
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, /*row=*/0, /*count=*/1)));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 69.0);
+  }
+  {
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("First");
+    wb.add_sheet("Second");
+    wb.add_sheet("Summary");
+    for (std::uint32_t col = 0; col < 4U; ++col) {
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, col, Value::number(static_cast<double>(col + 1U)))));
+    }
+    for (std::uint32_t col = 0; col < 3U; ++col) {
+      ASSERT_TRUE(
+          static_cast<bool>(wb.set_cell_value(1, 0, col, Value::number(static_cast<double>((col + 1U) * 10U)))));
+    }
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 9, 0, "=SUM(First:Second!1:1)")));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    ASSERT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 70.0);
+
+    ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/0, /*count=*/1)));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(2).cell_at(9, 0)->cached_value.as_number(), 69.0);
+  }
+}
+
+TEST(WorkbookRowColEdits, DeleteColsShrunkRangeRecalculatesAfterSurvivorChange) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 1, Value::number(20.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 2, Value::number(30.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 3, Value::number(40.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 5, 6, "=SUM(A1:D1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_EQ(wb.sheet(0).cell_at(5, 6)->cached_value.as_number(), 100.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(0, /*col=*/0, /*count=*/1)));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_NE(wb.sheet(0).cell_at(5, 5), nullptr);
+  EXPECT_EQ(wb.sheet(0).cell_at(5, 5)->formula_text, "=SUM(A1:C1)");
+  EXPECT_EQ(wb.sheet(0).cell_at(5, 5)->cached_value.as_number(), 90.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 1, Value::number(50.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(wb.sheet(0).cell_at(5, 5)->cached_value.as_number(), 110.0);
 }
 
 TEST(WorkbookRowColEdits, InsertRowsShiftsMergeRanges) {

@@ -251,5 +251,37 @@ TEST(PartialRecalc, ViewportClampedToSheetExtent) {
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 14.0);
 }
 
+TEST(PartialRecalc, SpillReleaseRetriesBlockedAnchorInClosureNextWave) {
+  // B1 owns the committed B1:C3 region and A2 owns a blocked A2:B4
+  // footprint. Shrinking B1:C3 to B1:C1 releases A2:B4 while the viewport
+  // includes both producers, so the release must be retried in a second,
+  // dependency-ordered partial wave rather than lost at pass end.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SEQUENCE(E1,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_EQ(CellValue(wb, 0U, 1U, 0U).as_error(), ErrorCode::Spill);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 4U, Value::number(1.0))));
+  SheetCellRange viewport;
+  viewport.sheet_id = 0U;
+  viewport.first_row = 0U;
+  viewport.last_row = 1U;
+  viewport.first_col = 0U;
+  viewport.last_col = 1U;
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), viewport)));
+
+  const Value a2 = CellValue(wb, 0U, 1U, 0U);
+  const Value b4 = wb.sheet(0).resolve_cell_value(3U, 1U);
+  ASSERT_TRUE(a2.is_number()) << "A2 kind=" << static_cast<int>(a2.kind());
+  ASSERT_TRUE(b4.is_number()) << "B4 kind=" << static_cast<int>(b4.kind());
+  EXPECT_DOUBLE_EQ(a2.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(b4.as_number(), 6.0);
+  EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
 }  // namespace
 }  // namespace formulon::eval

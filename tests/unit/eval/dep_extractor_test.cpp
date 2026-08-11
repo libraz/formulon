@@ -490,6 +490,128 @@ TEST(DepExtractor, NameRefVolatileBodyPropagates) {
   EXPECT_TRUE(deps.cell_deps.empty());
 }
 
+TEST(DepExtractor, NamedLambdaBodyCellsAndVolatilityAreExpandedOnce) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({io::DefinedName{"Named", "LAMBDA(x,x+A1+RAND())", -1, false, ""}});
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Named(5)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_TRUE(deps.is_volatile);
+  ASSERT_EQ(deps.cell_deps.size(), 1U);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1
+}
+
+TEST(DepExtractor, ThreeDSpanMetadataIsNormalizedAndDeduplicatedAcrossExpansion) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "First")));
+  wb.add_sheet("Second");
+  wb.add_sheet("Third");
+  wb.set_defined_names({
+      io::DefinedName{"Inner", "First:Second!A1:A3", -1, false, ""},
+      io::DefinedName{"Outer", "Inner", -1, false, ""},
+      io::DefinedName{"F", "LAMBDA(x,SUM(Outer)+x)", -1, false, ""},
+  });
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(First:Second!A1:A3)+SUM(Second:First!A1:A3)+SUM(Outer)+F(0)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+
+  ASSERT_EQ(deps.three_d_spans.size(), 1U);
+  EXPECT_EQ(deps.three_d_spans[0], (ThreeDSheetSpanDependency{0U, 1U}));
+}
+
+TEST(DepExtractor, ThreeDSpanMetadataIncludesWholeAxisReferences) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "First")));
+  wb.add_sheet("Second");
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(First:Second!A:A)+SUM(First:Second!1:1)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+
+  ASSERT_EQ(deps.three_d_spans.size(), 1U);
+  EXPECT_EQ(deps.three_d_spans[0], (ThreeDSheetSpanDependency{0U, 1U}));
+}
+
+TEST(DepExtractor, NamedLambdaParameterShadowsDefinedName) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({
+      io::DefinedName{"x", "B1", -1, false, ""},
+      io::DefinedName{"F", "LAMBDA(x,x+A1)", -1, false, ""},
+  });
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("F(5)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ASSERT_EQ(deps.cell_deps.size(), 1U);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1, not x -> B1
+}
+
+TEST(DepExtractor, NamedLambdaDoesNotInheritCallerLetScope) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({
+      io::DefinedName{"x", "B1", -1, false, ""},
+      io::DefinedName{"F", "LAMBDA(y,y+x)", -1, false, ""},
+  });
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("LET(x,A1,F(1))", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  std::vector<CellNodeId> expected = {
+      CellNodeId{0U, 0U, 0U},  // LET initializer A1
+      CellNodeId{0U, 0U, 1U},  // defined x -> B1 inside F
+  };
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, NamedLambdaRecursiveBodyIsFinite) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({io::DefinedName{"Fact", "LAMBDA(n,IF(n<=1,1,n*Fact(n-1)+A1))", -1, false, ""}});
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Fact(5)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ASSERT_EQ(deps.cell_deps.size(), 1U);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1, one body expansion
+}
+
+TEST(DepExtractor, LetBoundLambdaBodyIsExpandedOnCall) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("LET(f,LAMBDA(x,A1+x),f(1))", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ASSERT_EQ(deps.cell_deps.size(), 1U);
+  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 0U, 0U}));  // A1 in invoked body
+}
+
+TEST(DepExtractor, NamedLambdaExpansionRestoresCallerLetBindings) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({io::DefinedName{"Named", "LAMBDA(x,x+A1)", -1, false, ""}});
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("LET(f,LAMBDA(x,B1+x),Named(1)+f(2))", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  std::vector<CellNodeId> expected = {
+      CellNodeId{0U, 0U, 0U},  // Named body A1
+      CellNodeId{0U, 0U, 1U},  // caller LET lambda body B1
+  };
+  EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
+}
+
+TEST(DepExtractor, LambdaNamesShadowBuiltinVolatility) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({io::DefinedName{"NOW", "LAMBDA(x,x+1)", -1, false, ""}});
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("LET(RAND,LAMBDA(x,x),NOW(1)+RAND(2))", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+}
+
 TEST(DepExtractor, NameRefCaseInsensitive) {
   Workbook wb = Workbook::create();
   // Defined name authored as `Foo`; the formula references `foo` (lowercase).

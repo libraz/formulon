@@ -385,7 +385,7 @@ JsStatus JsWorkbook::pivotSetLayout(uint32_t sheet, uint32_t pivotIdx, uint32_t 
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_status_t rc = fm_workbook_pivot_set_layout(handle_, sheet, pivotIdx, static_cast<fm_pivot_layout_t>(layout));
+  fm_status_t rc = fm_workbook_pivot_set_layout(handle_, sheet, pivotIdx, static_cast<std::int32_t>(layout));
   return status_from_rc(rc);
 }
 
@@ -443,7 +443,7 @@ JsStatus JsWorkbook::pivotFieldSetAxis(uint32_t sheet, uint32_t pivotIdx, uint32
     return error_status(7000);
   }
   fm_status_t rc =
-      fm_workbook_pivot_field_set_axis(handle_, sheet, pivotIdx, fieldIdx, static_cast<fm_pivot_axis_t>(axis));
+      fm_workbook_pivot_field_set_axis(handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(axis));
   return status_from_rc(rc);
 }
 
@@ -469,8 +469,8 @@ JsStatus JsWorkbook::pivotFieldAddAggregation(uint32_t sheet, uint32_t pivotIdx,
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_status_t rc = fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivotIdx, fieldIdx,
-                                                           static_cast<fm_pivot_aggregation_t>(agg));
+  fm_status_t rc =
+      fm_workbook_pivot_field_add_aggregation(handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(agg));
   return status_from_rc(rc);
 }
 
@@ -513,8 +513,8 @@ JsStatus JsWorkbook::pivotFieldAddSubtotalFn(uint32_t sheet, uint32_t pivotIdx, 
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_status_t rc = fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivotIdx, fieldIdx,
-                                                           static_cast<fm_pivot_aggregation_t>(agg));
+  fm_status_t rc =
+      fm_workbook_pivot_field_add_subtotal_fn(handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(agg));
   return status_from_rc(rc);
 }
 
@@ -531,9 +531,9 @@ JsStatus JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIdx, u
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_status_t rc = fm_workbook_pivot_field_set_date_group(
-      handle_, sheet, pivotIdx, fieldIdx, static_cast<fm_pivot_date_grouping_t>(granularity),
-      static_cast<fm_pivot_calendar_t>(calendar), startYear, endYear);
+  fm_status_t rc =
+      fm_workbook_pivot_field_set_date_group(handle_, sheet, pivotIdx, fieldIdx, static_cast<std::int32_t>(granularity),
+                                             static_cast<std::int32_t>(calendar), startYear, endYear);
   return status_from_rc(rc);
 }
 

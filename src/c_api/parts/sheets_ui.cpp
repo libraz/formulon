@@ -132,7 +132,10 @@ extern "C" fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, std::uint32_t sheet
   m.first_col = (merge.first_col < merge.last_col) ? merge.first_col : merge.last_col;
   m.last_row = (merge.first_row < merge.last_row) ? merge.last_row : merge.first_row;
   m.last_col = (merge.first_col < merge.last_col) ? merge.last_col : merge.first_col;
-  wb->workbook().sheet(sheet).mutable_merges().push_back(m);
+  const auto result = wb->workbook().add_merge(sheet, m);
+  if (!result) {
+    return formulon::c_api::parts::set_last_error(result.error());
+  }
   return 0;
 }
 
@@ -147,13 +150,10 @@ extern "C" fm_status_t fm_sheet_remove_merge(fm_workbook_t* wb, std::uint32_t sh
   q.first_col = (range.first_col < range.last_col) ? range.first_col : range.last_col;
   q.last_row = (range.first_row < range.last_row) ? range.last_row : range.first_row;
   q.last_col = (range.first_col < range.last_col) ? range.last_col : range.first_col;
-  auto& merges = wb->workbook().sheet(sheet).mutable_merges();
-  merges.erase(std::remove_if(merges.begin(), merges.end(),
-                              [&](const formulon::MergeRange& a) {
-                                return !(a.last_row < q.first_row || q.last_row < a.first_row ||
-                                         a.last_col < q.first_col || q.last_col < a.first_col);
-                              }),
-               merges.end());
+  const auto result = wb->workbook().remove_merges_intersecting(sheet, q);
+  if (!result) {
+    return formulon::c_api::parts::set_last_error(result.error());
+  }
   return 0;
 }
 
@@ -162,13 +162,10 @@ extern "C" fm_status_t fm_sheet_remove_merge_at(fm_workbook_t* wb, std::uint32_t
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_remove_merge_at"); rc != 0) {
     return rc;
   }
-  auto& merges = wb->workbook().sheet(sheet).mutable_merges();
-  if (static_cast<std::size_t>(index) >= merges.size()) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_remove_merge_at: index out of range",
-                             "index=" + std::to_string(index) + " count=" + std::to_string(merges.size()));
+  const auto result = wb->workbook().remove_merge_at(sheet, index);
+  if (!result) {
+    return formulon::c_api::parts::set_last_error(result.error());
   }
-  merges.erase(merges.begin() + static_cast<std::ptrdiff_t>(index));
   return 0;
 }
 
@@ -177,7 +174,10 @@ extern "C" fm_status_t fm_sheet_clear_merges(fm_workbook_t* wb, std::uint32_t sh
   if (auto rc = check_sheet_u32(wb, sheet, "fm_sheet_clear_merges"); rc != 0) {
     return rc;
   }
-  wb->workbook().sheet(sheet).mutable_merges().clear();
+  const auto result = wb->workbook().clear_merges(sheet);
+  if (!result) {
+    return formulon::c_api::parts::set_last_error(result.error());
+  }
   return 0;
 }
 

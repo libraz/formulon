@@ -33,6 +33,128 @@
 #include "workbook.h"
 
 namespace formulon::eval {
+namespace {
+
+struct SpillReleaseQueue {
+  const Workbook* workbook = nullptr;
+  std::mutex mutex;
+  std::vector<CellNodeId> anchors;
+  std::unordered_set<CellNodeId, CellNodeIdHash> queued;
+
+  explicit SpillReleaseQueue(const Workbook* owner) : workbook(owner) {}
+
+  std::vector<CellNodeId> take() {
+    std::lock_guard<std::mutex> guard(mutex);
+    std::vector<CellNodeId> out;
+    out.swap(anchors);
+    queued.clear();
+    return out;
+  }
+};
+
+void queue_spill_release(void* raw, const Sheet& sheet, std::uint32_t first_row, std::uint32_t first_col,
+                         std::uint32_t rows, std::uint32_t cols) noexcept {
+  auto* queue = static_cast<SpillReleaseQueue*>(raw);
+  if (queue == nullptr || queue->workbook == nullptr) {
+    return;
+  }
+  std::size_t sheet_index = queue->workbook->sheet_count();
+  for (std::size_t i = 0; i < queue->workbook->sheet_count(); ++i) {
+    if (&queue->workbook->sheet(i) == &sheet) {
+      sheet_index = i;
+      break;
+    }
+  }
+  if (sheet_index >= queue->workbook->sheet_count()) {
+    return;
+  }
+  const std::vector<CellAddress> anchors = sheet.blocked_spill_anchors_intersecting(first_row, first_col, rows, cols);
+  std::lock_guard<std::mutex> guard(queue->mutex);
+  for (const CellAddress anchor : anchors) {
+    const CellNodeId node{static_cast<std::uint16_t>(sheet_index), anchor.row, anchor.col};
+    if (queue->queued.insert(node).second) {
+      queue->anchors.push_back(node);
+    }
+  }
+}
+
+// A release wave is allowed to change the blocked footprint set while it
+// wakes producers. If the same set comes back unchanged, however, the
+// release is not making progress (a common example is a volatile producer
+// that re-commits the same spill while another producer remains blocked).
+// Keep the comparison independent of unordered-map iteration order so the
+// guard is deterministic across native and parallel schedulers.
+struct BlockedSpillState {
+  std::uint16_t sheet_id = 0;
+  BlockedSpillFootprint footprint;
+
+  bool operator==(const BlockedSpillState& other) const noexcept {
+    return sheet_id == other.sheet_id && footprint.anchor_row == other.footprint.anchor_row &&
+           footprint.anchor_col == other.footprint.anchor_col && footprint.rows == other.footprint.rows &&
+           footprint.cols == other.footprint.cols;
+  }
+};
+
+std::vector<BlockedSpillState> snapshot_blocked_spills(const Workbook& workbook) {
+  std::vector<BlockedSpillState> state;
+  for (std::size_t sheet_id = 0; sheet_id < workbook.sheet_count(); ++sheet_id) {
+    for (const BlockedSpillFootprint& footprint : workbook.sheet(sheet_id).blocked_spill_footprints()) {
+      state.push_back(BlockedSpillState{static_cast<std::uint16_t>(sheet_id), footprint});
+    }
+  }
+  std::sort(state.begin(), state.end(), [](const BlockedSpillState& lhs, const BlockedSpillState& rhs) {
+    if (lhs.sheet_id != rhs.sheet_id) {
+      return lhs.sheet_id < rhs.sheet_id;
+    }
+    if (lhs.footprint.anchor_row != rhs.footprint.anchor_row) {
+      return lhs.footprint.anchor_row < rhs.footprint.anchor_row;
+    }
+    if (lhs.footprint.anchor_col != rhs.footprint.anchor_col) {
+      return lhs.footprint.anchor_col < rhs.footprint.anchor_col;
+    }
+    if (lhs.footprint.rows != rhs.footprint.rows) {
+      return lhs.footprint.rows < rhs.footprint.rows;
+    }
+    return lhs.footprint.cols < rhs.footprint.cols;
+  });
+  return state;
+}
+
+std::vector<CellNodeId> canonical_release_targets(const std::vector<CellNodeId>& targets) {
+  // The target set is part of progress: an unchanged blocked geometry may
+  // still be making progress when a different producer is woken. Formula
+  // values are intentionally not compared here because collision state is
+  // represented by the spill/merge/occupied-cell geometry; literal edits
+  // update the release targets through the workbook mutator.
+  std::vector<CellNodeId> sorted = targets;
+  std::sort(sorted.begin(), sorted.end(), [](const CellNodeId& lhs, const CellNodeId& rhs) {
+    if (lhs.sheet_id != rhs.sheet_id) {
+      return lhs.sheet_id < rhs.sheet_id;
+    }
+    if (lhs.row != rhs.row) {
+      return lhs.row < rhs.row;
+    }
+    return lhs.col < rhs.col;
+  });
+  return sorted;
+}
+
+constexpr std::size_t kMaxSpillReleaseWaves = 4096U;
+constexpr std::size_t kMaxNoProgressSpillWaves = 8U;
+
+void mark_spill_release_wave(const RecalcEngine::LockedMutator& mutator, const std::vector<CellNodeId>& anchors,
+                             const DepGraph& graph) {
+  for (const CellNodeId anchor : anchors) {
+    mutator.mark_dirty(anchor);
+    for (const CellNodeId dependent : graph.dependents_of(anchor)) {
+      mutator.mark_dirty(dependent);
+    }
+    mutator.mark_range_dependents_dirty(anchor);
+  }
+}
+
+}  // namespace
+
 // ----------------------------------------------------------------------------
 // RecalcEngine
 // ----------------------------------------------------------------------------
@@ -76,6 +198,29 @@ const DepGraph& RecalcEngine::LockedMutator::dep_graph() const noexcept {
   return engine_.graph_;
 }
 
+std::vector<CellNodeId> RecalcEngine::LockedMutator::three_d_span_owners_covering_sheet(
+    std::uint16_t edited_sheet) const {
+  std::vector<CellNodeId> owners;
+  for (const RegisteredThreeDSpan& entry : engine_.three_d_span_dependencies_) {
+    if (edited_sheet < entry.span.sheet_first || edited_sheet > entry.span.sheet_last) {
+      continue;
+    }
+    if (std::find(owners.begin(), owners.end(), entry.owner) == owners.end()) {
+      owners.push_back(entry.owner);
+    }
+  }
+  std::sort(owners.begin(), owners.end(), [](const CellNodeId& lhs, const CellNodeId& rhs) {
+    if (lhs.sheet_id != rhs.sheet_id) {
+      return lhs.sheet_id < rhs.sheet_id;
+    }
+    if (lhs.row != rhs.row) {
+      return lhs.row < rhs.row;
+    }
+    return lhs.col < rhs.col;
+  });
+  return owners;
+}
+
 // ---------------------------------------------------------------------------
 // Public mutating API: each entry acquires `mutex_` and delegates to the
 // `_locked` body. Internal callers (notably the parallel scheduler) take
@@ -96,6 +241,10 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
       std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
                      [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
       range_dependencies_.end());
+  three_d_span_dependencies_.erase(
+      std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
+                     [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
+      three_d_span_dependencies_.end());
   // Same for the volatile flag — only re-register if the new AST is still
   // volatile.
   volatiles_.unregister_cell(cell);
@@ -103,6 +252,9 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   const ExtractedDeps deps = extract_deps(ast, cell.sheet_id, workbook);
   for (CellNodeId dep : deps.cell_deps) {
     graph_.add_dependency(cell, dep);
+  }
+  for (const ThreeDSheetSpanDependency span : deps.three_d_spans) {
+    three_d_span_dependencies_.push_back(RegisteredThreeDSpan{cell, span});
   }
   for (CellRangeDependency range : deps.range_deps) {
     range_dependencies_.push_back(RegisteredRangeDependency{cell, range});
@@ -154,6 +306,10 @@ void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
       std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
                      [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
       range_dependencies_.end());
+  three_d_span_dependencies_.erase(
+      std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
+                     [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
+      three_d_span_dependencies_.end());
   volatiles_.unregister_cell(cell);
 }
 
@@ -168,6 +324,10 @@ void RecalcEngine::clear_cell_dependencies_locked(CellNodeId cell) {
       std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
                      [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
       range_dependencies_.end());
+  three_d_span_dependencies_.erase(
+      std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
+                     [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
+      three_d_span_dependencies_.end());
   volatiles_.unregister_cell(cell);
 }
 
@@ -191,6 +351,7 @@ void RecalcEngine::mark_range_dependents_dirty_locked(CellNodeId cell) {
 void RecalcEngine::reset_graph_locked() {
   graph_ = DepGraph{};
   range_dependencies_.clear();
+  three_d_span_dependencies_.clear();
   volatiles_.clear();
   dirty_.clear();
 }
@@ -213,7 +374,17 @@ Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const Func
 
 Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, const FunctionRegistry& registry) {
   RecalcStats stats;
+  SpillReleaseQueue release_queue{&workbook};
+  const SpillReleaseCallback release_callback = &queue_spill_release;
+  std::size_t release_waves = 0U;
+  std::size_t no_progress_waves = 0U;
+  std::vector<BlockedSpillState> previous_release_state;
+  std::vector<CellNodeId> previous_release_targets;
+  bool have_previous_release_state = false;
 
+  // Per-wave locals begin after this label and are destroyed on the backward
+  // jump, while the counters, queue, and accumulated stats above persist.
+recalc_next_wave:
   // ---- Phase 1: seed the dirty set with every volatile cell. ----
   // Volatile formulas re-execute every pass even if their inputs are
   // unchanged. Counting them here also reports how many of the eventually-
@@ -297,7 +468,8 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
             continue;  // Defensive — should not happen.
           }
           Sheet& sheet = workbook.sheet(c.sheet_id);
-          sheet.set_cell_cached_value(c.row, c.col, Value::error(ErrorCode::Ref));
+          SpillCommitter committer(&sheet, c.row, c.col, release_callback, &release_queue);
+          sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
           ++stats.cycle_cells;
         }
         continue;
@@ -330,6 +502,8 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
         arena_->reset();
         EvaluateCellOptions opts;
         opts.iterative_mode = true;
+        opts.spill_release_callback = release_callback;
+        opts.spill_release_user_data = &release_queue;
         return evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
       };
       auto commit = [&](CellNodeId c, Value v) {
@@ -394,7 +568,10 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
     //     the write below, so the cached `string_view` does not dangle
     //     when the next cell's evaluation resets the arena.
     arena_->reset();
-    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
+    EvaluateCellOptions opts;
+    opts.spill_release_callback = release_callback;
+    opts.spill_release_user_data = &release_queue;
+    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_, opts);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
     }
@@ -421,12 +598,47 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
       continue;
     }
     arena_->reset();
-    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
+    EvaluateCellOptions opts;
+    opts.spill_release_callback = release_callback;
+    opts.spill_release_user_data = &release_queue;
+    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during recalc");
     }
     sheet.set_cell_cached_value(c.row, c.col, result);
     ++stats.cells_evaluated;
+  }
+
+  // A spill shape change can release cells that blocked a different pending
+  // producer. Keep those anchors for a dependency-ordered next wave instead
+  // of losing them when this pass clears its dirty set.
+  const std::vector<CellNodeId> released = release_queue.take();
+  if (!released.empty()) {
+    ++release_waves;
+    const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
+    const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
+    if (have_previous_release_state && release_state == previous_release_state &&
+        release_targets == previous_release_targets) {
+      ++no_progress_waves;
+    } else {
+      no_progress_waves = 0U;
+    }
+    previous_release_state = release_state;
+    previous_release_targets = release_targets;
+    have_previous_release_state = true;
+    if (release_waves > kMaxSpillReleaseWaves || no_progress_waves >= kMaxNoProgressSpillWaves) {
+      // Do not recurse through an unbounded chain of release waves. Preserve
+      // the existing dirty set (including unrelated work) and keep the
+      // release targets dirty for a caller retry after an external mutation.
+      const LockedMutator mutator = locked_mutator();
+      mark_spill_release_wave(mutator, released, graph_);
+      return make_error(FormulonErrorCode::kGraphScheduleFailed, "spill release waves made no progress",
+                        "dynamic-array spill recovery exceeded its bounded wave budget");
+    }
+    dirty_.clear();
+    const LockedMutator mutator = locked_mutator();
+    mark_spill_release_wave(mutator, released, graph_);
+    goto recalc_next_wave;
   }
 
   // ---- Phase 5: clear the dirty set. ----
@@ -451,6 +663,13 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc(Workbook& workbook, co
 Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,
                                                                  const SheetCellRange& viewport) {
   RecalcStats stats;
+  SpillReleaseQueue release_queue{&workbook};
+  const SpillReleaseCallback release_callback = &queue_spill_release;
+  std::size_t release_waves = 0U;
+  std::size_t no_progress_waves = 0U;
+  std::vector<BlockedSpillState> previous_release_state;
+  std::vector<CellNodeId> previous_release_targets;
+  bool have_previous_release_state = false;
 
   // ---- Phase 0: validate the viewport. ----
   // Empty viewport — collapsed row / column range, or unknown sheet —
@@ -477,6 +696,9 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
     return stats;
   }
 
+  // As in the full pass, this label keeps the release-wave loop iterative;
+  // locals in each wave's body leave scope before the backward jump.
+partial_recalc_next_wave:
   // ---- Phase 1: enumerate the viewport's seed cells. ----
   // Walk the requested rectangle and pull every populated cell into the
   // seed set. Cells outside the sheet's stored extent are silently
@@ -617,7 +839,8 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
             continue;
           }
           Sheet& sheet = workbook.sheet(c.sheet_id);
-          sheet.set_cell_cached_value(c.row, c.col, Value::error(ErrorCode::Ref));
+          SpillCommitter committer(&sheet, c.row, c.col, release_callback, &release_queue);
+          sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
           ++stats.cycle_cells;
         }
         continue;
@@ -635,6 +858,8 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
         arena_->reset();
         EvaluateCellOptions opts;
         opts.iterative_mode = true;
+        opts.spill_release_callback = release_callback;
+        opts.spill_release_user_data = &release_queue;
         return evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
       };
       auto commit = [&](CellNodeId c, Value v) {
@@ -684,7 +909,10 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
       continue;
     }
     arena_->reset();
-    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_);
+    EvaluateCellOptions opts;
+    opts.spill_release_callback = release_callback;
+    opts.spill_release_user_data = &release_queue;
+    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, only.row, only.col, registry, *arena_, opts);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
     }
@@ -712,7 +940,10 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
       continue;
     }
     arena_->reset();
-    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_);
+    EvaluateCellOptions opts;
+    opts.spill_release_callback = release_callback;
+    opts.spill_release_user_data = &release_queue;
+    Value result = evaluate_cell_for_recalc(workbook, sheet, *cell_data, c.row, c.col, registry, *arena_, opts);
     if (arena_->exhausted()) {
       return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during partial recalc");
     }
@@ -734,6 +965,42 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   });
   for (CellNodeId c : to_unmark) {
     dirty_.unmark(c);
+  }
+
+  // A committed spill can release a pending producer while this viewport is
+  // being evaluated. Preserve releases outside the closure for a later full
+  // or overlapping partial pass; releases inside the closure get a true
+  // dependency-ordered next wave before this partial call returns.
+  const std::vector<CellNodeId> released = release_queue.take();
+  if (!released.empty()) {
+    const LockedMutator mutator = locked_mutator();
+    mark_spill_release_wave(mutator, released, graph_);
+    bool release_in_closure = false;
+    for (const CellNodeId anchor : released) {
+      if (closure.count(anchor) != 0U) {
+        release_in_closure = true;
+        break;
+      }
+    }
+    if (release_in_closure) {
+      ++release_waves;
+      const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
+      const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
+      if (have_previous_release_state && release_state == previous_release_state &&
+          release_targets == previous_release_targets) {
+        ++no_progress_waves;
+      } else {
+        no_progress_waves = 0U;
+      }
+      previous_release_state = release_state;
+      previous_release_targets = release_targets;
+      have_previous_release_state = true;
+      if (release_waves > kMaxSpillReleaseWaves || no_progress_waves >= kMaxNoProgressSpillWaves) {
+        return make_error(FormulonErrorCode::kGraphScheduleFailed, "spill release waves made no progress",
+                          "partial dynamic-array spill recovery exceeded its bounded wave budget");
+      }
+      goto partial_recalc_next_wave;
+    }
   }
   return stats;
 }

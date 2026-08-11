@@ -55,6 +55,22 @@ std::string ParseShiftRelativeDump(std::string_view src, std::int32_t row_delta,
   return dump_sexpr(*shifted);
 }
 
+std::string ParseRowColShiftFormula(std::string_view src, RowColAxis axis, RowColEdit edit, std::uint32_t index,
+                                    std::uint32_t count, std::string_view target_sheet = "Sheet1",
+                                    bool local_means_target = true) {
+  Arena arena;
+  const AstNode* root = ParseOrNull(src, arena);
+  if (root == nullptr) {
+    return "<parse-failed>";
+  }
+  RowColShiftTransform transform(target_sheet, axis, edit, index, count, local_means_target);
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  if (shifted == nullptr) {
+    return "<arena-fail>";
+  }
+  return format_formula(*shifted);
+}
+
 // ---------------------------------------------------------------------------
 // shift_relative_refs (legacy wrapper)
 // ---------------------------------------------------------------------------
@@ -132,6 +148,66 @@ TEST(ShiftRelativeRefs, IdentityWalkPreservesPointer) {
   ASSERT_NE(root, nullptr);
   const AstNode* shifted = shift_relative_refs(*root, arena, 5, 5);
   EXPECT_EQ(shifted, root) << "absolute-only refs should round-trip without allocation";
+}
+
+// ---------------------------------------------------------------------------
+// Range-level row/column transforms
+// ---------------------------------------------------------------------------
+
+TEST(ShiftRefsWithRowCol, RowDeleteShrinksFirstEndpoint) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(A1:A3)", RowColAxis::kRow, RowColEdit::kDelete, 0, 1), "SUM(A1:A2)");
+}
+
+TEST(ShiftRefsWithRowCol, RowDeleteShrinksLastEndpoint) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(A1:A3)", RowColAxis::kRow, RowColEdit::kDelete, 2, 1), "SUM(A1:A2)");
+}
+
+TEST(ShiftRefsWithRowCol, RowDeleteShrinksMiddleAndPreservesAbsoluteFlags) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM($A$1:$A$5)", RowColAxis::kRow, RowColEdit::kDelete, 1, 2), "SUM($A$1:$A$3)");
+}
+
+TEST(ShiftRefsWithRowCol, RowDeleteCollapsesSingletonReference) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(A2:A2)", RowColAxis::kRow, RowColEdit::kDelete, 1, 1), "SUM(#REF!)");
+}
+
+TEST(ShiftRefsWithRowCol, RowDeleteCollapsesFullyDeletedMultiCellRange) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(A2:A4)", RowColAxis::kRow, RowColEdit::kDelete, 1, 3), "SUM(#REF!)");
+}
+
+TEST(ShiftRefsWithRowCol, ColDeleteShrinksRange) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(A1:D1)", RowColAxis::kCol, RowColEdit::kDelete, 1, 1), "SUM(A1:C1)");
+}
+
+TEST(ShiftRefsWithRowCol, WholeRowAndColumnRangesShrink) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(1:4)", RowColAxis::kRow, RowColEdit::kDelete, 1, 1), "SUM(1:3)");
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(A:D)", RowColAxis::kCol, RowColEdit::kDelete, 1, 1), "SUM(A:C)");
+}
+
+TEST(ShiftRefsWithRowCol, QualifiedRangeInheritsSheetForBothEndpoints) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet1!A1:A3)", RowColAxis::kRow, RowColEdit::kDelete, 0, 1, "Sheet1", false),
+            "SUM(Sheet1!A1:A2)");
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet2!A1:A3)", RowColAxis::kRow, RowColEdit::kDelete, 0, 1, "Sheet1", false),
+            "SUM(Sheet2!A1:A3)");
+}
+
+TEST(ShiftRefsWithRowCol, StructuralEditsPreserveThreeDCoordinates) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet1:Sheet2!A1:A3)", RowColAxis::kRow, RowColEdit::kDelete, 0, 1, "", true),
+            "SUM(Sheet1:Sheet2!A1:A3)");
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet1:Sheet2!A3)", RowColAxis::kRow, RowColEdit::kDelete, 0, 1, "", true),
+            "SUM(Sheet1:Sheet2!A3)");
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet1:Sheet2!A1:C1)", RowColAxis::kCol, RowColEdit::kDelete, 0, 1, "", true),
+            "SUM(Sheet1:Sheet2!A1:C1)");
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet1:Sheet2!A1:A3)", RowColAxis::kRow, RowColEdit::kInsert, 0, 1, "", true),
+            "SUM(Sheet1:Sheet2!A1:A3)");
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet1:Sheet2!A1:A3)", RowColAxis::kRow, RowColEdit::kDelete, 0, 1, "Sheet1",
+                                    false),
+            "SUM(Sheet1:Sheet2!A1:A3)");
+}
+
+TEST(ShiftRefsWithRowCol, CrossSheetQualifiedRangesOnlyRewriteTargetSheet) {
+  EXPECT_EQ(ParseRowColShiftFormula("=SUM(Sheet1!A1:A3)+SUM(Sheet2!A1:A3)", RowColAxis::kRow, RowColEdit::kDelete, 0, 1,
+                                    "Sheet1", false),
+            "SUM(Sheet1!A1:A2)+SUM(Sheet2!A1:A3)");
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +355,16 @@ TEST(ShiftRefsCustom, FixedColTransformRewritesEveryRef) {
   const AstNode* shifted = shift_refs(*root, arena, transform);
   ASSERT_NE(shifted, nullptr);
   EXPECT_EQ(dump_sexpr(*shifted), "(binary + (ref F1) (ref F2))");
+}
+
+TEST(ShiftRefsCustom, DefaultRangeHookTransformsBothEndpoints) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=A1:B2", arena);
+  ASSERT_NE(root, nullptr);
+  FixedColTransform transform;
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "F1:F2");
 }
 
 }  // namespace

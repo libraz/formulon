@@ -28,6 +28,11 @@
 //     "grand_totals": {"rows": true, "cols": true},
 //     "filters":  [                    // optional manual item filters
 //       {"field": "Region", "hide": ["South"]}
+//     ],
+//     "page_fields": ["Region"],     // optional report-filter fields
+//     "formula_probes": [              // optional post-build formulas
+//       {"id": "page", "cell": "Report!Z1",
+//        "formula": "=GETPIVOTDATA(...)"}
 //     ]
 //   }
 //
@@ -103,6 +108,8 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
@@ -125,6 +132,14 @@ struct BuiltPivot {
   pivot::PivotTable table;
 };
 
+/// One result from a declarative post-build formula probe. The result value
+/// is owned by the workbook/cache retained by the `BuiltPivot` passed to
+/// `evaluate_pivot_formula_probes`.
+struct FormulaProbeResult {
+  std::string id;
+  Value value;
+};
+
 /// Builds a `Workbook` + `PivotCache` + `PivotTable` from a declarative
 /// workbook case `spec`.
 ///
@@ -140,6 +155,16 @@ struct BuiltPivot {
 ///   * a declared row / col / data field name is not a source header.
 ///   * an `agg` string is not one of the recognised aggregation names.
 Expected<BuiltPivot, Error> build_pivot_from_spec(const JsonValue& spec);
+
+/// Attaches the built pivot to its workbook, evaluates every
+/// `pivot.formula_probes` entry, and returns the resulting cell values.
+///
+/// This is a separate post-build step because GETPIVOTDATA observes a
+/// materialised PivotTable, while the rendered-grid verifier can exercise
+/// the evaluator without attaching the table to a workbook. An absent or
+/// empty probe block returns an empty vector without consuming `built`.
+Expected<std::vector<FormulaProbeResult>, Error> evaluate_pivot_formula_probes(BuiltPivot* built,
+                                                                               const JsonValue& spec);
 
 /// The in-memory objects produced from a declarative workbook + print
 /// spec. `workbook` is heap-owned; `sheet_index` is the 0-based index of

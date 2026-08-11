@@ -13,6 +13,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -745,7 +746,7 @@ TEST(FormulonCApi, XlsbReadDiagnosticsExReportsDroppedPartAndInitializesOutputsO
   EXPECT_EQ(dropped, 0U);
 }
 
-TEST(FormulonCApi, XlsbReadDiagnosticsReportsOneDroppedPartFromDeterministicFixture) {
+TEST(FormulonCApi, XlsbReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   BufferGuard bytes;
@@ -761,7 +762,9 @@ TEST(FormulonCApi, XlsbReadDiagnosticsReportsOneDroppedPartFromDeterministicFixt
   ASSERT_EQ(fm_workbook_xlsb_read_diagnostics_ex(loaded.handle, &formulas, &names, &dropped), 0);
   EXPECT_EQ(formulas, 0U);
   EXPECT_EQ(names, 0U);
-  EXPECT_EQ(dropped, 1U);
+  // Unknown package parts are retained as passthrough data, so loading the
+  // fixture is lossless and the dropped-part diagnostic remains zero.
+  EXPECT_EQ(dropped, 0U);
 }
 
 TEST(FormulonCApi, DiagnosticFailuresNameTheInvokedLegacyOrExtendedSymbol) {
@@ -833,10 +836,23 @@ TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  BufferGuard buf;
-  const fm_status_t rc = fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_UNKNOWN, &buf.data, &buf.len);
-  EXPECT_NE(rc, 0);
-  EXPECT_EQ(buf.data, nullptr);
+  const std::int32_t invalid_formats[] = {99, std::numeric_limits<std::int32_t>::min(),
+                                          std::numeric_limits<std::int32_t>::max()};
+  for (const std::int32_t raw : invalid_formats) {
+    BufferGuard buf;
+    EXPECT_EQ(fm_workbook_save_ex(wb.handle, raw, &buf.data, &buf.len),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+    EXPECT_EQ(buf.data, nullptr);
+    EXPECT_EQ(buf.len, 0U);
+    std::size_t downgraded = 99;
+    std::size_t deferred = 99;
+    EXPECT_EQ(fm_workbook_save_ex_with_diagnostics(wb.handle, raw, &buf.data, &buf.len, &downgraded, &deferred),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+    EXPECT_EQ(buf.data, nullptr);
+    EXPECT_EQ(buf.len, 0U);
+    EXPECT_EQ(downgraded, 0U);
+    EXPECT_EQ(deferred, 0U);
+  }
 }
 
 TEST(FormulonCApi, LoadRoutesXlsbBytesToXlsbReader) {

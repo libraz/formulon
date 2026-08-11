@@ -332,7 +332,7 @@ TEST_P(WorkbookOracleTest, Matches) {
   // diff the rendered grid (anchor-relative) against `expect.pivot.grid`.
   auto built_or = build_pivot_from_spec(param.spec);
   ASSERT_TRUE(static_cast<bool>(built_or)) << "build_pivot_from_spec failed: " << built_or.error().message;
-  const BuiltPivot& built = built_or.value();
+  BuiltPivot built = std::move(built_or.value());
 
   auto result_or = pivot::evaluate(built.table, built.cache);
   ASSERT_TRUE(static_cast<bool>(result_or)) << "pivot::evaluate failed: " << result_or.error().message;
@@ -380,6 +380,37 @@ TEST_P(WorkbookOracleTest, Matches) {
     ASSERT_TRUE(inserted) << "duplicate golden pivot cell at (" << it->first.first << ',' << it->first.second << ')';
   }
   EXPECT_EQ(actual, expected) << "rendered pivot grid differs from the golden grid";
+
+  // A formula probe is evaluated only after the pivot has been attached to
+  // the workbook. This is the native counterpart of the Windows driver's
+  // post-build GETPIVOTDATA readback and is what pins page/data-axis routing
+  // once an external Excel golden is available.
+  const JsonValue* pivot_spec = param.spec.find("pivot");
+  const JsonValue* probes_v =
+      pivot_spec != nullptr && pivot_spec->is_object() ? pivot_spec->find("formula_probes") : nullptr;
+  if (probes_v != nullptr) {
+    auto probe_results_or = evaluate_pivot_formula_probes(&built, param.spec);
+    ASSERT_TRUE(static_cast<bool>(probe_results_or))
+        << "evaluate_pivot_formula_probes failed: " << probe_results_or.error().message;
+    const JsonValue* expected_probes = param.expect.find("formula_probes");
+    ASSERT_NE(expected_probes, nullptr) << "golden 'expect' has no 'formula_probes' block";
+    ASSERT_TRUE(expected_probes->is_array()) << "golden 'expect.formula_probes' is not an array";
+    ASSERT_EQ(probe_results_or.value().size(), expected_probes->as_array().size())
+        << "formula probe result count differs from the golden";
+    for (std::size_t i = 0; i < probe_results_or.value().size(); ++i) {
+      const FormulaProbeResult& got = probe_results_or.value()[i];
+      const JsonValue& want = expected_probes->as_array()[i];
+      ASSERT_TRUE(want.is_object()) << "formula probe golden entry is not an object";
+      const JsonValue* id_v = want.find("id");
+      const JsonValue* result_v = want.find("result");
+      ASSERT_NE(id_v, nullptr) << "formula probe golden entry missing 'id'";
+      ASSERT_NE(result_v, nullptr) << "formula probe golden entry missing 'result'";
+      ASSERT_TRUE(id_v->is_string()) << "formula probe golden id is not a string";
+      EXPECT_EQ(got.id, id_v->as_string()) << "formula probe id differs from the golden";
+      EXPECT_EQ(render_value(got.value), render_golden_cell(*result_v))
+          << "formula probe result differs for " << got.id;
+    }
+  }
 }
 
 // Human-readable gtest parameter names so failures show up as

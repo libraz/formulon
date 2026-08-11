@@ -5,7 +5,7 @@
 // `<calcPr calcMode>`.
 
 #include <cstdint>
-#include <cstring>
+#include <limits>
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
@@ -76,16 +76,17 @@ TEST(FormulonCApiCalcMode, IterativeEnabledTogglePreservesConfiguredLimits) {
 TEST(FormulonCApiCalcMode, UnknownModeRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  // Domain is {0, 1, 2}; build an out-of-range value via memcpy because a
-  // direct `static_cast<fm_calc_mode_t>(99)` is unspecified per the standard
-  // (99 sits outside the enum's representable range, which GCC's
-  // -Wconversion correctly flags). The C ABI accepts the raw byte value
-  // regardless and routes it through the validation switch.
-  fm_calc_mode_t bad_mode{};
-  const int raw = 99;
-  std::memcpy(&bad_mode, &raw, sizeof(bad_mode));
-  fm_status_t rc = fm_workbook_set_calc_mode(wb.handle, bad_mode);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  // The setter accepts a raw int32_t so FFI callers can probe the complete
+  // invalid domain without constructing an out-of-domain C enum.
+  const std::int32_t invalid_modes[] = {
+      99,
+      std::numeric_limits<std::int32_t>::min(),
+      std::numeric_limits<std::int32_t>::max(),
+  };
+  for (const std::int32_t raw : invalid_modes) {
+    const fm_status_t rc = fm_workbook_set_calc_mode(wb.handle, raw);
+    EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument)) << raw;
+  }
   // Workbook state should be unchanged after a rejected set.
   fm_calc_mode_t mode = FM_CALC_MODE_MANUAL;
   ASSERT_EQ(fm_workbook_calc_mode(wb.handle, &mode), 0);

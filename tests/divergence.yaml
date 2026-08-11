@@ -715,7 +715,7 @@ entries:
   # unavailable-function surface for the primary Mac target.
   - id: encodeurl_space
     mode: skip-oracle
-    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Windows Excel 365 variant goldens provide live coverage for available-host behavior."
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Historical Windows files are reference-only until a product-verified Microsoft 365 capture is available; no live Windows coverage is asserted here."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
@@ -850,24 +850,11 @@ entries:
     last_verified_excel_version: "16.0"
 
   # -- GROUPBY / PIVOTBY nested subtotals (|total_depth| == 2) -------------
-  # A ±2 total_depth requests per-outer-group subtotal rows in addition to
-  # the grand total. Both functions now build the outer/inner hierarchy over
-  # the first key column and place a subtotal row per outer group on the
-  # same side of its block as the grand total, so
-  # `groupby_subtotal_depth_two` and `pivotby_row_subtotal_depth_two` are no
-  # longer divergences and their entries are gone; the goldens still carry
-  # the old `skipped` marker and need a regeneration run to go live. That
-  # run is also what confirms the ja-JP subtotal-row wording, which is
-  # currently derived from the grand-total label (`<key> 合計`) rather than
-  # captured from a host — see `subtotal_label` in
-  # src/eval/groupby_pivotby/common.cpp.
-  #
-  # PIVOTBY subtotal COLUMNS (|col_total_depth| == 2) remain unimplemented:
-  # they insert an extra value-wide block per outer column group, which
-  # reshapes every column index in the layout. A ±2 column request still
-  # falls back to the ±1 grand-total-only layout behind the
-  # eval.pivotby.subtotals_unsupported warning. No oracle case covers that
-  # shape yet, so there is no entry to record here.
+  # Both functions build the outer/inner hierarchy over the first key
+  # column. PIVOTBY also emits value-wide subtotal blocks for every outer
+  # column group on a two-level column axis; the unit matrix is an observed
+  # Mac Excel 16.111.3 ja-JP result (see builtins_pivotby_test.cpp). No
+  # divergence entry is needed for these shapes.
 
   # -- XLOOKUP / XMATCH binary search over dirty (non-sorted) data --------
   # Binary search (search_mode = 2 / -2) requires the lookup vector to be
@@ -897,18 +884,23 @@ entries:
   # data-axis fields), because routing through pivot filter state is not
   # yet implemented (src/eval/getpivotdata_lazy.cpp). Excel's real surface
   # for page/data-axis addressing has NOT been confirmed against a live
-  # oracle run; the code comment asserts it mirrors Mac's response but that
-  # is unverified. Tracked here so a live `make oracle-gen` on real Excel
-  # can confirm whether #REF! is correct or whether the page/data-axis
-  # value should be returned. Remove or re-scope this entry once verified.
-  - id: getpivotdata_page_axis_field_needs_verification
+  # product-verified Microsoft 365 Windows oracle. The workbook driver now
+  # builds page/data-axis pivots and records post-build formula probes, while
+  # the native verifier pins the current direct #REF! branch. The existing
+  # Office 2019 / unknown-version files are reference-only and must not be
+  # used as a Microsoft 365 result.
+  - id: page_axis_field
     mode: skip-oracle
-    scope: deferred-feature
-    evidence: [tests/unit/eval/getpivotdata_lazy_test.cpp]
-    reason: "GETPIVOTDATA returns #REF! for fields on the page/data axis (filter-state routing not implemented). Excel's actual surface for page/data-axis addressing is unconfirmed. Confirming it needs a PivotTable in the workbook, so it can only be observed on the workbook track's Windows primary — a macOS host cannot clear this entry, since mac-365-ja_JP is a research-only variant there."
+    reason: "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
     prefer: formulon
     first_noted: 2026-06-26
-    last_verified_excel_version: "unverified (needs live oracle run on win-365-ja_JP)"
+    last_verified_excel_version: "unverified (external Microsoft 365 Windows probe pending)"
+  - id: data_axis_field
+    mode: skip-oracle
+    reason: "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
+    prefer: formulon
+    first_noted: 2026-06-26
+    last_verified_excel_version: "unverified (external Microsoft 365 Windows probe pending)"
 
   # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
   # itself a union reports its real area count.

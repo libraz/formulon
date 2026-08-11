@@ -214,6 +214,24 @@ TEST(WorkbookRecalc, DirectLambdaCallTracksBodyCellDependency) {
       << "direct lambda-call body dependency on A1 was not tracked";
 }
 
+TEST(WorkbookRecalc, DefinedLambdaCallTracksBodyCellDependency) {
+  // A workbook-defined Lambda has the same dependency contract as a direct
+  // IIFE: the caller is dirtied when a cell read by the Lambda body changes.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0))));  // A1 = 10
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("AddA1", "LAMBDA(x,x+A1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=adda1(5)")));  // B1
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 1U).as_number(), 15.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(100.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 1U).as_number(), 105.0)
+      << "defined-Lambda body dependency on A1 was not tracked";
+}
+
 TEST(WorkbookRecalc, DefinedNameInsideCallArgumentTracksItsCells) {
   // A defined name used as a call argument expands the ordinary way, so
   // the cell it names stays a dependency of the calling formula.

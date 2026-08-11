@@ -63,7 +63,7 @@ emscripten::val JsWorkbook::dependents(uint32_t sheet, uint32_t row, uint32_t co
 emscripten::val JsWorkbook::functionMetadata(const std::string& name, uint32_t locale) const {
   emscripten::val o = emscripten::val::object();
   fm_function_metadata_t md{};
-  fm_status_t rc = fm_function_metadata(name.c_str(), static_cast<fm_locale_t>(locale), &md);
+  fm_status_t rc = fm_function_metadata(name.c_str(), static_cast<std::int32_t>(locale), &md);
   if (rc != 0) {
     o.set("ok", false);
     return o;
@@ -103,7 +103,7 @@ emscripten::val JsWorkbook::functionNames() const {
 
 std::string JsWorkbook::localizeFunctionName(const std::string& canonical_name, uint32_t locale) const {
   const char* out = nullptr;
-  if (fm_function_localize(canonical_name.c_str(), static_cast<fm_locale_t>(locale), &out) != 0 || out == nullptr) {
+  if (fm_function_localize(canonical_name.c_str(), static_cast<std::int32_t>(locale), &out) != 0 || out == nullptr) {
     return std::string();
   }
   return std::string(out);
@@ -111,7 +111,8 @@ std::string JsWorkbook::localizeFunctionName(const std::string& canonical_name, 
 
 std::string JsWorkbook::canonicalizeFunctionName(const std::string& localized_name, uint32_t locale) const {
   const char* out = nullptr;
-  if (fm_function_canonicalize(localized_name.c_str(), static_cast<fm_locale_t>(locale), &out) != 0 || out == nullptr) {
+  if (fm_function_canonicalize(localized_name.c_str(), static_cast<std::int32_t>(locale), &out) != 0 ||
+      out == nullptr) {
     return std::string();
   }
   return std::string(out);

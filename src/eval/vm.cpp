@@ -57,6 +57,7 @@
 #include "eval/range_args.h"
 #include "eval/scalar_ops.h"
 #include "eval/structured_ref.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -497,6 +498,43 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
           return name_p.error();
         }
         const std::string_view name = *name_p.value();
+        // A visible defined name shadows the lazy table and registry just as
+        // it does in the tree-walker. The compiler has already evaluated the
+        // argument expressions, so resolve the definition and invoke an
+        // AST-backed LambdaValue through the value-based bridge. VM-internal
+        // closure records never enter this path; they are reached only by
+        // CallLambda and remain isolated from the tree-walker helper.
+        if (find_defined_name(ctx, name) != nullptr) {
+          std::vector<Value> defined_args;
+          defined_args.reserve(arity);
+          for (std::uint32_t i = 0; i < arity; ++i) {
+            defined_args.push_back(s.stack[s.stack.size() - arity + i]);
+          }
+          pop_values(s, arity);
+          const Value defined = resolve_defined_name(name, arena, registry, ctx);
+          Value out = defined;
+          if (!defined.is_error()) {
+            if (!defined.is_lambda()) {
+              out = Value::error(ErrorCode::Value);
+            } else {
+              // `execute()` historically permits an uninstrumented context;
+              // provide local depth counters for tree-walker evaluation of a
+              // named Lambda so recursive definitions still terminate. When
+              // the caller supplied counters, preserve those instead.
+              std::uint32_t eval_depth = 0;
+              std::uint32_t lambda_depth = 0;
+              const EvalContext lambda_ctx = ctx.with_depth_counters(
+                  ctx.eval_depth_counter() != nullptr ? ctx.eval_depth_counter() : &eval_depth,
+                  ctx.lambda_depth_counter() != nullptr ? ctx.lambda_depth_counter() : &lambda_depth);
+              out =
+                  invoke_lambda_values(defined.as_lambda(), arity, defined_args.empty() ? nullptr : defined_args.data(),
+                                       arena, registry, lambda_ctx);
+            }
+          }
+          RETURN_IF_ERROR(push_value(s, out));
+          ++pc;
+          break;
+        }
         // Lazy IFERROR / IFNA: the compiler emits these as eager Calls with
         // both arguments already on the stack. Inspect the primary post-hoc
         // and pick either the primary or the fallback. This drifts from the

@@ -87,6 +87,20 @@ struct CellRangeDependency {
   }
 };
 
+/// Normalized inclusive workbook-order sheet span read by a Ref3D node.
+/// Endpoint names are resolved before this metadata is emitted, so callers
+/// can match a structural edit against the span without reparsing formula
+/// text. `sheet_first <= sheet_last` even when the authored endpoint order
+/// is reversed.
+struct ThreeDSheetSpanDependency {
+  std::uint16_t sheet_first = 0;
+  std::uint16_t sheet_last = 0;
+
+  friend bool operator==(const ThreeDSheetSpanDependency& lhs, const ThreeDSheetSpanDependency& rhs) noexcept {
+    return lhs.sheet_first == rhs.sheet_first && lhs.sheet_last == rhs.sheet_last;
+  }
+};
+
 /// `is_volatile` is true only when any function-call node in the AST names
 /// one of the nine Excel Volatile functions. Full-row / full-column refs use
 /// `range_deps` instead.
@@ -99,6 +113,9 @@ struct CellRangeDependency {
 struct ExtractedDeps {
   std::vector<CellNodeId> cell_deps;
   std::vector<CellRangeDependency> range_deps;
+  /// Deduplicated normalized spans contributed by direct and expanded Ref3D
+  /// nodes, including those reached through defined names / named Lambdas.
+  std::vector<ThreeDSheetSpanDependency> three_d_spans;
   bool is_volatile = false;
   std::vector<std::uint32_t> external_book_ids;
 };

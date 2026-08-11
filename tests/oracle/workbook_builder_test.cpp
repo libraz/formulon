@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -183,6 +184,76 @@ TEST(WorkbookBuilder, RejectsUnknownAggregation) {
 
   auto built_or = build_pivot_from_spec(jobj(std::move(root)));
   EXPECT_FALSE(static_cast<bool>(built_or));
+}
+
+TEST(WorkbookBuilder, FormulaProbePinsDirectRefBranch) {
+  JsonValue spec = build_smoke_spec();
+  std::map<std::string, JsonValue> root = spec.as_object();
+  std::map<std::string, JsonValue> pivot = root.at("pivot").as_object();
+  pivot["formula_probes"] = jarr({
+      jobj({
+          {"id", jstr("unknown_field_ref")},
+          {"cell", jstr("Report!Z1")},
+          {"formula", jstr("=GETPIVOTDATA(\"合計 / Amount\",Report!A1,\"MissingField\",\"x\")")},
+      }),
+  });
+  root["pivot"] = jobj(std::move(pivot));
+  const JsonValue probe_spec = jobj(std::move(root));
+
+  auto built_or = build_pivot_from_spec(probe_spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  BuiltPivot built = std::move(built_or.value());
+
+  auto results_or = evaluate_pivot_formula_probes(&built, probe_spec);
+  ASSERT_TRUE(static_cast<bool>(results_or)) << results_or.error().message;
+  ASSERT_EQ(results_or.value().size(), 1U);
+  EXPECT_EQ(results_or.value()[0].id, "unknown_field_ref");
+  ASSERT_TRUE(results_or.value()[0].value.is_error());
+  EXPECT_EQ(results_or.value()[0].value.as_error(), ErrorCode::Ref);
+}
+
+TEST(WorkbookBuilder, FormulaProbePinsValueAxisRefBranch) {
+  JsonValue spec = build_smoke_spec();
+  std::map<std::string, JsonValue> root = spec.as_object();
+  std::map<std::string, JsonValue> pivot = root.at("pivot").as_object();
+  pivot["formula_probes"] = jarr({jobj({
+      {"id", jstr("value_axis_ref")},
+      {"cell", jstr("Report!Z1")},
+      {"formula", jstr("=GETPIVOTDATA(\"合計 / Amount\",Report!A1,\"Amount\",100)")},
+  })});
+  root["pivot"] = jobj(std::move(pivot));
+  const JsonValue probe_spec = jobj(std::move(root));
+  auto built_or = build_pivot_from_spec(probe_spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  BuiltPivot built = std::move(built_or.value());
+  auto results_or = evaluate_pivot_formula_probes(&built, probe_spec);
+  ASSERT_TRUE(static_cast<bool>(results_or)) << results_or.error().message;
+  ASSERT_EQ(results_or.value().size(), 1U);
+  ASSERT_TRUE(results_or.value()[0].value.is_error());
+  EXPECT_EQ(results_or.value()[0].value.as_error(), ErrorCode::Ref);
+}
+
+TEST(WorkbookBuilder, FormulaProbePinsPageAxisRefBranch) {
+  JsonValue spec = build_smoke_spec();
+  std::map<std::string, JsonValue> root = spec.as_object();
+  std::map<std::string, JsonValue> pivot = root.at("pivot").as_object();
+  pivot["row_fields"] = jarr({});
+  pivot["page_fields"] = jarr({jstr("Region")});
+  pivot["formula_probes"] = jarr({jobj({
+      {"id", jstr("page_axis_ref")},
+      {"cell", jstr("Report!Z1")},
+      {"formula", jstr("=GETPIVOTDATA(\"合計 / Amount\",Report!A1,\"Region\",\"North\")")},
+  })});
+  root["pivot"] = jobj(std::move(pivot));
+  const JsonValue probe_spec = jobj(std::move(root));
+  auto built_or = build_pivot_from_spec(probe_spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  BuiltPivot built = std::move(built_or.value());
+  auto results_or = evaluate_pivot_formula_probes(&built, probe_spec);
+  ASSERT_TRUE(static_cast<bool>(results_or)) << results_or.error().message;
+  ASSERT_EQ(results_or.value().size(), 1U);
+  ASSERT_TRUE(results_or.value()[0].value.is_error());
+  EXPECT_EQ(results_or.value()[0].value.as_error(), ErrorCode::Ref);
 }
 
 // --- Print pagination tests -------------------------------------------------

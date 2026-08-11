@@ -41,6 +41,11 @@ namespace {
 // produced for defined-name expansion; it is local to a single
 // `extract_deps()` invocation and never escapes.
 struct WalkState {
+  struct LexicalBinding {
+    std::string name;
+    const parser::AstNode* lambda = nullptr;
+  };
+
   ExtractedDeps* out;
   std::unordered_set<CellNodeId, CellNodeIdHash> seen;
   std::unordered_set<std::uint32_t> seen_external_books;
@@ -48,7 +53,28 @@ struct WalkState {
   const Workbook* workbook;
   Arena* name_arena;
   std::vector<std::string> name_stack;
+  std::vector<LexicalBinding> lexical_stack;
+  std::vector<const parser::AstNode*> lambda_stack;
 };
+
+const WalkState::LexicalBinding* lookup_lexical(std::string_view name, const WalkState& state) {
+  const std::string lowered = strings::to_ascii_lower(name);
+  for (auto it = state.lexical_stack.rbegin(); it != state.lexical_stack.rend(); ++it) {
+    if (it->name == lowered) {
+      return &*it;
+    }
+  }
+  return nullptr;
+}
+
+bool lambda_is_active(const parser::AstNode* lambda, const WalkState& state) noexcept {
+  for (const parser::AstNode* active : state.lambda_stack) {
+    if (active == lambda) {
+      return true;
+    }
+  }
+  return false;
+}
 
 // Resolves the sheet id for a `Reference`. Returns true and writes
 // `*out_sheet_id` on success; returns false (and writes nothing) when the
@@ -88,6 +114,17 @@ void add_range_dep(WalkState& state, CellRangeDependency range) {
     }
   }
   state.out->range_deps.push_back(range);
+}
+
+void add_three_d_span_dep(WalkState& state, std::size_t sheet_first, std::size_t sheet_last) {
+  if (sheet_first > 0xFFFFU || sheet_last > 0xFFFFU) {
+    return;
+  }
+  const ThreeDSheetSpanDependency span{static_cast<std::uint16_t>(sheet_first), static_cast<std::uint16_t>(sheet_last)};
+  if (std::find(state.out->three_d_spans.begin(), state.out->three_d_spans.end(), span) ==
+      state.out->three_d_spans.end()) {
+    state.out->three_d_spans.push_back(span);
+  }
 }
 
 // Flattens the rectangle [lhs, rhs] into per-cell dependencies. Both
@@ -166,14 +203,19 @@ void walk(const parser::AstNode& node, WalkState& state);
 // *value* is not (see the `Lambda` case in `walk()`), and walking it
 // would invent dependencies the formula never reads.
 void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
+  if (lambda_is_active(&lambda, state)) {
+    return;
+  }
+  state.lambda_stack.push_back(&lambda);
   const std::uint32_t param_count = lambda.as_lambda_param_count();
   for (std::uint32_t i = 0; i < param_count; ++i) {
-    state.name_stack.push_back(strings::to_ascii_lower(lambda.as_lambda_param(i)));
+    state.lexical_stack.push_back({strings::to_ascii_lower(lambda.as_lambda_param(i)), nullptr});
   }
   walk(lambda.as_lambda_body(), state);
   for (std::uint32_t i = 0; i < param_count; ++i) {
-    state.name_stack.pop_back();
+    state.lexical_stack.pop_back();
   }
+  state.lambda_stack.pop_back();
 }
 
 // Expands a defined-name reference: parses its formula text in the
@@ -187,7 +229,7 @@ void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state) {
 // name's formula are also silently skipped: malformed defined-name
 // formulas exist in the wild and the dep extractor is not the right layer
 // to surface them.
-void expand_defined_name(const io::DefinedName& def, WalkState& state) {
+void expand_defined_name(const io::DefinedName& def, WalkState& state, bool invoked) {
   // Cycle detection. Lowercase the name for the stack comparison so a
   // mixed-case re-entry (`Foo` -> `=foo+1`) is still caught.
   std::string lowered = strings::to_ascii_lower(def.name);
@@ -209,9 +251,32 @@ void expand_defined_name(const io::DefinedName& def, WalkState& state) {
     return;  // Unparseable (or valid-prefix-plus-garbage) formula: skip.
   }
 
+  // Defined-name evaluation clears the caller's lexical NameEnv. Keep the
+  // extractor's lexical shadow stack isolated for the same reason: a LET
+  // binding at the call site must not hide a workbook name referenced by the
+  // definition body.
+  std::vector<WalkState::LexicalBinding> saved_lexical;
+  saved_lexical.swap(state.lexical_stack);
   state.name_stack.push_back(std::move(lowered));
-  walk(*root, state);
+  if (invoked && root->kind() == parser::NodeKind::Lambda) {
+    // A direct defined-name LAMBDA body is evaluated by a call, so descend
+    // into it with parameter names shadowing workbook names. A bare NameRef
+    // to the same definition remains a lambda value and must not invent
+    // dependencies from its body.
+    walk_invoked_lambda_body(*root, state);
+  } else if (invoked && root->kind() == parser::NodeKind::NameRef) {
+    // Preserve the common alias shape (`Alias = NamedLambda`) without
+    // repeatedly walking the lambda body. Any non-defined alias is handled
+    // by the ordinary NameRef walker and contributes no static deps.
+    const io::DefinedName* aliased = find_defined_name(*state.workbook, state.current_sheet_id, root->as_name());
+    if (aliased != nullptr) {
+      expand_defined_name(*aliased, state, /*invoked=*/true);
+    }
+  } else {
+    walk(*root, state);
+  }
   state.name_stack.pop_back();
+  state.lexical_stack.swap(saved_lexical);
 }
 
 // Resolves a `StructuredRef` node into a static rectangle on the table's
@@ -409,6 +474,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
       }
       const std::size_t lo = std::min(begin_idx, end_idx);
       const std::size_t hi = std::max(begin_idx, end_idx);
+      add_three_d_span_dep(state, lo, hi);
       const std::uint32_t r_lo = full_col ? 0U : (is_range ? std::min(cell.row, cell_end.row) : cell.row);
       const std::uint32_t r_hi =
           full_col ? Sheet::kMaxRows - 1U : (is_range ? std::max(cell.row, cell_end.row) : cell.row);
@@ -434,6 +500,13 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
 
     case parser::NodeKind::NameRef: {
+      // Lexical LET / LAMBDA bindings shadow workbook names. The binding
+      // itself is already accounted for by its initializer (or by the
+      // invoked lambda body), so a bare lexical NameRef contributes no
+      // additional workbook dependency.
+      if (lookup_lexical(node.as_name(), state) != nullptr) {
+        return;
+      }
       // Resolve against the workbook's defined-name list. A miss (the name
       // is undefined, scoped to a different sheet, or hidden behind a cycle
       // already on the expansion stack) is a silent skip — same policy as
@@ -444,7 +517,7 @@ void walk(const parser::AstNode& node, WalkState& state) {
       if (def == nullptr) {
         return;
       }
-      expand_defined_name(*def, state);
+      expand_defined_name(*def, state, /*invoked=*/false);
       return;
     }
 
@@ -479,15 +552,32 @@ void walk(const parser::AstNode& node, WalkState& state) {
       return;
 
     case parser::NodeKind::Call: {
-      // Volatile detection: `is_volatile_function` matches names
-      // case-insensitively, so the call lexeme is passed through verbatim
-      // (a hand-typed `=now()` is recognised as well as `=NOW()`).
-      if (VolatileTracker::is_volatile_function(node.as_call_name())) {
-        state.out->is_volatile = true;
-      }
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
         walk(node.as_call_arg(i), state);
+      }
+
+      const WalkState::LexicalBinding* lexical = lookup_lexical(node.as_call_name(), state);
+      const io::DefinedName* defined =
+          lexical == nullptr ? find_defined_name(*state.workbook, state.current_sheet_id, node.as_call_name())
+                             : nullptr;
+      // A lexical binding or a visible defined name shadows a built-in name;
+      // in particular, a LET-bound `NOW` / `RAND` must not be marked
+      // volatile merely because its spelling resembles a built-in.
+      if (lexical == nullptr && defined == nullptr && VolatileTracker::is_volatile_function(node.as_call_name())) {
+        state.out->is_volatile = true;
+      }
+      if (lexical != nullptr) {
+        if (lexical->lambda != nullptr) {
+          walk_invoked_lambda_body(*lexical->lambda, state);
+        }
+        return;
+      }
+      if (defined != nullptr) {
+        // `Name(args)` is the only call shape for a workbook-defined
+        // LAMBDA. Expanding its body once is enough: recursive re-entry is
+        // blocked by `name_stack` while its arguments remain ordinary deps.
+        expand_defined_name(*defined, state, /*invoked=*/true);
       }
       return;
     }
@@ -526,10 +616,22 @@ void walk(const parser::AstNode& node, WalkState& state) {
       // practice and over-approximating cell deps is conservative for the
       // recalc engine.
       const std::uint32_t binding_count = node.as_let_binding_count();
+      const std::size_t saved_lexical_depth = state.lexical_stack.size();
       for (std::uint32_t i = 0; i < binding_count; ++i) {
         walk(node.as_let_binding_expr(i), state);
+        const parser::AstNode& expr = node.as_let_binding_expr(i);
+        const parser::AstNode* lambda = nullptr;
+        if (expr.kind() == parser::NodeKind::Lambda) {
+          lambda = &expr;
+        } else if (expr.kind() == parser::NodeKind::NameRef) {
+          if (const WalkState::LexicalBinding* prior = lookup_lexical(expr.as_name(), state); prior != nullptr) {
+            lambda = prior->lambda;
+          }
+        }
+        state.lexical_stack.push_back({strings::to_ascii_lower(node.as_let_binding_name(i)), lambda});
       }
       walk(node.as_let_body(), state);
+      state.lexical_stack.resize(saved_lexical_depth);
       return;
     }
 
@@ -571,7 +673,7 @@ ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sh
   // as long as this call so the parsed nodes never outlive the walk; the
   // caller-supplied `node` is unrelated and stays in its own arena.
   Arena name_arena;
-  WalkState state{&deps, {}, {}, current_sheet_id, &workbook, &name_arena, {}};
+  WalkState state{&deps, {}, {}, current_sheet_id, &workbook, &name_arena, {}, {}, {}};
   walk(node, state);
   return deps;
 }

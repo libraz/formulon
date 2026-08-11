@@ -65,6 +65,22 @@ class Expected {
   using value_type = T;
   using error_type = E;
 
+#if defined(__clang__) && defined(__APPLE__) && defined(_LIBCPP_VERSION)
+  // Apple libc++'s std::variant destructor dispatch is diagnosed by Clang's
+  // function sanitizer as a type mismatch in the library's own visitor table.
+  // Keep function sanitizer active for Expected's callers and product code.
+  ~Expected() noexcept __attribute__((no_sanitize("function"), noinline)) = default;
+#else
+  ~Expected() noexcept = default;
+#endif
+
+  // The explicit destructor above would otherwise suppress implicit moves;
+  // preserve the pre-workaround special-member behavior for move-only T/E.
+  Expected(const Expected&) = default;
+  Expected(Expected&&) noexcept(std::is_nothrow_move_constructible_v<std::variant<T, E>>) = default;
+  Expected& operator=(const Expected&) = default;
+  Expected& operator=(Expected&&) noexcept(std::is_nothrow_move_assignable_v<std::variant<T, E>>) = default;
+
   /// Builds a success-state expected from a value.
   Expected(T v) noexcept(std::is_nothrow_move_constructible_v<T>)  // NOLINT(google-explicit-constructor)
       : payload_(std::in_place_index<0>, std::move(v)) {}

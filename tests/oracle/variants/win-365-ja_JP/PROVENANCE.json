@@ -1,0 +1,11 @@
+{
+  "target": "win-365-ja_JP",
+  "status": "wanted",
+  "classification": "reference-only",
+  "verified": false,
+  "locale": "ja-JP",
+  "product": "Office Professional Plus 2019 Retail (historical capture)",
+  "source": "tests/oracle/reference/win-2019-ja_JP",
+  "reason": "The former win-365-ja_JP directory was captured on an Office 2019 host. It is retained for historical comparison and is not a Microsoft 365 oracle.",
+  "active_ctest": false
+}

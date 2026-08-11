@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -152,6 +153,17 @@ struct SpillRegion {
   // vector itself remains a dense array of `Value` (which is trivially
   // copyable).
   std::vector<std::string> owned_strings;
+};
+
+/// The shape a dynamic-array formula tried to occupy when its spill was
+/// blocked.  Unlike `SpillRegion`, this stores no values: it is only a
+/// reverse index used to wake the anchor when a blocker is removed or moved.
+/// The entry is keyed by `(anchor_row, anchor_col)` in `SpillTable`.
+struct BlockedSpillFootprint {
+  std::uint32_t anchor_row = 0;
+  std::uint32_t anchor_col = 0;
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
 };
 
 /// Per-sheet view state (zoom, frozen panes, tab visibility).
@@ -796,6 +808,41 @@ class Sheet {
   /// a phantom's effective value is read back through `resolve_cell_value`.
   std::vector<CellAddress> spill_phantom_addresses() const;
 
+  /// Returns every anchor whose last attempted spill footprint intersects the
+  /// supplied rectangle.  The returned coordinates are copies, so callers
+  /// may release the sheet lock before marking the anchors dirty in the
+  /// workbook dependency graph.  This is a read-only query: unlike
+  /// `commit_spill`, it never records a new blocked footprint.
+  std::vector<CellAddress> blocked_spill_anchors_intersecting(std::uint32_t first_row, std::uint32_t first_col,
+                                                              std::uint32_t rows, std::uint32_t cols) const;
+
+  /// Returns every currently committed spill anchor whose materialised
+  /// rectangle intersects the supplied rectangle. Coordinates are copies so
+  /// callers may release the sheet lock before marking the anchors dirty.
+  std::vector<CellAddress> committed_spill_anchors_intersecting(std::uint32_t first_row, std::uint32_t first_col,
+                                                                std::uint32_t rows, std::uint32_t cols) const;
+
+  /// Returns all currently blocked spill anchors.  Structural workbook edits
+  /// use this after remapping the sheet-local table to mark surviving formula
+  /// anchors dirty.  The returned coordinates are copies.
+  std::vector<CellAddress> blocked_spill_anchors() const;
+
+  /// Returns copies of the full blocked-footprint records.  Workbook
+  /// structural edits snapshot these before formula text rewrites (which may
+  /// temporarily clear an anchor entry), then restore the records at their
+  /// mapped coordinates after the cell move.
+  std::vector<BlockedSpillFootprint> blocked_spill_footprints() const;
+
+  /// Returns a copy of the committed spill rectangle covering `(row, col)`.
+  /// The anchor itself is included, unlike `spill_region_covering`, because
+  /// mutation callers need the complete rectangle before they clear it.
+  std::optional<BlockedSpillFootprint> committed_spill_footprint_covering(std::uint32_t row, std::uint32_t col) const;
+
+  /// Restores blocked-footprint records at their already-mapped coordinates.
+  /// Invalid/degenerate records are ignored.  Intended for the workbook's
+  /// lock-aware structural-edit path.
+  void restore_blocked_spill_footprints(std::vector<BlockedSpillFootprint> footprints);
+
   /// Returns the spill-aware effective value of `(row, col)`:
   ///
   ///   1. If the cell is a phantom of a spill region, returns the
@@ -869,6 +916,26 @@ class Sheet {
   /// edits use this before moving cells; the next recalculation recreates
   /// regions at their new coordinates.
   void clear_all_spills() noexcept;
+
+  /// Adds a merge while holding the same sheet lock used by spill collision
+  /// checks.  Reader/setup code may continue to use `mutable_merges()` when
+  /// no concurrent evaluation is possible; workbook/UI mutations should use
+  /// this method.
+  void add_merge(MergeRange merge);
+
+  /// Removes every merge intersecting `range`, returning copies of the
+  /// rectangles actually erased. The operation is lock-aware so a concurrent
+  /// spill check cannot observe a partially erased merge vector.
+  std::vector<MergeRange> remove_merges_intersecting(MergeRange range);
+
+  /// Removes one merge by insertion order. Returns false when `index` is out
+  /// of range. When `removed` is non-null, it receives a copy of the erased
+  /// rectangle. The operation is lock-aware.
+  bool remove_merge_at(std::size_t index, MergeRange* removed = nullptr);
+
+  /// Removes every merge and returns the number removed. The operation is
+  /// lock-aware.
+  std::size_t clear_merges();
 
   // ---------------------------------------------------------------------------
   // Pivot tables anchored on this sheet
@@ -1186,6 +1253,15 @@ class Sheet {
   /// `spill_would_collide` body; assumes `spill_mutex_` is held.
   bool spill_would_collide_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
                                   std::uint32_t cols) const noexcept;
+
+  /// Clears committed spill regions but preserves blocked-footprint records.
+  /// Structural row/column edits use this before remapping pending anchors;
+  /// public `clear_all_spills()` also drops the blocked records.
+  void clear_committed_spills_locked() noexcept;
+
+  /// Remaps blocked-footprint anchors through one structural row/column edit.
+  /// Caller must hold `spill_mutex_`.
+  void shift_blocked_spills_locked(const StructuralEdit& edit);
 
   std::string name_;
   // Non-empty only for chartsheets / dialog sheets / macro sheets and other

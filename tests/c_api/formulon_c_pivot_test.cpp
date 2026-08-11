@@ -5,7 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
+#include <limits>
 #include <string_view>
 #include <vector>
 
@@ -30,6 +30,15 @@ struct PivotCellsGuard {
   PivotCellsGuard() = default;
   PivotCellsGuard(const PivotCellsGuard&) = delete;
   PivotCellsGuard& operator=(const PivotCellsGuard&) = delete;
+};
+
+struct BufferGuard {
+  std::uint8_t* data = nullptr;
+  std::size_t len = 0;
+  ~BufferGuard() { fm_buffer_free(data); }
+  BufferGuard() = default;
+  BufferGuard(const BufferGuard&) = delete;
+  BufferGuard& operator=(const BufferGuard&) = delete;
 };
 
 struct PartFile {
@@ -568,16 +577,44 @@ TEST(FormulonCApiPivot, PivotReportLayoutRoundTripsThroughApi) {
   ASSERT_EQ(fm_workbook_pivot_get_layout(wb.handle, 0, pivot_idx, &layout), 0);
   EXPECT_EQ(layout, FM_PIVOT_LAYOUT_OUTLINE);
 
-  // Domain is {0, 1, 2}; build an out-of-range value via memcpy because a
-  // direct `static_cast<fm_pivot_layout_t>(99)` is unspecified per the
-  // standard (99 sits outside the enum's representable range, which GCC's
-  // -Wconversion correctly flags). The C ABI accepts the raw byte value
-  // regardless and routes it through the validation switch.
-  fm_pivot_layout_t bad_layout{};
-  const int raw = 99;
-  std::memcpy(&bad_layout, &raw, sizeof(bad_layout));
-  EXPECT_EQ(fm_workbook_pivot_set_layout(wb.handle, 0, pivot_idx, bad_layout),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  // The setter accepts a raw int32_t so FFI callers can probe the complete
+  // invalid domain without constructing an out-of-domain C enum.
+  const std::int32_t invalid_layouts[] = {
+      99,
+      std::numeric_limits<std::int32_t>::min(),
+      std::numeric_limits<std::int32_t>::max(),
+  };
+  for (const std::int32_t raw : invalid_layouts) {
+    EXPECT_EQ(fm_workbook_pivot_set_layout(wb.handle, 0, pivot_idx, raw),
+              static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument))
+        << raw;
+  }
+}
+
+TEST(FormulonCApiPivot, ScalarEnumMutatorsRejectRawValuesWithoutMutation) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  BufferGuard before;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &before.data, &before.len), 0) << fm_last_error_message();
+  const std::vector<std::uint8_t> snapshot(before.data, before.data + before.len);
+  const std::int32_t invalid[] = {99, std::numeric_limits<std::int32_t>::min(),
+                                  std::numeric_limits<std::int32_t>::max()};
+  const fm_status_t expected = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  for (const std::int32_t raw : invalid) {
+    EXPECT_EQ(fm_workbook_pivot_field_set_axis(wb.handle, 0, pivot_idx, 0, raw), expected) << raw;
+    EXPECT_EQ(fm_workbook_pivot_field_add_aggregation(wb.handle, 0, pivot_idx, 1, raw), expected) << raw;
+    EXPECT_EQ(fm_workbook_pivot_field_add_subtotal_fn(wb.handle, 0, pivot_idx, 0, raw), expected) << raw;
+    EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, raw, 0, -1, -1), expected) << raw;
+    EXPECT_EQ(fm_workbook_pivot_field_set_date_group(wb.handle, 0, pivot_idx, 0, 3, raw, -1, -1), expected) << raw;
+  }
+
+  BufferGuard after;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &after.data, &after.len), 0) << fm_last_error_message();
+  EXPECT_EQ(std::vector<std::uint8_t>(after.data, after.data + after.len), snapshot);
 }
 
 TEST(FormulonCApiPivot, PivotProjectionUsesWorkbookLocaleAndReportLayout) {

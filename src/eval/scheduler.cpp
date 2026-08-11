@@ -41,6 +41,105 @@
 namespace formulon::eval {
 namespace {
 
+struct SpillReleaseQueue {
+  const Workbook* workbook = nullptr;
+  std::mutex mutex;
+  std::vector<CellNodeId> anchors;
+  std::unordered_set<CellNodeId, CellNodeIdHash> queued;
+
+  explicit SpillReleaseQueue(const Workbook* owner) : workbook(owner) {}
+
+  std::vector<CellNodeId> take() {
+    std::lock_guard<std::mutex> guard(mutex);
+    std::vector<CellNodeId> out;
+    out.swap(anchors);
+    queued.clear();
+    return out;
+  }
+};
+
+void queue_spill_release(void* raw, const Sheet& sheet, std::uint32_t first_row, std::uint32_t first_col,
+                         std::uint32_t rows, std::uint32_t cols) noexcept {
+  auto* queue = static_cast<SpillReleaseQueue*>(raw);
+  if (queue == nullptr || queue->workbook == nullptr) {
+    return;
+  }
+  std::size_t sheet_index = queue->workbook->sheet_count();
+  for (std::size_t i = 0; i < queue->workbook->sheet_count(); ++i) {
+    if (&queue->workbook->sheet(i) == &sheet) {
+      sheet_index = i;
+      break;
+    }
+  }
+  if (sheet_index >= queue->workbook->sheet_count()) {
+    return;
+  }
+  const std::vector<CellAddress> anchors = sheet.blocked_spill_anchors_intersecting(first_row, first_col, rows, cols);
+  std::lock_guard<std::mutex> guard(queue->mutex);
+  for (const CellAddress anchor : anchors) {
+    const CellNodeId node{static_cast<std::uint16_t>(sheet_index), anchor.row, anchor.col};
+    if (queue->queued.insert(node).second) {
+      queue->anchors.push_back(node);
+    }
+  }
+}
+
+struct BlockedSpillState {
+  std::uint16_t sheet_id = 0;
+  BlockedSpillFootprint footprint;
+
+  bool operator==(const BlockedSpillState& other) const noexcept {
+    return sheet_id == other.sheet_id && footprint.anchor_row == other.footprint.anchor_row &&
+           footprint.anchor_col == other.footprint.anchor_col && footprint.rows == other.footprint.rows &&
+           footprint.cols == other.footprint.cols;
+  }
+};
+
+std::vector<BlockedSpillState> snapshot_blocked_spills(const Workbook& workbook) {
+  std::vector<BlockedSpillState> state;
+  for (std::size_t sheet_id = 0; sheet_id < workbook.sheet_count(); ++sheet_id) {
+    for (const BlockedSpillFootprint& footprint : workbook.sheet(sheet_id).blocked_spill_footprints()) {
+      state.push_back(BlockedSpillState{static_cast<std::uint16_t>(sheet_id), footprint});
+    }
+  }
+  std::sort(state.begin(), state.end(), [](const BlockedSpillState& lhs, const BlockedSpillState& rhs) {
+    if (lhs.sheet_id != rhs.sheet_id) {
+      return lhs.sheet_id < rhs.sheet_id;
+    }
+    if (lhs.footprint.anchor_row != rhs.footprint.anchor_row) {
+      return lhs.footprint.anchor_row < rhs.footprint.anchor_row;
+    }
+    if (lhs.footprint.anchor_col != rhs.footprint.anchor_col) {
+      return lhs.footprint.anchor_col < rhs.footprint.anchor_col;
+    }
+    if (lhs.footprint.rows != rhs.footprint.rows) {
+      return lhs.footprint.rows < rhs.footprint.rows;
+    }
+    return lhs.footprint.cols < rhs.footprint.cols;
+  });
+  return state;
+}
+
+std::vector<CellNodeId> canonical_release_targets(const std::vector<CellNodeId>& targets) {
+  // Include the target set in progress detection: unchanged blocked geometry
+  // may still advance when another producer is woken. Sort it so parallel
+  // worker completion order cannot manufacture a false difference.
+  std::vector<CellNodeId> sorted = targets;
+  std::sort(sorted.begin(), sorted.end(), [](const CellNodeId& lhs, const CellNodeId& rhs) {
+    if (lhs.sheet_id != rhs.sheet_id) {
+      return lhs.sheet_id < rhs.sheet_id;
+    }
+    if (lhs.row != rhs.row) {
+      return lhs.row < rhs.row;
+    }
+    return lhs.col < rhs.col;
+  });
+  return sorted;
+}
+
+constexpr std::size_t kMaxSpillReleaseWaves = 4096U;
+constexpr std::size_t kMaxNoProgressSpillWaves = 8U;
+
 // Hard cap on auto-detected worker count. Matches the `PTHREAD_POOL_SIZE`
 // the WASM build reserves so behaviour is consistent across native and
 // browser runtimes.
@@ -178,7 +277,8 @@ struct SccOutcome {
 
 SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, const DepGraph& graph,
                        const FunctionRegistry& registry, const IterativeOptions& iter_opts, Arena& arena,
-                       IterativeProgressCb progress_cb, void* progress_user_data, std::mutex& write_mutex) {
+                       IterativeProgressCb progress_cb, void* progress_user_data, std::mutex& write_mutex,
+                       SpillReleaseCallback release_callback, void* release_user_data) {
   SccOutcome out;
   const std::size_t sheet_count = wb.sheet_count();
 
@@ -191,7 +291,8 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
         }
         Sheet& sheet = wb.sheet(c.sheet_id);
         std::lock_guard<std::mutex> guard(write_mutex);
-        sheet.set_cell_cached_value(c.row, c.col, Value::error(ErrorCode::Ref));
+        SpillCommitter committer(&sheet, c.row, c.col, release_callback, release_user_data);
+        sheet.set_cell_cached_value(c.row, c.col, committer.commit(Value::error(ErrorCode::Ref)));
       }
       return out;
     }
@@ -214,6 +315,8 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
       arena.reset();
       EvaluateCellOptions opts;
       opts.iterative_mode = true;
+      opts.spill_release_callback = release_callback;
+      opts.spill_release_user_data = release_user_data;
       return evaluate_cell_for_recalc(wb, sheet, *cell_data, c.row, c.col, registry, arena, opts);
     };
     auto commit = [&](CellNodeId c, Value v) {
@@ -245,7 +348,10 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
     return out;
   }
   arena.reset();
-  Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, only.row, only.col, registry, arena);
+  EvaluateCellOptions opts;
+  opts.spill_release_callback = release_callback;
+  opts.spill_release_user_data = release_user_data;
+  Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, only.row, only.col, registry, arena, opts);
   {
     std::lock_guard<std::mutex> guard(write_mutex);
     sheet.set_cell_cached_value(only.row, only.col, result);
@@ -270,6 +376,8 @@ struct LayerWork {
   void* progress_user_data = nullptr;
   ThreadArenas* arenas = nullptr;
   std::mutex* write_mutex = nullptr;
+  SpillReleaseCallback release_callback = nullptr;
+  void* release_user_data = nullptr;
   std::vector<SccOutcome>* outcomes = nullptr;
 };
 
@@ -295,7 +403,8 @@ void worker_loop(std::size_t worker_id, LayerWork* work) {
     }
     (*work->outcomes)[idx] =
         process_scc((*work->components)[(*work->tasks)[idx]], *work->wb, *work->graph, *work->registry,
-                    *work->iter_opts, arena, work->progress_cb, work->progress_user_data, *work->write_mutex);
+                    *work->iter_opts, arena, work->progress_cb, work->progress_user_data, *work->write_mutex,
+                    work->release_callback, work->release_user_data);
   }
 }
 
@@ -464,157 +573,208 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   // evaluation must not call back into mutating `RecalcEngine` APIs.
   std::lock_guard<std::mutex> engine_guard(engine.mutex_);
 
-  // Phase 1 + 2: seed the dirty set with volatile cells, BFS-propagate
-  // dirtiness through reverse edges. Mirrors `RecalcEngine::recalc`.
-  engine.volatiles_.for_each([&](CellNodeId cell) {
-    if (!engine.dirty_.contains(cell)) {
-      engine.dirty_.mark(cell);
-    }
-  });
-
-  std::vector<CellNodeId> bfs_queue;
-  bfs_queue.reserve(engine.dirty_.size());
-  engine.dirty_.for_each([&](CellNodeId c) { bfs_queue.push_back(c); });
-  std::size_t bfs_head = 0;
-  while (bfs_head < bfs_queue.size()) {
-    const CellNodeId current = bfs_queue[bfs_head++];
-    for (CellNodeId dependent : engine.graph_.dependents_of(current)) {
-      if (!engine.dirty_.contains(dependent)) {
-        engine.dirty_.mark(dependent);
-        bfs_queue.push_back(dependent);
-      }
-    }
-  }
-
-  // Phase 3: Tarjan SCC over the entire graph (same as the serial engine).
-  const std::vector<std::vector<CellNodeId>> all_sccs = engine.graph_.tarjan_scc();
-
-  // Filter to dirty SCCs and assign condensed-graph indices.
-  SccIndex idx;
-  idx.components.reserve(all_sccs.size());
-  for (const std::vector<CellNodeId>& comp : all_sccs) {
-    bool any_dirty = false;
-    for (CellNodeId c : comp) {
-      if (engine.dirty_.contains(c)) {
-        any_dirty = true;
-        break;
-      }
-    }
-    if (!any_dirty) {
-      continue;
-    }
-    const std::size_t scc_id = idx.components.size();
-    for (CellNodeId c : comp) {
-      idx.cell_to_scc.emplace(c, scc_id);
-    }
-    idx.components.push_back(comp);
-  }
-
-  const CondensedGraph cg = build_condensed_graph(idx, engine.graph_);
-  const std::vector<std::vector<std::size_t>> layers = kahn_layers(cg);
-
-  // The pool is built before the arenas because it may come back smaller
-  // than requested: an OS that refuses a thread degrades the pass instead
-  // of ending the process. Every layer then dispatches against the live
-  // worker count, and zero live workers falls all the way through to the
-  // serial branch below — which still needs one arena of its own.
-  LayerWorkerPool worker_pool(resolve_thread_count(cfg.num_threads));
-  const std::uint32_t worker_count = worker_pool.size();
-  ThreadArenas arenas = make_thread_arenas(std::max<std::uint32_t>(worker_count, 1U));
-  std::mutex write_mutex;
-
+  SpillReleaseQueue release_queue{&wb};
+  const SpillReleaseCallback release_callback = &queue_spill_release;
   std::uint64_t cells_evaluated = 0;
   std::uint64_t sccs_processed = 0;
   std::uint64_t parallel_steps = 0;
   std::uint64_t serial_fallback_steps = 0;
   std::uint64_t cycle_recoveries = 0;
+  std::size_t release_waves = 0U;
+  std::size_t no_progress_waves = 0U;
+  std::vector<BlockedSpillState> previous_release_state;
+  std::vector<CellNodeId> previous_release_targets;
+  bool have_previous_release_state = false;
+  const auto mark_release_targets_dirty = [&](const std::vector<CellNodeId>& anchors) {
+    for (const CellNodeId anchor : anchors) {
+      engine.dirty_.mark(anchor);
+      for (const CellNodeId dependent : engine.graph_.dependents_of(anchor)) {
+        engine.dirty_.mark(dependent);
+      }
+      engine.mark_range_dependents_dirty_locked(anchor);
+    }
+  };
 
-  const IterativeOptions iter_opts = engine.iterative_options();
-  const IterativeProgressCb progress_cb = engine.progress_cb_;
-  void* const progress_user_data = engine.progress_user_data_;
+  for (;;) {
+    // Phase 1 + 2: seed the dirty set with volatile cells, BFS-propagate
+    // dirtiness through reverse edges. Mirrors `RecalcEngine::recalc`.
+    engine.volatiles_.for_each([&](CellNodeId cell) {
+      if (!engine.dirty_.contains(cell)) {
+        engine.dirty_.mark(cell);
+      }
+    });
 
-  for (const std::vector<std::size_t>& layer : layers) {
-    sccs_processed += layer.size();
+    std::vector<CellNodeId> bfs_queue;
+    bfs_queue.reserve(engine.dirty_.size());
+    engine.dirty_.for_each([&](CellNodeId c) { bfs_queue.push_back(c); });
+    std::size_t bfs_head = 0;
+    while (bfs_head < bfs_queue.size()) {
+      const CellNodeId current = bfs_queue[bfs_head++];
+      for (CellNodeId dependent : engine.graph_.dependents_of(current)) {
+        if (!engine.dirty_.contains(dependent)) {
+          engine.dirty_.mark(dependent);
+          bfs_queue.push_back(dependent);
+        }
+      }
+    }
 
-    if (layer.size() <= 1U || worker_count <= 1U) {
-      // Tiny layer or single-worker mode: process serially on this thread.
-      ++serial_fallback_steps;
-      Arena& arena = *arenas[0U];
-      for (std::size_t scc_id : layer) {
-        const SccOutcome o = process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena,
-                                         progress_cb, progress_user_data, write_mutex);
+    // Phase 3: Tarjan SCC over the entire graph (same as the serial engine).
+    const std::vector<std::vector<CellNodeId>> all_sccs = engine.graph_.tarjan_scc();
+
+    // Filter to dirty SCCs and assign condensed-graph indices.
+    SccIndex idx;
+    idx.components.reserve(all_sccs.size());
+    for (const std::vector<CellNodeId>& comp : all_sccs) {
+      bool any_dirty = false;
+      for (CellNodeId c : comp) {
+        if (engine.dirty_.contains(c)) {
+          any_dirty = true;
+          break;
+        }
+      }
+      if (!any_dirty) {
+        continue;
+      }
+      const std::size_t scc_id = idx.components.size();
+      for (CellNodeId c : comp) {
+        idx.cell_to_scc.emplace(c, scc_id);
+      }
+      idx.components.push_back(comp);
+    }
+
+    const CondensedGraph cg = build_condensed_graph(idx, engine.graph_);
+    const std::vector<std::vector<std::size_t>> layers = kahn_layers(cg);
+
+    // The pool is built before the arenas because it may come back smaller
+    // than requested: an OS that refuses a thread degrades the pass instead
+    // of ending the process. Every layer then dispatches against the live
+    // worker count, and zero live workers falls all the way through to the
+    // serial branch below — which still needs one arena of its own.
+    LayerWorkerPool worker_pool(resolve_thread_count(cfg.num_threads));
+    const std::uint32_t worker_count = worker_pool.size();
+    ThreadArenas arenas = make_thread_arenas(std::max<std::uint32_t>(worker_count, 1U));
+    std::mutex write_mutex;
+
+    const IterativeOptions iter_opts = engine.iterative_options();
+    const IterativeProgressCb progress_cb = engine.progress_cb_;
+    void* const progress_user_data = engine.progress_user_data_;
+
+    for (const std::vector<std::size_t>& layer : layers) {
+      sccs_processed += layer.size();
+
+      if (layer.size() <= 1U || worker_count <= 1U) {
+        // Tiny layer or single-worker mode: process serially on this thread.
+        ++serial_fallback_steps;
+        Arena& arena = *arenas[0U];
+        for (std::size_t scc_id : layer) {
+          const SccOutcome o =
+              process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena, progress_cb,
+                          progress_user_data, write_mutex, release_callback, &release_queue);
+          cells_evaluated += o.cells_evaluated;
+          cycle_recoveries += o.cycle_recoveries;
+        }
+        continue;
+      }
+
+      // Parallel layer: the workers are already alive and return to the
+      // barrier for the next layer after draining this queue.
+      std::vector<SccOutcome> outcomes;
+      LayerWork work;
+      work.tasks = &layer;
+      work.components = &idx.components;
+      work.wb = &wb;
+      work.graph = &engine.graph_;
+      work.registry = &registry;
+      work.iter_opts = &iter_opts;
+      work.progress_cb = progress_cb;
+      work.progress_user_data = progress_user_data;
+      work.arenas = &arenas;
+      work.write_mutex = &write_mutex;
+      work.release_callback = release_callback;
+      work.release_user_data = &release_queue;
+      work.outcomes = &outcomes;
+      worker_pool.run(work);
+
+      for (const SccOutcome& o : outcomes) {
         cells_evaluated += o.cells_evaluated;
         cycle_recoveries += o.cycle_recoveries;
       }
+      ++parallel_steps;
+    }
+
+    // Phase 4b: standalone-dirty cells (no graph edges, e.g. `=NOW()`).
+    // These are not in any SCC; sweep them serially. The fast `cells_to_scc`
+    // map already covers every cell that landed in a dirty SCC.
+    std::vector<CellNodeId> standalone_dirty;
+    engine.dirty_.for_each([&](CellNodeId c) {
+      if (idx.cell_to_scc.find(c) == idx.cell_to_scc.end()) {
+        standalone_dirty.push_back(c);
+      }
+    });
+    if (!standalone_dirty.empty()) {
+      Arena& arena = *arenas[0U];
+      const std::size_t sheet_count = wb.sheet_count();
+      for (CellNodeId c : standalone_dirty) {
+        if (c.sheet_id >= sheet_count) {
+          continue;
+        }
+        Sheet& sheet = wb.sheet(c.sheet_id);
+        const Cell* cell_data = sheet.cell_at(c.row, c.col);
+        if (cell_data == nullptr || cell_data->formula_text.empty()) {
+          continue;
+        }
+        arena.reset();
+        EvaluateCellOptions opts;
+        opts.spill_release_callback = release_callback;
+        opts.spill_release_user_data = &release_queue;
+        Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, c.row, c.col, registry, arena, opts);
+        sheet.set_cell_cached_value(c.row, c.col, result);
+        ++cells_evaluated;
+        ++sccs_processed;  // Treat a standalone formula as its own component.
+      }
+      ++serial_fallback_steps;
+    }
+
+    const std::vector<CellNodeId> released = release_queue.take();
+    if (!released.empty()) {
+      ++release_waves;
+      const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(wb);
+      const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
+      if (have_previous_release_state && release_state == previous_release_state &&
+          release_targets == previous_release_targets) {
+        ++no_progress_waves;
+      } else {
+        no_progress_waves = 0U;
+      }
+      previous_release_state = release_state;
+      previous_release_targets = release_targets;
+      have_previous_release_state = true;
+      if (release_waves > kMaxSpillReleaseWaves || no_progress_waves >= kMaxNoProgressSpillWaves) {
+        // Keep the current dirty set, including unrelated work, while
+        // retaining the release targets for a caller retry after an
+        // external mutation.
+        mark_release_targets_dirty(released);
+        return make_error(FormulonErrorCode::kGraphScheduleFailed, "spill release waves made no progress",
+                          "parallel dynamic-array spill recovery exceeded its bounded wave budget");
+      }
+      engine.dirty_.clear();
+      mark_release_targets_dirty(released);
       continue;
     }
 
-    // Parallel layer: the workers are already alive and return to the
-    // barrier for the next layer after draining this queue.
-    std::vector<SccOutcome> outcomes;
-    LayerWork work;
-    work.tasks = &layer;
-    work.components = &idx.components;
-    work.wb = &wb;
-    work.graph = &engine.graph_;
-    work.registry = &registry;
-    work.iter_opts = &iter_opts;
-    work.progress_cb = progress_cb;
-    work.progress_user_data = progress_user_data;
-    work.arenas = &arenas;
-    work.write_mutex = &write_mutex;
-    work.outcomes = &outcomes;
-    worker_pool.run(work);
+    // Phase 5: clear the dirty set.
+    engine.dirty_.clear();
 
-    for (const SccOutcome& o : outcomes) {
-      cells_evaluated += o.cells_evaluated;
-      cycle_recoveries += o.cycle_recoveries;
+    if (stats != nullptr) {
+      stats->cells_evaluated = cells_evaluated;
+      stats->sccs_processed = sccs_processed;
+      stats->parallel_steps = parallel_steps;
+      stats->serial_fallback_steps = serial_fallback_steps;
+      stats->cycle_recoveries = cycle_recoveries;
     }
-    ++parallel_steps;
+
+    return Expected<void, Error>::Ok();
   }
-
-  // Phase 4b: standalone-dirty cells (no graph edges, e.g. `=NOW()`).
-  // These are not in any SCC; sweep them serially. The fast `cells_to_scc`
-  // map already covers every cell that landed in a dirty SCC.
-  std::vector<CellNodeId> standalone_dirty;
-  engine.dirty_.for_each([&](CellNodeId c) {
-    if (idx.cell_to_scc.find(c) == idx.cell_to_scc.end()) {
-      standalone_dirty.push_back(c);
-    }
-  });
-  if (!standalone_dirty.empty()) {
-    Arena& arena = *arenas[0U];
-    const std::size_t sheet_count = wb.sheet_count();
-    for (CellNodeId c : standalone_dirty) {
-      if (c.sheet_id >= sheet_count) {
-        continue;
-      }
-      Sheet& sheet = wb.sheet(c.sheet_id);
-      const Cell* cell_data = sheet.cell_at(c.row, c.col);
-      if (cell_data == nullptr || cell_data->formula_text.empty()) {
-        continue;
-      }
-      arena.reset();
-      Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, c.row, c.col, registry, arena);
-      sheet.set_cell_cached_value(c.row, c.col, result);
-      ++cells_evaluated;
-      ++sccs_processed;  // Treat a standalone formula as its own component.
-    }
-    ++serial_fallback_steps;
-  }
-
-  // Phase 5: clear the dirty set.
-  engine.dirty_.clear();
-
-  if (stats != nullptr) {
-    stats->cells_evaluated = cells_evaluated;
-    stats->sccs_processed = sccs_processed;
-    stats->parallel_steps = parallel_steps;
-    stats->serial_fallback_steps = serial_fallback_steps;
-    stats->cycle_recoveries = cycle_recoveries;
-  }
-
-  return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> recalc_parallel(Workbook& wb, const SchedulerConfig& cfg, SchedulerStats* stats) {

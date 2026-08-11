@@ -1,0 +1,30 @@
+{
+  "track": "cf",
+  "target": "mac-365-ja_JP",
+  "status": "primary",
+  "classification": "reference-only",
+  "verified": false,
+  "active_ctest": false,
+  "locale": "ja-JP",
+  "product": "unknown Excel 365 capture (pre-provenance)",
+  "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
+  "capture_id": "legacy-cf-smoke-pre-provenance",
+  "required_suites": [
+    "cf_smoke"
+  ],
+  "captured_suites": [
+    "cf_smoke"
+  ],
+  "case_count": 23,
+  "all_suites_same_capture": true,
+  "suite_inventory": [
+    {
+      "suite": "cf_smoke",
+      "case_count": 23,
+      "sha256": "8644ab0d678cc47908cc2558e0081d6aafd1d968cdbd568e2cf10a0568273846",
+      "capture_id": "legacy-cf-smoke-pre-provenance"
+    }
+  ],
+  "reason": "The existing CF smoke golden is retained as a hash-pinned reference until a fresh Mac Excel 365 capture records its exact build.",
+  "source": "tests/oracle/golden_cf/cf_smoke.golden.json"
+}

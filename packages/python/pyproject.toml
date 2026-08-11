@@ -31,7 +31,7 @@ dependencies = [
   # wasmtime is itself a per-platform binary wheel; pip resolves the
   # right build at install time. Pin the major to keep the runtime
   # API stable across formulon point releases.
-  "wasmtime>=20,<45",
+  "wasmtime>=45,<46",
 ]
 keywords = ["excel", "spreadsheet", "formula", "xlsx", "calculation", "wasm"]
 classifiers = [

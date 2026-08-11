@@ -21,6 +21,7 @@
 
 #include <cstdint>
 
+#include "eval/spill_committer.h"
 #include "value.h"
 
 namespace formulon {
@@ -52,6 +53,9 @@ struct EvaluateCellOptions {
   /// SCC reads its peers' most-recently-committed values rather than
   /// triggering re-entrant evaluation.
   bool iterative_mode = false;
+
+  SpillReleaseCallback spill_release_callback = nullptr;
+  void* spill_release_user_data = nullptr;
 };
 
 /// Re-parses and evaluates the formula at `(row, col)` on `sheet`. Returns

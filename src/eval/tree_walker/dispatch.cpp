@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/defined_name_resolve.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/lambda_value.h"
@@ -107,8 +108,53 @@ bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode
 
 }  // namespace
 
+namespace {
+
+Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, const Value* args, Arena& arena,
+                                const FunctionRegistry& registry, const EvalContext& ctx) {
+  const std::uint32_t required = lv->param_count - lv->optional_count;
+  if (arity < required || arity > lv->param_count) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (lv->body == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  NameEnv env;
+  if (lv->captured_env != nullptr) {
+    env = *lv->captured_env;
+  }
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    env = env.extend(lv->params[i], args[i], arena);
+  }
+  for (std::uint32_t i = arity; i < lv->param_count; ++i) {
+    env = env.extend_omitted(lv->params[i], arena);
+  }
+  const EvalContext body_ctx = ctx.with_name_env(&env);
+  return eval_node(*lv->body, arena, registry, body_ctx);
+}
+
+}  // namespace
+
+Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Value* args, Arena& arena,
+                           const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (lv == nullptr || (arity != 0U && args == nullptr)) {
+    return Value::error(ErrorCode::Value);
+  }
+  // Lambda-depth cap fires before the arity check so a runaway
+  // self-recursion (e.g. `LAMBDA(n, f(n+1))`) cannot keep extending the
+  // call stack on its own dime. See `kMaxLambdaDepth` for rationale.
+  EvalDepthGuard lambda_guard(ctx.lambda_depth_counter(), kMaxLambdaDepth);
+  if (lambda_guard.exceeded()) {
+    return Value::error(ErrorCode::Calc);
+  }
+  return invoke_lambda_values_impl(lv, arity, args, arena, registry, ctx);
+}
+
 Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args, Arena& arena,
                     const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (lv == nullptr || (arity != 0U && call_args == nullptr)) {
+    return Value::error(ErrorCode::Value);
+  }
   // Lambda-depth cap fires before the arity check so a runaway
   // self-recursion (e.g. `LAMBDA(n, f(n+1))`) cannot keep extending the
   // call stack on its own dime. See `kMaxLambdaDepth` for rationale.
@@ -120,19 +166,12 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   if (arity < required || arity > lv->param_count) {
     return Value::error(ErrorCode::Value);
   }
-  NameEnv env;
-  if (lv->captured_env != nullptr) {
-    env = *lv->captured_env;
-  }
+  std::vector<Value> args;
+  args.reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const Value arg = eval_node(*call_args[i], arena, registry, ctx);
-    env = env.extend(lv->params[i], arg, arena);
+    args.push_back(eval_node(*call_args[i], arena, registry, ctx));
   }
-  for (std::uint32_t i = arity; i < lv->param_count; ++i) {
-    env = env.extend_omitted(lv->params[i], arena);
-  }
-  const EvalContext body_ctx = ctx.with_name_env(&env);
-  return eval_node(*lv->body, arena, registry, body_ctx);
+  return invoke_lambda_values_impl(lv, arity, args.empty() ? nullptr : args.data(), arena, registry, ctx);
 }
 
 namespace {
@@ -245,6 +284,31 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
       }
       return Value::error(ErrorCode::Value);
     }
+  }
+
+  // A visible defined name has precedence over the lazy table and the
+  // function registry. This is the call-shaped counterpart of NameRef
+  // resolution: a definition may evaluate to a LambdaValue and is then
+  // invoked with the ordinary AST-backed lambda path; an error value is
+  // propagated, while a successfully evaluated non-lambda is not callable.
+  // `resolve_defined_name` returns the LambdaValue after its expansion frame
+  // has been removed, so a named lambda may recurse by resolving itself on
+  // each nested call without being mistaken for a circular defined-name
+  // reference.
+  if (find_defined_name(ctx, name) != nullptr) {
+    const Value defined = resolve_defined_name(name, arena, registry, ctx);
+    if (defined.is_error()) {
+      return defined;
+    }
+    if (!defined.is_lambda()) {
+      return Value::error(ErrorCode::Value);
+    }
+    std::vector<const parser::AstNode*> argv;
+    argv.reserve(arity);
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      argv.push_back(&node.as_call_arg(i));
+    }
+    return invoke_lambda(defined.as_lambda(), arity, argv.empty() ? nullptr : argv.data(), arena, registry, ctx);
   }
 
   if (LazyImpl lazy = find_lazy_impl(name); lazy != nullptr) {

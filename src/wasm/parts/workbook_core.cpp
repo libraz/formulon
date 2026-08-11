@@ -98,7 +98,7 @@ JsSaveResult JsWorkbook::saveEx(int32_t format) const {
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  fm_status_t rc = fm_workbook_save_ex(handle_, static_cast<fm_workbook_format_t>(format), &out, &len);
+  fm_status_t rc = fm_workbook_save_ex(handle_, format, &out, &len);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
@@ -119,8 +119,8 @@ JsSaveDiagnosticsResult JsWorkbook::saveExWithDiagnostics(int32_t format) const 
   std::size_t len = 0;
   std::size_t downgraded_formula_count = 0;
   std::size_t deferred_feature_count = 0;
-  fm_status_t rc = fm_workbook_save_ex_with_diagnostics(handle_, static_cast<fm_workbook_format_t>(format), &out, &len,
-                                                        &downgraded_formula_count, &deferred_feature_count);
+  fm_status_t rc = fm_workbook_save_ex_with_diagnostics(handle_, format, &out, &len, &downgraded_formula_count,
+                                                        &deferred_feature_count);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
@@ -282,7 +282,7 @@ JsStatus JsWorkbook::setCalcMode(uint32_t mode) {
   if (handle_ == nullptr) {
     return error_status(7000);
   }
-  fm_status_t rc = fm_workbook_set_calc_mode(handle_, static_cast<fm_calc_mode_t>(mode));
+  fm_status_t rc = fm_workbook_set_calc_mode(handle_, static_cast<std::int32_t>(mode));
   return status_from_rc(rc);
 }
 

@@ -57,12 +57,14 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
               .with_excel_profile(workbook.excel_profile())
               .with_date1904(workbook.date1904())
               .with_mutable_sheet(sheet)
+              .with_spill_release_callback(opts.spill_release_callback, opts.spill_release_user_data)
               .with_formula_cell(row, col);
   } else {
     ctx = EvalContext(workbook, sheet, state)
               .with_excel_profile(workbook.excel_profile())
               .with_date1904(workbook.date1904())
               .with_mutable_sheet(sheet)
+              .with_spill_release_callback(opts.spill_release_callback, opts.spill_release_user_data)
               .with_formula_cell(row, col);
   }
   // The recalc engine owns iterative-calc resolution (SCC detection + the
@@ -75,9 +77,7 @@ Value evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell& cel
   // If the top-level evaluator produced an Array (e.g. a SEQUENCE() at the
   // anchor), commit the spill and return the anchor scalar. Mirrors the
   // logic in `EvalContext::resolve_ref` for recursive Array results.
-  if (result.is_array()) {
-    result = ctx.dispatch_array_result(result);
-  }
+  result = ctx.dispatch_array_result(result);
   return result;
 }
 

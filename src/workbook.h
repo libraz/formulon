@@ -280,6 +280,23 @@ class Workbook {
   Expected<void, Error> set_cell_formula(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
                                          std::string formula);
 
+  /// Adds a normalized merge range through the workbook mutation path.  The
+  /// engine mutex is held while the sheet merge vector is updated so a spill
+  /// collision check cannot observe a partially-written metadata mutation.
+  Expected<void, Error> add_merge(std::size_t sheet_index, MergeRange merge);
+
+  /// Removes every merge intersecting `merge` and wakes any blocked spill
+  /// anchor whose attempted footprint intersects the removed range.
+  Expected<void, Error> remove_merges_intersecting(std::size_t sheet_index, MergeRange merge);
+
+  /// Removes one merge by insertion order and wakes blocked spill anchors
+  /// intersecting the removed rectangle.
+  Expected<void, Error> remove_merge_at(std::size_t sheet_index, std::size_t index);
+
+  /// Removes all merges from a sheet and wakes all of that sheet's blocked
+  /// spill anchors.
+  Expected<void, Error> clear_merges(std::size_t sheet_index);
+
   /// Drives a full incremental recalc using the embedded recalc engine.
   ///
   /// `registry` supplies the function dispatch table — typically
@@ -702,10 +719,11 @@ class Workbook {
   // the same shift on the affected sheet only; cross-sheet references
   // are rewritten via the AST-based reference transform.
   //
-  // Range clamping (Excel's behaviour where deleting only part of a
-  // range shrinks the range rather than collapsing it) is a follow-up
-  // enhancement; the current implementation collapses to `#REF!` whenever
-  // a range endpoint sits inside the deleted interval. All other Excel
+  // Ordinary 2-D range clamping follows Excel's behaviour: deleting only
+  // part of a range shrinks the surviving interval, while deleting every
+  // coordinate in a range produces `#REF!`. The same rule applies to cell
+  // formulas, defined names, and conditional-format formulas. A Ref3D
+  // sheet-span keeps its shared inner coordinates unchanged. All other Excel
   // semantics — propagation across sheets, defined-name updates,
   // out-of-bounds collapse for inserts that overflow the sheet — match
   // Excel today.

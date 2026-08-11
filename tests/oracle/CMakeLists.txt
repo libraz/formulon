@@ -151,6 +151,76 @@ endforeach()
 
 option(FORMULON_ORACLE_VARIANTS "Build the variant oracle test binary" OFF)
 
+# `targets.yaml` is the eligibility source of truth.  The JSON marker is a
+# required second cross-check, not a way to promote a directory by itself.
+# If the optional Python/PyYAML tooling is unavailable, fail closed and keep
+# all external captures out of active CTest coverage.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+set(_formulon_oracle_python "${Python3_EXECUTABLE}")
+if(EXISTS "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python")
+  set(_formulon_oracle_python "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python")
+endif()
+set(_manifest_active_variants "")
+set(_manifest_workbook_active "")
+if(Python3_Interpreter_FOUND)
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py
+            active-variants --repo-root ${CMAKE_SOURCE_DIR}
+            --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
+    OUTPUT_VARIABLE _manifest_active_variants_raw
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(_manifest_active_variants_raw)
+    string(REPLACE "\n" ";" _manifest_active_variants "${_manifest_active_variants_raw}")
+  endif()
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py
+            workbook-active --repo-root ${CMAKE_SOURCE_DIR}
+            --targets-file ${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml
+    OUTPUT_VARIABLE _manifest_workbook_active
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+endif()
+
+# A directory under variants/ is not automatically an active oracle.  In
+# particular, the historical win-365-ja_JP capture is deliberately kept for
+# research but its manifest status is `wanted` and its provenance record says
+# `active_ctest: false`.  Parse the tiny, committed JSON marker here rather
+# than letting an old golden tree silently become CI coverage merely because
+# FORMULON_ORACLE_VARIANTS=ON was enabled.
+function(formulon_oracle_variant_active tag out_var)
+  list(FIND _manifest_active_variants "${tag}" _manifest_variant_index)
+  if(_manifest_variant_index LESS 0)
+    set(${out_var} FALSE PARENT_SCOPE)
+    return()
+  endif()
+  set(_provenance "${CMAKE_CURRENT_SOURCE_DIR}/variants/${tag}/PROVENANCE.json")
+  if(NOT EXISTS "${_provenance}")
+    set(${out_var} FALSE PARENT_SCOPE)
+    return()
+  endif()
+  file(READ "${_provenance}" _record)
+  # Keep the status in the directory marker as a second line of defence:
+  # even if a stale active marker is copied over a `status: wanted` target,
+  # CTest must not admit it.  provenance.py performs the manifest-level
+  # cross-check; this configure-time guard makes the exclusion immediate.
+  string(REGEX MATCH "\"status\"[ \t\r\n]*:[ \t\r\n]*\"(primary|scaffolded|wanted)\"" _status "${_record}")
+  if(NOT _status OR _record MATCHES "\"status\"[ \t\r\n]*:[ \t\r\n]*\"wanted\"")
+    set(${out_var} FALSE PARENT_SCOPE)
+    return()
+  endif()
+  string(REGEX MATCH "\"classification\"[ \t\r\n]*:[ \t\r\n]*\"(active|verified)\"" _classification "${_record}")
+  string(REGEX MATCH "\"verified\"[ \t\r\n]*:[ \t\r\n]*true" _verified "${_record}")
+  string(REGEX MATCH "\"active_ctest\"[ \t\r\n]*:[ \t\r\n]*true" _active_ctest "${_record}")
+  if(_classification AND _verified AND _active_ctest)
+    set(${out_var} TRUE PARENT_SCOPE)
+  else()
+    set(${out_var} FALSE PARENT_SCOPE)
+  endif()
+endfunction()
+
 if(FORMULON_ORACLE_VARIANTS)
   set(_variant_root "${CMAKE_CURRENT_SOURCE_DIR}/variants")
   set(_variant_dirs_default "")
@@ -158,7 +228,8 @@ if(FORMULON_ORACLE_VARIANTS)
     file(GLOB _variant_subdirs RELATIVE "${_variant_root}" "${_variant_root}/*")
     foreach(_tag IN LISTS _variant_subdirs)
       set(_golden "${_variant_root}/${_tag}/golden")
-      if(IS_DIRECTORY "${_golden}")
+      formulon_oracle_variant_active("${_tag}" _variant_active)
+      if(_variant_active AND IS_DIRECTORY "${_golden}")
         if(_variant_dirs_default STREQUAL "")
           set(_variant_dirs_default "${_tag}=${_golden}")
         else()
@@ -215,7 +286,8 @@ if(FORMULON_ORACLE_VARIANTS)
     file(GLOB _variant_subdirs RELATIVE "${_variant_root}" "${_variant_root}/*")
     foreach(_tag IN LISTS _variant_subdirs)
       set(_golden_wb "${_variant_root}/${_tag}/golden_wb")
-      if(IS_DIRECTORY "${_golden_wb}")
+      formulon_oracle_variant_active("${_tag}" _variant_active)
+      if(_variant_active AND IS_DIRECTORY "${_golden_wb}")
         if(_wb_variant_dirs_default STREQUAL "")
           set(_wb_variant_dirs_default "${_tag}=${_golden_wb}")
         else()
@@ -320,8 +392,8 @@ gtest_discover_tests(formulon_cf_oracle_tests
 #
 # Registered separately from formulon_oracle_tests because the workbook
 # spec / result data model is structurally different from the Value-result
-# schema the function oracle uses. The pivot / print verifier itself lands
-# in a later phase; this binary is the scaffolding.
+# schema the function oracle uses. Historical workbook goldens remain
+# available for comparison, but provenance gates whether they are active.
 # ---------------------------------------------------------------------------
 
 add_executable(formulon_workbook_oracle_tests
@@ -331,6 +403,27 @@ add_executable(formulon_workbook_oracle_tests
   workbook_oracle_runner.cpp
   workbook_oracle_test.cpp
 )
+
+# The checked-in workbook goldens were captured with an unverified Excel
+# product/version. Keep them available for historical comparison, but do not
+# count them as active Windows 365 CTest coverage until their provenance file
+# explicitly opts in. The native builder test below remains active.
+set(_workbook_oracle_golden_dir "${CMAKE_CURRENT_SOURCE_DIR}/golden_wb")
+set(_workbook_oracle_active FALSE)
+set(_workbook_oracle_provenance "${_workbook_oracle_golden_dir}/PROVENANCE.json")
+if(EXISTS "${_workbook_oracle_provenance}" AND _manifest_workbook_active STREQUAL "active")
+  file(READ "${_workbook_oracle_provenance}" _workbook_record)
+  string(REGEX MATCH "\"status\"[ \t\r\n]*:[ \t\r\n]*\"(primary|scaffolded|wanted)\"" _workbook_status "${_workbook_record}")
+  string(REGEX MATCH "\"classification\"[ \t\r\n]*:[ \t\r\n]*\"(active|verified)\"" _workbook_classification "${_workbook_record}")
+  string(REGEX MATCH "\"verified\"[ \t\r\n]*:[ \t\r\n]*true" _workbook_verified "${_workbook_record}")
+  string(REGEX MATCH "\"active_ctest\"[ \t\r\n]*:[ \t\r\n]*true" _workbook_active_ctest "${_workbook_record}")
+  if(_workbook_status AND NOT _workbook_record MATCHES "\"status\"[ \t\r\n]*:[ \t\r\n]*\"wanted\"" AND _workbook_classification AND _workbook_verified AND _workbook_active_ctest)
+    set(_workbook_oracle_active TRUE)
+  endif()
+endif()
+if(NOT _workbook_oracle_active)
+  set(_workbook_oracle_golden_dir "")
+endif()
 
 target_link_libraries(formulon_workbook_oracle_tests
   PRIVATE
@@ -346,7 +439,7 @@ target_include_directories(formulon_workbook_oracle_tests
 
 target_compile_definitions(formulon_workbook_oracle_tests
   PRIVATE
-    FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden_wb"
+    FORMULON_WORKBOOK_ORACLE_GOLDEN_DIR="${_workbook_oracle_golden_dir}"
 )
 
 formulon_apply_warnings(formulon_workbook_oracle_tests)
@@ -391,3 +484,46 @@ formulon_apply_warnings(formulon_workbook_builder_test)
 gtest_discover_tests(formulon_workbook_builder_test
   PROPERTIES LABELS "oracle"
 )
+
+# Metadata checks are read-only and deliberately separate from the executable
+# golden tests.  The closure check reports external-pending suites (including
+# an incomplete historical print suite) without fabricating or deleting data.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  add_test(
+    NAME formulon_oracle_provenance_check
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py check
+  )
+  set_tests_properties(formulon_oracle_provenance_check PROPERTIES LABELS "oracle;oracle-metadata")
+  add_test(
+    NAME formulon_oracle_policy_unit
+    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.provenance_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_oracle_policy_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  option(FORMULON_ORACLE_RELEASE_GATES
+    "Register strict external-capture oracle gates (release CI only)"
+    OFF
+  )
+  if(FORMULON_ORACLE_RELEASE_GATES)
+    add_test(
+      NAME formulon_workbook_closure_check
+      COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py --require-active
+    )
+    # Release workflows opt in explicitly with -DFORMULON_ORACLE_RELEASE_GATES=ON
+    # and ctest -L oracle-release.  The strict capture gate is not registered
+    # in a normal developer/CI build merely because it has a label.
+    set_tests_properties(formulon_workbook_closure_check PROPERTIES LABELS "oracle-release")
+  endif()
+  add_test(
+    NAME formulon_workbook_closure_check_optional
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/workbook_closure_check.py
+  )
+  set_tests_properties(formulon_workbook_closure_check_optional PROPERTIES LABELS "oracle;oracle-metadata")
+  add_test(
+    NAME formulon_workbook_case_schema_negative
+    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.workbook_case_schema_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_workbook_case_schema_negative PROPERTIES LABELS "oracle;oracle-metadata")
+endif()

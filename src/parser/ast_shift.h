@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -52,6 +53,24 @@ class RefTransform {
   /// Returns the rewritten reference. Returning `std::nullopt` collapses
   /// the containing subtree to the `#REF!` error literal.
   virtual std::optional<Reference> apply(const Reference& ref) const = 0;
+
+  /// Returns the rewritten endpoints of a cell/range reference. The default
+  /// implementation applies the ordinary endpoint transform independently;
+  /// structural-edit transforms can override this to preserve a surviving
+  /// portion of a range when an edit removes one of its endpoints.
+  ///
+  /// Returning `std::nullopt` collapses the whole range to `#REF!`. The
+  /// endpoint references have already had any implicit sheet qualifier
+  /// inherited by the walker, so an override can reason about both endpoints
+  /// as one rectangle.
+  virtual std::optional<std::pair<Reference, Reference>> apply_range(const Reference& lhs, const Reference& rhs) const;
+
+  /// Whether a Ref3D node's inner cell coordinates must be carried through
+  /// unchanged. Excel treats row/column structural edits this way: editing a
+  /// sheet inside `First:Last!A1:B3` (or the sheet that owns the formula)
+  /// does not rewrite the shared `A1:B3` tail. Relative-copy transforms still
+  /// use the ordinary `apply` / `apply_range` path.
+  virtual bool preserves_ref3d_coordinates() const noexcept { return false; }
 
   /// Hook for `ExternalRef` payloads. The default forwards to `apply`,
   /// which is sufficient for transforms that only manipulate row / column

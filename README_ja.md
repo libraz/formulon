@@ -24,7 +24,7 @@ CLI バイナリは [GitHub Releases](https://github.com/libraz/formulon/release
 
 ## 特徴
 
-- **互換性を oracle で確認します。** 既定の profile は `win-365-ja_JP` です。primary oracle は Mac Excel 365 (ja-JP) で、Windows Excel 365 (ja-JP) は variant golden として管理しています。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
+- **互換性を oracle で確認します。** 既定の profile は `win-365-ja_JP` です。primary oracle は Mac Excel 365 (ja-JP) です。Windows の `win-365-ja_JP` target は現在 `wanted` で、過去の Office 2019 / バージョン不明のファイルは比較用の `reference-only` として保持し、Microsoft 365 の検証済みデータや active CTest coverage とは数えません。出力は実 Excel から再生成した golden と照合します。許容している差分、たとえば超越関数の ulp 差、揮発関数、Excel 側の不整合を Formulon が意図的に採らないケースは、[`tests/divergence.yaml`](tests/divergence.yaml) に理由と確認済み Excel ビルドを記録します。
 - **C++ コア 1 本で動きます。** ブラウザ、Python、CLI のために別々の計算ロジックを持たず、同じエンジンを配布します。実装が複数に分かれて結果がずれる、という問題を避けています。
 - **WASM サイズを管理します。** CI は非圧縮 **3.00 MiB** と Brotli **768 KiB** の hard ceiling を強制し、**2.50 MiB** / **640 KiB** の soft ceiling を報告します。実際に効いてくるのは配信時の Brotli サイズなので、非圧縮と対等に検査します。現在値は `make size-check` で確認できます。
 - **依存は小さく保っています。** ランタイム依存は `miniz` (zip/deflate)、`pugixml` (XML + XPath 1.0)、`PCRE2` (`REGEX*`)、`double-conversion` (Grisu3 `dtoa`) の 4 つです。線形代数、UTF-8 処理、数値変換の多くはリポジトリ内で実装しています。
@@ -93,7 +93,7 @@ formulon paginate output.xlsx --sheet 0
 | &nbsp;&nbsp;↳ うち環境依存 | 2 | 実装済みだが、ホスト環境やワークブック状態によって値が変わるため固定 golden だけでは完全に記述できない関数。上記 507 に含まれます。 | `INFO`, `CELL` |
 | unavailable stub | 15 | Formulon が内蔵しない外部サービス、ネットワーク、COM、OLAP 接続などが必要な関数。固定のエラー面だけを返します。 | `PY`, `WEBSERVICE`, `STOCKHISTORY`, `IMAGE`, `RTD`, `TRANSLATE`, `DETECTLANGUAGE`, `COPILOT`, `CUBE*` |
 
-oracle は **97 カテゴリ** あります。primary oracle は Mac Excel 365 ja-JP から再生成し、Windows Excel 365 ja-JP は `win-365-ja_JP` variant golden でカバーしています。
+oracle は **97 カテゴリ** あります。primary oracle は Mac Excel 365 ja-JP から再生成します。Windows Excel 365 ja-JP は外部検証待ちの target で、過去の reference ファイルは active coverage から除外しています。
 
 現在のローカル検証結果:
 
@@ -103,12 +103,12 @@ oracle は **97 カテゴリ** あります。primary oracle は Mac Excel 365 j
 | `ctest -LE "LOAD"` (`SLOW` 層を追加) | `11932/11932` |
 | primary formula oracle | `3942/3942` passed / `140` documented skips |
 | 条件付き書式 oracle | `23/23` |
-| workbook oracle (pivot + print) | `63/70` passed / `7` documented skips |
+| workbook oracle (pivot + print) | 過去の golden は除外、製品確認済み Windows M365 probe 待ち |
 | 取り込み済み外部エンジンコーパス (クロスチェック) | `12510/12510` passed / `168` documented divergences |
 
-残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `518` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る `4` 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、behavior taxonomy の記述が不足しているためです。実装や golden の欠落ではありません。
+残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `518` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る `4` 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、behavior taxonomy の記述が不足しているためです。別枠の workbook track には実装/golden の gap が残っており、page/data-axis `GETPIVOTDATA` は製品確認済み Windows M365 の観測待ちです。観測結果によっては C++ 側の修正が必要になります。
 
-数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** があります。信頼できる PivotTable 自動化には Windows Excel の COM が必要なため、この track の primary は `win-365-ja_JP` です。golden 採取は完了しており、pivot suite は `28/28` closure、`print_basic` / `print_pagination` / `print_fit` / `print_matrix` の 4 suite が `formulon_workbook_oracle_tests` ハーネスで `35/41` ケース pass。残り `6` ケースは Excel の PageBreakPreview に `PageSetup.Zoom <= 50` で発生する既知の COM quirk (低スケールで列の auto-break が直感に逆らって増える挙動。VBA コミュニティで documented) のため `win-365-ja_JP` scope で divergence-skip 登録しています。
+数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** と Windows COM driver があります。`win-365-ja_JP` target はまだ `wanted` で、チェックイン済み workbook ファイルは比較用の `reference-only` であり、Microsoft 365 検証とは数えません。GETPIVOTDATA の page/data-axis ケースには post-build formula-probe schema、native verifier、直接の `#REF!` 回帰を追加しました。製品確認済み Windows Microsoft 365 host での外部 golden 採取が必要で、コマンドと制約は [`tests/divergence.yaml`](tests/divergence.yaml) に記録しています。
 
 新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
 

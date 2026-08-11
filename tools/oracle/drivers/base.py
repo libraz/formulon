@@ -163,10 +163,9 @@ class OracleDriver(abc.ABC):
                 sentinel cannot evaluate the real suite either, so we
                 refuse rather than emit partial goldens).
 
-        Any other observed shape (text result, number, blank, etc.) is
-        treated as a pass and returns silently. The base class trusts the
-        :meth:`run_suite` contract; it does not type-check unexpected
-        results.
+        The exact expected result is the text value ``"1"``. Any other
+        result shape is rejected; a product/version sentinel must not be
+        treated as a best-effort hint.
         """
 
         message = (
@@ -188,12 +187,17 @@ class OracleDriver(abc.ABC):
             [{"id": "sentinel", "formula": "=ARRAYTOTEXT(1)", "setup": {}}],
         )
         if not results:
-            return
+            raise RuntimeError("M365 sentinel probe returned no result; refusing unverified capture")
         result = results[0]
         if result.kind == "error" and result.error_code == "#NAME?":
             raise RuntimeError(message)
         if result.kind == "skipped":
             raise RuntimeError(message)
+        if result.kind != "text" or result.value != "1":
+            raise RuntimeError(
+                "Microsoft 365 sentinel ARRAYTOTEXT(1) returned an unexpected "
+                f"result: kind={result.kind!r}, value={result.value!r}"
+            )
 
     def run_workbook_case(self, case: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluates one declarative workbook case and returns the result.

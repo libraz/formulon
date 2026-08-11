@@ -66,17 +66,22 @@ bool current_sheet_index(const EvalContext& ctx, std::uint16_t* out) noexcept {
 
 }  // namespace
 
+const io::DefinedName* find_defined_name(const EvalContext& ctx, std::string_view name) noexcept {
+  const Workbook* wb = ctx.workbook();
+  std::uint16_t sheet_id = 0;
+  if (wb == nullptr || !current_sheet_index(ctx, &sheet_id)) {
+    return nullptr;
+  }
+  return find_defined_name(*wb, sheet_id, name);
+}
+
 Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx) {
   const Workbook* wb = ctx.workbook();
   if (wb == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  std::uint16_t sheet_id = 0;
-  if (!current_sheet_index(ctx, &sheet_id)) {
-    return Value::error(ErrorCode::Name);
-  }
-  const io::DefinedName* def = find_defined_name(*wb, sheet_id, name);
+  const io::DefinedName* def = find_defined_name(ctx, name);
   if (def == nullptr) {
     return Value::error(ErrorCode::Name);
   }
@@ -92,8 +97,7 @@ Value resolve_defined_name(std::string_view name, Arena& arena, const FunctionRe
   if (src.empty()) {
     return Value::error(ErrorCode::Name);
   }
-  parser::Parser parser(src, arena);
-  parser::AstNode* root = parser.parse();
+  parser::AstNode* root = parser::parse_strict(src, arena);
   if (root == nullptr) {
     return Value::error(ErrorCode::Name);
   }

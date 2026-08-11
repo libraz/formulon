@@ -17,6 +17,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/text_format/number_format_scanner.h"
 #include "eval/text_format/number_format_types.h"
 #include "eval/text_format/render_date.h"
 #include "eval/text_format/render_numeric.h"
@@ -31,7 +32,11 @@ FormatStatus apply_format(double value, std::string_view format, std::string_vie
   if (format.empty()) {
     return FormatStatus::kOk;
   }
-  const auto sections_raw = number_format_detail::split_sections(format);
+  // Normalise the ja-JP full-width syntax once. All section/string views and
+  // literal offsets below refer to this owned buffer for the duration of the
+  // render; quoted and escaped payloads remain byte-for-byte unchanged.
+  const std::string normalized_format = number_format_detail::normalize_ja_jp_format_syntax(format);
+  const auto sections_raw = number_format_detail::split_sections(normalized_format);
   if (sections_raw.empty()) {
     return FormatStatus::kOk;
   }

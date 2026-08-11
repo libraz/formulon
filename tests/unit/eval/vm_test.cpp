@@ -20,6 +20,7 @@
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
+#include "io/defined_names.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
@@ -827,6 +828,24 @@ TEST(Vm, ResultMatchesTreeWalker_LetLambdaCompose) {
   Arena a2;
   EXPECT_TRUE(ValuesAgreeBitExact(RunTreeOrDie("=LET(f, LAMBDA(x, x*x), f(7))", a1),
                                   RunVmOrDie("=LET(f, LAMBDA(x, x*x), f(7))", a2)));
+}
+
+TEST(Vm, ResultMatchesTreeWalker_WorkbookNamedLambda) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(10.0));
+  wb.set_defined_names({io::DefinedName{"AddA1", "LAMBDA(x,x+A1)", -1, false, ""}});
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, s, state);
+
+  Arena tree_arena;
+  Arena vm_arena;
+  const Value tree = RunTreeWithCtx("=adda1(5)", tree_arena, ctx);
+  const Value vm = RunVmWithCtx("=adda1(5)", vm_arena, ctx);
+  ASSERT_TRUE(tree.is_number()) << tree.debug_to_string();
+  ASSERT_TRUE(vm.is_number()) << vm.debug_to_string();
+  EXPECT_DOUBLE_EQ(tree.as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(vm.as_number(), tree.as_number());
 }
 
 }  // namespace

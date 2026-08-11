@@ -98,8 +98,11 @@ bool check_range_count(std::uint32_t n, const char* api);
 // Translates a `Value` into a C-side `fm_value_t`. For text variants the
 // payload is appended to `store` and the returned pointer is a stable,
 // NUL-terminated `c_str()` into it. Read-path callers pass the per-handle
-// `read_scratch` (cleared each call) so returned pointers stay valid only
-// until the next read; intern-path callers pass long-lived storage.
+// `read_scratch`; after argument/model validation, each successful
+// scratch-backed producer clears and refreshes that store. A
+// validation-rejected call leaves it untouched, so returned pointers remain
+// valid until the next successful scratch-backed read, mutation, or handle
+// destruction. Intern-path callers pass long-lived storage.
 void value_to_fm(const formulon::Value& v, TextStore& store, fm_value_t* out);
 
 // Validates a `(handle, sheet_index)` pair and returns the in-bounds
@@ -139,15 +142,15 @@ struct fm_workbook {
   std::uint32_t xlsb_undecoded_defined_name_count = 0;
   std::uint32_t xlsb_dropped_part_count = 0;
 
-  // Scratch storage for strings handed back to the caller on the read
-  // path (`fm_workbook_get_value` / `fm_workbook_cell_at` /
-  // `fm_workbook_lambda_text_at`). Each fallible read entry point clears
-  // this at its start, so it only ever holds the strings produced by the
-  // single most recent read call. This bounds memory: a long-lived handle
-  // that loops over reads no longer accumulates one entry per call. The
-  // returned `const char*` is therefore valid only until the next read
-  // call on the same handle (or any mutation, or handle destruction) —
-  // the standard C-ABI scratch contract documented in `formulon_c.h`.
+  // Scratch storage for strings handed back to the caller on the read path.
+  // After argument/model validation, each successful text-producing read
+  // clears and refreshes this store; the successful CF getter also refreshes
+  // it while serializing threshold value strings. Validation-rejected calls
+  // leave it untouched. This bounds memory: a long-lived handle that loops
+  // over reads no longer accumulates one entry per call. Returned `const
+  // char*` values are valid only until the next successful scratch-backed
+  // read on the same handle (or any mutation, or handle destruction) — the
+  // standard C-ABI scratch contract documented in `formulon_c.h`.
   formulon::c_api::parts::TextStore read_scratch;
 
   // Sorted coordinate cache for the `cell_count` / `cell_at` iteration
@@ -160,9 +163,12 @@ struct fm_workbook {
   };
   mutable CellEnumerationCache cell_enumeration_cache;
 
-  // Scratch buffers for `fm_sheet_cf_get_at` visual payload arrays. The
-  // returned pointers follow the same read-scratch lifetime as textual
-  // readbacks: valid until the next read/mutation on this handle.
+  // Scratch buffers for `fm_sheet_cf_get_at` visual payload arrays. They are
+  // separate from `read_scratch`: after argument/model validation, only a
+  // successful `fm_sheet_cf_get_at` clears and refreshes these vectors;
+  // textual producers do not touch them. Validation-rejected CF calls leave
+  // them untouched. Returned pointers are valid until the next successful CF
+  // getter, mutation, or handle destruction on this handle.
   std::vector<fm_cfvo_t> cfvo_scratch;
   std::vector<fm_cf_color_t> cf_color_scratch;
 

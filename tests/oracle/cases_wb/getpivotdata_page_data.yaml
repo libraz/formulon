@@ -1,0 +1,68 @@
+suite: getpivotdata_page_data
+kind: workbook
+description: "Windows Excel workbook-oracle probes for GETPIVOTDATA field routing. The first case places Region on the page axis, the second addresses a value-axis field explicitly. formula_probes are evaluated only after the PivotTable is built; no golden is checked in until a product-verified Microsoft 365 Windows host is available."
+
+cases:
+  - id: page_axis_field
+    description: "Page-axis field/item addressing plus the direct #REF branch."
+    sheets:
+      Data:
+        A1: Region
+        B1: Product
+        C1: Amount
+        A2: North
+        B2: Widget
+        C2: 100
+        A3: North
+        B3: Gadget
+        C3: 50
+        A4: South
+        B4: Widget
+        C4: 200
+        A5: South
+        B5: Gadget
+        C5: 300
+      Report: {}
+    pivot:
+      source: Data!A1:C5
+      anchor: Report!A1
+      row_fields: [Product]
+      page_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+      formula_probes:
+        - id: page_field_item
+          cell: Report!Z1
+          formula: '=GETPIVOTDATA("合計 / Amount",Report!A1,"Region","North")'
+        - id: unknown_field_ref
+          cell: Report!Z2
+          formula: '=GETPIVOTDATA("合計 / Amount",Report!A1,"MissingField","x")'
+
+  - id: data_axis_field
+    description: "Value-axis field/item addressing plus the direct #REF branch."
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        A3: North
+        B3: 200
+        A4: South
+        B4: 300
+        A5: South
+        B5: 400
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+      formula_probes:
+        - id: data_field_item
+          cell: Report!Z1
+          formula: '=GETPIVOTDATA("合計 / Amount",Report!A1,"Amount",100)'
+        - id: unknown_field_ref
+          cell: Report!Z2
+          formula: '=GETPIVOTDATA("合計 / Amount",Report!A1,"MissingField","x")'

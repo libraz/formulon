@@ -196,6 +196,107 @@ TEST(RowColShiftTransform, RowDeleteCollapsesInsideInterval) {
   EXPECT_EQ(before->row, 2U);
 }
 
+TEST(RowColShiftTransform, RowDeleteShrinksRangeAtFirstEndpoint) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/0, /*count=*/1);
+  const std::optional<std::pair<Reference, Reference>> out =
+      t.apply_range(MakeRef("Sheet1", 0, 0), MakeRef("Sheet1", 2, 0));
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->first.row, 0U);
+  EXPECT_EQ(out->second.row, 1U);
+}
+
+TEST(RowColShiftTransform, RowDeleteShrinksRangeAtLastEndpoint) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/2, /*count=*/1);
+  const std::optional<std::pair<Reference, Reference>> out =
+      t.apply_range(MakeRef("Sheet1", 0, 0), MakeRef("Sheet1", 2, 0));
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->first.row, 0U);
+  EXPECT_EQ(out->second.row, 1U);
+}
+
+TEST(RowColShiftTransform, RowDeleteShrinksRangeThroughMiddle) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/1, /*count=*/2);
+  const std::optional<std::pair<Reference, Reference>> out =
+      t.apply_range(MakeRef("Sheet1", 0, 0), MakeRef("Sheet1", 4, 0));
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->first.row, 0U);
+  EXPECT_EQ(out->second.row, 2U);
+}
+
+TEST(RowColShiftTransform, RowDeleteCollapsesSingletonRange) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/2, /*count=*/1);
+  EXPECT_FALSE(t.apply_range(MakeRef("Sheet1", 2, 0), MakeRef("Sheet1", 2, 0)).has_value());
+}
+
+TEST(RowColShiftTransform, RowDeletePreservesReverseRangeOrientation) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/1, /*count=*/1);
+  const std::optional<std::pair<Reference, Reference>> out =
+      t.apply_range(MakeRef("Sheet1", 3, 0), MakeRef("Sheet1", 0, 0));
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->first.row, 2U);
+  EXPECT_EQ(out->second.row, 0U);
+}
+
+TEST(RowColShiftTransform, ColDeleteShrinksRangeAtBothEndpoints) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kCol, RowColEdit::kDelete, /*index=*/1, /*count=*/1);
+  const std::optional<std::pair<Reference, Reference>> out =
+      t.apply_range(MakeRef("Sheet1", 0, 0), MakeRef("Sheet1", 0, 3));
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->first.col, 0U);
+  EXPECT_EQ(out->second.col, 2U);
+}
+
+TEST(RowColShiftTransform, ColDeleteCollapsesSingletonRange) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kCol, RowColEdit::kDelete, /*index=*/2, /*count=*/1);
+  EXPECT_FALSE(t.apply_range(MakeRef("Sheet1", 0, 2), MakeRef("Sheet1", 0, 2)).has_value());
+}
+
+TEST(RowColShiftTransform, WholeRowAndColumnRangesUseTheirRelevantAxis) {
+  RowColShiftTransform row_delete("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/1, /*count=*/1);
+  Reference row_first = MakeRef("Sheet1", 0, 0);
+  Reference row_last = MakeRef("Sheet1", 3, 0);
+  row_first.is_full_row = true;
+  row_last.is_full_row = true;
+  const std::optional<std::pair<Reference, Reference>> rows = row_delete.apply_range(row_first, row_last);
+  ASSERT_TRUE(rows.has_value());
+  EXPECT_EQ(rows->first.row, 0U);
+  EXPECT_EQ(rows->second.row, 2U);
+
+  RowColShiftTransform col_delete("Sheet1", RowColAxis::kCol, RowColEdit::kDelete, /*index=*/1, /*count=*/1);
+  Reference col_first = MakeRef("Sheet1", 0, 0);
+  Reference col_last = MakeRef("Sheet1", 0, 3);
+  col_first.is_full_col = true;
+  col_last.is_full_col = true;
+  const std::optional<std::pair<Reference, Reference>> cols = col_delete.apply_range(col_first, col_last);
+  ASSERT_TRUE(cols.has_value());
+  EXPECT_EQ(cols->first.col, 0U);
+  EXPECT_EQ(cols->second.col, 2U);
+}
+
+TEST(RowColShiftTransform, OutOfScopeOrCrossSheetRangeUsesEndpointPolicy) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/1, /*count=*/1);
+  const std::optional<std::pair<Reference, Reference>> out_of_scope =
+      t.apply_range(MakeRef("Other", 1, 0), MakeRef("Other", 3, 0));
+  ASSERT_TRUE(out_of_scope.has_value());
+  EXPECT_EQ(out_of_scope->first.row, 1U);
+  EXPECT_EQ(out_of_scope->second.row, 3U);
+
+  const std::optional<std::pair<Reference, Reference>> cross_sheet =
+      t.apply_range(MakeRef("Sheet1", 1, 0), MakeRef("Other", 3, 0));
+  EXPECT_FALSE(cross_sheet.has_value()) << "an in-scope deleted endpoint still poisons a cross-sheet range";
+}
+
+TEST(RowColShiftTransform, RangeDeletePreservesAbsoluteFlags) {
+  RowColShiftTransform t("Sheet1", RowColAxis::kRow, RowColEdit::kDelete, /*index=*/0, /*count=*/1);
+  const std::optional<std::pair<Reference, Reference>> out =
+      t.apply_range(MakeRef("Sheet1", 0, 0, true, true), MakeRef("Sheet1", 2, 0, true, true));
+  ASSERT_TRUE(out.has_value());
+  EXPECT_TRUE(out->first.col_abs);
+  EXPECT_TRUE(out->first.row_abs);
+  EXPECT_TRUE(out->second.col_abs);
+  EXPECT_TRUE(out->second.row_abs);
+}
+
 TEST(RowColShiftTransform, ColInsertSkipsFullRowReferences) {
   RowColShiftTransform t("Sheet1", RowColAxis::kCol, RowColEdit::kInsert, /*index=*/2, /*count=*/3);
   Reference full_row = MakeRef("Sheet1", 5, 0);

@@ -13,6 +13,7 @@
 #define FORMULON_EVAL_TEXT_FORMAT_NUMBER_FORMAT_SCANNER_H_
 
 #include <cstddef>
+#include <string>
 #include <string_view>
 
 #include "eval/text_format/number_format_types.h"
@@ -20,6 +21,18 @@
 namespace formulon {
 namespace text_format {
 namespace number_format_detail {
+
+// Normalises the syntax-bearing full-width forms accepted by the ja-JP
+// TEXT() parser. This is deliberately not a general NFKC pass: quoted text,
+// escape/underscore/asterisk payloads, and malformed UTF-8 are copied byte
+// for byte. The returned string owns the normalised view consumed by the
+// tokenizer, so literal token offsets remain stable for the whole parse.
+std::string normalize_ja_jp_format_syntax(std::string_view fmt);
+
+// Returns the byte width of the UTF-8 scalar beginning at `i`, or one byte for
+// malformed/truncated input. Callers use this for payload consumption so a
+// multibyte literal is never split into independent escape tokens.
+std::size_t utf8_scalar_width(std::string_view fmt, std::size_t i) noexcept;
 
 // Returns true iff `c` is one of `yYmMdDhHsS`. Used to detect date-family
 // tokens; AM/PM handled separately because they span multiple characters.

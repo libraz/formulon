@@ -35,6 +35,33 @@ targets:
 means **WSL2** — plain Linux is rejected by the bridge driver via
 `/proc/version`.
 
+Target status is part of the evidence contract, not a display label:
+
+```bash
+tools/oracle/.venv/bin/python tools/oracle/provenance.py check
+tools/oracle/.venv/bin/python tools/oracle/provenance.py active-variants
+tools/oracle/.venv/bin/python tools/oracle/provenance.py cf-active
+```
+
+Only a non-primary target with `status: scaffolded` and a verified
+`PROVENANCE.json` (`classification: active`, `verified: true`,
+`active_ctest: true`) can enter default variant CTest coverage. `status:
+wanted` is a reserved slot. The old `win-365-ja_JP` directory is retained as
+`reference-only`; its `16.0`/Click-to-Run values do not prove Microsoft 365
+and must not be described as a verified Windows 365 golden. A fresh Windows
+capture must pass the built-in `ARRAYTOTEXT` M365 sentinel before any golden
+is committed.
+
+The conditional-formatting track is declared separately in
+`targets.yaml`:
+`tracks.cf.primary: mac-365-ja_JP`. `cf_oracle_gen.py` resolves and validates
+that target (driver, host OS, locale, and M365 sentinel) before writing
+`golden_cf/*.golden.json`. A complete run also writes
+`golden_cf/PROVENANCE.json`, including the Excel build, capture id, suite
+case counts, and SHA-256 for every golden. `cf-active` is the explicit
+check for a verified capture; a legacy/reference marker is intentionally not
+active coverage.
+
 ## Setup
 
 `make oracle-setup` auto-detects the host and routes to the right path:
@@ -62,7 +89,7 @@ make oracle-setup
 #     -> (your terminal) -> Microsoft Excel
 ```
 
-### WSL2 → Windows variant (opt-in, for divergence research)
+### WSL2 → Windows (external probe; currently wanted/reference-only)
 
 Prerequisites:
 - Windows host with Office 365 installed, signed in, and activated. The
@@ -103,9 +130,22 @@ make oracle-gen
 # Primary, single suite
 make oracle-gen SUITE=count
 
-# Variant by target name (works on any compatible host)
+# Conditional-formatting primary (Mac Excel 365 ja-JP)
+make oracle-gen-cf
+make oracle-gen-cf SUITE=cf_smoke
+
+# External probe by target name (requires a product-verified Windows host)
+# The wanted win-365-ja_JP target is intentionally reference-only until
+# Microsoft 365 is verified by the driver's preflight sentinel.
 make oracle-gen TARGET=win-365-ja_JP
 make oracle-gen TARGET=win-365-ja_JP SUITE=count
+
+# Workbook track (pivot + post-build formula probes). Stage output outside
+# the repository until provenance is reviewed; do not overwrite historical
+# reference goldens.
+tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py \
+  --target win-365-ja_JP --suite getpivotdata_page_data \
+  --golden-dir /tmp/formulon-m365-getpivotdata-golden
 
 # Direct CLI access (more flexibility)
 tools/oracle/.venv/bin/python tools/oracle/cli.py gen --target win-365-ja_JP
@@ -113,7 +153,7 @@ tools/oracle/.venv/bin/python tools/oracle/cli.py gen --all     # all targets co
 tools/oracle/.venv/bin/python tools/oracle/oracle_gen.py --suite count --visible   # debug, shows Excel UI
 ```
 
-Successful runs:
+Successful runs for a maintained target:
 - Primary: updates `tests/oracle/golden/*.golden.json` + `tests/oracle/ENVIRONMENT.md`
 - Variant: updates `tests/oracle/variants/<target>/golden/*.golden.json` + per-variant `ENVIRONMENT.md`
 
@@ -126,8 +166,15 @@ should call out which cells changed and why.
 make oracle-verify           # primary only; runs ctest -L oracle
 ```
 
-Variants are verified through a **separate** test binary, gated behind a
-CMake option:
+The workbook closure check without an external capture is pending-aware and
+belongs to the normal `oracle` metadata surface. The strict
+`--require-active` release gate is registered only when CMake is configured
+with `-DFORMULON_ORACLE_RELEASE_GATES=ON`; a label alone never adds it to a
+default CTest run.
+
+Maintained variants are verified through a **separate** test binary, gated
+behind a CMake option. `status: wanted` targets and their historical
+reference-only directories are excluded even when the option is enabled:
 
 ```bash
 cmake -B build -DFORMULON_ORACLE_VARIANTS=ON

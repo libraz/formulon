@@ -108,15 +108,16 @@ std::vector<std::string_view> split_sections(std::string_view fmt) {
       continue;
     }
     if (c == '\\' || c == '!') {
-      i += 2;  // Skip escape + next byte.
+      i += i + 1 < fmt.size() ? 1 + utf8_scalar_width(fmt, i + 1) : 1;
+      // Skip escape + one complete UTF-8 scalar payload.
       continue;
     }
     if (c == '_' && i + 1 < fmt.size()) {
-      i += 2;  // Skip underscore-skip pair; the trailing byte is reserved.
+      i += 1 + utf8_scalar_width(fmt, i + 1);  // Skip the scalar payload.
       continue;
     }
     if (c == '*' && i + 1 < fmt.size()) {
-      i += 2;  // Skip asterisk-fill pair; the trailing byte is the fill char.
+      i += 1 + utf8_scalar_width(fmt, i + 1);  // Skip the scalar payload.
       continue;
     }
     if (c == '[') {

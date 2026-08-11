@@ -33,20 +33,62 @@ set(FM_FUZZ_SANITIZERS "fuzzer,address,undefined" CACHE STRING
     "Comma-separated -fsanitize list for the fuzz harnesses")
 message(STATUS "Formulon fuzz: sanitizers = ${FM_FUZZ_SANITIZERS}")
 
+# Keep the production core completely free of fuzzer instrumentation.  An
+# object library is intentionally built from the same source manifest as the
+# production core, but with `fuzzer-no-link` and the selected memory/UB
+# sanitizers.  Only the four harness executables below receive the libFuzzer
+# runtime.  Linking a harness directly to `formulon_static` would leave the
+# core objects uninstrumented (and adding sanitizer flags to
+# `formulon_core` would contaminate every native/WASM/Node/Python artifact).
+string(REPLACE "," ";" _FORMULON_FUZZ_SANITIZER_LIST "${FM_FUZZ_SANITIZERS}")
+set(_FORMULON_FUZZ_CORE_SANITIZER_LIST fuzzer-no-link)
+foreach(_sanitizer IN LISTS _FORMULON_FUZZ_SANITIZER_LIST)
+  if(NOT _sanitizer STREQUAL "fuzzer" AND NOT _sanitizer STREQUAL "fuzzer-no-link" AND
+     NOT _sanitizer STREQUAL "")
+    list(APPEND _FORMULON_FUZZ_CORE_SANITIZER_LIST "${_sanitizer}")
+  endif()
+endforeach()
+list(JOIN _FORMULON_FUZZ_CORE_SANITIZER_LIST "," _FORMULON_FUZZ_CORE_SANITIZERS)
+
 set(_FORMULON_FUZZ_FLAGS
   -fsanitize=${FM_FUZZ_SANITIZERS}
+  -fno-sanitize-recover=undefined
   -fno-exceptions
   -fno-rtti
 )
+set(_FORMULON_FUZZ_CORE_FLAGS
+  -fsanitize=${_FORMULON_FUZZ_CORE_SANITIZERS}
+  -fno-sanitize-recover=undefined
+)
+
+# This target is deliberately separate from `formulon_core`.  Its compile
+# commands are the evidence that parser/eval/OOXML/XLSB objects are all built
+# with the selected sanitizers, while the normal core compile commands retain
+# their ordinary flags.
+set(_FORMULON_FUZZ_CORE_SOURCES)
+foreach(_core_source IN LISTS FORMULON_CORE_SOURCES)
+  list(APPEND _FORMULON_FUZZ_CORE_SOURCES "${CMAKE_SOURCE_DIR}/${_core_source}")
+endforeach()
+add_library(formulon_fuzz_core OBJECT ${_FORMULON_FUZZ_CORE_SOURCES})
+formulon_apply_common_deps(formulon_fuzz_core)
+formulon_apply_warnings(formulon_fuzz_core)
+target_include_directories(formulon_fuzz_core PRIVATE "${CMAKE_SOURCE_DIR}/src")
+# Keep the strict project warnings on the fuzz-only core. Third-party
+# dependencies are linked as separate targets and are not recompiled as part
+# of this object library.
+target_compile_options(formulon_fuzz_core PRIVATE ${_FORMULON_FUZZ_CORE_FLAGS})
+
+add_library(formulon_fuzz_static STATIC $<TARGET_OBJECTS:formulon_fuzz_core>)
+formulon_apply_common_deps(formulon_fuzz_static)
 
 # Per-harness wiring. Each harness:
-#   * links to formulon_static for engine code
+#   * links to the sanitizer-instrumented fuzz-only static core
 #   * compiles + links with -fsanitize=fuzzer,address,undefined
 #   * lands in ${CMAKE_BINARY_DIR}/bin alongside the CLI
 #   * registers a smoke ctest with -runs=1000 -timeout=10 and label SLOW
 function(_formulon_add_fuzz_target name source)
   add_executable(${name} ${source})
-  target_link_libraries(${name} PRIVATE formulon_static)
+  target_link_libraries(${name} PRIVATE formulon_fuzz_static)
   target_include_directories(${name} PRIVATE ${CMAKE_SOURCE_DIR}/src)
   target_compile_options(${name} PRIVATE ${_FORMULON_FUZZ_FLAGS})
   target_link_options(${name} PRIVATE ${_FORMULON_FUZZ_FLAGS})
@@ -70,18 +112,24 @@ add_test(
   COMMAND parser_fuzz -runs=1000 -timeout=10 -dict=${CMAKE_CURRENT_SOURCE_DIR}/parser_dict.txt
 )
 set_tests_properties(FuzzParserSmoke PROPERTIES LABELS "SLOW")
+set_tests_properties(FuzzParserSmoke PROPERTIES ENVIRONMENT
+  "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_test(
   NAME FuzzEvalSmoke
   COMMAND eval_fuzz -runs=1000 -timeout=10 -dict=${CMAKE_CURRENT_SOURCE_DIR}/parser_dict.txt
 )
 set_tests_properties(FuzzEvalSmoke PROPERTIES LABELS "SLOW")
+set_tests_properties(FuzzEvalSmoke PROPERTIES ENVIRONMENT
+  "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 add_test(
   NAME FuzzXlsxSmoke
   COMMAND xlsx_fuzz -runs=1000 -timeout=10
 )
 set_tests_properties(FuzzXlsxSmoke PROPERTIES LABELS "SLOW")
+set_tests_properties(FuzzXlsxSmoke PROPERTIES ENVIRONMENT
+  "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
 
 # The real XLSB fixture exercises the recorded Ptg / function coverage from
 # the first run. `seeds/` carries committed starting inputs — including a
@@ -105,3 +153,5 @@ add_test(
   COMMAND xlsb_fuzz -runs=1000 -timeout=10 "${_FORMULON_XLSB_CORPUS}"
 )
 set_tests_properties(FuzzXlsbSmoke PROPERTIES LABELS "SLOW")
+set_tests_properties(FuzzXlsbSmoke PROPERTIES ENVIRONMENT
+  "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")

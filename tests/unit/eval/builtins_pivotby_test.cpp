@@ -7,9 +7,9 @@
 //   * Form A / B / C aggregator resolution (parity with GROUPBY).
 //   * 2D output layout: row-axis groups + col-axis groups + per-cell body.
 //   * `field_headers` ∈ {0, 1, 2, 3} drives both row and col header edges.
-//   * `row_total_depth` / `col_total_depth` ∈ {-1, 0, 1} control row /
+//   * `row_total_depth` / `col_total_depth` ∈ {-2, -1, 0, 1, 2} control row /
 //     column total placement (top/bottom for row totals, left/right for
-//     column totals).
+//     column totals, with nested subtotals on two-level axes).
 //   * `row_sort_order` / `col_sort_order` ∈ {-1, 0, 1} sort by row / col
 //     totals (the "first/only value column" reduces to the total in the
 //     single-column-values scope of this commit).
@@ -914,7 +914,7 @@ TEST(PivotBy, AggregatorReturningArrayYieldsCalcInThatCell) {
 }
 
 // ---------------------------------------------------------------------------
-// Nested subtotals (|row_total_depth| == 2); column subtotals still fall back
+// Nested subtotals (|row_total_depth| == 2 and |col_total_depth| == 2)
 // ---------------------------------------------------------------------------
 
 TEST(PivotBy, RowTotalDepthTwoAddsASubtotalRowPerOuterRowGroup) {
@@ -982,15 +982,179 @@ TEST(PivotBy, RowTotalDepthTwoEmitsNoFallbackDiagnostic) {
       << "unexpected fallback diagnostic; stderr was: " << captured;
 }
 
-TEST(PivotBy, ColTotalDepthTwoStillFallsBackAndSaysSo) {
-  // Subtotal COLUMNS are not implemented; the ±2 column request degrades to
-  // the grand-total-only layout and must announce it.
+TEST(PivotBy, ColTotalDepthTwoEmitsNoFallbackDiagnostic) {
+  // Column subtotals are implemented, so the ±2 column request must not
+  // announce a degraded grand-total-only layout.
   testing::internal::CaptureStderr();
   const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\",\"p\";\"X\",\"q\"}, {10;20}, SUM, 0, 1, 0, 2)");
   const std::string captured = testing::internal::GetCapturedStderr();
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_NE(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos)
-      << "expected column-axis fallback diagnostic; stderr was: " << captured;
+  EXPECT_EQ(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos)
+      << "unexpected fallback diagnostic; stderr was: " << captured;
+}
+
+TEST(PivotBy, ColTotalDepthPositiveTwoMatchesMacExcelObservedMatrix) {
+  // Mac Excel 16.111.3 ja-JP observation (V=1):
+  //   [blank, X, X, Y, Y, 総計]
+  //   [blank, M, blank, N, blank, blank]
+  //   [合計, 4, 4, 2, 2, 6]
+  //   [A, 4, 4, blank, blank, 4]
+  //   [B, blank, blank, 2, 2, 2]
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"},"
+      "         {1;2;3}, SUM, 0, -1, 0, 2, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_EQ(v.as_array_cols(), 6U);
+  EXPECT_TRUE(Cell(v, 0, 0).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "総計");
+  EXPECT_EQ(std::string(Cell(v, 1, 1).as_text()), "M");
+  EXPECT_TRUE(Cell(v, 1, 2).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "N");
+  EXPECT_TRUE(Cell(v, 1, 4).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 5).as_number(), 6.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 4.0);
+  EXPECT_TRUE(Cell(v, 3, 3).is_blank());
+  EXPECT_TRUE(Cell(v, 3, 4).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 5).as_number(), 4.0);
+  EXPECT_TRUE(Cell(v, 4, 1).is_blank());
+  EXPECT_TRUE(Cell(v, 4, 2).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 4).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 5).as_number(), 2.0);
+}
+
+TEST(PivotBy, ColTotalDepthNegativeTwoMatchesMacExcelObservedMatrix) {
+  // The negative depth puts the hierarchy grand total first and each outer
+  // subtotal immediately before its leaf blocks.
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"},"
+      "         {1;2;3}, SUM, 0, -1, 0, -2, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 5U);
+  ASSERT_EQ(v.as_array_cols(), 6U);
+  EXPECT_TRUE(Cell(v, 0, 0).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "総計");
+  EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "Y");
+  EXPECT_TRUE(Cell(v, 1, 1).is_blank());
+  EXPECT_TRUE(Cell(v, 1, 2).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 1, 3).as_text()), "M");
+  EXPECT_TRUE(Cell(v, 1, 4).is_blank());
+  EXPECT_EQ(std::string(Cell(v, 1, 5).as_text()), "N");
+  EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 6.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 5).as_number(), 2.0);
+}
+
+TEST(PivotBy, ColTotalDepthTwoTilesEveryValueColumn) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"A\";\"B\";\"A\"}, {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"},"
+      "         {1,10;2,20;3,30}, SUM, 0, 0, 0, 2, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 4U);
+  ASSERT_EQ(v.as_array_cols(), 11U);  // key + (leaf, subtotal) * 2 outers * V=2 + grand V=2
+  // A: X leaf/subtotal = (4,40), Y is empty; B has only Y.
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 1).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 2).as_number(), 40.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 3).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 2, 4).as_number(), 40.0);
+  EXPECT_TRUE(Cell(v, 2, 5).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 6).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 7).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 8).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 5).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 6).as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 7).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 8).as_number(), 20.0);
+}
+
+TEST(PivotBy, RowAndColumnNestedSubtotalsIntersectAtBothOuterKeys) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"},"
+      "         {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\"},"
+      "         {10;20;30}, SUM, 0, 2, 0, 2, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 8U);
+  ASSERT_EQ(v.as_array_cols(), 7U);
+  // A subtotal row: X leaf/subtotal=10, Y leaf/subtotal=20.
+  EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "A");
+  EXPECT_TRUE(Cell(v, 4, 1).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 2).as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 3).as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 4).as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 4, 5).as_number(), 20.0);
+  // B subtotal has no Y intersection, so both Y blocks remain blank.
+  EXPECT_EQ(std::string(Cell(v, 6, 0).as_text()), "B");
+  EXPECT_DOUBLE_EQ(Cell(v, 6, 2).as_number(), 30.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 6, 3).as_number(), 30.0);
+  EXPECT_TRUE(Cell(v, 6, 4).is_blank());
+  EXPECT_TRUE(Cell(v, 6, 5).is_blank());
+}
+
+TEST(PivotBy, ColSubtotalSortKeepsOuterGroupsContiguous) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"A\";\"A\";\"A\";\"A\"},"
+      "         {\"Y\",\"N\";\"X\",\"M\";\"Y\",\"O\";\"X\",\"P\"},"
+      "         {1;2;3;4}, SUM, 0, 0, 0, 2, 1)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_cols(), 8U);
+  // col_sort_order=1 orders leaves by totals Y(1), X(2), Y(3), X(4), but
+  // the subtotal block plan re-bundles those leaves by outer key: Y,Y,Y,
+  // then X,X,X.
+  EXPECT_EQ(std::string(Cell(v, 0, 1).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 0, 2).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 0, 3).as_text()), "Y");
+  EXPECT_EQ(std::string(Cell(v, 0, 4).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 0, 5).as_text()), "X");
+  EXPECT_EQ(std::string(Cell(v, 0, 6).as_text()), "X");
+}
+
+TEST(PivotBy, ColSubtotalFilterAndErrorRemainLocal) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"},"
+      "         {\"X\",\"M\";\"Y\",\"N\";\"X\",\"M\";\"Y\",\"N\"},"
+      "         {0;5;4;8}, LAMBDA(v, 1/SUM(v)), 0, 0, 0, 2, 0,"
+      "         {TRUE;FALSE;TRUE;TRUE})");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 4U);
+  ASSERT_EQ(v.as_array_cols(), 6U);
+  // A/X is a local #DIV/0! in both its leaf and subtotal; A/Y was filtered
+  // out and stays blank. B remains fully calculable.
+  EXPECT_EQ(Cell(v, 2, 1).as_error(), ErrorCode::Div0);
+  EXPECT_EQ(Cell(v, 2, 2).as_error(), ErrorCode::Div0);
+  EXPECT_TRUE(Cell(v, 2, 3).is_blank());
+  EXPECT_TRUE(Cell(v, 2, 4).is_blank());
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 1).as_number(), 0.25);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 2).as_number(), 0.25);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 3).as_number(), 0.125);
+  EXPECT_DOUBLE_EQ(Cell(v, 3, 4).as_number(), 0.125);
+}
+
+TEST(PivotBy, ColTotalDepthTwoWithOneColumnLevelKeepsOrdinaryLayout) {
+  testing::internal::CaptureStderr();
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 2, 0)");
+  const std::string captured = testing::internal::GetCapturedStderr();
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_cols(), 4U);  // key + two leaves + ordinary grand total
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 1.0);
+  EXPECT_TRUE(Cell(v, 0, 2).is_blank());
+  EXPECT_EQ(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos);
 }
 
 TEST(PivotBy, DefaultDepthEmitsNoSubtotalDiagnostic) {

@@ -65,6 +65,8 @@ platform.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
+import hashlib
 import json
 import platform
 import sys
@@ -75,6 +77,77 @@ from typing import Any, Dict, List, Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_cf"
 DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden_cf"
+DEFAULT_TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
+_M365_SENTINEL = "ARRAYTOTEXT(1) == text '1'"
+
+
+def _load_targets(path: Path) -> Dict[str, Any]:
+    """Load the target manifest and fail closed on a malformed document."""
+
+    try:
+        import yaml  # type: ignore
+    except ImportError as exc:  # pragma: no cover - setup failure
+        raise RuntimeError("PyYAML is required to inspect oracle targets") from exc
+    if not path.exists():
+        raise RuntimeError(f"oracle targets file not found: {path}")
+    try:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception as exc:  # pragma: no cover - parser-specific
+        raise RuntimeError(f"failed to parse {path}: {exc}") from exc
+    if not isinstance(doc, dict) or not isinstance(doc.get("targets"), dict):
+        raise RuntimeError(f"{path}: missing `targets:` mapping")
+    return doc
+
+
+def _cf_primary(targets_doc: Dict[str, Any]) -> str:
+    """Return the manifest-declared CF primary, failing closed."""
+
+    tracks = targets_doc.get("tracks")
+    cf_track = tracks.get("cf") if isinstance(tracks, dict) else None
+    primary = cf_track.get("primary") if isinstance(cf_track, dict) else None
+    if not isinstance(primary, str) or not primary:
+        raise RuntimeError("targets.yaml: tracks.cf.primary is required")
+    return primary
+
+
+def _resolve_cf_target(targets_doc: Dict[str, Any], requested: Optional[str]) -> Dict[str, Any]:
+    """Resolve and validate one CF target from the manifest."""
+
+    primary = _cf_primary(targets_doc)
+    track = targets_doc.get("tracks", {}).get("cf", {})
+    names = [primary]
+    if isinstance(track, dict) and isinstance(track.get("variants"), list):
+        names.extend(str(name) for name in track["variants"])
+    name = requested or primary
+    if name not in names:
+        raise RuntimeError(f"target {name!r} is not listed in tracks.cf")
+    targets = targets_doc.get("targets") or {}
+    record = targets.get(name)
+    if not isinstance(record, dict):
+        raise RuntimeError(f"target {name!r} is missing from targets.yaml")
+    status = record.get("status")
+    if status not in {"primary", "scaffolded"}:
+        raise RuntimeError(f"CF target {name!r} has non-generating status {status!r}")
+    if record.get("driver") != "macos_excel":
+        raise RuntimeError(f"CF target {name!r} must use the macos_excel driver")
+    if platform.system() not in (record.get("runs_on") or []):
+        raise RuntimeError(f"CF target {name!r} cannot run on {platform.system()} (runs_on={record.get('runs_on')!r})")
+    locale = record.get("locale")
+    if not isinstance(locale, str) or not locale:
+        raise RuntimeError(f"CF target {name!r} is missing a locale")
+    return {"_name": name, **record}
+
+
+def _cf_golden_dir(targets_doc: Dict[str, Any], target: Dict[str, Any]) -> Path:
+    """Return the CF output directory for a target."""
+
+    if target["_name"] == _cf_primary(targets_doc):
+        return DEFAULT_GOLDEN_DIR
+    return REPO_ROOT / "tests" / "oracle" / "variants" / target["_name"] / "golden_cf"
+
+
+def _iso_now() -> str:
+    return _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _ensure_darwin() -> None:
@@ -84,7 +157,7 @@ def _ensure_darwin() -> None:
         )
 
 
-def _assert_m365_or_abort() -> None:
+def _assert_m365_or_abort() -> Dict[str, str]:
     """Aborts when the attached Excel install is not Microsoft 365.
 
     cf_oracle_gen does not go through the OracleDriver abstraction (it
@@ -99,13 +172,21 @@ def _assert_m365_or_abort() -> None:
 
     import xlwings as xw  # type: ignore
 
+    try:
+        from tools.oracle.drivers._locale import detect_locale_from_app
+    except ImportError:  # direct `python tools/oracle/cf_oracle_gen.py`
+        from drivers._locale import detect_locale_from_app  # type: ignore
+
     app = xw.App(visible=False, add_book=False)
     app.display_alerts = False
     try:
         _sentinel_wb = app.books.add()
         try:
             _sht = _sentinel_wb.sheets[0]
-            _sht.range("A1").formula2 = "=ARRAYTOTEXT(1)"
+            try:
+                _sht.range("A1").formula2 = "=ARRAYTOTEXT(1)"
+            except Exception:
+                _sht.range("A1").formula = "=ARRAYTOTEXT(1)"
             app.calculate()
             _v = _sht.range("A1").value
             if isinstance(_v, str) and _v == "#NAME?":
@@ -115,6 +196,30 @@ def _assert_m365_or_abort() -> None:
                     "Formulon's oracle requires Microsoft 365. "
                     "See CONTRIBUTING.md."
                 )
+            if _v != "1":
+                raise RuntimeError(
+                    "Microsoft 365 sentinel ARRAYTOTEXT(1) returned an unexpected "
+                    f"value: {_v!r}; refusing an unverified CF capture."
+                )
+            version = ""
+            try:
+                version = str(app.version).strip() if app.version else ""
+            except Exception:
+                pass
+            if not version:
+                try:
+                    api = app.api
+                    raw_version = api.version() if callable(api.version) else api.version
+                    raw_build = api.build() if callable(api.build) else api.build
+                    version = str(raw_version).strip()
+                    if raw_build and str(raw_build) not in version:
+                        version = f"{version} (Build {raw_build})"
+                except Exception:
+                    pass
+            if not version:
+                raise RuntimeError("could not read the Excel version; refusing an unproven CF capture")
+            locale = detect_locale_from_app(app) or ""
+            return {"excel_version": f"Microsoft Excel for Mac {version}", "excel_locale": locale}
         finally:
             try:
                 _sentinel_wb.close()
@@ -967,7 +1072,7 @@ def _capture_via_excel(xlsx: Path, case: Dict[str, Any], descriptors: List[Dict[
             pass
 
 
-def _process_suite(case_path: Path, golden_path: Path) -> None:
+def _process_suite(case_path: Path, golden_path: Path) -> int:
     doc = json.loads(case_path.read_text(encoding="utf-8"))
     out_cases: List[Dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="formulon-cf-oracle-") as tmp:
@@ -986,6 +1091,67 @@ def _process_suite(case_path: Path, golden_path: Path) -> None:
     golden_path.parent.mkdir(parents=True, exist_ok=True)
     golden_path.write_text(
         json.dumps(out_doc, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return len(out_cases)
+
+
+def _write_provenance(
+    golden_dir: Path,
+    *,
+    target: Dict[str, Any],
+    product: str,
+    locale: str,
+    capture_id: str,
+    generated_at: str,
+    required_suites: List[str],
+    captured_suites: List[str],
+    suite_counts: Dict[str, int],
+) -> None:
+    """Write the capture manifest beside the CF goldens.
+
+    A CF golden has no workbook environment block of its own, so this marker
+    is the evidence boundary for product, locale, suite completeness, and
+    content identity.  Partial ``--suite`` runs are deliberately marked
+    inactive; a later full run must refresh the marker before CTest can treat
+    the directory as a complete capture.
+    """
+
+    inventory = []
+    for suite in sorted(captured_suites):
+        golden = golden_dir / f"{suite}.golden.json"
+        inventory.append(
+            {
+                "suite": suite,
+                "case_count": suite_counts[suite],
+                "sha256": hashlib.sha256(golden.read_bytes()).hexdigest(),
+                "capture_id": capture_id,
+            }
+        )
+    complete = sorted(required_suites) == sorted(captured_suites)
+    provenance = {
+        "track": "cf",
+        "target": target["_name"],
+        "status": target["status"],
+        "classification": "active" if complete else "scaffolded",
+        "verified": complete,
+        "active_ctest": complete,
+        "locale": locale,
+        "product": product,
+        "m365_sentinel": _M365_SENTINEL,
+        "capture_id": capture_id,
+        "generated_at": generated_at,
+        "required_suites": sorted(required_suites),
+        "captured_suites": sorted(captured_suites),
+        "case_count": sum(item["case_count"] for item in inventory),
+        "all_suites_same_capture": True,
+        "suite_inventory": inventory,
+        "reason": "CF goldens captured by the manifest-selected Mac Excel 365 target.",
+        "source": "tools/oracle/cf_oracle_gen.py",
+    }
+    golden_dir.mkdir(parents=True, exist_ok=True)
+    (golden_dir / "PROVENANCE.json").write_text(
+        json.dumps(provenance, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
 
@@ -1007,16 +1173,19 @@ def main() -> int:
         )
         return 2
 
-    # M365 sentinel: refuse to run on Office 2019 / pre-M365. The two
-    # OracleDriver-based gens enforce this via assert_m365_or_abort();
-    # cf_oracle_gen uses xlwings directly so the check is open-coded.
-    try:
-        _assert_m365_or_abort()
-    except RuntimeError as exc:
-        print(f"cf-oracle-gen: {exc}", file=sys.stderr)
-        return 2
-
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--target",
+        default=None,
+        metavar="NAME",
+        help="CF target from tools/oracle/targets.yaml (defaults to tracks.cf.primary).",
+    )
+    parser.add_argument(
+        "--targets-file",
+        type=Path,
+        default=DEFAULT_TARGETS_FILE,
+        help=f"target manifest (default: {DEFAULT_TARGETS_FILE})",
+    )
     parser.add_argument(
         "--suite",
         action="append",
@@ -1032,13 +1201,39 @@ def main() -> int:
     parser.add_argument(
         "--golden-dir",
         type=Path,
-        default=DEFAULT_GOLDEN_DIR,
-        help=f"directory to write golden JSON (default: {DEFAULT_GOLDEN_DIR})",
+        default=None,
+        help="directory to write golden JSON and PROVENANCE.json (defaults to the target output)",
     )
     args = parser.parse_args()
 
+    try:
+        targets_doc = _load_targets(args.targets_file)
+        target = _resolve_cf_target(targets_doc, args.target)
+    except RuntimeError as exc:
+        print(f"cf-oracle-gen: {exc}", file=sys.stderr)
+        return 2
+
+    # M365 sentinel: refuse to run on Office 2019 / pre-M365. The two
+    # OracleDriver-based gens enforce this via assert_m365_or_abort();
+    # cf_oracle_gen uses xlwings directly so the check is open-coded.
+    try:
+        environment = _assert_m365_or_abort()
+    except RuntimeError as exc:
+        print(f"cf-oracle-gen: {exc}", file=sys.stderr)
+        return 2
+
+    declared_locale = target.get("locale")
+    captured_locale = environment.get("excel_locale")
+    if captured_locale and captured_locale != declared_locale:
+        print(
+            "cf-oracle-gen: target locale does not match Excel locale: "
+            f"target={declared_locale!r}, Excel={captured_locale!r}",
+            file=sys.stderr,
+        )
+        return 2
+
     cases_dir: Path = args.cases_dir
-    golden_dir: Path = args.golden_dir
+    golden_dir: Path = args.golden_dir or _cf_golden_dir(targets_doc, target)
 
     files = sorted(cases_dir.glob("*.case.json"))
     if args.suite:
@@ -1048,12 +1243,31 @@ def main() -> int:
         print(f"[cf-oracle-gen] no .case.json files under {cases_dir}", file=sys.stderr)
         return 0
 
+    required_suites = sorted(path.name.removesuffix(".case.json") for path in cases_dir.glob("*.case.json"))
+    captured_suites: List[str] = []
+    suite_counts: Dict[str, int] = {}
+    generated_at = _iso_now()
+    capture_id = f"{target['_name']}:{environment['excel_version']}:{declared_locale}:{generated_at}"
     for case_path in files:
         suite = case_path.name.removesuffix(".case.json")
         golden_path = golden_dir / f"{suite}.golden.json"
         print(f"[cf-oracle-gen] {case_path.name} -> {golden_path.name}")
-        _process_suite(case_path, golden_path)
+        suite_counts[suite] = _process_suite(case_path, golden_path)
+        captured_suites.append(suite)
         print(f"[cf-oracle-gen]   wrote {golden_path}")
+
+    _write_provenance(
+        golden_dir,
+        target=target,
+        product=environment["excel_version"],
+        locale=captured_locale or str(declared_locale),
+        capture_id=capture_id,
+        generated_at=generated_at,
+        required_suites=required_suites,
+        captured_suites=captured_suites,
+        suite_counts=suite_counts,
+    )
+    print(f"[cf-oracle-gen]   wrote {golden_dir / 'PROVENANCE.json'}")
 
     return 0
 
