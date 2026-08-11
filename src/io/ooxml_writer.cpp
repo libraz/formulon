@@ -143,6 +143,20 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
     out.append(" totalsRowCount=\"1\"");
   }
   out.append(">\n");
+  // CT_Table orders the optional filter/sort payload before the required
+  // tableColumns collection. Keep these fragments opaque: they may carry
+  // filter criteria, extension attributes, or other fields the table model
+  // does not interpret.
+  if (!t.auto_filter_xml.empty()) {
+    out.append("  ");
+    out.append(t.auto_filter_xml);
+    out.push_back('\n');
+  }
+  if (!t.sort_state_xml.empty()) {
+    out.append("  ");
+    out.append(t.sort_state_xml);
+    out.push_back('\n');
+  }
   out.append("  <tableColumns count=\"");
   out.append(std::to_string(t.columns.size()));
   out.append("\">\n");
@@ -178,18 +192,6 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
     }
   }
   out.append("  </tableColumns>\n");
-  // Table-level filters and sort state follow <tableColumns>. They are not
-  // modelled by the evaluator, but dropping them removes Excel's filter UI.
-  if (!t.auto_filter_xml.empty()) {
-    out.append("  ");
-    out.append(t.auto_filter_xml);
-    out.push_back('\n');
-  }
-  if (!t.sort_state_xml.empty()) {
-    out.append("  ");
-    out.append(t.sort_state_xml);
-    out.push_back('\n');
-  }
   // `<tableStyleInfo>` follows `<tableColumns>` in the CT_Table schema.
   // Re-emit the captured element verbatim so banded-row / style-name
   // metadata survives the round trip.

@@ -352,6 +352,14 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
   table.columns.push_back(io::TableColumn{1, "Region", "Total", "", ""});
   table.columns.push_back(io::TableColumn{2, "Q1", "", "sum", ""});
   table.columns.push_back(io::TableColumn{3, "Q2", "", "sum", ""});
+  table.auto_filter_xml =
+      "<autoFilter ref=\"A1:C5\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
+      "</autoFilter>";
+  table.sort_state_xml = "<sortState ref=\"A1:C5\"><sortCondition ref=\"C2:C5\" descending=\"1\"/></sortState>";
+  table.table_style_info_xml =
+      "<tableStyleInfo name=\"TableStyleMedium2\" showFirstColumn=\"0\" showLastColumn=\"1\" "
+      "showRowStripes=\"1\" showColumnStripes=\"0\"/>";
+  table.ext_lst_xml = "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>";
 
   std::vector<io::TableMetadata> tables;
   tables.push_back(std::move(table));
@@ -376,6 +384,35 @@ TEST(OoxmlMetadata, TableRoundTripThroughWriter) {
   EXPECT_EQ(got.columns[0].totals_label, "Total");
   EXPECT_EQ(got.columns[1].totals_function, "sum");
   EXPECT_EQ(got.columns[2].totals_function, "sum");
+  EXPECT_EQ(
+      got.auto_filter_xml,
+      "<autoFilter ref=\"A1:C5\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
+      "</autoFilter>");
+  EXPECT_EQ(got.sort_state_xml, "<sortState ref=\"A1:C5\"><sortCondition ref=\"C2:C5\" descending=\"1\"/></sortState>");
+  EXPECT_EQ(got.table_style_info_xml,
+            "<tableStyleInfo name=\"TableStyleMedium2\" showFirstColumn=\"0\" showLastColumn=\"1\" "
+            "showRowStripes=\"1\" showColumnStripes=\"0\"/>");
+  EXPECT_EQ(got.ext_lst_xml, "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>");
+
+  const std::string table_xml = ExtractEntry(bytes, "xl/tables/table1.xml");
+  const std::size_t auto_filter_pos = table_xml.find("<autoFilter");
+  const std::size_t sort_state_pos = table_xml.find("<sortState");
+  const std::size_t table_columns_pos = table_xml.find("<tableColumns");
+  const std::size_t style_info_pos = table_xml.find("<tableStyleInfo");
+  const std::size_t ext_lst_pos = table_xml.find("<extLst");
+  ASSERT_NE(auto_filter_pos, std::string::npos);
+  ASSERT_NE(sort_state_pos, std::string::npos);
+  ASSERT_NE(table_columns_pos, std::string::npos);
+  ASSERT_NE(style_info_pos, std::string::npos);
+  ASSERT_NE(ext_lst_pos, std::string::npos);
+  EXPECT_LT(auto_filter_pos, sort_state_pos);
+  EXPECT_LT(sort_state_pos, table_columns_pos);
+  EXPECT_LT(table_columns_pos, style_info_pos);
+  EXPECT_LT(style_info_pos, ext_lst_pos);
+  EXPECT_NE(table_xml.find("ref=\"A1:C5\""), std::string::npos);
+  EXPECT_NE(table_xml.find("filterColumn"), std::string::npos);
+  EXPECT_NE(table_xml.find("sortCondition ref=\"C2:C5\""), std::string::npos);
+  EXPECT_NE(table_xml.find("futureTableData value=\"kept\""), std::string::npos);
 }
 
 /// Builds a synthetic in-memory `.xlsx` package whose only "extra" part
