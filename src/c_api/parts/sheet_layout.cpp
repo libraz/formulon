@@ -15,6 +15,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -25,27 +26,48 @@ using formulon::c_api::parts::set_binding_error;
 
 namespace {
 
-// Shallow shape check for a worksheet `<autoFilter>` fragment. Filter
+// Structural validation for a worksheet `<autoFilter>` fragment. Filter
 // criteria and extension payloads are preserved verbatim, so the engine
-// only confirms that the caller passed one complete `autoFilter` element
-// rather than an inner fragment or a differently named element; the
-// remaining schema validation belongs to Excel / OOXML consumers.
-bool is_auto_filter_fragment(const std::string& fragment) {
-  constexpr std::string_view kOpen = "<autoFilter";
-  constexpr std::string_view kClose = "</autoFilter>";
-  if (fragment.compare(0, kOpen.size(), kOpen) != 0) {
-    return false;
+// confirms only that the caller passed one complete, well-formed
+// `autoFilter` element; schema validation belongs to Excel / OOXML consumers.
+struct AutoFilterValidation {
+  bool valid = false;
+  std::string context;
+};
+
+// Parse a worksheet `<autoFilter>` fragment as a complete XML document. The
+// full parse mode keeps declarations, comments, processing instructions, and
+// doctypes in the document tree so they can be rejected as top-level siblings.
+// The caller retains the original bytes; this parser owns its copied buffer.
+AutoFilterValidation validate_auto_filter_fragment(const std::string& fragment) {
+  pugi::xml_document doc;
+  const pugi::xml_parse_result parse =
+      doc.load_buffer(fragment.data(), fragment.size(), pugi::parse_full, pugi::encoding_utf8);
+  if (!parse) {
+    return {false, "pugixml=parse_failed description=" + std::string(parse.description()) +
+                       " offset=" + std::to_string(parse.offset)};
   }
-  // The element name must end here rather than continue into another one,
-  // so `<autoFilterColumn .../>` is not mistaken for an `<autoFilter>`.
-  const char after = fragment[kOpen.size()];
-  if (after != ' ' && after != '\t' && after != '\n' && after != '\r' && after != '/' && after != '>') {
-    return false;
+
+  pugi::xml_node root;
+  std::size_t top_level_count = 0;
+  for (pugi::xml_node node : doc.children()) {
+    ++top_level_count;
+    if (node.type() != pugi::node_element) {
+      return {false, "pugixml=top_level_node_rejected type=" + std::to_string(static_cast<int>(node.type())) +
+                         " index=" + std::to_string(top_level_count - 1U)};
+    }
+    if (root) {
+      return {false, "pugixml=multiple_top_level_elements count_at_rejection=" + std::to_string(top_level_count)};
+    }
+    root = node;
   }
-  const bool self_closed = fragment.size() >= 2U && fragment.compare(fragment.size() - 2U, 2U, "/>") == 0;
-  const bool tag_closed =
-      fragment.size() >= kClose.size() && fragment.compare(fragment.size() - kClose.size(), kClose.size(), kClose) == 0;
-  return self_closed || tag_closed;
+  if (!root) {
+    return {false, "pugixml=no_top_level_element"};
+  }
+  if (std::string_view(root.name()) != "autoFilter") {
+    return {false, "pugixml=wrong_root name=" + std::string(root.name())};
+  }
+  return {true, "pugixml=ok top_level_elements=1"};
 }
 
 // Splits any pre-existing column entries that intersect `[first, last]`
@@ -360,9 +382,12 @@ extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sh
     return rc;
   }
   const std::string fragment(xml);
-  if (!fragment.empty() && !is_auto_filter_fragment(fragment)) {
-    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_sheet_set_auto_filter_xml: expected an autoFilter XML fragment");
+  if (!fragment.empty()) {
+    const AutoFilterValidation validation = validate_auto_filter_fragment(fragment);
+    if (!validation.valid) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_sheet_set_auto_filter_xml: invalid autoFilter XML fragment", validation.context);
+    }
   }
   wb->workbook().sheet(sheet_index).set_auto_filter_xml(fragment);
   return 0;

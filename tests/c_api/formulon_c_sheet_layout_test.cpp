@@ -5,9 +5,11 @@
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
+#include "pugixml.hpp"
 
 namespace {
 
@@ -131,6 +133,14 @@ TEST(FormulonCApiSheetLayout, AutoFilterXmlSurvivesXlsxSaveLoad) {
   ASSERT_EQ(fm_sheet_get_auto_filter_xml(reloaded.handle, 0, &actual), 0);
   ASSERT_NE(actual, nullptr);
   EXPECT_STREQ(actual, xml);
+
+  pugi::xml_document parsed;
+  const pugi::xml_parse_result parse = parsed.load_string(actual, pugi::parse_full);
+  ASSERT_TRUE(parse) << parse.description();
+  ASSERT_TRUE(parsed.first_child());
+  EXPECT_FALSE(parsed.first_child().next_sibling());
+  EXPECT_STREQ(parsed.first_child().name(), "autoFilter");
+  EXPECT_TRUE(parsed.first_child().child("filterColumn").child("filters").child("filter"));
 }
 
 TEST(FormulonCApiSheetLayout, AutoFilterXmlRejectsWrongRoot) {
@@ -142,8 +152,24 @@ TEST(FormulonCApiSheetLayout, AutoFilterXmlRejectsWrongRoot) {
   EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilterColumn colId=\"0\"/>"), 0);
   // An unterminated element would break the whole worksheet part.
   EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\">"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\"/><autoFilter/>"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\"/><filterColumn/>"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\""), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10/>"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<?xml version=\"1.0\"?><autoFilter/>"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<!-- comment --><autoFilter/>"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<?processing?><autoFilter/>"), 0);
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<!DOCTYPE autoFilter><autoFilter/>"), 0);
   EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter"), 0);
   EXPECT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\"/>"), 0);
+}
+
+TEST(FormulonCApiSheetLayout, AutoFilterXmlFailureIncludesParseContext) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilter ref=\"A1:C10\""), 0);
+  EXPECT_NE(std::string(fm_last_error_context()).find("pugixml"), std::string::npos);
 }
 
 TEST(FormulonCApiSheetLayout, SetViewModeRejectsNullPointer) {
