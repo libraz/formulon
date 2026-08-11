@@ -233,33 +233,37 @@ TEST(FormulonCApiCf, OutOfRangeIndicesReturnInvalidArgument) {
 }
 
 TEST(FormulonCApiCf, NullWorkbookSetsBindingError) {
-  fm_cf_results_t* out = nullptr;
+  fm_cf_results_t* out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
   fm_status_t rc = fm_workbook_cf_evaluate_range(nullptr, 0, 0, 0, 0, 0, std::nan(""), &out);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
   EXPECT_EQ(out, nullptr);
+  fm_cf_results_destroy(out);
 }
 
 TEST(FormulonCApiCf, OutOfRangeSheetIndexReturnsInvalidArgument) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cf_results_t* out = nullptr;
+  fm_cf_results_t* out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
   fm_status_t rc = fm_workbook_cf_evaluate_range(wb.handle, 99, 0, 0, 0, 0, std::nan(""), &out);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(out, nullptr);
+  fm_cf_results_destroy(out);
 }
 
 TEST(FormulonCApiCf, OutOfGridOrReversedRectReturnsInvalidArgument) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cf_results_t* out = nullptr;
+  fm_cf_results_t* out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
   // A reversed rectangle (last < first) would wrap the iteration span.
   EXPECT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 5, 5, 0, 0, std::nan(""), &out),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(out, nullptr);
   // A corner past the grid ceiling would materialize billions of cells.
+  out = reinterpret_cast<fm_cf_results_t*>(static_cast<std::uintptr_t>(1));
   EXPECT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 0, formulon::Sheet::kMaxRows, 0, std::nan(""), &out),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(out, nullptr);
+  fm_cf_results_destroy(out);
 }
 
 TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {

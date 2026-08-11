@@ -4,9 +4,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
@@ -21,6 +24,11 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
 namespace {
+
+static_assert(std::is_nothrow_move_constructible_v<formulon::io::StylesTable>,
+              "StylesTable must be nothrow-move-constructible for staged style commits");
+static_assert(std::is_nothrow_move_assignable_v<formulon::io::StylesTable>,
+              "StylesTable must be nothrow-move-assignable for staged style commits");
 
 /// Validates the `(handle, sheet_index, row, col)` quad and resolves
 /// the cell's `xf_index`. On failure populates the thread-local
@@ -61,15 +69,18 @@ extern "C" fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, u
   return 0;
 }
 
-extern "C" fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out) {
-  clear_last_error();
+namespace {
+
+fm_status_t get_cell_xf_impl(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out, const char* api) {
   if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_cell_xf: NULL argument");
+    const std::string message = std::string(api) + ": NULL argument";
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, message.c_str());
   }
   const formulon::io::StylesTable& styles = wb->workbook().styles();
   if (xf_index >= styles.cell_xfs.size()) {
+    const std::string message = std::string(api) + ": xf_index out of range";
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_cell_xf: xf_index out of range",
+        formulon::FormulonErrorCode::kInvalidArgument, message.c_str(),
         "xf_index=" + std::to_string(xf_index) + " cell_xfs_count=" + std::to_string(styles.cell_xfs.size()));
   }
   const formulon::io::CellXf& xf = styles.cell_xfs[xf_index];
@@ -83,18 +94,79 @@ extern "C" fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_inde
   return 0;
 }
 
+fm_status_t get_cell_style_xf_impl(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out, const char* api) {
+  if (wb == nullptr || out == nullptr) {
+    const std::string message = std::string(api) + ": NULL argument";
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, message.c_str());
+  }
+  const formulon::io::StylesTable& styles = wb->workbook().styles();
+  if (index >= styles.cell_style_xfs.size()) {
+    const std::string message = std::string(api) + ": index out of range";
+    return set_binding_error(
+        formulon::FormulonErrorCode::kInvalidArgument, message.c_str(),
+        "index=" + std::to_string(index) + " cell_style_xfs_count=" + std::to_string(styles.cell_style_xfs.size()));
+  }
+  const formulon::io::CellXf& xf = styles.cell_style_xfs[index];
+  out->font_index = xf.font_index;
+  out->fill_index = xf.fill_index;
+  out->border_index = xf.border_index;
+  out->num_fmt_id = xf.num_fmt_id;
+  out->horizontal_align = xf.horizontal_align;
+  out->vertical_align = xf.vertical_align;
+  out->wrap_text = xf.wrap_text ? 1 : 0;
+  return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out) {
+  clear_last_error();
+  return get_cell_xf_impl(wb, xf_index, out, "fm_styles_get_cell_xf");
+}
+
 extern "C" fm_status_t fm_styles_get_cell_xf_ex(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf_ex* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_get_cell_xf_ex: NULL argument");
   }
-  fm_status_t rc = fm_styles_get_cell_xf(wb, xf_index, &out->base);
+  fm_status_t rc = get_cell_xf_impl(wb, xf_index, &out->base, "fm_styles_get_cell_xf_ex");
   if (rc != 0) {
     return rc;
   }
   out->justify_last_line = wb->workbook().styles().cell_xfs[xf_index].justify_last_line ? 1 : 0;
   out->xf_id = wb->workbook().styles().cell_xfs[xf_index].xf_id;
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_cell_xf_ex2(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf_ex2* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_get_cell_xf_ex2: NULL argument");
+  }
+  fm_status_t rc = get_cell_xf_impl(wb, xf_index, &out->base, "fm_styles_get_cell_xf_ex2");
+  if (rc != 0) {
+    return rc;
+  }
+  const formulon::io::CellXf& xf = wb->workbook().styles().cell_xfs[xf_index];
+  out->justify_last_line = xf.justify_last_line ? 1 : 0;
+  out->xf_id = xf.xf_id;
+  out->has_alignment = xf.has_alignment ? 1 : 0;
+  out->has_text_rotation = xf.has_text_rotation ? 1 : 0;
+  out->text_rotation = xf.text_rotation;
+  out->has_indent = xf.has_indent ? 1 : 0;
+  out->indent = xf.indent;
+  out->has_relative_indent = xf.has_relative_indent ? 1 : 0;
+  out->relative_indent = xf.relative_indent;
+  out->has_shrink_to_fit = xf.has_shrink_to_fit ? 1 : 0;
+  out->shrink_to_fit = xf.shrink_to_fit ? 1 : 0;
+  out->has_reading_order = xf.has_reading_order ? 1 : 0;
+  out->reading_order = xf.reading_order;
+  out->has_horizontal_align = xf.has_horizontal_align ? 1 : 0;
+  out->has_vertical_align = xf.has_vertical_align ? 1 : 0;
+  out->has_wrap_text = xf.has_wrap_text ? 1 : 0;
+  out->has_justify_last_line = xf.has_justify_last_line ? 1 : 0;
   return 0;
 }
 
@@ -332,25 +404,7 @@ extern "C" fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint
 
 extern "C" fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out) {
   clear_last_error();
-  if (wb == nullptr || out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_styles_get_cell_style_xf: NULL argument");
-  }
-  const formulon::io::StylesTable& styles = wb->workbook().styles();
-  if (index >= styles.cell_style_xfs.size()) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_cell_style_xf: index out of range",
-        "index=" + std::to_string(index) + " cell_style_xfs_count=" + std::to_string(styles.cell_style_xfs.size()));
-  }
-  const formulon::io::CellXf& xf = styles.cell_style_xfs[index];
-  out->font_index = xf.font_index;
-  out->fill_index = xf.fill_index;
-  out->border_index = xf.border_index;
-  out->num_fmt_id = xf.num_fmt_id;
-  out->horizontal_align = xf.horizontal_align;
-  out->vertical_align = xf.vertical_align;
-  out->wrap_text = xf.wrap_text ? 1 : 0;
-  return 0;
+  return get_cell_style_xf_impl(wb, index, out, "fm_styles_get_cell_style_xf");
 }
 
 extern "C" fm_status_t fm_styles_get_cell_style_xf_ex(fm_workbook_t* wb, uint32_t index, fm_cell_xf_ex* out) {
@@ -359,12 +413,43 @@ extern "C" fm_status_t fm_styles_get_cell_style_xf_ex(fm_workbook_t* wb, uint32_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_get_cell_style_xf_ex: NULL argument");
   }
-  fm_status_t rc = fm_styles_get_cell_style_xf(wb, index, &out->base);
+  fm_status_t rc = get_cell_style_xf_impl(wb, index, &out->base, "fm_styles_get_cell_style_xf_ex");
   if (rc != 0) {
     return rc;
   }
   out->justify_last_line = wb->workbook().styles().cell_style_xfs[index].justify_last_line ? 1 : 0;
   out->xf_id = 0;
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_get_cell_style_xf_ex2(fm_workbook_t* wb, uint32_t index, fm_cell_xf_ex2* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_get_cell_style_xf_ex2: NULL argument");
+  }
+  fm_status_t rc = get_cell_style_xf_impl(wb, index, &out->base, "fm_styles_get_cell_style_xf_ex2");
+  if (rc != 0) {
+    return rc;
+  }
+  const formulon::io::CellXf& xf = wb->workbook().styles().cell_style_xfs[index];
+  out->justify_last_line = xf.justify_last_line ? 1 : 0;
+  out->xf_id = 0;
+  out->has_alignment = xf.has_alignment ? 1 : 0;
+  out->has_text_rotation = xf.has_text_rotation ? 1 : 0;
+  out->text_rotation = xf.text_rotation;
+  out->has_indent = xf.has_indent ? 1 : 0;
+  out->indent = xf.indent;
+  out->has_relative_indent = xf.has_relative_indent ? 1 : 0;
+  out->relative_indent = xf.relative_indent;
+  out->has_shrink_to_fit = xf.has_shrink_to_fit ? 1 : 0;
+  out->shrink_to_fit = xf.shrink_to_fit ? 1 : 0;
+  out->has_reading_order = xf.has_reading_order ? 1 : 0;
+  out->reading_order = xf.reading_order;
+  out->has_horizontal_align = xf.has_horizontal_align ? 1 : 0;
+  out->has_vertical_align = xf.has_vertical_align ? 1 : 0;
+  out->has_wrap_text = xf.has_wrap_text ? 1 : 0;
+  out->has_justify_last_line = xf.has_justify_last_line ? 1 : 0;
   return 0;
 }
 
@@ -393,11 +478,31 @@ bool border_records_equal(const formulon::io::BorderRecord& a, const formulon::i
          a.diagonal_down == b.diagonal_down;
 }
 
+template <typename T>
+bool optional_xf_field_equal(bool a_has, const T& a_value, bool b_has, const T& b_value) noexcept {
+  return a_has == b_has && (!a_has || a_value == b_value);
+}
+
 bool cell_xfs_equal(const formulon::io::CellXf& a, const formulon::io::CellXf& b) noexcept {
   return a.font_index == b.font_index && a.fill_index == b.fill_index && a.border_index == b.border_index &&
-         a.num_fmt_id == b.num_fmt_id && a.horizontal_align == b.horizontal_align &&
-         a.vertical_align == b.vertical_align && a.wrap_text == b.wrap_text &&
-         a.justify_last_line == b.justify_last_line && a.xf_id == b.xf_id;
+         a.num_fmt_id == b.num_fmt_id && a.xf_id == b.xf_id && a.apply_number_format == b.apply_number_format &&
+         a.apply_font == b.apply_font && a.apply_fill == b.apply_fill && a.apply_border == b.apply_border &&
+         a.apply_alignment == b.apply_alignment && a.apply_protection == b.apply_protection &&
+         a.quote_prefix == b.quote_prefix && formulon::io::HasAlignment(a) == formulon::io::HasAlignment(b) &&
+         optional_xf_field_equal(formulon::io::HasHorizontalAlign(a), a.horizontal_align,
+                                 formulon::io::HasHorizontalAlign(b), b.horizontal_align) &&
+         optional_xf_field_equal(formulon::io::HasVerticalAlign(a), a.vertical_align, formulon::io::HasVerticalAlign(b),
+                                 b.vertical_align) &&
+         optional_xf_field_equal(formulon::io::HasWrapText(a), a.wrap_text, formulon::io::HasWrapText(b),
+                                 b.wrap_text) &&
+         optional_xf_field_equal(formulon::io::HasJustifyLastLine(a), a.justify_last_line,
+                                 formulon::io::HasJustifyLastLine(b), b.justify_last_line) &&
+         optional_xf_field_equal(a.has_text_rotation, a.text_rotation, b.has_text_rotation, b.text_rotation) &&
+         optional_xf_field_equal(a.has_indent, a.indent, b.has_indent, b.indent) &&
+         optional_xf_field_equal(a.has_relative_indent, a.relative_indent, b.has_relative_indent, b.relative_indent) &&
+         optional_xf_field_equal(a.has_shrink_to_fit, a.shrink_to_fit, b.has_shrink_to_fit, b.shrink_to_fit) &&
+         optional_xf_field_equal(a.has_reading_order, a.reading_order, b.has_reading_order, b.reading_order) &&
+         a.has_protection == b.has_protection && (!a.has_protection || (a.locked == b.locked && a.hidden == b.hidden));
 }
 
 template <typename T>
@@ -443,11 +548,61 @@ std::string cell_xf_key(const formulon::io::CellXf& value) {
   append_key_scalar(out, value.fill_index);
   append_key_scalar(out, value.border_index);
   append_key_scalar(out, value.num_fmt_id);
-  append_key_scalar(out, value.horizontal_align);
-  append_key_scalar(out, value.vertical_align);
-  append_key_scalar(out, value.wrap_text);
-  append_key_scalar(out, value.justify_last_line);
   append_key_scalar(out, value.xf_id);
+  append_key_scalar(out, value.apply_number_format);
+  append_key_scalar(out, value.apply_font);
+  append_key_scalar(out, value.apply_fill);
+  append_key_scalar(out, value.apply_border);
+  append_key_scalar(out, value.apply_alignment);
+  append_key_scalar(out, value.apply_protection);
+  append_key_scalar(out, value.quote_prefix);
+  const bool has_alignment = formulon::io::HasAlignment(value);
+  append_key_scalar(out, has_alignment);
+  const bool has_horizontal_align = formulon::io::HasHorizontalAlign(value);
+  append_key_scalar(out, has_horizontal_align);
+  if (has_horizontal_align) {
+    append_key_scalar(out, value.horizontal_align);
+  }
+  const bool has_vertical_align = formulon::io::HasVerticalAlign(value);
+  append_key_scalar(out, has_vertical_align);
+  if (has_vertical_align) {
+    append_key_scalar(out, value.vertical_align);
+  }
+  const bool has_wrap_text = formulon::io::HasWrapText(value);
+  append_key_scalar(out, has_wrap_text);
+  if (has_wrap_text) {
+    append_key_scalar(out, value.wrap_text);
+  }
+  const bool has_justify_last_line = formulon::io::HasJustifyLastLine(value);
+  append_key_scalar(out, has_justify_last_line);
+  if (has_justify_last_line) {
+    append_key_scalar(out, value.justify_last_line);
+  }
+  append_key_scalar(out, value.has_text_rotation);
+  if (value.has_text_rotation) {
+    append_key_scalar(out, value.text_rotation);
+  }
+  append_key_scalar(out, value.has_indent);
+  if (value.has_indent) {
+    append_key_scalar(out, value.indent);
+  }
+  append_key_scalar(out, value.has_relative_indent);
+  if (value.has_relative_indent) {
+    append_key_scalar(out, value.relative_indent);
+  }
+  append_key_scalar(out, value.has_shrink_to_fit);
+  if (value.has_shrink_to_fit) {
+    append_key_scalar(out, value.shrink_to_fit);
+  }
+  append_key_scalar(out, value.has_reading_order);
+  if (value.has_reading_order) {
+    append_key_scalar(out, value.reading_order);
+  }
+  append_key_scalar(out, value.has_protection);
+  if (value.has_protection) {
+    append_key_scalar(out, value.locked);
+    append_key_scalar(out, value.hidden);
+  }
   return out;
 }
 
@@ -514,6 +669,39 @@ fm_status_t validate_xf_references(const formulon::io::StylesTable& styles, cons
   }
   if (!num_fmt_ok) {
     return reject("num_fmt_id not registered", "num_fmt_id=" + std::to_string(record.num_fmt_id));
+  }
+  return 0;
+}
+
+fm_status_t validate_xf_alignment_extras(const fm_cell_xf_ex2& record, const char* api) {
+  auto reject = [api](const char* what, std::string context) {
+    const std::string message = std::string(api) + ": " + what;
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, message.c_str(), std::move(context));
+  };
+  if (record.has_text_rotation != 0 && record.text_rotation > 180U && record.text_rotation != 255U) {
+    return reject("text_rotation out of range", "text_rotation=" + std::to_string(record.text_rotation));
+  }
+  if (record.has_indent != 0 && record.indent > 255U) {
+    return reject("indent out of range", "indent=" + std::to_string(record.indent));
+  }
+  if (record.has_reading_order != 0 && record.reading_order > 2U) {
+    return reject("reading_order out of range", "reading_order=" + std::to_string(record.reading_order));
+  }
+  return 0;
+}
+
+fm_status_t validate_xf_alignment_enums(const fm_cell_xf& record, const char* api) {
+  auto reject = [api](const char* what, std::string context) {
+    const std::string message = std::string(api) + ": " + what;
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, message.c_str(), std::move(context));
+  };
+  // These ordinals are the canonical writer mapping for the corresponding
+  // XML string enums (general..distributed and top..distributed).
+  if (record.horizontal_align > 7U) {
+    return reject("horizontal_align out of range", "horizontal_align=" + std::to_string(record.horizontal_align));
+  }
+  if (record.vertical_align > 4U) {
+    return reject("vertical_align out of range", "vertical_align=" + std::to_string(record.vertical_align));
   }
   return 0;
 }
@@ -670,44 +858,59 @@ extern "C" fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* form
   // Step 3: append a new custom entry. New id is one past the largest
   // existing custom id, with `163` as the lower bound (the last
   // built-in slot).
-  uint16_t next_id = 163U;
+  std::uint32_t next_id = 163U;
   for (const formulon::io::NumFmtRecord& n : styles.num_fmts) {
     if (n.id > next_id) {
       next_id = n.id;
     }
   }
+  if (next_id >= std::numeric_limits<std::uint16_t>::max()) {
+    return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed,
+                             "fm_styles_add_num_fmt: custom numFmtId space exhausted",
+                             "max_num_fmt_id=" + std::to_string(std::numeric_limits<std::uint16_t>::max()));
+  }
   ++next_id;
 
   styles.num_fmt_strings.push_back(code);
   formulon::io::NumFmtRecord rec;
-  rec.id = next_id;
+  rec.id = static_cast<std::uint16_t>(next_id);
   rec.format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size() - 1);
   styles.num_fmts.push_back(rec);
-  *out_num_fmt_id = next_id;
+  *out_num_fmt_id = static_cast<std::uint16_t>(next_id);
   return 0;
 }
 
 namespace {
 
 fm_status_t add_cell_xf_impl(fm_workbook_t* wb, fm_cell_xf record, bool justify_last_line, uint32_t xf_id,
-                             uint32_t* out_xf_index) {
+                             const fm_cell_xf_ex2* extras, uint32_t* out_xf_index, const char* api) {
   if (wb == nullptr || out_xf_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_cell_xf: NULL argument");
+    const std::string message = std::string(api) + ": NULL argument";
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, message.c_str());
+  }
+  if (fm_status_t rc = validate_xf_alignment_enums(record, api); rc != 0) {
+    return rc;
+  }
+  if (extras != nullptr) {
+    if (fm_status_t rc = validate_xf_alignment_extras(*extras, api); rc != 0) {
+      return rc;
+    }
   }
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
   ensure_default_cell_xf(styles);
 
   // Reject out-of-range references rather than auto-growing the parallel
   // tables; callers must register fonts / fills / borders beforehand.
-  if (fm_status_t rc = validate_xf_references(styles, record, "fm_styles_add_cell_xf"); rc != 0) {
+  if (fm_status_t rc = validate_xf_references(styles, record, api); rc != 0) {
     return rc;
   }
   // A non-zero `xfId` must name an existing `<cellStyleXfs>` entry, or the
   // emitted attribute dangles. Zero stays legal with an empty table so the
   // plain `fm_styles_add_cell_xf` path keeps its historic behaviour.
   if (xf_id != 0 && xf_id >= styles.cell_style_xfs.size()) {
+    const std::string message = std::string(api) + ": xf_id out of range";
     return set_binding_error(
-        formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_add_cell_xf: xf_id out of range",
+        formulon::FormulonErrorCode::kInvalidArgument, message.c_str(),
         "xf_id=" + std::to_string(xf_id) + " cell_style_xfs_count=" + std::to_string(styles.cell_style_xfs.size()));
   }
 
@@ -733,6 +936,44 @@ fm_status_t add_cell_xf_impl(fm_workbook_t* wb, fm_cell_xf record, bool justify_
   candidate.wrap_text = record.wrap_text != 0;
   candidate.justify_last_line = justify_last_line;
   candidate.xf_id = xf_id;
+  candidate.has_horizontal_align = candidate.horizontal_align != 0U;
+  candidate.has_vertical_align = candidate.vertical_align != 2U;
+  candidate.has_wrap_text = candidate.wrap_text;
+  candidate.has_justify_last_line = candidate.justify_last_line;
+  if (extras != nullptr) {
+    candidate.has_alignment = extras->has_alignment != 0;
+    candidate.has_horizontal_align = extras->has_horizontal_align != 0 || candidate.has_horizontal_align;
+    candidate.has_vertical_align = extras->has_vertical_align != 0 || candidate.has_vertical_align;
+    candidate.has_wrap_text = extras->has_wrap_text != 0 || candidate.has_wrap_text;
+    candidate.has_justify_last_line = extras->has_justify_last_line != 0 || candidate.has_justify_last_line;
+    if (!candidate.has_alignment && !candidate.has_horizontal_align && !candidate.has_vertical_align &&
+        !candidate.has_wrap_text && !candidate.has_justify_last_line && record.horizontal_align == 0U &&
+        record.vertical_align == 0U && record.wrap_text == 0 && !candidate.justify_last_line &&
+        extras->has_text_rotation == 0 && extras->has_indent == 0 && extras->has_relative_indent == 0 &&
+        extras->has_shrink_to_fit == 0 && extras->has_reading_order == 0) {
+      // A zero-initialized public record denotes the omitted child. The
+      // engine's normalized effective default for vertical alignment is
+      // bottom, not the ordinal used for an explicit top alignment.
+      candidate.vertical_align = 2U;
+    }
+    candidate.has_text_rotation = extras->has_text_rotation != 0;
+    candidate.text_rotation = extras->text_rotation;
+    candidate.has_indent = extras->has_indent != 0;
+    candidate.indent = extras->indent;
+    candidate.has_relative_indent = extras->has_relative_indent != 0;
+    candidate.relative_indent = extras->relative_indent;
+    candidate.has_shrink_to_fit = extras->has_shrink_to_fit != 0;
+    candidate.shrink_to_fit = extras->shrink_to_fit != 0;
+    candidate.has_reading_order = extras->has_reading_order != 0;
+    candidate.reading_order = extras->reading_order;
+    // Keep the C ABI's inferred presence semantics in lockstep with the
+    // binding adapters and the writer.  A caller may supply an alignment
+    // value without setting the top-level presence bit; non-default values
+    // still require an alignment child.  Conversely, an explicit empty
+    // child remains present through `has_alignment=true`.
+    candidate.has_alignment = formulon::io::HasAlignment(candidate);
+  }
+  candidate.has_alignment = formulon::io::HasAlignment(candidate);
 
   for (std::size_t i = 0; i < styles.cell_xfs.size(); ++i) {
     if (cell_xfs_equal(styles.cell_xfs[i], candidate)) {
@@ -749,12 +990,19 @@ fm_status_t add_cell_xf_impl(fm_workbook_t* wb, fm_cell_xf record, bool justify_
 
 extern "C" fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_index) {
   clear_last_error();
-  return add_cell_xf_impl(wb, record, false, 0, out_xf_index);
+  return add_cell_xf_impl(wb, record, false, 0, nullptr, out_xf_index, "fm_styles_add_cell_xf");
 }
 
 extern "C" fm_status_t fm_styles_add_cell_xf_ex(fm_workbook_t* wb, fm_cell_xf_ex record, uint32_t* out_xf_index) {
   clear_last_error();
-  return add_cell_xf_impl(wb, record.base, record.justify_last_line != 0, record.xf_id, out_xf_index);
+  return add_cell_xf_impl(wb, record.base, record.justify_last_line != 0, record.xf_id, nullptr, out_xf_index,
+                          "fm_styles_add_cell_xf_ex");
+}
+
+extern "C" fm_status_t fm_styles_add_cell_xf_ex2(fm_workbook_t* wb, fm_cell_xf_ex2 record, uint32_t* out_xf_index) {
+  clear_last_error();
+  return add_cell_xf_impl(wb, record.base, record.justify_last_line != 0, record.xf_id, &record, out_xf_index,
+                          "fm_styles_add_cell_xf_ex2");
 }
 
 extern "C" fm_status_t fm_styles_add_cell_style_xf_ex(fm_workbook_t* wb, fm_cell_xf_ex record, uint32_t* out_xf_id) {
@@ -762,6 +1010,9 @@ extern "C" fm_status_t fm_styles_add_cell_style_xf_ex(fm_workbook_t* wb, fm_cell
   if (wb == nullptr || out_xf_id == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_styles_add_cell_style_xf_ex: NULL argument");
+  }
+  if (fm_status_t rc = validate_xf_alignment_enums(record.base, "fm_styles_add_cell_style_xf_ex"); rc != 0) {
+    return rc;
   }
   auto& styles = wb->workbook().mutable_styles();
   ensure_default_style_roots(styles);
@@ -777,6 +1028,71 @@ extern "C" fm_status_t fm_styles_add_cell_style_xf_ex(fm_workbook_t* wb, fm_cell
   candidate.vertical_align = record.base.vertical_align;
   candidate.wrap_text = record.base.wrap_text != 0;
   candidate.justify_last_line = record.justify_last_line != 0;
+  candidate.has_horizontal_align = candidate.horizontal_align != 0U;
+  candidate.has_vertical_align = candidate.vertical_align != 2U;
+  candidate.has_wrap_text = candidate.wrap_text;
+  candidate.has_justify_last_line = candidate.justify_last_line;
+  candidate.has_alignment = formulon::io::HasAlignment(candidate);
+  for (std::size_t i = 0; i < styles.cell_style_xfs.size(); ++i) {
+    if (cell_xfs_equal(styles.cell_style_xfs[i], candidate)) {
+      *out_xf_id = static_cast<uint32_t>(i);
+      return 0;
+    }
+  }
+  styles.cell_style_xfs.push_back(std::move(candidate));
+  *out_xf_id = static_cast<uint32_t>(styles.cell_style_xfs.size() - 1U);
+  return 0;
+}
+
+extern "C" fm_status_t fm_styles_add_cell_style_xf_ex2(fm_workbook_t* wb, fm_cell_xf_ex2 record, uint32_t* out_xf_id) {
+  clear_last_error();
+  if (wb == nullptr || out_xf_id == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_styles_add_cell_style_xf_ex2: NULL argument");
+  }
+  if (fm_status_t rc = validate_xf_alignment_enums(record.base, "fm_styles_add_cell_style_xf_ex2"); rc != 0) {
+    return rc;
+  }
+  if (fm_status_t rc = validate_xf_alignment_extras(record, "fm_styles_add_cell_style_xf_ex2"); rc != 0) {
+    return rc;
+  }
+  auto& styles = wb->workbook().mutable_styles();
+  ensure_default_style_roots(styles);
+  if (fm_status_t rc = validate_xf_references(styles, record.base, "fm_styles_add_cell_style_xf_ex2"); rc != 0) {
+    return rc;
+  }
+  formulon::io::CellXf candidate;
+  candidate.font_index = record.base.font_index;
+  candidate.fill_index = record.base.fill_index;
+  candidate.border_index = record.base.border_index;
+  candidate.num_fmt_id = record.base.num_fmt_id;
+  candidate.horizontal_align = record.base.horizontal_align;
+  candidate.vertical_align = record.base.vertical_align;
+  candidate.wrap_text = record.base.wrap_text != 0;
+  candidate.justify_last_line = record.justify_last_line != 0;
+  candidate.has_alignment = record.has_alignment != 0;
+  candidate.has_horizontal_align = record.has_horizontal_align != 0 || candidate.horizontal_align != 0U;
+  candidate.has_vertical_align = record.has_vertical_align != 0 || candidate.vertical_align != 2U;
+  candidate.has_wrap_text = record.has_wrap_text != 0 || candidate.wrap_text;
+  candidate.has_justify_last_line = record.has_justify_last_line != 0 || candidate.justify_last_line;
+  candidate.has_text_rotation = record.has_text_rotation != 0;
+  candidate.text_rotation = record.text_rotation;
+  candidate.has_indent = record.has_indent != 0;
+  candidate.indent = record.indent;
+  candidate.has_relative_indent = record.has_relative_indent != 0;
+  candidate.relative_indent = record.relative_indent;
+  candidate.has_shrink_to_fit = record.has_shrink_to_fit != 0;
+  candidate.shrink_to_fit = record.shrink_to_fit != 0;
+  candidate.has_reading_order = record.has_reading_order != 0;
+  candidate.reading_order = record.reading_order;
+  if (!candidate.has_alignment && !candidate.has_horizontal_align && !candidate.has_vertical_align &&
+      !candidate.has_wrap_text && !candidate.has_justify_last_line && record.base.horizontal_align == 0U &&
+      record.base.vertical_align == 0U && record.base.wrap_text == 0 && !candidate.justify_last_line &&
+      record.has_text_rotation == 0 && record.has_indent == 0 && record.has_relative_indent == 0 &&
+      record.has_shrink_to_fit == 0 && record.has_reading_order == 0) {
+    candidate.vertical_align = 2U;
+  }
+  candidate.has_alignment = formulon::io::HasAlignment(candidate);
   for (std::size_t i = 0; i < styles.cell_style_xfs.size(); ++i) {
     if (cell_xfs_equal(styles.cell_style_xfs[i], candidate)) {
       *out_xf_id = static_cast<uint32_t>(i);
@@ -837,49 +1153,61 @@ extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_ba
   }
 
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
-  ensure_default_style_roots(styles);
+  // Stage every mutation, including the default roots that are required for
+  // a valid xf. StylesTable owns strings and all nested records by value, so
+  // this is a deep copy. The live table and caller-owned output arrays remain
+  // untouched until every input record has passed validation.
+  formulon::io::StylesTable staged = styles;
+  ensure_default_style_roots(staged);
+
+  std::vector<uint32_t> staged_font_indices(batch->font_count);
+  std::vector<uint32_t> staged_fill_indices(batch->fill_count);
+  std::vector<uint32_t> staged_border_indices(batch->border_count);
+  std::vector<uint32_t> staged_cell_xf_indices(batch->cell_xf_count);
+  std::vector<uint16_t> staged_num_fmt_ids(batch->num_fmt_count);
+
   std::unordered_map<std::string, uint32_t> fonts;
   std::unordered_map<std::string, uint32_t> fills;
   std::unordered_map<std::string, uint32_t> borders;
-  fonts.reserve(styles.fonts.size() + batch->font_count);
-  fills.reserve(styles.fills.size() + batch->fill_count);
-  borders.reserve(styles.borders.size() + batch->border_count);
-  for (uint32_t i = 0; i < styles.fonts.size(); ++i)
-    fonts.emplace(font_key(styles.fonts[i]), i);
-  for (uint32_t i = 0; i < styles.fills.size(); ++i)
-    fills.emplace(fill_key(styles.fills[i]), i);
-  for (uint32_t i = 0; i < styles.borders.size(); ++i)
-    borders.emplace(border_key(styles.borders[i]), i);
+  fonts.reserve(staged.fonts.size() + batch->font_count);
+  fills.reserve(staged.fills.size() + batch->fill_count);
+  borders.reserve(staged.borders.size() + batch->border_count);
+  for (uint32_t i = 0; i < staged.fonts.size(); ++i)
+    fonts.emplace(font_key(staged.fonts[i]), i);
+  for (uint32_t i = 0; i < staged.fills.size(); ++i)
+    fills.emplace(fill_key(staged.fills[i]), i);
+  for (uint32_t i = 0; i < staged.borders.size(); ++i)
+    borders.emplace(border_key(staged.borders[i]), i);
   for (size_t i = 0; i < batch->font_count; ++i) {
     formulon::io::FontRecord value = font_from_c(batch->fonts[i]);
     const std::string key = font_key(value);
-    const auto [it, inserted] = fonts.emplace(key, static_cast<uint32_t>(styles.fonts.size()));
+    const auto [it, inserted] = fonts.emplace(key, static_cast<uint32_t>(staged.fonts.size()));
     if (inserted)
-      styles.fonts.push_back(std::move(value));
-    batch->font_indices[i] = it->second;
+      staged.fonts.push_back(std::move(value));
+    staged_font_indices[i] = it->second;
   }
   for (size_t i = 0; i < batch->fill_count; ++i) {
     formulon::io::FillRecord value = fill_from_c(batch->fills[i]);
     const std::string key = fill_key(value);
-    const auto [it, inserted] = fills.emplace(key, static_cast<uint32_t>(styles.fills.size()));
+    const auto [it, inserted] = fills.emplace(key, static_cast<uint32_t>(staged.fills.size()));
     if (inserted)
-      styles.fills.push_back(value);
-    batch->fill_indices[i] = it->second;
+      staged.fills.push_back(value);
+    staged_fill_indices[i] = it->second;
   }
   for (size_t i = 0; i < batch->border_count; ++i) {
     formulon::io::BorderRecord value = border_from_c(batch->borders[i]);
     const std::string key = border_key(value);
-    const auto [it, inserted] = borders.emplace(key, static_cast<uint32_t>(styles.borders.size()));
+    const auto [it, inserted] = borders.emplace(key, static_cast<uint32_t>(staged.borders.size()));
     if (inserted)
-      styles.borders.push_back(value);
-    batch->border_indices[i] = it->second;
+      staged.borders.push_back(value);
+    staged_border_indices[i] = it->second;
   }
   std::unordered_map<std::string, uint16_t> num_fmts;
-  num_fmts.reserve(styles.num_fmts.size() + batch->num_fmt_count);
-  uint16_t next_num_fmt_id = 163U;
-  for (const formulon::io::NumFmtRecord& record : styles.num_fmts) {
-    if (record.format_string_index < styles.num_fmt_strings.size()) {
-      num_fmts.emplace(styles.num_fmt_strings[record.format_string_index], record.id);
+  num_fmts.reserve(staged.num_fmts.size() + batch->num_fmt_count);
+  std::uint32_t next_num_fmt_id = 163U;
+  for (const formulon::io::NumFmtRecord& record : staged.num_fmts) {
+    if (record.format_string_index < staged.num_fmt_strings.size()) {
+      num_fmts.emplace(staged.num_fmt_strings[record.format_string_index], record.id);
     }
     if (record.id > next_num_fmt_id) {
       next_num_fmt_id = record.id;
@@ -898,31 +1226,41 @@ extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_ba
       }
     }
     if (is_builtin) {
-      batch->num_fmt_ids[i] = builtin_id;
+      staged_num_fmt_ids[i] = builtin_id;
       continue;
     }
-    const auto [it, inserted] = num_fmts.emplace(code, static_cast<uint16_t>(next_num_fmt_id + 1U));
-    if (inserted) {
-      ++next_num_fmt_id;
-      styles.num_fmt_strings.push_back(code);
-      formulon::io::NumFmtRecord record;
-      record.id = next_num_fmt_id;
-      record.format_string_index = static_cast<uint32_t>(styles.num_fmt_strings.size() - 1U);
-      styles.num_fmts.push_back(record);
+    const auto existing = num_fmts.find(code);
+    if (existing != num_fmts.end()) {
+      staged_num_fmt_ids[i] = existing->second;
+      continue;
     }
-    batch->num_fmt_ids[i] = it->second;
+    if (next_num_fmt_id >= std::numeric_limits<std::uint16_t>::max()) {
+      return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed,
+                               "fm_styles_add_batch: custom numFmtId space exhausted",
+                               "max_num_fmt_id=" + std::to_string(std::numeric_limits<std::uint16_t>::max()));
+    }
+    const std::uint32_t candidate_num_fmt_id = next_num_fmt_id + 1U;
+    num_fmts.emplace(code, static_cast<std::uint16_t>(candidate_num_fmt_id));
+    ++next_num_fmt_id;
+    staged.num_fmt_strings.push_back(code);
+    formulon::io::NumFmtRecord record;
+    record.id = static_cast<std::uint16_t>(next_num_fmt_id);
+    record.format_string_index = static_cast<uint32_t>(staged.num_fmt_strings.size() - 1U);
+    staged.num_fmts.push_back(record);
+    staged_num_fmt_ids[i] = record.id;
   }
-  ensure_default_cell_xf(styles);
+  ensure_default_cell_xf(staged);
   std::unordered_map<std::string, uint32_t> xfs;
-  xfs.reserve(styles.cell_xfs.size() + batch->cell_xf_count);
-  for (uint32_t i = 0; i < styles.cell_xfs.size(); ++i)
-    xfs.emplace(cell_xf_key(styles.cell_xfs[i]), i);
+  xfs.reserve(staged.cell_xfs.size() + batch->cell_xf_count);
+  for (uint32_t i = 0; i < staged.cell_xfs.size(); ++i)
+    xfs.emplace(cell_xf_key(staged.cell_xfs[i]), i);
   for (size_t i = 0; i < batch->cell_xf_count; ++i) {
     const fm_cell_xf record = batch->cell_xfs[i];
-    if (record.font_index >= styles.fonts.size() || record.fill_index >= styles.fills.size() ||
-        record.border_index >= styles.borders.size()) {
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_styles_add_batch: xf style index out of range");
+    if (fm_status_t rc = validate_xf_alignment_enums(record, "fm_styles_add_batch"); rc != 0) {
+      return rc;
+    }
+    if (fm_status_t rc = validate_xf_references(staged, record, "fm_styles_add_batch"); rc != 0) {
+      return rc;
     }
     formulon::io::CellXf value;
     value.font_index = record.font_index;
@@ -932,12 +1270,31 @@ extern "C" fm_status_t fm_styles_add_batch(fm_workbook_t* wb, const fm_styles_ba
     value.horizontal_align = record.horizontal_align;
     value.vertical_align = record.vertical_align;
     value.wrap_text = record.wrap_text != 0;
+    value.has_horizontal_align = value.horizontal_align != 0U;
+    value.has_vertical_align = value.vertical_align != 2U;
+    value.has_wrap_text = value.wrap_text;
+    value.has_alignment = formulon::io::HasAlignment(value);
     const std::string key = cell_xf_key(value);
-    const auto [it, inserted] = xfs.emplace(key, static_cast<uint32_t>(styles.cell_xfs.size()));
+    const auto [it, inserted] = xfs.emplace(key, static_cast<uint32_t>(staged.cell_xfs.size()));
     if (inserted)
-      styles.cell_xfs.push_back(value);
-    batch->cell_xf_indices[i] = it->second;
+      staged.cell_xfs.push_back(value);
+    staged_cell_xf_indices[i] = it->second;
   }
+
+  // Commit the complete staged table and publish output indices only after
+  // all records have succeeded. A failed batch therefore leaves both the
+  // workbook and every caller-provided sentinel byte-identical.
+  styles = std::move(staged);
+  for (size_t i = 0; i < batch->font_count; ++i)
+    batch->font_indices[i] = staged_font_indices[i];
+  for (size_t i = 0; i < batch->fill_count; ++i)
+    batch->fill_indices[i] = staged_fill_indices[i];
+  for (size_t i = 0; i < batch->border_count; ++i)
+    batch->border_indices[i] = staged_border_indices[i];
+  for (size_t i = 0; i < batch->cell_xf_count; ++i)
+    batch->cell_xf_indices[i] = staged_cell_xf_indices[i];
+  for (size_t i = 0; i < batch->num_fmt_count; ++i)
+    batch->num_fmt_ids[i] = staged_num_fmt_ids[i];
   return 0;
 }
 

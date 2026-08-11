@@ -692,40 +692,36 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::
 // PivotTable filters
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, std::size_t sheet_index,
-                                                      std::size_t pivot_index, std::size_t* out_count) {
-  clear_last_error();
-  if (wb == nullptr || out_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_filter_count: NULL argument");
-  }
-  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_filter_count");
-  if (table == nullptr) {
-    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  }
-  *out_count = table->active_filters().size();
-  return 0;
-}
+namespace {
 
-extern "C" fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                                    const fm_pivot_filter_spec_t* spec) {
-  clear_last_error();
+fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                  const fm_pivot_filter_spec_ex_t* spec, bool validate_data_field_index,
+                                  const char* api) {
   if (wb == nullptr || spec == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_filter_add: NULL argument");
+                             (std::string(api) + ": NULL argument").c_str());
   }
   if (spec->field_name == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_pivot_filter_add: spec->field_name is NULL");
+                             (std::string(api) + ": spec->field_name is NULL").c_str());
   }
-  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_filter_add");
+  auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, api);
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  const bool is_value_filter = spec->type == FM_PIVOT_FILTER_VALUE_TOP_10 ||
+                               spec->type == FM_PIVOT_FILTER_VALUE_GREATER_THAN ||
+                               spec->type == FM_PIVOT_FILTER_VALUE_BETWEEN;
+  if (validate_data_field_index && is_value_filter && spec->data_field_index >= table->data_fields().size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(api) + ": data_field_index out of range").c_str(),
+                             "data_field_index=" + std::to_string(spec->data_field_index));
   }
   formulon::pivot::PivotFilter filter;
   filter.axis = pivot_axis_from_fm(spec->axis);
   filter.field_name = spec->field_name;
   filter.type = pivot_filter_type_from_fm(spec->type);
+  filter.data_field_index = spec->data_field_index;
   switch (spec->value_kind) {
     case FM_PIVOT_FILTER_VALUE_INT:
       filter.value = static_cast<int>(spec->value_int);
@@ -736,14 +732,14 @@ extern "C" fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, std::size
     case FM_PIVOT_FILTER_VALUE_TEXT:
       if (spec->value_text == nullptr) {
         return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                                 "fm_workbook_pivot_filter_add: spec->value_text is NULL");
+                                 (std::string(api) + ": spec->value_text is NULL").c_str());
       }
       filter.value = std::string(spec->value_text);
       break;
     case FM_PIVOT_FILTER_VALUE_NONE:
     default:
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_pivot_filter_add: spec->value_kind is unset",
+                               (std::string(api) + ": spec->value_kind is unset").c_str(),
                                "value_kind=" + std::to_string(static_cast<int>(spec->value_kind)));
   }
   switch (spec->value_high_kind) {
@@ -759,12 +755,56 @@ extern "C" fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, std::size
     case FM_PIVOT_FILTER_VALUE_TEXT:
     default:
       return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                               "fm_workbook_pivot_filter_add: spec->value_high_kind not supported",
+                               (std::string(api) + ": spec->value_high_kind not supported").c_str(),
                                "value_high_kind=" + std::to_string(static_cast<int>(spec->value_high_kind)));
   }
   table->mutable_active_filters().push_back(std::move(filter));
   invalidate_pivot_result(*table);
   return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                      std::size_t pivot_index, std::size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_filter_count: NULL argument");
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_filter_count");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  *out_count = table->active_filters().size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_filter_add_ex(fm_workbook_t* wb, std::size_t sheet_index,
+                                                       std::size_t pivot_index, const fm_pivot_filter_spec_ex_t* spec) {
+  clear_last_error();
+  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, true, "fm_workbook_pivot_filter_add_ex");
+}
+
+extern "C" fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
+                                                    const fm_pivot_filter_spec_t* spec) {
+  clear_last_error();
+  fm_pivot_filter_spec_ex_t ex{};
+  if (spec != nullptr) {
+    ex.axis = spec->axis;
+    ex.field_name = spec->field_name;
+    ex.type = spec->type;
+    ex.value_kind = spec->value_kind;
+    ex.value_int = spec->value_int;
+    ex.value_double = spec->value_double;
+    ex.value_text = spec->value_text;
+    ex.value_high_kind = spec->value_high_kind;
+    ex.value_high_int = spec->value_high_int;
+    ex.value_high_double = spec->value_high_double;
+  }
+  ex.data_field_index = 0;
+  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec == nullptr ? nullptr : &ex, false,
+                               "fm_workbook_pivot_filter_add");
 }
 
 extern "C" fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, std::size_t sheet_index,

@@ -137,6 +137,7 @@ struct fm_workbook {
   // `fm_workbook_load` returns successfully.
   std::uint32_t xlsb_undecoded_formula_count = 0;
   std::uint32_t xlsb_undecoded_defined_name_count = 0;
+  std::uint32_t xlsb_dropped_part_count = 0;
 
   // Scratch storage for strings handed back to the caller on the read
   // path (`fm_workbook_get_value` / `fm_workbook_cell_at` /

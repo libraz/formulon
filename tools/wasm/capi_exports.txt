@@ -20,6 +20,7 @@ fm_workbook_destroy
 # -- Save ------------------------------------------------------------------------
 fm_workbook_save
 fm_workbook_save_ex
+fm_workbook_save_ex_with_diagnostics
 fm_buffer_free
 
 # -- Sheets ----------------------------------------------------------------------
@@ -156,6 +157,7 @@ fm_workbook_spill_info
 fm_cell_get_xf_index
 fm_cell_set_xf_index
 fm_styles_get_cell_xf
+fm_styles_get_cell_xf_ex2
 fm_styles_get_font
 fm_styles_get_fill
 fm_styles_get_border
@@ -170,13 +172,16 @@ fm_styles_get_cell_style_count
 fm_styles_get_cell_style
 fm_styles_get_cell_style_xf_count
 fm_styles_get_cell_style_xf
+fm_styles_get_cell_style_xf_ex2
 fm_styles_add_font
 fm_styles_add_fill
 fm_styles_add_border
 fm_styles_add_batch
 fm_styles_add_num_fmt
 fm_styles_add_cell_xf
+fm_styles_add_cell_xf_ex2
 fm_styles_add_dxf
+fm_styles_add_cell_style_xf_ex2
 
 # -- Pivot layout projection -----------------------------------------------------
 fm_workbook_pivot_count
@@ -245,6 +250,7 @@ fm_workbook_pivot_data_field_clear
 fm_workbook_pivot_data_field_set
 fm_workbook_pivot_filter_count
 fm_workbook_pivot_filter_add
+fm_workbook_pivot_filter_add_ex
 fm_workbook_pivot_filter_clear
 fm_workbook_pivot_filter_remove_at
 
@@ -261,6 +267,7 @@ fm_workbook_external_link_at
 
 # -- Diagnostics -----------------------------------------------------------------
 fm_workbook_xlsb_read_diagnostics
+fm_workbook_xlsb_read_diagnostics_ex
 fm_last_error_message
 fm_last_error_context
 fm_status_string

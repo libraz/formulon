@@ -9,16 +9,21 @@
 
 #include "c_api/formulon_c.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
+#include "c_api/parts/common.h"
 #include "gtest/gtest.h"
 #include "io/format_detect.h"
 #include "io/xlsb/writer.h"
+#include "io/zip_reader.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
@@ -54,6 +59,84 @@ void MarkZipEntriesEncrypted(std::vector<std::uint8_t>& bytes) {
       bytes[flag_offset] = static_cast<std::uint8_t>(bytes[flag_offset] | 0x01U);
     }
   }
+}
+
+std::vector<std::uint8_t> AppendEmptyZipEntry(const std::vector<std::uint8_t>& bytes, std::string_view name) {
+  const std::uint8_t signature[] = {0x50, 0x4b, 0x05, 0x06};
+  const auto eocd_it = std::find_end(bytes.begin(), bytes.end(), std::begin(signature), std::end(signature));
+  EXPECT_NE(eocd_it, bytes.end());
+  if (eocd_it == bytes.end()) {
+    return {};
+  }
+  const std::size_t eocd = static_cast<std::size_t>(eocd_it - bytes.begin());
+  const auto read16 = [&](std::size_t offset) {
+    return static_cast<std::uint16_t>(bytes[offset] | (static_cast<std::uint16_t>(bytes[offset + 1U]) << 8U));
+  };
+  const auto read32 = [&](std::size_t offset) {
+    return static_cast<std::uint32_t>(bytes[offset] | (static_cast<std::uint32_t>(bytes[offset + 1U]) << 8U) |
+                                      (static_cast<std::uint32_t>(bytes[offset + 2U]) << 16U) |
+                                      (static_cast<std::uint32_t>(bytes[offset + 3U]) << 24U));
+  };
+  const std::uint16_t count = read16(eocd + 10U);
+  const std::uint32_t central_size = read32(eocd + 12U);
+  const std::uint32_t central_offset = read32(eocd + 16U);
+  const auto put16 = [](std::vector<std::uint8_t>& out, std::uint16_t value) {
+    out.push_back(static_cast<std::uint8_t>(value));
+    out.push_back(static_cast<std::uint8_t>(value >> 8U));
+  };
+  const auto put32 = [](std::vector<std::uint8_t>& out, std::uint32_t value) {
+    out.push_back(static_cast<std::uint8_t>(value));
+    out.push_back(static_cast<std::uint8_t>(value >> 8U));
+    out.push_back(static_cast<std::uint8_t>(value >> 16U));
+    out.push_back(static_cast<std::uint8_t>(value >> 24U));
+  };
+  const std::string encoded_name(name);
+  std::vector<std::uint8_t> local;
+  put32(local, 0x04034b50U);
+  put16(local, 20);
+  put16(local, 0);
+  put16(local, 0);
+  put16(local, 0);
+  put16(local, 0);
+  put32(local, 0);
+  put32(local, 0);
+  put32(local, 0);
+  put16(local, static_cast<std::uint16_t>(encoded_name.size()));
+  put16(local, 0);
+  local.insert(local.end(), encoded_name.begin(), encoded_name.end());
+  std::vector<std::uint8_t> central;
+  put32(central, 0x02014b50U);
+  put16(central, 20);
+  put16(central, 20);
+  put16(central, 0);
+  put16(central, 0);
+  put16(central, 0);
+  put16(central, 0);
+  put32(central, 0);
+  put32(central, 0);
+  put32(central, 0);
+  put16(central, static_cast<std::uint16_t>(encoded_name.size()));
+  put16(central, 0);
+  put16(central, 0);
+  put16(central, 0);
+  put16(central, 0);
+  put32(central, 0);
+  put32(central, central_offset);
+  central.insert(central.end(), encoded_name.begin(), encoded_name.end());
+  std::vector<std::uint8_t> out;
+  out.insert(out.end(), bytes.begin(), bytes.begin() + central_offset);
+  out.insert(out.end(), local.begin(), local.end());
+  out.insert(out.end(), bytes.begin() + central_offset, bytes.begin() + central_offset + central_size);
+  out.insert(out.end(), central.begin(), central.end());
+  put32(out, 0x06054b50U);
+  put16(out, 0);
+  put16(out, 0);
+  put16(out, count + 1U);
+  put16(out, count + 1U);
+  put32(out, central_size + static_cast<std::uint32_t>(central.size()));
+  put32(out, central_offset + static_cast<std::uint32_t>(local.size()));
+  put16(out, 0);
+  return out;
 }
 
 }  // namespace
@@ -124,6 +207,78 @@ TEST(FormulonCApi, TableRangeMustMatchTheColumnList) {
   const char* duplicate_columns[] = {"Product", "product"};
   EXPECT_NE(fm_workbook_table_create(wb.handle, 0, "D1:E3", "Other", "Other", duplicate_columns, 2, "", 1, 0, &index),
             0);
+}
+
+TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  const char* columns[] = {"Product", "Amount"};
+  size_t index = 99;
+  ASSERT_EQ(fm_workbook_table_create(wb.handle, 0, "A1:B3", "Sales", "Sales", columns, 2, "CustomStyle", 1, 1, &index),
+            0);
+
+  // Seed payload that the C ABI deliberately does not model. The update must
+  // rewrite only the opening autoFilter ref and retain every raw payload.
+  auto& table = wb.handle->wb->mutable_tables()[index];
+  table.auto_filter_xml =
+      "<autoFilter ref=\"A1:B3\"><filterColumn colId=\"0\"><filters><filter val=\"West\"/></filters></filterColumn>"
+      "</autoFilter>";
+  table.sort_state_xml = "<sortState ref=\"A1:B3\"><sortCondition ref=\"B2:B3\" descending=\"1\"/></sortState>";
+  table.table_style_info_xml = "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>";
+  table.ext_lst_xml = "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>";
+
+  ASSERT_EQ(fm_workbook_table_update(wb.handle, index, "A1:B4", nullptr, -1, -1), 0);
+  EXPECT_EQ(table.ref, "A1:B4");
+  EXPECT_TRUE(table.header_row);
+  EXPECT_TRUE(table.totals_row);
+  EXPECT_NE(table.auto_filter_xml.find("ref=\"A1:B4\""), std::string::npos);
+  EXPECT_NE(table.auto_filter_xml.find("filterColumn"), std::string::npos);
+  EXPECT_NE(table.sort_state_xml.find("ref=\"A1:B3\""), std::string::npos);
+  EXPECT_NE(table.sort_state_xml.find("sortCondition"), std::string::npos);
+  EXPECT_EQ(table.table_style_info_xml, "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>");
+  EXPECT_EQ(table.ext_lst_xml,
+            "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>");
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  const auto& reloaded = loaded.handle->wb->tables()[0];
+  EXPECT_EQ(reloaded.ref, "A1:B4");
+  EXPECT_TRUE(reloaded.header_row);
+  EXPECT_TRUE(reloaded.totals_row);
+  EXPECT_NE(reloaded.auto_filter_xml.find("ref=\"A1:B4\""), std::string::npos);
+  EXPECT_NE(reloaded.auto_filter_xml.find("filterColumn"), std::string::npos);
+  EXPECT_NE(reloaded.auto_filter_xml.find("West"), std::string::npos);
+  EXPECT_EQ(reloaded.sort_state_xml,
+            "<sortState ref=\"A1:B3\"><sortCondition ref=\"B2:B3\" descending=\"1\"/></sortState>");
+  EXPECT_EQ(reloaded.table_style_info_xml, "<tableStyleInfo name=\"CustomStyle\" showRowStripes=\"0\"/>");
+  EXPECT_EQ(reloaded.ext_lst_xml,
+            "<extLst><ext uri=\"urn:formulon:test\"><futureTableData value=\"kept\"/></ext></extLst>");
+
+  formulon::io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(formulon::io::ByteSpan{saved.data, saved.len})));
+  auto table_part_or = zip.read_entry("xl/tables/table1.xml");
+  ASSERT_TRUE(static_cast<bool>(table_part_or)) << table_part_or.error().message;
+  const std::string table_xml(table_part_or.value().begin(), table_part_or.value().end());
+  const std::size_t auto_filter_pos = table_xml.find("<autoFilter");
+  const std::size_t sort_state_pos = table_xml.find("<sortState");
+  const std::size_t table_columns_pos = table_xml.find("<tableColumns");
+  const std::size_t style_info_pos = table_xml.find("<tableStyleInfo");
+  const std::size_t ext_lst_pos = table_xml.find("<extLst");
+  ASSERT_NE(auto_filter_pos, std::string::npos);
+  ASSERT_NE(sort_state_pos, std::string::npos);
+  ASSERT_NE(table_columns_pos, std::string::npos);
+  ASSERT_NE(style_info_pos, std::string::npos);
+  ASSERT_NE(ext_lst_pos, std::string::npos);
+  EXPECT_LT(auto_filter_pos, sort_state_pos);
+  EXPECT_LT(sort_state_pos, table_columns_pos);
+  EXPECT_LT(table_columns_pos, style_info_pos);
+  EXPECT_LT(style_info_pos, ext_lst_pos);
+  EXPECT_NE(table_xml.find("ref=\"A1:B4\""), std::string::npos);
+  EXPECT_NE(table_xml.find("filterColumn"), std::string::npos);
+  EXPECT_NE(table_xml.find("sortCondition ref=\"B2:B3\""), std::string::npos);
+  EXPECT_NE(table_xml.find("futureTableData value=\"kept\""), std::string::npos);
 }
 
 TEST(FormulonCApi, PaginationSnapshotExposesBreaksAndUsedRangeFallback) {
@@ -497,6 +652,43 @@ TEST(FormulonCApi, SaveXlsbWithResultReportsUnsupportedFormulaDowngrade) {
   EXPECT_EQ(downgraded, 1U);
 }
 
+TEST(FormulonCApi, SaveExWithDiagnosticsReportsBothXlsbCountersAndKeepsLegacyShapes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=@A1:A10"), 0);
+
+  auto& sheet = wb.handle->workbook().sheet(0);
+  formulon::Hyperlink hyperlink;
+  hyperlink.target = "https://example.com";
+  sheet.mutable_hyperlinks().push_back(std::move(hyperlink));
+  sheet.mutable_validations().push_back(formulon::DataValidation{});
+  sheet.set_auto_filter_xml("<autoFilter ref=\"A1:B2\"/>");
+
+  BufferGuard xlsx_buf;
+  size_t downgraded = 99U;
+  size_t deferred = 99U;
+  ASSERT_EQ(fm_workbook_save_ex_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len,
+                                                 &downgraded, &deferred),
+            0);
+  EXPECT_EQ(downgraded, 0U);
+  EXPECT_EQ(deferred, 0U);
+
+  BufferGuard xlsb_buf;
+  downgraded = 0U;
+  deferred = 0U;
+  ASSERT_EQ(fm_workbook_save_ex_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len,
+                                                 &downgraded, &deferred),
+            0);
+  EXPECT_EQ(downgraded, 1U);
+  EXPECT_EQ(deferred, 3U);
+
+  BufferGuard legacy_buf;
+  size_t legacy_downgraded = 0U;
+  ASSERT_EQ(fm_workbook_save_xlsb_with_result(wb.handle, &legacy_buf.data, &legacy_buf.len, &legacy_downgraded), 0);
+  EXPECT_EQ(legacy_downgraded, downgraded);
+  EXPECT_GT(legacy_buf.len, 0U);
+}
+
 TEST(FormulonCApi, XlsbReadDiagnosticsAreZeroForCleanRoundTrip) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -512,6 +704,107 @@ TEST(FormulonCApi, XlsbReadDiagnosticsAreZeroForCleanRoundTrip) {
   ASSERT_EQ(fm_workbook_xlsb_read_diagnostics(loaded.handle, &formulas, &names), 0);
   EXPECT_EQ(formulas, 0U);
   EXPECT_EQ(names, 0U);
+
+  size_t dropped = 99U;
+  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics_ex(loaded.handle, &formulas, &names, &dropped), 0);
+  EXPECT_EQ(formulas, 0U);
+  EXPECT_EQ(names, 0U);
+  EXPECT_EQ(dropped, 0U);
+}
+
+TEST(FormulonCApi, XlsbReadDiagnosticsExReportsDroppedPartAndInitializesOutputsOnFailure) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  size_t formulas = 99U;
+  size_t names = 99U;
+  size_t dropped = 99U;
+  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics_ex(wb.handle, &formulas, &names, &dropped), 0);
+  EXPECT_EQ(formulas, 0U);
+  EXPECT_EQ(names, 0U);
+  EXPECT_EQ(dropped, 0U);
+
+  uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
+  size_t len = 99U;
+  size_t downgraded = 99U;
+  size_t deferred = 99U;
+  EXPECT_NE(
+      fm_workbook_save_ex_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_UNKNOWN, &bytes, &len, &downgraded, &deferred),
+      0);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(len, 0U);
+  EXPECT_EQ(downgraded, 0U);
+  EXPECT_EQ(deferred, 0U);
+
+  formulas = 99U;
+  names = 99U;
+  dropped = 99U;
+  EXPECT_NE(fm_workbook_xlsb_read_diagnostics_ex(nullptr, &formulas, &names, &dropped), 0);
+  EXPECT_EQ(formulas, 0U);
+  EXPECT_EQ(names, 0U);
+  EXPECT_EQ(dropped, 0U);
+}
+
+TEST(FormulonCApi, XlsbReadDiagnosticsReportsOneDroppedPartFromDeterministicFixture) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  BufferGuard bytes;
+  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
+  const std::vector<std::uint8_t> fixture =
+      AppendEmptyZipEntry(std::vector<std::uint8_t>(bytes.data, bytes.data + bytes.len), "xl/dropped.bin");
+  ASSERT_FALSE(fixture.empty());
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(fixture.data(), fixture.size(), &loaded.handle), 0);
+  size_t formulas = 0;
+  size_t names = 0;
+  size_t dropped = 0;
+  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics_ex(loaded.handle, &formulas, &names, &dropped), 0);
+  EXPECT_EQ(formulas, 0U);
+  EXPECT_EQ(names, 0U);
+  EXPECT_EQ(dropped, 1U);
+}
+
+TEST(FormulonCApi, DiagnosticFailuresNameTheInvokedLegacyOrExtendedSymbol) {
+  size_t formulas = 77U;
+  size_t names = 77U;
+  EXPECT_NE(fm_workbook_xlsb_read_diagnostics(nullptr, &formulas, &names), 0);
+  EXPECT_EQ(formulas, 0U);
+  EXPECT_EQ(names, 0U);
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_xlsb_read_diagnostics: NULL argument");
+
+  formulas = 77U;
+  names = 77U;
+  size_t dropped = 77U;
+  EXPECT_NE(fm_workbook_xlsb_read_diagnostics_ex(nullptr, &formulas, &names, &dropped), 0);
+  EXPECT_EQ(formulas, 0U);
+  EXPECT_EQ(names, 0U);
+  EXPECT_EQ(dropped, 0U);
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_xlsb_read_diagnostics_ex: NULL argument");
+
+  uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
+  size_t len = 77U;
+  EXPECT_NE(fm_workbook_save_ex(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(len, 0U);
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_ex: NULL argument");
+
+  size_t downgraded = 77U;
+  EXPECT_NE(fm_workbook_save_xlsb_with_result(nullptr, &bytes, &len, &downgraded), 0);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(len, 0U);
+  EXPECT_EQ(downgraded, 0U);
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_xlsb_with_result: NULL argument");
+
+  size_t deferred = 77U;
+  bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
+  len = 77U;
+  EXPECT_NE(
+      fm_workbook_save_ex_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len, &downgraded, &deferred), 0);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(len, 0U);
+  EXPECT_EQ(downgraded, 0U);
+  EXPECT_EQ(deferred, 0U);
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_ex_with_diagnostics: NULL argument");
 }
 
 TEST(FormulonCApi, MemoryUsageTracksTheWorkbookAndRejectsNulls) {

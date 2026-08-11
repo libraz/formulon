@@ -81,6 +81,204 @@ std::string table_style_xml(std::string_view style_name) {
          "\" showFirstColumn=\"0\" showLastColumn=\"0\" showRowStripes=\"1\" showColumnStripes=\"0\"/>";
 }
 
+// Keep the raw table-level autoFilter payload, changing only its opening
+// element's ref attribute. The reader stores this fragment verbatim because
+// filterColumn criteria and extension payloads are not modelled by the
+// evaluator.
+std::string table_auto_filter_xml(std::string_view raw_xml, std::string_view ref) {
+  const std::string escaped_ref = xml_attr_escape(ref);
+  if (raw_xml.empty()) {
+    return "<autoFilter ref=\"" + escaped_ref + "\"/>";
+  }
+
+  const std::size_t name_start = raw_xml.find("<autoFilter");
+  if (name_start == std::string_view::npos) {
+    return std::string(raw_xml);
+  }
+  const std::size_t name_end = name_start + std::string_view("<autoFilter").size();
+  if (name_end < raw_xml.size() && raw_xml[name_end] != ' ' && raw_xml[name_end] != '\t' && raw_xml[name_end] != '\r' &&
+      raw_xml[name_end] != '\n' && raw_xml[name_end] != '/' && raw_xml[name_end] != '>') {
+    return std::string(raw_xml);
+  }
+
+  bool in_quote = false;
+  char quote = '\0';
+  std::size_t opening_end = std::string_view::npos;
+  for (std::size_t i = name_end; i < raw_xml.size(); ++i) {
+    const char ch = raw_xml[i];
+    if (in_quote) {
+      if (ch == quote) {
+        in_quote = false;
+      }
+    } else if (ch == '\'' || ch == '"') {
+      in_quote = true;
+      quote = ch;
+    } else if (ch == '>') {
+      opening_end = i;
+      break;
+    }
+  }
+  if (opening_end == std::string_view::npos || in_quote) {
+    return std::string(raw_xml);
+  }
+
+  // Locate a ref attribute in the opening element. This intentionally edits
+  // only the attribute value, retaining its original quoting and whitespace.
+  for (std::size_t i = name_end; i + 3U <= opening_end; ++i) {
+    if (raw_xml.substr(i, 3U) != "ref") {
+      continue;
+    }
+    const char before = i == name_end ? ' ' : raw_xml[i - 1U];
+    const char after = i + 3U < opening_end ? raw_xml[i + 3U] : ' ';
+    const bool before_is_space = before == ' ' || before == '\t' || before == '\r' || before == '\n';
+    const bool after_is_space = after == ' ' || after == '\t' || after == '\r' || after == '\n' || after == '=';
+    if (!before_is_space || !after_is_space) {
+      continue;
+    }
+    std::size_t equal = i + 3U;
+    while (equal < opening_end &&
+           (raw_xml[equal] == ' ' || raw_xml[equal] == '\t' || raw_xml[equal] == '\r' || raw_xml[equal] == '\n')) {
+      ++equal;
+    }
+    if (equal >= opening_end || raw_xml[equal] != '=') {
+      continue;
+    }
+    ++equal;
+    while (equal < opening_end &&
+           (raw_xml[equal] == ' ' || raw_xml[equal] == '\t' || raw_xml[equal] == '\r' || raw_xml[equal] == '\n')) {
+      ++equal;
+    }
+    if (equal >= opening_end) {
+      continue;
+    }
+    const char value_quote = raw_xml[equal];
+    const bool quoted = value_quote == '\'' || value_quote == '"';
+    const std::size_t value_start = quoted ? equal + 1U : equal;
+    std::size_t value_end = value_start;
+    if (quoted) {
+      value_end = raw_xml.find(value_quote, value_start);
+      if (value_end == std::string_view::npos || value_end > opening_end) {
+        continue;
+      }
+    } else {
+      while (value_end < opening_end && raw_xml[value_end] != ' ' && raw_xml[value_end] != '\t' &&
+             raw_xml[value_end] != '\r' && raw_xml[value_end] != '\n' && raw_xml[value_end] != '/') {
+        ++value_end;
+      }
+    }
+    std::string out(raw_xml);
+    out.replace(value_start, value_end - value_start, escaped_ref);
+    return out;
+  }
+
+  // No ref attribute: insert it immediately before the closing `>` (or the
+  // self-closing slash) without touching any existing attributes.
+  std::size_t insert_at = opening_end;
+  while (insert_at > name_end && (raw_xml[insert_at - 1U] == ' ' || raw_xml[insert_at - 1U] == '\t' ||
+                                  raw_xml[insert_at - 1U] == '\r' || raw_xml[insert_at - 1U] == '\n')) {
+    --insert_at;
+  }
+  if (insert_at > name_end && raw_xml[insert_at - 1U] == '/') {
+    --insert_at;
+  }
+  std::string out(raw_xml);
+  out.insert(insert_at, " ref=\"" + escaped_ref + "\"");
+  return out;
+}
+
+fm_status_t set_api_error(const formulon::Error& error, const char* api_name) {
+  formulon::Error named = error;
+  named.message = std::string(api_name) + ": " + error.message;
+  return set_last_error(named);
+}
+
+fm_status_t xlsb_read_diagnostics_impl(const fm_workbook_t* wb, size_t* out_undecoded_formula_count,
+                                       size_t* out_undecoded_defined_name_count, size_t* out_dropped_part_count,
+                                       const char* api_name) {
+  clear_last_error();
+  if (out_undecoded_formula_count != nullptr) {
+    *out_undecoded_formula_count = 0;
+  }
+  if (out_undecoded_defined_name_count != nullptr) {
+    *out_undecoded_defined_name_count = 0;
+  }
+  if (out_dropped_part_count != nullptr) {
+    *out_dropped_part_count = 0;
+  }
+  if (wb == nullptr || out_undecoded_formula_count == nullptr || out_undecoded_defined_name_count == nullptr ||
+      out_dropped_part_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(api_name) + ": NULL argument").c_str());
+  }
+  *out_undecoded_formula_count = wb->xlsb_undecoded_formula_count;
+  *out_undecoded_defined_name_count = wb->xlsb_undecoded_defined_name_count;
+  *out_dropped_part_count = wb->xlsb_dropped_part_count;
+  return 0;
+}
+
+fm_status_t save_ex_with_diagnostics_impl(const fm_workbook_t* wb, fm_workbook_format_t format, uint8_t** out_bytes,
+                                          size_t* out_len, size_t* out_downgraded_formula_count,
+                                          size_t* out_deferred_feature_count, const char* api_name) {
+  clear_last_error();
+  if (out_bytes != nullptr) {
+    *out_bytes = nullptr;
+  }
+  if (out_len != nullptr) {
+    *out_len = 0;
+  }
+  if (out_downgraded_formula_count != nullptr) {
+    *out_downgraded_formula_count = 0;
+  }
+  if (out_deferred_feature_count != nullptr) {
+    *out_deferred_feature_count = 0;
+  }
+  if (wb == nullptr || !wb->wb.has_value() || out_bytes == nullptr || out_len == nullptr ||
+      out_downgraded_formula_count == nullptr || out_deferred_feature_count == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             (std::string(api_name) + ": NULL argument").c_str());
+  }
+
+  std::vector<std::uint8_t> bytes;
+  std::uint32_t downgraded_formula_count = 0;
+  std::uint32_t deferred_feature_count = 0;
+  switch (format) {
+    case FM_WORKBOOK_FORMAT_XLSX: {
+      auto result = wb->workbook().save_ex(formulon::io::WorkbookFormat::Ooxml);
+      if (!result) {
+        return set_api_error(result.error(), api_name);
+      }
+      bytes = std::move(result.value());
+      break;
+    }
+    case FM_WORKBOOK_FORMAT_XLSB: {
+      auto result = formulon::io::xlsb::write_xlsb_with_result(wb->workbook());
+      if (!result) {
+        return set_api_error(result.error(), api_name);
+      }
+      formulon::io::xlsb::XlsbWriteResult write_result = std::move(result.value());
+      bytes = std::move(write_result.bytes);
+      downgraded_formula_count = write_result.downgraded_formula_count;
+      deferred_feature_count = write_result.deferred_feature_count;
+      break;
+    }
+    case FM_WORKBOOK_FORMAT_UNKNOWN:
+    default:
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               (std::string(api_name) + ": unsupported format").c_str(),
+                               "format=" + std::to_string(static_cast<int>(format)));
+  }
+
+  auto* buffer = new uint8_t[bytes.size()];
+  if (!bytes.empty()) {
+    std::memcpy(buffer, bytes.data(), bytes.size());
+  }
+  *out_bytes = buffer;
+  *out_len = bytes.size();
+  *out_downgraded_formula_count = downgraded_formula_count;
+  *out_deferred_feature_count = deferred_feature_count;
+  return 0;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -136,6 +334,7 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
     formulon::io::xlsb::XlsbReadResult read_result = std::move(result.value());
     handle->xlsb_undecoded_formula_count = read_result.undecoded_formula_count;
     handle->xlsb_undecoded_defined_name_count = read_result.undecoded_defined_name_count;
+    handle->xlsb_dropped_part_count = read_result.dropped_part_count;
     handle->wb.emplace(std::move(read_result.workbook));
   } else {
     auto result = formulon::io::read_ooxml(span);
@@ -152,16 +351,19 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_xlsb_read_diagnostics_ex(const fm_workbook_t* wb,
+                                                            size_t* out_undecoded_formula_count,
+                                                            size_t* out_undecoded_defined_name_count,
+                                                            size_t* out_dropped_part_count) {
+  return xlsb_read_diagnostics_impl(wb, out_undecoded_formula_count, out_undecoded_defined_name_count,
+                                    out_dropped_part_count, "fm_workbook_xlsb_read_diagnostics_ex");
+}
+
 extern "C" fm_status_t fm_workbook_xlsb_read_diagnostics(const fm_workbook_t* wb, size_t* out_undecoded_formula_count,
                                                          size_t* out_undecoded_defined_name_count) {
-  clear_last_error();
-  if (wb == nullptr || out_undecoded_formula_count == nullptr || out_undecoded_defined_name_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_xlsb_read_diagnostics: NULL argument");
-  }
-  *out_undecoded_formula_count = wb->xlsb_undecoded_formula_count;
-  *out_undecoded_defined_name_count = wb->xlsb_undecoded_defined_name_count;
-  return 0;
+  size_t dropped_part_count = 0;
+  return xlsb_read_diagnostics_impl(wb, out_undecoded_formula_count, out_undecoded_defined_name_count,
+                                    &dropped_part_count, "fm_workbook_xlsb_read_diagnostics");
 }
 
 extern "C" fm_status_t fm_workbook_memory_usage(const fm_workbook_t* wb, size_t* out_bytes) {
@@ -204,59 +406,27 @@ extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_b
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_save_ex_with_diagnostics(const fm_workbook_t* wb, fm_workbook_format_t format,
+                                                            uint8_t** out_bytes, size_t* out_len,
+                                                            size_t* out_downgraded_formula_count,
+                                                            size_t* out_deferred_feature_count) {
+  return save_ex_with_diagnostics_impl(wb, format, out_bytes, out_len, out_downgraded_formula_count,
+                                       out_deferred_feature_count, "fm_workbook_save_ex_with_diagnostics");
+}
+
 extern "C" fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, fm_workbook_format_t format, uint8_t** out_bytes,
                                            size_t* out_len) {
-  clear_last_error();
-  if (wb == nullptr || out_bytes == nullptr || out_len == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_save_ex: NULL argument");
-  }
-  formulon::io::WorkbookFormat engine_format;
-  switch (format) {
-    case FM_WORKBOOK_FORMAT_XLSX:
-      engine_format = formulon::io::WorkbookFormat::Ooxml;
-      break;
-    case FM_WORKBOOK_FORMAT_XLSB:
-      engine_format = formulon::io::WorkbookFormat::Xlsb;
-      break;
-    case FM_WORKBOOK_FORMAT_UNKNOWN:
-    default:
-      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_workbook_save_ex: unsupported format",
-                               "format=" + std::to_string(static_cast<int>(format)));
-  }
-  auto bytes = wb->workbook().save_ex(engine_format);
-  if (!bytes) {
-    return set_last_error(bytes.error());
-  }
-  const std::vector<std::uint8_t>& src = bytes.value();
-  auto* buffer = new uint8_t[src.size()];
-  if (!src.empty()) {
-    std::memcpy(buffer, src.data(), src.size());
-  }
-  *out_bytes = buffer;
-  *out_len = src.size();
-  return 0;
+  size_t downgraded_formula_count = 0;
+  size_t deferred_feature_count = 0;
+  return save_ex_with_diagnostics_impl(wb, format, out_bytes, out_len, &downgraded_formula_count,
+                                       &deferred_feature_count, "fm_workbook_save_ex");
 }
 
 extern "C" fm_status_t fm_workbook_save_xlsb_with_result(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len,
                                                          size_t* out_downgraded_formula_count) {
-  clear_last_error();
-  if (wb == nullptr || out_bytes == nullptr || out_len == nullptr || out_downgraded_formula_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_save_xlsb_with_result: NULL argument");
-  }
-  auto result_or = formulon::io::xlsb::write_xlsb_with_result(wb->workbook());
-  if (!result_or) {
-    return set_last_error(result_or.error());
-  }
-  formulon::io::xlsb::XlsbWriteResult result = std::move(result_or.value());
-  auto* buffer = new uint8_t[result.bytes.size()];
-  if (!result.bytes.empty()) {
-    std::memcpy(buffer, result.bytes.data(), result.bytes.size());
-  }
-  *out_bytes = buffer;
-  *out_len = result.bytes.size();
-  *out_downgraded_formula_count = result.downgraded_formula_count;
-  return 0;
+  size_t deferred_feature_count = 0;
+  return save_ex_with_diagnostics_impl(wb, FM_WORKBOOK_FORMAT_XLSB, out_bytes, out_len, out_downgraded_formula_count,
+                                       &deferred_feature_count, "fm_workbook_save_xlsb_with_result");
 }
 
 extern "C" void fm_buffer_free(uint8_t* bytes) {
@@ -551,7 +721,7 @@ extern "C" fm_status_t fm_workbook_table_create(fm_workbook_t* wb, size_t sheet_
 extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index, const char* ref,
                                                 const char* style_name, int32_t header_row, int32_t totals_row) {
   clear_last_error();
-  if (wb == nullptr || ref == nullptr || style_name == nullptr) {
+  if (wb == nullptr || ref == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_table_update: NULL argument");
   }
@@ -566,11 +736,21 @@ extern "C" fm_status_t fm_workbook_table_update(fm_workbook_t* wb, size_t index,
                              "fm_workbook_table_update: ref width does not match the table's column count",
                              "ref=" + std::string(ref) + " column_count=" + std::to_string(table.columns.size()));
   }
-  table.ref = ref;
-  table.header_row = header_row != 0;
-  table.totals_row = totals_row != 0;
-  table.auto_filter_xml = "<autoFilter ref=\"" + xml_attr_escape(table.ref) + "\"/>";
-  table.table_style_info_xml = table_style_xml(style_name);
+
+  // Compute every replacement before committing any metadata. In
+  // particular, a raw style payload survives a NULL style_name, while an
+  // empty string explicitly removes it.
+  const std::string next_ref = ref;
+  const std::string next_auto_filter_xml = table_auto_filter_xml(table.auto_filter_xml, next_ref);
+  const std::string next_style_xml = style_name == nullptr ? table.table_style_info_xml : table_style_xml(style_name);
+  const bool next_header_row = header_row < 0 ? table.header_row : header_row > 0;
+  const bool next_totals_row = totals_row < 0 ? table.totals_row : totals_row > 0;
+
+  table.ref = next_ref;
+  table.header_row = next_header_row;
+  table.totals_row = next_totals_row;
+  table.auto_filter_xml = next_auto_filter_xml;
+  table.table_style_info_xml = next_style_xml;
   return 0;
 }
 

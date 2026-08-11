@@ -85,6 +85,7 @@ fm_status_t trace_impl(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32
         formulon::FormulonErrorCode::kBindingNullPointer,
         kPrecedents ? "fm_workbook_precedents: NULL argument" : "fm_workbook_dependents: NULL argument");
   }
+  *out = nullptr;
   if (auto rc = check_sheet_u32(wb, sheet, fn_name); rc != 0) {
     return rc;
   }

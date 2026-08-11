@@ -114,6 +114,7 @@ extern "C" fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, si
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_cf_evaluate_range: NULL argument");
   }
+  *out = nullptr;
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_cf_evaluate_range"); rc != 0) {
     return rc;
   }

@@ -108,18 +108,31 @@ TEST(FormulonCApiTrace, DepthCapPreventsRunaway) {
 TEST(FormulonCApiTrace, OutOfRangeSheetReturnsInvalidArgument) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_nodes_t* out = nullptr;
+  fm_cell_nodes_t* out = reinterpret_cast<fm_cell_nodes_t*>(static_cast<std::uintptr_t>(1));
   fm_status_t rc = fm_workbook_precedents(wb.handle, 99, 0, 0, 1, &out);
   EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
   EXPECT_EQ(out, nullptr);
+  fm_cell_nodes_destroy(out);
+
+  out = reinterpret_cast<fm_cell_nodes_t*>(static_cast<std::uintptr_t>(1));
+  rc = fm_workbook_dependents(wb.handle, 99, 0, 0, 1, &out);
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(out, nullptr);
+  fm_cell_nodes_destroy(out);
 }
 
 TEST(FormulonCApiTrace, NullArgsReturnBindingNullPointer) {
-  fm_cell_nodes_t* out = nullptr;
+  fm_cell_nodes_t* out = reinterpret_cast<fm_cell_nodes_t*>(static_cast<std::uintptr_t>(1));
   EXPECT_EQ(fm_workbook_precedents(nullptr, 0, 0, 0, 1, &out),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(out, nullptr);
+  fm_cell_nodes_destroy(out);
+
+  out = reinterpret_cast<fm_cell_nodes_t*>(static_cast<std::uintptr_t>(1));
   EXPECT_EQ(fm_workbook_dependents(nullptr, 0, 0, 0, 1, &out),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(out, nullptr);
+  fm_cell_nodes_destroy(out);
 
   fm_cell_node_t node{};
   EXPECT_EQ(fm_cell_nodes_at(nullptr, 0, &node),
