@@ -2,11 +2,11 @@
   "suite": "spill_collision",
   "description": "Dynamic-array spill collision (#SPILL!). When a 365-era formula at the formula cell would spill into a rectangle whose downstream cells are not blank, Excel suppresses the spill and the formula cell itself reports #SPILL!. This suite probes the closure: clean spill (control), column blocker, row blocker, mid-rectangle blocker, and merged-cell blocker. The formula always lives at Z1 (the xlwings driver convention), so blockers are placed in cells the would-be spill rectangle covers.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.111.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-11T01:28:21Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -123,6 +123,18 @@
           "formula": "=\"\""
         }
       },
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "spill_blocked_by_merged_anchor",
+      "formula": "=SEQUENCE(2)",
+      "setup": {},
+      "merges": [
+        "Z1:AA1"
+      ],
       "expect": {
         "kind": "error",
         "code": "#SPILL!"

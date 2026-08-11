@@ -59,42 +59,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-// Returns true when a dynamic-array result anchored at `(anchor_row,
-// anchor_col)` with the given shape would collide with an already-occupied
-// cell, in which case Excel surfaces `#SPILL!` at the anchor instead of
-// spilling. A cell other than the anchor is "occupied" when it carries a
-// formula (even one evaluating to `""`) or a non-blank cached value; a
-// genuinely blank cell does not block.
-//
-// This is the read-only counterpart of `Sheet::commit_spill`'s collision
-// scan: the production recalc path commits through `commit_spill` (which
-// also clears any stale phantom region first), so this helper only runs on
-// the read-only evaluation path where no spill is committed.
-bool spill_would_collide(const Sheet& sheet, std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
-                         std::uint32_t cols) {
-  if (static_cast<std::uint64_t>(anchor_row) + rows > Sheet::kMaxRows ||
-      static_cast<std::uint64_t>(anchor_col) + cols > Sheet::kMaxCols) {
-    return true;
-  }
-  for (std::uint32_t r = 0; r < rows; ++r) {
-    for (std::uint32_t c = 0; c < cols; ++c) {
-      const std::uint32_t row = anchor_row + r;
-      const std::uint32_t col = anchor_col + c;
-      if (row == anchor_row && col == anchor_col) {
-        continue;
-      }
-      const Cell* cell = sheet.cell_at(row, col);
-      if (cell == nullptr) {
-        continue;
-      }
-      if (!cell->formula_text.empty() || !cell->cached_value.is_blank()) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 #ifdef FORMULON_VM_PARITY_CHECK
 // Parity-harness honesty filter.
 //
@@ -857,8 +821,7 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   if (v.is_array() && ctx.mutable_sheet() == nullptr && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
     const std::uint32_t rows = v.as_array_rows();
     const std::uint32_t cols = v.as_array_cols();
-    if (rows > 0U && cols > 0U &&
-        spill_would_collide(*ctx.current_sheet(), ctx.formula_row(), ctx.formula_col(), rows, cols)) {
+    if (ctx.current_sheet()->spill_would_collide(ctx.formula_row(), ctx.formula_col(), rows, cols)) {
       return Value::error(ErrorCode::Spill);
     }
   }

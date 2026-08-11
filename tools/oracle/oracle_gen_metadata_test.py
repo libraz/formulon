@@ -79,6 +79,15 @@ class OracleGeneratorMetadataTest(unittest.TestCase):
         self.assertTrue(filterxml.cases)
         self.assertTrue(all(case.id in skips for case in filterxml.cases))
 
+    def test_formula_case_merges_round_trip_to_golden(self) -> None:
+        suite = self.by_name["spill_collision"]
+        source_case = next(case for case in suite.cases if case.id == "spill_blocked_by_merged_anchor")
+        self.assertEqual(source_case.merges, ["Z1:AA1"])
+
+        golden = json.loads((REPO_ROOT / "tests/oracle/golden/spill_collision.golden.json").read_text(encoding="utf-8"))
+        generated = next(record for record in golden["cases"] if record["id"] == source_case.id)
+        self.assertEqual(generated.get("merges"), source_case.merges)
+
 
 if __name__ == "__main__":
     unittest.main()

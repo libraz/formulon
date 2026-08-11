@@ -156,11 +156,14 @@ def _env_to_json(env: EnvironmentInfo, iso_now: str) -> Dict[str, object]:
 
 
 def _case_input(case: case_schema.Case) -> Dict[str, object]:
-    return {
+    result: Dict[str, object] = {
         "id": case.id,
         "formula": case.formula,
         "setup": case.setup,
     }
+    if case.merges:
+        result["merges"] = list(case.merges)
+    return result
 
 
 def _write_golden(
@@ -179,6 +182,8 @@ def _write_golden(
             "formula": c.formula,
             "setup": c.setup,
         }
+        if c.merges:
+            record["merges"] = list(c.merges)
         if c.id in skipped:
             record["skipped"] = skipped[c.id]
             cases_out.append(record)

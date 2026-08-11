@@ -422,6 +422,79 @@ const SpillRegion* Sheet::spill_region_covering_locked(std::uint32_t row, std::u
   return nullptr;
 }
 
+bool Sheet::spill_would_collide(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                std::uint32_t cols) const noexcept {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  return spill_would_collide_locked(anchor_row, anchor_col, rows, cols);
+}
+
+bool Sheet::spill_would_collide_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                       std::uint32_t cols) const noexcept {
+  // Treat malformed shapes and arithmetic that would leave the grid as a
+  // collision. Keep the rectangle ends widened so uint32_t coordinates cannot
+  // wrap at the bottom or right edge of the sheet.
+  if (rows == 0U || cols == 0U || !coord_in_grid(anchor_row, anchor_col)) {
+    return true;
+  }
+  const std::uint64_t row_end = static_cast<std::uint64_t>(anchor_row) + rows;
+  const std::uint64_t col_end = static_cast<std::uint64_t>(anchor_col) + cols;
+  if (row_end > kMaxRows || col_end > kMaxCols) {
+    return true;
+  }
+
+  // A pre-existing region at this anchor is the producer's own spill. It is
+  // ignored wholesale: ad-hoc evaluation is read-only and cannot clear it,
+  // while commit_spill clears it before reaching this predicate.
+  if (spill_table_ != nullptr) {
+    for (const auto& entry : spill_table_->by_anchor) {
+      const SpillRegion& region = entry.second;
+      if (region.anchor_row == anchor_row && region.anchor_col == anchor_col) {
+        continue;
+      }
+      const std::uint64_t region_row_end = static_cast<std::uint64_t>(region.anchor_row) + region.rows;
+      const std::uint64_t region_col_end = static_cast<std::uint64_t>(region.anchor_col) + region.cols;
+      if (static_cast<std::uint64_t>(anchor_row) < region_row_end &&
+          static_cast<std::uint64_t>(region.anchor_row) < row_end &&
+          static_cast<std::uint64_t>(anchor_col) < region_col_end &&
+          static_cast<std::uint64_t>(region.anchor_col) < col_end) {
+        return true;
+      }
+    }
+  }
+
+  // Merged cells occupy their complete rectangle even when only the
+  // top-left coordinate has a stored Cell. Any intersection is a blocker,
+  // including a merge whose top-left cell is the requested spill anchor.
+  for (const MergeRange& merge : merges_) {
+    if (merge.first_row > merge.last_row || merge.first_col > merge.last_col) {
+      continue;
+    }
+    const std::uint64_t merge_row_end = static_cast<std::uint64_t>(merge.last_row) + 1U;
+    const std::uint64_t merge_col_end = static_cast<std::uint64_t>(merge.last_col) + 1U;
+    if (static_cast<std::uint64_t>(anchor_row) < merge_row_end &&
+        static_cast<std::uint64_t>(merge.first_row) < row_end &&
+        static_cast<std::uint64_t>(anchor_col) < merge_col_end &&
+        static_cast<std::uint64_t>(merge.first_col) < col_end) {
+      return true;
+    }
+  }
+
+  // Scan stored cells last so a blank/default slot created by row growth does
+  // not become a blocker. Formula cells and non-blank cached values remain
+  // blockers, preserving the existing commit_spill semantics and metadata.
+  for (std::uint64_t row = anchor_row; row < row_end; ++row) {
+    for (std::uint64_t col = anchor_col; col < col_end; ++col) {
+      if (row == anchor_row && col == anchor_col) {
+        continue;
+      }
+      if (IsCellOccupied(cell_at_locked(static_cast<std::uint32_t>(row), static_cast<std::uint32_t>(col)))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noexcept {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
@@ -502,31 +575,15 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // existing region" case is intentionally idempotent.
   clear_spill_locked(anchor_row, anchor_col);
 
-  // Collision check: scan the footprint excluding the anchor itself.
-  for (std::uint32_t r = 0; r < rows; ++r) {
-    for (std::uint32_t c = 0; c < cols; ++c) {
-      const std::uint32_t row = anchor_row + r;
-      const std::uint32_t col = anchor_col + c;
-      if (row == anchor_row && col == anchor_col) {
-        continue;
-      }
-      if (IsCellOccupied(cell_at_locked(row, col))) {
-        // Surface #SPILL! at the anchor; preserve the existing literal at
-        // the colliding cell.
-        RowCells& row_cells = rows_[anchor_row];
-        Cell& anchor_slot = row_cells.ensure(anchor_col);
-        anchor_slot.cached_value = Value::error(ErrorCode::Spill);
-        ++cell_enumeration_revision_;
-        return false;
-      }
-      if (spill_region_covering_locked(row, col) != nullptr) {
-        RowCells& row_cells = rows_[anchor_row];
-        Cell& anchor_slot = row_cells.ensure(anchor_col);
-        anchor_slot.cached_value = Value::error(ErrorCode::Spill);
-        ++cell_enumeration_revision_;
-        return false;
-      }
-    }
+  // Collision check is shared with the read-only/ad-hoc evaluation path.
+  if (spill_would_collide_locked(anchor_row, anchor_col, rows, cols)) {
+    // Surface #SPILL! at the anchor; preserve the existing literal and all
+    // other metadata at the colliding cell.
+    RowCells& row_cells = rows_[anchor_row];
+    Cell& anchor_slot = row_cells.ensure(anchor_col);
+    anchor_slot.cached_value = Value::error(ErrorCode::Spill);
+    ++cell_enumeration_revision_;
+    return false;
   }
 
   // Materialise the spill table on first use.

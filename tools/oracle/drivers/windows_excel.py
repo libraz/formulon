@@ -467,6 +467,7 @@ class WindowsExcelOracle(OracleDriver):
                 case_sheets.append(sht)
 
                 try:
+                    _apply_merges(sht, case.get("merges") or [])
                     setup = case.get("setup") or {}
                     for addr, rec in setup.items():
                         _write_cell(sht, addr, rec)
@@ -572,6 +573,7 @@ class WindowsExcelOracle(OracleDriver):
                     write_error: Optional[str] = None
                     try:
                         setup = case.get("setup") or {}
+                        _apply_merges(sht, case.get("merges") or [])
                         for addr, rec in setup.items():
                             sheet_name, bare_addr = _split_sheet_qualified_addr(addr)
                             target_sht = sht if sheet_name is None else _get_or_add_sheet(wb, sheet_name)
@@ -799,6 +801,13 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
             rng.formula = trigger
         return
     raise ValueError(f"unknown cell kind: {kind}")
+
+
+def _apply_merges(sht, merges: List[str]) -> None:
+    """Apply case-declared inclusive A1 merge ranges on ``sht``."""
+
+    for ref in merges:
+        sht.range(ref).merge()
 
 
 # Excel `XlConsolidationFunction` constants, keyed by the declarative

@@ -153,6 +153,47 @@ const char* apply_cell_value(const JsonValue& spec, Sheet& sheet, std::uint32_t 
   return "setup cell has unknown 'kind'";
 }
 
+// Applies the optional case-level `merges` list emitted by oracle_gen. The
+// formula drivers use Excel's inclusive A1 range syntax; keep the native
+// verifier on the same representation and normalise transposed corners just
+// as the C API merge surface does.
+const char* apply_merge_ranges(const JsonValue& spec, Sheet& sheet) {
+  if (!spec.is_array()) {
+    return "case 'merges' is not an array";
+  }
+  for (const JsonValue& item : spec.as_array()) {
+    if (!item.is_string() || item.as_string().empty()) {
+      return "merge range is not a non-empty A1 string";
+    }
+    const std::string& ref = item.as_string();
+    const std::size_t separator = ref.find(':');
+    if (separator != std::string::npos && ref.find(':', separator + 1U) != std::string::npos) {
+      return "merge range contains more than one ':'";
+    }
+    const std::string first_ref = ref.substr(0, separator);
+    const std::string last_ref = separator == std::string::npos ? first_ref : ref.substr(separator + 1U);
+    std::uint32_t first_row = 0;
+    std::uint32_t first_col = 0;
+    std::uint32_t last_row = 0;
+    std::uint32_t last_col = 0;
+    if (!a1_to_row_col(first_ref, &first_row, &first_col) || !a1_to_row_col(last_ref, &last_row, &last_col)) {
+      return "merge range contains an invalid A1 address";
+    }
+    if (first_row > last_row) {
+      const std::uint32_t tmp = first_row;
+      first_row = last_row;
+      last_row = tmp;
+    }
+    if (first_col > last_col) {
+      const std::uint32_t tmp = first_col;
+      first_col = last_col;
+      last_col = tmp;
+    }
+    sheet.mutable_merges().push_back(MergeRange{first_row, first_col, last_row, last_col});
+  }
+  return nullptr;
+}
+
 // Renders a Formulon Value as a short display string for assertion failure
 // messages. Mirrors the debug_to_string helper but keeps error / text
 // formatting consistent with the JSON schema.
@@ -641,6 +682,14 @@ TEST_P(OracleTest, Matches) {
   // formula cell. The actual value comes from `eval::evaluate` below; the
   // formula_text stored here is only consulted by FORMULATEXT / ISFORMULA.
   sheet.set_cell_formula(case_row, case_col, formula_src);
+
+  if (const JsonValue* merges = param.raw_case.find("merges"); merges != nullptr) {
+    const char* err_msg = apply_merge_ranges(*merges, sheet);
+    if (err_msg != nullptr) {
+      FAIL() << param.suite << "." << param.case_id << ": " << err_msg;
+      return;
+    }
+  }
 
   if (const JsonValue* setup = param.raw_case.find("setup"); setup && setup->is_object()) {
     for (const auto& entry : setup->as_object()) {

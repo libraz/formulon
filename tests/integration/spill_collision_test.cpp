@@ -136,6 +136,49 @@ TEST(SpillCollision, ScalarBlocks2DSpillInterior) {
   EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
 }
 
+TEST(SpillCollision, MergedRangeBlocksSpillWithoutOverwritingMetadata) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  Sheet& s = wb.sheet(0);
+  s.mutable_merges().push_back(MergeRange{1U, 1U, 2U, 2U});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,3)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Value a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(a1.is_error()) << "A1 expected #SPILL!; kind=" << static_cast<int>(a1.kind());
+  EXPECT_EQ(a1.as_error(), ErrorCode::Spill);
+  EXPECT_EQ(s.spill_region_at_anchor(0U, 0U), nullptr);
+
+  // The merge itself is metadata, not a stored cell, and must remain intact.
+  ASSERT_EQ(s.merges().size(), 1U);
+  EXPECT_EQ(s.merges()[0].first_row, 1U);
+  EXPECT_EQ(s.merges()[0].first_col, 1U);
+  EXPECT_EQ(s.merges()[0].last_row, 2U);
+  EXPECT_EQ(s.merges()[0].last_col, 2U);
+}
+
+TEST(SpillCollision, MergeAtAnchorBlocksVerticalSpill) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(eval::mac_365_ja_jp_profile());
+  Sheet& s = wb.sheet(0);
+  // Exact A1:B1 merge with a would-be A1:A2 dynamic-array spill.
+  s.mutable_merges().push_back(MergeRange{0U, 0U, 0U, 1U});
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(2,1)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+
+  const Value a1 = StoredValue(wb, 0U, 0U, 0U);
+  ASSERT_TRUE(a1.is_error()) << "A1 expected #SPILL!; kind=" << static_cast<int>(a1.kind());
+  EXPECT_EQ(a1.as_error(), ErrorCode::Spill);
+  EXPECT_EQ(s.spill_region_at_anchor(0U, 0U), nullptr);
+  ASSERT_EQ(s.merges().size(), 1U);
+  EXPECT_EQ(s.merges()[0].first_row, 0U);
+  EXPECT_EQ(s.merges()[0].first_col, 0U);
+  EXPECT_EQ(s.merges()[0].last_row, 0U);
+  EXPECT_EQ(s.merges()[0].last_col, 1U);
+}
+
 // ---------------------------------------------------------------------------
 // Recovery after the blocker is removed
 // ---------------------------------------------------------------------------

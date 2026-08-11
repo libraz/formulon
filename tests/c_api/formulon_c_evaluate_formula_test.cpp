@@ -11,6 +11,7 @@
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
+#include "value.h"
 
 namespace {
 
@@ -219,6 +220,63 @@ TEST(EvaluateFormulaArray, MatrixDimensionsAndRowMajorOrder) {
     EXPECT_EQ(v.kind, FM_VAL_NUMBER);
     EXPECT_DOUBLE_EQ(v.u.number, static_cast<double>(i + 1U));
   }
+}
+
+TEST(EvaluateFormulaArray, ForeignSpillPhantomSurfacesSpill) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  // First create a real spill at A1:A2. The ad-hoc API is read-only, so its
+  // second evaluation can be anchored at the existing phantom A2 without
+  // clearing the foreign region.
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SEQUENCE(2,1)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 1, 0, "=SEQUENCE(2,1)", &rows, &cols), 0);
+  EXPECT_EQ(rows, 1U);
+  EXPECT_EQ(cols, 1U);
+
+  fm_value_t result{};
+  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0, &result), 0);
+  ASSERT_EQ(result.kind, FM_VAL_ERROR);
+  EXPECT_EQ(result.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Spill));
+
+  // The foreign spill and its phantom remain intact after the read-only call.
+  fm_value_t phantom{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 1, 0, &phantom), 0);
+  ASSERT_EQ(phantom.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(phantom.u.number, 2.0);
+}
+
+TEST(EvaluateFormulaArray, MergeAtAnchorBlocksVerticalSpill) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  // Exact A1:B1 merge with a would-be A1:A2 spill. Ad-hoc evaluation is
+  // read-only, but it must still surface Excel's #SPILL! collision result.
+  const fm_merge_range merge{0U, 0U, 0U, 1U};
+  ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, merge), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0U, 0U, 0U, "=SEQUENCE(2,1)", &rows, &cols), 0);
+  EXPECT_EQ(rows, 1U);
+  EXPECT_EQ(cols, 1U);
+
+  fm_value_t result{};
+  ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, 0U, &result), 0);
+  ASSERT_EQ(result.kind, FM_VAL_ERROR);
+  EXPECT_EQ(result.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Spill));
+
+  // The ad-hoc call does not write the anchor or alter the merge metadata.
+  fm_value_t anchor{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0U, 0U, 0U, &anchor), 0);
+  EXPECT_EQ(anchor.kind, FM_VAL_BLANK);
+  uint32_t merge_count = 0;
+  ASSERT_EQ(fm_sheet_get_merge_count(wb.handle, 0U, &merge_count), 0);
+  EXPECT_EQ(merge_count, 1U);
 }
 
 // A scalar result is reported as a 1x1 array, index 0 carrying the value.

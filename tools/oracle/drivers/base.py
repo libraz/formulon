@@ -139,8 +139,10 @@ class OracleDriver(abc.ABC):
         """Evaluates every case in `cases` and returns observed results.
 
         Each `cases[i]` is a dict with keys `id`, `formula`, and `setup`
-        (mapping A1 -> `{kind, value, ...}` record). The driver does not
-        normalise; it trusts upstream `case_schema` to have done so.
+        (mapping A1 -> `{kind, value, ...}` record), plus the optional
+        `merges` list of inclusive A1 ranges on the default sheet. The
+        driver does not normalise; it trusts upstream `case_schema` to have
+        done so.
         """
 
     def assert_m365_or_abort(self) -> None:

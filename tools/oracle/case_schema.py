@@ -75,6 +75,11 @@ class Case:
     convention; cross-sheet refs from the formula resolve through the
     setup-populated sheets).
 
+    `merges`, when present, is a list of inclusive A1 ranges on the default
+    sheet (for example ``["Z1:AA1"]``). Drivers and the native verifier
+    apply these ranges before evaluating the formula so merged-cell spill
+    collisions are observed consistently.
+
     `tolerance`, if set, overrides the suite default for this case only.
 
     `compare_mode`, if set, switches the C++ verifier to a structured
@@ -86,6 +91,11 @@ class Case:
     id: str
     formula: str
     setup: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    # Optional inclusive A1 merge ranges applied to the default sheet before
+    # setup cells and the formula-under-test are evaluated. Formula-oracle
+    # cases keep these ranges on the case so the native verifier and Excel
+    # drivers observe the same sheet metadata.
+    merges: List[str] = field(default_factory=list)
     description: str = ""
     tolerance: Optional[Tolerance] = None
     compare_mode: Optional[str] = None
@@ -154,6 +164,21 @@ def _load_tolerance(raw: Any, *, where: str) -> Tolerance:
     return Tolerance(abs=abs_t, rel=rel_t)
 
 
+def _normalise_merges(raw: Any, *, where: str) -> List[str]:
+    """Validate and copy optional inclusive A1 merge-range references."""
+
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError(f"{where}: merges must be a list of A1 ranges")
+    merges: List[str] = []
+    for i, merge in enumerate(raw):
+        if not isinstance(merge, str) or not merge.strip():
+            raise ValueError(f"{where}/merges[{i}]: expected a non-empty A1 range string")
+        merges.append(merge)
+    return merges
+
+
 def load_suite(path: Path) -> Suite:
     """Parses a single `<category>.yaml` file into a :class:`Suite`.
 
@@ -205,6 +230,8 @@ def load_suite(path: Path) -> Suite:
                 raise ValueError(f"{path}: case '{cid}' setup key must be a string A1 address")
             setup[addr] = _normalise_value(value, where=f"case '{cid}', setup[{addr}]")
 
+        merges = _normalise_merges(raw.get("merges"), where=f"case '{cid}'")
+
         case_tol = _load_tolerance(raw.get("tolerance"), where=f"{path}: case '{cid}'")
 
         compare_mode_raw = raw.get("compare_mode")
@@ -231,6 +258,7 @@ def load_suite(path: Path) -> Suite:
                 id=cid,
                 formula=formula,
                 setup=setup,
+                merges=merges,
                 description=raw.get("description", "") or "",
                 tolerance=case_tol if raw.get("tolerance") is not None else None,
                 compare_mode=compare_mode,

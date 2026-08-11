@@ -84,3 +84,12 @@ cases:
     setup:
       Z2: '=""'
     formula: '=SEQUENCE(3)'
+
+  # A merged range is occupied metadata even when its top-left cell is the
+  # formula anchor. Any intersection blocks the spill, so this is the oracle
+  # counterpart of the exact A1:B1 merge with an A1:A2 spill regression.
+  - id: spill_blocked_by_merged_anchor
+    description: 'Z1:AA1 is merged; SEQUENCE(2) at merged Z1 would spill to Z2 -> #SPILL!'
+    merges:
+      - 'Z1:AA1'
+    formula: '=SEQUENCE(2)'

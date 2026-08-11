@@ -194,6 +194,83 @@ TEST(SheetSpillTest, CollidingWithAnotherSpillsPhantomReturnsFalse) {
   EXPECT_EQ(s.resolve_cell_value(1U, 1U), Value::number(2.0));
 }
 
+TEST(SheetSpillTest, SpillWouldCollideTreatsForeignPhantomAsBlocker) {
+  Sheet s("Sheet1");
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
+
+  // A2 is a phantom, not a stored Cell. The foreign region still blocks a
+  // read-only spill anchored there; the existing region remains untouched.
+  EXPECT_TRUE(s.spill_would_collide(1U, 0U, 2U, 1U));
+  EXPECT_NE(s.spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(s.resolve_cell_value(1U, 0U), Value::number(2.0));
+}
+
+TEST(SheetSpillTest, SpillWouldCollideIgnoresCurrentAnchorSpill) {
+  Sheet s("Sheet1");
+  ASSERT_TRUE(s.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
+
+  // Ad-hoc re-evaluation is allowed to inspect the producer's own current
+  // spill without reporting that spill as a foreign blocker.
+  EXPECT_FALSE(s.spill_would_collide(0U, 0U, 3U, 1U));
+}
+
+TEST(SheetSpillTest, MergedRangeBlocksSpillAndPreservesMetadata) {
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=SEQUENCE(3,3)");
+  s.set_cell_xf_index(0U, 0U, 17U);
+  s.mutable_merges().push_back(MergeRange{1U, 1U, 2U, 2U});
+
+  EXPECT_TRUE(s.spill_would_collide(0U, 0U, 3U, 3U));
+  EXPECT_FALSE(s.commit_spill(
+      0U, 0U, 3U, 3U,
+      {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0), Value::number(5.0),
+       Value::number(6.0), Value::number(7.0), Value::number(8.0), Value::number(9.0)}));
+
+  const Cell* anchor = s.cell_at(0U, 0U);
+  ASSERT_NE(anchor, nullptr);
+  EXPECT_EQ(anchor->formula_text, "=SEQUENCE(3,3)");
+  EXPECT_EQ(anchor->xf_index, 17U);
+  ASSERT_TRUE(anchor->cached_value.is_error());
+  EXPECT_EQ(anchor->cached_value.as_error(), ErrorCode::Spill);
+  ASSERT_EQ(s.merges().size(), 1U);
+  EXPECT_EQ(s.merges()[0].first_row, 1U);
+  EXPECT_EQ(s.merges()[0].last_col, 2U);
+}
+
+TEST(SheetSpillTest, MergeAtAnchorBlocksVerticalSpill) {
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=SEQUENCE(2,1)");
+  s.set_cell_xf_index(0U, 0U, 23U);
+  // Excel's A1:B1 merge occupies the anchor itself and its adjacent cell.
+  s.mutable_merges().push_back(MergeRange{0U, 0U, 0U, 1U});
+
+  EXPECT_TRUE(s.spill_would_collide(0U, 0U, 2U, 1U));
+  EXPECT_FALSE(s.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
+
+  const Cell* anchor = s.cell_at(0U, 0U);
+  ASSERT_NE(anchor, nullptr);
+  EXPECT_EQ(anchor->formula_text, "=SEQUENCE(2,1)");
+  EXPECT_EQ(anchor->xf_index, 23U);
+  ASSERT_TRUE(anchor->cached_value.is_error());
+  EXPECT_EQ(anchor->cached_value.as_error(), ErrorCode::Spill);
+  EXPECT_EQ(s.spill_region_at_anchor(0U, 0U), nullptr);
+  ASSERT_EQ(s.merges().size(), 1U);
+  EXPECT_EQ(s.merges()[0].first_row, 0U);
+  EXPECT_EQ(s.merges()[0].first_col, 0U);
+  EXPECT_EQ(s.merges()[0].last_row, 0U);
+  EXPECT_EQ(s.merges()[0].last_col, 1U);
+}
+
+TEST(SheetSpillTest, SpillWouldCollideRejectsMalformedFootprints) {
+  Sheet s("Sheet1");
+  EXPECT_TRUE(s.spill_would_collide(0U, 0U, 0U, 1U));
+  EXPECT_TRUE(s.spill_would_collide(0U, 0U, 1U, 0U));
+  EXPECT_TRUE(s.spill_would_collide(Sheet::kMaxRows, 0U, 1U, 1U));
+  EXPECT_TRUE(s.spill_would_collide(0U, Sheet::kMaxCols, 1U, 1U));
+  EXPECT_TRUE(s.spill_would_collide(Sheet::kMaxRows - 1U, 0U, 2U, 1U));
+  EXPECT_TRUE(s.spill_would_collide(0U, Sheet::kMaxCols - 1U, 1U, 2U));
+}
+
 // ---------------------------------------------------------------------------
 // Text deep-copy
 // ---------------------------------------------------------------------------

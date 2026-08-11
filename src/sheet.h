@@ -758,6 +758,18 @@ class Sheet {
   // Dynamic-array spill API
   // ---------------------------------------------------------------------------
 
+  /// Returns whether a spill footprint would collide with this sheet's
+  /// current contents. The predicate is conservative: zero-sized,
+  /// out-of-grid, or overflowing footprints collide. Only the stored Cell at
+  /// the requested anchor and any spill region currently anchored there are
+  /// ignored so callers can re-evaluate an existing producer without
+  /// self-collision. Other stored cells, spill rectangles (including their
+  /// anchors and phantoms), and *any* merged range intersecting the footprint
+  /// collide; a merge at the requested anchor is not exempt. The sheet lock
+  /// is held for the complete read.
+  bool spill_would_collide(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                           std::uint32_t cols) const noexcept;
+
   /// Returns the spill region anchored at `(row, col)`, or `nullptr` when
   /// no region is anchored there. The returned pointer is valid until the
   /// next mutating call to the spill API (`commit_spill`, `clear_spill`)
@@ -822,13 +834,13 @@ class Sheet {
   ///
   ///   * Any existing region anchored at `(anchor_row, anchor_col)` is
   ///     cleared first (including its reverse-map entries).
-  ///   * The would-be footprint is checked: every cell in the rectangle
-  ///     except the anchor is "occupied" if (a) `cell_at` returns non-null
-  ///     with a non-blank `cached_value` or non-empty `formula_text`, or
-  ///     (b) it is already covered by another spill region. On any
-  ///     occupied cell the anchor's `cached_value` is set to
-  ///     `#SPILL!`, no region is registered, and the function returns
-  ///     `false`. Pre-existing literals are preserved.
+  ///   * The would-be footprint is checked through `spill_would_collide`.
+  ///     Only the stored Cell at the anchor is ignored. Any other occupied
+  ///     stored cell, intersection with another spill rectangle, or
+  ///     intersection with a merged range (including a merge at the anchor)
+  ///     sets the anchor's `cached_value` to `#SPILL!`, registers no region,
+  ///     and returns `false`. Pre-existing literals and sheet metadata are
+  ///     preserved.
   ///   * On success, `cells` is deep-copied into the region (Text payloads
   ///     interned in `owned_strings`), reverse entries are written for each
   ///     phantom (the anchor itself is excluded from the reverse map), the
@@ -1170,6 +1182,10 @@ class Sheet {
 
   /// `spill_region_covering` body; assumes `spill_mutex_` is held.
   const SpillRegion* spill_region_covering_locked(std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// `spill_would_collide` body; assumes `spill_mutex_` is held.
+  bool spill_would_collide_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                  std::uint32_t cols) const noexcept;
 
   std::string name_;
   // Non-empty only for chartsheets / dialog sheets / macro sheets and other
