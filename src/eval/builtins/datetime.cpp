@@ -547,8 +547,9 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 }
 
 /// DATEDIF(start, end, unit). Returns the signed difference between two
-/// dates expressed in the requested unit. Unit strings are case-sensitive
-/// and uppercase-only in Excel's documented surface:
+/// dates expressed in the requested unit. Unit strings are matched
+/// case-insensitively, as Excel accepts the documented tokens regardless of
+/// ASCII letter case:
 ///
 ///   "Y"  - complete years between start and end
 ///   "M"  - complete months between start and end
@@ -579,21 +580,21 @@ Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
   const date_time::YMD a = date_time::ymd_from_serial(s, date1904);
   const date_time::YMD b = date_time::ymd_from_serial(e, date1904);
   const std::string& u = unit.value();
-  if (u == "D") {
+  if (strings::case_insensitive_eq(u, "D")) {
     return Value::number(e - s);
   }
-  if (u == "Y") {
+  if (strings::case_insensitive_eq(u, "Y")) {
     const long long months = completed_months(a.y, a.m, a.d, b.y, b.m, b.d);
     return Value::number(static_cast<double>(months / 12));
   }
-  if (u == "M") {
+  if (strings::case_insensitive_eq(u, "M")) {
     return Value::number(static_cast<double>(completed_months(a.y, a.m, a.d, b.y, b.m, b.d)));
   }
-  if (u == "YM") {
+  if (strings::case_insensitive_eq(u, "YM")) {
     const long long months = completed_months(a.y, a.m, a.d, b.y, b.m, b.d);
     return Value::number(static_cast<double>(months % 12));
   }
-  if (u == "YD") {
+  if (strings::case_insensitive_eq(u, "YD")) {
     // Shift `start` into the same or preceding year as `end` so the
     // calendar anniversary logic falls out directly. If start's (m,d)
     // has already passed in end's year, the anniversary for the "partial
@@ -607,7 +608,7 @@ Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
     const std::int64_t end_days = date_time::days_from_civil(b.y, b.m, b.d);
     return Value::number(static_cast<double>(end_days - anniv));
   }
-  if (u == "MD") {
+  if (strings::case_insensitive_eq(u, "MD")) {
     // Days ignoring months and years: pretend both dates share end's
     // (year, month) and return `b.d - a.d`; if that would be negative,
     // borrow a month (one full calendar month of end's previous month).

@@ -857,6 +857,27 @@ TEST(DateTimeDatedif, UnknownUnitIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(DateTimeDatedif, UnitTokensAreCaseInsensitive) {
+  struct Case {
+    std::string_view unit;
+    std::string_view start;
+    std::string_view end;
+    double expected;
+  };
+  const Case cases[] = {
+      {"y", "DATE(2020,3,15)", "DATE(2024,7,1)", 4.0},   {"m", "DATE(2024,1,15)", "DATE(2024,7,1)", 5.0},
+      {"d", "DATE(2024,1,1)", "DATE(2024,1,15)", 14.0},  {"yM", "DATE(2020,3,15)", "DATE(2024,7,1)", 3.0},
+      {"Yd", "DATE(2020,3,15)", "DATE(2024,3,15)", 0.0}, {"mD", "DATE(2024,1,15)", "DATE(2024,7,15)", 0.0},
+  };
+  for (const Case& test : cases) {
+    const std::string formula =
+        "=DATEDIF(" + std::string(test.start) + "," + std::string(test.end) + ",\"" + std::string(test.unit) + "\")";
+    const Value v = EvalSource(formula);
+    ASSERT_TRUE(v.is_number()) << formula << ": " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), test.expected) << formula;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // NETWORKDAYS / WORKDAY
 // ---------------------------------------------------------------------------

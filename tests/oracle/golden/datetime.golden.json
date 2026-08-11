@@ -2,11 +2,11 @@
   "suite": "datetime",
   "description": "DATE / TIME / YEAR / MONTH / DAY / HOUR / MINUTE / SECOND / WEEKDAY / EDATE / EOMONTH / DAYS / DAYS360 / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / NETWORKDAYS / NETWORKDAYS.INTL / WORKDAY / WORKDAY.INTL",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.111.3",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-11T02:30:04Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -443,6 +443,60 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "datedif_lowercase_y",
+      "formula": "=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),\"y\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "datedif_lowercase_m",
+      "formula": "=DATEDIF(DATE(2024,1,15),DATE(2024,7,1),\"m\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "datedif_lowercase_d",
+      "formula": "=DATEDIF(DATE(2024,1,1),DATE(2024,1,15),\"d\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.0
+      }
+    },
+    {
+      "id": "datedif_mixed_ym",
+      "formula": "=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),\"yM\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "datedif_mixed_yd",
+      "formula": "=DATEDIF(DATE(2020,3,15),DATE(2024,3,15),\"Yd\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "datedif_mixed_md",
+      "formula": "=DATEDIF(DATE(2024,1,15),DATE(2024,7,15),\"mD\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
       }
     },
     {

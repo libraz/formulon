@@ -188,6 +188,25 @@ cases:
   - id: datedif_unknown_unit_is_num
     formula: "=DATEDIF(DATE(2024,1,1),DATE(2024,12,31),\"X\")"
 
+  - id: datedif_lowercase_y
+    description: "Excel accepts lowercase unit tokens"
+    formula: "=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),\"y\")"
+
+  - id: datedif_lowercase_m
+    formula: "=DATEDIF(DATE(2024,1,15),DATE(2024,7,1),\"m\")"
+
+  - id: datedif_lowercase_d
+    formula: "=DATEDIF(DATE(2024,1,1),DATE(2024,1,15),\"d\")"
+
+  - id: datedif_mixed_ym
+    formula: "=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),\"yM\")"
+
+  - id: datedif_mixed_yd
+    formula: "=DATEDIF(DATE(2020,3,15),DATE(2024,3,15),\"Yd\")"
+
+  - id: datedif_mixed_md
+    formula: "=DATEDIF(DATE(2024,1,15),DATE(2024,7,15),\"mD\")"
+
   # -- NETWORKDAYS ---------------------------------------------------------
   - id: networkdays_one_week
     description: "Mon..Fri -> 5 business days"
