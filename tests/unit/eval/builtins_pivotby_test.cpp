@@ -130,6 +130,21 @@ TEST(PivotBy, BareSumName) {
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 4.0);
 }
 
+TEST(PivotBy, BareSumFiltersRangeSourcedNonNumbers) {
+  const Value v = EvalSrc(
+      "=PIVOTBY({\"A\";\"A\";\"B\";\"B\"}, {\"X\";\"X\";\"X\";\"X\"},"
+      "         {1;TRUE;\"text\";2}, SUM, 0, 0, 0, 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 2.0);
+}
+
+TEST(PivotBy, BareSumInvokedWhenRangeFilterKeepsNothing) {
+  const Value v = EvalSrc("=PIVOTBY({\"A\";\"A\"}, {\"X\";\"X\"}, {TRUE;\"text\"}, SUM, 0, 0, 0, 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 0.0);
+}
+
 TEST(PivotBy, BareAverageName) {
   // (A, X) = avg(10, 30) = 20; (A, Y) = 40; (B, X) = 20; (B, Y) = avg(60, 80) = 70.
   const Value v = EvalSrc(

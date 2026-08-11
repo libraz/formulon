@@ -73,44 +73,6 @@ std::string_view strip_future_prefix(std::string_view name) noexcept {
   return name;
 }
 
-bool append_range_sourced_value(const FunctionDef& def, const Value& v, std::vector<Value>* values, Value* out_err) {
-  if (def.propagate_errors && v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (def.range_filter_numeric_only && v.kind() != ValueKind::Number) {
-    return true;
-  }
-  if (def.range_filter_bool_coercible && v.kind() != ValueKind::Number && v.kind() != ValueKind::Bool) {
-    return true;
-  }
-  if (def.range_filter_a_coerce) {
-    if (v.kind() == ValueKind::Blank) {
-      return true;
-    }
-    if (v.kind() == ValueKind::Bool) {
-      values->push_back(Value::number(v.as_boolean() ? 1.0 : 0.0));
-      return true;
-    }
-    if (v.kind() == ValueKind::Text) {
-      values->push_back(Value::number(0.0));
-      return true;
-    }
-  }
-  values->push_back(v);
-  return true;
-}
-
-bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count,
-                                 std::vector<Value>* values, Value* out_err) {
-  for (std::size_t i = 0; i < count; ++i) {
-    if (!append_range_sourced_value(def, cells[i], values, out_err)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 using RangeCallExpander = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
                                    std::vector<Value>*, ErrorCode*, std::uint32_t*, std::uint32_t*);
 

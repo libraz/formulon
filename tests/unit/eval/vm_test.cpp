@@ -572,6 +572,81 @@ TEST(Vm, RangeAverageAgreesWithTreeWalker) {
   EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
 }
 
+TEST(Vm, MixedScalarAndRangeErrorsKeepSourceOrder) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::error(ErrorCode::NA));  // A1 = #N/A
+  EvalState state;
+  const EvalContext ctx(wb, s, state);
+
+  // The scalar first argument is evaluated before the range argument, so its
+  // #DIV/0! wins even though the range contains #N/A.
+  Arena tree_first_arena;
+  const Value tree_first = RunTreeWithCtx("=SUM(1/0,A1:A1)", tree_first_arena, ctx);
+  Arena vm_first_arena;
+  const Value vm_first = RunVmWithCtx("=SUM(1/0,A1:A1)", vm_first_arena, ctx);
+  ASSERT_TRUE(tree_first.is_error());
+  EXPECT_EQ(tree_first.as_error(), ErrorCode::Div0);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree_first, vm_first));
+
+  // Reversing the slots makes the range's #N/A the first error.
+  Arena tree_second_arena;
+  const Value tree_second = RunTreeWithCtx("=SUM(A1:A1,1/0)", tree_second_arena, ctx);
+  Arena vm_second_arena;
+  const Value vm_second = RunVmWithCtx("=SUM(A1:A1,1/0)", vm_second_arena, ctx);
+  ASSERT_TRUE(tree_second.is_error());
+  EXPECT_EQ(tree_second.as_error(), ErrorCode::NA);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree_second, vm_second));
+}
+
+TEST(Vm, RangeErrorsKeepRowMajorOrder) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  s.set_cell_value(0U, 1U, Value::error(ErrorCode::NA));    // B1
+  s.set_cell_value(1U, 0U, Value::error(ErrorCode::Div0));  // A2
+  s.set_cell_value(1U, 1U, Value::number(2.0));
+  EvalState state;
+  const EvalContext ctx(wb, s, state);
+
+  // A1:B2 is scanned row-major, so B1's #N/A precedes A2's #DIV/0!.
+  Arena tree_arena;
+  const Value tree = RunTreeWithCtx("=SUM(A1:B2)", tree_arena, ctx);
+  Arena vm_arena;
+  const Value vm = RunVmWithCtx("=SUM(A1:B2)", vm_arena, ctx);
+  ASSERT_TRUE(tree.is_error());
+  EXPECT_EQ(tree.as_error(), ErrorCode::NA);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+TEST(Vm, RangeFilterCompactsBoolAndTextValues) {
+  Arena tree_arena;
+  const Value tree = RunTreeOrDie("=SUM({TRUE,\"text\",10})", tree_arena);
+  Arena vm_arena;
+  const Value vm = RunVmOrDie("=SUM({TRUE,\"text\",10})", vm_arena);
+  ASSERT_TRUE(tree.is_number());
+  EXPECT_DOUBLE_EQ(tree.as_number(), 10.0);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree, vm));
+}
+
+TEST(Vm, ErrorInspectionOptOutsReceiveRangeAndScalarErrors) {
+  Arena tree_is_error_arena;
+  const Value tree_is_error = RunTreeOrDie("=ISERROR(#N/A)", tree_is_error_arena);
+  Arena vm_is_error_arena;
+  const Value vm_is_error = RunVmOrDie("=ISERROR(#N/A)", vm_is_error_arena);
+  ASSERT_TRUE(tree_is_error.is_boolean());
+  EXPECT_TRUE(tree_is_error.as_boolean());
+  EXPECT_TRUE(ValuesAgreeBitExact(tree_is_error, vm_is_error));
+
+  Arena tree_counta_arena;
+  const Value tree_counta = RunTreeOrDie("=COUNTA({#N/A,10})", tree_counta_arena);
+  Arena vm_counta_arena;
+  const Value vm_counta = RunVmOrDie("=COUNTA({#N/A,10})", vm_counta_arena);
+  ASSERT_TRUE(tree_counta.is_number());
+  EXPECT_DOUBLE_EQ(tree_counta.as_number(), 2.0);
+  EXPECT_TRUE(ValuesAgreeBitExact(tree_counta, vm_counta));
+}
+
 // ---------------------------------------------------------------------------
 // Recursive LAMBDA + inner LET: per-invocation slot isolation
 // ---------------------------------------------------------------------------

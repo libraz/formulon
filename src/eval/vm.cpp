@@ -54,6 +54,7 @@
 #include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
+#include "eval/range_args.h"
 #include "eval/scalar_ops.h"
 #include "eval/structured_ref.h"
 #include "parser/ast.h"
@@ -605,58 +606,40 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         // the principal flattening surface for the VM.
         std::vector<Value> argv;
         argv.reserve(arity);
+        bool short_circuit = false;
+        Value propagated_error = Value::blank();
         for (std::uint32_t i = 0; i < arity; ++i) {
           const Value& slot = s.stack[s.stack.size() - arity + i];
+          // Keep error precedence in source order across mixed scalar and
+          // array arguments. A scalar error belongs to this slot, so detect
+          // it before moving on to a later range. Range cells are handled
+          // at their own row-major position below.
+          if (def->propagate_errors && slot.is_error()) {
+            propagated_error = slot;
+            short_circuit = true;
+            break;
+          }
           if (def->accepts_ranges && slot.is_array()) {
             const ArrayValue* arr = slot.as_array();
             const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
             for (std::size_t k = 0; k < n; ++k) {
-              const Value& cell = arr->cells[k];
-              if (def->range_filter_numeric_only && cell.kind() != ValueKind::Number) {
-                continue;
+              if (!append_range_sourced_value(*def, arr->cells[k], &argv, &propagated_error)) {
+                short_circuit = true;
+                break;
               }
-              if (def->range_filter_bool_coercible && cell.kind() != ValueKind::Number &&
-                  cell.kind() != ValueKind::Bool) {
-                continue;
-              }
-              if (def->range_filter_a_coerce) {
-                if (cell.kind() == ValueKind::Blank) {
-                  continue;
-                }
-                if (cell.kind() == ValueKind::Bool) {
-                  argv.push_back(Value::number(cell.as_boolean() ? 1.0 : 0.0));
-                  continue;
-                }
-                if (cell.kind() == ValueKind::Text) {
-                  argv.push_back(Value::number(0.0));
-                  continue;
-                }
-              }
-              argv.push_back(cell);
+            }
+            if (short_circuit) {
+              break;
             }
           } else {
             argv.push_back(slot);
           }
         }
         pop_values(s, arity);
-        // Default tree-walker rule: short-circuit on the first error arg.
-        // Functions that opt out (`propagate_errors == false`) must inspect
-        // their error inputs; we pass the raw values through.
-        if (def->propagate_errors) {
-          bool short_circuit = false;
-          Value err_v = Value::blank();
-          for (const Value& a : argv) {
-            if (a.is_error()) {
-              err_v = a;
-              short_circuit = true;
-              break;
-            }
-          }
-          if (short_circuit) {
-            RETURN_IF_ERROR(push_value(s, err_v));
-            ++pc;
-            break;
-          }
+        if (short_circuit) {
+          RETURN_IF_ERROR(push_value(s, propagated_error));
+          ++pc;
+          break;
         }
         // Pass the post-flattening size (may exceed the original `arity`
         // when an Array argument was unpacked).

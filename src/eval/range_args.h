@@ -13,6 +13,7 @@
 #ifndef FORMULON_EVAL_RANGE_ARGS_H_
 #define FORMULON_EVAL_RANGE_ARGS_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -32,6 +33,20 @@ namespace eval {
 
 class EvalContext;
 class FunctionRegistry;
+struct FunctionDef;
+
+/// Applies the FunctionDef's provenance-aware range filter to one cell.
+bool append_range_sourced_value(const FunctionDef& def, const Value& value, std::vector<Value>* values, Value* out_err);
+
+/// Applies the same filter in source order to a contiguous range.
+bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count,
+                                 std::vector<Value>* values, Value* out_err);
+
+/// Applies the same filter while compacting retained values into an arena
+/// buffer. `out_cells` must have room for `count` values; the retained count
+/// may be zero after a valid non-empty input.
+bool filter_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count, Value* out_cells,
+                                 std::size_t* out_count, Value* out_err);
 
 /// Resolution result for a range-shaped argument: a flat row-major vector
 /// of cell `Value`s plus the rectangle's shape. A 1-cell `Ref` produces

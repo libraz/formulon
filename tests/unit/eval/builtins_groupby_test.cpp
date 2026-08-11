@@ -112,6 +112,19 @@ TEST(GroupBy, BareAverageName) {
   EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 20.0);
 }
 
+TEST(GroupBy, BareSumFiltersRangeSourcedNonNumbers) {
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\";\"B\";\"B\"}, {1;TRUE;\"text\";2}, SUM, 0, 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(Cell(v, 1, 1).as_number(), 2.0);
+}
+
+TEST(GroupBy, BareSumInvokedWhenRangeFilterKeepsNothing) {
+  const Value v = EvalSrc("=GROUPBY({\"A\";\"A\"}, {TRUE;\"text\"}, SUM, 0, 0, 0)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 0.0);
+}
+
 TEST(GroupBy, BareCountAName) {
   // COUNTA counts non-Blank cells; here the input has no blanks so it
   // behaves like COUNT for the registered eager-dispatch path. (Bare COUNT

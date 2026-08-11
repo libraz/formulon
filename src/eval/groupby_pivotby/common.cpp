@@ -19,6 +19,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
+#include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -85,17 +86,21 @@ Value invoke_function_for_group(const FunctionDef* def, const ArrayValue* slice,
     return Value::error(ErrorCode::Calc);
   }
   const std::uint32_t n = slice->rows;
+  if (n < def->min_arity || (def->max_arity != kVariadic && n > def->max_arity)) {
+    return Value::error(ErrorCode::Value);
+  }
   Value* args = arena.create_array<Value>(n);
   if (args == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  for (std::uint32_t i = 0; i < n; ++i) {
-    args[i] = slice->cells[i];
+  std::size_t kept = 0;
+  Value filter_err = Value::blank();
+  if (!filter_range_sourced_values(*def, slice->cells, n, args, &kept, &filter_err)) {
+    return filter_err;
   }
-  if (n < def->min_arity || (def->max_arity != kVariadic && n > def->max_arity)) {
-    return Value::error(ErrorCode::Value);
-  }
-  return def->impl(args, n, arena);
+  // The initial group arity was validated above. Filtering may remove every
+  // cell, but the implementation still owns the zero-argument result.
+  return def->impl(args, static_cast<std::uint32_t>(kept), arena);
 }
 
 }  // namespace

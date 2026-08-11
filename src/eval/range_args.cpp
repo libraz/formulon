@@ -13,6 +13,7 @@
 
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
+#include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_expanders.h"
@@ -30,6 +31,40 @@
 namespace formulon {
 namespace eval {
 namespace {
+
+bool filter_range_sourced_value(const FunctionDef& def, const Value& value, Value* out, bool* keep, Value* out_err) {
+  if (def.propagate_errors && value.is_error()) {
+    *out_err = value;
+    return false;
+  }
+  if (def.range_filter_numeric_only && value.kind() != ValueKind::Number) {
+    *keep = false;
+    return true;
+  }
+  if (def.range_filter_bool_coercible && value.kind() != ValueKind::Number && value.kind() != ValueKind::Bool) {
+    *keep = false;
+    return true;
+  }
+  if (def.range_filter_a_coerce) {
+    if (value.kind() == ValueKind::Blank) {
+      *keep = false;
+      return true;
+    }
+    if (value.kind() == ValueKind::Bool) {
+      *out = Value::number(value.as_boolean() ? 1.0 : 0.0);
+      *keep = true;
+      return true;
+    }
+    if (value.kind() == ValueKind::Text) {
+      *out = Value::number(0.0);
+      *keep = true;
+      return true;
+    }
+  }
+  *out = value;
+  *keep = true;
+  return true;
+}
 
 /// Range-shaped Call-name dispatch. `OFFSET` / `CHOOSE` produce
 /// rectangles directly; `IF` preserves shape through the picked branch;
@@ -424,6 +459,46 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
 }
 
 }  // namespace
+
+bool append_range_sourced_value(const FunctionDef& def, const Value& value, std::vector<Value>* values,
+                                Value* out_err) {
+  Value filtered = Value::blank();
+  bool keep = false;
+  if (!filter_range_sourced_value(def, value, &filtered, &keep, out_err)) {
+    return false;
+  }
+  if (keep) {
+    values->push_back(filtered);
+  }
+  return true;
+}
+
+bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count,
+                                 std::vector<Value>* values, Value* out_err) {
+  for (std::size_t i = 0; i < count; ++i) {
+    if (!append_range_sourced_value(def, cells[i], values, out_err)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool filter_range_sourced_values(const FunctionDef& def, const Value* cells, std::size_t count, Value* out_cells,
+                                 std::size_t* out_count, Value* out_err) {
+  std::size_t kept = 0;
+  for (std::size_t i = 0; i < count; ++i) {
+    Value filtered = Value::blank();
+    bool keep = false;
+    if (!filter_range_sourced_value(def, cells[i], &filtered, &keep, out_err)) {
+      return false;
+    }
+    if (keep) {
+      out_cells[kept++] = filtered;
+    }
+  }
+  *out_count = kept;
+  return true;
+}
 
 Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_node, Arena& arena,
                                                    const FunctionRegistry& registry, const EvalContext& ctx) {
