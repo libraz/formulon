@@ -217,6 +217,23 @@ Value aggregate_matching_numbers(const IfsInputs& inputs, ExcelProfile profile, 
   return Value::error(ErrorCode::Value);
 }
 
+/// Shared body of SUMIFS / AVERAGEIFS / MAXIFS / MINIFS. The four differ
+/// only in which reduction `aggregate_matching_numbers` applies; the arity
+/// rule (odd, >= 3) and the range/criteria resolution are identical.
+Value eval_ifs_numeric_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, IfsNumericAggregate aggregate) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 3 || (arity % 2) != 1) {
+    return Value::error(ErrorCode::Value);
+  }
+  Value err = Value::number(0.0);
+  IfsInputs inputs;
+  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
+    return err;
+  }
+  return aggregate_matching_numbers(inputs, ctx.excel_profile(), aggregate);
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -464,16 +481,7 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
 // pool -> `0`.
 Value eval_sumifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 3 || (arity % 2) != 1) {
-    return Value::error(ErrorCode::Value);
-  }
-  Value err = Value::number(0.0);
-  IfsInputs inputs;
-  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
-    return err;
-  }
-  return aggregate_matching_numbers(inputs, ctx.excel_profile(), IfsNumericAggregate::Sum);
+  return eval_ifs_numeric_lazy(call, arena, registry, ctx, IfsNumericAggregate::Sum);
 }
 
 // AVERAGEIFS(avg_range, range1, crit1 [, range2, crit2, ...])
@@ -484,16 +492,7 @@ Value eval_sumifs_lazy(const parser::AstNode& call, Arena& arena, const Function
 // both the numerator and the denominator, matching Excel.
 Value eval_averageifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 3 || (arity % 2) != 1) {
-    return Value::error(ErrorCode::Value);
-  }
-  Value err = Value::number(0.0);
-  IfsInputs inputs;
-  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
-    return err;
-  }
-  return aggregate_matching_numbers(inputs, ctx.excel_profile(), IfsNumericAggregate::Average);
+  return eval_ifs_numeric_lazy(call, arena, registry, ctx, IfsNumericAggregate::Average);
 }
 
 // MAXIFS(max_range, range1, crit1 [, range2, crit2, ...])
@@ -504,16 +503,7 @@ Value eval_averageifs_lazy(const parser::AstNode& call, Arena& arena, const Func
 // `#NUM!` even though "max of empty" is mathematically undefined).
 Value eval_maxifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 3 || (arity % 2) != 1) {
-    return Value::error(ErrorCode::Value);
-  }
-  Value err = Value::number(0.0);
-  IfsInputs inputs;
-  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
-    return err;
-  }
-  return aggregate_matching_numbers(inputs, ctx.excel_profile(), IfsNumericAggregate::Max);
+  return eval_ifs_numeric_lazy(call, arena, registry, ctx, IfsNumericAggregate::Max);
 }
 
 // MINIFS(min_range, range1, crit1 [, range2, crit2, ...])
@@ -522,16 +512,7 @@ Value eval_maxifs_lazy(const parser::AstNode& call, Arena& arena, const Function
 // pool -> `0`.
 Value eval_minifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity < 3 || (arity % 2) != 1) {
-    return Value::error(ErrorCode::Value);
-  }
-  Value err = Value::number(0.0);
-  IfsInputs inputs;
-  if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
-    return err;
-  }
-  return aggregate_matching_numbers(inputs, ctx.excel_profile(), IfsNumericAggregate::Min);
+  return eval_ifs_numeric_lazy(call, arena, registry, ctx, IfsNumericAggregate::Min);
 }
 
 }  // namespace eval
