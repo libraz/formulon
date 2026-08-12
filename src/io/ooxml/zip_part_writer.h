@@ -1,8 +1,7 @@
 //
-// miniz wrappers used by the OOXML writer to add parts to the in-memory
-// zip archive. The RAII guard ensures the writer state is torn down
-// even on the error path. Internal to `src/io/ooxml/`; not part of the
-// public API.
+// miniz wrappers used by the OOXML and XLSB writers to add parts to the
+// in-memory zip archive. The RAII guard ensures the writer state is torn down
+// even on the error path. Internal to `src/io/`; not part of the public API.
 
 #ifndef FORMULON_IO_OOXML_ZIP_PART_WRITER_H_
 #define FORMULON_IO_OOXML_ZIP_PART_WRITER_H_
@@ -62,7 +61,8 @@ class ZipWriterGuard {
 /// with the part path when miniz refuses the write.
 Expected<void, Error> AddPart(mz_zip_archive* archive, std::string_view path, const std::string& body);
 
-/// Adds a binary part (passthrough). Same error contract as `AddPart`.
+/// Adds a binary part — a passthrough blob, or an XLSB record stream.
+/// Same error contract as `AddPart`.
 Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view path,
                                    const std::vector<std::uint8_t>& body);
 

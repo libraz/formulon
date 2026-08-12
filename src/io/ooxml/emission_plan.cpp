@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "io/external_links.h"
+#include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/passthrough_part.h"
 #include "io/tables_reader.h"
@@ -101,7 +102,7 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   // from the captured `ExternalLinkRecord`s; the body parts themselves
   // are passthrough.
   for (const ExternalLinkRecord& rec : wb.external_links()) {
-    paths.insert(RelsPathForPart(rec.part_path));
+    paths.insert(ooxml::rels_path_for_part(rec.part_path));
   }
   // Sheet rels: any sheet that owns at least one table or pivot table.
   // Computed by callers; we enumerate them here for completeness.

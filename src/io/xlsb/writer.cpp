@@ -24,6 +24,8 @@
 #include "cf/cf_types.h"
 #include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
+#include "io/ooxml/relationship_writer.h"
+#include "io/ooxml/zip_part_writer.h"
 #include "io/passthrough_part.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
@@ -173,25 +175,6 @@ bool IsXlsxOnlyMetadataPart(const std::string& path) {
   return path == "xl/metadata.xml";
 }
 
-std::string LowercaseExtension(std::string_view extension) {
-  std::string out(extension);
-  for (char& c : out) {
-    if (c >= 'A' && c <= 'Z') {
-      c = static_cast<char>(c - 'A' + 'a');
-    }
-  }
-  return out;
-}
-
-std::string ExtensionOfPart(std::string_view path) {
-  const std::size_t slash = path.find_last_of('/');
-  const std::size_t dot = path.find_last_of('.');
-  if (dot == std::string_view::npos || dot == path.size() - 1U || (slash != std::string_view::npos && dot < slash)) {
-    return {};
-  }
-  return LowercaseExtension(path.substr(dot + 1U));
-}
-
 bool HasRawStylesPart(const Workbook& wb) {
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (part.path == "xl/styles.bin")
@@ -339,7 +322,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     if (source.extension.empty() || source.content_type.empty()) {
       continue;
     }
-    const std::string extension = LowercaseExtension(source.extension);
+    const std::string extension = ooxml::lowercase_extension(source.extension);
     auto [it, inserted] = source_defaults.emplace(extension, source.content_type);
     if (!inserted && it->second != source.content_type) {
       return make_error(FormulonErrorCode::kIoContentTypeInvalid,
@@ -386,7 +369,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
       continue;
     }
     if (part.content_type.empty()) {
-      const std::string extension = ExtensionOfPart(part.path);
+      const std::string extension = ooxml::extension_of_part(part.path);
       const auto default_it = source_defaults.find(extension);
       if (extension.empty() || default_it == source_defaults.end()) {
         return make_error(FormulonErrorCode::kIoContentTypeInvalid,
@@ -586,21 +569,6 @@ std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-// Shapes a package path into the form a worksheet rels file resolves against
-// (`xl/worksheets/`), mirroring `WorkbookRelativeTarget` one directory down.
-std::string WorksheetRelativeTarget(std::string_view package_path) {
-  constexpr std::string_view kWorkbookDirectory = "xl/";
-  std::string out;
-  if (package_path.size() >= kWorkbookDirectory.size() &&
-      package_path.substr(0U, kWorkbookDirectory.size()) == kWorkbookDirectory) {
-    out.assign("../");
-    out.append(package_path.substr(kWorkbookDirectory.size()));
-    return out;
-  }
-  out.assign(package_path);
-  return out;
-}
-
 // Builds `xl/worksheets/_rels/sheet<N>.bin.rels`, or an empty string when the
 // sheet has nothing to relate to.
 //
@@ -620,7 +588,7 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan) {
           .warn();
       continue;
     }
-    const std::string target = rel.target_external ? rel.target : WorksheetRelativeTarget(rel.target);
+    const std::string target = rel.target_external ? rel.target : TargetRelativeToWorksheet(rel.target);
     entries.append("  <Relationship Id=\"");
     AppendXmlEscaped(entries, rel.id);
     entries.append("\" Type=\"");
@@ -643,15 +611,6 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan) {
   out.append(entries);
   out.append("</Relationships>\n");
   return out;
-}
-
-std::string WorkbookRelativeTarget(std::string_view package_path) {
-  constexpr std::string_view kWorkbookDirectory = "xl/";
-  if (package_path.size() >= kWorkbookDirectory.size() &&
-      package_path.substr(0U, kWorkbookDirectory.size()) == kWorkbookDirectory) {
-    return std::string(package_path.substr(kWorkbookDirectory.size()));
-  }
-  return std::string(package_path);
 }
 
 std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan, const Workbook& wb) {
@@ -704,7 +663,7 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
                                  (rel.type == kRelSheetMetadata && rel.target == "xl/metadata.bin"))) {
       continue;
     }
-    const std::string target = rel.target_external ? rel.target : WorkbookRelativeTarget(rel.target);
+    const std::string target = rel.target_external ? rel.target : std::string(WithoutXlPrefix(rel.target));
     AppendRelationship(out, &next_rid, rel.type, target, rel.target_external);
   }
   out.append("</Relationships>\n");
@@ -1034,66 +993,6 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
 
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndBook), ByteSpan{});
   return body;
-}
-
-// ---------------------------------------------------------------------------
-// miniz helpers (mirrors `ooxml_writer.cpp`)
-// ---------------------------------------------------------------------------
-
-class ZipWriterGuard {
- public:
-  ZipWriterGuard() = default;
-  ZipWriterGuard(const ZipWriterGuard&) = delete;
-  ZipWriterGuard& operator=(const ZipWriterGuard&) = delete;
-  ZipWriterGuard(ZipWriterGuard&&) = delete;
-  ZipWriterGuard& operator=(ZipWriterGuard&&) = delete;
-
-  ~ZipWriterGuard() {
-    if (active_) {
-      mz_zip_writer_end(&archive_);
-    }
-  }
-
-  bool init() {
-    if (mz_zip_writer_init_heap(&archive_, /*size_to_reserve_at_beginning=*/0,
-                                /*initial_allocation_size=*/8 * 1024) == MZ_FALSE) {
-      return false;
-    }
-    active_ = true;
-    return true;
-  }
-
-  mz_zip_archive* get() noexcept { return &archive_; }
-
-  void release() noexcept { active_ = false; }
-
- private:
-  mz_zip_archive archive_{};
-  bool active_ = false;
-};
-
-Expected<void, Error> AddPart(mz_zip_archive* archive, std::string_view path, const std::string& body) {
-  const mz_bool ok = mz_zip_writer_add_mem(archive, std::string(path).c_str(), body.data(), body.size(),
-                                           static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
-  if (ok == MZ_FALSE) {
-    std::string context("part=");
-    context.append(path);
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_add_mem failed", std::move(context));
-  }
-  return Expected<void, Error>::Ok();
-}
-
-Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view path,
-                                   const std::vector<std::uint8_t>& body) {
-  const mz_bool ok = mz_zip_writer_add_mem(archive, std::string(path).c_str(), body.data(), body.size(),
-                                           static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
-  if (ok == MZ_FALSE) {
-    std::string context("part=");
-    context.append(path);
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_add_mem failed (binary)",
-                      std::move(context));
-  }
-  return Expected<void, Error>::Ok();
 }
 
 }  // namespace

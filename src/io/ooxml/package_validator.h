@@ -1,8 +1,9 @@
 //
 // Package-level structural validation for OOXML reads. Bundles
 // `[Content_Types].xml` parsing, root-level rels lookup, and the path
-// helpers (`ResolveRelativePath`, `DirOf`, `RelsPathForPart`,
-// `RelationshipRefId`) that every other reader subcomponent shares.
+// helpers (`resolve_relative_path`, `dir_of`, `rels_path_for_part`,
+// `relationship_ref_id`, `extension_of_part`) that the OOXML reader, the
+// OOXML writer and the XLSB reader/writer all share.
 //
 // Zip-Slip hardening: `resolve_relative_path` refuses any input that
 // escapes the package root via excessive `..` segments or that begins
@@ -108,6 +109,16 @@ std::string rels_path_for_part(std::string_view part_path);
 /// Returns the Office relationship id from nodes that may spell it as
 /// either `r:id` or bare `id`.
 std::string relationship_ref_id(const pugi::xml_node& node);
+
+/// Lowercases an ASCII part extension. `[Content_Types].xml` matches
+/// `Default Extension=` case-insensitively, so both the reader and the
+/// writer normalise before comparing.
+std::string lowercase_extension(std::string_view extension);
+
+/// Returns the lowercased extension of a part path, without the dot.
+/// Empty when the path has no extension, ends in a dot, or the only dot
+/// belongs to a directory segment.
+std::string extension_of_part(std::string_view path);
 
 }  // namespace ooxml
 }  // namespace io

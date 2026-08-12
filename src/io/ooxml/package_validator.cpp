@@ -342,6 +342,25 @@ std::string relationship_ref_id(const pugi::xml_node& node) {
   return rid;
 }
 
+std::string lowercase_extension(std::string_view extension) {
+  std::string out(extension);
+  for (char& c : out) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+  return out;
+}
+
+std::string extension_of_part(std::string_view path) {
+  const std::size_t slash = path.find_last_of('/');
+  const std::size_t dot = path.find_last_of('.');
+  if (dot == std::string_view::npos || dot == path.size() - 1U || (slash != std::string_view::npos && dot < slash)) {
+    return {};
+  }
+  return lowercase_extension(path.substr(dot + 1U));
+}
+
 }  // namespace ooxml
 }  // namespace io
 }  // namespace formulon

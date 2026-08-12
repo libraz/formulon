@@ -34,7 +34,7 @@ Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view pat
   if (ok == MZ_FALSE) {
     std::string context("part=");
     context.append(path);
-    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_add_mem failed (passthrough)",
+    return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_add_mem failed (binary part)",
                       std::move(context));
   }
   return Expected<void, Error>::Ok();

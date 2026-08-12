@@ -412,7 +412,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     if (rels_xml.empty()) {
       continue;
     }
-    std::string rels_path = RelsPathForPart(e.record->part_path);
+    std::string rels_path = ooxml::rels_path_for_part(e.record->part_path);
     auto result = AddPart(writer.get(), rels_path, std::move(rels_xml));
     if (!result) {
       return result.error();

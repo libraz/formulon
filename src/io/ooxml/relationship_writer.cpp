@@ -13,22 +13,6 @@
 namespace formulon {
 namespace io {
 
-std::string RelsPathForPart(std::string_view part_path) {
-  const std::size_t slash = part_path.find_last_of('/');
-  if (slash == std::string_view::npos) {
-    std::string rels_path("_rels/");
-    rels_path.append(part_path);
-    rels_path.append(".rels");
-    return rels_path;
-  }
-  std::string rels_path;
-  rels_path.append(part_path.substr(0, slash));
-  rels_path.append("/_rels/");
-  rels_path.append(part_path.substr(slash + 1));
-  rels_path.append(".rels");
-  return rels_path;
-}
-
 std::string_view WithoutXlPrefix(std::string_view path) {
   constexpr std::string_view kXlPrefix = "xl/";
   if (path.size() >= kXlPrefix.size() && path.substr(0, kXlPrefix.size()) == kXlPrefix) {

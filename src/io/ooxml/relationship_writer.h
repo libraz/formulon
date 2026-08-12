@@ -26,11 +26,6 @@ namespace io {
 // Path-shaping helpers
 // ---------------------------------------------------------------------------
 
-/// Returns the package path of the `.rels` companion for `part_path`,
-/// inserting `_rels/` before the basename (e.g.
-/// `"xl/workbook.xml"` -> `"xl/_rels/workbook.xml.rels"`).
-std::string RelsPathForPart(std::string_view part_path);
-
 /// Strips a leading `"xl/"` segment when present; the value is returned
 /// as a view into the original path. Used to convert package paths
 /// into the relative form Excel emits for workbook-level relationships.

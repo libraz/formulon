@@ -30,7 +30,9 @@ namespace ooxml {
 /// Loads `rels_path` from `zip`, parses it as a `<Relationships>` document,
 /// and invokes `fn(node)` for each `<Relationship>` child in document
 /// order. `label` is the human-readable name used in error messages
-/// (e.g. `"workbook rels"`, `"sheet rels"`).
+/// (e.g. `"workbook rels"`, `"sheet rels"`), and `context` names the
+/// reader that drove the walk so an error can be traced back to the
+/// package format it came from (`"ooxml_reader"`, `"xlsb_reader"`).
 ///
 /// Returns a parse / structure error on malformed input (`kIoXmlParse` /
 /// `kIoRelationshipBroken`) or the first error surfaced by `fn`. The
@@ -38,7 +40,7 @@ namespace ooxml {
 /// convertible); a failed status short-circuits the walk.
 template <typename Fn>
 Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
-                                               Fn&& fn) {
+                                               std::string_view context, Fn&& fn) {
   auto rels_bytes_or = zip.read_entry(rels_path);
   if (!rels_bytes_or) {
     return rels_bytes_or.error();
@@ -49,7 +51,9 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
   pugi::xml_parse_result parse =
       doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
   if (!parse) {
-    std::string ctx("context=ooxml_reader part=");
+    std::string ctx("context=");
+    ctx.append(context);
+    ctx.append(" part=");
     ctx.append(rels_path);
     ctx.append(" desc=");
     ctx.append(parse.description());
@@ -59,7 +63,9 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
   }
   pugi::xml_node root = doc.child("Relationships");
   if (!root) {
-    std::string ctx("context=ooxml_reader part=");
+    std::string ctx("context=");
+    ctx.append(context);
+    ctx.append(" part=");
     ctx.append(rels_path);
     std::string message(label);
     message.append(": missing <Relationships>");
@@ -73,6 +79,14 @@ Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string
     }
   }
   return Expected<void, Error>::Ok();
+}
+
+/// `visit_relationship_nodes` for the OOXML reader, which is the common
+/// caller and always reports `context=ooxml_reader`.
+template <typename Fn>
+Expected<void, Error> visit_relationship_nodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
+                                               Fn&& fn) {
+  return visit_relationship_nodes(zip, rels_path, label, "ooxml_reader", std::forward<Fn>(fn));
 }
 
 }  // namespace ooxml

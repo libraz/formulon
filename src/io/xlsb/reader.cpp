@@ -28,6 +28,7 @@
 
 #include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
+#include "io/ooxml/rels_walker.h"
 #include "io/passthrough_part.h"
 #include "io/unknown_relationship.h"
 #include "io/xlsb/ptg_reader.h"
@@ -101,67 +102,6 @@ Expected<std::string, Error> ResolveRelativePath(std::string_view base_dir, std:
   return ooxml::resolve_relative_path(base_dir, target);
 }
 
-std::string DirOf(std::string_view path) {
-  const std::size_t pos = path.find_last_of('/');
-  if (pos == std::string_view::npos) {
-    return {};
-  }
-  return std::string(path.substr(0, pos));
-}
-
-std::string RelsPathForPart(std::string_view part_path) {
-  const std::size_t slash = part_path.find_last_of('/');
-  std::string out;
-  if (slash == std::string_view::npos) {
-    out.append("_rels/").append(part_path).append(".rels");
-  } else {
-    out.append(part_path.substr(0, slash));
-    out.append("/_rels/");
-    out.append(part_path.substr(slash + 1));
-    out.append(".rels");
-  }
-  return out;
-}
-
-template <typename Fn>
-Expected<void, Error> VisitRelationshipNodes(const ZipReader& zip, std::string_view rels_path, std::string_view label,
-                                             Fn&& fn) {
-  auto rels_bytes_or = zip.read_entry(rels_path);
-  if (!rels_bytes_or) {
-    return rels_bytes_or.error();
-  }
-  const std::vector<std::uint8_t>& rels_bytes = rels_bytes_or.value();
-
-  pugi::xml_document doc;
-  pugi::xml_parse_result parse =
-      doc.load_buffer(rels_bytes.data(), rels_bytes.size(), pugi::parse_default, pugi::encoding_utf8);
-  if (!parse) {
-    std::string ctx("context=xlsb_reader part=");
-    ctx.append(rels_path);
-    ctx.append(" desc=");
-    ctx.append(parse.description());
-    std::string message(label);
-    message.append(": pugixml parse failed");
-    return make_error(FormulonErrorCode::kIoXmlParse, std::move(message), std::move(ctx));
-  }
-  pugi::xml_node root = doc.child("Relationships");
-  if (!root) {
-    std::string ctx("context=xlsb_reader part=");
-    ctx.append(rels_path);
-    std::string message(label);
-    message.append(": missing <Relationships>");
-    return make_error(FormulonErrorCode::kIoRelationshipBroken, std::move(message), std::move(ctx));
-  }
-
-  for (pugi::xml_node rel = root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
-    auto status = fn(rel);
-    if (!status) {
-      return status.error();
-    }
-  }
-  return Expected<void, Error>::Ok();
-}
-
 // ---------------------------------------------------------------------------
 // XML envelope walkers (return `Expected` on every failure path).
 // ---------------------------------------------------------------------------
@@ -173,25 +113,6 @@ struct ContentTypesView {
   std::vector<std::pair<std::string, std::string>> overrides;  // (part_name, content_type)
   std::vector<DefaultContentType> defaults;
 };
-
-std::string LowercaseExtension(std::string_view extension) {
-  std::string out(extension);
-  for (char& c : out) {
-    if (c >= 'A' && c <= 'Z') {
-      c = static_cast<char>(c - 'A' + 'a');
-    }
-  }
-  return out;
-}
-
-std::string ExtensionOfPart(std::string_view path) {
-  const std::size_t slash = path.find_last_of('/');
-  const std::size_t dot = path.find_last_of('.');
-  if (dot == std::string_view::npos || dot == path.size() - 1U || (slash != std::string_view::npos && dot < slash)) {
-    return {};
-  }
-  return LowercaseExtension(path.substr(dot + 1U));
-}
 
 Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_t>& ct_bytes) {
   pugi::xml_document doc;
@@ -226,7 +147,7 @@ Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_
       if (ext.empty()) {
         continue;
       }
-      const std::string normalized_ext = LowercaseExtension(ext);
+      const std::string normalized_ext = ooxml::lowercase_extension(ext);
       auto existing = std::find_if(
           view.defaults.begin(), view.defaults.end(),
           [&normalized_ext](const DefaultContentType& value) { return value.extension == normalized_ext; });
@@ -344,14 +265,14 @@ struct WorkbookRels {
 
 Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string_view workbook_path) {
   WorkbookRels rels;
-  const std::string rels_path = RelsPathForPart(workbook_path);
+  const std::string rels_path = ooxml::rels_path_for_part(workbook_path);
   if (!zip.has_entry(rels_path)) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "workbook rels: part not found",
                       "context=xlsb_reader rels_path=" + rels_path);
   }
-  const std::string base_dir = DirOf(workbook_path);
-  auto visit_status =
-      VisitRelationshipNodes(zip, rels_path, "workbook rels", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
+  const std::string base_dir = ooxml::dir_of(workbook_path);
+  auto visit_status = ooxml::visit_relationship_nodes(
+      zip, rels_path, "workbook rels", "xlsb_reader", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
         const std::string_view type = rel.attribute("Type").value();
         const std::string_view target = rel.attribute("Target").value();
         if (target.empty()) {
@@ -881,27 +802,28 @@ Expected<std::vector<io::UnknownRelationship>, Error> LoadSheetRelationships(con
                                                                              std::string_view rels_path,
                                                                              std::string_view sheet_dir) {
   std::vector<io::UnknownRelationship> out;
-  auto status = VisitRelationshipNodes(zip, rels_path, "sheet rels", [&](const pugi::xml_node& rel) {
-    io::UnknownRelationship entry;
-    entry.id = rel.attribute("Id").value();
-    if (entry.id.empty()) {
-      return Expected<void, Error>::Ok();
-    }
-    entry.type = rel.attribute("Type").value();
-    const std::string_view target = rel.attribute("Target").value();
-    entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
-    if (entry.target_external) {
-      entry.target = std::string(target);
-    } else {
-      auto resolved = ResolveRelativePath(sheet_dir, target);
-      if (!resolved) {
-        return Expected<void, Error>(resolved.error());
-      }
-      entry.target = std::move(resolved).value();
-    }
-    out.push_back(std::move(entry));
-    return Expected<void, Error>::Ok();
-  });
+  auto status =
+      ooxml::visit_relationship_nodes(zip, rels_path, "sheet rels", "xlsb_reader", [&](const pugi::xml_node& rel) {
+        io::UnknownRelationship entry;
+        entry.id = rel.attribute("Id").value();
+        if (entry.id.empty()) {
+          return Expected<void, Error>::Ok();
+        }
+        entry.type = rel.attribute("Type").value();
+        const std::string_view target = rel.attribute("Target").value();
+        entry.target_external = std::string_view(rel.attribute("TargetMode").value()) == "External";
+        if (entry.target_external) {
+          entry.target = std::string(target);
+        } else {
+          auto resolved = ResolveRelativePath(sheet_dir, target);
+          if (!resolved) {
+            return Expected<void, Error>(resolved.error());
+          }
+          entry.target = std::move(resolved).value();
+        }
+        out.push_back(std::move(entry));
+        return Expected<void, Error>::Ok();
+      });
   if (!status) {
     return status.error();
   }
@@ -1769,7 +1691,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   consumed_parts.insert("[Content_Types].xml");
   consumed_parts.insert("_rels/.rels");
   consumed_parts.insert(workbook_path);
-  consumed_parts.insert(RelsPathForPart(workbook_path));
+  consumed_parts.insert(ooxml::rels_path_for_part(workbook_path));
   if (!wb_rels.sst_path.empty()) {
     consumed_parts.insert(wb_rels.sst_path);
   }
@@ -1798,9 +1720,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     // is `rels`-Default-typed, so the Override-driven passthrough loop below
     // never sees it; keeping every entry — none of them are modelled by the
     // binary reader — preserves both the ids and their targets.
-    const std::string sheet_rels_path = RelsPathForPart(sheet_path);
+    const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
     if (zip.has_entry(sheet_rels_path)) {
-      auto rels_or = LoadSheetRelationships(zip, sheet_rels_path, DirOf(sheet_path));
+      auto rels_or = LoadSheetRelationships(zip, sheet_rels_path, ooxml::dir_of(sheet_path));
       if (!rels_or) {
         return rels_or.error();
       }
@@ -1848,7 +1770,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   }
 
   auto default_content_type_for = [&ct_view](std::string_view path) -> const DefaultContentType* {
-    const std::string extension = ExtensionOfPart(path);
+    const std::string extension = ooxml::extension_of_part(path);
     if (extension.empty()) {
       return nullptr;
     }
