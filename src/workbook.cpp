@@ -1588,9 +1588,6 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   Sheet& target = sheets[sheet_index];
   const std::vector<BlockedSpillFootprint> blocked_before = target.blocked_spill_footprints();
   rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
-  if (names_changed) {
-    reindex_all_formulas(sheets, mutator, wb);
-  }
   const parser::RowColShiftTransform cf_transform(target_sheet_name, axis, edit, origin, count,
                                                   /*local_means_target=*/true);
   rewrite_conditional_format_formulas(target.mutable_conditional_formats(), cf_transform);
@@ -1605,6 +1602,13 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
     target.insert_cols(origin, count);
   } else {
     target.delete_cols(origin, count);
+  }
+  // Re-index only after the physical move. Formula text is rewritten while
+  // cells still occupy their pre-edit coordinates, so rebuilding the graph
+  // before the move would register moved owners (including Ref3D owners) at
+  // stale coordinates and leave duplicate registry entries behind.
+  if (names_changed) {
+    reindex_all_formulas(sheets, mutator, wb);
   }
   reregister_three_d_span_owners_after_row_col_edit(three_d_owners, sheets, mutator, wb, sheet_index, axis, edit,
                                                     origin, count);
