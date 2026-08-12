@@ -159,6 +159,7 @@ set(FORMULON_CORE_SOURCES
   src/io/tables_reader.cpp
   src/io/xml_escape.cpp
   src/io/xml_utils.cpp
+  src/io/xsd_double.cpp
   src/io/zip_reader.cpp
   src/io/xlsb/cell_writer.cpp
   src/io/xlsb/func_id_table.cpp

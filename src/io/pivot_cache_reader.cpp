@@ -16,6 +16,7 @@
 
 #include "io/iso_date.h"
 #include "io/xml_utils.h"
+#include "io/xsd_double.h"
 #include "pivot/pivot_cache.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -67,42 +68,6 @@ ErrorCode ParseErrorDisplay(std::string_view text) {
   return ErrorCode::Value;
 }
 
-/// Parses a numeric attribute body as a locale-independent double.
-/// Returns false on empty input or trailing non-whitespace garbage; the
-/// out-parameter is unchanged in that case. Mirrors the helper in
-/// `cell_parser.cpp` so the pivot path produces identical numeric
-/// behaviour (Excel writes round-trip-friendly decimal strings, never
-/// localised).
-bool ParseDouble(std::string_view text, double* out) {
-  if (text.empty()) {
-    return false;
-  }
-  char small_buf[64];
-  const char* nstr = nullptr;
-  std::string heap;
-  if (text.size() < sizeof(small_buf)) {
-    std::memcpy(small_buf, text.data(), text.size());
-    small_buf[text.size()] = '\0';
-    nstr = small_buf;
-  } else {
-    heap.assign(text.data(), text.size());
-    nstr = heap.c_str();
-  }
-  char* end = nullptr;
-  const double v = std::strtod(nstr, &end);
-  if (end == nstr) {
-    return false;
-  }
-  while (end != nullptr && *end != '\0') {
-    if (*end != ' ' && *end != '\t' && *end != '\r' && *end != '\n') {
-      return false;
-    }
-    ++end;
-  }
-  *out = v;
-  return true;
-}
-
 /// Returns true iff the boolean attribute body is the OOXML literal
 /// `"1"` (true) or `"0"` (false). On unrecognised input, defaults to
 /// `false` and reports failure via the `*ok` flag.
@@ -135,7 +100,7 @@ Expected<Value, Error> DecodeTypedValue(const pugi::xml_node& node, std::deque<s
   if (name == "n") {
     std::string_view raw = node.attribute("v").as_string();
     double num = 0.0;
-    if (!ParseDouble(raw, &num)) {
+    if (!parse_xsd_double(raw, &num)) {
       std::string ctx("context=pivot_cache_reader v=");
       ctx.append(raw);
       return make_error(FormulonErrorCode::kIoSheetCorrupt, "pivot cache: <n v=...> not a number", std::move(ctx));

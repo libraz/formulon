@@ -33,6 +33,7 @@
 #include "io/iso_date.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
+#include "io/xsd_double.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -157,43 +158,6 @@ void ConcatInlinePhoneticText(const pugi::xml_node& is_node, std::string& out) {
       AppendOoxmlTextUnescaped(out, t.text().get());
     }
   }
-}
-
-/// Parses a `<v>` text node as a double. Returns false on non-empty
-/// trailing characters or empty input; `out` is unchanged in that case.
-bool ParseDouble(std::string_view text, double* out) {
-  if (text.empty()) {
-    return false;
-  }
-  // strtod requires a NUL-terminated string. The pugixml `text().get()`
-  // we receive already is, but the slice we hand in may have been built
-  // from a `string_view` substring (we currently never do that); copy
-  // into a small stack buffer when oversized to stay safe.
-  char small_buf[64];
-  const char* nstr = nullptr;
-  std::string heap;
-  if (text.size() < sizeof(small_buf)) {
-    std::memcpy(small_buf, text.data(), text.size());
-    small_buf[text.size()] = '\0';
-    nstr = small_buf;
-  } else {
-    heap.assign(text.data(), text.size());
-    nstr = heap.c_str();
-  }
-  char* end = nullptr;
-  const double v = std::strtod(nstr, &end);
-  if (end == nstr) {
-    return false;
-  }
-  // Trailing garbage is not allowed.
-  while (end != nullptr && *end != '\0') {
-    if (*end != ' ' && *end != '\t' && *end != '\r' && *end != '\n') {
-      return false;
-    }
-    ++end;
-  }
-  *out = v;
-  return true;
 }
 
 }  // namespace
@@ -353,7 +317,7 @@ Expected<ParsedCell, Error> decode_cell_payload(std::string_view t, std::string_
     return out;
   }
   double num = 0.0;
-  if (!ParseDouble(v_text, &num)) {
+  if (!parse_xsd_double(v_text, &num)) {
     std::string ctx("context=cell_parser v=");
     ctx.append(v_text);
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "cell parser: t='n' has unparseable <v>", std::move(ctx));
