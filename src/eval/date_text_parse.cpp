@@ -18,6 +18,9 @@ namespace eval {
 namespace date_parse {
 namespace {
 
+// Day-of-month clamping shares the calendar helper with the date builtins.
+using date_time::days_in_month;
+
 // UTF-8 byte sequences for the kanji the date / time parser recognises.
 // Declared as 4-byte arrays (3 UTF-8 bytes + NUL) so they forward cleanly
 // into `starts_with_utf8` without array-decay pitfalls.
@@ -81,19 +84,6 @@ std::string fold_fullwidth_digits(std::string_view s) {
     ++i;
   }
   return out;
-}
-
-// Returns the last valid day-of-month under the Gregorian leap rule.
-unsigned days_in_month(int y, unsigned m) noexcept {
-  static constexpr unsigned kTable[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  if (m < 1u || m > 12u) {
-    return 31u;
-  }
-  if (m == 2u) {
-    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
-    return leap ? 29u : 28u;
-  }
-  return kTable[m - 1u];
 }
 
 // Scans 1..`max_digits` ASCII digits from the head of `s`, writes the parsed

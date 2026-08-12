@@ -68,20 +68,10 @@ namespace eval {
 namespace financial_detail {
 namespace {
 
-// Last day-of-month for a given Gregorian (year, month) pair. Identical
-// to the helper in `coupon_schedule.cpp`; replicated here to keep this
-// TU's schedule walker self-contained.
-unsigned last_day_of_month(int y, unsigned m) noexcept {
-  static constexpr unsigned kTable[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  if (m < 1u || m > 12u) {
-    return 31u;
-  }
-  if (m == 2u) {
-    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
-    return leap ? 29u : 28u;
-  }
-  return kTable[m - 1u];
-}
+// Calendar day-count helpers shared with the COUP* engine and the date
+// builtins; see `eval/date_time.h`.
+using date_time::basis_days_between;
+using date_time::days_in_month;
 
 // Constructs the serial for (y, m, anchor_day), clamping the day to the
 // target month's last day when shorter. Matches the COUP* engine's
@@ -89,7 +79,7 @@ unsigned last_day_of_month(int y, unsigned m) noexcept {
 // three months backward, we land on May-31; six months -> Feb-28 (or
 // Feb-29 in a leap year).
 double quasi_serial(int y, unsigned m, unsigned anchor_day) noexcept {
-  const unsigned last = last_day_of_month(y, m);
+  const unsigned last = days_in_month(y, m);
   const unsigned d = anchor_day > last ? last : anchor_day;
   return date_time::serial_from_ymd(y, m, d);
 }
@@ -106,22 +96,6 @@ void shift_months_back(int& y, unsigned& m, int months) noexcept {
   }
   y += static_cast<int>(year_shift);
   m = static_cast<unsigned>(rem + 1);
-}
-
-// Basis-adjusted days-between-two-serials. `a <= b`. The 30/360 bases
-// decompose each serial via `ymd_from_serial` and apply the NASD / EU
-// day-count rules (multiplied by 360 to match the integer day-count
-// output the COUP* engine produces); bases 1, 2, 3 use raw serial
-// difference. Identical to the helper in `coupon_schedule.cpp`.
-double basis_days_between(double a, double b, int basis) noexcept {
-  if (basis == 0 || basis == 4) {
-    const date_time::YMD ya = date_time::ymd_from_serial(a);
-    const date_time::YMD yb = date_time::ymd_from_serial(b);
-    const double yf = basis == 0 ? date_time::yearfrac_us30_360(ya.y, ya.m, ya.d, yb.y, yb.m, yb.d)
-                                 : date_time::yearfrac_eu30_360(ya.y, ya.m, ya.d, yb.y, yb.m, yb.d);
-    return yf * 360.0;
-  }
-  return b - a;
 }
 
 // Period length E for the basis. Bases 0/2/4 use 360/freq; basis 3

@@ -238,6 +238,30 @@ HMS hms_from_fraction(double serial) noexcept {
   return HMS{h, m, s};
 }
 
+unsigned days_in_month(int y, unsigned m) noexcept {
+  static constexpr unsigned kTable[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (m < 1u || m > 12u) {
+    return 31u;
+  }
+  if (m == 2u) {
+    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+    return leap ? 29u : 28u;
+  }
+  return kTable[m - 1u];
+}
+
+double basis_days_between(double a, double b, int basis) noexcept {
+  if (basis == 0 || basis == 4) {
+    const YMD ya = ymd_from_serial(a);
+    const YMD yb = ymd_from_serial(b);
+    const double yf = basis == 0 ? yearfrac_us30_360(ya.y, ya.m, ya.d, yb.y, yb.m, yb.d)
+                                 : yearfrac_eu30_360(ya.y, ya.m, ya.d, yb.y, yb.m, yb.d);
+    return yf * 360.0;
+  }
+  // Bases 1, 2, 3: actual days.
+  return b - a;
+}
+
 }  // namespace date_time
 }  // namespace eval
 }  // namespace formulon

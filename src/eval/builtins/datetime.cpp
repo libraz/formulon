@@ -45,9 +45,12 @@ namespace {
 //     number, and rejects negative values as `#NUM!`. The returned value
 //     is the raw serial (fractional part intact); callers floor it
 //     themselves when only the date component is relevant.
-//   * `days_in_month` returns the last valid day-of-month for a given
-//     (year, month) pair, respecting the Gregorian leap rule. Used by
-//     EDATE / EOMONTH when clamping the day field after a month shift.
+//   * `days_in_month` (from `eval/date_time.h`) returns the last valid
+//     day-of-month for a given (year, month) pair, respecting the Gregorian
+//     leap rule. Used by EDATE / EOMONTH when clamping the day field after
+//     a month shift.
+using date_time::days_in_month;
+
 // Excel's maximum serial value: 2958465 = 9999-12-31. Serial 2958466 would
 // map to 10000-01-01 which is outside the representable range.
 constexpr double kExcelMaxSerial = 2958465.0;
@@ -101,18 +104,6 @@ Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v) {
     return serial.error();
   }
   return date_time::hms_from_fraction(serial.value());
-}
-
-unsigned days_in_month(int y, unsigned m) noexcept {
-  static constexpr unsigned kTable[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  if (m < 1u || m > 12u) {
-    return 31u;  // Defensive; callers always normalise first.
-  }
-  if (m == 2u) {
-    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
-    return leap ? 29u : 28u;
-  }
-  return kTable[m - 1u];
 }
 
 /// DATE(year, month, day). Each argument is truncated (Excel floors toward

@@ -45,6 +45,12 @@ struct HMS {
   unsigned s;
 };
 
+/// Last valid day-of-month for a Gregorian (year, month) pair, under the
+/// Gregorian leap rule. Months outside `[1, 12]` return 31 rather than
+/// asserting: every caller normalises first, and the fallback keeps a
+/// mis-normalised month from clamping a date it should have rolled over.
+unsigned days_in_month(int y, unsigned m) noexcept;
+
 /// Converts a Gregorian (y, m, d) to days since 1970-01-01.
 ///
 /// Accepts any `y` and any `m` / `d`; out-of-range months/days are normalised
@@ -113,6 +119,14 @@ double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, 
 /// otherwise. This produces integer-valued results on exact anniversary
 /// spans.
 double yearfrac_actual_actual(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept;
+
+/// Days between two Excel serials under a day-count `basis`, with `a <= b`.
+///
+/// Bases 0 and 4 (the 30/360 family) decompose both serials and apply the
+/// NASD / EU day-count rules, scaled by 360 so the result is the integer day
+/// count Excel reports for COUPDAYBS / COUPDAYSNC. Bases 1, 2 and 3 are
+/// actual-day conventions and use the raw serial difference.
+double basis_days_between(double a, double b, int basis) noexcept;
 
 }  // namespace date_time
 }  // namespace eval
