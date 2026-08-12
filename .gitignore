@@ -84,6 +84,7 @@ Thumbs.db
 # AI / Agent tools
 .codex/
 .claude/
+.codehelion/
 .serena/
 .wrangler/
 .act/
