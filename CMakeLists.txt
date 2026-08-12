@@ -211,6 +211,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/cell_evaluator.cpp
   src/eval/adhoc_eval.cpp
   src/eval/scheduler.cpp
+  src/eval/spill_release.cpp
   src/eval/volatile_tracker.cpp
   src/eval/function_registry.cpp
   src/eval/special_forms_catalog.cpp
