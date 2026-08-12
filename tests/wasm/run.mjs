@@ -1,7 +1,7 @@
 //
 // Node-based smoke tests for the Formulon WASM bundle.
 //
-// Loads `build-wasm/formulon.js` (the Emscripten ES-module factory),
+// Loads `build-wasm/formulon.js` (or FORMULON_WASM_BUILD_DIR when set),
 // exercises every embind export at least once, and exits 1 with a
 // descriptive message on any failure.
 //
@@ -41,7 +41,8 @@ const PIVOT = Object.freeze({
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const moduleUrl = path.resolve(__dirname, '..', '..', 'build-wasm', 'formulon.js');
+const wasmBuildDir = process.env.FORMULON_WASM_BUILD_DIR ?? 'build-wasm';
+const moduleUrl = path.resolve(__dirname, '..', '..', wasmBuildDir, 'formulon.js');
 
 const utf8 = new TextEncoder();
 let crcTable = null;
@@ -605,14 +606,13 @@ async function run() {
       } finally {
         loaded.delete();
       }
-      const droppedLoaded = Module.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/dropped.unknown'));
+      const preservedLoaded = Module.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
       try {
-        const dropped = droppedLoaded.xlsbReadDiagnostics();
-        assert.ok(dropped.status.ok, `dropped-part diagnostics failed: ${JSON.stringify(dropped.status)}`);
-        // Unknown package parts are retained as passthrough data.
-        assert.equal(dropped.droppedPartCount, 0);
+        const preserved = preservedLoaded.xlsbReadDiagnostics();
+        assert.ok(preserved.status.ok, `passthrough diagnostics failed: ${JSON.stringify(preserved.status)}`);
+        assert.equal(preserved.droppedPartCount, 0);
       } finally {
-        droppedLoaded.delete();
+        preservedLoaded.delete();
       }
       const invalidSave = wb.saveExWithDiagnostics(0);
       assert.ok(!invalidSave.status.ok, `unknown format unexpectedly succeeded: ${JSON.stringify(invalidSave)}`);

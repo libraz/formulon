@@ -188,7 +188,7 @@ test-wasm:
 	  echo "test-wasm: '$(NODE)' not found"; \
 	  exit 1; \
 	fi
-	$(NODE) tests/wasm/run.mjs
+	FORMULON_WASM_BUILD_DIR="$(WASM_BUILD_DIR)" $(NODE) tests/wasm/run.mjs
 
 # -- npm packaging targets ------------------------------------------------
 # `make npm-package` -> stage build-wasm/formulon.{js,wasm} + the

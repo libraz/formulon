@@ -720,9 +720,9 @@ class XlsbDiagnosticsTests(unittest.TestCase):
                 self.assertEqual(read.undecoded_defined_name_count, 0)
                 self.assertEqual(read.dropped_part_count, 0)
 
-            with Workbook.load(_append_empty_zip_entry(xlsb.bytes, "xl/dropped.bin")) as dropped_loaded:
-                dropped = dropped_loaded.xlsb_read_diagnostics()
-                self.assertEqual(dropped.dropped_part_count, 1)
+            with Workbook.load(_append_empty_zip_entry(xlsb.bytes, "xl/preserved.bin")) as preserved_loaded:
+                preserved = preserved_loaded.xlsb_read_diagnostics()
+                self.assertEqual(preserved.dropped_part_count, 0)
 
     def test_diagnostic_scratch_is_freed_when_a_later_allocation_fails(self) -> None:
         with Workbook.create_default() as wb:

@@ -870,11 +870,11 @@ test('saveExWithDiagnostics() reports counters and xlsbReadDiagnostics keeps a s
   assert.equal(read.undecodedFormulaCount, 0);
   assert.equal(read.undecodedDefinedNameCount, 0);
   assert.equal(read.droppedPartCount, 0);
-  const droppedLoaded = mod.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/dropped.bin'));
-  const dropped = droppedLoaded.xlsbReadDiagnostics();
-  assert.ok(dropped.status.ok, JSON.stringify(dropped.status));
-  assert.equal(dropped.droppedPartCount, 1);
-  droppedLoaded.dispose();
+  const preservedLoaded = mod.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
+  const preserved = preservedLoaded.xlsbReadDiagnostics();
+  assert.ok(preserved.status.ok, JSON.stringify(preserved.status));
+  assert.equal(preserved.droppedPartCount, 0);
+  preservedLoaded.dispose();
   const invalidSave = wb.saveExWithDiagnostics(0);
   assert.ok(!invalidSave.status.ok, JSON.stringify(invalidSave));
   assert.equal(invalidSave.bytes, null);
