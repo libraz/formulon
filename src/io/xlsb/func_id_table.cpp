@@ -3,12 +3,13 @@
 // flat `constexpr` array sorted by id, so a binary search lands the row
 // in O(log N) without `<map>` / `<unordered_map>`.
 //
-// Coverage policy: the table includes the classic Excel function set
-// up to id ~0x17F whose ids are documented in [MS-XLS] §2.5.198.17
-// (Cetab) and [MS-XLSB] §2.5.97.74. The Reader surfaces `#NAME?` for
-// any id missing from this table, so the table can grow incrementally
-// as additional names are needed; we deliberately do not pad it out
-// with guessed ids.
+// Coverage policy: every row is either an id documented in [MS-XLS]
+// §2.5.198.17 (Cetab) / [MS-XLSB] §2.5.97.74, or an id decoded from the
+// Ptg stream of an Excel-produced workbook. The Reader surfaces `#NAME?`
+// for any id missing from this table, so the table can grow
+// incrementally as additional names are needed; we deliberately do not
+// pad it out with guessed ids, because a wrong id substitutes a
+// different function in both directions.
 
 #include "io/xlsb/func_id_table.h"
 
@@ -26,7 +27,7 @@ namespace {
 /// Sentinel for "no documented upper bound" used by variadic functions.
 constexpr std::uint8_t kVariadicMax = 255;
 
-constexpr std::size_t kEntriesCountConst = 268;
+constexpr std::size_t kEntriesCountConst = 357;
 using FuncEntryArray = std::array<XlsbFuncEntry, kEntriesCountConst>;
 
 constexpr FuncEntryArray kEntries = {{
@@ -176,7 +177,7 @@ constexpr FuncEntryArray kEntries = {{
     {212, "ROUNDUP", 2, 2, false},
     {213, "ROUNDDOWN", 2, 2, false},
     {214, "ASC", 1, 1, false},
-    {215, "JIS", 1, 1, false},
+    {215, "DBCS", 1, 1, false},
     {216, "RANK", 2, 3, true},
     {219, "ADDRESS", 2, 5, true},
     {220, "DAYS360", 2, 3, true},
@@ -294,10 +295,107 @@ constexpr FuncEntryArray kEntries = {{
     {377, "ROUNDBAHTUP", 1, 1, false},
     {378, "THAIYEAR", 1, 1, false},
     {379, "RTD", 2, kVariadicMax, true},
+    // ---- Analysis ToolPak functions Excel 2007 made native ---------------
+    // These ids were decoded from the `PtgFunc` / `PtgFuncVar` tokens of an
+    // Excel-365-produced workbook (`tests/fixtures/excel/xlsb_func_ids.xlsb`,
+    // one probe formula per function per arity); the harvester that produced
+    // it is `tools/dev/xlsb_func_id_harvest.py`. A row is fixed-arity
+    // (`variadic = false`) exactly when Excel encoded the call as `PtgFunc`,
+    // in which case `arg_min` is the arity Excel accepted -- the Reader pops
+    // that many operands for such a call.
+    {384, "HEX2BIN", 1, 2, true},
+    {385, "HEX2DEC", 1, 1, false},
+    {386, "HEX2OCT", 1, 2, true},
+    {387, "DEC2BIN", 1, 2, true},
+    {388, "DEC2HEX", 1, 2, true},
+    {389, "DEC2OCT", 1, 2, true},
+    {390, "OCT2BIN", 1, 2, true},
+    {391, "OCT2HEX", 1, 2, true},
+    {392, "OCT2DEC", 1, 1, false},
+    {393, "BIN2DEC", 1, 1, false},
+    {394, "BIN2OCT", 1, 2, true},
+    {395, "BIN2HEX", 1, 2, true},
+    {396, "IMSUB", 2, 2, false},
+    {397, "IMDIV", 2, 2, false},
+    {398, "IMPOWER", 2, 2, false},
+    {399, "IMABS", 1, 1, false},
+    {400, "IMSQRT", 1, 1, false},
+    {401, "IMLN", 1, 1, false},
+    {402, "IMLOG2", 1, 1, false},
+    {403, "IMLOG10", 1, 1, false},
+    {404, "IMSIN", 1, 1, false},
+    {405, "IMCOS", 1, 1, false},
+    {406, "IMEXP", 1, 1, false},
+    {407, "IMARGUMENT", 1, 1, false},
+    {408, "IMCONJUGATE", 1, 1, false},
+    {409, "IMAGINARY", 1, 1, false},
+    {410, "IMREAL", 1, 1, false},
+    {411, "COMPLEX", 2, 3, true},
+    {412, "IMSUM", 1, kVariadicMax, true},
+    {413, "IMPRODUCT", 1, kVariadicMax, true},
+    {414, "SERIESSUM", 4, 4, false},
+    {415, "FACTDOUBLE", 1, 1, false},
+    {416, "SQRTPI", 1, 1, false},
+    {417, "QUOTIENT", 2, 2, false},
+    {418, "DELTA", 1, 2, true},
+    {419, "GESTEP", 1, 2, true},
+    {420, "ISEVEN", 1, 1, false},
+    {421, "ISODD", 1, 1, false},
+    {422, "MROUND", 2, 2, false},
+    {423, "ERF", 1, 2, true},
+    {424, "ERFC", 1, 1, false},
+    {425, "BESSELJ", 2, 2, false},
+    {426, "BESSELK", 2, 2, false},
+    {427, "BESSELY", 2, 2, false},
+    {428, "BESSELI", 2, 2, false},
+    {429, "XIRR", 2, 3, true},
+    {430, "XNPV", 3, 3, false},
+    {431, "PRICEMAT", 5, 6, true},
+    {432, "YIELDMAT", 5, 6, true},
+    {433, "INTRATE", 4, 5, true},
+    {434, "RECEIVED", 4, 5, true},
+    {435, "DISC", 4, 5, true},
+    {436, "PRICEDISC", 4, 5, true},
+    {437, "YIELDDISC", 4, 5, true},
+    {438, "TBILLEQ", 3, 3, false},
+    {439, "TBILLPRICE", 3, 3, false},
+    {440, "TBILLYIELD", 3, 3, false},
+    {441, "PRICE", 6, 7, true},
+    {442, "YIELD", 6, 7, true},
+    {443, "DOLLARDE", 2, 2, false},
+    {444, "DOLLARFR", 2, 2, false},
+    {445, "NOMINAL", 2, 2, false},
+    {446, "EFFECT", 2, 2, false},
+    {447, "CUMPRINC", 6, 6, false},
+    {448, "CUMIPMT", 6, 6, false},
     {449, "EDATE", 2, 2, false},
     {450, "EOMONTH", 2, 2, false},
+    {451, "YEARFRAC", 2, 3, true},
+    {452, "COUPDAYBS", 3, 4, true},
+    {453, "COUPDAYS", 3, 4, true},
+    {454, "COUPDAYSNC", 3, 4, true},
+    {455, "COUPNCD", 3, 4, true},
+    {456, "COUPNUM", 3, 4, true},
+    {457, "COUPPCD", 3, 4, true},
+    {458, "DURATION", 5, 6, true},
+    {459, "MDURATION", 5, 6, true},
+    {460, "ODDLPRICE", 7, 8, true},
+    {461, "ODDLYIELD", 7, 8, true},
+    {462, "ODDFPRICE", 8, 9, true},
+    {463, "ODDFYIELD", 8, 9, true},
+    {464, "RANDBETWEEN", 2, 2, false},
+    {465, "WEEKNUM", 1, 2, true},
+    {466, "AMORDEGRC", 6, 7, true},
+    {467, "AMORLINC", 6, 7, true},
+    {468, "CONVERT", 3, 3, false},
+    {469, "ACCRINT", 6, 8, true},
+    {470, "ACCRINTM", 4, 5, true},
     {471, "WORKDAY", 2, 3, true},
     {472, "NETWORKDAYS", 2, 3, true},
+    {473, "GCD", 1, kVariadicMax, true},
+    {474, "MULTINOMIAL", 1, kVariadicMax, true},
+    {475, "LCM", 1, kVariadicMax, true},
+    {476, "FVSCHEDULE", 2, 2, false},
     {480, "IFERROR", 2, 2, false},
     {481, "COUNTIFS", 2, kVariadicMax, true},
     {482, "SUMIFS", 3, kVariadicMax, true},
@@ -317,6 +415,12 @@ constexpr bool TableIsSortedById() {
 }
 
 static_assert(TableIsSortedById(), "kEntries must be sorted by id");
+
+// A name Excel accepts but never stores (the ja-JP formula bar's `JIS`
+// for `DBCS`) is resolved by `io::canonical_function_name` before it
+// reaches this table, so both persistence paths agree on the callee and
+// there is exactly one place aliases are enumerated. This table stays a
+// pure id <-> stored-name mapping.
 
 /// ASCII upper-case fold for case-insensitive name lookup. Excel names
 /// are ASCII so a `std::toupper`-equivalent is sufficient.

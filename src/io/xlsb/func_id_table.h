@@ -64,6 +64,12 @@ const XlsbFuncEntry* lookup_func_by_id(std::uint16_t id);
 /// Returns the table row whose `name` matches case-insensitively, or
 /// `nullptr` when no row matches. Linear scan — the lookup is rare
 /// (Writer side) and the table is small.
+///
+/// Rows carry the name Excel stores. A spelling Excel accepts without
+/// storing it (the ja-JP formula bar's `JIS` for `DBCS`) is resolved by
+/// `io::canonical_function_name` before it reaches this table, so both
+/// persistence paths look up the same callee and this mapping stays a
+/// one-to-one id <-> name relation in both directions.
 const XlsbFuncEntry* lookup_func_by_name(std::string_view name);
 
 }  // namespace xlsb

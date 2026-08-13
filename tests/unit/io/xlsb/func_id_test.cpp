@@ -43,7 +43,7 @@ TEST(XlsbFuncId, Post2007BuiltinIdsResolveToExpectedNames) {
     const char* name;
   };
   const Pair cases[] = {
-      {214, "ASC"},     {215, "JIS"},         {449, "EDATE"},      {450, "EOMONTH"},
+      {214, "ASC"},     {215, "DBCS"},        {449, "EDATE"},      {450, "EOMONTH"},
       {471, "WORKDAY"}, {472, "NETWORKDAYS"}, {480, "IFERROR"},    {481, "COUNTIFS"},
       {482, "SUMIFS"},  {483, "AVERAGEIF"},   {484, "AVERAGEIFS"},
   };
@@ -73,6 +73,38 @@ TEST(XlsbFuncId, NameLookupRoundTripsIds) {
   const XlsbFuncEntry* sum_lower = lookup_func_by_name("sum");
   ASSERT_NE(sum_lower, nullptr);
   EXPECT_EQ(sum_lower->id, 4);
+}
+
+TEST(XlsbFuncId, TableCarriesTheNameExcelStores) {
+  // Excel localises the formula bar but not the file: the ja-JP UI
+  // spells `DBCS` as `JIS`, and both containers store `DBCS` with
+  // function id 215. The table therefore carries `DBCS` only — the
+  // localised spelling is resolved by `io::canonical_function_name`
+  // before either writer looks anything up, so this table stays a
+  // one-to-one id <-> stored-name mapping.
+  const XlsbFuncEntry* by_stored_name = lookup_func_by_name("DBCS");
+  ASSERT_NE(by_stored_name, nullptr);
+  EXPECT_EQ(by_stored_name->id, 215);
+
+  const XlsbFuncEntry* by_id = lookup_func_by_id(215);
+  ASSERT_NE(by_id, nullptr);
+  EXPECT_STREQ(by_id->name, "DBCS");
+
+  EXPECT_EQ(lookup_func_by_name("JIS"), nullptr);
+}
+
+TEST(XlsbFuncId, EveryRowRoundTripsByNameAndById) {
+  // Nothing may make one row's name resolve to another row's id, in
+  // either direction.
+  for (std::size_t i = 0; i < kXlsbFuncEntryCount; ++i) {
+    const XlsbFuncEntry& row = kXlsbFuncEntries[i];
+    const XlsbFuncEntry* by_name = lookup_func_by_name(row.name);
+    ASSERT_NE(by_name, nullptr) << row.name;
+    EXPECT_EQ(by_name->id, row.id) << row.name;
+    const XlsbFuncEntry* by_id = lookup_func_by_id(row.id);
+    ASSERT_NE(by_id, nullptr) << row.id;
+    EXPECT_STREQ(by_id->name, row.name);
+  }
 }
 
 TEST(XlsbFuncId, UnknownIdReturnsNull) {
