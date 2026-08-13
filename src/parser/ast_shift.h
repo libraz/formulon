@@ -2,7 +2,7 @@
 // Reference-rewriting transforms over an `AstNode` tree.
 //
 // `shift_refs` walks the AST and returns a new tree in which every
-// reference (Ref, SpillRef, ExternalRef, range endpoints inside RangeOp)
+// reference (Ref, SpillRef, Ref3D, range endpoints inside RangeOp)
 // has been mapped through the supplied `RefTransform`. Non-reference
 // subtrees are forwarded unchanged when no descendant rewrites occur, so
 // the cost of an identity walk is bounded by the size of the input.
@@ -42,10 +42,8 @@ namespace parser {
 /// Generic reference-rewriting policy for `shift_refs`.
 ///
 /// Implementations override `apply` for the common case (sheet-local cell
-/// references and the inner cell of an external ref). `apply_external` may
-/// be overridden separately when the transform needs to react to the
-/// external sheet field (which lives outside `Reference.sheet`); the
-/// default implementation forwards to `apply`.
+/// references). The `apply_range` and `apply_ref3d_span` hooks below cover
+/// the shapes whose payload is not a single `Reference`.
 class RefTransform {
  public:
   virtual ~RefTransform() = default;
@@ -84,26 +82,6 @@ class RefTransform {
     std::string_view end;
   };
   virtual std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const;
-
-  /// Hook for `ExternalRef` payloads. The default forwards to `apply`,
-  /// which is sufficient for transforms that only manipulate row / column
-  /// indices. Sheet-structure transforms can override this to keep external
-  /// references opaque or to apply a workbook-specific policy.
-  ///
-  /// `book_id` and `sheet` are passed for context; transforms may inspect
-  /// them but the return value is just the rewritten cell.
-  virtual std::optional<Reference> apply_external(std::uint32_t book_id, std::string_view sheet,
-                                                  const Reference& cell) const;
-
-  /// Optional hook to rewrite the external-ref sheet field. Returning
-  /// `std::nullopt` means "leave the sheet unchanged"; returning a string
-  /// view replaces it. The walker is responsible for interning the new
-  /// sheet name into the AST arena. This hook applies only to
-  /// `ExternalRef`; workbook-local `Ref3D` endpoints use `apply_ref3d_span`
-  /// above.
-  ///
-  /// The default implementation does nothing.
-  virtual std::optional<std::string_view> transform_external_sheet(std::uint32_t book_id, std::string_view sheet) const;
 };
 
 /// Walks `root` and produces a new tree with every reference rewritten via

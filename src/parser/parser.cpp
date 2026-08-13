@@ -112,9 +112,8 @@ int InfixBindingPower(TokenKind kind, int* right_bp) noexcept {
 }
 
 bool is_range_endpoint_kind(NodeKind kind) noexcept {
-  return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::ExternalRef ||
-         kind == NodeKind::StructuredRef || kind == NodeKind::RangeOp || kind == NodeKind::Call ||
-         kind == NodeKind::ErrorPlaceholder;
+  return kind == NodeKind::Ref || kind == NodeKind::NameRef || kind == NodeKind::StructuredRef ||
+         kind == NodeKind::RangeOp || kind == NodeKind::Call || kind == NodeKind::ErrorPlaceholder;
 }
 
 // Maps a binary token kind to its `BinOp` enum value.
@@ -830,9 +829,8 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
     // must still parse as two separate atoms with the whitespace dropped.
     if (kind == TokenKind::Whitespace) {
       const NodeKind lk = lhs->kind();
-      const bool lhs_ref_shaped = lk == NodeKind::Ref || lk == NodeKind::RangeOp || lk == NodeKind::ExternalRef ||
-                                  lk == NodeKind::NameRef || lk == NodeKind::StructuredRef || lk == NodeKind::Call ||
-                                  lk == NodeKind::IntersectOp;
+      const bool lhs_ref_shaped = lk == NodeKind::Ref || lk == NodeKind::RangeOp || lk == NodeKind::NameRef ||
+                                  lk == NodeKind::StructuredRef || lk == NodeKind::Call || lk == NodeKind::IntersectOp;
       if (!lhs_ref_shaped) {
         // Treat the retained whitespace as layout: drop it and continue.
         advance();
@@ -879,9 +877,8 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // reference RHS records `InvalidRange` but we still wrap the children
       // so siblings keep parsing.
       const NodeKind rk = rhs->kind();
-      if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::ExternalRef &&
-          rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp && rk != NodeKind::Call &&
-          rk != NodeKind::IntersectOp && rk != NodeKind::ErrorPlaceholder) {
+      if (rk != NodeKind::Ref && rk != NodeKind::NameRef && rk != NodeKind::StructuredRef && rk != NodeKind::RangeOp &&
+          rk != NodeKind::Call && rk != NodeKind::IntersectOp && rk != NodeKind::ErrorPlaceholder) {
         record_error_with_token(ParseErrorCode::InvalidRange, op_tok.range, op_tok.lexeme);
       }
       node = make_intersect_op(arena_, lhs, rhs);
@@ -953,11 +950,10 @@ AstNode* Parser::parse_atom(SyncContext ctx) {
       // identifier — i.e. a *bare* structured reference (`=[@col]`,
       // `=[col]`) or an external-book reference (`=[Book1.xlsx]Sheet1!A1`,
       // `=[1]Sheet1!A1`). Neither shape is supported: bare structured
-      // refs have no table to qualify against, and no parser path builds
-      // an `ExternalRef` AST node from source text at all (see
-      // `tokenizer.h`'s design-notes comment). Both surface
-      // `UnsupportedConstruct` (or `UnbalancedBrackets` if the bracket
-      // never closes).
+      // refs have no table to qualify against, and cross-workbook
+      // references are out of scope for the engine (see `tokenizer.h`'s
+      // design-notes comment). Both surface `UnsupportedConstruct` (or
+      // `UnbalancedBrackets` if the bracket never closes).
       //
       // Table-qualified structured refs (`=Table[col]`, `=Table[@col]`)
       // never reach this arm: they dispatch through `TokenKind::Ident`

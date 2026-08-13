@@ -39,14 +39,6 @@
 // re-extraction at the recalc-engine layer; this layer does not maintain
 // a live "table-shape" dep, matching how `RangeOp` is treated.
 //
-// External (cross-workbook) references contribute an opaque sentinel: the
-// referenced `book_id` is appended to `ExtractedDeps::external_book_ids`
-// (deduplicated). The cross-workbook cells are not enumerated because
-// their values live outside the dep graph today — the evaluator returns
-// `#NAME?` until the workbook registry can resolve external books — but
-// recording the link lets the recalc engine invalidate dependents when an
-// external link's stamp changes (consumer wiring is a separate task).
-//
 // LAMBDA bodies are not descended into here. Captures and parameter lookups
 // happen at evaluator time via the LET / LAMBDA name environment, so static
 // analysis of the body before binding would either over-approximate (treat
@@ -131,12 +123,6 @@ struct ThreeDSheetSpanDependency {
 /// `is_volatile` is true only when any function-call node in the AST names
 /// one of the nine Excel Volatile functions. Full-row / full-column refs use
 /// `range_deps` instead.
-/// `external_book_ids` is the deduplicated list of external workbook ids
-/// (`[N]Book!Sheet!A1`) the formula references. Order matches first
-/// encounter during the walk. The recalc engine consumes this list to
-/// invalidate dependents when an external link's stamp changes; today the
-/// evaluator returns `#NAME?` for ExternalRef nodes, so the field is
-/// forward-compatible plumbing.
 struct ExtractedDeps {
   std::vector<CellNodeId> cell_deps;
   std::vector<CellRangeDependency> range_deps;
@@ -144,7 +130,6 @@ struct ExtractedDeps {
   /// nodes, including those reached through defined names / named Lambdas.
   std::vector<ThreeDSheetSpanDependency> three_d_spans;
   bool is_volatile = false;
-  std::vector<std::uint32_t> external_book_ids;
 };
 
 /// Walks `node` and reports the cell dependencies and volatility status of

@@ -148,22 +148,6 @@ void DumpInto(const AstNode& node, std::string& out) {
       out.append("#)");
       return;
 
-    case NodeKind::ExternalRef: {
-      out.append("(ext-ref [");
-      out.append(std::to_string(node.as_external_ref_book_id()));
-      out.append("] ");
-      out.append(node.as_external_ref_sheet());
-      out.push_back(' ');
-      // Inner cell ref is formatted without its sheet: external ref already
-      // exposes sheet as a separate field, so we strip it for the cell part.
-      Reference cell_no_sheet = node.as_external_ref_cell();
-      cell_no_sheet.sheet = {};
-      cell_no_sheet.sheet_quoted = false;
-      out.append(format_a1(cell_no_sheet));
-      out.push_back(')');
-      return;
-    }
-
     case NodeKind::Ref3D: {
       out.append("(ref3d ");
       out.append(node.as_ref3d_sheet_begin());

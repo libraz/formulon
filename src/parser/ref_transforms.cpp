@@ -41,15 +41,6 @@ std::optional<Reference> SheetRenameTransform::apply(const Reference& ref) const
   return out;
 }
 
-std::optional<Reference> SheetRenameTransform::apply_external(std::uint32_t /*book_id*/, std::string_view /*sheet*/,
-                                                              const Reference& cell) const {
-  // External-workbook references are opaque to a local-sheet rename. In
-  // particular, do not inspect the inner Reference's optional sheet field:
-  // it is still part of the external link's payload and does not identify a
-  // sheet in this workbook.
-  return cell;
-}
-
 std::optional<RefTransform::Ref3DSheetSpan> SheetRenameTransform::apply_ref3d_span(std::string_view begin,
                                                                                    std::string_view end) const {
   const std::string_view mapped_begin = remap_sheet(begin).value_or(begin);
@@ -83,13 +74,6 @@ std::optional<Reference> SheetRemovalTransform::apply(const Reference& ref) cons
     return std::nullopt;
   }
   return ref;
-}
-
-std::optional<Reference> SheetRemovalTransform::apply_external(std::uint32_t /*book_id*/, std::string_view /*sheet*/,
-                                                               const Reference& cell) const {
-  // External workbook links are not part of the pre-removal local sheet
-  // order, even if their payload happens to carry a matching display name.
-  return cell;
 }
 
 std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_span(std::string_view begin,

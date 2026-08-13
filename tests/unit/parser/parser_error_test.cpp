@@ -225,6 +225,27 @@ TEST(ParserErrors, UnbalancedBracketsForOpenStructuredRef) {
   EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnbalancedBrackets));
 }
 
+TEST(ParserErrors, ExternalWorkbookReferenceIsUnsupported) {
+  // Cross-workbook references are out of scope: a leading `[` with no
+  // qualifying table name is rejected as UnsupportedConstruct, and the
+  // parser recovers with a placeholder rather than bailing.
+  for (const char* src : {"=[1]Sheet1!A1", "=[Book1.xlsx]Sheet1!A1"}) {
+    Arena a;
+    Parser p(src, a);
+    const AstNode* root = p.parse();
+    ASSERT_NE(root, nullptr) << src;
+    EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnsupportedConstruct)) << src;
+  }
+}
+
+TEST(ParserErrors, UnbalancedBracketsForOpenExternalWorkbookReference) {
+  // The same atom arm reports UnbalancedBrackets when the `[` never closes.
+  Arena a;
+  Parser p("=[1", a);
+  (void)p.parse();
+  EXPECT_TRUE(HasErrorCode(p.errors(), ParseErrorCode::UnbalancedBrackets));
+}
+
 TEST(ParserErrors, BalancedStructuredRefParses) {
   // A balanced `Table[col]` is a structured (table) reference; the parser
   // produces a `NodeKind::StructuredRef` node and emits no error.

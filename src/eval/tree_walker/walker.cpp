@@ -477,10 +477,6 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       return eval_node(node.as_let_body(), arena, registry, body_ctx);
     }
 
-    // -- Unsupported: external names --------------------------------------
-    case parser::NodeKind::ExternalRef:
-      return Value::error(ErrorCode::Name);
-
     case parser::NodeKind::Ref3D: {
       // A 3-D reference (`Sheet2:Sheet3!A1`) denotes one cell across a span
       // of sheets — a range shape. In scalar context Excel cannot collapse

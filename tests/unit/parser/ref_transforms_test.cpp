@@ -125,15 +125,6 @@ TEST(SheetRenameTransform, RenameFromQuotedToBareDropsQuoting) {
   EXPECT_FALSE(out->sheet_quoted);
 }
 
-TEST(SheetRenameTransform, ExternalWorkbookReferenceIsOpaque) {
-  SheetRenameTransform t("Sheet1", "Renamed");
-  Reference cell;
-  cell.sheet = "Sheet1";
-  const std::optional<Reference> remapped = t.apply_external(/*book_id=*/1, "Sheet1", cell);
-  ASSERT_TRUE(remapped.has_value());
-  EXPECT_EQ(remapped->sheet, "Sheet1");
-}
-
 TEST(SheetRenameTransform, RemapSheetHelper) {
   SheetRenameTransform t("Sheet1", "Renamed");
   EXPECT_FALSE(t.remap_sheet("").has_value());
@@ -353,15 +344,6 @@ TEST(SheetRemovalTransform, RemovesOnlyTheQualifiedTarget) {
   EXPECT_FALSE(t.apply(MakeRef("bEtA", 0, 0)).has_value());
   EXPECT_TRUE(t.apply(MakeRef("Alpha", 0, 0)).has_value());
   EXPECT_TRUE(t.apply(MakeRef("", 0, 0)).has_value());
-}
-
-TEST(SheetRemovalTransform, ExternalWorkbookReferenceIsOpaque) {
-  const std::vector<std::string_view> order = {"Alpha", "Beta"};
-  SheetRemovalTransform t(order, /*removed_index=*/1);
-  Reference cell = MakeRef("Beta", 0, 0);
-  const std::optional<Reference> out = t.apply_external(/*book_id=*/7, "Beta", cell);
-  ASSERT_TRUE(out.has_value());
-  EXPECT_EQ(out->sheet, "Beta");
 }
 
 TEST(SheetRemovalTransform, MiddleSpanKeepsEndpoints) {

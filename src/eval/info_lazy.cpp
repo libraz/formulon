@@ -75,7 +75,6 @@ bool is_static_reference_shape(const parser::AstNode& node) noexcept {
   switch (node.kind()) {
     case parser::NodeKind::Ref:
     case parser::NodeKind::RangeOp:
-    case parser::NodeKind::ExternalRef:
     case parser::NodeKind::StructuredRef:
       return true;
     default:
@@ -472,7 +471,7 @@ Value eval_sheets_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Reference or range: MVP returns 1 (no 3D references yet). Errors
   // in the argument subtree still propagate if we evaluate.
   if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::RangeOp ||
-      arg.kind() == parser::NodeKind::ExternalRef || arg.kind() == parser::NodeKind::StructuredRef) {
+      arg.kind() == parser::NodeKind::StructuredRef) {
     return Value::number(1.0);
   }
   // Fall through: evaluate to surface errors, then reject non-references.

@@ -21,16 +21,13 @@
 //     small and lets the parser handle the context-sensitive grammar.
 //     Bare structured refs with no table name (`[@col]` on its own) are
 //     rejected by the parser as `UnsupportedConstruct`.
-//   * External book refs (`[Book1.xlsx]Sheet1!A1`, `[1]Sheet1!A1`) are
-//     tokenized as the same component punctuation, but — unlike
-//     structured refs — the parser does not reinterpret them into an
-//     `ExternalRef` AST node: no parser code path currently constructs
-//     one from source text (the `NodeKind::ExternalRef` consumers —
-//     `ast_dump`, `ast_format`, `ast_shift` — exist for nodes built
-//     programmatically, e.g. via the C API, but not for this syntax).
-//     An external book ref in formula text falls through to the same
+//     Cross-workbook references (`[Book1.xlsx]Sheet1!A1`, `[1]Sheet1!A1`)
+//     tokenize as the same component punctuation and are likewise not
+//     reinterpreted: the engine evaluates a single workbook, so there is
+//     no AST node for them. Such a reference falls through to the same
 //     bare-bracket handling as an unqualified structured ref and is
-//     rejected as `UnsupportedConstruct`.
+//     rejected as `UnsupportedConstruct`. External link metadata found in
+//     a package is preserved separately (see `io/external_links.h`).
 //   * Column-only (`A:A`) and row-only (`1:1`) references: the lexer emits
 //     them as `Ident COLON Ident` and `Number COLON Number` respectively;
 //     the parser promotes the adjacent tokens to full range references.

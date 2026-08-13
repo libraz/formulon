@@ -195,17 +195,8 @@ TEST(AstDumpRef, FullColumnSheetQualified) {
 }
 
 // ---------------------------------------------------------------------------
-// External / structured / name refs
+// Structured / name refs
 // ---------------------------------------------------------------------------
-
-TEST(AstDumpExternalRef, FormatsBookSheetCell) {
-  Arena a;
-  Reference cell;
-  cell.col = 0;
-  cell.row = 0;
-  AstNode* n = make_external_ref(a, 1, "Sheet1", cell);
-  EXPECT_EQ(dump_sexpr(*n), "(ext-ref [1] Sheet1 A1)");
-}
 
 TEST(AstDumpStructuredRef, AtModifier) {
   Arena a;

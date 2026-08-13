@@ -98,90 +98,84 @@ enum class OpCode : std::uint8_t {
   /// payload as `LoadRef` but the VM expands the spill region.
   LoadSpillRef = 5,
 
-  /// `LoadExternalRef a=N(sheet) b=lo16(book_id)|hi16(refs index)` -- an
-  /// external workbook reference. The book id, sheet view, and cell
-  /// reference are split across pools to keep the operand budget within
-  /// 56 bits.
-  LoadExternalRef = 6,
-
   /// `LoadLet a=slot` -- push the value bound at LET slot `a`.
-  LoadLet = 7,
+  LoadLet = 6,
 
   /// `StoreLet a=slot` -- pop the top of stack and store it in LET slot
   /// `a`. Emitted as the second half of a `LetBinding` lowering.
-  StoreLet = 8,
+  StoreLet = 7,
 
   /// `LoadLambdaArg a=slot` -- push the lambda call argument bound at
   /// slot `a` of the active call frame.
-  LoadLambdaArg = 9,
+  LoadLambdaArg = 8,
 
   /// `Call a=N(name) b=arity` -- pop `arity` operands, look up
   /// `names[N]` in the function registry, push the result. Eager (Excel
   /// non-short-circuit) functions only.
-  Call = 10,
+  Call = 9,
 
   /// `CallLambda a=arity` -- pop `arity` operands plus a lambda value
   /// underneath them, push the result. The lambda value is the
   /// `arity+1`-th deepest stack slot.
-  CallLambda = 11,
+  CallLambda = 10,
 
   /// `BinaryOp a=op` -- pop two operands, apply binary operator
   /// `parser::BinOp(a)`, push the result. Operators include arithmetic,
   /// concat, and the six comparisons. Excel error propagation is the
   /// VM's responsibility.
-  BinaryOp = 12,
+  BinaryOp = 11,
 
   /// `UnaryOp a=op` -- pop one operand, apply `parser::UnaryOp(a)`,
   /// push the result.
-  UnaryOp = 13,
+  UnaryOp = 12,
 
   /// `Concat` -- pop two operands, push their `&` concatenation. Sugar
   /// for `BinaryOp(BinOp::Concat)` to keep `&` lowering cheap to detect.
-  Concat = 14,
+  Concat = 13,
 
   /// `MakeArray a=rows b=cols` -- pop `rows*cols` operands (row-major,
   /// last cell is top of stack) and push a single `Array` value.
-  MakeArray = 15,
+  MakeArray = 14,
 
   /// `MakeLambda a=N(name array start) b=lo16(param_count)|hi16(optional_count)` --
   /// build a closure value over the immediately following sub-bytecode
   /// body. The body bytes are spliced inline via a `Jump` so the parent
   /// stream skips over them at run time. Detailed encoding lives in
   /// `compile_lambda()`.
-  MakeLambda = 16,
+  MakeLambda = 15,
 
   /// `Union a=count` -- pop `count` operands and push a single union
   /// value (Excel comma operator inside ranges).
-  Union = 17,
+  Union = 16,
 
   /// `Intersect` -- pop two operands and push their intersection (Excel
   /// space operator).
-  Intersect = 18,
+  Intersect = 17,
 
   /// `ImplicitIntersection` -- pop one operand, apply Excel's `@`
   /// implicit-intersection coercion, push the result.
-  ImplicitIntersection = 19,
+  ImplicitIntersection = 18,
 
   /// `Jump target` -- unconditional branch to absolute instruction
   /// `target` (`a` field, encoded as 24-bit; for targets above 2^24 the
   /// compiler reports `kVmInstructionLimit`).
-  Jump = 20,
+  Jump = 19,
 
   /// `JumpIfFalse target` -- pop one operand. If it coerces to FALSE
   /// (Excel rules: zero-numeric / FALSE / empty becomes false; error
   /// propagates by leaving the value on the stack and skipping the
   /// branch -- the VM contract is documented in Bundle 5.2's vm.cpp),
   /// branch to `target`; otherwise fall through.
-  JumpIfFalse = 21,
+  JumpIfFalse = 20,
 
   /// `Return` -- terminate execution; top of stack is the result.
-  Return = 22,
+  Return = 21,
 
   /// `Halt` -- internal sentinel emitted at the end of every body so the
   /// VM never falls off the end of the instruction stream. Indistinct
   /// from `Return` for the reference VM but kept separate so optimiser
   /// passes can tell synthetic from user-emitted RETs.
-  Halt = 23,
+  Halt = 22,
 };
 
 /// Returns a stable textual mnemonic for `op`, useful for diagnostics.
@@ -200,8 +194,6 @@ constexpr const char* opcode_name(OpCode op) noexcept {
       return "LoadStructRef";
     case OpCode::LoadSpillRef:
       return "LoadSpillRef";
-    case OpCode::LoadExternalRef:
-      return "LoadExternalRef";
     case OpCode::LoadLet:
       return "LoadLet";
     case OpCode::StoreLet:
@@ -303,7 +295,7 @@ struct ByteCode {
   std::vector<std::string> names;
 
   /// Pool of references referenced by `LoadRef` / `LoadRange` /
-  /// `LoadSpillRef` / `LoadExternalRef`. The `sheet` view inside each
+  /// `LoadSpillRef`. The `sheet` view inside each
   /// `parser::Reference` borrows from `string_storage` so the
   /// `ByteCode` is fully self-contained.
   std::vector<parser::Reference> refs;

@@ -32,7 +32,6 @@ namespace parser {
 ///
 /// 3-D references store their sheet endpoints in a separate span slot. The
 /// dedicated `apply_ref3d_span` hook maps those workbook-local endpoint names.
-/// External-workbook references remain opaque and are not renamed.
 ///
 /// `old_name` and `new_name` must outlive the transform.
 class SheetRenameTransform final : public RefTransform {
@@ -45,8 +44,6 @@ class SheetRenameTransform final : public RefTransform {
   std::optional<std::string_view> remap_sheet(std::string_view sheet) const noexcept;
 
   std::optional<Reference> apply(const Reference& ref) const override;
-  std::optional<Reference> apply_external(std::uint32_t book_id, std::string_view sheet,
-                                          const Reference& cell) const override;
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
 
  private:
@@ -65,7 +62,6 @@ class SheetRenameTransform final : public RefTransform {
 /// duration of `shift_refs`. `removed_index` is an index into that order.
 /// Ordinary qualified references naming the removed sheet collapse to
 /// `#REF!`; local, unqualified references and references to other sheets are
-/// left untouched. External-workbook references are opaque and are always
 /// left untouched.
 ///
 /// For a 3-D span, removing a middle sheet leaves the textual endpoints
@@ -80,8 +76,6 @@ class SheetRemovalTransform final : public RefTransform {
   SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order, std::uint32_t removed_index);
 
   std::optional<Reference> apply(const Reference& ref) const override;
-  std::optional<Reference> apply_external(std::uint32_t book_id, std::string_view sheet,
-                                          const Reference& cell) const override;
   std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
 
  private:

@@ -46,7 +46,6 @@ TEST(OpcodeMeta, LoadOpcodesAreClassifiedLoad) {
   EXPECT_EQ(opcode_meta(OpCode::LoadName).cls, OpClass::Load);
   EXPECT_EQ(opcode_meta(OpCode::LoadStructRef).cls, OpClass::Load);
   EXPECT_EQ(opcode_meta(OpCode::LoadSpillRef).cls, OpClass::Load);
-  EXPECT_EQ(opcode_meta(OpCode::LoadExternalRef).cls, OpClass::Load);
   EXPECT_EQ(opcode_meta(OpCode::LoadLet).cls, OpClass::Load);
   EXPECT_EQ(opcode_meta(OpCode::LoadLambdaArg).cls, OpClass::Load);
   // The convenience predicate must agree.
@@ -120,9 +119,6 @@ TEST(OpcodeMeta, PoolReferencesMatchCompilerEncoding) {
   // Structured-ref packs the column-name index plus a modifier into `b`.
   EXPECT_EQ(opcode_meta(OpCode::LoadStructRef).a, OperandA::NamesIndex);
   EXPECT_EQ(opcode_meta(OpCode::LoadStructRef).b, OperandB::Packed);
-  // External ref packs book id + refs index into `b`.
-  EXPECT_EQ(opcode_meta(OpCode::LoadExternalRef).a, OperandA::NamesIndex);
-  EXPECT_EQ(opcode_meta(OpCode::LoadExternalRef).b, OperandB::Packed);
 }
 
 // Inline-tag operands carry small parser enums (BinOp / UnaryOp), not

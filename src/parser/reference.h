@@ -1,8 +1,8 @@
 //
 // `Reference` is the parser's structural representation of an A1-style cell
 // reference. It is shared by every node kind that needs to talk about a cell
-// or a range endpoint: `NodeKind::Ref`, `NodeKind::ExternalRef`, and the two
-// endpoints of `NodeKind::RangeOp`.
+// or a range endpoint: `NodeKind::Ref`, `NodeKind::SpillRef`, the cell tail of
+// `NodeKind::Ref3D`, and the two endpoints of `NodeKind::RangeOp`.
 //
 // The structure is layout-flat (no heap, no destructors) so it can live
 // directly inside an `AstNode` payload. String views point into arena-interned

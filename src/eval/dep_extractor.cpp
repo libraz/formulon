@@ -49,7 +49,6 @@ struct WalkState {
 
   ExtractedDeps* out;
   std::unordered_set<CellNodeId, CellNodeIdHash> seen;
-  std::unordered_set<std::uint32_t> seen_external_books;
   std::uint16_t current_sheet_id;
   const Workbook* workbook;
   Arena* name_arena;
@@ -93,8 +92,9 @@ bool resolve_sheet_id(const parser::Reference& ref, const WalkState& state, std:
   if (idx == static_cast<std::size_t>(-1)) {
     return false;
   }
-  // Sheet ids fit in uint16_t per CellNodeId; Excel allows at most a few
-  // thousand sheets in a workbook, well within range. Cast is safe.
+  // `idx` is below `sheet_count()`, which `Workbook::kMaxSheets` bounds at
+  // the 16-bit ceiling `CellNodeId::sheet_id` can address, so the narrowing
+  // keeps the index intact.
   *out_sheet_id = static_cast<std::uint16_t>(idx);
   return true;
 }
@@ -384,9 +384,10 @@ void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
   }
   const StructuredRefRange rect = std::move(rect_or).value();
 
-  // Sheet ids fit in uint16_t per CellNodeId; Excel allows at most a few
-  // thousand sheets per workbook, well within range. Reject defensively
-  // if the workbook's sheet index ever overflows.
+  // `Workbook::kMaxSheets` keeps every real sheet index inside the 16-bit
+  // `CellNodeId::sheet_id`. `rect` arrives from a resolved defined name, so
+  // the bound is re-checked rather than assumed: a rectangle that cannot be
+  // addressed contributes no edges instead of aliasing another sheet.
   if (rect.sheet_index > 0xFFFFu) {
     return;
   }
@@ -479,21 +480,6 @@ void walk(const parser::AstNode& node, WalkState& state) {
         return;
       }
       add_cell_dep(state, CellNodeId{sheet_id, ref.row, ref.col});
-      return;
-    }
-
-    case parser::NodeKind::ExternalRef: {
-      // Opaque-sentinel tracking: capture the referenced book id so the
-      // recalc engine can invalidate dependents when the external link's
-      // stamp changes. The cross-workbook cell is not flattened into a
-      // CellNodeId because external sheets live outside the dep graph
-      // (CellNodeId.sheet_id indexes the bound workbook). Today the
-      // evaluator returns `#NAME?` for ExternalRef so this is forward-
-      // compatible plumbing; consumer wiring is a separate task.
-      const std::uint32_t book_id = node.as_external_ref_book_id();
-      if (state.seen_external_books.insert(book_id).second) {
-        state.out->external_book_ids.push_back(book_id);
-      }
       return;
     }
 
@@ -719,7 +705,7 @@ ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sh
   // as long as this call so the parsed nodes never outlive the walk; the
   // caller-supplied `node` is unrelated and stays in its own arena.
   Arena name_arena;
-  WalkState state{&deps, {}, {}, current_sheet_id, &workbook, &name_arena, {}, {}, {}};
+  WalkState state{&deps, {}, current_sheet_id, &workbook, &name_arena, {}, {}, {}};
   walk(node, state);
   return deps;
 }

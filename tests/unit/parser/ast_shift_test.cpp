@@ -298,33 +298,6 @@ TEST(ShiftRefsWithSheetRename, RangeWithSheetRenamed) {
   EXPECT_EQ(format_formula(*shifted), "Renamed!A1:Renamed!B2");
 }
 
-TEST(ShiftRefsWithSheetRename, ExternalRefSheetIsUnchanged) {
-  // External refs are not parser-produceable; build the AST manually.
-  Arena arena;
-  Reference cell;
-  cell.col = 0;
-  cell.row = 0;
-  AstNode* ext = make_external_ref(arena, 1, "Sheet1", cell);
-  ASSERT_NE(ext, nullptr);
-  SheetRenameTransform transform("Sheet1", "Renamed");
-  const AstNode* shifted = shift_refs(*ext, arena, transform);
-  ASSERT_NE(shifted, nullptr);
-  EXPECT_EQ(shifted, ext) << "local sheet rename must not rewrite external-workbook references";
-  EXPECT_EQ(format_formula(*shifted), "[1]Sheet1!A1");
-}
-
-TEST(ShiftRefsWithSheetRename, ExternalRefUnrelatedSheetUnchanged) {
-  Arena arena;
-  Reference cell;
-  cell.col = 0;
-  cell.row = 0;
-  AstNode* ext = make_external_ref(arena, 1, "OtherSheet", cell);
-  ASSERT_NE(ext, nullptr);
-  SheetRenameTransform transform("Sheet1", "Renamed");
-  const AstNode* shifted = shift_refs(*ext, arena, transform);
-  EXPECT_EQ(shifted, ext) << "non-matching external sheet should be a no-op";
-}
-
 TEST(ShiftRefsWithSheetRename, RenamesBoth3DSpanEndpoints) {
   Arena arena;
   const AstNode* root = ParseOrNull("=SUM(Sheet1:Sheet2!A1:B2)", arena);
@@ -449,22 +422,13 @@ TEST(ShiftRefsWithSheetRemoval, UnresolvedSpanOutsideRemovalPreservesAstIdentity
   EXPECT_EQ(format_formula(*shifted), "SUM(Missing:Sheet3!A1)");
 }
 
-TEST(ShiftRefsWithSheetRemoval, StringLiteralAndExternalRefAreUntouched) {
+TEST(ShiftRefsWithSheetRemoval, StringLiteralIsUntouched) {
   const std::vector<std::string_view> order = {"Sheet1", "Sheet2"};
   Arena arena;
   const AstNode* literal = ParseOrNull("=\"Sheet2!A1\"", arena);
   ASSERT_NE(literal, nullptr);
   SheetRemovalTransform transform(order, /*removed_index=*/1);
   EXPECT_EQ(shift_refs(*literal, arena, transform), literal);
-
-  Reference cell;
-  cell.sheet = "Sheet2";
-  AstNode* external = make_external_ref(arena, 9, "Sheet2", cell);
-  ASSERT_NE(external, nullptr);
-  const AstNode* shifted = shift_refs(*external, arena, transform);
-  ASSERT_NE(shifted, nullptr);
-  EXPECT_EQ(shifted, external);
-  EXPECT_EQ(format_formula(*shifted), "[9]Sheet2!A1");
 }
 
 // ---------------------------------------------------------------------------

@@ -81,7 +81,6 @@ std::uint64_t ChildCount(const AstNode& node) {
     case NodeKind::Literal:
     case NodeKind::Ref:
     case NodeKind::SpillRef:
-    case NodeKind::ExternalRef:
     case NodeKind::Ref3D:
     case NodeKind::StructuredRef:
     case NodeKind::NameRef:
@@ -123,7 +122,6 @@ const AstNode& ChildAt(const AstNode& node, std::uint64_t index) {
     case NodeKind::Literal:
     case NodeKind::Ref:
     case NodeKind::SpillRef:
-    case NodeKind::ExternalRef:
     case NodeKind::Ref3D:
     case NodeKind::StructuredRef:
     case NodeKind::NameRef:
@@ -209,29 +207,9 @@ AstNode* make_spill_ref(Arena& arena, const Reference& r) {
   return n;
 }
 
-AstNode* make_external_ref(Arena& arena, std::uint32_t book_id, std::string_view sheet, const Reference& cell) {
-  // Heap-allocate the payload so the AstNode union stays small (see the size
-  // budget asserted in ast.h).
-  auto* payload = arena.create<AstNode::ExternalRefPayload>();
-  if (payload == nullptr) {
-    return nullptr;
-  }
-  payload->book_id = book_id;
-  payload->sheet = arena.intern(sheet);
-  payload->cell = cell;
-  payload->cell.sheet = arena.intern(cell.sheet);
-  AstNode* n = arena.create<AstNode>();
-  if (n == nullptr) {
-    return nullptr;
-  }
-  n->kind_ = NodeKind::ExternalRef;
-  n->data_.external_ref = payload;
-  return n;
-}
-
 AstNode* make_ref3d(Arena& arena, std::string_view sheet_begin, std::string_view sheet_end, const Reference& cell) {
   // Heap-allocate the payload so the AstNode union stays within its size
-  // budget, mirroring make_external_ref.
+  // budget (see the size budget asserted in ast.h).
   auto* payload = arena.create<AstNode::Ref3DPayload>();
   if (payload == nullptr) {
     return nullptr;
@@ -545,21 +523,6 @@ const Reference& AstNode::as_ref() const {
 const Reference& AstNode::as_spill_ref() const {
   FM_CHECK(kind_ == NodeKind::SpillRef, "AstNode::as_spill_ref on non-SpillRef");
   return data_.ref;
-}
-
-std::uint32_t AstNode::as_external_ref_book_id() const {
-  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_book_id on non-ExternalRef");
-  return data_.external_ref->book_id;
-}
-
-std::string_view AstNode::as_external_ref_sheet() const {
-  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_sheet on non-ExternalRef");
-  return data_.external_ref->sheet;
-}
-
-const Reference& AstNode::as_external_ref_cell() const {
-  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_cell on non-ExternalRef");
-  return data_.external_ref->cell;
 }
 
 std::string_view AstNode::as_ref3d_sheet_begin() const {

@@ -235,7 +235,7 @@ bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const Fun
     return resolve_reference_call(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
                                   out_right_col, &is_range_unused, out_err);
   }
-  // Anything else (NameRef, ExternalRef, BinaryOp, ArrayLiteral, etc.) is
+  // Anything else (NameRef, BinaryOp, ArrayLiteral, etc.) is
   // not a recognized range endpoint shape.
   *out_err = ErrorCode::Ref;
   return false;

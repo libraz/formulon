@@ -125,19 +125,6 @@ TEST(AstNodeRef, EscapesEmbeddedQuoteInSheetName) {
   EXPECT_EQ(format_a1(n->as_ref()), "'It''s'!A1");
 }
 
-TEST(AstNodeExternalRef, AccessorRoundtrips) {
-  Arena a;
-  Reference cell;
-  cell.col = 0;
-  cell.row = 0;
-  AstNode* n = make_external_ref(a, 7, "Sheet1", cell);
-  ASSERT_NE(n, nullptr);
-  EXPECT_EQ(n->kind(), NodeKind::ExternalRef);
-  EXPECT_EQ(n->as_external_ref_book_id(), 7u);
-  EXPECT_EQ(n->as_external_ref_sheet(), "Sheet1");
-  EXPECT_EQ(format_a1(n->as_external_ref_cell()), "A1");
-}
-
 TEST(AstNodeStructuredRef, AccessorRoundtripsWithColumn) {
   Arena a;
   AstNode* n = make_structured_ref(a, "Tbl", "Col", StructuredRefModifier::At);

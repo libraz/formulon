@@ -47,7 +47,7 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
                             const EvalContext& ctx);
 
 /// `ISREF(value)` — returns TRUE iff the argument AST is a reference
-/// shape (Ref / RangeOp / ExternalRef / StructuredRef / NameRef) or a
+/// shape (Ref / RangeOp / StructuredRef / NameRef) or a
 /// reference-returning call (INDIRECT / OFFSET / INDEX / CHOOSE) that
 /// evaluates without error. Returns FALSE for literals, arithmetic,
 /// and calls that produce a scalar Value. The predicate is lazy so a

@@ -39,7 +39,7 @@ namespace eval {
 enum class OpClass : std::uint8_t {
   /// Pushes a value computed from one or more pool entries
   /// (`LoadConst` / `LoadRef` / `LoadName` / `LoadStructRef` /
-  /// `LoadSpillRef` / `LoadExternalRef` / `LoadLet` / `LoadLambdaArg`).
+  /// `LoadSpillRef` / `LoadLet` / `LoadLambdaArg`).
   Load,
   /// Pops the top of stack and stores it into a slot (`StoreLet`).
   Store,
@@ -118,8 +118,6 @@ constexpr std::array<OpcodeMeta, kOpcodeTableSize> make_opcode_table() noexcept 
       OpcodeMeta{"LoadStructRef", OpClass::Load, OperandA::NamesIndex, OperandB::Packed};
   t[static_cast<std::size_t>(OpCode::LoadSpillRef)] =
       OpcodeMeta{"LoadSpillRef", OpClass::Load, OperandA::RefsIndex, OperandB::None};
-  t[static_cast<std::size_t>(OpCode::LoadExternalRef)] =
-      OpcodeMeta{"LoadExternalRef", OpClass::Load, OperandA::NamesIndex, OperandB::Packed};
   t[static_cast<std::size_t>(OpCode::LoadLet)] = OpcodeMeta{"LoadLet", OpClass::Load, OperandA::Slot, OperandB::None};
   t[static_cast<std::size_t>(OpCode::StoreLet)] =
       OpcodeMeta{"StoreLet", OpClass::Store, OperandA::Slot, OperandB::None};

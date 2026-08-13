@@ -453,14 +453,6 @@ Expected<Value, Error> dispatch(const ByteCode& bc, Arena& arena, const Function
         break;
       }
 
-      case OpCode::LoadExternalRef: {
-        // External workbook refs are not yet supported anywhere in the
-        // engine; mirror the tree-walker's `#NAME?` surfacing.
-        RETURN_IF_ERROR(push_value(s, Value::error(ErrorCode::Name)));
-        ++pc;
-        break;
-      }
-
       case OpCode::LoadLet: {
         if (ins.a >= s.let_slots.size()) {
           return make_vm_error(FormulonErrorCode::kVmLetSlotMissing, "LoadLet slot not populated");

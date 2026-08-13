@@ -13,8 +13,6 @@
 //     pinning the resulting rectangle on the table's owning sheet at
 //     extract time. Implicit-intersection (`Table[@Col]`), unknown
 //     tables, and unknown columns silently skip.
-//   * Capture ExternalRef book ids in `external_book_ids` (deduplicated,
-//     forward-compatible with future cross-workbook recalc wiring).
 //   * Skip Lambda body silently.
 //   * Descend into LET binding initialisers and the LET body, so refs and
 //     volatile calls inside either surface as deps.
@@ -987,104 +985,6 @@ TEST(DepExtractor, StructuredRefHeadersOnHeaderlessTableSilentSkip) {
   ExtractedDeps deps = extract_deps(*root, 0U, wb);
   EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
-}
-
-// ---------------------------------------------------------------------------
-// ExternalRef opaque-sentinel tracking
-// ---------------------------------------------------------------------------
-
-TEST(DepExtractor, ExternalRefRecordsBookId) {
-  Workbook wb = Workbook::create();
-  Arena arena;
-  parser::Reference cell{};
-  cell.row = 0U;
-  cell.col = 0U;
-  parser::AstNode* root = parser::make_external_ref(arena, /*book_id=*/3U, "Sheet1", cell);
-  ASSERT_NE(root, nullptr);
-
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  EXPECT_FALSE(deps.is_volatile);
-  EXPECT_TRUE(deps.cell_deps.empty());
-  ASSERT_EQ(deps.external_book_ids.size(), 1u);
-  EXPECT_EQ(deps.external_book_ids[0], 3u);
-}
-
-TEST(DepExtractor, ExternalRefDeduplicatesRepeatedBook) {
-  Workbook wb = Workbook::create();
-  Arena arena;
-  parser::Reference cell_a{};
-  cell_a.row = 0U;
-  cell_a.col = 0U;
-  parser::Reference cell_b{};
-  cell_b.row = 1U;
-  cell_b.col = 1U;
-  parser::AstNode* lhs = parser::make_external_ref(arena, /*book_id=*/2U, "Sheet1", cell_a);
-  parser::AstNode* rhs = parser::make_external_ref(arena, /*book_id=*/2U, "Sheet1", cell_b);
-  ASSERT_NE(lhs, nullptr);
-  ASSERT_NE(rhs, nullptr);
-  parser::AstNode* root = parser::make_binary_op(arena, parser::BinOp::Add, lhs, rhs);
-  ASSERT_NE(root, nullptr);
-
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  EXPECT_TRUE(deps.cell_deps.empty());
-  ASSERT_EQ(deps.external_book_ids.size(), 1u);
-  EXPECT_EQ(deps.external_book_ids[0], 2u);
-}
-
-TEST(DepExtractor, ExternalRefMultipleBooksPreservedInOrder) {
-  Workbook wb = Workbook::create();
-  Arena arena;
-  parser::Reference cell{};
-  cell.row = 0U;
-  cell.col = 0U;
-  parser::AstNode* a = parser::make_external_ref(arena, /*book_id=*/5U, "Sheet1", cell);
-  parser::AstNode* b = parser::make_external_ref(arena, /*book_id=*/1U, "Sheet1", cell);
-  parser::AstNode* root = parser::make_binary_op(arena, parser::BinOp::Add, a, b);
-  ASSERT_NE(root, nullptr);
-
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  ASSERT_EQ(deps.external_book_ids.size(), 2u);
-  // First-encounter order; the walker sees `a` (5) before `b` (1).
-  EXPECT_EQ(deps.external_book_ids[0], 5u);
-  EXPECT_EQ(deps.external_book_ids[1], 1u);
-}
-
-TEST(DepExtractor, ExternalRefDoesNotEnumerateCells) {
-  // ExternalRef must contribute zero CellNodeId entries — its sheet lives
-  // outside the workbook's sheet table, so a CellNodeId would index the
-  // wrong sheet. Combining with a local Ref lets us confirm only the local
-  // cell surfaces in cell_deps.
-  Workbook wb = Workbook::create();
-  Arena arena;
-  parser::Reference ext_cell{};
-  ext_cell.row = 5U;
-  ext_cell.col = 7U;
-  parser::AstNode* ext = parser::make_external_ref(arena, /*book_id=*/1U, "Sheet1", ext_cell);
-
-  parser::Reference b2{};
-  b2.row = 1U;
-  b2.col = 1U;
-  parser::AstNode* b2_node = parser::make_ref(arena, b2);
-  parser::AstNode* root = parser::make_binary_op(arena, parser::BinOp::Add, ext, b2_node);
-  ASSERT_NE(root, nullptr);
-
-  ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
-  ASSERT_EQ(deps.cell_deps.size(), 1u);
-  EXPECT_EQ(deps.cell_deps[0], (CellNodeId{0U, 1U, 1U}));
-  ASSERT_EQ(deps.external_book_ids.size(), 1u);
-  EXPECT_EQ(deps.external_book_ids[0], 1u);
-}
-
-TEST(DepExtractor, ExternalRefIsNotMarkedVolatile) {
-  // Capturing the book id is enough; the formula is not volatile in the
-  // RAND/NOW sense.
-  Workbook wb = Workbook::create();
-  Arena arena;
-  parser::Reference cell{};
-  parser::AstNode* root = parser::make_external_ref(arena, /*book_id=*/9U, "Sheet1", cell);
-  ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  EXPECT_FALSE(deps.is_volatile);
 }
 
 TEST(DepExtractor, RangeAcrossSheetQualifierOnLeft) {

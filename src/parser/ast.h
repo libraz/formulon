@@ -1,9 +1,9 @@
 //
 // Parser abstract syntax tree.
 //
-// `AstNode` is the parser's tagged-union output. The 18 `NodeKind` variants
-// cover every Excel 365 surface construct: literals, references (including
-// external workbook and structured table refs), unary/binary/range/union/
+// `AstNode` is the parser's tagged-union output. The `NodeKind` variants
+// cover every Excel 365 surface construct: literals, references (cell,
+// spilled-range, 3-D and structured table refs), unary/binary/range/union/
 // intersect operators, the `@` implicit-intersection wrapper, function calls,
 // inline array literals, `LAMBDA` and `LET` forms, immediately-invoked lambda
 // calls, source-level error literals such as `#DIV/0!`, and an
@@ -45,43 +45,43 @@ inline constexpr std::uint32_t kMaxFormulaAstDepth = 128;
 
 /// Discriminator tag for every AST variant.
 ///
-/// The numeric assignments are stable: switch tables in the dumper and (later)
-/// the compiler dispatch on these values, so do not reorder.
+/// The numeric values are an internal detail: the AST is never persisted and
+/// the tag is not exposed by any binding, so consumers must dispatch on the
+/// enumerator rather than on its integer value.
 enum class NodeKind : std::uint8_t {
   Literal = 0,
   Ref = 1,
-  ExternalRef = 2,
-  StructuredRef = 3,
-  NameRef = 4,
-  UnaryOp = 5,
-  BinaryOp = 6,
-  RangeOp = 7,
-  UnionOp = 8,
-  IntersectOp = 9,
-  ImplicitIntersection = 10,
-  Call = 11,
-  ArrayLiteral = 12,
-  Lambda = 13,
-  LetBinding = 14,
-  LambdaCall = 15,
-  ErrorLiteral = 16,
+  StructuredRef = 2,
+  NameRef = 3,
+  UnaryOp = 4,
+  BinaryOp = 5,
+  RangeOp = 6,
+  UnionOp = 7,
+  IntersectOp = 8,
+  ImplicitIntersection = 9,
+  Call = 10,
+  ArrayLiteral = 11,
+  Lambda = 12,
+  LetBinding = 13,
+  LambdaCall = 14,
+  ErrorLiteral = 15,
   /// Placeholder node installed by panic-mode recovery in place of a subtree
   /// whose parse failed. Carries no payload; `range_` is set to the failure
   /// site by the parser. Consumers (compiler, dumper) must treat this as an
   /// opaque sentinel and propagate `#NAME?` / `#REF!` semantics if reached.
-  ErrorPlaceholder = 17,
+  ErrorPlaceholder = 16,
   /// Spilled-range reference (Excel's postfix `#` operator, e.g. `=A1#`).
   /// Refers to "the entire spill region anchored at this cell". The payload
   /// is the anchor `Reference`; the evaluator resolves it via
   /// `Sheet::spill_region_at_anchor` and yields an `ArrayValue`. The anchor
   /// must be a single cell (the parser rejects `=A1:B2#`); whole-column /
   /// whole-row anchors are also rejected at parse time.
-  SpillRef = 18,
+  SpillRef = 17,
   /// Three-dimensional reference spanning a contiguous run of sheets
   /// (`Sheet2:Sheet3!A1`). The payload carries the two endpoint sheet
   /// names plus the (sheet-less) cell `Reference`; the evaluator expands
   /// it to one cell per sheet in the inclusive workbook-order span.
-  Ref3D = 19,
+  Ref3D = 18,
 };
 
 /// Binary operator catalog covering arithmetic, concat, and comparisons.
@@ -148,11 +148,6 @@ class AstNode final {
 
   // --- SpillRef ------------------------------------------------------------
   const Reference& as_spill_ref() const;
-
-  // --- ExternalRef ---------------------------------------------------------
-  std::uint32_t as_external_ref_book_id() const;
-  std::string_view as_external_ref_sheet() const;
-  const Reference& as_external_ref_cell() const;
 
   // --- Ref3D ---------------------------------------------------------------
   std::string_view as_ref3d_sheet_begin() const;
@@ -239,7 +234,6 @@ class AstNode final {
   friend AstNode* make_literal(Arena&, Value);
   friend AstNode* make_ref(Arena&, const Reference&);
   friend AstNode* make_spill_ref(Arena&, const Reference&);
-  friend AstNode* make_external_ref(Arena&, std::uint32_t, std::string_view, const Reference&);
   friend AstNode* make_ref3d(Arena&, std::string_view, std::string_view, const Reference&);
   friend AstNode* make_ref3d_range(Arena&, std::string_view, std::string_view, const Reference&, const Reference&);
   friend AstNode* make_structured_ref(Arena&, std::string_view, std::string_view, StructuredRefModifier);
@@ -259,19 +253,13 @@ class AstNode final {
   friend AstNode* make_error_placeholder(Arena&);
 
   // --- Per-kind payload structs --------------------------------------------
-  // Each is trivially destructible; pointer arrays are arena-owned. The
-  // ExternalRef payload (book id + sheet view + Reference) is large enough
-  // that we store it through an arena-allocated pointer to keep the union
-  // small; every other variant fits inline.
-  struct ExternalRefPayload {
-    std::uint32_t book_id;
-    std::string_view sheet;
-    Reference cell;
-  };
-  // Three-dimensional reference payload (`Sheet2:Sheet3!A1`). Stored behind
-  // an arena pointer like ExternalRefPayload so the AstNode union stays
-  // within its size budget. `cell` carries the cell coordinates with an
-  // empty sheet qualifier; the span endpoints are the two sheet names.
+  // Each is trivially destructible; pointer arrays are arena-owned.
+  //
+  // Three-dimensional reference payload (`Sheet2:Sheet3!A1`). It is the one
+  // variant large enough to need an arena-allocated pointer so the AstNode
+  // union stays within its size budget; every other variant fits inline.
+  // `cell` carries the cell coordinates with an empty sheet qualifier; the
+  // span endpoints are the two sheet names.
   struct Ref3DPayload {
     std::string_view sheet_begin;
     std::string_view sheet_end;
@@ -342,7 +330,6 @@ class AstNode final {
   union Payload {
     Value literal;
     Reference ref;
-    const ExternalRefPayload* external_ref;
     const Ref3DPayload* ref3d;
     StructuredRefPayload structured_ref;
     std::string_view name;
@@ -404,9 +391,6 @@ AstNode* make_ref(Arena& arena, const Reference& r);
 /// valid spill anchors; the parser is expected to reject those before
 /// reaching this factory.
 AstNode* make_spill_ref(Arena& arena, const Reference& r);
-
-/// Builds an `ExternalRef` node referencing `[book_id]sheet!cell`.
-AstNode* make_external_ref(Arena& arena, std::uint32_t book_id, std::string_view sheet, const Reference& cell);
 
 /// Builds a `Ref3D` node referencing `sheet_begin:sheet_end!cell`. The
 /// span is by workbook sheet order, resolved at evaluation time; `cell`'s

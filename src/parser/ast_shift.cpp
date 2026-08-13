@@ -24,11 +24,6 @@ namespace parser {
 // RefTransform default hooks
 // ---------------------------------------------------------------------------
 
-std::optional<Reference> RefTransform::apply_external(std::uint32_t /*book_id*/, std::string_view /*sheet*/,
-                                                      const Reference& cell) const {
-  return apply(cell);
-}
-
 std::optional<std::pair<Reference, Reference>> RefTransform::apply_range(const Reference& lhs,
                                                                          const Reference& rhs) const {
   const std::optional<Reference> rewritten_lhs = apply(lhs);
@@ -45,11 +40,6 @@ std::optional<std::pair<Reference, Reference>> RefTransform::apply_range(const R
 std::optional<RefTransform::Ref3DSheetSpan> RefTransform::apply_ref3d_span(std::string_view begin,
                                                                            std::string_view end) const {
   return Ref3DSheetSpan{begin, end};
-}
-
-std::optional<std::string_view> RefTransform::transform_external_sheet(std::uint32_t /*book_id*/,
-                                                                       std::string_view /*sheet*/) const {
-  return std::nullopt;
 }
 
 namespace {
@@ -101,30 +91,6 @@ const AstNode* TransformSpillRef(const AstNode& node, Arena& arena, const RefTra
   return make_spill_ref(arena, nr);
 }
 
-const AstNode* TransformExternalRef(const AstNode& node, Arena& arena, const RefTransform& transform) {
-  const std::uint32_t book_id = node.as_external_ref_book_id();
-  const std::string_view sheet = node.as_external_ref_sheet();
-  std::optional<Reference> rewritten = transform.apply_external(book_id, sheet, node.as_external_ref_cell());
-  if (!rewritten.has_value()) {
-    return MakeRefError(arena);
-  }
-  // External-sheet hook: when a transform supplies a new sheet name we
-  // intern it into the arena so the rebuilt node owns its bytes.
-  std::optional<std::string_view> new_sheet = transform.transform_external_sheet(book_id, sheet);
-  const Reference& orig_cell = node.as_external_ref_cell();
-  const Reference& nr = *rewritten;
-  const bool cell_unchanged = orig_cell.sheet.data() == nr.sheet.data() && orig_cell.sheet.size() == nr.sheet.size() &&
-                              orig_cell.sheet_quoted == nr.sheet_quoted && orig_cell.col == nr.col &&
-                              orig_cell.row == nr.row && orig_cell.col_abs == nr.col_abs &&
-                              orig_cell.row_abs == nr.row_abs && orig_cell.is_full_col == nr.is_full_col &&
-                              orig_cell.is_full_row == nr.is_full_row;
-  if (!new_sheet.has_value() && cell_unchanged) {
-    return &node;
-  }
-  const std::string_view final_sheet = new_sheet.has_value() ? *new_sheet : sheet;
-  return make_external_ref(arena, book_id, final_sheet, nr);
-}
-
 bool SameReference(const Reference& lhs, const Reference& rhs) {
   return lhs.sheet.data() == rhs.sheet.data() && lhs.sheet.size() == rhs.sheet.size() &&
          lhs.sheet_quoted == rhs.sheet_quoted && lhs.col == rhs.col && lhs.row == rhs.row &&
@@ -164,10 +130,8 @@ const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransf
     rewritten_last = last;
   }
 
-  // Ref3D stores its workbook-local sheet span outside Reference. Keep this
-  // separate from ExternalRef: a workbook-local 3-D endpoint is not an
-  // external-workbook sheet field and must not be rewritten by an
-  // ExternalRef-only hook.
+  // Ref3D stores its workbook-local sheet span outside Reference, so the
+  // span endpoints route through their own hook rather than through `apply`.
   const std::string_view begin = node.as_ref3d_sheet_begin();
   const std::string_view end = node.as_ref3d_sheet_end();
   const std::optional<RefTransform::Ref3DSheetSpan> rewritten_span = transform.apply_ref3d_span(begin, end);
@@ -507,8 +471,6 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
       return TransformRef(node, arena, transform);
     case NodeKind::SpillRef:
       return TransformSpillRef(node, arena, transform);
-    case NodeKind::ExternalRef:
-      return TransformExternalRef(node, arena, transform);
     case NodeKind::Ref3D:
       return TransformRef3D(node, arena, transform);
     case NodeKind::UnaryOp:

@@ -86,7 +86,6 @@ SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry*
     case NodeKind::ErrorLiteral:
     case NodeKind::ErrorPlaceholder:
     case NodeKind::Ref:
-    case NodeKind::ExternalRef:
       return SpillPotential::kNever;
     case NodeKind::Ref3D:
       // A 3-D single-cell tail still expands to one value per sheet when

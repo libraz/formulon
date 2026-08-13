@@ -292,20 +292,6 @@ Expected<void, Error> compile_spill_ref(BodyState& bs, const parser::AstNode& no
   return {};
 }
 
-Expected<void, Error> compile_external_ref(BodyState& bs, const parser::AstNode& node) {
-  ASSIGN_OR_RETURN(auto sheet_n, push_name(bs, node.as_external_ref_sheet()));
-  ASSIGN_OR_RETURN(auto refs_idx, push_ref(bs, node.as_external_ref_cell()));
-  // Pack book_id (low 16) and refs_idx (high 16) into `b`; sheet_n in `a`.
-  const std::uint32_t book_id = node.as_external_ref_book_id();
-  if (book_id > 0xFFFFu || refs_idx > 0xFFFFu) {
-    return make_compile_error(FormulonErrorCode::kVmCompileFailed,
-                              "external ref book_id or refs index exceeds 16-bit budget");
-  }
-  const std::uint32_t b = (refs_idx << 16) | book_id;
-  RETURN_IF_ERROR(emit(bs, node, OpCode::LoadExternalRef, sheet_n, b));
-  return {};
-}
-
 Expected<void, Error> compile_structured_ref(BodyState& bs, const parser::AstNode& node) {
   ASSIGN_OR_RETURN(auto table_n, push_name(bs, node.as_structured_ref_table()));
   ASSIGN_OR_RETURN(auto col_n, push_name(bs, node.as_structured_ref_column()));
@@ -601,8 +587,6 @@ Expected<void, Error> compile_node(BodyState& bs, const parser::AstNode& node) {
       return compile_ref(bs, node);
     case parser::NodeKind::SpillRef:
       return compile_spill_ref(bs, node);
-    case parser::NodeKind::ExternalRef:
-      return compile_external_ref(bs, node);
     case parser::NodeKind::Ref3D:
       // 3-D references are resolved by the tree-walker only; the bytecode
       // VM runs in parity mode and does not implement them.
