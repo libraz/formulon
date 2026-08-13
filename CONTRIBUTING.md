@@ -68,9 +68,12 @@ The maintainer team can't reproduce these from a single install:
    refresh. Distributing this across the community keeps any single
    update from blocking the project.
 
-If Formulon ever ships a runtime `compat_mode` switch (Mac ↔ Windows,
-locale A ↔ locale B), the goldens you contribute are exactly what
-teaches the engine the right answer in each mode.
+Formulon already ships a runtime profile switch: `excel_profile_id`
+selects between `mac-365-ja_JP` and `win-365-ja_JP`, and it is wired
+through the C ABI, WASM, the native Node addon, and Python. The goldens
+you contribute are what unlocks a further profile — they are exactly
+what teaches the engine the right answer in a locale we cannot observe
+ourselves.
 
 ### What we're collecting
 
@@ -86,16 +89,21 @@ tagged with one of:
 | `scaffolded` | wired up; goldens may be partial or stale. |
 | `wanted` | reserved slot, no goldens yet. **These are exactly what we'd love to receive from you.** |
 
-Currently reserved as `wanted`:
+Run `make oracle-contribute-list` for the current set. It reads
+`targets.yaml` directly and prints every target with its status,
+alongside the subset your host can actually drive, so it never drifts
+out of step with the file above.
 
-- `mac-365-en_US`, `win-365-en_US`
-- `win-365-de_DE` (decimal-comma locale)
-- `win-365-fr_FR` (decimal-comma locale)
-- `win-365-zh_CN` (`NUMBERSTRING`, localized format codes)
-- `win-365-ko_KR`
-- `win-365-th_TH` (`BAHTTEXT`)
+One `wanted` slot is worth calling out: **`win-365-ja_JP`**. It is the
+primary reference for the workbook track (pivot tables and print areas),
+which needs Windows COM automation, and it is the blocker on the
+page/data-axis `GETPIVOTDATA` cases. Goldens once committed under that
+name turned out to have been captured on a perpetual Office 2019 install
+rather than a Microsoft 365 one; they are retained as historical
+reference, are not a maintained target, and the slot stays open until a
+product-verified Microsoft 365 host regenerates them.
 
-If your locale isn't on this list, see
+If your locale isn't listed at all, see
 [Adding a new target](#adding-a-new-target).
 
 ### Prerequisites
