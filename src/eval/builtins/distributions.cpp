@@ -19,12 +19,14 @@
 //     surface #NUM! explicitly before calling std::tgamma so the
 //     behaviour matches Excel regardless of the platform's tgamma
 //     NaN vs. Inf convention.
-//   * GAMMA.INV reuses the chi-squared inverse identity
+//   * GAMMA.INV follows the chi-squared inverse identity
 //       GAMMA.INV(p, alpha, beta) == beta * chisq_inv(p, 2*alpha) / 2,
-//     avoiding a second Newton driver. (chisq_inv lives in stats.cpp;
-//     we replicate just the solver here because the stats TU doesn't
-//     expose it. The solver itself is a standard Wilson-Hilferty +
-//     Newton and is small.)
+//     but runs its own Wilson-Hilferty seed + Newton driver: the
+//     chi-squared solver (`ChisqInvCore` in
+//     `eval/builtins/stats/stats_distributions.cpp`) is TU-local. The
+//     inverse standard-normal seed is NOT replicated — it comes from
+//     `stats_detail::InverseStandardNormal`, the single definition all
+//     quantile callers share.
 //   * BETA.INV uses a shared bisection-then-Newton driver on the CDF
 //     surface, bracketing on [0, 1].
 //   * HYPGEOM.DIST's PMF uses lgamma-based log-combinations so the
@@ -39,6 +41,7 @@
 
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/registration_helpers.h"
+#include "eval/builtins/stats/stats_helpers.h"
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "eval/stats/special_functions.h"
@@ -402,66 +405,6 @@ Value GammaDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return finalize(GammaPdf(x, alpha, beta_scale));
 }
 
-// Inverse standard-normal CDF: rational Acklam approximation + two
-// Halley-method polish iterations. Duplicated from stats.cpp because
-// that TU keeps the helper internal; the replica is the same algorithm
-// (same coefficients) and is used only as a Wilson-Hilferty initial
-// guess for GAMMA.INV, not as a user-visible function.
-double InverseStandardNormal(double p) {
-  static constexpr double a1 = -3.969683028665376e+01;
-  static constexpr double a2 = 2.209460984245205e+02;
-  static constexpr double a3 = -2.759285104469687e+02;
-  static constexpr double a4 = 1.383577518672690e+02;
-  static constexpr double a5 = -3.066479806614716e+01;
-  static constexpr double a6 = 2.506628277459239e+00;
-
-  static constexpr double b1 = -5.447609879822406e+01;
-  static constexpr double b2 = 1.615858368580409e+02;
-  static constexpr double b3 = -1.556989798598866e+02;
-  static constexpr double b4 = 6.680131188771972e+01;
-  static constexpr double b5 = -1.328068155288572e+01;
-
-  static constexpr double c1 = -7.784894002430293e-03;
-  static constexpr double c2 = -3.223964580411365e-01;
-  static constexpr double c3 = -2.400758277161838e+00;
-  static constexpr double c4 = -2.549732539343734e+00;
-  static constexpr double c5 = 4.374664141464968e+00;
-  static constexpr double c6 = 2.938163982698783e+00;
-
-  static constexpr double d1 = 7.784695709041462e-03;
-  static constexpr double d2 = 3.224671290700398e-01;
-  static constexpr double d3 = 2.445134137142996e+00;
-  static constexpr double d4 = 3.754408661907416e+00;
-
-  static constexpr double p_low = 0.02425;
-  static constexpr double p_high = 1.0 - p_low;
-
-  double z;
-  if (p < p_low) {
-    const double q = std::sqrt(-2.0 * std::log(p));
-    z = (((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) / ((((d1 * q + d2) * q + d3) * q + d4) * q + 1.0);
-  } else if (p <= p_high) {
-    const double q = p - 0.5;
-    const double r = q * q;
-    z = (((((a1 * r + a2) * r + a3) * r + a4) * r + a5) * r + a6) * q /
-        (((((b1 * r + b2) * r + b3) * r + b4) * r + b5) * r + 1.0);
-  } else {
-    const double q = std::sqrt(-2.0 * std::log(1.0 - p));
-    z = -(((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) / ((((d1 * q + d2) * q + d3) * q + d4) * q + 1.0);
-  }
-  for (int i = 0; i < 2; ++i) {
-    const double phi_cdf = 0.5 * std::erfc(-z / std::sqrt(2.0));
-    const double phi_pdf = std::exp(-0.5 * z * z) / std::sqrt(2.0 * kDistPi);
-    if (phi_pdf == 0.0) {
-      break;
-    }
-    const double e = phi_cdf - p;
-    const double u = e / phi_pdf;
-    z -= u * (1.0 + 0.5 * z * u);
-  }
-  return z;
-}
-
 // GAMMA.INV(p, alpha, beta) - inverse of GAMMA.DIST's CDF. Mathematically
 // equivalent to `beta * chisq_inv(p, 2*alpha) / 2`, i.e. a scaled
 // chi-squared inverse; we implement the Wilson-Hilferty seed + Newton
@@ -487,7 +430,7 @@ Value GammaInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // equivalent; the scale factor `beta/2` recovers the gamma scale.
   const double df = 2.0 * alpha;
   const double h = 2.0 / (9.0 * df);
-  const double z = InverseStandardNormal(p);
+  const double z = stats_detail::InverseStandardNormal(p);
   const double cube_arg = 1.0 - h + z * std::sqrt(h);
   double chi2 = df * cube_arg * cube_arg * cube_arg;
   if (!(chi2 > 0.0)) {
@@ -614,7 +557,7 @@ Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 }
 
 // LOGNORM.INV(p, mean, sd) - inverse log-normal CDF. Computed as
-//   exp(mean + sd * InverseStandardNormal(p))
+//   exp(mean + sd * stats_detail::InverseStandardNormal(p))
 // #NUM! on p <= 0, p >= 1, sd <= 0.
 Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto parsed = read_number_triple(args);
@@ -627,7 +570,7 @@ Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (p <= 0.0 || p >= 1.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double z = InverseStandardNormal(p);
+  const double z = stats_detail::InverseStandardNormal(p);
   return finalize(std::exp(mean + sd * z));
 }
 
