@@ -139,12 +139,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
       !emit_breaks("vertical_breaks", fm_pagination_vertical_break_count, fm_pagination_vertical_break_at)) {
     return 1;
   }
-  out.flush();
-  if (!out) {
-    err << "formulon: paginate: failed to write output\n";
-    return 1;
-  }
-  return 0;
+  return flush_output(out, err, "paginate");
 }
 
 }  // namespace formulon::cli

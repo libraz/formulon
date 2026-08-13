@@ -235,6 +235,10 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     return rc;
   }
 
+  if (const auto rc = flush_output(out, err, "eval"); rc != 0) {
+    return rc;
+  }
+
   if (repeat > 1) {
     const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
     err << "formulon: eval: " << repeat << " iterations in " << micros << "us\n";

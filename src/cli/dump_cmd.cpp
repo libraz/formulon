@@ -291,12 +291,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
     emit_last_error(err, "dump");
     return rc;
   }
-  out.flush();
-  if (!out) {
-    err << "formulon: dump: failed to write output\n";
-    return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
-  }
-  return 0;
+  return flush_output(out, err, "dump");
 }
 
 }  // namespace cli

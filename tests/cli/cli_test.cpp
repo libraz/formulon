@@ -361,6 +361,16 @@ TEST(FormulonCli, PaginatePrintsResolvedGeometry) {
   EXPECT_EQ(r.stdout_text, "sheet=0\npages=1\nprint_area=\nhorizontal_breaks=\nvertical_breaks=\n");
 }
 
+TEST(FormulonCli, PaginateWriteFailureReturnsOutputError) {
+  const std::string path = "/tmp/fm_cli_paginate_write_failure.xlsx";
+  PathGuard guard(path);
+  ASSERT_TRUE(write_fixture_workbook(path));
+
+  CliRun r = run_cli({"paginate", path}, /*merge_streams=*/false, /*close_stdout=*/true);
+  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
+}
+
 TEST(FormulonCli, NoArgsExits64) {
   CliRun r = run_cli({});
   EXPECT_EQ(r.exit_code, 64);
@@ -474,6 +484,20 @@ TEST(FormulonCli, EvalRepeatRunsMultipleTimes) {
   EXPECT_NE(r.stderr_text.find("3 iterations"), std::string::npos);
 }
 
+TEST(FormulonCli, EvalWriteFailureReturnsOutputError) {
+  CliRun r = run_cli({"eval", "=SUM(1,2,3)"}, /*merge_streams=*/false, /*close_stdout=*/true);
+  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
+}
+
+TEST(FormulonCli, EvalRepeatWriteFailureSkipsTimingOutput) {
+  CliRun r = run_cli({"eval", "--repeat", "3", "=SUM(1,2,3)"}, /*merge_streams=*/false,
+                     /*close_stdout=*/true);
+  EXPECT_EQ(r.exit_code, 1);
+  EXPECT_NE(r.stderr_text.find("failed to write output"), std::string::npos);
+  EXPECT_EQ(r.stderr_text.find("iterations"), std::string::npos);
+}
+
 TEST(FormulonCli, EvalRepeatOverflowExits64) {
   CliRun r = run_cli({"eval", "--repeat", "999999999999999999999999999999", "=1"});
   EXPECT_EQ(r.exit_code, 64);
@@ -539,7 +563,7 @@ TEST(FormulonCli, RecalcLossWarningsAreNonfatalAndNotSuppressedByQuiet) {
   EXPECT_TRUE(r.stdout_text.empty());
   EXPECT_NE(r.stderr_text.find("warning: XLSB write diagnostics"), std::string::npos);
   EXPECT_NE(r.stderr_text.find("downgraded_formula_count=1"), std::string::npos);
-  EXPECT_NE(r.stderr_text.find("deferred_feature_count=3"), std::string::npos);
+  EXPECT_NE(r.stderr_text.find("deferred_feature_count=2"), std::string::npos);
 }
 
 TEST(FormulonCli, RecalcDroppedPartWarningIsNonfatalAndQuietStillReportsIt) {

@@ -28,9 +28,11 @@
 #ifndef FORMULON_CLI_CLI_H_
 #define FORMULON_CLI_CLI_H_
 
-#include <iosfwd>
+#include <ostream>
 #include <string_view>
 #include <vector>
+
+#include "utils/error.h"
 
 namespace formulon {
 namespace cli {
@@ -52,6 +54,18 @@ constexpr int exit_code_for_status(int status) {
     return 0;
   }
   return status == kExitUsage ? kExitUsage : 1;
+}
+
+/// Flushes a command's primary output and turns a stream failure into the
+/// stable CLI output error. Commands must call this after emitting their
+/// main result so exit status 0 means the complete result reached `out`.
+inline int flush_output(std::ostream& out, std::ostream& err, std::string_view subcommand) {
+  out.flush();
+  if (out) {
+    return 0;
+  }
+  err << "formulon: " << subcommand << ": failed to write output\n";
+  return static_cast<int>(FormulonErrorCode::kCliOutputFailed);
 }
 
 /// `eval` handler: evaluate a single formula on a fresh empty workbook.
