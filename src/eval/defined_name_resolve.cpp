@@ -31,7 +31,10 @@ const io::DefinedName* find_defined_name(const Workbook& workbook, std::uint16_t
     if (!strings::case_insensitive_eq(entry.name, name)) {
       continue;
     }
-    if (entry.local_sheet_id >= 0 && static_cast<std::uint16_t>(entry.local_sheet_id) == current_sheet_id) {
+    // Compare in the wider type: `local_sheet_id` comes from the file and is
+    // not bounded by `sheet_count()`, so narrowing it to the 16-bit sheet id
+    // first would let a crafted scope (0x10000) match sheet 0.
+    if (entry.local_sheet_id >= 0 && entry.local_sheet_id == static_cast<std::int32_t>(current_sheet_id)) {
       // Sheet-scoped match for the current sheet wins immediately.
       return &entry;
     }
