@@ -55,6 +55,23 @@ TEST(ParserLet, LowerCaseKeyword) {
   EXPECT_EQ(ParseToSexpr("=let(x, 5, x)"), "(let ((x (num 5))) (name x))");
 }
 
+TEST(ParserLet, XlfnStoragePrefixIsRecognizedAsSpecialForm) {
+  // Excel's name manager stores a reusable LET as `_xlfn.LET(...)` so older
+  // Excel versions do not misinterpret it. `io::strip_storage_prefixes`
+  // canonicalises `formula_text` at every known ingestion point, but the
+  // parser must also recognise the prefixed spelling directly: without
+  // this, a caller handing the parser un-normalised text would get an
+  // ordinary (and wrong) function-call parse instead of LET's dedicated
+  // binding-name grammar.
+  EXPECT_EQ(ParseToSexpr("=_xlfn.LET(x, 1, x+2)"), "(let ((x (num 1))) (binary + (name x) (num 2)))");
+  EXPECT_EQ(ParseToSexpr("=_XLFN.let(x, 1, x+2)"), "(let ((x (num 1))) (binary + (name x) (num 2)))");
+}
+
+TEST(ParserLet, XlfnStoragePrefixIsRecognizedForLambda) {
+  // Same mechanism as the LET case above, for `_xlfn.LAMBDA(...)`.
+  EXPECT_EQ(ParseToSexpr("=_xlfn.LAMBDA(x, x+1)"), "(lambda (x) (binary + (name x) (num 1)))");
+}
+
 TEST(ParserLet, NestedLetInBindingValue) {
   EXPECT_EQ(ParseToSexpr("=LET(x, LET(y, 2, y*y), x+1)"),
             "(let ((x (let ((y (num 2))) (binary * (name y) (name y))))) (binary + (name x) (num 1)))");

@@ -284,6 +284,35 @@ TEST(DefinedNameResolve, WorkbookNamedLambdaCallIsCaseInsensitive) {
   EXPECT_DOUBLE_EQ(v.as_number(), 15.0);
 }
 
+// The parser recognises the `_xlfn.` storage prefix on LET / LAMBDA
+// directly (defence in depth on top of `io::strip_storage_prefixes` at the
+// defined-names ingestion point tested in `DefinedNamesReader`). These two
+// cases construct `io::DefinedName` with the raw, un-normalised storage
+// spelling to exercise that parser-level recognition in isolation.
+TEST(DefinedNameResolve, XlfnPrefixedLambdaDefinedNameEvaluates) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({io::DefinedName{"Doubler", "_xlfn.LAMBDA(_xlpm.x,_xlpm.x*2)", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Doubler(21)", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
+}
+
+TEST(DefinedNameResolve, XlfnPrefixedLetDefinedNameEvaluates) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  wb.set_defined_names({io::DefinedName{"Doubled", "_xlfn.LET(_xlpm.x,21,_xlpm.x*2)", -1, false, ""}});
+  EvalState state;
+  EvalContext ctx(wb, s, state);
+  Arena a;
+  const Value v = EvalOrDie("=Doubled", a, ctx);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
+}
+
 TEST(DefinedNameResolve, SheetNamedLambdaShadowsWorkbookLambda) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");

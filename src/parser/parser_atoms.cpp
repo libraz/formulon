@@ -23,6 +23,27 @@ using detail::kBpUnaryPrefix;
 using detail::kMaxRow;
 using detail::SpanRange;
 
+namespace {
+
+// Returns true iff `lexeme` names the special form `form`, ignoring an
+// optional case-insensitive `_xlfn.` storage prefix. Excel's name manager
+// stores a reusable LAMBDA / LET as `_xlfn.LAMBDA(...)` / `_xlfn.LET(...)`
+// so that older Excel versions do not misinterpret it; `io::strip_storage_prefixes`
+// canonicalises `formula_text` at every known ingestion point, but the
+// parser also recognises the prefixed spelling directly so a caller that
+// hands it un-normalised text still gets LET / LAMBDA's dedicated
+// binding-name grammar instead of being parsed (incorrectly) as an
+// ordinary function call.
+bool is_special_form(std::string_view lexeme, std::string_view form) noexcept {
+  constexpr std::string_view kXlfn = "_xlfn.";
+  if (lexeme.size() > kXlfn.size() && strings::case_insensitive_eq(lexeme.substr(0, kXlfn.size()), kXlfn)) {
+    lexeme.remove_prefix(kXlfn.size());
+  }
+  return strings::case_insensitive_eq(lexeme, form);
+}
+
+}  // namespace
+
 AstNode* Parser::parse_number_atom() {
   const Token& tok = peek();
   // Full-row promotion: `Number Colon Number` -> ref like `1:1` / `$1:$1`.
@@ -395,7 +416,11 @@ AstNode* Parser::parse_array_literal_atom() {
 
 AstNode* Parser::parse_at_prefix_atom(SyncContext ctx) {
   const Token& at_tok = advance();
-  // `@` consumes the entire remaining expression (lowest precedence).
+  // `@` binds at `kBpAtPrefix`: tighter than every arithmetic / comparison
+  // operator but looser than the reference operators (`:`, space intersect,
+  // postfix `#`), so it absorbs a reference operand (`@A1:B2`) without also
+  // swallowing a following `*2` (see `parser_detail.h` for the full
+  // rationale and the binding-power table in `parser.cpp`).
   AstNode* operand = parse_expression(kBpAtPrefix, ctx);
   if (operand == nullptr) {
     return nullptr;
@@ -520,13 +545,13 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     // LET is a special form: binding names are bare identifiers that must
     // NOT be resolved as cell references. Detect it before the generic
     // argument loop kicks in so name slots go through a dedicated parse path.
-    if (strings::case_insensitive_eq(ident.lexeme, std::string_view("LET"))) {
+    if (is_special_form(ident.lexeme, "LET")) {
       return parse_let_call(ident);
     }
     // LAMBDA is a special form: each non-final slot is a bare parameter name
     // (NOT a name=value pair), and the final slot is the body. Detect it
     // here so the parameter slots go through a dedicated parse path.
-    if (strings::case_insensitive_eq(ident.lexeme, std::string_view("LAMBDA"))) {
+    if (is_special_form(ident.lexeme, "LAMBDA")) {
       return parse_lambda_call(ident);
     }
     const std::string_view fn_name = ident.lexeme;

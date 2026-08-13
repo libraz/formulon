@@ -42,6 +42,11 @@ std::optional<std::pair<Reference, Reference>> RefTransform::apply_range(const R
   return std::make_pair(*rewritten_lhs, *rewritten_rhs);
 }
 
+std::optional<RefTransform::Ref3DSheetSpan> RefTransform::apply_ref3d_span(std::string_view begin,
+                                                                           std::string_view end) const {
+  return Ref3DSheetSpan{begin, end};
+}
+
 std::optional<std::string_view> RefTransform::transform_external_sheet(std::uint32_t /*book_id*/,
                                                                        std::string_view /*sheet*/) const {
   return std::nullopt;
@@ -103,7 +108,7 @@ const AstNode* TransformExternalRef(const AstNode& node, Arena& arena, const Ref
   if (!rewritten.has_value()) {
     return MakeRefError(arena);
   }
-  // Sheet rename hook: when the transform supplies a new sheet name we
+  // External-sheet hook: when a transform supplies a new sheet name we
   // intern it into the arena so the rebuilt node owns its bytes.
   std::optional<std::string_view> new_sheet = transform.transform_external_sheet(book_id, sheet);
   const Reference& orig_cell = node.as_external_ref_cell();
@@ -159,19 +164,22 @@ const AstNode* TransformRef3D(const AstNode& node, Arena& arena, const RefTransf
     rewritten_last = last;
   }
 
-  // Ref3D stores its sheet span outside Reference, as ExternalRef does. A
-  // book id of zero identifies this workbook-local span to the existing
-  // sheet-name hook.
+  // Ref3D stores its workbook-local sheet span outside Reference. Keep this
+  // separate from ExternalRef: a workbook-local 3-D endpoint is not an
+  // external-workbook sheet field and must not be rewritten by an
+  // ExternalRef-only hook.
   const std::string_view begin = node.as_ref3d_sheet_begin();
   const std::string_view end = node.as_ref3d_sheet_end();
-  const std::optional<std::string_view> new_begin = transform.transform_external_sheet(0U, begin);
-  const std::optional<std::string_view> new_end = transform.transform_external_sheet(0U, end);
-  if (!new_begin.has_value() && !new_end.has_value() && SameReference(first, *rewritten_first) &&
+  const std::optional<RefTransform::Ref3DSheetSpan> rewritten_span = transform.apply_ref3d_span(begin, end);
+  if (!rewritten_span.has_value()) {
+    return MakeRefError(arena);
+  }
+  const std::string_view final_begin = rewritten_span->begin;
+  const std::string_view final_end = rewritten_span->end;
+  if (final_begin == begin && final_end == end && SameReference(first, *rewritten_first) &&
       (!is_range || SameReference(last, *rewritten_last))) {
     return &node;
   }
-  const std::string_view final_begin = new_begin.has_value() ? *new_begin : begin;
-  const std::string_view final_end = new_end.has_value() ? *new_end : end;
   if (is_range) {
     return make_ref3d_range(arena, final_begin, final_end, *rewritten_first, *rewritten_last);
   }

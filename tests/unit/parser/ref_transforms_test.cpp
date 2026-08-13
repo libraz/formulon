@@ -7,6 +7,7 @@
 
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include "gtest/gtest.h"
 #include "parser/reference.h"
@@ -124,17 +125,13 @@ TEST(SheetRenameTransform, RenameFromQuotedToBareDropsQuoting) {
   EXPECT_FALSE(out->sheet_quoted);
 }
 
-TEST(SheetRenameTransform, ExternalSheetHookMatches) {
+TEST(SheetRenameTransform, ExternalWorkbookReferenceIsOpaque) {
   SheetRenameTransform t("Sheet1", "Renamed");
-  std::optional<std::string_view> remapped = t.transform_external_sheet(/*book_id=*/1, "Sheet1");
+  Reference cell;
+  cell.sheet = "Sheet1";
+  const std::optional<Reference> remapped = t.apply_external(/*book_id=*/1, "Sheet1", cell);
   ASSERT_TRUE(remapped.has_value());
-  EXPECT_EQ(*remapped, "Renamed");
-}
-
-TEST(SheetRenameTransform, ExternalSheetHookDoesNotMatch) {
-  SheetRenameTransform t("Sheet1", "Renamed");
-  std::optional<std::string_view> remapped = t.transform_external_sheet(/*book_id=*/1, "Other");
-  EXPECT_FALSE(remapped.has_value());
+  EXPECT_EQ(remapped->sheet, "Sheet1");
 }
 
 TEST(SheetRenameTransform, RemapSheetHelper) {
@@ -342,6 +339,85 @@ TEST(RowColShiftTransform, LocalMeansTargetGatesUnqualifiedRefs) {
   std::optional<Reference> on = t_on.apply(MakeRef("", 5, 0));
   ASSERT_TRUE(on.has_value());
   EXPECT_EQ(on->row, 8U);
+}
+
+// ---------------------------------------------------------------------------
+// SheetRemovalTransform
+// ---------------------------------------------------------------------------
+
+TEST(SheetRemovalTransform, RemovesOnlyTheQualifiedTarget) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta", "Gamma"};
+  SheetRemovalTransform t(order, /*removed_index=*/1);
+
+  EXPECT_FALSE(t.apply(MakeRef("Beta", 0, 0)).has_value());
+  EXPECT_FALSE(t.apply(MakeRef("bEtA", 0, 0)).has_value());
+  EXPECT_TRUE(t.apply(MakeRef("Alpha", 0, 0)).has_value());
+  EXPECT_TRUE(t.apply(MakeRef("", 0, 0)).has_value());
+}
+
+TEST(SheetRemovalTransform, ExternalWorkbookReferenceIsOpaque) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta"};
+  SheetRemovalTransform t(order, /*removed_index=*/1);
+  Reference cell = MakeRef("Beta", 0, 0);
+  const std::optional<Reference> out = t.apply_external(/*book_id=*/7, "Beta", cell);
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->sheet, "Beta");
+}
+
+TEST(SheetRemovalTransform, MiddleSpanKeepsEndpoints) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta", "Gamma"};
+  SheetRemovalTransform t(order, /*removed_index=*/1);
+  const std::optional<RefTransform::Ref3DSheetSpan> out = t.apply_ref3d_span("Alpha", "Gamma");
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->begin, "Alpha");
+  EXPECT_EQ(out->end, "Gamma");
+}
+
+TEST(SheetRemovalTransform, EndpointSpanMovesInward) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta", "Gamma"};
+  {
+    SheetRemovalTransform t(order, /*removed_index=*/0);
+    const std::optional<RefTransform::Ref3DSheetSpan> out = t.apply_ref3d_span("Alpha", "Gamma");
+    ASSERT_TRUE(out.has_value());
+    EXPECT_EQ(out->begin, "Beta");
+    EXPECT_EQ(out->end, "Gamma");
+  }
+  {
+    SheetRemovalTransform t(order, /*removed_index=*/2);
+    const std::optional<RefTransform::Ref3DSheetSpan> out = t.apply_ref3d_span("Alpha", "Gamma");
+    ASSERT_TRUE(out.has_value());
+    EXPECT_EQ(out->begin, "Alpha");
+    EXPECT_EQ(out->end, "Beta");
+  }
+}
+
+TEST(SheetRemovalTransform, ReverseSpanMovesInwardInReverseDirection) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta", "Gamma"};
+  {
+    SheetRemovalTransform t(order, /*removed_index=*/2);
+    const std::optional<RefTransform::Ref3DSheetSpan> out = t.apply_ref3d_span("Gamma", "Alpha");
+    ASSERT_TRUE(out.has_value());
+    EXPECT_EQ(out->begin, "Beta");
+    EXPECT_EQ(out->end, "Alpha");
+  }
+  {
+    SheetRemovalTransform t(order, /*removed_index=*/0);
+    const std::optional<RefTransform::Ref3DSheetSpan> out = t.apply_ref3d_span("Gamma", "Alpha");
+    ASSERT_TRUE(out.has_value());
+    EXPECT_EQ(out->begin, "Gamma");
+    EXPECT_EQ(out->end, "Beta");
+  }
+}
+
+TEST(SheetRemovalTransform, DegenerateAndUnresolvedSpansCollapse) {
+  const std::vector<std::string_view> order = {"Alpha", "Beta", "Gamma"};
+  SheetRemovalTransform remove_beta(order, /*removed_index=*/1);
+  EXPECT_FALSE(remove_beta.apply_ref3d_span("Beta", "Beta").has_value());
+  const std::optional<RefTransform::Ref3DSheetSpan> unaffected = remove_beta.apply_ref3d_span("Missing", "Gamma");
+  ASSERT_TRUE(unaffected.has_value());
+  EXPECT_EQ(unaffected->begin, "Missing");
+  EXPECT_EQ(unaffected->end, "Gamma");
+  EXPECT_FALSE(remove_beta.apply_ref3d_span("Beta", "Missing").has_value());
 }
 
 }  // namespace

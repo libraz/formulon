@@ -1,7 +1,7 @@
 //
 // Tests for `shift_refs` (generic walker), `shift_relative_refs` (the
-// historical relative-shift wrapper), and the integration with
-// `SheetRenameTransform`.
+// historical relative-shift wrapper), and the integration with the
+// sheet-structure transforms.
 
 #include "parser/ast_shift.h"
 
@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -64,6 +65,21 @@ std::string ParseRowColShiftFormula(std::string_view src, RowColAxis axis, RowCo
     return "<parse-failed>";
   }
   RowColShiftTransform transform(target_sheet, axis, edit, index, count, local_means_target);
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  if (shifted == nullptr) {
+    return "<arena-fail>";
+  }
+  return format_formula(*shifted);
+}
+
+std::string ParseSheetRemovalFormula(std::string_view src, const std::vector<std::string_view>& order,
+                                     std::uint32_t removed_index) {
+  Arena arena;
+  const AstNode* root = ParseOrNull(src, arena);
+  if (root == nullptr) {
+    return "<parse-failed>";
+  }
+  SheetRemovalTransform transform(order, removed_index);
   const AstNode* shifted = shift_refs(*root, arena, transform);
   if (shifted == nullptr) {
     return "<arena-fail>";
@@ -282,7 +298,7 @@ TEST(ShiftRefsWithSheetRename, RangeWithSheetRenamed) {
   EXPECT_EQ(format_formula(*shifted), "Renamed!A1:Renamed!B2");
 }
 
-TEST(ShiftRefsWithSheetRename, ExternalRefSheetRenamed) {
+TEST(ShiftRefsWithSheetRename, ExternalRefSheetIsUnchanged) {
   // External refs are not parser-produceable; build the AST manually.
   Arena arena;
   Reference cell;
@@ -293,7 +309,8 @@ TEST(ShiftRefsWithSheetRename, ExternalRefSheetRenamed) {
   SheetRenameTransform transform("Sheet1", "Renamed");
   const AstNode* shifted = shift_refs(*ext, arena, transform);
   ASSERT_NE(shifted, nullptr);
-  EXPECT_EQ(format_formula(*shifted), "[1]Renamed!A1");
+  EXPECT_EQ(shifted, ext) << "local sheet rename must not rewrite external-workbook references";
+  EXPECT_EQ(format_formula(*shifted), "[1]Sheet1!A1");
 }
 
 TEST(ShiftRefsWithSheetRename, ExternalRefUnrelatedSheetUnchanged) {
@@ -318,6 +335,54 @@ TEST(ShiftRefsWithSheetRename, RenamesBoth3DSpanEndpoints) {
   EXPECT_EQ(format_formula(*shifted), "SUM(Renamed:Sheet2!A1:B2)");
 }
 
+TEST(ShiftRefsWithSheetRename, RenamesEitherBare3DSpanEndpoint) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM(Sheet1:Sheet2!A1)", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("Sheet2", "Renamed");
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "SUM(Sheet1:Renamed!A1)");
+}
+
+TEST(ShiftRefsWithSheetRename, RenamesEitherQuoted3DSpanEndpoint) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM('Data:S2'!A1)", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("S2", "Summary");
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "SUM(Data:Summary!A1)");
+}
+
+TEST(ShiftRefsWithSheetRename, Quoted3DSpanUsesQuotedRenamedEndpoint) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM('Data:S2'!A1)", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("S2", "New Sheet");
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "SUM('Data:New Sheet'!A1)");
+}
+
+TEST(ShiftRefsWithSheetRename, Quoted3DSpanRenamesBeginEndpoint) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM('S1:Data'!A1)", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("S1", "New Sheet");
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(format_formula(*shifted), "SUM('New Sheet:Data'!A1)");
+}
+
+TEST(ShiftRefsWithSheetRename, Unrelated3DSpanPreservesIdentity) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM(Sheet1:Sheet2!A1)", arena);
+  ASSERT_NE(root, nullptr);
+  SheetRenameTransform transform("Other", "Renamed");
+  EXPECT_EQ(shift_refs(*root, arena, transform), root);
+}
+
 TEST(ShiftRefs, RelativeShiftUpdates3DRangeTail) {
   Arena arena;
   const AstNode* root = ParseOrNull("=Sheet1:Sheet2!A1:B2", arena);
@@ -325,6 +390,81 @@ TEST(ShiftRefs, RelativeShiftUpdates3DRangeTail) {
   const AstNode* shifted = shift_relative_refs(*root, arena, 2, 3);
   ASSERT_NE(shifted, nullptr);
   EXPECT_EQ(format_formula(*shifted), "Sheet1:Sheet2!D3:E4");
+}
+
+// ---------------------------------------------------------------------------
+// shift_refs with SheetRemovalTransform
+// ---------------------------------------------------------------------------
+
+TEST(ShiftRefsWithSheetRemoval, RemovesNormalQualifiedReference) {
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  EXPECT_EQ(ParseSheetRemovalFormula("=Sheet2!A1", order, /*removed_index=*/1), "#REF!");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2!A1:B2)+1", order, /*removed_index=*/1), "SUM(#REF!)+1");
+  EXPECT_EQ(ParseSheetRemovalFormula("=Sheet1!A1", order, /*removed_index=*/1), "Sheet1!A1");
+  EXPECT_EQ(ParseSheetRemovalFormula("=A1", order, /*removed_index=*/1), "A1");
+}
+
+TEST(ShiftRefsWithSheetRemoval, MiddleSpanKeepsEndpoints) {
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet1:Sheet3!A1)", order, /*removed_index=*/1), "SUM(Sheet1:Sheet3!A1)");
+}
+
+TEST(ShiftRefsWithSheetRemoval, MiddleSpanPreservesIdentity) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM(Sheet1:Sheet3!A1)", arena);
+  ASSERT_NE(root, nullptr);
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  SheetRemovalTransform transform(order, /*removed_index=*/1);
+  EXPECT_EQ(shift_refs(*root, arena, transform), root);
+}
+
+TEST(ShiftRefsWithSheetRemoval, BeginAndEndSpansMoveInward) {
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet1:Sheet3!A1)", order, /*removed_index=*/0), "SUM(Sheet2:Sheet3!A1)");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet1:Sheet3!A1)", order, /*removed_index=*/2), "SUM(Sheet1:Sheet2!A1)");
+}
+
+TEST(ShiftRefsWithSheetRemoval, ReverseSpanMovesInward) {
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet3:Sheet1!A1)", order, /*removed_index=*/2), "SUM(Sheet2:Sheet1!A1)");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet3:Sheet1!A1)", order, /*removed_index=*/0), "SUM(Sheet3:Sheet2!A1)");
+}
+
+TEST(ShiftRefsWithSheetRemoval, DegenerateAndUnresolvedSpansCollapse) {
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2:Sheet2!A1)", order, /*removed_index=*/1), "SUM(#REF!)");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Missing:Sheet3!A1)", order, /*removed_index=*/1), "SUM(Missing:Sheet3!A1)");
+  EXPECT_EQ(ParseSheetRemovalFormula("=SUM(Sheet2:Missing!A1)", order, /*removed_index=*/1), "SUM(#REF!)");
+}
+
+TEST(ShiftRefsWithSheetRemoval, UnresolvedSpanOutsideRemovalPreservesAstIdentity) {
+  Arena arena;
+  const AstNode* root = ParseOrNull("=SUM(Missing:Sheet3!A1)", arena);
+  ASSERT_NE(root, nullptr);
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2", "Sheet3"};
+  SheetRemovalTransform transform(order, /*removed_index=*/1);
+  const AstNode* shifted = shift_refs(*root, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(shifted, root);
+  EXPECT_EQ(format_formula(*shifted), "SUM(Missing:Sheet3!A1)");
+}
+
+TEST(ShiftRefsWithSheetRemoval, StringLiteralAndExternalRefAreUntouched) {
+  const std::vector<std::string_view> order = {"Sheet1", "Sheet2"};
+  Arena arena;
+  const AstNode* literal = ParseOrNull("=\"Sheet2!A1\"", arena);
+  ASSERT_NE(literal, nullptr);
+  SheetRemovalTransform transform(order, /*removed_index=*/1);
+  EXPECT_EQ(shift_refs(*literal, arena, transform), literal);
+
+  Reference cell;
+  cell.sheet = "Sheet2";
+  AstNode* external = make_external_ref(arena, 9, "Sheet2", cell);
+  ASSERT_NE(external, nullptr);
+  const AstNode* shifted = shift_refs(*external, arena, transform);
+  ASSERT_NE(shifted, nullptr);
+  EXPECT_EQ(shifted, external);
+  EXPECT_EQ(format_formula(*shifted), "[9]Sheet2!A1");
 }
 
 // ---------------------------------------------------------------------------

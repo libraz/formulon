@@ -65,9 +65,10 @@ const char* BinOpToken(BinOp op) noexcept {
   return "+";
 }
 
-// Returns the binding-power slot for the given binary operator. Right-
-// associativity is encoded in the per-side `min_bp` calls in `FormatBinary`,
-// not here.
+// Returns the binding-power slot for the given binary operator. Every
+// binary operator is left-associative (including `^`, matching Excel 365's
+// left-to-right evaluation of a chained power); the per-side `min_bp` calls
+// in `FormatBinary` / `StorageEmitter::emit_binary` encode that uniformly.
 int BinOpBp(BinOp op) noexcept {
   switch (op) {
     case BinOp::Pow:
@@ -334,11 +335,12 @@ void FormatBinary(const AstNode& node, std::string& out, int min_bp) {
   if (wrap) {
     out.push_back('(');
   }
-  // Power is right-associative: LHS demands `bp + 1` (so a same-precedence
-  // child on the left would be wrapped), RHS demands `bp` (so the same
-  // child does not need wrapping). Every other binary is left-associative.
-  const int lhs_min = (op == BinOp::Pow) ? bp + 1 : bp;
-  const int rhs_min = (op == BinOp::Pow) ? bp : bp + 1;
+  // Left-associative: LHS demands `bp` (a same-precedence child on the left
+  // does not need wrapping), RHS demands `bp + 1` (a same-precedence child
+  // on the right must be wrapped so it does not silently re-associate on
+  // reparse). Uniform across every binary operator, including `^`.
+  const int lhs_min = bp;
+  const int rhs_min = bp + 1;
   FormatNode(node.as_binary_lhs(), out, lhs_min);
   out.append(BinOpToken(op));
   FormatNode(node.as_binary_rhs(), out, rhs_min);
@@ -750,8 +752,10 @@ struct StorageEmitter {
     if (wrap) {
       out.push_back('(');
     }
-    const int lhs_min = (op == BinOp::Pow) ? bp + 1 : bp;
-    const int rhs_min = (op == BinOp::Pow) ? bp : bp + 1;
+    // Left-associative, uniformly across every binary operator including
+    // `^`; see `FormatBinary`'s comment for the rationale.
+    const int lhs_min = bp;
+    const int rhs_min = bp + 1;
     emit(node.as_binary_lhs(), out, lhs_min);
     out.append(BinOpToken(op));
     emit(node.as_binary_rhs(), out, rhs_min);

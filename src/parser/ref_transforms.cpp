@@ -2,6 +2,7 @@
 #include "parser/ref_transforms.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -40,9 +41,102 @@ std::optional<Reference> SheetRenameTransform::apply(const Reference& ref) const
   return out;
 }
 
-std::optional<std::string_view> SheetRenameTransform::transform_external_sheet(std::uint32_t /*book_id*/,
-                                                                               std::string_view sheet) const {
-  return remap_sheet(sheet);
+std::optional<Reference> SheetRenameTransform::apply_external(std::uint32_t /*book_id*/, std::string_view /*sheet*/,
+                                                              const Reference& cell) const {
+  // External-workbook references are opaque to a local-sheet rename. In
+  // particular, do not inspect the inner Reference's optional sheet field:
+  // it is still part of the external link's payload and does not identify a
+  // sheet in this workbook.
+  return cell;
+}
+
+std::optional<RefTransform::Ref3DSheetSpan> SheetRenameTransform::apply_ref3d_span(std::string_view begin,
+                                                                                   std::string_view end) const {
+  const std::string_view mapped_begin = remap_sheet(begin).value_or(begin);
+  const std::string_view mapped_end = remap_sheet(end).value_or(end);
+  return Ref3DSheetSpan{mapped_begin, mapped_end};
+}
+
+SheetRemovalTransform::SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order,
+                                             std::uint32_t removed_index)
+    : pre_removal_sheet_order_(pre_removal_sheet_order), removed_index_(removed_index) {}
+
+std::size_t SheetRemovalTransform::find_sheet(std::string_view sheet) const noexcept {
+  for (std::size_t i = 0; i < pre_removal_sheet_order_.size(); ++i) {
+    if (strings::case_insensitive_eq(sheet, pre_removal_sheet_order_[i])) {
+      return i;
+    }
+  }
+  return kInvalidSheetIndex;
+}
+
+bool SheetRemovalTransform::is_removed(std::size_t index) const noexcept {
+  return removed_index_ < pre_removal_sheet_order_.size() && index == removed_index_;
+}
+
+std::optional<Reference> SheetRemovalTransform::apply(const Reference& ref) const {
+  if (ref.sheet.empty()) {
+    return ref;
+  }
+  const std::size_t sheet_index = find_sheet(ref.sheet);
+  if (is_removed(sheet_index)) {
+    return std::nullopt;
+  }
+  return ref;
+}
+
+std::optional<Reference> SheetRemovalTransform::apply_external(std::uint32_t /*book_id*/, std::string_view /*sheet*/,
+                                                               const Reference& cell) const {
+  // External workbook links are not part of the pre-removal local sheet
+  // order, even if their payload happens to carry a matching display name.
+  return cell;
+}
+
+std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_span(std::string_view begin,
+                                                                                    std::string_view end) const {
+  if (removed_index_ >= pre_removal_sheet_order_.size()) {
+    // An invalid removal index cannot describe a safe structural edit.
+    return std::nullopt;
+  }
+  const std::size_t begin_index = find_sheet(begin);
+  const std::size_t end_index = find_sheet(end);
+  const bool begin_removed = is_removed(begin_index);
+  const bool end_removed = is_removed(end_index);
+  if (!begin_removed && !end_removed) {
+    // An unresolved endpoint is not itself evidence that this deletion
+    // affects the reference. Preserve existing unresolved spans, as well as
+    // resolved spans outside the removed sheet, byte-for-byte.
+    return Ref3DSheetSpan{begin, end};
+  }
+  if (begin_removed && end_removed) {
+    // The span is degenerate (the only endpoint names the removed sheet), so
+    // no sheet remains to carry the reference.
+    return std::nullopt;
+  }
+  if ((begin_removed && end_index == kInvalidSheetIndex) || (end_removed && begin_index == kInvalidSheetIndex)) {
+    // Once one endpoint resolves to the deleted sheet, the other endpoint
+    // must resolve too: without it there is no safe direction for the
+    // inward step. Only this affected unresolved case collapses to #REF!.
+    return std::nullopt;
+  }
+
+  const bool forward = begin_index < end_index;
+  if (begin_removed) {
+    // Move the first endpoint toward the surviving end.
+    const std::size_t inward = forward ? begin_index + 1U : begin_index - 1U;
+    if (inward >= pre_removal_sheet_order_.size() || inward == removed_index_) {
+      return std::nullopt;
+    }
+    return Ref3DSheetSpan{pre_removal_sheet_order_[inward], end};
+  }
+
+  // Move the last endpoint toward the surviving begin. The two endpoint
+  // names cannot be equal here because begin_removed is false.
+  const std::size_t inward = forward ? end_index - 1U : end_index + 1U;
+  if (inward >= pre_removal_sheet_order_.size() || inward == removed_index_) {
+    return std::nullopt;
+  }
+  return Ref3DSheetSpan{begin, pre_removal_sheet_order_[inward]};
 }
 
 RowColShiftTransform::RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit,

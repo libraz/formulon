@@ -5,19 +5,24 @@
 //
 // Operator binding-power scheme (higher = tighter):
 //
-//   Postfix `#`           90   (spilled-range; only valid on a single Ref)
-//   Range `:`             80   (left-assoc binary)
-//   Prefix unary `+`/`-`  70
-//   Postfix `%`           60
-//   Power `^`             50   (right-assoc binary)
-//   `*` `/`               40
-//   Binary `+` `-`        30
-//   Concat `&`            20
-//   Comparisons           10
-//   Prefix `@`             1   (lowest - consumes the entire RHS)
+//   Postfix `(`            95   (immediately-invoked LAMBDA / curried call)
+//   Postfix `#`            90   (spilled-range; only valid on a single Ref)
+//   Range `:`              80   (left-assoc binary)
+//   Space intersect        75   (left-assoc binary; only between ref operands)
+//   Prefix unary `+`/`-`   70
+//   Prefix `@`              65   (implicit-intersection; see `parser_detail.h`)
+//   Postfix `%`             60
+//   Power `^`               50   (left-assoc binary — repeated `^` evaluates
+//                                left-to-right, matching Excel 365)
+//   `*` `/`                 40
+//   Binary `+` `-`          30
+//   Concat `&`              20
+//   Comparisons             10
 //
 // Right-associativity is implemented by recursing the RHS at the same
 // binding power (`min_bp = bp`), left-associativity at `min_bp = bp + 1`.
+// Every binary operator above is left-associative; none currently uses
+// `min_bp = bp`.
 //
 // Error recovery: every `parse_expression` call accepts a `SyncContext`
 // describing the syntactic frame it lives in. On error we
@@ -78,7 +83,9 @@ int InfixBindingPower(TokenKind kind, int* right_bp) noexcept {
       *right_bp = kBpIntersect + 1;
       return kBpIntersect;
     case TokenKind::Caret:
-      *right_bp = kBpPow;  // right-assoc.
+      // Left-assoc: Excel evaluates a chain of `^` left-to-right
+      // (`2^3^2` -> `(2^3)^2` -> 64), unlike most languages' right-assoc `^`.
+      *right_bp = kBpPow + 1;
       return kBpPow;
     case TokenKind::Star:
     case TokenKind::Slash:

@@ -9,10 +9,12 @@
 #ifndef FORMULON_PARSER_REF_TRANSFORMS_H_
 #define FORMULON_PARSER_REF_TRANSFORMS_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "parser/ast_shift.h"
 #include "parser/reference.h"
@@ -28,11 +30,9 @@ namespace parser {
 /// `Reference.sheet_quoted` flag is set so `format_a1` round-trips with
 /// the canonical quoted form.
 ///
-/// External references store their sheet name in a separate slot from the
-/// inner cell's `Reference.sheet`. The external-sheet hook
-/// (`transform_external_sheet`) reports the new name when the slot
-/// matches; the walker is responsible for interning it into the AST
-/// arena.
+/// 3-D references store their sheet endpoints in a separate span slot. The
+/// dedicated `apply_ref3d_span` hook maps those workbook-local endpoint names.
+/// External-workbook references remain opaque and are not renamed.
 ///
 /// `old_name` and `new_name` must outlive the transform.
 class SheetRenameTransform final : public RefTransform {
@@ -45,8 +45,9 @@ class SheetRenameTransform final : public RefTransform {
   std::optional<std::string_view> remap_sheet(std::string_view sheet) const noexcept;
 
   std::optional<Reference> apply(const Reference& ref) const override;
-  std::optional<std::string_view> transform_external_sheet(std::uint32_t book_id,
-                                                           std::string_view sheet) const override;
+  std::optional<Reference> apply_external(std::uint32_t book_id, std::string_view sheet,
+                                          const Reference& cell) const override;
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
 
  private:
   std::string_view old_name_;
@@ -54,6 +55,43 @@ class SheetRenameTransform final : public RefTransform {
   // Pre-computed quoting decision for the new name. Computing this once at
   // construction time keeps `apply` allocation-free.
   bool new_name_needs_quotes_;
+};
+
+/// Rewrites workbook-local references after removing one sheet.
+///
+/// `pre_removal_sheet_order` is the workbook's sheet order before the removal;
+/// the transform copies the string views so callers may pass a temporary
+/// vector, but the referenced sheet-name bytes must remain alive for the
+/// duration of `shift_refs`. `removed_index` is an index into that order.
+/// Ordinary qualified references naming the removed sheet collapse to
+/// `#REF!`; local, unqualified references and references to other sheets are
+/// left untouched. External-workbook references are opaque and are always
+/// left untouched.
+///
+/// For a 3-D span, removing a middle sheet leaves the textual endpoints
+/// unchanged. Removing an endpoint moves that endpoint one sheet inward in
+/// the original direction (including reverse spans). A span whose only sheet
+/// is removed collapses to `#REF!`. An unresolved endpoint is preserved when
+/// the removed sheet is not resolved by either endpoint; if the other endpoint
+/// resolves to the removed sheet, the unresolved counterpart collapses to
+/// `#REF!` because the inward direction cannot be determined.
+class SheetRemovalTransform final : public RefTransform {
+ public:
+  SheetRemovalTransform(const std::vector<std::string_view>& pre_removal_sheet_order, std::uint32_t removed_index);
+
+  std::optional<Reference> apply(const Reference& ref) const override;
+  std::optional<Reference> apply_external(std::uint32_t book_id, std::string_view sheet,
+                                          const Reference& cell) const override;
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
+
+ private:
+  static constexpr std::size_t kInvalidSheetIndex = static_cast<std::size_t>(-1);
+
+  std::size_t find_sheet(std::string_view sheet) const noexcept;
+  bool is_removed(std::size_t index) const noexcept;
+
+  std::vector<std::string_view> pre_removal_sheet_order_;
+  std::size_t removed_index_;
 };
 
 /// Direction of a row/column structural edit.

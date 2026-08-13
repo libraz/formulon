@@ -438,8 +438,11 @@ TEST(ParserBinary, AddIsLeftAssoc) {
   EXPECT_EQ(ParseToSexpr("=1+2+3"), "(binary + (binary + (num 1) (num 2)) (num 3))");
 }
 
-TEST(ParserBinary, PowIsRightAssoc) {
-  EXPECT_EQ(ParseToSexpr("=2^3^4"), "(binary ^ (num 2) (binary ^ (num 3) (num 4)))");
+TEST(ParserBinary, PowIsLeftAssoc) {
+  // Excel 365 evaluates a chain of `^` left-to-right: `2^3^4` is `(2^3)^4`,
+  // not `2^(3^4)` (the latter is the mathematical / most-languages
+  // convention, but not Excel's).
+  EXPECT_EQ(ParseToSexpr("=2^3^4"), "(binary ^ (binary ^ (num 2) (num 3)) (num 4))");
 }
 
 TEST(ParserBinary, ComparisonChainsLeftAssoc) {

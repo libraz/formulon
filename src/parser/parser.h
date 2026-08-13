@@ -6,16 +6,19 @@
 //
 //   * Atoms: numeric / boolean / error literals, cell refs, sheet-qualified
 //     refs, full-column / full-row refs, defined-name refs, parenthesised
-//     expressions, inline array literals (`{1,2;3,4}`).
-//   * Function calls (`IDENT(args, ...)`).
-//   * Operators (high -> low precedence): `:` range, prefix `+`/`-`,
-//     postfix `%`, `^` (right-assoc), `*` `/`, binary `+` `-`, `&`,
-//     comparisons (`=`, `<>`, `<`, `<=`, `>`, `>=`), prefix `@`
-//     (implicit-intersection, lowest precedence).
+//     expressions, inline array literals (`{1,2;3,4}`), a top-level
+//     parenthesised comma list as a reference union (`=SUM((A1:B2,C3:D4))`).
+//   * Function calls (`IDENT(args, ...)`), including immediately-invoked and
+//     curried `LAMBDA` calls (`LAMBDA(x, x+1)(5)`).
+//   * Operators (high -> low precedence): postfix `(` (IIFE / curry), postfix
+//     `#` (spill), `:` range, space-as-intersection, prefix `+`/`-`, prefix
+//     `@` (implicit-intersection), postfix `%`, `^`, `*` `/`, binary `+` `-`,
+//     `&`, comparisons (`=`, `<>`, `<`, `<=`, `>`, `>=`). Every binary
+//     operator left-associates, including repeated `^` (`2^3^2` = 64,
+//     matching Excel 365).
 //
 // Out of scope for the current parser:
-//   * Union (`,`) outside call arglists; intersection-as-space.
-//   * External-workbook references.
+//   * External-workbook references (`[Book1.xlsx]Sheet1!A1`, `[1]Sheet1!A1`).
 //   * Suggestion engine (the `ParseError::suggestion` slot is reserved but
 //     never populated yet).
 //
@@ -59,10 +62,21 @@ struct ParserOptions {
   /// the cap check in `parser.cpp`. After the sentinel is appended,
   /// further parsing is skipped (the parser short-circuits).
   std::uint32_t max_error_count = 50;
-  /// Maximum recursion depth of `parse_expression`. Excel-side formulas in
-  /// the wild rarely exceed double-digit depths; 128 leaves a comfortable
-  /// margin while still preventing pathological inputs from blowing the
-  /// native stack.
+  /// Maximum recursion depth of `parse_expression`, shared between true
+  /// nesting and a flat left-associative operator chain (`Parser::parse()`
+  /// validates the completed tree against the same cap once the Pratt loop
+  /// returns, since a chain never adds recursion frames of its own). This
+  /// is comfortably above what real nested-call / parenthesised formulas
+  /// need, but it is NOT above Excel's actual limit on a flat chain: Excel
+  /// bounds a chain by the 8,192-character formula length, not a term
+  /// count, so a `=A1+A2+...+A150`-shaped formula can exceed this cap while
+  /// still being well within Excel's own limit (see
+  /// `tests/divergence.yaml`'s `left_associative_chain_default_depth_cap`
+  /// entry). The cap stays shared because the recursive downstream
+  /// consumers (`ast_format::FormatNode`, `ast_shift`, the XLSB
+  /// `ptg_reader` decode-time check) walk the same tree and must not
+  /// overflow the native stack; raising it here alone would reopen that
+  /// stack-safety hole.
   std::uint32_t max_parse_depth = kMaxFormulaAstDepth;
 };
 

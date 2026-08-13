@@ -72,11 +72,23 @@ class RefTransform {
   /// use the ordinary `apply` / `apply_range` path.
   virtual bool preserves_ref3d_coordinates() const noexcept { return false; }
 
+  /// Rewrites the workbook-local sheet span carried by a `Ref3D` node.
+  ///
+  /// A 3-D reference stores its sheet endpoints outside the ordinary
+  /// `Reference` payload, so a transform that edits sheet structure needs a
+  /// dedicated hook rather than trying to route the endpoint names through
+  /// `apply`. The default is an identity mapping. Returning `std::nullopt`
+  /// collapses the complete `Ref3D` subtree to `#REF!`.
+  struct Ref3DSheetSpan {
+    std::string_view begin;
+    std::string_view end;
+  };
+  virtual std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const;
+
   /// Hook for `ExternalRef` payloads. The default forwards to `apply`,
   /// which is sufficient for transforms that only manipulate row / column
-  /// indices. Sheet-rename transforms override this to also update the
-  /// external `sheet` field — see `transform_external_sheet` for the
-  /// matching helper used by the walker.
+  /// indices. Sheet-structure transforms can override this to keep external
+  /// references opaque or to apply a workbook-specific policy.
   ///
   /// `book_id` and `sheet` are passed for context; transforms may inspect
   /// them but the return value is just the rewritten cell.
@@ -86,7 +98,9 @@ class RefTransform {
   /// Optional hook to rewrite the external-ref sheet field. Returning
   /// `std::nullopt` means "leave the sheet unchanged"; returning a string
   /// view replaces it. The walker is responsible for interning the new
-  /// sheet name into the AST arena.
+  /// sheet name into the AST arena. This hook applies only to
+  /// `ExternalRef`; workbook-local `Ref3D` endpoints use `apply_ref3d_span`
+  /// above.
   ///
   /// The default implementation does nothing.
   virtual std::optional<std::string_view> transform_external_sheet(std::uint32_t book_id, std::string_view sheet) const;

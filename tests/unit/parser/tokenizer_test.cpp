@@ -655,7 +655,13 @@ TEST(TokenizerWhitespace, FullwidthSpaceIsInvalid) {
       "A1");
   (void)tz.tokens();
   ASSERT_FALSE(tz.errors().empty());
-  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+  const LexerError& err = tz.errors().front();
+  EXPECT_EQ(err.code, LexerErrorCode::InvalidCharacter);
+  // The fullwidth space is the very first codepoint (one UTF-16 unit), so
+  // the range must start at 0, not at whatever position a stale
+  // `mark_start()` from a previous token would have left behind.
+  EXPECT_EQ(err.range.start, 0u);
+  EXPECT_EQ(err.range.end, 1u);
 }
 
 // ---------------------------------------------------------------------------
@@ -688,7 +694,29 @@ TEST(TokenizerBomHandling, MidInputBomIsInvalid) {
       "B2");
   (void)tz.tokens();
   ASSERT_FALSE(tz.errors().empty());
-  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::InvalidCharacter);
+  const LexerError& err = tz.errors().front();
+  EXPECT_EQ(err.code, LexerErrorCode::InvalidCharacter);
+  // "A1" occupies UTF-16 units [0,2); the BOM starts right after it.
+  EXPECT_EQ(err.range.start, 2u);
+  EXPECT_EQ(err.range.end, 3u);
+}
+
+TEST(TokenizerBomHandling, MidInputBomDoesNotDesyncSubsequentOffsets) {
+  // Regression: a manual `byte_pos_ += 3` in the mid-input BOM branch never
+  // advanced `utf16_pos_`, so every token after the BOM reported a UTF-16
+  // offset one code unit behind its real position (colliding with the
+  // BOM's own range instead of following it).
+  Tokenizer tz(
+      "A1\xEF\xBB\xBF"
+      "B2");
+  const auto& v = tz.tokens();
+  ASSERT_EQ(v.size(), 3u);  // CellRef("A1"), CellRef("B2"), Eof -- the BOM emits no token.
+  EXPECT_EQ(v[0].kind, TokenKind::CellRef);
+  EXPECT_EQ(v[0].range.start, 0u);
+  EXPECT_EQ(v[0].range.end, 2u);
+  EXPECT_EQ(v[1].kind, TokenKind::CellRef);
+  EXPECT_EQ(v[1].range.start, 3u);
+  EXPECT_EQ(v[1].range.end, 5u);
 }
 
 // ---------------------------------------------------------------------------
@@ -709,6 +737,39 @@ TEST(TokenizerSurrogatePairOffsets, EmojiInsideString) {
 }
 
 // ---------------------------------------------------------------------------
+// ErrorRanges
+// ---------------------------------------------------------------------------
+// `Tokenizer::record_error` is documented to produce a range covering
+// [err_start, byte_pos_) in UTF-16 code units. These probe the
+// unclassifiable-byte default branch directly (the other stale-mark_start
+// branches -- excessive length, mid-input BOM, fullwidth space -- are
+// covered next to their own token-family tests above).
+
+TEST(TokenizerErrorRanges, InvalidByteRangePointsAtOffendingByte) {
+  // 0x01 (SOH) is not a valid formula byte anywhere. "A1+" is 3 ASCII
+  // bytes / UTF-16 units, so the offending byte's range must be [3,4),
+  // not the position of the preceding '+' token (the stale-`mark_start()`
+  // bug pointed the squiggle one token too early).
+  Tokenizer tz(
+      "A1+\x01"
+      "+B2");
+  const auto& v = tz.tokens();
+  // CellRef("A1"), Plus, [invalid byte: no token], Plus, CellRef("B2"), Eof.
+  ASSERT_EQ(v.size(), 5u);
+  ASSERT_FALSE(tz.errors().empty());
+  const LexerError& err = tz.errors().front();
+  EXPECT_EQ(err.code, LexerErrorCode::InvalidCharacter);
+  EXPECT_EQ(err.range.start, 3u);
+  EXPECT_EQ(err.range.end, 4u);
+  // The token stream past the invalid byte must stay correctly offset.
+  EXPECT_EQ(v[2].kind, TokenKind::Plus);
+  EXPECT_EQ(v[2].range.start, 4u);
+  EXPECT_EQ(v[3].kind, TokenKind::CellRef);
+  EXPECT_EQ(v[3].range.start, 5u);
+  EXPECT_EQ(v[3].range.end, 7u);
+}
+
+// ---------------------------------------------------------------------------
 // ExcessiveLength
 // ---------------------------------------------------------------------------
 
@@ -719,7 +780,14 @@ TEST(TokenizerExcessiveLength, Truncates) {
   Tokenizer tz("A B C D E F G H", opts);
   (void)tz.tokens();
   ASSERT_FALSE(tz.errors().empty());
-  EXPECT_EQ(tz.errors().front().code, LexerErrorCode::ExcessiveLength);
+  const LexerError& err = tz.errors().front();
+  EXPECT_EQ(err.code, LexerErrorCode::ExcessiveLength);
+  // Regression: the cap branch never called `mark_start()` before jumping
+  // `byte_pos_` to the end of source, so the range's start carried over
+  // from whichever earlier token happened to call `mark_start()` last
+  // (here, "E" at [4,5)) instead of the cap boundary itself.
+  EXPECT_EQ(err.range.start, 5u);
+  EXPECT_EQ(err.range.end, 5u);
 }
 
 TEST(TokenizerExcessiveLength, SingleOversizedIdentifierIsCapped) {

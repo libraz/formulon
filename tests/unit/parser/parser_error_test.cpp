@@ -286,6 +286,30 @@ TEST(ParserErrors, LeftAssociativeChainTooDeep) {
   EXPECT_TRUE(HasErrorCode(parser.errors(), ParseErrorCode::NestedFormulaTooDeep));
 }
 
+// Documented divergence (tests/divergence.yaml:
+// left_associative_chain_default_depth_cap): Excel's real ceiling on a flat
+// operator chain is the 8192-character formula length, not a nesting-depth
+// count, so `=A1+A2+...+A150` (150 terms, well under the character limit)
+// evaluates fine in Excel. Formulon shares `kMaxFormulaAstDepth` between
+// true nesting and flat left-associative chains because the recursive
+// downstream consumers (`ast_format::FormatNode`, `ast_shift`, the XLSB
+// `ptg_reader` decode-time check) walk the same tree and must not overflow
+// the native stack; raising the shared cap would reopen that stack-safety
+// hole. This test pins the default-`ParserOptions` (128) rejection so a
+// future change to the cap is a deliberate, reviewed decision rather than
+// an accidental regression either way.
+TEST(ParserErrors, DefaultDepthCapRejectsLongLeftAssociativeChain) {
+  std::string formula = "=A1";
+  for (std::uint32_t i = 2; i <= 150; ++i) {
+    formula.append("+A").append(std::to_string(i));
+  }
+  Arena arena;
+  Parser parser(formula, arena);  // default ParserOptions: max_parse_depth == kMaxFormulaAstDepth (128).
+  AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  EXPECT_TRUE(HasErrorCode(parser.errors(), ParseErrorCode::NestedFormulaTooDeep));
+}
+
 TEST(ParserErrors, TooManyErrorsAppendsSentinel) {
   Arena a;
   ParserOptions opts;

@@ -4,8 +4,9 @@
 //
 //   * UTF-8 decoding is hand-rolled (no `<codecvt>` / ICU): we only need
 //     byte-length and UTF-16 code-unit count per codepoint.
-//   * Numbers currently go through `std::strtod`; this will be swapped for
-//     `fast_float` once 1-bit Excel parity becomes mandatory.
+//   * Numbers go through `std::strtod` in the C locale (IEEE 754
+//     round-to-nearest), which matches Excel across the oracle corpus with
+//     no observed divergence.
 //   * String / quoted-sheet-name escapes expand into the tokenizer's arena
 //     so token views remain stable for the lifetime of the tokenizer.
 //   * The spilled-range `#` operator is disambiguated from `#error!` by
@@ -334,6 +335,11 @@ const std::vector<Token>& Tokenizer::tokens() {
     if (utf16_pos_ >= opts_.max_formula_length_utf16) {
       if (!truncated_) {
         const std::size_t err_start = byte_pos_;
+        // Mark the range start at the cap boundary before jumping `byte_pos_`
+        // to the end of source, so the diagnostic points at where the limit
+        // was hit rather than at whatever token was scanned immediately
+        // before it (`start_utf16_` otherwise retains that stale value).
+        mark_start();
         // Advance to end of source so the error lexeme covers the overflow.
         byte_pos_ = source_.size();
         record_error(LexerErrorCode::ExcessiveLength, err_start);
@@ -349,8 +355,15 @@ const std::vector<Token>& Tokenizer::tokens() {
     if (c == 0xEF && byte_pos_ + 2 < source_.size() && static_cast<unsigned char>(source_[byte_pos_ + 1]) == 0xBB &&
         static_cast<unsigned char>(source_[byte_pos_ + 2]) == 0xBF) {
       const std::size_t err_start = byte_pos_;
-      byte_pos_ += 3;
-      column_ += 1;  // zero-width BOM counts as one column for diagnostics.
+      mark_start();
+      // `advance_one()` (rather than a manual `byte_pos_ += 3`) is required
+      // here: it is the only thing that advances `utf16_pos_` for this
+      // codepoint. The previous manual-jump form left `utf16_pos_` unmoved,
+      // so a BOM appearing mid-formula desynchronised the UTF-16 offset of
+      // every token scanned after it. U+FEFF is a single BMP code unit, so
+      // this also reproduces the prior "zero-width BOM counts as one column"
+      // column bump as a side effect.
+      advance_one();
       record_error(LexerErrorCode::InvalidCharacter, err_start);
       continue;
     }
@@ -367,6 +380,9 @@ const std::vector<Token>& Tokenizer::tokens() {
     if (c == 0xE3 && byte_pos_ + 2 < source_.size() && static_cast<unsigned char>(source_[byte_pos_ + 1]) == 0x80 &&
         static_cast<unsigned char>(source_[byte_pos_ + 2]) == 0x80) {
       const std::size_t err_start = byte_pos_;
+      // Mark the range start before advancing past the codepoint, so
+      // `start_utf16_` reflects `err_start` rather than the previous token.
+      mark_start();
       // Advance by one codepoint (3 bytes) and record.
       advance_one();
       record_error(LexerErrorCode::InvalidCharacter, err_start);
@@ -503,6 +519,9 @@ const std::vector<Token>& Tokenizer::tokens() {
     // Unclassifiable byte: emit an error and consume one codepoint.
     {
       const std::size_t err_start = byte_pos_;
+      // Mark the range start before advancing, so `start_utf16_` reflects
+      // `err_start` rather than the previous token.
+      mark_start();
       advance_one();
       record_error(LexerErrorCode::InvalidCharacter, err_start);
     }
