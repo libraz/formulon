@@ -54,17 +54,26 @@ enum class StoragePrefixKind {
 /// header stays free of the function catalog.
 using StoragePrefixClassifier = StoragePrefixKind (*)(std::string_view canonical_name);
 
-/// Like `format_formula`, but re-applies Excel's hidden storage prefixes so
-/// the result is what a real Excel worksheet stores in `<f>`:
-///   * each function call whose name `classify` maps to `Xlfn` / `XlfnXlws`
-///     is emitted with the corresponding `_xlfn.` / `_xlfn._xlws.` prefix;
-///   * LET / LAMBDA are themselves future functions (classified the same
+/// Spells the exact function name a stored formula carries for a call
+/// written as `name`: the storage prefix plus whatever spelling Excel
+/// itself stores, which is not always the one the user typed (a
+/// localised formula-bar alias resolves to the invariant name).
+/// Supplied by the writer for the same reason as the classifier — the
+/// parser holds the name as typed and does not own the catalog.
+using StorageFunctionNameSpeller = std::string (*)(std::string_view name);
+
+/// Like `format_formula`, but emits what a real Excel worksheet stores in
+/// `<f>`:
+///   * each function call's name is spelled by `spell`, which applies the
+///     `_xlfn.` / `_xlfn._xlws.` prefix and resolves any spelling Excel
+///     accepts but does not store;
+///   * LET / LAMBDA are themselves future functions (spelled the same
 ///     way), and every LET binding name / LAMBDA parameter name — plus each
 ///     in-scope reference to one — is emitted with the `_xlpm.` prefix.
 ///
 /// This is the inverse of `io::strip_storage_prefixes` for the shapes the
 /// writer produces, so a save → load cycle round-trips the canonical text.
-std::string format_formula_storage(const AstNode& node, StoragePrefixClassifier classify);
+std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell);
 
 }  // namespace parser
 }  // namespace formulon

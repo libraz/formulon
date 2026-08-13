@@ -6,6 +6,7 @@
 
 #include "io/xlsb/writer.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -650,6 +651,123 @@ TEST(XlsbWriter, DefinedNameWithFutureFunctionRoundTrips) {
   ASSERT_EQ(read_or.value().workbook.defined_names().size(), 1U);
   EXPECT_EQ(read_or.value().workbook.defined_names()[0].name, "Joined");
   EXPECT_EQ(read_or.value().workbook.defined_names()[0].formula, "_xlfn.TEXTJOIN(\",\",TRUE,A1:A2)");
+}
+
+// True when `haystack` contains `needle` encoded the way `BrtName`
+// stores a name: UTF-16LE, no BOM. Excel names are ASCII, so each byte
+// is followed by a zero byte.
+bool ContainsUtf16Le(const std::vector<std::uint8_t>& haystack, std::string_view needle) {
+  std::vector<std::uint8_t> wide;
+  wide.reserve(needle.size() * 2U);
+  for (const char c : needle) {
+    wide.push_back(static_cast<std::uint8_t>(c));
+    wide.push_back(0U);
+  }
+  return std::search(haystack.begin(), haystack.end(), wide.begin(), wide.end()) != haystack.end();
+}
+
+TEST(XlsbWriter, FutureFunctionCallRegistersHiddenName) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("F");
+  s.set_cell_formula(0U, 0U, "=XLOOKUP(\"k\",A1:A3,B1:B3)");
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
+  auto workbook_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(workbook_or));
+  EXPECT_TRUE(ContainsUtf16Le(workbook_or.value(), "_xlfn.XLOOKUP"));
+}
+
+TEST(XlsbWriter, CallWithNoKnownFuncIdIsNotEncodedAsAFutureFunction) {
+  // `CUBEVALUE` is a classic (pre-2007) Excel function whose id
+  // `func_id_table` does not carry. Encoding it as a future function
+  // would register a hidden `_xlfn.CUBEVALUE` name real Excel cannot
+  // resolve (`#NAME?`); the encoder reports the missing id instead and
+  // the cell degrades to its cached literal, which the write result
+  // counts. Absence from the table says nothing about whether Excel has
+  // an id, which is exactly why the hidden-name route is reachable only
+  // by enumeration.
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("F");
+  s.set_cell_formula(0U, 0U, "=CUBEVALUE(\"c\",\"m\")");
+  s.set_cell_cached_value(0U, 0U, Value::number(42.0));
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().downgraded_formula_count, 1U);
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
+  auto workbook_or = zip.read_entry("xl/workbook.bin");
+  ASSERT_TRUE(static_cast<bool>(workbook_or));
+  EXPECT_FALSE(ContainsUtf16Le(workbook_or.value(), "_xlfn.CUBEVALUE"));
+
+  auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Cell* cell = read_or.value().workbook.sheet(0).cell_at(0U, 0U);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_TRUE(cell->formula_text.empty());
+  ASSERT_TRUE(cell->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(cell->cached_value.as_number(), 42.0);
+}
+
+TEST(XlsbWriter, LocalisedJisSpellingSavesAsTheStoredDbcsSpelling) {
+  // Excel localises the formula bar but not the file: `JIS` is the ja-JP
+  // spelling of `DBCS`, and Excel stores the call as `DBCS` with
+  // function id 215 in both containers. A workbook carrying either
+  // spelling must save without degrading, and both come back as the
+  // stored spelling.
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("F");
+  s.set_cell_formula(0U, 0U, "=JIS(\"ABC\")");
+  s.set_cell_formula(1U, 0U, "=DBCS(\"ABC\")");
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+
+  auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Sheet& rt = read_or.value().workbook.sheet(0);
+  const Cell* from_jis = rt.cell_at(0U, 0U);
+  ASSERT_NE(from_jis, nullptr);
+  EXPECT_EQ(from_jis->formula_text, "=DBCS(\"ABC\")");
+  const Cell* from_dbcs = rt.cell_at(1U, 0U);
+  ASSERT_NE(from_dbcs, nullptr);
+  EXPECT_EQ(from_dbcs->formula_text, "=DBCS(\"ABC\")");
+}
+
+TEST(XlsbWriter, HarvestedFuncIdCallsRoundTripWithIdenticalFormulaText) {
+  // The ids for these callees were decoded from an Excel-produced
+  // workbook (`tests/fixtures/excel/xlsb_func_ids.xlsb`). Each spells a
+  // different encoding decision the table drives: a fixed-arity
+  // `PtgFunc` (MROUND), a `PtgFuncVar` at its minimum and its maximum
+  // arity (WEEKNUM), and an open-ended variadic (GCD). None may degrade
+  // to a cached literal, and every formula must come back byte-identical.
+  constexpr std::uint32_t kFormulaCount = 5U;
+  const char* kFormulas[kFormulaCount] = {
+      "=MROUND(17,5)", "=WEEKNUM(43922)", "=WEEKNUM(43922,1)", "=GCD(24,36,60)", "=YEARFRAC(43831,44197,0)",
+  };
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("F");
+  for (std::uint32_t i = 0; i < kFormulaCount; ++i) {
+    s.set_cell_formula(i, 0U, kFormulas[i]);
+  }
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+
+  auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Sheet& rt = read_or.value().workbook.sheet(0);
+  for (std::uint32_t i = 0; i < kFormulaCount; ++i) {
+    const Cell* cell = rt.cell_at(i, 0U);
+    ASSERT_NE(cell, nullptr) << kFormulas[i];
+    EXPECT_EQ(cell->formula_text, kFormulas[i]);
+  }
 }
 
 TEST(XlsbWriter, UnencodableFormulaDowngradesToCachedLiteralAndReportsIt) {

@@ -26,6 +26,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/workbook_test.cpp
   unit/utils/checked_mul_test.cpp
   unit/utils/a1_column_test.cpp
+  unit/utils/budget_charge_test.cpp
   unit/utils/double_format_test.cpp
   unit/utils/rect_iterator_test.cpp
   unit/utils/resource_budget_test.cpp
@@ -40,6 +41,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/comments_roundtrip_test.cpp
   unit/io/data_validation_roundtrip_test.cpp
   unit/io/defined_names_test.cpp
+  unit/io/future_functions_test.cpp
   unit/io/hyperlink_roundtrip_test.cpp
   unit/io/iso_date_test.cpp
   unit/io/merge_roundtrip_test.cpp
@@ -53,8 +55,11 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/pivot_table_writer_test.cpp
   unit/io/sax_shared_formula_test.cpp
   unit/io/sax_xml_reader_test.cpp
+  unit/io/sheet_name_validation_test.cpp
+  unit/io/sheet_reader_lexing_parity_test.cpp
   unit/io/sheet_reader_test.cpp
   unit/io/sst_reader_test.cpp
+  unit/io/storage_prefix_container_test.cpp
   unit/io/styles_reader_test.cpp
   unit/io/styles_writer_test.cpp
   unit/io/tables_reader_test.cpp
@@ -62,12 +67,14 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xml_escape_test.cpp
   unit/io/xml_utils_test.cpp
   unit/io/xsd_bool_test.cpp
+  unit/io/xsd_double_test.cpp
   unit/io/zip_reader_test.cpp
   unit/io/format_detect_test.cpp
   unit/io/roundtrip_symmetry_test.cpp
   unit/io/pivot_roundtrip_symmetry_test.cpp
   unit/io/sheet_roundtrip_symmetry_test.cpp
   unit/io/xlsb_roundtrip_symmetry_test.cpp
+  unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp
   unit/io/xlsb/ptg_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
@@ -369,6 +376,11 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME binding_drift_dts_enums
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py dts-enums
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME binding_drift_style_record_fields
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py style-record-fields
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   # Structural invariants enforced by "exactly one implementation exists":

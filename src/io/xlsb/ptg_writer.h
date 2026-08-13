@@ -70,9 +70,10 @@ struct EncodedFormula {
 /// Walks `node`'s AST appending, in encounter order, every name a
 /// `PtgName` reference will be needed for while encoding it:
 ///
-///   * A `Call` node whose name is not resolvable via `func_id_table`
-///     (a post-2007 "future function": XLOOKUP, TEXTJOIN, CONCAT, IFS,
-///     SEQUENCE, ...).
+///   * A `Call` node naming one of the enumerated future functions
+///     (`io/future_functions.h`: XLOOKUP, TEXTJOIN, CONCAT, IFS,
+///     SEQUENCE, ...), which Excel stores as a hidden `_xlfn.*` name
+///     rather than a function id.
 ///   * A `NameRef` node (an ordinary defined-name reference, e.g.
 ///     `Rate`).
 ///

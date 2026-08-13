@@ -198,6 +198,46 @@ TEST(BuiltinsWidthDbcs, AliasOfJisVoiced) {
   EXPECT_EQ(v.as_text(), u8"ガ");
 }
 
+TEST(BuiltinsWidthDbcs, BothSpellingsAgreeAcrossTheConversionCorpus) {
+  // `JIS` is the ja-JP formula-bar spelling of `DBCS`; Excel rewrites it
+  // to `DBCS` when the formula is committed, so no oracle case can check
+  // that the two agree — by the time Excel evaluates, only one name is
+  // left. The equivalence is an internal invariant of the shared
+  // registration in `register_text_width_builtins`, and this is where it
+  // is pinned. The argument list mirrors the width oracle corpus so the
+  // alias is exercised over exactly the inputs Excel answers for.
+  const char* const kArguments[] = {
+      "\"ABC 123\"",
+      u8"\"ｶﾞ\"",
+      u8"\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\"",
+      u8"\"ｱｲｳｴｵ\"",
+      u8"\"ＡＢＣ\"",
+      u8"\"漢字\"",
+      u8"\"漢ｱ字\"",
+      u8"\"ﾞ\"",
+      "\"!@#$%\"",
+      "TRUE",
+      "#DIV/0!",
+      u8"\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\"",
+      "ASC(\"ＡＢＣ１２３\")",
+  };
+  for (const char* argument : kArguments) {
+    SCOPED_TRACE(argument);
+    const Value from_jis = EvalSource(std::string("=JIS(") + argument + ")");
+    const Value from_dbcs = EvalSource(std::string("=DBCS(") + argument + ")");
+    ASSERT_EQ(from_jis.kind(), from_dbcs.kind());
+    if (from_jis.is_text()) {
+      EXPECT_EQ(from_jis.as_text(), from_dbcs.as_text());
+    } else if (from_jis.is_error()) {
+      EXPECT_EQ(from_jis.as_error(), from_dbcs.as_error());
+    }
+  }
+
+  // The nesting order must not matter either, which is what the corpus's
+  // two round-trip cases assert against Excel under the stored spelling.
+  EXPECT_EQ(EvalSource("=ASC(JIS(\"ABC123\"))").as_text(), EvalSource("=ASC(DBCS(\"ABC123\"))").as_text());
+}
+
 // ---------------------------------------------------------------------------
 // Round-trips
 // ---------------------------------------------------------------------------

@@ -18,16 +18,17 @@
 //   G1:G5 = SORT(A1:A5) spill, H1:H3 = UNIQUE({1;2;2;3;1}) spill,
 //     I1:I3 = FILTER(A1:A5,A1:A5>4) spill, J1:L1 = TRANSPOSE(A1:A3) spill
 //
-// One deliberate exception: E4 is `JIS("ｱｲｳ123")`. Mac Excel has no
-// built-in JIS() function, so its own cache is host-dependent (`#NAME?`)
-// rather than a value Formulon's JIS() should reproduce; E4 is excluded
-// from the generic cache comparison and asserted directly instead.
+// E4 is `JIS("ｱｲｳ123")`. Localized Excel provides JIS(), but this fixture was
+// authored through Excel's invariant API with the localized name, leaving
+// raw JIS and a `#NAME?` cache as evidence of invalid authoring. The direct
+// E4 assertion is Formulon alias coverage, not an Excel-cache oracle.
 
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <deque>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -92,8 +93,10 @@ pugi::xml_document LoadRawSheetXml() {
 // exact same "cached value is the oracle" contract the rest of this file
 // relies on. Handles the two shapes among this fixture's formula cells:
 // plain numeric `<v>` (no `t=`) and `t="str"` (formula string result).
-// `t="e"` (E4) is intentionally unsupported here -- it is asserted
-// directly elsewhere, never through this generic path.
+// `t="e"` (E4) is intentionally unsupported here: the fixture's invalid
+// invariant-API authoring left localized `JIS` and a `#NAME?` cache. E4 is
+// asserted directly for Formulon's alias behavior, not through this generic
+// Excel-cache path.
 //
 // `Value::text` is a non-owning view: a `t="str"` result's backing bytes
 // are pushed onto `text_storage` (a `deque`, so existing elements never
@@ -164,14 +167,15 @@ struct FormulaCase {
   const char* label;  // function family under test, for SCOPED_TRACE
 };
 
-// Column E (index 4), rows 1..28 (0-based 0..27). E4 (JIS, row 3) is
-// deliberately excluded -- see the file-header comment.
+// Column E (index 4), rows 1..28 (0-based 0..27). E4 (localized JIS, row 3)
+// is excluded from this cached-value list because its invalid invariant-API
+// cache is `#NAME?`; see the file-header comment.
 const std::vector<FormulaCase>& FormulaCases() {
   static const std::vector<FormulaCase> kCases = {
       {0, "E1 LEN"},
       {1, "E2 LENB"},
       {2, "E3 ASC"},
-      // row 3 (E4, JIS) intentionally omitted.
+      // row 3 (E4, localized JIS) intentionally omitted from cache comparison.
       {4, "E5 MID"},
       {5, "E6 TEXT(date)"},
       {6, "E7 TEXT(number)"},
@@ -198,6 +202,24 @@ const std::vector<FormulaCase>& FormulaCases() {
       {27, "E28 FV"},
   };
   return kCases;
+}
+
+// Collects `cell reference -> <f> element text` for every formula cell in
+// a worksheet part. The text is pugixml's decoded form, so the comparison
+// is on the formula as spelled rather than on the entity encoding: Excel
+// leaves a `"` inside a string literal unescaped where Formulon's writer
+// emits `&quot;`, which is the same XML text either way.
+std::map<std::string, std::string> FormulaTextsByCell(const pugi::xml_document& sheet_xml) {
+  std::map<std::string, std::string> out;
+  for (const pugi::xpath_node& xnode : sheet_xml.select_nodes("//c[f]")) {
+    const pugi::xml_node c = xnode.node();
+    const std::string text = c.child("f").text().get();
+    if (text.empty()) {
+      continue;  // shared-formula follower: no text of its own.
+    }
+    out.emplace(c.attribute("r").value(), text);
+  }
+  return out;
 }
 
 constexpr std::uint32_t kColE = 4;
@@ -252,8 +274,8 @@ void ExpectSpillShapesMatch(const Sheet& sheet) {
 
 // ---------------------------------------------------------------------------
 // (1)+(2) Cached (Excel-authored) values match Formulon's recalculated
-// values across every formula-family cell, except E4 (see file header),
-// which is asserted directly against Formulon's own JIS() semantics.
+// values across every formula-family cell. E4's invalid localized-JIS cache
+// is not an Excel oracle; its Formulon alias semantics are asserted directly.
 // ---------------------------------------------------------------------------
 
 TEST(FormulaCorpusFixtureSmoke, CachedValuesMatchRecalcAcrossFunctionFamilies) {
@@ -280,13 +302,12 @@ TEST(FormulaCorpusFixtureSmoke, CachedValuesMatchRecalcAcrossFunctionFamilies) {
   }
 }
 
-TEST(FormulaCorpusFixtureSmoke, E4JisConvertsHalfWidthToFullWidthDirectly) {
-  // Mac Excel has no built-in JIS(); its own cache is the host-dependent
-  // #NAME? (wrapped in a `<f t="array" aca="1" ref="E4" ca="1">` rich-array
-  // shape -- itself a useful reader edge case, exercised implicitly by
-  // this test needing E4's formula to parse at all). Formulon does
-  // implement JIS(), so its recalculated value is asserted directly
-  // against the win-365 primary-oracle semantics (half-width -> full-width).
+TEST(FormulaCorpusFixtureSmoke, E4LocalizedJisAliasConvertsHalfWidthToFullWidth) {
+  // Localized Excel provides JIS(), but this fixture was authored through
+  // Excel's invariant API with the localized name, leaving raw JIS and a
+  // #NAME? cache. This is Formulon alias coverage, not an Excel-cache oracle.
+  // The `<f t="array" aca="1" ref="E4" ca="1">` rich-array shape is also a
+  // useful reader edge case, exercised by needing E4's formula to parse.
   Workbook wb = LoadFixture();
   ASSERT_EQ(wb.sheet_count(), 1U);
   auto recalc_or = wb.recalc(eval::default_registry());
@@ -350,6 +371,64 @@ TEST(FormulaCorpusFixtureSmoke, SaveReloadPreservesRecalculatedValues) {
   }
 
   ExpectSpillShapesMatch(sheet);
+}
+
+// ---------------------------------------------------------------------------
+// (5) Every `<f>` this fixture carries survives load -> recalc -> save with
+// Excel's storage spelling, including E4's correction from the fixture's
+// invalid invariant-API `JIS(...)` to canonical `DBCS(...)`. This corpus
+// separates the two halves of the rule: MROUND / YEARFRAC / EOMONTH /
+// TRANSPOSE / DATEDIF are Analysis ToolPak functions Excel 2007 made
+// native and stores bare, while CEILING.MATH / STDEV.P / PERCENTILE.INC /
+// XMATCH / TEXTJOIN / UNIQUE and the worksheet-only SORT / FILTER carry
+// their `_xlfn.` / `_xlfn._xlws.` prefix. Prefixing a bare one, or
+// dropping the prefix from a prefixed one, makes real Excel show #NAME?.
+// ---------------------------------------------------------------------------
+
+TEST(FormulaCorpusFixtureSmoke, SavedFormulaTextUsesExcelStorageSpellingForEveryCell) {
+  const pugi::xml_document original_xml = LoadRawSheetXml();
+  const std::map<std::string, std::string> original = FormulaTextsByCell(original_xml);
+  ASSERT_FALSE(original.empty()) << "no <f> elements found in the fixture";
+  const auto e4 = original.find("E4");
+  ASSERT_NE(e4, original.end()) << "E4 formula missing from the fixture";
+  ASSERT_EQ(e4->second, "JIS(\"ｱｲｳ123\")");
+  std::map<std::string, std::string> expected = original;
+  expected["E4"] = "DBCS(\"ｱｲｳ123\")";
+
+  Workbook wb = LoadFixture();
+  ASSERT_EQ(wb.sheet_count(), 1U);
+  auto recalc_or = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc_or)) << "recalc failed: " << recalc_or.error().message;
+  auto saved_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved_or)) << "save failed: " << saved_or.error().message;
+
+  std::string saved_part;
+  const ::testing::AssertionResult extracted =
+      test::extract_part(test::span_of(saved_or.value()), "xl/worksheets/sheet1.xml", &saved_part);
+  ASSERT_TRUE(static_cast<bool>(extracted)) << extracted.message();
+  pugi::xml_document saved_xml;
+  const ::testing::AssertionResult parsed = test::parse_xml(saved_part, &saved_xml);
+  ASSERT_TRUE(static_cast<bool>(parsed)) << parsed.message();
+  const std::map<std::string, std::string> saved = FormulaTextsByCell(saved_xml);
+
+  for (const auto& entry : expected) {
+    SCOPED_TRACE(entry.first);
+    const auto it = saved.find(entry.first);
+    ASSERT_NE(it, saved.end()) << "formula cell dropped on save";
+    EXPECT_EQ(it->second, entry.second);
+  }
+  EXPECT_EQ(saved.size(), original.size()) << "save introduced formula cells the fixture does not have";
+
+  // The prefixes themselves carry no escapable character, so they are also
+  // assertable against the raw part bytes.
+  EXPECT_NE(saved_part.find(">MROUND(17,5)<"), std::string::npos) << saved_part;
+  EXPECT_EQ(saved_part.find("_xlfn.MROUND"), std::string::npos) << saved_part;
+  EXPECT_EQ(saved_part.find("_xlfn.YEARFRAC"), std::string::npos) << saved_part;
+  EXPECT_EQ(saved_part.find("_xlfn.TRANSPOSE"), std::string::npos) << saved_part;
+  EXPECT_NE(saved_part.find("_xlfn.CEILING.MATH("), std::string::npos) << saved_part;
+  EXPECT_NE(saved_part.find("_xlfn._xlws.SORT("), std::string::npos) << saved_part;
+  EXPECT_NE(saved_part.find("_xlfn._xlws.FILTER("), std::string::npos) << saved_part;
+  EXPECT_NE(saved_part.find("_xlfn.UNIQUE("), std::string::npos) << saved_part;
 }
 
 }  // namespace

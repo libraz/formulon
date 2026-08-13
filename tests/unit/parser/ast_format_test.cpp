@@ -187,39 +187,6 @@ TEST(AstFormat, SpillRef) {
   ExpectRoundTripsToSame("=A1#");
 }
 
-TEST(AstFormat, ExternalRefRoundTripsViaAst) {
-  // The parser does not consume `[1]Sheet1!A1` source, so build the AST
-  // manually and verify format → re-parse → equivalent shape. Re-parsing
-  // an external-ref formatter output requires a parser path that is out of
-  // scope for this bundle; instead verify the *shape* of the output text
-  // matches the canonical form so future external-ref parsing slots in.
-  Arena a;
-  Reference cell;
-  cell.col = 0;
-  cell.row = 0;
-  AstNode* n = make_external_ref(a, 1, "Sheet1", cell);
-  ASSERT_NE(n, nullptr);
-  EXPECT_EQ(format_formula(*n), "[1]Sheet1!A1");
-}
-
-TEST(AstFormat, ExternalRefQuotesSheetWithSpace) {
-  Arena a;
-  Reference cell;
-  cell.col = 0;
-  cell.row = 0;
-  AstNode* n = make_external_ref(a, 2, "My Book", cell);
-  ASSERT_NE(n, nullptr);
-  EXPECT_EQ(format_formula(*n), "[2]'My Book'!A1");
-}
-
-TEST(AstFormat, ExternalRefQuotesNumericSheet) {
-  Arena a;
-  Reference cell;
-  AstNode* n = make_external_ref(a, 2, "2026", cell);
-  ASSERT_NE(n, nullptr);
-  EXPECT_EQ(format_formula(*n), "[2]'2026'!A1");
-}
-
 TEST(AstFormat, StructuredRefRoundTripsColumn) {
   ExpectRoundTripsToSame("=Tbl[Region]");
 }

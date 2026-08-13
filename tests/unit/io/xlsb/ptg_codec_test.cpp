@@ -219,7 +219,14 @@ TEST(XlsbPtgCodec, NestedFunctions) {
 
 TEST(XlsbPtgCodec, Post2007BuiltinsUseNativeFunctionIds) {
   EXPECT_EQ(RoundTrip("ASC(\"Ａ\")"), "ASC(\"Ａ\")");
-  EXPECT_EQ(RoundTrip("JIS(\"A\")"), "JIS(\"A\")");
+  // `JIS` is the ja-JP formula-bar spelling of `DBCS`; Excel stores the
+  // call as `DBCS` in both containers and has one function id (215) for
+  // it. The codec therefore canonicalises the spelling rather than
+  // preserving it — the Writer resolves `JIS` to id 215 through the
+  // table's alias, and the Reader hands that id back as `DBCS`, which
+  // is exactly what Excel's own formula text would say.
+  EXPECT_EQ(RoundTrip("JIS(\"A\")"), "DBCS(\"A\")");
+  EXPECT_EQ(RoundTrip("DBCS(\"A\")"), "DBCS(\"A\")");
   EXPECT_EQ(RoundTrip("EDATE(A1,1)"), "EDATE(A1,1)");
   EXPECT_EQ(RoundTrip("EOMONTH(A1,1)"), "EOMONTH(A1,1)");
   EXPECT_EQ(RoundTrip("WORKDAY(A1,1)"), "WORKDAY(A1,1)");

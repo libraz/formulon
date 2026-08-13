@@ -31,8 +31,8 @@
 #include "cell.h"
 #include "double-conversion/double-conversion.h"
 #include "eval/utf8_length.h"
+#include "io/future_functions.h"
 #include "io/ooxml/shared_strings_writer.h"
-#include "io/xlsb/func_id_table.h"
 #include "io/xml_escape.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
@@ -45,34 +45,6 @@
 namespace formulon {
 namespace io {
 namespace {
-
-// Classifies a function name into the storage prefix Excel writes for it,
-// for the OOXML `<f>` re-serialisation (see the formula-emit path below).
-// Worksheet-only dynamic-array functions (the original 2018 set) carry
-// `_xlfn._xlws.`; every other function absent from the classic (pre-2007)
-// XLSB function-id table is a post-2007 "future function" carrying
-// `_xlfn.`; classic functions carry no prefix. This mirrors the
-// classic-vs-future split the XLSB writer already uses.
-parser::StoragePrefixKind ClassifyStoragePrefix(std::string_view canonical_name) {
-  std::string upper;
-  upper.reserve(canonical_name.size());
-  for (char c : canonical_name) {
-    if (c >= 'a' && c <= 'z') {
-      c = static_cast<char>(c - 'a' + 'A');
-    }
-    upper.push_back(c);
-  }
-  static constexpr std::string_view kXlwsFunctions[] = {"FILTER", "SORT", "SORTBY", "UNIQUE"};
-  for (const std::string_view name : kXlwsFunctions) {
-    if (upper == name) {
-      return parser::StoragePrefixKind::XlfnXlws;
-    }
-  }
-  if (xlsb::lookup_func_by_name(upper) != nullptr) {
-    return parser::StoragePrefixKind::None;
-  }
-  return parser::StoragePrefixKind::Xlfn;
-}
 
 // ---------------------------------------------------------------------------
 // Number formatting
@@ -369,18 +341,19 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       formula.remove_prefix(1);
     }
     // Re-apply Excel's hidden storage prefixes (`_xlfn.` / `_xlfn._xlws.`
-    // on future functions, `_xlpm.` on LET / LAMBDA parameters) so a real
-    // Excel reading this file resolves the modern functions instead of
-    // showing #NAME?. `formula_text` was normalised to the canonical
-    // formula-bar form on ingestion (io::strip_storage_prefixes). Parse it
-    // and re-serialise through the storage formatter; on any parse failure
-    // fall back to the canonical text unchanged.
+    // on the enumerated future functions, `_xlpm.` on LET / LAMBDA
+    // parameters) so a real Excel reading this file resolves the modern
+    // functions instead of showing #NAME?. `formula_text` was normalised
+    // to the canonical formula-bar form on ingestion
+    // (io::strip_storage_prefixes). Parse it and re-serialise through the
+    // storage formatter; on any parse failure fall back to the canonical
+    // text unchanged.
     Arena formula_arena;
     parser::Parser formula_parser(formula, formula_arena);
     parser::AstNode* formula_root = formula_parser.parse();
     bool storage_emitted = false;
     if (formula_root != nullptr && formula_parser.errors().empty()) {
-      const std::string storage = parser::format_formula_storage(*formula_root, &ClassifyStoragePrefix);
+      const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name);
       // Only re-serialise when a storage prefix was actually added (the
       // formula uses a future function or LET / LAMBDA). For a classic
       // formula the storage form equals the plain form, so the stored text

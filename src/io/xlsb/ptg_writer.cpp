@@ -14,8 +14,10 @@
 #include <utility>
 #include <vector>
 
+#include "io/future_functions.h"
 #include "io/xlsb/func_id_table.h"
 #include "io/xlsb/ptg.h"
+#include "parser/ast_format.h"
 #include "parser/reference.h"
 #include "utils/status_macros.h"
 #include "value.h"
@@ -23,30 +25,27 @@
 namespace formulon {
 namespace io {
 namespace xlsb {
+namespace {
 
-// Storage name Excel writes into the BrtName table for a "future"
-// (post-2007) function absent from the classic func-id table. Worksheet-
-// only dynamic-array functions (the original 2018 set) carry the
-// `_xlfn._xlws.` prefix; every other future function carries `_xlfn.`.
-// Mirrors ClassifyStoragePrefix in the OOXML writer so both persistence
-// formats name the callee identically. The name is upper-cased to match
-// Excel's own BrtName spelling byte-for-byte.
-std::string future_function_storage_name(std::string_view name) {
-  std::string upper;
-  upper.reserve(name.size());
-  for (char c : name) {
-    upper.push_back((c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c);
-  }
-  static constexpr std::string_view kXlwsFunctions[] = {"FILTER", "SORT", "SORTBY", "UNIQUE"};
-  for (const std::string_view fn : kXlwsFunctions) {
-    if (upper == fn) {
-      return std::string("_xlfn._xlws.") + upper;
-    }
-  }
-  return std::string("_xlfn.") + upper;
+/// True when Excel stores a call to `name` under a hidden `_xlfn.*`
+/// BrtName rather than a function id. Classified by
+/// `io::classify_storage_prefix`, the same enumeration the OOXML writer
+/// consults, so the two formats name the callee identically.
+bool IsFutureFunction(std::string_view name) {
+  return classify_storage_prefix(name) != parser::StoragePrefixKind::None;
 }
 
-namespace {
+/// True when a call to `name` is encoded through the hidden-name route
+/// (`PtgName` + `PtgFuncVar(255)`) rather than a function id: either a
+/// `_xlfn.*` future function, or one of the enumerated names Excel
+/// spells bare in OOXML yet has no function id for. Both sets are
+/// enumerated from observed Excel output — "absent from
+/// `func_id_table`" deliberately does not qualify, because that table
+/// grows incrementally and a hidden `_xlfn.<NAME>` Excel does not know
+/// resolves to `#NAME?`.
+bool UsesHiddenNameRoute(std::string_view name) {
+  return IsFutureFunction(name) || xlsb_uses_hidden_name(name);
+}
 
 constexpr std::uint16_t kColRelBit = 0x4000;
 constexpr std::uint16_t kRowRelBit = 0x8000;
@@ -229,8 +228,6 @@ class Encoder {
         return emit_array(node);
       case parser::NodeKind::NameRef:
         return emit_name_ref(node.as_name());
-      case parser::NodeKind::ExternalRef:
-        return unsupported_node("ExternalRef");
       case parser::NodeKind::StructuredRef:
         return unsupported_node("StructuredRef");
       case parser::NodeKind::SpillRef:
@@ -587,10 +584,24 @@ class Encoder {
   }
 
   Expected<void, Error> emit_call(const parser::AstNode& node) {
-    const std::string_view name = node.as_call_name();
+    // A localised formula-bar spelling resolves to the name Excel stores
+    // before anything is looked up, so both containers agree on the
+    // callee and `func_id_table` needs no alias of its own.
+    const std::string_view name = canonical_function_name(node.as_call_name());
+    if (UsesHiddenNameRoute(name)) {
+      return emit_future_function_call(node, name);
+    }
     const XlsbFuncEntry* entry = lookup_func_by_name(name);
     if (entry == nullptr) {
-      return emit_future_function_call(node, name);
+      // A classic callee whose id `func_id_table` does not yet carry.
+      // Encoding it through the hidden-name route would make real Excel
+      // resolve a hidden `_xlfn.<NAME>` that does not exist (#NAME?),
+      // and guessing an id would silently substitute a different
+      // function — so the encode fails instead. A callee Excel really
+      // has no id for takes that route only by being enumerated in
+      // `io::xlsb_uses_hidden_name`, which requires an observation.
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "xlsb encoder: no XLSB function id known for callee",
+                        std::string("context=xlsb_ptg_writer fn=") + std::string(name));
     }
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
@@ -615,19 +626,23 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
-  /// Encodes a call to a function absent from the classic
-  /// `func_id_table` as a "future function": `PtgName(ilbl)` naming the
-  /// callee, then the real arguments, then `PtgFuncVar` with the
-  /// `id == 255` sentinel and `cparams == arity + 1` (the name-ref
-  /// counts as an operand). Verified against a real Excel-365-produced
+  /// Encodes a call taking the hidden-name route (see
+  /// `io/future_functions.h`): `PtgName(ilbl)` naming the callee, then
+  /// the real arguments, then `PtgFuncVar` with the `id == 255` sentinel
+  /// and `cparams == arity + 1` (the name-ref counts as an operand).
+  /// Verified against a real Excel-365-produced
   /// `xl/worksheets/sheetN.bin` for XLOOKUP / TEXTJOIN / CONCAT / IFS /
-  /// SEQUENCE — see `ptg_reader.cpp`'s `decode_future_function`, the
-  /// decoder counterpart.
+  /// SEQUENCE and for the bare-in-OOXML `ISO.CEILING` — see
+  /// `ptg_reader.cpp`'s `decode_future_function`, the decoder
+  /// counterpart. The hidden name is always `_xlfn.`-prefixed even when
+  /// OOXML spells the callee bare, so it is spelled by
+  /// `xlsb_hidden_function_name` rather than by the OOXML-facing
+  /// `storage_function_name`.
   Expected<void, Error> emit_future_function_call(const parser::AstNode& node, std::string_view name) {
-    const auto it = name_table_.find(future_function_storage_name(name));
+    const auto it = name_table_.find(xlsb_hidden_function_name(name));
     if (it == name_table_.end()) {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                        "xlsb encoder: function has no XLSB id and no future-function name registered",
+                        "xlsb encoder: hidden-name callee has no BrtName registered",
                         std::string("context=xlsb_ptg_writer fn=") + std::string(name));
     }
     emit_u8(out_, 0x23);  // PtgName (reference-class): the callee name-ref
@@ -739,9 +754,9 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       return;
     }
     case parser::NodeKind::Call: {
-      const std::string_view name = node.as_call_name();
-      if (lookup_func_by_name(name) == nullptr) {
-        AddName(future_function_storage_name(name), names, seen);
+      const std::string_view name = canonical_function_name(node.as_call_name());
+      if (UsesHiddenNameRoute(name)) {
+        AddName(xlsb_hidden_function_name(name), names, seen);
       }
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
@@ -800,7 +815,7 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
       return;
     }
     // Leaves, and forms the encoder does not lower (Lambda / LambdaCall /
-    // StructuredRef / ExternalRef / SpillRef): nothing to collect. A
+    // StructuredRef / SpillRef): nothing to collect. A
     // future writer bundle that lowers these would extend this switch
     // alongside the corresponding `emit_*` case.
     default:

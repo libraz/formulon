@@ -171,29 +171,6 @@ void AppendQuoteEscaped(std::string_view s, std::string& out) {
   }
 }
 
-void FormatExternalRef(const AstNode& node, std::string& out) {
-  out.push_back('[');
-  out.append(std::to_string(node.as_external_ref_book_id()));
-  out.push_back(']');
-  // The external ref's sheet field carries the sheet name verbatim; use the
-  // same quoting heuristic that `format_a1` applies to the inline sheet
-  // field. We bypass format_a1's sheet handling here because the cell sub-
-  // ref's own `sheet` is normally empty (the parser strips it).
-  const std::string_view sheet = node.as_external_ref_sheet();
-  if (sheet_name_needs_quoting(sheet)) {
-    out.push_back('\'');
-    AppendQuoteEscaped(sheet, out);
-    out.push_back('\'');
-  } else {
-    out.append(sheet);
-  }
-  out.push_back('!');
-  Reference cell_no_sheet = node.as_external_ref_cell();
-  cell_no_sheet.sheet = {};
-  cell_no_sheet.sheet_quoted = false;
-  out.append(format_a1(cell_no_sheet));
-}
-
 void FormatRef3D(const AstNode& node, std::string& out) {
   // A 3-D range's sheet span (`SheetFrom:SheetTo`) quotes as a SINGLE
   // unit when either endpoint needs quoting -- `'Data:S2'!B1`, not
@@ -543,9 +520,6 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
       }
       return;
     }
-    case NodeKind::ExternalRef:
-      FormatExternalRef(node, out);
-      return;
     case NodeKind::Ref3D:
       FormatRef3D(node, out);
       return;
@@ -600,13 +574,15 @@ void FormatNode(const AstNode& node, std::string& out, int min_bp) {
   }
 }
 
-// Storage-form emitter: mirrors `FormatNode`'s dispatch but re-applies the
-// `_xlfn.` / `_xlfn._xlws.` function prefixes (via the injected classifier)
-// and the `_xlpm.` LET / LAMBDA parameter prefix (tracked through a lexical
-// scope stack). Leaf / operator rendering reuses the same free helpers and
-// precedence rules as the canonical formatter so the two stay in lockstep.
+// Storage-form emitter: mirrors `FormatNode`'s dispatch but spells each
+// function name the way the file stores it (via the injected speller,
+// which owns both the `_xlfn.` / `_xlfn._xlws.` prefixes and any
+// name Excel accepts without storing) and applies the `_xlpm.` LET /
+// LAMBDA parameter prefix (tracked through a lexical scope stack). Leaf /
+// operator rendering reuses the same free helpers and precedence rules as
+// the canonical formatter so the two stay in lockstep.
 struct StorageEmitter {
-  StoragePrefixClassifier classify;
+  StorageFunctionNameSpeller spell;
   std::vector<std::string_view> scope;  // in-scope LET binding / LAMBDA param names
 
   bool in_scope(std::string_view name) const {
@@ -618,19 +594,7 @@ struct StorageEmitter {
     return false;
   }
 
-  void append_function_name(std::string& out, std::string_view canonical) const {
-    switch (classify(canonical)) {
-      case StoragePrefixKind::XlfnXlws:
-        out.append("_xlfn._xlws.");
-        break;
-      case StoragePrefixKind::Xlfn:
-        out.append("_xlfn.");
-        break;
-      case StoragePrefixKind::None:
-        break;
-    }
-    out.append(canonical);
-  }
+  void append_function_name(std::string& out, std::string_view canonical) const { out.append(spell(canonical)); }
 
   void emit(const AstNode& node, std::string& out, int min_bp) {
     switch (node.kind()) {
@@ -652,9 +616,6 @@ struct StorageEmitter {
         }
         return;
       }
-      case NodeKind::ExternalRef:
-        FormatExternalRef(node, out);
-        return;
       case NodeKind::Ref3D:
         FormatRef3D(node, out);
         return;
@@ -914,11 +875,11 @@ std::string format_formula(const AstNode& node) {
   return out;
 }
 
-std::string format_formula_storage(const AstNode& node, StoragePrefixClassifier classify) {
+std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpeller spell) {
   if (!ast_depth_within_limit(node, kMaxFormulaAstDepth)) {
     return "#REF!";
   }
-  StorageEmitter emitter{classify, {}};
+  StorageEmitter emitter{spell, {}};
   std::string out;
   out.reserve(64);
   emitter.emit(node, out, 0);
