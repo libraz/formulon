@@ -12,6 +12,146 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stable XLSB read/write diagnostics across the C API, WASM, native Node,
   Python, and CLI surfaces, including downgraded formulas, omitted features,
   undecoded formulas/names, and dropped package parts.
+  `fm_workbook_save_ex_with_diagnostics` reports the formula cells the XLSB
+  writer downgraded to cached literals and the modelled features it omitted;
+  `fm_workbook_xlsb_read_diagnostics_ex` adds the dropped package-part
+  counter. They reach the bindings as `saveExWithDiagnostics` /
+  `xlsbReadDiagnostics` and `save_ex_with_diagnostics()` /
+  `xlsb_read_diagnostics()`.
+- Table authoring: `fm_workbook_table_create` / `_update` / `_remove` and
+  their `createTable` / `updateTable` / `removeTable` counterparts, which
+  reject a column list whose count disagrees with the width of `ref` because
+  such a table is a file Excel refuses to open without repair. An update is
+  partial — a `NULL` style name keeps the stored style payload, a negative
+  header-row or totals-row flag keeps the current one, and an existing
+  AutoFilter is retargeted by rewriting only its `ref`, so criteria and
+  extensions survive a read-modify-write.
+- Worksheet AutoFilter access as an opaque fragment:
+  `fm_sheet_get_auto_filter_xml` / `fm_sheet_set_auto_filter_xml`
+  (`getSheetAutoFilterXml` / `setSheetAutoFilterXml`) hand over the whole
+  `<autoFilter>` element verbatim, so filter criteria, sort state and filter
+  extensions can be read, modified and written back without loss.
+- Alignment-complete cell formats. `fm_cell_xf_ex` carries `justifyLastLine`
+  and enables named-style authoring through `fm_styles_add_cell_style_xf_ex`
+  and `fm_styles_set_cell_style`; `fm_cell_xf_ex2` adds `textRotation`,
+  `indent`, `relativeIndent`, `shrinkToFit`, `readingOrder` and the alignment
+  presence flags. Both embed the existing `fm_cell_xf` as `base`, so the
+  established struct layouts are untouched, and the extended getters and
+  adders reach WASM, the native Node addon and Python.
+- Multi-cell hyperlinks: `fm_hyperlink` carries the inclusive rectangle end
+  as `last_row` / `last_col`, `fm_sheet_add_hyperlink` accepts that
+  rectangle, and the bindings expose it as `addHyperlinkRange` /
+  `add_hyperlink_range` alongside `lastRow` / `lastCol` on a read-back
+  hyperlink. OOXML and XLSB carry the full anchor span in both directions.
+- A pivot value filter can name the measure it ranks.
+  `PivotFilter::data_field_index` — reachable as `fm_pivot_filter_spec_ex_t`
+  with `fm_workbook_pivot_filter_add_ex`, `dataFieldIndex` and
+  `data_field_index` — indexes the table's data fields; a table with several
+  measures previously always scored the first one. Label and date filters
+  ignore the selector.
+- `formulon recalc` accepts `.xlsx` or `.xlsb` on both sides, the output
+  container following the extension of `-o`, and warns on stderr when a load
+  left undecoded formulas, undecoded defined names or dropped package parts,
+  or when the writer downgraded formula cells or omitted modelled features.
+  Those warnings are data loss rather than status, so `--quiet` suppresses
+  only the success line and leaves them visible.
+- An XLSB load reports the package parts it could not carry as
+  `XlsbReadResult::dropped_part_count`, together with an
+  `xlsb.package.parts_dropped` structured warning naming the first such entry
+  and why it was skipped. A part typed through an extension default — media,
+  embedded OLE, printer settings, the relationships of an unmodelled part —
+  was previously absent from a saved workbook with no signal.
+
+### Changed
+
+- `fm_hyperlink` gained the `last_row` / `last_col` rectangle end, so its
+  layout differs from the previous release; recompile against the current
+  header before linking.
+- miniz is tracked at 3.1.2.
+
+### Fixed
+
+- `DATEDIF` matches its unit argument case-insensitively for every documented
+  token (`Y`, `M`, `D`, `YM`, `YD`, `MD`). A lowercase or mixed-case spelling
+  such as `DATEDIF(a, b, "y")` or `"yM"` returned `#NUM!` where Excel returns
+  the interval.
+- A spill is blocked when its footprint meets a merged range or another
+  formula's spill rectangle, so `=SEQUENCE(2)` entered at a merged `A1:B1`
+  reports `#SPILL!` as Excel does instead of writing over the merge. Only a
+  region anchored at the requested anchor is ignored — that is the producer
+  re-evaluating itself. A blocked spill leaves the sheet untouched apart from
+  the anchor's cached `#SPILL!`, and a zero-sized, out-of-grid or
+  end-overflowing footprint counts as a collision.
+- Whole-axis and spill-derived dependencies are normalized on one path, so a
+  partial recalculation reaches the same fixed point as a full one: extents
+  are shared rather than recomputed per caller, range bounds are inclusive
+  throughout, a spill footprint contributes its own dependency edges, and a
+  semantic reindex invalidates the spills it invalidates.
+- Structural edits keep formulas addressable. A row or column insert or
+  delete reindexes defined names after the physical move rather than before,
+  so a moved owner — including a 3-D span owner — is no longer registered at
+  its pre-edit coordinates. Sheet rename, removal and reordering rewrite
+  workbook-local 3-D spans through a single visitor that walks every formula
+  holder.
+- Pivot hierarchy and subtotal rows are emitted in one display order, and
+  subtotals are counted per owner so two branches sharing a display label
+  stay separate.
+- The iterative solver no longer retains arena-backed values between passes:
+  scalars are copied by value, text is copied byte-exactly into bounded
+  solver-owned storage including embedded NUL, and arrays, lambdas and
+  references are treated as incomparable so the residual stays infinite.
+- OOXML and XLSB readers cap cumulative decompression at 256 MiB per open
+  session and report `kIoFileTooLarge` before allocating beyond that budget.
+  A reopen and a failed inflate are charged against the same budget.
+- `fm_sheet_add_hyperlink`, `fm_sheet_add_merge`, `fm_sheet_set_comment` and
+  `fm_sheet_add_validation` reject a rectangle or coordinate outside the
+  Excel grid with `kInvalidArgument`. A validation rule's ranges are all
+  checked before the rule is stored, so a rejected call leaves the sheet
+  unchanged.
+- `fm_styles_add_batch` stages the complete table and commits it in one step,
+  so a failure leaves both the workbook and the caller's output arrays
+  untouched, and `fm_styles_add_num_fmt` reports `kPreconditionFailed` when
+  the 16-bit custom number-format id space is exhausted instead of wrapping.
+- Every optional `xf` alignment attribute round-trips. `textRotation`,
+  `indent`, `relativeIndent`, `shrinkToFit` and `readingOrder` each sit
+  behind a presence flag, so an omitted attribute stays distinct from an
+  explicit zero or false, and an explicitly empty `<alignment/>` or an
+  explicit schema default (`horizontal="general"`, `wrapText="0"`) survives
+  instead of collapsing away. A malformed attribute value returns
+  `kIoSheetCorrupt` naming the table, xf index and attribute rather than
+  reading as a default.
+- `justifyLastLine` is read from `<alignment>` and written back. The
+  attribute was parsed past and never emitted, so it was dropped from every
+  imported workbook on save.
+- A table part emits `<autoFilter>` and `<sortState>` before
+  `<tableColumns>`, the order `CT_Table` declares; the previous order
+  produced a part Excel flagged as needing repair.
+- Every `pivotTable` part gets the `pivotCacheDefinition` relationship part
+  it requires, so a consumer navigating the package by relationship alone can
+  reach the cache a table draws from.
+- `fm_sheet_set_auto_filter_xml` validates the fragment with a real XML parse
+  — exactly one top-level element, named `autoFilter` — instead of a
+  prefix/suffix shape check, so a malformed or truncated element is rejected
+  rather than written into a package Excel refuses to open. Criteria and
+  extension payloads are still preserved verbatim.
+- The CLI resolves a symbolic link before its temp-then-rename write, so
+  saving through a link updates the workbook the link names instead of
+  replacing the link with a regular file and leaving the real workbook stale.
+  A plain path, a dangling link or a failed resolution is replaced as-is.
+- `eval`, `dump` and `paginate` report a failed write of their primary result
+  as a nonzero exit status, so exit 0 means the complete result reached the
+  output stream.
+- The formula length cap bounds a single oversized token. A string literal,
+  identifier or quoted sheet name longer than the cap was consumed whole
+  because the cap was only re-checked between tokens; the input is now
+  trimmed on a codepoint boundary before any scanner runs, an input of
+  exactly the cap length is still accepted, and a truncation that lands
+  mid-token reports `ExcessiveLength` rather than passing silently.
+- Range-sourced arguments are filtered identically on both evaluation paths,
+  and a scalar argument's error is detected at its own slot before later
+  range arguments are flattened, so `SUM(1/0, A1)` and `SUM(A1, 1/0)` pick
+  the same error whichever path evaluates them. The same filter applies to
+  the per-group slice `GROUPBY` and `PIVOTBY` hand to a bare aggregate.
 
 ## [0.9.7] - 2026-08-06
 
