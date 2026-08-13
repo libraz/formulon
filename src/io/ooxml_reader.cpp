@@ -523,7 +523,24 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     // call below; the merge across both paths is OR-style.
     const std::string_view state = sn.attribute("state").value();
     const bool workbook_hides = (state == "hidden") || (state == "veryHidden");
-    wb.add_sheet(std::move(name));
+    // Validate the name at the boundary instead of trusting it. Sheet
+    // lookup resolves to the first match, so a workbook carrying two
+    // sheets whose names fold together would answer every reference from
+    // one of them and produce a confident wrong number with no ambiguity
+    // signal a caller could act on. Excel treats such a file as needing
+    // repair rather than opening it; renaming a sheet the author wrote
+    // would be a worse repair than refusing the load.
+    auto added = wb.add_sheet_validated(name);
+    if (!added) {
+      if (added.error().code != FormulonErrorCode::kInvalidSheetName) {
+        return added.error();
+      }
+      std::string ctx("context=ooxml_reader part=");
+      ctx.append(workbook_path);
+      ctx.append(" sheet=\"").append(name).append("\"");
+      return make_error(FormulonErrorCode::kIoSheetCorrupt,
+                        "workbook.xml: <sheet> name is invalid or collides with an earlier sheet", std::move(ctx));
+    }
     if (workbook_hides) {
       wb.sheet(wb.sheet_count() - 1U).mutable_view().tab_hidden = true;
     }

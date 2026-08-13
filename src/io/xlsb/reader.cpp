@@ -44,6 +44,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/structured_log.h"
 #include "value.h"
@@ -1873,7 +1874,20 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       return make_error(FormulonErrorCode::kIoRelationshipBroken,
                         "workbook.bin: BrtBundleSh rId has no matching workbook relationship", std::move(ctx));
     }
-    wb.add_sheet(b.name);
+    // Same boundary validation the OOXML reader applies, and the same
+    // error code: a duplicate sheet name makes every lookup resolve to the
+    // first match, so the workbook would compute from the wrong sheet with
+    // no ambiguity signal. Callers should not have to switch on the source
+    // format to recognise that condition.
+    auto added = wb.add_sheet_validated(b.name);
+    if (!added) {
+      if (added.error().code != FormulonErrorCode::kInvalidSheetName) {
+        return added.error();
+      }
+      return make_error(FormulonErrorCode::kIoSheetCorrupt,
+                        "workbook.bin: BrtBundleSh name is invalid or collides with an earlier sheet",
+                        "context=xlsb_reader sheet=\"" + b.name + "\"");
+    }
     if (b.hidden) {
       wb.sheet(wb.sheet_count() - 1U).mutable_view().tab_hidden = true;
     }

@@ -13,6 +13,8 @@
 #include <vector>
 
 #include "cell.h"
+#include "eval/dep_graph.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/package_validator.h"
 #include "io/zip_reader.h"
@@ -97,6 +99,26 @@ TEST(OoxmlReader, WorkbookOutlivesReadResult) {
   auto save_or = wb.save();
   ASSERT_TRUE(static_cast<bool>(save_or));
   EXPECT_FALSE(save_or.value().empty());
+}
+
+TEST(OoxmlReader, MultiMillionCellRangeLoadsWithoutMaterialisingItsCells) {
+  // The reader routes every formula cell through `Workbook::set_cell_formula`,
+  // so a load registers dependencies exactly like an interactive edit does.
+  // A two-column, million-row reference is the shape whose per-cell graph
+  // would be two million permanently resident nodes; registered as one
+  // compact rectangle it contributes none, which is what keeps the loaded
+  // workbook's retained heap independent of the referenced area.
+  Workbook src = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_formula(0U, 0U, 3U, "=SUM(A1:B1000000)")));
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+
+  auto result_or = read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read_ooxml failed: " << result_or.error().message;
+  const Workbook& wb = result_or.value().workbook;
+  const Cell* d1 = wb.sheet(0).cell_at(0U, 3U);
+  ASSERT_NE(d1, nullptr);
+  EXPECT_EQ(d1->formula_text, "=SUM(A1:B1000000)");
+  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), 0U);
 }
 
 TEST(OoxmlReader, JapaneseSheetNameSurvivesRoundTrip) {
