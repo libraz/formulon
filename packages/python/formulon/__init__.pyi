@@ -558,6 +558,21 @@ class CellXf:
         has_justify_last_line: Optional[bool] = ...,
     ) -> None: ...
 
+class ColorSpec:
+    kind: int
+    rgb: int
+    theme: int
+    tint: float
+    indexed: int
+    def __init__(
+        self,
+        kind: int = ...,
+        rgb: int = ...,
+        theme: int = ...,
+        tint: float = ...,
+        indexed: int = ...,
+    ) -> None: ...
+
 class FontRecord:
     name: str
     size: float
@@ -565,7 +580,16 @@ class FontRecord:
     bold: bool
     italic: bool
     strike: bool
+    has_bold: bool
+    has_italic: bool
+    has_strike: bool
     underline: int
+    vert_align: int
+    has_family: bool
+    family: int
+    has_charset: bool
+    charset: int
+    color: ColorSpec
     def __init__(
         self,
         name: str = ...,
@@ -574,14 +598,32 @@ class FontRecord:
         bold: bool = ...,
         italic: bool = ...,
         strike: bool = ...,
+        has_bold: bool = ...,
+        has_italic: bool = ...,
+        has_strike: bool = ...,
         underline: int = ...,
+        vert_align: int = ...,
+        has_family: bool = ...,
+        family: int = ...,
+        has_charset: bool = ...,
+        charset: int = ...,
+        color: ColorSpec = ...,
     ) -> None: ...
 
 class FillRecord:
     pattern: int
     fg_argb: int
     bg_argb: int
-    def __init__(self, pattern: int = ..., fg_argb: int = ..., bg_argb: int = ...) -> None: ...
+    fg: ColorSpec
+    bg: ColorSpec
+    def __init__(
+        self,
+        pattern: int = ...,
+        fg_argb: int = ...,
+        bg_argb: int = ...,
+        fg: ColorSpec = ...,
+        bg: ColorSpec = ...,
+    ) -> None: ...
 
 class DifferentialFormat:
     font: Optional[FontRecord]

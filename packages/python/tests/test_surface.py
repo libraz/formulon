@@ -108,7 +108,7 @@ class StructLayoutTests(unittest.TestCase):
         "PIVOT_CELL": 40,
         "PIVOT_FIELD_SPEC": 20,
         "PIVOT_DATA_FIELD_SPEC": 28,
-        "PIVOT_FILTER_SPEC": 56,
+        "PIVOT_FILTER_SPEC": 64,
         "SPILL_INFO": 20,
         "FUNCTION_METADATA": 24,
         "SHEET_VIEW": 16,
@@ -116,10 +116,12 @@ class StructLayoutTests(unittest.TestCase):
         "ROW_LAYOUT": 24,
         "CELL_XF": 20,
         "CELL_XF_EX2": 88,
-        "FONT_RECORD": 40,
-        "FILL_RECORD": 12,
-        "BORDER_RECORD": 48,
-        "DXF_RECORD": 128,
+        "COLOR_SPEC": 24,
+        "FONT_RECORD": 80,
+        "FILL_RECORD": 64,
+        "BORDER_SIDE": 32,
+        "BORDER_RECORD": 168,
+        "DXF_RECORD": 352,
         "CELL_STYLE_RECORD": 24,
         "EXTERNAL_LINK_RECORD": 24,
     }
@@ -484,6 +486,37 @@ class StyleTests(unittest.TestCase):
             )
             self.assertNotEqual(explicit_empty, omitted)
             self.assertTrue(wb.get_cell_xf(explicit_empty).has_alignment)
+
+    def test_font_vert_align_roundtrip_is_the_identity(self) -> None:
+        with Workbook.create_default() as wb:
+            index = wb.add_font(FontRecord(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
+            self.assertEqual(wb.get_font(index).vert_align, 1)
+
+            before = wb.font_count()
+            self.assertEqual(wb.add_font(wb.get_font(index)), index)
+            self.assertEqual(wb.font_count(), before)
+
+    def test_font_one_field_rewrite_preserves_the_superscript(self) -> None:
+        with Workbook.create_default() as wb:
+            index = wb.add_font(FontRecord(name="Arial", size=12.0, vert_align=1, color_argb=0xFF112233))
+            edited = wb.get_font(index)
+            edited.color_argb = 0xFF00FF00
+            recolored = wb.add_font(edited)
+            self.assertNotEqual(recolored, index)
+            reread = wb.get_font(recolored)
+            self.assertEqual(reread.vert_align, 1)
+            self.assertEqual(reread.color_argb, 0xFF00FF00)
+
+    def test_dxf_font_vert_align_roundtrip_is_the_identity(self) -> None:
+        with Workbook.create_default() as wb:
+            index = wb.add_dxf(DifferentialFormat(font=FontRecord(name="Calibri", size=9.0, vert_align=1)))
+            got = wb.get_dxf(index)
+            self.assertIsNotNone(got.font)
+            self.assertEqual(got.font.vert_align, 1)
+
+            before = wb.dxf_count()
+            self.assertEqual(wb.add_dxf(got), index)
+            self.assertEqual(wb.dxf_count(), before)
 
     def test_dxf_roundtrip_and_dedup(self) -> None:
         with Workbook.create_default() as wb:
@@ -908,6 +941,7 @@ class SurfaceParityTests(unittest.TestCase):
             "SpillInfo",
             "FunctionMetadata",
             "CellXf",
+            "ColorSpec",
             "FontRecord",
             "FillRecord",
             "CellStyle",

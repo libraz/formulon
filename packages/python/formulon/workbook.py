@@ -11,6 +11,11 @@ Cell-level Excel errors (``#DIV/0!``, ``#VALUE!``, etc.) are reported as
 problems (NULL handle, parse failure during ``Workbook.load``, OOM)
 raise :class:`FormulonError`.
 
+Sheet, row, column, and count arguments are 32-bit on the C ABI. A value
+that does not fit the parameter it is bound for raises ``ValueError``
+before the call crosses into WebAssembly, where it would otherwise be
+truncated modulo 2**32 into a different, valid-looking coordinate.
+
 The transport is WebAssembly (``formulon_capi.wasm``) loaded via
 ``wasmtime``; see :mod:`formulon._c` for the low-level memory and call
 plumbing.
@@ -36,6 +41,7 @@ __all__ = [
     "CfColor",
     "CfMatch",
     "CfValueObject",
+    "ColorSpec",
     "ColumnLayout",
     "Comment",
     "ConditionalFormat",
@@ -112,7 +118,7 @@ class FormulonError(Exception):
 
     def __init__(self, status: int, *, op: str = "") -> None:
         self.status = int(status)
-        self.status_name = LIB.read_cstr(LIB.fm_status_string(self.status))
+        self.status_name = LIB.read_cstr(LIB.fm_status_string(_sint(self.status, "status")))
         self.message, self.context = LIB.last_diagnostic(self.status)
         prefix = f"{op}: " if op else ""
         text = f"{prefix}{self.status_name} ({self.status})"
@@ -145,6 +151,52 @@ def _check(status: int, op: str) -> None:
     """Raise :class:`FormulonError` if ``status`` is non-zero."""
     if status != 0:
         raise FormulonError(status, op=op)
+
+
+def _uint(value: int, name: str, bits: int = 32) -> int:
+    """Validate ``value`` as an unsigned WASM argument of ``bits`` width.
+
+    Every integer the C ABI takes by value crosses into WebAssembly as an
+    ``i32``, and ``wasmtime`` marshals a Python ``int`` into that slot
+    modulo 2**32 without complaint. An index the caller never intended --
+    ``2**32 + 5``, or a negative produced by an arithmetic slip -- would
+    therefore arrive on the engine side as a perfectly plausible
+    coordinate (``5``) and silently overwrite an unrelated cell. The
+    engine's own grid bounds cannot catch that: they see only the wrapped
+    value.
+
+    Args:
+      value: the caller-supplied index, count, or length.
+      name: the C ABI parameter name, used in the error message.
+      bits: width of the C parameter (32 for ``uint32_t`` / ``size_t``).
+
+    Returns:
+      ``value`` as an ``int``, unchanged.
+
+    Raises:
+      ValueError: when ``value`` is negative or does not fit ``bits``.
+    """
+    ivalue = int(value)
+    if ivalue < 0 or ivalue >= (1 << bits):
+        raise ValueError(f"formulon: {name} out of range for uint{bits}: {ivalue}")
+    return ivalue
+
+
+def _sint(value: int, name: str, bits: int = 32) -> int:
+    """Validate ``value`` as a signed WASM argument of ``bits`` width.
+
+    Signed counterpart of :func:`_uint`, for the ``int32_t`` parameters
+    (enum selectors, iteration caps, the ``-1`` sentinels of the pivot
+    date-group API) where a negative value is meaningful.
+
+    Raises:
+      ValueError: when ``value`` does not fit a signed ``bits``-wide int.
+    """
+    ivalue = int(value)
+    limit = 1 << (bits - 1)
+    if ivalue < -limit or ivalue >= limit:
+        raise ValueError(f"formulon: {name} out of range for int{bits}: {ivalue}")
+    return ivalue
 
 
 # ---------------------------------------------------------------------------
@@ -786,8 +838,32 @@ class CellXf:
 
 
 @dataclass
+class ColorSpec:
+    """How an OOXML ``<color>`` element expressed its value.
+
+    Records read from a file carry the original specification here while
+    the owning record's ``*_argb`` field carries the resolved AARRGGBB
+    value. ``kind`` is ``0=none``, ``1=rgb``, ``2=theme``, ``3=indexed``,
+    ``4=auto``; the default ``kind=0`` makes the writer fall back to the
+    resolved value, which is what a record built from scratch wants.
+    """
+
+    kind: int = 0
+    rgb: int = 0
+    theme: int = 0
+    tint: float = 0.0
+    indexed: int = 0
+
+
+@dataclass
 class FontRecord:
-    """A font record (``add_font`` input / ``get_font`` result)."""
+    """A font record (``add_font`` input / ``get_font`` result).
+
+    The ``has_*`` flags distinguish an absent OOXML element from an
+    explicit ``val="0"``: on a differential font an absent ``<b>`` means
+    "leave the source formatting unchanged" while ``<b val="0"/>`` means
+    "switch bold off".
+    """
 
     name: str = ""
     size: float = 11.0
@@ -795,7 +871,17 @@ class FontRecord:
     bold: bool = False
     italic: bool = False
     strike: bool = False
+    has_bold: bool = False
+    has_italic: bool = False
+    has_strike: bool = False
     underline: int = 0
+    #: 0=baseline, 1=superscript, 2=subscript.
+    vert_align: int = 0
+    has_family: bool = False
+    family: int = 0
+    has_charset: bool = False
+    charset: int = 0
+    color: ColorSpec = field(default_factory=ColorSpec)
 
 
 @dataclass
@@ -805,6 +891,8 @@ class FillRecord:
     pattern: int = 0
     fg_argb: int = 0
     bg_argb: int = 0
+    fg: ColorSpec = field(default_factory=ColorSpec)
+    bg: ColorSpec = field(default_factory=ColorSpec)
 
 
 @dataclass
@@ -820,6 +908,133 @@ class DifferentialFormat:
     border: Optional[Dict[str, object]] = None
     num_fmt_id: Optional[int] = None
     num_fmt_code: str = ""
+
+
+def _decode_color(ptr: int) -> ColorSpec:
+    d = S.COLOR_SPEC.unpack(LIB, ptr)
+    return ColorSpec(kind=d["kind"], rgb=d["rgb"], theme=d["theme"], tint=d["tint"], indexed=d["indexed"])
+
+
+def _pack_color(ptr: int, spec: ColorSpec) -> None:
+    S.COLOR_SPEC.pack(
+        LIB,
+        ptr,
+        {
+            "kind": int(spec.kind),
+            "rgb": int(spec.rgb),
+            "theme": int(spec.theme),
+            "tint": float(spec.tint),
+            "indexed": int(spec.indexed),
+        },
+    )
+
+
+def _decode_font(ptr: int) -> FontRecord:
+    d = S.FONT_RECORD.unpack(LIB, ptr)
+    return FontRecord(
+        name=LIB.read_cstr(d["name"]),
+        size=d["size"],
+        color_argb=d["color_argb"],
+        bold=bool(d["bold"]),
+        italic=bool(d["italic"]),
+        strike=bool(d["strike"]),
+        has_bold=bool(d["has_bold"]),
+        has_italic=bool(d["has_italic"]),
+        has_strike=bool(d["has_strike"]),
+        underline=d["underline"],
+        vert_align=d["vert_align"],
+        has_family=bool(d["has_family"]),
+        family=d["family"],
+        has_charset=bool(d["has_charset"]),
+        charset=d["charset"],
+        color=_decode_color(ptr + S.FONT_RECORD.offsets["color"][1]),
+    )
+
+
+def _pack_font(ptr: int, record: FontRecord, owned: List[int]) -> None:
+    S.FONT_RECORD.pack(
+        LIB,
+        ptr,
+        {
+            "size": float(record.size),
+            "color_argb": int(record.color_argb),
+            "bold": 1 if record.bold else 0,
+            "italic": 1 if record.italic else 0,
+            "strike": 1 if record.strike else 0,
+            "has_bold": 1 if record.has_bold else 0,
+            "has_italic": 1 if record.has_italic else 0,
+            "has_strike": 1 if record.has_strike else 0,
+            "underline": int(record.underline),
+            "vert_align": int(record.vert_align),
+            "has_family": 1 if record.has_family else 0,
+            "family": int(record.family),
+            "has_charset": 1 if record.has_charset else 0,
+            "charset": int(record.charset),
+        },
+    )
+    _pack_color(ptr + S.FONT_RECORD.offsets["color"][1], record.color)
+    S.write_str_field(LIB, ptr, S.FONT_RECORD, "name", record.name, owned)
+
+
+def _decode_fill(ptr: int) -> FillRecord:
+    d = S.FILL_RECORD.unpack(LIB, ptr)
+    return FillRecord(
+        pattern=d["pattern"],
+        fg_argb=d["fg_argb"],
+        bg_argb=d["bg_argb"],
+        fg=_decode_color(ptr + S.FILL_RECORD.offsets["fg"][1]),
+        bg=_decode_color(ptr + S.FILL_RECORD.offsets["bg"][1]),
+    )
+
+
+def _pack_fill(ptr: int, record: FillRecord) -> None:
+    S.FILL_RECORD.pack(
+        LIB,
+        ptr,
+        {
+            "pattern": int(record.pattern),
+            "fg_argb": int(record.fg_argb),
+            "bg_argb": int(record.bg_argb),
+        },
+    )
+    _pack_color(ptr + S.FILL_RECORD.offsets["fg"][1], record.fg)
+    _pack_color(ptr + S.FILL_RECORD.offsets["bg"][1], record.bg)
+
+
+def _decode_border_record(ptr: int) -> Dict[str, object]:
+    sides: Dict[str, object] = {}
+    for side in ("left", "right", "top", "bottom", "diagonal"):
+        side_ptr = ptr + S.BORDER_RECORD.offsets[side][1]
+        d = S.BORDER_SIDE.unpack(LIB, side_ptr)
+        sides[side] = {
+            "style": d["style"],
+            "color_argb": d["color_argb"],
+            "color": _decode_color(side_ptr + S.BORDER_SIDE.offsets["color"][1]),
+        }
+    outer = S.BORDER_RECORD.unpack(LIB, ptr)
+    sides["diagonal_up"] = bool(outer["diagonal_up"])
+    sides["diagonal_down"] = bool(outer["diagonal_down"])
+    return sides
+
+
+def _pack_border_record(ptr: int, sides: Dict[str, object]) -> None:
+    S.BORDER_RECORD.pack(
+        LIB,
+        ptr,
+        {
+            "diagonal_up": 1 if sides.get("diagonal_up") else 0,
+            "diagonal_down": 1 if sides.get("diagonal_down") else 0,
+        },
+    )
+    for side in ("left", "right", "top", "bottom", "diagonal"):
+        spec = sides.get(side) or {}
+        side_ptr = ptr + S.BORDER_RECORD.offsets[side][1]
+        S.BORDER_SIDE.pack(
+            LIB,
+            side_ptr,
+            {"style": int(spec.get("style", 0)), "color_argb": int(spec.get("color_argb", 0))},
+        )
+        _pack_color(side_ptr + S.BORDER_SIDE.offsets["color"][1], spec.get("color") or ColorSpec())
 
 
 @dataclass(frozen=True)
@@ -1064,7 +1279,7 @@ class Workbook:
         data_ptr = LIB.alloc_bytes(buf) if len(buf) > 0 else 0
         out_ptr = _alloc_out_ptr()
         try:
-            status = LIB.fm_workbook_load(data_ptr, len(buf), out_ptr)
+            status = LIB.fm_workbook_load(data_ptr, _uint(len(buf), "len"), out_ptr)
             _check(status, "fm_workbook_load")
             wb._handle = LIB.read_u32(out_ptr)
         finally:
@@ -1118,7 +1333,7 @@ class Workbook:
         h = self._require()
         out_ptr = _alloc_out_ptr()
         try:
-            status = LIB.fm_workbook_sheet_name(h, index, out_ptr)
+            status = LIB.fm_workbook_sheet_name(h, _uint(index, "index"), out_ptr)
             _check(status, "fm_workbook_sheet_name")
             return LIB.read_cstr(LIB.read_u32(out_ptr))
         finally:
@@ -1137,38 +1352,48 @@ class Workbook:
     # -- Cell mutation -----------------------------------------------------
     def set_number(self, sheet: int, row: int, col: int, value: float) -> None:
         h = self._require()
-        status = LIB.fm_workbook_set_number(h, sheet, row, col, float(value))
+        status = LIB.fm_workbook_set_number(
+            h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), float(value)
+        )
         _check(status, "fm_workbook_set_number")
 
     def set_bool(self, sheet: int, row: int, col: int, value: bool) -> None:
         h = self._require()
-        status = LIB.fm_workbook_set_bool(h, sheet, row, col, 1 if value else 0)
+        status = LIB.fm_workbook_set_bool(
+            h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), 1 if value else 0
+        )
         _check(status, "fm_workbook_set_bool")
 
     def set_error(self, sheet: int, row: int, col: int, error_code: int) -> None:
         h = self._require()
-        status = LIB.fm_workbook_set_error(h, sheet, row, col, int(error_code))
+        status = LIB.fm_workbook_set_error(
+            h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), _sint(error_code, "error")
+        )
         _check(status, "fm_workbook_set_error")
 
     def set_text(self, sheet: int, row: int, col: int, value: str) -> None:
         h = self._require()
         text_ptr, _ = LIB.alloc_utf8(value)
         try:
-            status = LIB.fm_workbook_set_text(h, sheet, row, col, text_ptr)
+            status = LIB.fm_workbook_set_text(
+                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr
+            )
             _check(status, "fm_workbook_set_text")
         finally:
             LIB.free(text_ptr)
 
     def set_blank(self, sheet: int, row: int, col: int) -> None:
         h = self._require()
-        status = LIB.fm_workbook_set_blank(h, sheet, row, col)
+        status = LIB.fm_workbook_set_blank(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"))
         _check(status, "fm_workbook_set_blank")
 
     def set_formula(self, sheet: int, row: int, col: int, formula: str) -> None:
         h = self._require()
         formula_ptr, _ = LIB.alloc_utf8(formula)
         try:
-            status = LIB.fm_workbook_set_formula(h, sheet, row, col, formula_ptr)
+            status = LIB.fm_workbook_set_formula(
+                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), formula_ptr
+            )
             _check(status, "fm_workbook_set_formula")
         finally:
             LIB.free(formula_ptr)
@@ -1184,7 +1409,9 @@ class Workbook:
         h = self._require()
         value_ptr = LIB.alloc(fm_value_t_size)
         try:
-            status = LIB.fm_workbook_get_value(h, sheet, row, col, value_ptr)
+            status = LIB.fm_workbook_get_value(
+                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), value_ptr
+            )
             _check(status, "fm_workbook_get_value")
             return Value._from_wasm(value_ptr)
         finally:
@@ -1201,7 +1428,14 @@ class Workbook:
         try:
             _check(
                 LIB.fm_workbook_evaluate_cf_formula(
-                    h, int(sheet), int(row), int(col), int(anchor_row), int(anchor_col), formula_ptr, value_ptr
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(row, "row"),
+                    _uint(col, "col"),
+                    _uint(anchor_row, "anchor_row"),
+                    _uint(anchor_col, "anchor_col"),
+                    formula_ptr,
+                    value_ptr,
                 ),
                 "fm_workbook_evaluate_cf_formula",
             )
@@ -1240,7 +1474,9 @@ class Workbook:
         rows_ptr = _alloc_out_ptr()
         cols_ptr = _alloc_out_ptr()
         try:
-            status = LIB.fm_workbook_evaluate_formula_array(h, sheet, row, col, formula_ptr, rows_ptr, cols_ptr)
+            status = LIB.fm_workbook_evaluate_formula_array(
+                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), formula_ptr, rows_ptr, cols_ptr
+            )
             _check(status, "fm_workbook_evaluate_formula_array")
             rows = LIB.read_u32(rows_ptr)
             cols = LIB.read_u32(cols_ptr)
@@ -1259,7 +1495,7 @@ class Workbook:
                 out_row: List[Value] = []
                 for c in range(cols):
                     index = r * cols + c
-                    status = LIB.fm_workbook_evaluate_formula_array_cell(h, index, value_ptr)
+                    status = LIB.fm_workbook_evaluate_formula_array_cell(h, _uint(index, "index"), value_ptr)
                     _check(status, "fm_workbook_evaluate_formula_array_cell")
                     out_row.append(Value._from_wasm(value_ptr))
                 grid.append(out_row)
@@ -1282,7 +1518,9 @@ class Workbook:
     def set_iterative(self, enabled: bool, max_iterations: int, max_change: float) -> None:
         """Configure iterative calculation."""
         h = self._require()
-        status = LIB.fm_workbook_set_iterative(h, 1 if enabled else 0, int(max_iterations), float(max_change))
+        status = LIB.fm_workbook_set_iterative(
+            h, 1 if enabled else 0, _sint(max_iterations, "max_iterations"), float(max_change)
+        )
         _check(status, "fm_workbook_set_iterative")
 
     # -- Save --------------------------------------------------------------
@@ -1327,7 +1565,7 @@ class Workbook:
         LIB.write_bytes(out_ptr_ptr, b"\x00\x00\x00\x00")
         LIB.write_bytes(out_len_ptr, b"\x00\x00\x00\x00")
         try:
-            status = LIB.fm_workbook_save_ex(h, int(fmt), out_ptr_ptr, out_len_ptr)
+            status = LIB.fm_workbook_save_ex(h, _sint(fmt, "format"), out_ptr_ptr, out_len_ptr)
             _check(status, "fm_workbook_save_ex")
             data_ptr = LIB.read_u32(out_ptr_ptr)
             data_len = LIB.read_u32(out_len_ptr)
@@ -1358,7 +1596,7 @@ class Workbook:
                 LIB.write_bytes(ptr, b"\x00\x00\x00\x00")
             out_ptr_ptr, out_len_ptr, downgraded_ptr, deferred_ptr = scratch
             status = LIB.fm_workbook_save_ex_with_diagnostics(
-                h, int(fmt), out_ptr_ptr, out_len_ptr, downgraded_ptr, deferred_ptr
+                h, _sint(fmt, "format"), out_ptr_ptr, out_len_ptr, downgraded_ptr, deferred_ptr
             )
             _check(status, "fm_workbook_save_ex_with_diagnostics")
             data_ptr = LIB.read_u32(out_ptr_ptr)
@@ -1411,7 +1649,7 @@ class Workbook:
         h = self._require()
         out_count = _alloc_out_ptr()
         try:
-            status = LIB.fm_workbook_cell_count(h, sheet, out_count)
+            status = LIB.fm_workbook_cell_count(h, _uint(sheet, "sheet_index"), out_count)
             _check(status, "fm_workbook_cell_count")
             n = LIB.read_u32(out_count)
         finally:
@@ -1428,7 +1666,9 @@ class Workbook:
             LIB.write_bytes(col_ptr, b"\x00\x00\x00\x00")
             LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
             for i in range(n):
-                status = LIB.fm_workbook_cell_at(h, sheet, i, row_ptr, col_ptr, formula_ptr, value_ptr)
+                status = LIB.fm_workbook_cell_at(
+                    h, _uint(sheet, "sheet_index"), _uint(i, "idx"), row_ptr, col_ptr, formula_ptr, value_ptr
+                )
                 _check(status, "fm_workbook_cell_at")
                 row = LIB.read_u32(row_ptr)
                 col = LIB.read_u32(col_ptr)
@@ -1454,7 +1694,7 @@ class Workbook:
             LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
             LIB.write_bytes(local_sheet_ptr, b"\x00\x00\x00\x00")
             try:
-                status = LIB.fm_workbook_defined_name_at_ex(h, i, name_ptr, formula_ptr, local_sheet_ptr)
+                status = LIB.fm_workbook_defined_name_at_ex(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
                 _check(status, "fm_workbook_defined_name_at_ex")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 formula = LIB.read_cstr(LIB.read_u32(formula_ptr))
@@ -1477,7 +1717,7 @@ class Workbook:
             for p in (name_ptr, display_ptr, ref_ptr, sheet_ptr):
                 LIB.write_bytes(p, b"\x00\x00\x00\x00")
             try:
-                status = LIB.fm_workbook_table_at(h, i, name_ptr, display_ptr, ref_ptr, sheet_ptr)
+                status = LIB.fm_workbook_table_at(h, _uint(i, "idx"), name_ptr, display_ptr, ref_ptr, sheet_ptr)
                 _check(status, "fm_workbook_table_at")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 display = LIB.read_cstr(LIB.read_u32(display_ptr))
@@ -1498,7 +1738,7 @@ class Workbook:
             path_ptr = LIB.alloc(4)
             LIB.write_bytes(path_ptr, b"\x00\x00\x00\x00")
             try:
-                status = LIB.fm_workbook_passthrough_at(h, i, path_ptr)
+                status = LIB.fm_workbook_passthrough_at(h, _uint(i, "idx"), path_ptr)
                 _check(status, "fm_workbook_passthrough_at")
                 path = LIB.read_cstr(LIB.read_u32(path_ptr))
             finally:
@@ -1510,14 +1750,14 @@ class Workbook:
         """Move the sheet at ``from_index`` to ``to_index`` (post-removal)."""
         h = self._require()
         _check(
-            LIB.fm_workbook_move_sheet(h, int(from_index), int(to_index)),
+            LIB.fm_workbook_move_sheet(h, _uint(from_index, "from_index"), _uint(to_index, "to_index")),
             "fm_workbook_move_sheet",
         )
 
     def remove_sheet(self, index: int) -> None:
         """Remove the sheet at ``index``."""
         h = self._require()
-        _check(LIB.fm_workbook_remove_sheet(h, int(index)), "fm_workbook_remove_sheet")
+        _check(LIB.fm_workbook_remove_sheet(h, _uint(index, "index")), "fm_workbook_remove_sheet")
 
     def rename_sheet(self, index: int, new_name: str) -> None:
         """Rename the sheet at ``index`` to ``new_name``."""
@@ -1525,7 +1765,7 @@ class Workbook:
         name_ptr, _ = LIB.alloc_utf8(new_name)
         try:
             _check(
-                LIB.fm_workbook_rename_sheet(h, int(index), name_ptr),
+                LIB.fm_workbook_rename_sheet(h, _uint(index, "index"), name_ptr),
                 "fm_workbook_rename_sheet",
             )
         finally:
@@ -1561,7 +1801,9 @@ class Workbook:
         formula_ptr, _ = LIB.alloc_utf8(formula)
         try:
             _check(
-                LIB.fm_workbook_set_defined_name_scoped(h, name_ptr, formula_ptr, int(local_sheet_id)),
+                LIB.fm_workbook_set_defined_name_scoped(
+                    h, name_ptr, formula_ptr, _sint(local_sheet_id, "local_sheet_id")
+                ),
                 "fm_workbook_set_defined_name_scoped",
             )
         finally:
@@ -1573,7 +1815,7 @@ class Workbook:
         """Insert ``count`` rows at ``row`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_insert_rows(h, int(sheet), int(row), int(count)),
+            LIB.fm_workbook_insert_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")),
             "fm_workbook_insert_rows",
         )
 
@@ -1581,7 +1823,7 @@ class Workbook:
         """Delete ``count`` rows starting at ``row`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_delete_rows(h, int(sheet), int(row), int(count)),
+            LIB.fm_workbook_delete_rows(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(count, "count")),
             "fm_workbook_delete_rows",
         )
 
@@ -1589,7 +1831,7 @@ class Workbook:
         """Insert ``count`` columns at ``col`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_insert_cols(h, int(sheet), int(col), int(count)),
+            LIB.fm_workbook_insert_cols(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")),
             "fm_workbook_insert_cols",
         )
 
@@ -1597,7 +1839,7 @@ class Workbook:
         """Delete ``count`` columns starting at ``col`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_delete_cols(h, int(sheet), int(col), int(count)),
+            LIB.fm_workbook_delete_cols(h, _uint(sheet, "sheet"), _uint(col, "col"), _uint(count, "count")),
             "fm_workbook_delete_cols",
         )
 
@@ -1615,7 +1857,7 @@ class Workbook:
     def set_calc_mode(self, mode: int) -> None:
         """Set the workbook's calc mode."""
         h = self._require()
-        _check(LIB.fm_workbook_set_calc_mode(h, int(mode)), "fm_workbook_set_calc_mode")
+        _check(LIB.fm_workbook_set_calc_mode(h, _sint(mode, "mode")), "fm_workbook_set_calc_mode")
 
     def excel_profile_id(self) -> str:
         """Return the workbook's active Excel formula profile id."""
@@ -1687,7 +1929,9 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_lambda_text_at(h, int(sheet), int(row), int(col), out),
+                LIB.fm_workbook_lambda_text_at(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), out
+                ),
                 "fm_workbook_lambda_text_at",
             )
             return LIB.read_cstr(LIB.read_u32(out))
@@ -1701,7 +1945,7 @@ class Workbook:
         owned: List[int] = []
         ptr = _pack_merge_array([merge], owned)
         try:
-            _check(LIB.fm_sheet_add_merge(h, int(sheet), ptr), "fm_sheet_add_merge")
+            _check(LIB.fm_sheet_add_merge(h, _uint(sheet, "sheet"), ptr), "fm_sheet_add_merge")
         finally:
             for p in owned:
                 LIB.free(p)
@@ -1713,7 +1957,7 @@ class Workbook:
         ptr = _pack_merge_array([merge], owned)
         try:
             _check(
-                LIB.fm_sheet_remove_merge(h, int(sheet), ptr),
+                LIB.fm_sheet_remove_merge(h, _uint(sheet, "sheet"), ptr),
                 "fm_sheet_remove_merge",
             )
         finally:
@@ -1724,14 +1968,14 @@ class Workbook:
         """Remove the merge at ``index`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_remove_merge_at(h, int(sheet), int(index)),
+            LIB.fm_sheet_remove_merge_at(h, _uint(sheet, "sheet"), _uint(index, "index")),
             "fm_sheet_remove_merge_at",
         )
 
     def clear_merges(self, sheet: int) -> None:
         """Drop every merge range on ``sheet``."""
         h = self._require()
-        _check(LIB.fm_sheet_clear_merges(h, int(sheet)), "fm_sheet_clear_merges")
+        _check(LIB.fm_sheet_clear_merges(h, _uint(sheet, "sheet")), "fm_sheet_clear_merges")
 
     def merge_count(self, sheet: int) -> int:
         """Return the number of merge ranges on ``sheet``."""
@@ -1747,7 +1991,7 @@ class Workbook:
             ptr = S.alloc_struct(LIB, S.MERGE_RANGE)
             try:
                 _check(
-                    LIB.fm_sheet_get_merge_at(h, int(sheet), i, ptr),
+                    LIB.fm_sheet_get_merge_at(h, _uint(sheet, "sheet"), _uint(i, "index"), ptr),
                     "fm_sheet_get_merge_at",
                 )
                 d = S.MERGE_RANGE.unpack(LIB, ptr)
@@ -1793,7 +2037,7 @@ class Workbook:
             S.write_str_field(LIB, ptr, S.HYPERLINK, "location", location, owned)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "display", display, owned)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", tooltip, owned)
-            _check(LIB.fm_sheet_add_hyperlink(h, int(sheet), ptr), "fm_sheet_add_hyperlink")
+            _check(LIB.fm_sheet_add_hyperlink(h, _uint(sheet, "sheet"), ptr), "fm_sheet_add_hyperlink")
         finally:
             LIB.free(ptr)
             for p in owned:
@@ -1830,7 +2074,7 @@ class Workbook:
             S.write_str_field(LIB, ptr, S.HYPERLINK, "location", location, owned)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "display", display, owned)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", tooltip, owned)
-            _check(LIB.fm_sheet_add_hyperlink(h, int(sheet), ptr), "fm_sheet_add_hyperlink")
+            _check(LIB.fm_sheet_add_hyperlink(h, _uint(sheet, "sheet"), ptr), "fm_sheet_add_hyperlink")
         finally:
             LIB.free(ptr)
             for p in owned:
@@ -1840,7 +2084,7 @@ class Workbook:
         """Remove every hyperlink anchored at ``(row, col)`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_remove_hyperlink(h, int(sheet), int(row), int(col)),
+            LIB.fm_sheet_remove_hyperlink(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col")),
             "fm_sheet_remove_hyperlink",
         )
 
@@ -1848,14 +2092,14 @@ class Workbook:
         """Remove the hyperlink at ``index`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_remove_hyperlink_at(h, int(sheet), int(index)),
+            LIB.fm_sheet_remove_hyperlink_at(h, _uint(sheet, "sheet"), _uint(index, "index")),
             "fm_sheet_remove_hyperlink_at",
         )
 
     def clear_hyperlinks(self, sheet: int) -> None:
         """Drop every hyperlink on ``sheet``."""
         h = self._require()
-        _check(LIB.fm_sheet_clear_hyperlinks(h, int(sheet)), "fm_sheet_clear_hyperlinks")
+        _check(LIB.fm_sheet_clear_hyperlinks(h, _uint(sheet, "sheet")), "fm_sheet_clear_hyperlinks")
 
     def hyperlink_count(self, sheet: int) -> int:
         """Return the number of hyperlinks on ``sheet``."""
@@ -1871,7 +2115,7 @@ class Workbook:
             ptr = S.alloc_struct(LIB, S.HYPERLINK)
             try:
                 _check(
-                    LIB.fm_sheet_get_hyperlink_at(h, int(sheet), i, ptr),
+                    LIB.fm_sheet_get_hyperlink_at(h, _uint(sheet, "sheet"), _uint(i, "index"), ptr),
                     "fm_sheet_get_hyperlink_at",
                 )
                 d = S.HYPERLINK.unpack(LIB, ptr)
@@ -1897,7 +2141,7 @@ class Workbook:
         h = self._require()
         ptr = S.alloc_struct(LIB, S.COMMENT)
         try:
-            status = LIB.fm_sheet_get_comment_at(h, int(sheet), int(row), int(col), ptr)
+            status = LIB.fm_sheet_get_comment_at(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr)
             if status == _STATUS_NOT_FOUND:
                 return None
             _check(status, "fm_sheet_get_comment_at")
@@ -1917,7 +2161,9 @@ class Workbook:
         text_ptr = _opt_str_ptr(text, owned)
         try:
             _check(
-                LIB.fm_sheet_set_comment(h, int(sheet), int(row), int(col), author_ptr, text_ptr),
+                LIB.fm_sheet_set_comment(
+                    h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), author_ptr, text_ptr
+                ),
                 "fm_sheet_set_comment",
             )
         finally:
@@ -1941,7 +2187,7 @@ class Workbook:
             ptr = S.alloc_struct(LIB, S.COMMENT)
             try:
                 _check(
-                    LIB.fm_sheet_get_comment_at_index(h, int(sheet), index, ptr),
+                    LIB.fm_sheet_get_comment_at_index(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
                     "fm_sheet_get_comment_at_index",
                 )
                 d = S.COMMENT.unpack(LIB, ptr)
@@ -1962,7 +2208,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.DATA_VALIDATION)
         try:
             _check(
-                LIB.fm_sheet_get_validation_at(h, int(sheet), int(index), ptr),
+                LIB.fm_sheet_get_validation_at(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
                 "fm_sheet_get_validation_at",
             )
             return self._decode_validation(ptr)
@@ -2043,7 +2289,7 @@ class Workbook:
             ):
                 S.write_str_field(LIB, ptr, S.DATA_VALIDATION, fld, getattr(validation, fld), owned)
             _check(
-                LIB.fm_sheet_add_validation(h, int(sheet), ptr),
+                LIB.fm_sheet_add_validation(h, _uint(sheet, "sheet"), ptr),
                 "fm_sheet_add_validation",
             )
         finally:
@@ -2055,7 +2301,7 @@ class Workbook:
         """Remove the validation rule at ``index`` on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_remove_validation_at(h, int(sheet), int(index)),
+            LIB.fm_sheet_remove_validation_at(h, _uint(sheet, "sheet"), _uint(index, "index")),
             "fm_sheet_remove_validation_at",
         )
 
@@ -2063,7 +2309,7 @@ class Workbook:
         """Drop every validation rule on ``sheet``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_clear_validations(h, int(sheet)),
+            LIB.fm_sheet_clear_validations(h, _uint(sheet, "sheet")),
             "fm_sheet_clear_validations",
         )
 
@@ -2093,7 +2339,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.SHEET_PROTECTION)
         try:
             _check(
-                LIB.fm_sheet_get_protection(h, int(sheet), ptr),
+                LIB.fm_sheet_get_protection(h, _uint(sheet, "sheet_index"), ptr),
                 "fm_sheet_get_protection",
             )
             d = S.SHEET_PROTECTION.unpack(LIB, ptr)
@@ -2127,7 +2373,7 @@ class Workbook:
             for fld in ("algorithm_name", "hash_value", "salt_value", "legacy_password"):
                 S.write_str_field(LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), owned)
             _check(
-                LIB.fm_sheet_set_protection(h, int(sheet), ptr),
+                LIB.fm_sheet_set_protection(h, _uint(sheet, "sheet_index"), ptr),
                 "fm_sheet_set_protection",
             )
         finally:
@@ -2145,7 +2391,7 @@ class Workbook:
         h = self._require()
         out = _alloc_out_ptr()
         try:
-            _check(LIB.fm_workbook_paginate(h, int(sheet), out), "fm_workbook_paginate")
+            _check(LIB.fm_workbook_paginate(h, _uint(sheet, "sheet_index"), out), "fm_workbook_paginate")
             pagination = LIB.read_u32(out)
             if pagination == 0:
                 raise FormulonError("fm_workbook_paginate returned a null result")
@@ -2160,21 +2406,21 @@ class Workbook:
                     print_area = []
                     for i in range(range_count):
                         _check(
-                            LIB.fm_pagination_print_area_at(pagination, i, range_ptr),
+                            LIB.fm_pagination_print_area_at(pagination, _uint(i, "index"), range_ptr),
                             "fm_pagination_print_area_at",
                         )
                         print_area.append(struct.unpack("<IIII", LIB.read_bytes(range_ptr, 16)))
                     horizontal_breaks = []
                     for i in range(break_count):
                         _check(
-                            LIB.fm_pagination_horizontal_break_at(pagination, i, value_ptr),
+                            LIB.fm_pagination_horizontal_break_at(pagination, _uint(i, "index"), value_ptr),
                             "fm_pagination_horizontal_break_at",
                         )
                         horizontal_breaks.append(LIB.read_u32(value_ptr))
                     vertical_breaks = []
                     for i in range(vertical_break_count):
                         _check(
-                            LIB.fm_pagination_vertical_break_at(pagination, i, value_ptr),
+                            LIB.fm_pagination_vertical_break_at(pagination, _uint(i, "index"), value_ptr),
                             "fm_pagination_vertical_break_at",
                         )
                         vertical_breaks.append(LIB.read_u32(value_ptr))
@@ -2193,7 +2439,7 @@ class Workbook:
         h = self._require()
         ptr = S.alloc_struct(LIB, S.SHEET_VIEW_EX)
         try:
-            _check(LIB.fm_sheet_get_view_ex(h, int(sheet), ptr), "fm_sheet_get_view_ex")
+            _check(LIB.fm_sheet_get_view_ex(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_get_view_ex")
             d = S.SHEET_VIEW_EX.unpack(LIB, ptr)
             return SheetView(
                 zoom_scale=d["zoom_scale"],
@@ -2213,13 +2459,17 @@ class Workbook:
     def set_sheet_zoom(self, sheet: int, zoom_scale: int) -> None:
         """Set the sheet zoom percentage (clamped to ``[10, 400]``)."""
         h = self._require()
-        _check(LIB.fm_sheet_set_zoom(h, int(sheet), int(zoom_scale)), "fm_sheet_set_zoom")
+        _check(
+            LIB.fm_sheet_set_zoom(h, _uint(sheet, "sheet_index"), _uint(zoom_scale, "zoom_scale")), "fm_sheet_set_zoom"
+        )
 
     def set_sheet_freeze(self, sheet: int, freeze_rows: int, freeze_cols: int) -> None:
         """Set the frozen pane in ``(rows, cols)``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_freeze(h, int(sheet), int(freeze_rows), int(freeze_cols)),
+            LIB.fm_sheet_set_freeze(
+                h, _uint(sheet, "sheet_index"), _uint(freeze_rows, "freeze_rows"), _uint(freeze_cols, "freeze_cols")
+            ),
             "fm_sheet_set_freeze",
         )
 
@@ -2227,7 +2477,7 @@ class Workbook:
         """Set the sheet tab's hidden flag."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_tab_hidden(h, int(sheet), 1 if hidden else 0),
+            LIB.fm_sheet_set_tab_hidden(h, _uint(sheet, "sheet_index"), 1 if hidden else 0),
             "fm_sheet_set_tab_hidden",
         )
 
@@ -2235,7 +2485,7 @@ class Workbook:
         """Set the sheet's ``showGridLines`` flag."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_show_grid_lines(h, int(sheet), 1 if show else 0),
+            LIB.fm_sheet_set_show_grid_lines(h, _uint(sheet, "sheet_index"), 1 if show else 0),
             "fm_sheet_set_show_grid_lines",
         )
 
@@ -2243,7 +2493,7 @@ class Workbook:
         """Set the sheet's ``showRowColHeaders`` flag."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_show_row_col_headers(h, int(sheet), 1 if show else 0),
+            LIB.fm_sheet_set_show_row_col_headers(h, _uint(sheet, "sheet_index"), 1 if show else 0),
             "fm_sheet_set_show_row_col_headers",
         )
 
@@ -2251,7 +2501,7 @@ class Workbook:
         """Set the sheet's ``showZeros`` flag."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_show_zeros(h, int(sheet), 1 if show else 0),
+            LIB.fm_sheet_set_show_zeros(h, _uint(sheet, "sheet_index"), 1 if show else 0),
             "fm_sheet_set_show_zeros",
         )
 
@@ -2259,7 +2509,7 @@ class Workbook:
         """Set the sheet's ``rightToLeft`` flag."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_right_to_left(h, int(sheet), 1 if right_to_left else 0),
+            LIB.fm_sheet_set_right_to_left(h, _uint(sheet, "sheet_index"), 1 if right_to_left else 0),
             "fm_sheet_set_right_to_left",
         )
 
@@ -2267,7 +2517,7 @@ class Workbook:
         """Set the sheet's ``tabSelected`` flag."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_tab_selected(h, int(sheet), 1 if selected else 0),
+            LIB.fm_sheet_set_tab_selected(h, _uint(sheet, "sheet_index"), 1 if selected else 0),
             "fm_sheet_set_tab_selected",
         )
 
@@ -2284,7 +2534,7 @@ class Workbook:
         mode_ptr, _ = LIB.alloc_utf8(mode)
         try:
             _check(
-                LIB.fm_sheet_set_view_mode(h, int(sheet), mode_ptr),
+                LIB.fm_sheet_set_view_mode(h, _uint(sheet, "sheet_index"), mode_ptr),
                 "fm_sheet_set_view_mode",
             )
         finally:
@@ -2299,7 +2549,7 @@ class Workbook:
             ptr = S.alloc_struct(LIB, S.COLUMN_LAYOUT)
             try:
                 _check(
-                    LIB.fm_sheet_get_column(h, int(sheet), i, ptr),
+                    LIB.fm_sheet_get_column(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
                     "fm_sheet_get_column",
                 )
                 d = S.COLUMN_LAYOUT.unpack(LIB, ptr)
@@ -2320,7 +2570,9 @@ class Workbook:
         """Set the column width override on ``[first, last]``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_column_width(h, int(sheet), int(first), int(last), float(width)),
+            LIB.fm_sheet_set_column_width(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), float(width)
+            ),
             "fm_sheet_set_column_width",
         )
 
@@ -2328,7 +2580,9 @@ class Workbook:
         """Set the column hidden flag on ``[first, last]``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_column_hidden(h, int(sheet), int(first), int(last), 1 if hidden else 0),
+            LIB.fm_sheet_set_column_hidden(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), 1 if hidden else 0
+            ),
             "fm_sheet_set_column_hidden",
         )
 
@@ -2336,7 +2590,9 @@ class Workbook:
         """Set the column outline level on ``[first, last]``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_column_outline(h, int(sheet), int(first), int(last), int(level)),
+            LIB.fm_sheet_set_column_outline(
+                h, _uint(sheet, "sheet_index"), _uint(first, "first"), _uint(last, "last"), _uint(level, "level", 8)
+            ),
             "fm_sheet_set_column_outline",
         )
 
@@ -2349,7 +2605,7 @@ class Workbook:
             ptr = S.alloc_struct(LIB, S.ROW_LAYOUT)
             try:
                 _check(
-                    LIB.fm_sheet_get_row_override(h, int(sheet), i, ptr),
+                    LIB.fm_sheet_get_row_override(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
                     "fm_sheet_get_row_override",
                 )
                 d = S.ROW_LAYOUT.unpack(LIB, ptr)
@@ -2369,7 +2625,7 @@ class Workbook:
         """Set the row height override at ``row``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_height(h, int(sheet), int(row), float(height)),
+            LIB.fm_sheet_set_row_height(h, _uint(sheet, "sheet_index"), _uint(row, "row"), float(height)),
             "fm_sheet_set_row_height",
         )
 
@@ -2377,7 +2633,7 @@ class Workbook:
         """Set the row hidden flag at ``row``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_hidden(h, int(sheet), int(row), 1 if hidden else 0),
+            LIB.fm_sheet_set_row_hidden(h, _uint(sheet, "sheet_index"), _uint(row, "row"), 1 if hidden else 0),
             "fm_sheet_set_row_hidden",
         )
 
@@ -2385,7 +2641,7 @@ class Workbook:
         """Set the row outline level at ``row``."""
         h = self._require()
         _check(
-            LIB.fm_sheet_set_row_outline(h, int(sheet), int(row), int(level)),
+            LIB.fm_sheet_set_row_outline(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(level, "level", 8)),
             "fm_sheet_set_row_outline",
         )
 
@@ -2416,11 +2672,11 @@ class Workbook:
             _check(
                 LIB.fm_workbook_cf_evaluate_range(
                     h,
-                    int(sheet),
-                    int(first_row),
-                    int(first_col),
-                    int(last_row),
-                    int(last_col),
+                    _uint(sheet, "sheet_index"),
+                    _uint(first_row, "first_row"),
+                    _uint(first_col, "first_col"),
+                    _uint(last_row, "last_row"),
+                    _uint(last_col, "last_col"),
                     float(today_serial),
                     out,
                 ),
@@ -2435,7 +2691,7 @@ class Workbook:
                 mcp = _alloc_out_ptr()
                 try:
                     _check(
-                        LIB.fm_cf_results_cell_at(results, ci, rp, cp, mcp),
+                        LIB.fm_cf_results_cell_at(results, _uint(ci, "cell_idx"), rp, cp, mcp),
                         "fm_cf_results_cell_at",
                     )
                     row = LIB.read_u32(rp)
@@ -2450,7 +2706,7 @@ class Workbook:
                     mptr = S.alloc_struct(LIB, S.CF_MATCH)
                     try:
                         _check(
-                            LIB.fm_cf_results_match_at(results, ci, mi, mptr),
+                            LIB.fm_cf_results_match_at(results, _uint(ci, "cell_idx"), _uint(mi, "match_idx"), mptr),
                             "fm_cf_results_match_at",
                         )
                         d = S.CF_MATCH.unpack(LIB, mptr)
@@ -2486,7 +2742,7 @@ class Workbook:
         h = self._require()
         out = _alloc_out_ptr()
         try:
-            _check(LIB.fm_sheet_cf_count(h, int(sheet), out), "fm_sheet_cf_count")
+            _check(LIB.fm_sheet_cf_count(h, _uint(sheet, "sheet_index"), out), "fm_sheet_cf_count")
             return LIB.read_u32(out)
         finally:
             LIB.free(out)
@@ -2519,7 +2775,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.CF_RULE)
         try:
             _check(
-                LIB.fm_sheet_cf_get_at(h, int(sheet), int(index), ptr),
+                LIB.fm_sheet_cf_get_at(h, _uint(sheet, "sheet_index"), _uint(index, "idx"), ptr),
                 "fm_sheet_cf_get_at",
             )
             d = S.CF_RULE.unpack(LIB, ptr)
@@ -2691,7 +2947,7 @@ class Workbook:
                 LIB.write_bytes(ptr + ro["icon_set_show_value"][1], struct.pack("<i", 1 if icon_set.show_value else 0))
                 LIB.write_bytes(ptr + ro["icon_set_percent"][1], struct.pack("<i", 1 if icon_set.percent else 0))
             _check(
-                LIB.fm_sheet_cf_add_rule(h, int(sheet), ptr, out),
+                LIB.fm_sheet_cf_add_rule(h, _uint(sheet, "sheet_index"), ptr, out),
                 "fm_sheet_cf_add_rule",
             )
             return LIB.read_u32(out)
@@ -2705,14 +2961,14 @@ class Workbook:
         """Remove the CF rule at ``index`` on ``sheet`` (flattened order)."""
         h = self._require()
         _check(
-            LIB.fm_sheet_cf_remove_at(h, int(sheet), int(index)),
+            LIB.fm_sheet_cf_remove_at(h, _uint(sheet, "sheet_index"), _uint(index, "idx")),
             "fm_sheet_cf_remove_at",
         )
 
     def clear_conditional_formats(self, sheet: int) -> None:
         """Drop every CF block on ``sheet``."""
         h = self._require()
-        _check(LIB.fm_sheet_cf_clear(h, int(sheet)), "fm_sheet_cf_clear")
+        _check(LIB.fm_sheet_cf_clear(h, _uint(sheet, "sheet_index")), "fm_sheet_cf_clear")
 
     # -- Styles ------------------------------------------------------------
     def get_cell_xf_index(self, sheet: int, row: int, col: int) -> int:
@@ -2721,7 +2977,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_cell_get_xf_index(h, int(sheet), int(row), int(col), out),
+                LIB.fm_cell_get_xf_index(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), out),
                 "fm_cell_get_xf_index",
             )
             return LIB.read_u32(out)
@@ -2732,7 +2988,9 @@ class Workbook:
         """Store ``xf_index`` on the cell at ``(row, col)``."""
         h = self._require()
         _check(
-            LIB.fm_cell_set_xf_index(h, int(sheet), int(row), int(col), int(xf_index)),
+            LIB.fm_cell_set_xf_index(
+                h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), _uint(xf_index, "xf_index")
+            ),
             "fm_cell_set_xf_index",
         )
 
@@ -2767,7 +3025,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
         try:
             _check(
-                LIB.fm_styles_get_cell_xf_ex2(h, int(xf_index), ptr),
+                LIB.fm_styles_get_cell_xf_ex2(h, _uint(xf_index, "xf_index"), ptr),
                 "fm_styles_get_cell_xf_ex2",
             )
             return self._decode_cell_xf(ptr)
@@ -2779,17 +3037,8 @@ class Workbook:
         h = self._require()
         ptr = S.alloc_struct(LIB, S.FONT_RECORD)
         try:
-            _check(LIB.fm_styles_get_font(h, int(font_index), ptr), "fm_styles_get_font")
-            d = S.FONT_RECORD.unpack(LIB, ptr)
-            return FontRecord(
-                name=LIB.read_cstr(d["name"]),
-                size=d["size"],
-                color_argb=d["color_argb"],
-                bold=bool(d["bold"]),
-                italic=bool(d["italic"]),
-                strike=bool(d["strike"]),
-                underline=d["underline"],
-            )
+            _check(LIB.fm_styles_get_font(h, _uint(font_index, "font_index"), ptr), "fm_styles_get_font")
+            return _decode_font(ptr)
         finally:
             LIB.free(ptr)
 
@@ -2798,79 +3047,43 @@ class Workbook:
         h = self._require()
         ptr = S.alloc_struct(LIB, S.FILL_RECORD)
         try:
-            _check(LIB.fm_styles_get_fill(h, int(fill_index), ptr), "fm_styles_get_fill")
-            d = S.FILL_RECORD.unpack(LIB, ptr)
-            return FillRecord(pattern=d["pattern"], fg_argb=d["fg_argb"], bg_argb=d["bg_argb"])
+            _check(LIB.fm_styles_get_fill(h, _uint(fill_index, "fill_index"), ptr), "fm_styles_get_fill")
+            return _decode_fill(ptr)
         finally:
             LIB.free(ptr)
 
     def get_border(self, border_index: int) -> Dict[str, object]:
         """Return the resolved border record at ``border_index``.
 
-        Each side is a ``{"style", "color_argb"}`` dict; the result also
+        Each side is a ``{"style", "color_argb", "color"}`` dict, where
+        ``color`` is the round-trip :class:`ColorSpec`; the result also
         carries ``diagonal_up`` / ``diagonal_down`` booleans.
         """
         h = self._require()
         ptr = S.alloc_struct(LIB, S.BORDER_RECORD)
         try:
             _check(
-                LIB.fm_styles_get_border(h, int(border_index), ptr),
+                LIB.fm_styles_get_border(h, _uint(border_index, "border_index"), ptr),
                 "fm_styles_get_border",
             )
-            d = S.BORDER_RECORD.unpack(LIB, ptr)
-            sides = {}
-            for side in ("left", "right", "top", "bottom", "diagonal"):
-                sides[side] = {
-                    "style": d[side + "_style"],
-                    "color_argb": d[side + "_color_argb"],
-                }
-            sides["diagonal_up"] = bool(d["diagonal_up"])
-            sides["diagonal_down"] = bool(d["diagonal_down"])
-            return sides
+            return _decode_border_record(ptr)
         finally:
             LIB.free(ptr)
-
-    @staticmethod
-    def _decode_border(ptr: int) -> Dict[str, object]:
-        d = S.BORDER_RECORD.unpack(LIB, ptr)
-        sides: Dict[str, object] = {}
-        for side in ("left", "right", "top", "bottom", "diagonal"):
-            sides[side] = {
-                "style": d[side + "_style"],
-                "color_argb": d[side + "_color_argb"],
-            }
-        sides["diagonal_up"] = bool(d["diagonal_up"])
-        sides["diagonal_down"] = bool(d["diagonal_down"])
-        return sides
 
     def get_dxf(self, dxf_index: int) -> DifferentialFormat:
         """Read one differential format by its conditional-format ``dxfId``."""
         h = self._require()
         ptr = S.alloc_struct(LIB, S.DXF_RECORD)
         try:
-            _check(LIB.fm_styles_get_dxf(h, int(dxf_index), ptr), "fm_styles_get_dxf")
+            _check(LIB.fm_styles_get_dxf(h, _uint(dxf_index, "dxf_index"), ptr), "fm_styles_get_dxf")
             d = S.DXF_RECORD.unpack(LIB, ptr)
             offsets = S.DXF_RECORD.offsets
-            font = None
-            if d["font_engaged"]:
-                fd = S.FONT_RECORD.unpack(LIB, ptr + offsets["font"][1])
-                font = FontRecord(
-                    name=LIB.read_cstr(fd["name"]),
-                    size=fd["size"],
-                    color_argb=fd["color_argb"],
-                    bold=bool(fd["bold"]),
-                    italic=bool(fd["italic"]),
-                    strike=bool(fd["strike"]),
-                    underline=fd["underline"],
-                )
-            fill = None
-            if d["fill_engaged"]:
-                fill_d = S.FILL_RECORD.unpack(LIB, ptr + offsets["fill"][1])
-                fill = FillRecord(fill_d["pattern"], fill_d["fg_argb"], fill_d["bg_argb"])
+            font = _decode_font(ptr + offsets["font"][1]) if d["font_engaged"] else None
+            fill = _decode_fill(ptr + offsets["fill"][1]) if d["fill_engaged"] else None
             return DifferentialFormat(
                 font=font,
                 fill=fill,
-                border=self._decode_border(ptr + offsets["border"][1]) if d["border_engaged"] else None,
+                border=_decode_border_record(ptr + offsets["border"][1]) if d["border_engaged"] else None,
                 num_fmt_id=d["num_fmt_id"] if d["num_fmt_engaged"] else None,
                 num_fmt_code=LIB.read_cstr(d["num_fmt_code"]) if d["num_fmt_engaged"] else "",
             )
@@ -2883,7 +3096,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_styles_get_num_fmt_string(h, int(num_fmt_id), out),
+                LIB.fm_styles_get_num_fmt_string(h, _uint(num_fmt_id, "num_fmt_id", 16), out),
                 "fm_styles_get_num_fmt_string",
             )
             return LIB.read_cstr(LIB.read_u32(out))
@@ -2934,19 +3147,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.FONT_RECORD)
         out = _alloc_out_ptr()
         try:
-            S.FONT_RECORD.pack(
-                LIB,
-                ptr,
-                {
-                    "size": float(record.size),
-                    "color_argb": int(record.color_argb),
-                    "bold": 1 if record.bold else 0,
-                    "italic": 1 if record.italic else 0,
-                    "strike": 1 if record.strike else 0,
-                    "underline": int(record.underline),
-                },
-            )
-            S.write_str_field(LIB, ptr, S.FONT_RECORD, "name", record.name, owned)
+            _pack_font(ptr, record, owned)
             _check(LIB.fm_styles_add_font(h, ptr, out), "fm_styles_add_font")
             return LIB.read_u32(out)
         finally:
@@ -2961,15 +3162,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.FILL_RECORD)
         out = _alloc_out_ptr()
         try:
-            S.FILL_RECORD.pack(
-                LIB,
-                ptr,
-                {
-                    "pattern": int(record.pattern),
-                    "fg_argb": int(record.fg_argb),
-                    "bg_argb": int(record.bg_argb),
-                },
-            )
+            _pack_fill(ptr, record)
             _check(LIB.fm_styles_add_fill(h, ptr, out), "fm_styles_add_fill")
             return LIB.read_u32(out)
         finally:
@@ -2981,22 +3174,15 @@ class Workbook:
 
         ``sides`` mirrors :meth:`get_border`'s shape: a dict with
         ``left`` / ``right`` / ``top`` / ``bottom`` / ``diagonal`` entries
-        (each ``{"style", "color_argb"}``) plus optional ``diagonal_up`` /
+        (each ``{"style", "color_argb"}`` plus an optional ``color``
+        :class:`ColorSpec`) plus optional ``diagonal_up`` /
         ``diagonal_down`` booleans.
         """
         h = self._require()
         ptr = S.alloc_struct(LIB, S.BORDER_RECORD)
         out = _alloc_out_ptr()
         try:
-            values: Dict[str, int] = {
-                "diagonal_up": 1 if sides.get("diagonal_up") else 0,
-                "diagonal_down": 1 if sides.get("diagonal_down") else 0,
-            }
-            for side in ("left", "right", "top", "bottom", "diagonal"):
-                spec = sides.get(side) or {}
-                values[side + "_style"] = int(spec.get("style", 0))
-                values[side + "_color_argb"] = int(spec.get("color_argb", 0))
-            S.BORDER_RECORD.pack(LIB, ptr, values)
+            _pack_border_record(ptr, sides)
             _check(LIB.fm_styles_add_border(h, ptr, out), "fm_styles_add_border")
             return LIB.read_u32(out)
         finally:
@@ -3099,40 +3285,11 @@ class Workbook:
             )
             offsets = S.DXF_RECORD.offsets
             if record.font is not None:
-                font_ptr = ptr + offsets["font"][1]
-                S.FONT_RECORD.pack(
-                    LIB,
-                    font_ptr,
-                    {
-                        "size": float(record.font.size),
-                        "color_argb": int(record.font.color_argb),
-                        "bold": 1 if record.font.bold else 0,
-                        "italic": 1 if record.font.italic else 0,
-                        "strike": 1 if record.font.strike else 0,
-                        "underline": int(record.font.underline),
-                    },
-                )
-                S.write_str_field(LIB, font_ptr, S.FONT_RECORD, "name", record.font.name, owned)
+                _pack_font(ptr + offsets["font"][1], record.font, owned)
             if record.fill is not None:
-                S.FILL_RECORD.pack(
-                    LIB,
-                    ptr + offsets["fill"][1],
-                    {
-                        "pattern": int(record.fill.pattern),
-                        "fg_argb": int(record.fill.fg_argb),
-                        "bg_argb": int(record.fill.bg_argb),
-                    },
-                )
+                _pack_fill(ptr + offsets["fill"][1], record.fill)
             if record.border is not None:
-                values: Dict[str, int] = {
-                    "diagonal_up": 1 if record.border.get("diagonal_up") else 0,
-                    "diagonal_down": 1 if record.border.get("diagonal_down") else 0,
-                }
-                for side in ("left", "right", "top", "bottom", "diagonal"):
-                    spec = record.border.get(side) or {}
-                    values[side + "_style"] = int(spec.get("style", 0))
-                    values[side + "_color_argb"] = int(spec.get("color_argb", 0))
-                S.BORDER_RECORD.pack(LIB, ptr + offsets["border"][1], values)
+                _pack_border_record(ptr + offsets["border"][1], record.border)
             S.write_str_field(LIB, ptr, S.DXF_RECORD, "num_fmt_code", record.num_fmt_code, owned)
             _check(LIB.fm_styles_add_dxf(h, ptr, out), "fm_styles_add_dxf")
             return LIB.read_u32(out)
@@ -3148,7 +3305,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.CELL_STYLE_RECORD)
         try:
             _check(
-                LIB.fm_styles_get_cell_style(h, int(index), ptr),
+                LIB.fm_styles_get_cell_style(h, _uint(index, "index"), ptr),
                 "fm_styles_get_cell_style",
             )
             d = S.CELL_STYLE_RECORD.unpack(LIB, ptr)
@@ -3169,7 +3326,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
         try:
             _check(
-                LIB.fm_styles_get_cell_style_xf_ex2(h, int(index), ptr),
+                LIB.fm_styles_get_cell_style_xf_ex2(h, _uint(index, "index"), ptr),
                 "fm_styles_get_cell_style_xf_ex2",
             )
             return self._decode_cell_xf(ptr)
@@ -3183,7 +3340,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_pivot_count(h, int(sheet), out),
+                LIB.fm_workbook_pivot_count(h, _uint(sheet, "sheet_index"), out),
                 "fm_workbook_pivot_count",
             )
             return LIB.read_u32(out)
@@ -3197,7 +3354,7 @@ class Workbook:
         handle = 0
         try:
             _check(
-                LIB.fm_workbook_pivot_layout(h, int(sheet), int(pivot_index), out),
+                LIB.fm_workbook_pivot_layout(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out),
                 "fm_workbook_pivot_layout",
             )
             handle = LIB.read_u32(out)
@@ -3225,7 +3382,7 @@ class Workbook:
                 cptr = S.alloc_struct(LIB, S.PIVOT_CELL)
                 try:
                     _check(
-                        LIB.fm_pivot_cells_at(handle, i, cptr),
+                        LIB.fm_pivot_cells_at(handle, _uint(i, "idx"), cptr),
                         "fm_pivot_cells_at",
                     )
                     d = S.PIVOT_CELL.unpack(LIB, cptr)
@@ -3269,7 +3426,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_id_at(h, int(index), out),
+                LIB.fm_workbook_pivot_cache_id_at(h, _uint(index, "idx"), out),
                 "fm_workbook_pivot_cache_id_at",
             )
             return LIB.read_u32(out)
@@ -3282,7 +3439,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_create(h, int(requested_id), out),
+                LIB.fm_workbook_pivot_cache_create(h, _uint(requested_id, "requested_id"), out),
                 "fm_workbook_pivot_cache_create",
             )
             return LIB.read_u32(out)
@@ -3299,7 +3456,7 @@ class Workbook:
         try:
             _check(
                 LIB.fm_workbook_pivot_cache_get_worksheet_source(
-                    h, int(cache_id), present, out_ref, out_sheet, out_name
+                    h, _uint(cache_id, "cache_id"), present, out_ref, out_sheet, out_name
                 ),
                 "fm_workbook_pivot_cache_get_worksheet_source",
             )
@@ -3331,7 +3488,7 @@ class Workbook:
             pointers = owned if source is not None else (0, 0, 0)
             _check(
                 LIB.fm_workbook_pivot_cache_set_worksheet_source(
-                    h, int(cache_id), 0 if source is None else 1, *pointers
+                    h, _uint(cache_id, "cache_id"), 0 if source is None else 1, *pointers
                 ),
                 "fm_workbook_pivot_cache_set_worksheet_source",
             )
@@ -3344,7 +3501,7 @@ class Workbook:
         """Remove the pivot cache with id ``cache_id``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_remove(h, int(cache_id)),
+            LIB.fm_workbook_pivot_cache_remove(h, _uint(cache_id, "cache_id")),
             "fm_workbook_pivot_cache_remove",
         )
 
@@ -3359,7 +3516,9 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_field_name(h, int(cache_id), int(field_idx), out),
+                LIB.fm_workbook_pivot_cache_field_name(
+                    h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), out
+                ),
                 "fm_workbook_pivot_cache_field_name",
             )
             return LIB.read_cstr(LIB.read_u32(out))
@@ -3373,7 +3532,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_field_add(h, int(cache_id), name_ptr, out),
+                LIB.fm_workbook_pivot_cache_field_add(h, _uint(cache_id, "cache_id"), name_ptr, out),
                 "fm_workbook_pivot_cache_field_add",
             )
             return LIB.read_u32(out)
@@ -3385,7 +3544,7 @@ class Workbook:
         """Drop every field (and record) from the cache."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_clear(h, int(cache_id)),
+            LIB.fm_workbook_pivot_cache_field_clear(h, _uint(cache_id, "cache_id")),
             "fm_workbook_pivot_cache_field_clear",
         )
 
@@ -3403,7 +3562,9 @@ class Workbook:
         """Append a numeric shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_number(h, int(cache_id), int(field_idx), float(value)),
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_number(
+                h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), float(value)
+            ),
             "fm_workbook_pivot_cache_field_add_shared_item_number",
         )
 
@@ -3413,7 +3574,9 @@ class Workbook:
         vp, _ = LIB.alloc_utf8(value)
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_field_add_shared_item_text(h, int(cache_id), int(field_idx), vp),
+                LIB.fm_workbook_pivot_cache_field_add_shared_item_text(
+                    h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), vp
+                ),
                 "fm_workbook_pivot_cache_field_add_shared_item_text",
             )
         finally:
@@ -3423,7 +3586,9 @@ class Workbook:
         """Append a boolean shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_bool(h, int(cache_id), int(field_idx), 1 if value else 0),
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_bool(
+                h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), 1 if value else 0
+            ),
             "fm_workbook_pivot_cache_field_add_shared_item_bool",
         )
 
@@ -3431,7 +3596,9 @@ class Workbook:
         """Append a blank shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_blank(h, int(cache_id), int(field_idx)),
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_blank(
+                h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx")
+            ),
             "fm_workbook_pivot_cache_field_add_shared_item_blank",
         )
 
@@ -3439,7 +3606,9 @@ class Workbook:
         """Append an Excel error shared item to a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_add_shared_item_error(h, int(cache_id), int(field_idx), int(error_code)),
+            LIB.fm_workbook_pivot_cache_field_add_shared_item_error(
+                h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx"), _sint(error_code, "error")
+            ),
             "fm_workbook_pivot_cache_field_add_shared_item_error",
         )
 
@@ -3447,7 +3616,9 @@ class Workbook:
         """Drop every shared item from a cache field."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_field_clear_shared_items(h, int(cache_id), int(field_idx)),
+            LIB.fm_workbook_pivot_cache_field_clear_shared_items(
+                h, _uint(cache_id, "cache_id"), _uint(field_idx, "field_idx")
+            ),
             "fm_workbook_pivot_cache_field_clear_shared_items",
         )
 
@@ -3462,7 +3633,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_record_add(h, int(cache_id), out),
+                LIB.fm_workbook_pivot_cache_record_add(h, _uint(cache_id, "cache_id"), out),
                 "fm_workbook_pivot_cache_record_add",
             )
             return LIB.read_u32(out)
@@ -3473,7 +3644,7 @@ class Workbook:
         """Drop every record from the cache."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_clear(h, int(cache_id)),
+            LIB.fm_workbook_pivot_cache_record_clear(h, _uint(cache_id, "cache_id")),
             "fm_workbook_pivot_cache_record_clear",
         )
 
@@ -3482,7 +3653,11 @@ class Workbook:
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_cache_record_set_number(
-                h, int(cache_id), int(record_idx), int(field_idx), float(value)
+                h,
+                _uint(cache_id, "cache_id"),
+                _uint(record_idx, "record_idx"),
+                _uint(field_idx, "field_idx"),
+                float(value),
             ),
             "fm_workbook_pivot_cache_record_set_number",
         )
@@ -3493,7 +3668,9 @@ class Workbook:
         vp, _ = LIB.alloc_utf8(value)
         try:
             _check(
-                LIB.fm_workbook_pivot_cache_record_set_text(h, int(cache_id), int(record_idx), int(field_idx), vp),
+                LIB.fm_workbook_pivot_cache_record_set_text(
+                    h, _uint(cache_id, "cache_id"), _uint(record_idx, "record_idx"), _uint(field_idx, "field_idx"), vp
+                ),
                 "fm_workbook_pivot_cache_record_set_text",
             )
         finally:
@@ -3504,7 +3681,11 @@ class Workbook:
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_cache_record_set_bool(
-                h, int(cache_id), int(record_idx), int(field_idx), 1 if value else 0
+                h,
+                _uint(cache_id, "cache_id"),
+                _uint(record_idx, "record_idx"),
+                _uint(field_idx, "field_idx"),
+                1 if value else 0,
             ),
             "fm_workbook_pivot_cache_record_set_bool",
         )
@@ -3513,7 +3694,9 @@ class Workbook:
         """Set cache cell ``(record_idx, field_idx)`` to blank."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_cache_record_set_blank(h, int(cache_id), int(record_idx), int(field_idx)),
+            LIB.fm_workbook_pivot_cache_record_set_blank(
+                h, _uint(cache_id, "cache_id"), _uint(record_idx, "record_idx"), _uint(field_idx, "field_idx")
+            ),
             "fm_workbook_pivot_cache_record_set_blank",
         )
 
@@ -3522,7 +3705,11 @@ class Workbook:
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_cache_record_set_error(
-                h, int(cache_id), int(record_idx), int(field_idx), int(error_code)
+                h,
+                _uint(cache_id, "cache_id"),
+                _uint(record_idx, "record_idx"),
+                _uint(field_idx, "field_idx"),
+                _sint(error_code, "error"),
             ),
             "fm_workbook_pivot_cache_record_set_error",
         )
@@ -3537,11 +3724,11 @@ class Workbook:
             _check(
                 LIB.fm_workbook_pivot_create(
                     h,
-                    int(sheet),
+                    _uint(sheet, "sheet_index"),
                     name_ptr,
-                    int(cache_id),
-                    int(anchor_row),
-                    int(anchor_col),
+                    _uint(cache_id, "cache_id"),
+                    _uint(anchor_row, "anchor_row"),
+                    _uint(anchor_col, "anchor_col"),
                     out,
                 ),
                 "fm_workbook_pivot_create",
@@ -3557,7 +3744,9 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_workbook_pivot_get_layout(h, int(sheet), int(pivot_index), out),
+                LIB.fm_workbook_pivot_get_layout(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), out
+                ),
                 "fm_workbook_pivot_get_layout",
             )
             return PivotReportLayout(LIB.read_i32(out))
@@ -3568,7 +3757,9 @@ class Workbook:
         """Set the pivot's compact, tabular, or outline report layout."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_set_layout(h, int(sheet), int(pivot_index), int(layout)),
+            LIB.fm_workbook_pivot_set_layout(
+                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _sint(layout, "layout")
+            ),
             "fm_workbook_pivot_set_layout",
         )
 
@@ -3576,7 +3767,7 @@ class Workbook:
         """Remove the pivot table at ``pivot_index``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_remove(h, int(sheet), int(pivot_index)),
+            LIB.fm_workbook_pivot_remove(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
             "fm_workbook_pivot_remove",
         )
 
@@ -3586,7 +3777,9 @@ class Workbook:
         name_ptr, _ = LIB.alloc_utf8(name)
         try:
             _check(
-                LIB.fm_workbook_pivot_set_name(h, int(sheet), int(pivot_index), name_ptr),
+                LIB.fm_workbook_pivot_set_name(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), name_ptr
+                ),
                 "fm_workbook_pivot_set_name",
             )
         finally:
@@ -3606,12 +3799,12 @@ class Workbook:
         _check(
             LIB.fm_workbook_pivot_set_anchor(
                 h,
-                int(sheet),
-                int(pivot_index),
-                int(anchor_row),
-                int(anchor_col),
-                int(span_rows),
-                int(span_cols),
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(anchor_row, "anchor_row"),
+                _uint(anchor_col, "anchor_col"),
+                _uint(span_rows, "span_rows"),
+                _uint(span_cols, "span_cols"),
             ),
             "fm_workbook_pivot_set_anchor",
         )
@@ -3622,8 +3815,8 @@ class Workbook:
         _check(
             LIB.fm_workbook_pivot_set_grand_totals(
                 h,
-                int(sheet),
-                int(pivot_index),
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
                 1 if rows_enabled else 0,
                 1 if cols_enabled else 0,
             ),
@@ -3661,7 +3854,9 @@ class Workbook:
                 owned,
             )
             _check(
-                LIB.fm_workbook_pivot_field_add(h, int(sheet), int(pivot_index), ptr, out),
+                LIB.fm_workbook_pivot_field_add(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr, out
+                ),
                 "fm_workbook_pivot_field_add",
             )
             return LIB.read_u32(out)
@@ -3675,7 +3870,7 @@ class Workbook:
         """Drop every field from the pivot."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear(h, int(sheet), int(pivot_index)),
+            LIB.fm_workbook_pivot_field_clear(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
             "fm_workbook_pivot_field_clear",
         )
 
@@ -3683,7 +3878,13 @@ class Workbook:
         """Set the axis of pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_set_axis(h, int(sheet), int(pivot_index), int(field_idx), int(axis)),
+            LIB.fm_workbook_pivot_field_set_axis(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                _sint(axis, "axis"),
+            ),
             "fm_workbook_pivot_field_set_axis",
         )
 
@@ -3703,9 +3904,9 @@ class Workbook:
             _check(
                 LIB.fm_workbook_pivot_field_set_sort(
                     h,
-                    int(sheet),
-                    int(pivot_index),
-                    int(field_idx),
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_idx, "field_idx"),
                     1 if ascending else 0,
                     by_ptr,
                 ),
@@ -3720,7 +3921,11 @@ class Workbook:
         h = self._require()
         _check(
             LIB.fm_workbook_pivot_field_set_subtotal_top(
-                h, int(sheet), int(pivot_index), int(field_idx), 1 if top else 0
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                1 if top else 0,
             ),
             "fm_workbook_pivot_field_set_subtotal_top",
         )
@@ -3729,7 +3934,13 @@ class Workbook:
         """Append an aggregation to pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_add_aggregation(h, int(sheet), int(pivot_index), int(field_idx), int(agg)),
+            LIB.fm_workbook_pivot_field_add_aggregation(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                _sint(agg, "agg"),
+            ),
             "fm_workbook_pivot_field_add_aggregation",
         )
 
@@ -3737,7 +3948,9 @@ class Workbook:
         """Drop every aggregation from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_aggregations(h, int(sheet), int(pivot_index), int(field_idx)),
+            LIB.fm_workbook_pivot_field_clear_aggregations(
+                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_idx, "field_idx")
+            ),
             "fm_workbook_pivot_field_clear_aggregations",
         )
 
@@ -3749,9 +3962,9 @@ class Workbook:
             _check(
                 LIB.fm_workbook_pivot_field_add_item(
                     h,
-                    int(sheet),
-                    int(pivot_index),
-                    int(field_idx),
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_idx, "field_idx"),
                     name_ptr,
                     1 if visible else 0,
                 ),
@@ -3764,7 +3977,9 @@ class Workbook:
         """Drop every manual-filter item from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_items(h, int(sheet), int(pivot_index), int(field_idx)),
+            LIB.fm_workbook_pivot_field_clear_items(
+                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_idx, "field_idx")
+            ),
             "fm_workbook_pivot_field_clear_items",
         )
 
@@ -3781,10 +3996,10 @@ class Workbook:
         _check(
             LIB.fm_workbook_pivot_field_set_item_visible(
                 h,
-                int(sheet),
-                int(pivot_index),
-                int(field_idx),
-                int(item_idx),
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                _uint(item_idx, "item_idx"),
                 1 if visible else 0,
             ),
             "fm_workbook_pivot_field_set_item_visible",
@@ -3794,7 +4009,13 @@ class Workbook:
         """Append a subtotal-fn entry to pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_add_subtotal_fn(h, int(sheet), int(pivot_index), int(field_idx), int(agg)),
+            LIB.fm_workbook_pivot_field_add_subtotal_fn(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                _sint(agg, "agg"),
+            ),
             "fm_workbook_pivot_field_add_subtotal_fn",
         )
 
@@ -3802,7 +4023,9 @@ class Workbook:
         """Drop every subtotal-fn entry from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_subtotal_fns(h, int(sheet), int(pivot_index), int(field_idx)),
+            LIB.fm_workbook_pivot_field_clear_subtotal_fns(
+                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_idx, "field_idx")
+            ),
             "fm_workbook_pivot_field_clear_subtotal_fns",
         )
 
@@ -3821,13 +4044,13 @@ class Workbook:
         _check(
             LIB.fm_workbook_pivot_field_set_date_group(
                 h,
-                int(sheet),
-                int(pivot_index),
-                int(field_idx),
-                int(granularity),
-                int(calendar),
-                int(start_year),
-                int(end_year),
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                _sint(granularity, "granularity"),
+                _sint(calendar, "calendar"),
+                _sint(start_year, "start_year_or_neg1"),
+                _sint(end_year, "end_year_or_neg1"),
             ),
             "fm_workbook_pivot_field_set_date_group",
         )
@@ -3836,7 +4059,9 @@ class Workbook:
         """Remove the date-grouping config from pivot field ``field_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_field_clear_date_group(h, int(sheet), int(pivot_index), int(field_idx)),
+            LIB.fm_workbook_pivot_field_clear_date_group(
+                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(field_idx, "field_idx")
+            ),
             "fm_workbook_pivot_field_clear_date_group",
         )
 
@@ -3846,7 +4071,13 @@ class Workbook:
         fmt_ptr, _ = LIB.alloc_utf8(fmt)
         try:
             _check(
-                LIB.fm_workbook_pivot_field_set_number_format(h, int(sheet), int(pivot_index), int(field_idx), fmt_ptr),
+                LIB.fm_workbook_pivot_field_set_number_format(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(field_idx, "field_idx"),
+                    fmt_ptr,
+                ),
                 "fm_workbook_pivot_field_set_number_format",
             )
         finally:
@@ -3889,7 +4120,9 @@ class Workbook:
         ptr = self._pack_data_field_spec(spec, owned)
         try:
             _check(
-                LIB.fm_workbook_pivot_data_field_add(h, int(sheet), int(pivot_index), ptr, out),
+                LIB.fm_workbook_pivot_data_field_add(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr, out
+                ),
                 "fm_workbook_pivot_data_field_add",
             )
             return LIB.read_u32(out)
@@ -3912,7 +4145,13 @@ class Workbook:
         ptr = self._pack_data_field_spec(spec, owned)
         try:
             _check(
-                LIB.fm_workbook_pivot_data_field_set(h, int(sheet), int(pivot_index), int(data_field_idx), ptr),
+                LIB.fm_workbook_pivot_data_field_set(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(data_field_idx, "data_field_idx"),
+                    ptr,
+                ),
                 "fm_workbook_pivot_data_field_set",
             )
         finally:
@@ -3949,7 +4188,7 @@ class Workbook:
         """Drop every data-field entry from the pivot."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_data_field_clear(h, int(sheet), int(pivot_index)),
+            LIB.fm_workbook_pivot_data_field_clear(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
             "fm_workbook_pivot_data_field_clear",
         )
 
@@ -3962,9 +4201,9 @@ class Workbook:
         """Append an active filter to the pivot."""
         h = self._require()
         owned: List[int] = []
-        ptr = S.alloc_struct(LIB, S.PIVOT_FILTER_SPEC_EX)
+        ptr = S.alloc_struct(LIB, S.PIVOT_FILTER_SPEC)
         try:
-            S.PIVOT_FILTER_SPEC_EX.pack(
+            S.PIVOT_FILTER_SPEC.pack(
                 LIB,
                 ptr,
                 {
@@ -3979,11 +4218,13 @@ class Workbook:
                     "value_high_double": float(spec.value_high_double),
                 },
             )
-            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC_EX, "field_name", spec.field_name, owned)
-            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC_EX, "value_text", spec.value_text, owned)
+            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "field_name", spec.field_name, owned)
+            S.write_str_field(LIB, ptr, S.PIVOT_FILTER_SPEC, "value_text", spec.value_text, owned)
             _check(
-                LIB.fm_workbook_pivot_filter_add_ex(h, int(sheet), int(pivot_index), ptr),
-                "fm_workbook_pivot_filter_add_ex",
+                LIB.fm_workbook_pivot_filter_add(
+                    h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), ptr
+                ),
+                "fm_workbook_pivot_filter_add",
             )
         finally:
             LIB.free(ptr)
@@ -3994,7 +4235,7 @@ class Workbook:
         """Drop every active filter from the pivot."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_filter_clear(h, int(sheet), int(pivot_index)),
+            LIB.fm_workbook_pivot_filter_clear(h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index")),
             "fm_workbook_pivot_filter_clear",
         )
 
@@ -4002,7 +4243,9 @@ class Workbook:
         """Remove the active filter at ``filter_idx``."""
         h = self._require()
         _check(
-            LIB.fm_workbook_pivot_filter_remove_at(h, int(sheet), int(pivot_index), int(filter_idx)),
+            LIB.fm_workbook_pivot_filter_remove_at(
+                h, _uint(sheet, "sheet_index"), _uint(pivot_index, "pivot_index"), _uint(filter_idx, "filter_idx")
+            ),
             "fm_workbook_pivot_filter_remove_at",
         )
 
@@ -4030,7 +4273,7 @@ class Workbook:
             for i in range(n):
                 nptr = S.alloc_struct(LIB, S.CELL_NODE)
                 try:
-                    _check(LIB.fm_cell_nodes_at(handle, i, nptr), "fm_cell_nodes_at")
+                    _check(LIB.fm_cell_nodes_at(handle, _uint(i, "idx"), nptr), "fm_cell_nodes_at")
                     d = S.CELL_NODE.unpack(LIB, nptr)
                     nodes.append(CellNode(sheet=d["sheet"], row=d["row"], col=d["col"]))
                 finally:
@@ -4048,7 +4291,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.SPILL_INFO)
         try:
             _check(
-                LIB.fm_workbook_spill_info(h, int(sheet), int(row), int(col), ptr),
+                LIB.fm_workbook_spill_info(h, _uint(sheet, "sheet"), _uint(row, "row"), _uint(col, "col"), ptr),
                 "fm_workbook_spill_info",
             )
             d = S.SPILL_INFO.unpack(LIB, ptr)
@@ -4073,7 +4316,7 @@ class Workbook:
         """Return the canonical name of the ``index``-th function."""
         out = _alloc_out_ptr()
         try:
-            _check(LIB.fm_function_name_at(int(index), out), "fm_function_name_at")
+            _check(LIB.fm_function_name_at(_uint(index, "idx"), out), "fm_function_name_at")
             return LIB.read_cstr(LIB.read_u32(out))
         finally:
             LIB.free(out)
@@ -4087,7 +4330,7 @@ class Workbook:
         name_ptr, _ = LIB.alloc_utf8(name)
         ptr = S.alloc_struct(LIB, S.FUNCTION_METADATA)
         try:
-            status = LIB.fm_function_metadata(name_ptr, int(locale), ptr)
+            status = LIB.fm_function_metadata(name_ptr, _sint(locale, "locale"), ptr)
             if status != 0:
                 return None
             d = S.FUNCTION_METADATA.unpack(LIB, ptr)
@@ -4116,7 +4359,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_function_localize(name_ptr, int(locale), out),
+                LIB.fm_function_localize(name_ptr, _sint(locale, "locale"), out),
                 "fm_function_localize",
             )
             return LIB.read_cstr(LIB.read_u32(out))
@@ -4131,7 +4374,7 @@ class Workbook:
         out = _alloc_out_ptr()
         try:
             _check(
-                LIB.fm_function_canonicalize(name_ptr, int(locale), out),
+                LIB.fm_function_canonicalize(name_ptr, _sint(locale, "locale"), out),
                 "fm_function_canonicalize",
             )
             return LIB.read_cstr(LIB.read_u32(out))
@@ -4159,7 +4402,7 @@ class Workbook:
         ptr = S.alloc_struct(LIB, S.EXTERNAL_LINK_RECORD)
         try:
             _check(
-                LIB.fm_workbook_external_link_at(h, int(index), ptr),
+                LIB.fm_workbook_external_link_at(h, _uint(index, "index"), ptr),
                 "fm_workbook_external_link_at",
             )
             d = S.EXTERNAL_LINK_RECORD.unpack(LIB, ptr)

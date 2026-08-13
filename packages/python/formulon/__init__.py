@@ -38,6 +38,7 @@ from .workbook import (
     CfMatch,
     CfValueObject,
     ColorScale,
+    ColorSpec,
     ColumnLayout,
     Comment,
     CommentEntry,
@@ -83,6 +84,7 @@ from .workbook import (
     Workbook,
     WorkbookFormat,
     XlsbReadDiagnostics,
+    _sint,
 )
 
 
@@ -144,6 +146,7 @@ __all__ = [
     "CfColor",
     "CfMatch",
     "CfValueObject",
+    "ColorSpec",
     "ColumnLayout",
     "Comment",
     "CommentEntry",
@@ -218,7 +221,7 @@ def error_display_name(error_code: int) -> str:
 
     Unknown numeric values return ``"#UNKNOWN!"``.
     """
-    return decode_cstr(LIB.fm_error_display_name(int(error_code)))
+    return decode_cstr(LIB.fm_error_display_name(_sint(error_code, "error")))
 
 
 # Backward-compat alias mirroring the npm binding's ``versionString`` name.

@@ -343,24 +343,6 @@ PIVOT_FILTER_SPEC = Struct(
         ("value_high_kind", I32),
         ("value_high_int", I32),
         ("value_high_double", F64),
-    ],
-)
-
-# ABI-safe extension of ``fm_pivot_filter_spec_t``. Keep the legacy layout
-# above unchanged; the extra selector is appended for the ``*_add_ex`` call.
-PIVOT_FILTER_SPEC_EX = Struct(
-    "fm_pivot_filter_spec_ex_t",
-    [
-        ("axis", I32),
-        ("field_name", PTR),
-        ("type", I32),
-        ("value_kind", I32),
-        ("value_int", I32),
-        ("value_double", F64),
-        ("value_text", PTR),
-        ("value_high_kind", I32),
-        ("value_high_int", I32),
-        ("value_high_double", F64),
         ("data_field_index", U32),
     ],
 )
@@ -481,6 +463,15 @@ CELL_XF_EX2 = Struct(
     ],
 )
 
+COLOR_SPEC = Struct(
+    "fm_color_spec",
+    [("tint", F64), ("rgb", U32), ("theme", U32), ("indexed", U32), ("kind", U8)],
+)
+# Inline ``fm_color_spec``. Nested rather than flattened into its owner: it
+# is 8-aligned, so its trailing padding is part of the C layout and a flat
+# field list would place the following member too early.
+COLOR_SPEC_BLOB = ("blob_color_spec", COLOR_SPEC.size, 8)
+
 FONT_RECORD = Struct(
     "fm_font_record",
     [
@@ -490,28 +481,44 @@ FONT_RECORD = Struct(
         ("bold", I32),
         ("italic", I32),
         ("strike", I32),
+        ("has_bold", I32),
+        ("has_italic", I32),
+        ("has_strike", I32),
+        ("has_family", I32),
+        ("has_charset", I32),
         ("underline", U8),
+        ("vert_align", U8),
+        ("family", U8),
+        ("charset", U8),
+        ("color", COLOR_SPEC_BLOB),
     ],
 )
 
 FILL_RECORD = Struct(
     "fm_fill_record",
-    [("pattern", U8), ("fg_argb", U32), ("bg_argb", U32)],
+    [
+        ("pattern", U8),
+        ("fg_argb", U32),
+        ("bg_argb", U32),
+        ("fg", COLOR_SPEC_BLOB),
+        ("bg", COLOR_SPEC_BLOB),
+    ],
 )
+
+BORDER_SIDE = Struct(
+    "fm_border_side",
+    [("style", U8), ("color_argb", U32), ("color", COLOR_SPEC_BLOB)],
+)
+BORDER_SIDE_BLOB = ("blob_border_side", BORDER_SIDE.size, 8)
 
 BORDER_RECORD = Struct(
     "fm_border_record",
     [
-        ("left_style", U8),
-        ("left_color_argb", U32),
-        ("right_style", U8),
-        ("right_color_argb", U32),
-        ("top_style", U8),
-        ("top_color_argb", U32),
-        ("bottom_style", U8),
-        ("bottom_color_argb", U32),
-        ("diagonal_style", U8),
-        ("diagonal_color_argb", U32),
+        ("left", BORDER_SIDE_BLOB),
+        ("right", BORDER_SIDE_BLOB),
+        ("top", BORDER_SIDE_BLOB),
+        ("bottom", BORDER_SIDE_BLOB),
+        ("diagonal", BORDER_SIDE_BLOB),
         ("diagonal_up", I32),
         ("diagonal_down", I32),
     ],
@@ -521,8 +528,8 @@ BORDER_RECORD = Struct(
 # callers marshal them through the standalone layouts above at their recorded
 # offsets.
 FONT_RECORD_BLOB = ("blob_font_record", FONT_RECORD.size, 8)
-FILL_RECORD_BLOB = ("blob_fill_record", FILL_RECORD.size, 4)
-BORDER_RECORD_BLOB = ("blob_border_record", BORDER_RECORD.size, 4)
+FILL_RECORD_BLOB = ("blob_fill_record", FILL_RECORD.size, 8)
+BORDER_RECORD_BLOB = ("blob_border_record", BORDER_RECORD.size, 8)
 
 DXF_RECORD = Struct(
     "fm_dxf_record",
