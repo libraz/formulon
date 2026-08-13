@@ -118,6 +118,26 @@ class MacExcelFormulaAssignmentTest(unittest.TestCase):
         with self.assertRaisesRegex(macos_excel._FormulaRetentionError, r"case rejected.*=BROKEN\(\)"):
             macos_excel._assign_formula(cell, "=BROKEN()", context="case rejected")
 
+    def test_prefix_readback_is_reported_as_truncation_with_both_lengths(self) -> None:
+        sent = "=" + "+".join(f"A{i}" for i in range(1, 151))
+        kept = "=" + "+".join(f"A{i}" for i in range(1, 67))
+        cell = _FakeCell(formula2_readback=kept)
+
+        with self.assertRaisesRegex(
+            macos_excel._FormulaRetentionError,
+            rf"only a prefix.*sent {len(sent)} characters, read back {len(kept)}",
+        ):
+            macos_excel._assign_formula(cell, sent, context="case long chain")
+
+    def test_shorter_readback_that_is_not_a_prefix_is_accepted_as_canonicalisation(self) -> None:
+        # Excel may drop insignificant whitespace, which shortens the readback
+        # without dropping the tail. That is retention, not truncation.
+        cell = _FakeCell(formula2_readback="=SUM(1,2)")
+
+        macos_excel._assign_formula(cell, "=SUM(1, 2)", context="case canonicalised")
+
+        self.assertEqual(cell.assigned_formula, "=SUM(1, 2)")
+
     def test_retained_formula_can_calculate_to_a_legitimate_blank(self) -> None:
         cell = _FakeCell(formula2_readback='=IF(FALSE,1,"")', value="")
 

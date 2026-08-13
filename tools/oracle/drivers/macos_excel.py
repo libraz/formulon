@@ -78,7 +78,7 @@ def _set_iteration(app, enabled: bool) -> None:
 
 
 class _FormulaRetentionError(RuntimeError):
-    """Raised when Excel silently clears a formula after assignment."""
+    """Raised when Excel does not retain an assigned formula as written."""
 
 
 def _formula_readback(cell) -> Optional[str]:
@@ -105,17 +105,39 @@ def _formula_readback(cell) -> Optional[str]:
 
 
 def _assign_formula(cell, formula: Any, *, context: str) -> None:
-    """Assigns a formula and rejects Excel's silent-clear failure mode.
+    """Assigns a formula and rejects Excel's silent non-retention failure modes.
 
-    Assignment exceptions deliberately propagate unchanged.  The readback
-    check handles the distinct Mac failure mode where Excel accepts the
-    AppleEvent but leaves the cell empty.
+    Assignment exceptions deliberately propagate unchanged.  Two distinct Mac
+    failure modes are caught by reading the formula back:
+
+    * Excel accepts the AppleEvent but leaves the cell empty.
+    * The AppleEvent setter keeps only a prefix of a long formula.  The cut
+      lands wherever the byte budget runs out, so a chain such as
+      ``=A1+A2+...+A150`` comes back as ``=A1+...+A66`` -- still a valid
+      formula, still evaluating, and therefore indistinguishable from a real
+      Excel answer to anything downstream.  Capturing that as a golden would
+      pin an observation Excel never made.
+
+    A readback that merely differs from the input is fine: Excel is allowed to
+    canonicalise a formula it retains in full.  Only a readback that is a
+    strict prefix of the input is treated as truncation, because
+    canonicalisation rewrites tokens rather than dropping the tail.
     """
 
     cell.formula2 = formula
-    if isinstance(formula, str) and formula and formula.startswith("=") and _formula_readback(cell) is None:
+    if not (isinstance(formula, str) and formula and formula.startswith("=")):
+        return
+    readback = _formula_readback(cell)
+    if readback is None:
         raise _FormulaRetentionError(
             f"Excel silently rejected formula for {context}: formula={formula!r}; formula2/formula readback was empty"
+        )
+    if len(readback) < len(formula) and formula.startswith(readback):
+        raise _FormulaRetentionError(
+            f"Excel retained only a prefix of the formula for {context}: "
+            f"sent {len(formula)} characters, read back {len(readback)}. "
+            f"formula={formula!r}; readback={readback!r}. "
+            "Assign a formula this long through a saved workbook instead of the AppleEvent setter."
         )
 
 
