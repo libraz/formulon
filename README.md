@@ -110,18 +110,20 @@ additional category (507 + 15 = 522, not 524).
 
 | Check | Result |
 |-------|--------|
-| `ctest -LE "SLOW\|LOAD\|BENCH"` (the PR gate) | `11680/11680` |
-| `ctest -LE "LOAD"` (adds the `SLOW` tier) | `11932/11932` |
+| `ctest -LE "SLOW\|BENCH\|TSAN"` — `make test`, the PR gate | all passing |
+| `ctest -LE "BENCH\|TSAN"` — `make test-slow`, adds the `SLOW` tier | all passing |
 | Primary formula oracle | `3942/3942` passing, `140` documented skips |
 | Conditional-formatting oracle | `23/23` |
 | Workbook oracle (pivot + print) | Historical goldens excluded; product-verified Windows M365 probe pending |
 | Imported third-party engine corpus (cross-check) | `12510/12510` passing, `168` documented divergences |
 
+Three labels partition the CTest suite: `SLOW` (minutes-scale integration, fuzz smoke, and concurrency cases), `TSAN` (thread-sanitizer runs), and `BENCH` (microbenchmark regression checks, whose threshold is tunable, so they run on demand). Everything else is the unlabeled fast tier that CI gates on; there is no separate load-test tier.
+
 Every skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 522 catalogued functions, `518` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `4` (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) fail only `behaviors_declared` — their behavior taxonomy is under-specified. The separate workbook track still has an implementation/golden gap: page/data-axis `GETPIVOTDATA` is pending a product-verified Windows M365 observation, which may require a subsequent C++ fix.
 
 Beyond formula results, **pivot tables and print areas / pagination** have a dedicated **workbook oracle track** and a Windows COM driver. The `win-365-ja_JP` target is still `wanted`; the checked-in workbook files are historical/reference-only and are not counted as Microsoft 365 verification. The GETPIVOTDATA page/data-axis cases now include a post-build formula-probe schema, a native verifier, and a direct `#REF!` regression. A product-verified Windows Microsoft 365 host is still required to generate the external golden; the exact command and limitation are recorded in [`tests/divergence.yaml`](tests/divergence.yaml).
 
-New workbooks use the `win-365-ja_JP` formula profile by default; callers can switch with the profile-id API (`mac-365-ja_JP`, `win-365-ja_JP`). English-locale profiles are intentionally not exposed until matching EN oracle data and verified locale-specific behavior are available. A bytecode compiler and stack-machine VM run in parallel with the tree-walker for parity verification. The OOXML reader/writer round-trips sheets, styles, conditional formatting, comments, hyperlinks, merges, data validations, defined names, tables, and pivot tables; an MS-XLSB reader/writer covers cell values, styles, cross-sheet 3-D references, and common tokenized formulas, with array-constant literals and post-2007 "future function" IDs still limited compared to the OOXML path. Workbook operations are available through the C ABI and language bindings; the CLI deliberately exposes only `eval`, `recalc`, `dump`, and `paginate`.
+New workbooks use the `win-365-ja_JP` formula profile by default; callers can switch with the profile-id API (`mac-365-ja_JP`, `win-365-ja_JP`). English-locale profiles are intentionally not exposed until matching EN oracle data and verified locale-specific behavior are available. A bytecode compiler and stack-machine VM exist alongside the tree-walker as an opt-in build mode (`-DFORMULON_VM_PARITY_CHECK=ON`) that cross-checks every evaluation against the tree-walker's result; every shipped artifact evaluates through the tree-walker alone. The OOXML reader/writer round-trips sheets, styles, conditional formatting, comments, hyperlinks, merges, data validations, defined names, tables, and pivot tables; an MS-XLSB reader/writer covers cell values, styles, cross-sheet 3-D references, and common tokenized formulas, with array-constant literals and post-2007 "future function" IDs still limited compared to the OOXML path. Workbook operations are available through the C ABI and language bindings; the CLI deliberately exposes only `eval`, `recalc`, `dump`, and `paginate`.
 
 Feedback, issue reports, and oracle divergence reports are very welcome.
 

@@ -5,7 +5,7 @@
 # Each `bench_*.cpp` is its own executable that consumes the nanobench
 # single-header library. Bench targets are built unconditionally with
 # the rest of the test tree, but their ctest registrations carry the
-# `BENCH` label so the default fast suite (`ctest -LE "SLOW|LOAD|BENCH"`)
+# `BENCH` label so the default fast suite (`ctest -LE "SLOW|BENCH|TSAN"`)
 # skips them. The `formulon_bench_check` ctest entry runs every bench
 # in turn, captures their JSON outputs into `${CMAKE_BINARY_DIR}/bench_results/`,
 # then invokes `tools/bench/check_regression.py` against the committed

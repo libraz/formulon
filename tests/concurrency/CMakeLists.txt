@@ -2,7 +2,7 @@
 #
 # Concurrency tests for the parallel scheduler, recalc engine, function
 # registry, and iterative solver. Split across three executables so the
-# fast `ctest -LE "SLOW|LOAD|TSAN"` invocation skips the slow / sanitizer
+# fast `ctest -LE "SLOW|BENCH|TSAN"` invocation skips the slow / sanitizer
 # fixtures cleanly.
 #
 #   * `formulon_concurrency_tests`        — fast scheduler topology tests
@@ -74,7 +74,7 @@ gtest_discover_tests(formulon_concurrency_stress_tests
 #
 # The label `TSAN` opts every test into the dedicated ThreadSanitizer CI
 # job (`tools/ci/run_tsan.sh`) and excludes them from the default fast
-# `ctest -LE "SLOW|LOAD|TSAN"` run so they do not slow down the PR loop
+# `ctest -LE "SLOW|BENCH|TSAN"` run so they do not slow down the PR loop
 # under non-sanitizer builds.
 
 set(FORMULON_CONCURRENCY_TSAN_SOURCES

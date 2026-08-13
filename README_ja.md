@@ -99,12 +99,14 @@ oracle は **97 カテゴリ** あります。primary oracle は Mac Excel 365 j
 
 | 検査 | 結果 |
 |------|------|
-| `ctest -LE "SLOW\|LOAD\|BENCH"` (PR ゲート) | `11680/11680` |
-| `ctest -LE "LOAD"` (`SLOW` 層を追加) | `11932/11932` |
+| `ctest -LE "SLOW\|BENCH\|TSAN"` — `make test`、PR ゲート | すべて passed |
+| `ctest -LE "BENCH\|TSAN"` — `make test-slow`、`SLOW` 層を追加 | すべて passed |
 | primary formula oracle | `3942/3942` passed / `140` documented skips |
 | 条件付き書式 oracle | `23/23` |
 | workbook oracle (pivot + print) | 過去の golden は除外、製品確認済み Windows M365 probe 待ち |
 | 取り込み済み外部エンジンコーパス (クロスチェック) | `12510/12510` passed / `168` documented divergences |
+
+CTest スイートを分けているラベルは 3 つです。`SLOW` (分オーダーの integration・fuzz smoke・concurrency ケース)、`TSAN` (thread sanitizer 実行)、`BENCH` (しきい値が可変なマイクロベンチ回帰チェックで、必要なときだけ実行) の 3 つで、残りはすべて CI がゲートする無ラベルの fast tier です。負荷試験専用の層はありません。
 
 残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `518` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る `4` 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、behavior taxonomy の記述が不足しているためです。別枠の workbook track には実装/golden の gap が残っており、page/data-axis `GETPIVOTDATA` は製品確認済み Windows M365 の観測待ちです。観測結果によっては C++ 側の修正が必要になります。
 
@@ -112,7 +114,7 @@ oracle は **97 カテゴリ** あります。primary oracle は Mac Excel 365 j
 
 新規ワークブックはデフォルトで `win-365-ja_JP` profile を使います。必要に応じて profile-id API (`mac-365-ja_JP` / `win-365-ja_JP`) で切り替えられます。英語ロケール profile は、対応する EN oracle データとロケール固有挙動の検証が揃うまで公開しません。
 
-実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並列に動作し、parity を検証しています。OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer はセル値、スタイル、シート間 3-D 参照、および一般的なトークン化数式をカバーします。配列定数リテラルと 2007 年以降の future function ID は、OOXML 経路に比べてまだ限定的です。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` / `paginate` のみを公開します。
+実装面では、バイトコードコンパイラとスタックマシン VM が tree-walker と並んで存在しますが、これは opt-in のビルドモード (`-DFORMULON_VM_PARITY_CHECK=ON`) で、有効にしたときだけ各評価を tree-walker の結果とクロスチェックします。出荷する成果物はいずれも tree-walker のみで評価します。OOXML reader / writer はシート、スタイル、条件付き書式、コメント、ハイパーリンク、結合セル、入力規則、定義済み名前、テーブル、ピボットテーブルを round-trip します。MS-XLSB reader / writer はセル値、スタイル、シート間 3-D 参照、および一般的なトークン化数式をカバーします。配列定数リテラルと 2007 年以降の future function ID は、OOXML 経路に比べてまだ限定的です。ワークブック操作は C ABI と各言語バインディングから利用できます。CLI は意図的に `eval` / `recalc` / `dump` / `paginate` のみを公開します。
 
 不具合報告・oracle 差分レポート・ご意見はいつでも歓迎しています。
 

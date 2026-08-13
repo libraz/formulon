@@ -37,7 +37,7 @@ formulon_apply_warnings(formulon_test_util)
 # Lives in its own executable so a breakage in the helpers is reported
 # under a stand-alone ctest entry rather than bundled into the much
 # larger formulon_unit_tests binary. Discovered into ctest with the
-# default fast-loop label so `ctest -LE "SLOW|LOAD"` covers it.
+# default fast-loop label so `ctest -LE "SLOW|BENCH|TSAN"` covers it.
 # ---------------------------------------------------------------------------
 add_executable(formulon_test_util_tests test_util_test.cpp)
 

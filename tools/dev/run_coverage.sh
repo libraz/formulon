@@ -117,9 +117,9 @@ fi
 # Run the fast test labels. Coverage data is still useful even when a
 # test fails, so we capture rc and continue rather than early-exit;
 # the native CI job already enforces test correctness.
-echo "${PROG}: running ctest -LE 'SLOW|LOAD' (timeout ${TIMEOUT_SEC}s per test)..."
+echo "${PROG}: running ctest -LE 'SLOW|BENCH|TSAN' (timeout ${TIMEOUT_SEC}s per test)..."
 set +e
-(cd "${BUILD_DIR}" && "${CTEST}" -LE "SLOW|LOAD" --output-on-failure --timeout "${TIMEOUT_SEC}") \
+(cd "${BUILD_DIR}" && "${CTEST}" -LE "SLOW|BENCH|TSAN" --output-on-failure --timeout "${TIMEOUT_SEC}") \
     > "${RUN_LOG}" 2>&1
 CTEST_RC=$?
 set -e
