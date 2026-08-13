@@ -16,6 +16,7 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -55,7 +56,9 @@ extern "C" fm_status_t fm_workbook_evaluate_formula(const fm_workbook_t* wb, siz
   }
   // Per-call arena backs any text payload in the result until it is copied
   // into the read scratch below; both are discarded when this call returns.
-  formulon::Arena arena;
+  // The byte ceiling keeps a hostile formula to a recoverable error here
+  // instead of an allocation failure that takes the host down.
+  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
   const formulon::Value v =
       formulon::eval::evaluate_formula_text(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                             std::string_view(formula), arena, formulon::eval::default_registry());
@@ -86,8 +89,10 @@ extern "C" fm_status_t fm_workbook_evaluate_formula_array(const fm_workbook_t* w
   }
   // Per-call arena backs any text payload in the evaluated result until it is
   // deep-copied into the per-handle stash below; the arena is discarded when
-  // this call returns.
-  formulon::Arena arena;
+  // this call returns. The byte ceiling keeps a hostile formula to a
+  // recoverable error here instead of an allocation failure that takes the
+  // host down.
+  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
   const formulon::Value v =
       formulon::eval::evaluate_formula_text_array(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                                   std::string_view(formula), arena, formulon::eval::default_registry());
@@ -166,7 +171,10 @@ extern "C" fm_status_t fm_workbook_evaluate_cf_formula(const fm_workbook_t* wb, 
   if (auto rc = check_sheet_index(wb, sheet_index, "fm_workbook_evaluate_cf_formula"); rc != 0) {
     return rc;
   }
-  formulon::Arena arena;
+  // Per-call arena, capped for the same reason as the other ad-hoc entry
+  // points: a caller-supplied formula must not be able to allocate without
+  // bound.
+  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
   const bool fired = formulon::eval::evaluate_cf_formula(wb->workbook(), wb->workbook().sheet(sheet_index), row, col,
                                                          anchor_row, anchor_col, std::string_view(formula), arena,
                                                          formulon::eval::default_registry());
