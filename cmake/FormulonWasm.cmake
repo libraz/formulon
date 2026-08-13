@@ -278,16 +278,34 @@ endif()
 # stabilise (Emscripten's link-time -Oz only invokes wasm-opt once).
 # Located via the binaryen bin dir that ships with the active emcc
 # toolchain. The pass is skipped under Debug to keep symbol info intact.
+#
+# The hint list has to cover two different toolchain layouts. An emsdk
+# checkout puts emcc in `upstream/emscripten/` and wasm-opt one level up
+# in `upstream/bin/`; a distro/homebrew emscripten keeps both in the same
+# bin dir. `upstream/bin` is not on PATH after `emsdk_env.sh` either, so a
+# missing hint is not rescued by the PATH fallback below -- it silently
+# skipped the pass and shipped an unoptimised binary.
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   get_filename_component(_FM_EMCC_DIR "${CMAKE_C_COMPILER}" DIRECTORY)
   find_program(WASM_OPT_EXECUTABLE
     NAMES wasm-opt
-    HINTS "${_FM_EMCC_DIR}/../binaryen/bin"
+    HINTS "${_FM_EMCC_DIR}/../bin"
+          "${_FM_EMCC_DIR}/../binaryen/bin"
           "${_FM_EMCC_DIR}/binaryen/bin"
     NO_DEFAULT_PATH
   )
   if(NOT WASM_OPT_EXECUTABLE)
     find_program(WASM_OPT_EXECUTABLE NAMES wasm-opt)
+  endif()
+  # Hard-fail rather than degrade quietly: the size ceilings are gated on
+  # this artifact, so a build that skips the pass reports a size that is
+  # not the one being judged.
+  if(NOT WASM_OPT_EXECUTABLE)
+    message(FATAL_ERROR
+      "wasm-opt not found; the release WASM post-build pass cannot run and the "
+      "artifact would miss the size the ceilings are measured against. It ships "
+      "with the active toolchain -- pass -DWASM_OPT_EXECUTABLE=/path/to/wasm-opt "
+      "if it lives outside the searched layouts.")
   endif()
   if(WASM_OPT_EXECUTABLE)
     add_custom_command(TARGET formulon_wasm POST_BUILD
