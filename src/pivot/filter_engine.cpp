@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "pivot/aggregator.h"
+#include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
@@ -26,19 +27,6 @@
 
 namespace formulon::pivot {
 namespace {
-
-// Resolves a filter `field_name` against `table.fields()`. Returns the
-// field's index on match, `nullopt` if no field has that name. Cache
-// fields and pivot fields share the same index in MVP, so this also
-// indexes into the cache record.
-std::optional<std::size_t> resolve_filter_field(const PivotTable& table, const std::string& name) {
-  for (std::size_t i = 0; i < table.fields().size(); ++i) {
-    if (table.fields()[i].source_name == name) {
-      return i;
-    }
-  }
-  return std::nullopt;
-}
 
 // Pulls the string payload of a filter when one is expected. Returns
 // an empty `string_view` when the variant carries a non-string value,
@@ -177,6 +165,51 @@ Value leaf_score(const PivotResult& result, std::size_t r, std::size_t c, std::s
   return result.values[r][c][data_field_index];
 }
 
+// Drops the entries of `items` whose index is marked false in `keep`,
+// preserving the relative order of the survivors. An index past the end of
+// `keep` is kept: the mask only describes the leaves the filter scored.
+template <typename T>
+void keep_marked(std::vector<T>& items, const std::vector<bool>& keep) {
+  std::vector<T> kept;
+  kept.reserve(items.size());
+  for (std::size_t i = 0; i < items.size(); ++i) {
+    if (i < keep.size() && !keep[i]) {
+      continue;
+    }
+    kept.push_back(std::move(items[i]));
+  }
+  items = std::move(kept);
+}
+
+// Rewrites each leaf set in `leaf_sets` from the pre-filter leaf index space
+// into the surviving-leaf one, dropping pruned leaves. Returns a per-set mask
+// marking the sets that still cover at least one surviving leaf; a set that
+// empties out belongs to a subtotal whose whole group was filtered away.
+std::vector<bool> remap_leaf_sets(std::vector<std::vector<std::size_t>>& leaf_sets, const std::vector<bool>& keep) {
+  std::vector<std::size_t> new_index(keep.size(), 0);
+  std::size_t surviving = 0;
+  for (std::size_t i = 0; i < keep.size(); ++i) {
+    new_index[i] = surviving;
+    if (keep[i]) {
+      ++surviving;
+    }
+  }
+  std::vector<bool> keep_set(leaf_sets.size(), false);
+  for (std::size_t s = 0; s < leaf_sets.size(); ++s) {
+    std::vector<std::size_t>& set = leaf_sets[s];
+    std::vector<std::size_t> remapped;
+    remapped.reserve(set.size());
+    for (const std::size_t leaf : set) {
+      if (leaf < keep.size() && keep[leaf]) {
+        remapped.push_back(new_index[leaf]);
+      }
+    }
+    keep_set[s] = !remapped.empty();
+    set = std::move(remapped);
+  }
+  return keep_set;
+}
+
 AxisScores score_axis(const PivotResult& result, ScoreAxis score_axis, std::size_t axis_count,
                       std::size_t cross_axis_count, std::size_t data_field_index) {
   AxisScores axis{{}, {}};
@@ -217,7 +250,7 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
     }
   }
   for (const PivotFilter& f : table.active_filters()) {
-    auto fi_or = resolve_filter_field(table, f.field_name);
+    auto fi_or = resolve_field_by_any_name(table, f.field_name);
     if (!fi_or) {
       continue;
     }
@@ -303,39 +336,38 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
   return std::nullopt;
 }
 
-void compact_row_axis_values(std::vector<std::vector<std::vector<Value>>>& values, const std::vector<bool>& keep) {
-  std::vector<std::vector<std::vector<Value>>> new_values;
-  new_values.reserve(values.size());
-  for (std::size_t i = 0; i < values.size() && i < keep.size(); ++i) {
-    if (keep[i]) {
-      new_values.push_back(std::move(values[i]));
+void compact_leaf_axis(PivotResult& result, const std::vector<bool>& keep, LeafAxis axis,
+                       std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                       std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets) {
+  if (axis == LeafAxis::Row) {
+    keep_marked(result.values, keep);
+    keep_marked(result.row_leaf_totals, keep);
+    // A column subtotal renders one value per row leaf, so its matrix is
+    // indexed by the axis being pruned.
+    for (ColSubtotal& col_subtotal : result.col_subtotals) {
+      keep_marked(col_subtotal.values, keep);
     }
+    const std::vector<bool> keep_subtotal = remap_leaf_sets(row_subtotal_leaf_sets, keep);
+    keep_marked(result.row_subtotals, keep_subtotal);
+    keep_marked(result.subtotals, keep_subtotal);
+    keep_marked(row_subtotal_leaf_sets, keep_subtotal);
+    return;
   }
-  values = std::move(new_values);
-}
-
-void compact_col_axis_values(std::vector<std::vector<std::vector<Value>>>& values, const std::vector<bool>& keep) {
-  for (auto& row_slot : values) {
-    std::vector<std::vector<Value>> new_row;
-    new_row.reserve(row_slot.size());
-    for (std::size_t c = 0; c < row_slot.size() && c < keep.size(); ++c) {
-      if (keep[c]) {
-        new_row.push_back(std::move(row_slot[c]));
-      }
-    }
-    row_slot = std::move(new_row);
+  for (auto& row_slot : result.values) {
+    keep_marked(row_slot, keep);
   }
-}
-
-void compact_leaf_totals(std::vector<std::vector<Value>>& totals, const std::vector<bool>& keep) {
-  std::vector<std::vector<Value>> compacted;
-  compacted.reserve(totals.size());
-  for (std::size_t i = 0; i < totals.size() && i < keep.size(); ++i) {
-    if (keep[i]) {
-      compacted.push_back(std::move(totals[i]));
-    }
+  keep_marked(result.col_leaf_totals, keep);
+  // A row subtotal renders one value per column leaf.
+  for (RowSubtotal& row_subtotal : result.row_subtotals) {
+    keep_marked(row_subtotal.col_values, keep);
   }
-  totals = std::move(compacted);
+  const std::vector<bool> keep_subtotal = remap_leaf_sets(col_subtotal_leaf_sets, keep);
+  keep_marked(result.col_subtotals, keep_subtotal);
+  keep_marked(col_subtotal_leaf_sets, keep_subtotal);
+  // The row x column subtotal intersections are indexed by column subtotal.
+  for (RowSubtotal& row_subtotal : result.row_subtotals) {
+    keep_marked(row_subtotal.col_subtotal_values, keep_subtotal);
+  }
 }
 
 }  // namespace formulon::pivot

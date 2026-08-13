@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "pivot/aggregator.h"
+#include "pivot/field_lookup.h"
 #include "pivot/filter_engine.h"
 #include "pivot/hierarchy_builder.h"
 #include "pivot/layout_generator.h"
@@ -64,8 +65,7 @@ std::optional<ValueSortSpec> resolve_value_sort(const PivotTable& table, std::ui
       continue;
     }
     const PivotField& source = table.fields()[data_field.field_index];
-    if (by_field == data_field.name || by_field == source.source_name ||
-        (!source.custom_name.empty() && by_field == source.custom_name)) {
+    if (by_field == data_field.name || pivot_field_has_name(source, by_field)) {
       return ValueSortSpec{data_field.field_index, data_field.aggregation};
     }
   }
@@ -477,9 +477,10 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   // pre-order (the order `finalize_hierarchy` assigned), compute the
   // keep-mask for the whole leaf array, then collapse the row/col tree
   // by dropping leaves whose mask is false and any interior node whose
-  // subtree becomes empty. Subtotals + grand totals retain their
-  // pre-filter values so a Top-N report can still surface "X out of
-  // total" framing.
+  // subtree becomes empty. A surviving subtotal and the grand totals
+  // retain their pre-filter values so a Top-N report can still surface
+  // "X out of total" framing; a subtotal whose group is filtered away
+  // entirely is dropped along with the leaves it covered.
   for (const PivotFilter& f : table.active_filters()) {
     if (f.type != FilterType::ValueTop10 && f.type != FilterType::ValueGreaterThan &&
         f.type != FilterType::ValueBetween) {
@@ -512,11 +513,10 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
       const std::vector<bool>& keep = *keep_or;
       // Prune the row hierarchy: leaves survive when `keep[leaf] == true`
       // and interior nodes survive when at least one descendant leaf
-      // does. Then compact `result.values` to the surviving leaves,
-      // preserving DFS order.
+      // does. Then re-express every leaf-indexed structure in the
+      // surviving-leaf index space, preserving DFS order.
       prune_top_level(result.rows, keep);
-      compact_row_axis_values(result.values, keep);
-      compact_leaf_totals(result.row_leaf_totals, keep);
+      compact_leaf_axis(result, keep, LeafAxis::Row, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
     } else if (f.axis == PivotAxis::Col && !table.col_field_order().empty()) {
       // `n` is the number of column leaves (DFS pre-order). When the row
       // axis has at least one materialised slot we read the leaf count
@@ -532,10 +532,10 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
         continue;
       }
       const std::vector<bool>& keep = *keep_or;
-      // Prune the col hierarchy then compact every row's per-col slice.
+      // Prune the col hierarchy then re-express every column-leaf-indexed
+      // structure in the surviving-leaf index space.
       prune_top_level(result.cols, keep);
-      compact_col_axis_values(result.values, keep);
-      compact_leaf_totals(result.col_leaf_totals, keep);
+      compact_leaf_axis(result, keep, LeafAxis::Col, row_subtotal_leaf_sets, col_subtotal_leaf_sets);
     }
     // Mixed-direction (e.g. row-axis filter referencing a column field)
     // remains out of scope; such filters fall through here as a no-op.

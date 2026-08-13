@@ -2998,5 +2998,228 @@ TEST(PivotEvaluator, ValueTop10FilterSaturatesOutOfDomainCounts) {
   EXPECT_EQ(rows_kept(2.0), 2U);
 }
 
+// ---------------------------------------------------------------------------
+// Value filters must leave every leaf-indexed structure in one index space
+// ---------------------------------------------------------------------------
+
+// Builds a cache with a two-level row axis (Region -> Product) and a two-level
+// column axis (Year -> Quarter), so the evaluator emits both row and column
+// subtotals. Each cell holds `region_product_base * year_quarter_multiplier`,
+// which makes the leaf scores easy to rank:
+//
+//   base:       North/A=1  North/B=2  South/A=10  South/B=20
+//   multiplier: 2024/Q1=1  2024/Q2=2  2025/Q1=10  2025/Q2=20
+PivotCache build_subtotal_grid_cache() {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Year", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Quarter", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+
+  const struct {
+    const char* region;
+    const char* product;
+    double base;
+  } rows[] = {{"North", "A", 1.0}, {"North", "B", 2.0}, {"South", "A", 10.0}, {"South", "B", 20.0}};
+  const struct {
+    const char* year;
+    const char* quarter;
+    double multiplier;
+  } cols[] = {{"2024", "Q1", 1.0}, {"2024", "Q2", 2.0}, {"2025", "Q1", 10.0}, {"2025", "Q2", 20.0}};
+
+  for (const auto& row : rows) {
+    for (const auto& col : cols) {
+      PivotCacheRecord rec;
+      rec.cells.push_back(owned_text(cache, row.region));
+      rec.cells.push_back(owned_text(cache, row.product));
+      rec.cells.push_back(owned_text(cache, col.year));
+      rec.cells.push_back(owned_text(cache, col.quarter));
+      rec.cells.push_back(Value::number(row.base * col.multiplier));
+      cache.mutable_records().push_back(std::move(rec));
+    }
+  }
+  return cache;
+}
+
+// Table over `build_subtotal_grid_cache()`: rows Region -> Product, columns
+// Year -> Quarter, one SUM(Amount) data field.
+PivotTable build_subtotal_grid_table() {
+  PivotTable table;
+  table.set_pivot_cache_id(1);
+  const char* names[] = {"Region", "Product", "Year", "Quarter", "Amount"};
+  for (std::size_t i = 0; i < 5; ++i) {
+    PivotField field;
+    field.source_name = names[i];
+    field.axis = i == 4 ? PivotAxis::Value : PivotAxis::Row;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  table.mutable_row_field_order() = {0, 1};
+  table.mutable_col_field_order() = {2, 3};
+  PivotDataField sum;
+  sum.name = "Sum of Amount";
+  sum.field_index = 4;
+  sum.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum));
+  return table;
+}
+
+TEST(PivotEvaluator, RowValueFilterCompactsEveryLeafIndexedStructure) {
+  PivotCache cache = build_subtotal_grid_cache();
+  PivotTable table = build_subtotal_grid_table();
+
+  // Row leaf scores are base * 33: North/A=33, North/B=66, South/A=330,
+  // South/B=660. Top-2 therefore keeps both South leaves and prunes the
+  // whole North group.
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::ValueTop10;
+  f.value = 2;
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Two surviving row leaves; every row-leaf-indexed structure agrees.
+  const std::size_t surviving_rows = 2U;
+  ASSERT_EQ(r.values.size(), surviving_rows);
+  EXPECT_EQ(r.row_leaf_totals.size(), surviving_rows);
+  ASSERT_EQ(r.col_subtotals.size(), 2U);  // One per Year.
+  for (const ColSubtotal& col_subtotal : r.col_subtotals) {
+    EXPECT_EQ(col_subtotal.values.size(), surviving_rows);
+  }
+
+  // The pruned group's subtotal is gone from both the metadata-rich list
+  // and the compact compatibility surface.
+  ASSERT_EQ(r.row_subtotals.size(), 1U);
+  ASSERT_EQ(r.row_subtotals[0].labels.size(), 1U);
+  EXPECT_EQ(r.row_subtotals[0].labels[0], "South");
+  EXPECT_EQ(r.subtotals.size(), 1U);
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "South");
+
+  // Cross-axis structures on the surviving subtotal keep the column index
+  // space untouched.
+  EXPECT_EQ(r.row_subtotals[0].col_values.size(), 4U);
+  EXPECT_EQ(r.row_subtotals[0].col_subtotal_values.size(), r.col_subtotals.size());
+
+  // A column subtotal now reads the surviving rows: South/A over 2024 is
+  // 10*(1+2)=30 and South/B is 20*(1+2)=60. Reading the pre-filter index
+  // space would surface the pruned North rows (3 and 6).
+  ASSERT_EQ(r.col_subtotals[0].values[0].size(), 1U);
+  EXPECT_DOUBLE_EQ(r.col_subtotals[0].values[0][0].as_number(), 30.0);
+  EXPECT_DOUBLE_EQ(r.col_subtotals[0].values[1][0].as_number(), 60.0);
+  EXPECT_DOUBLE_EQ(r.col_subtotals[1].values[0][0].as_number(), 300.0);
+  EXPECT_DOUBLE_EQ(r.col_subtotals[1].values[1][0].as_number(), 600.0);
+}
+
+TEST(PivotEvaluator, ColValueFilterCompactsEveryLeafIndexedStructure) {
+  PivotCache cache = build_subtotal_grid_cache();
+  PivotTable table = build_subtotal_grid_table();
+
+  // Column leaf scores are multiplier * 33: 2024/Q1=33, 2024/Q2=66,
+  // 2025/Q1=330, 2025/Q2=660. Top-2 keeps the 2025 quarters and prunes the
+  // whole 2024 group.
+  PivotFilter f;
+  f.axis = PivotAxis::Col;
+  f.field_name = "Year";
+  f.type = FilterType::ValueTop10;
+  f.value = 2;
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Two surviving column leaves; every column-leaf-indexed structure agrees.
+  const std::size_t surviving_cols = 2U;
+  ASSERT_EQ(r.values.size(), 4U);  // The row axis is untouched.
+  for (const auto& row_slot : r.values) {
+    EXPECT_EQ(row_slot.size(), surviving_cols);
+  }
+  EXPECT_EQ(r.col_leaf_totals.size(), surviving_cols);
+  ASSERT_EQ(r.row_subtotals.size(), 2U);  // One per Region.
+  for (const RowSubtotal& row_subtotal : r.row_subtotals) {
+    EXPECT_EQ(row_subtotal.col_values.size(), surviving_cols);
+  }
+
+  // The pruned group's column subtotal is gone, and so is its slot in every
+  // row x column subtotal intersection.
+  ASSERT_EQ(r.col_subtotals.size(), 1U);
+  ASSERT_EQ(r.col_subtotals[0].labels.size(), 1U);
+  EXPECT_EQ(r.col_subtotals[0].labels[0], "2025");
+  for (const RowSubtotal& row_subtotal : r.row_subtotals) {
+    EXPECT_EQ(row_subtotal.col_subtotal_values.size(), r.col_subtotals.size());
+  }
+  ASSERT_EQ(r.cols.size(), 1U);
+  EXPECT_EQ(r.cols[0].label, "2025");
+
+  // North's subtotal row now reads the surviving columns: (1+2)*10=30 at
+  // 2025/Q1 and (1+2)*20=60 at 2025/Q2, with 90 at the 2025 subtotal column.
+  const RowSubtotal& north = r.row_subtotals[0];
+  ASSERT_EQ(north.labels.size(), 1U);
+  ASSERT_EQ(north.labels[0], "North");
+  ASSERT_EQ(north.col_values[0].size(), 1U);
+  EXPECT_DOUBLE_EQ(north.col_values[0][0].as_number(), 30.0);
+  EXPECT_DOUBLE_EQ(north.col_values[1][0].as_number(), 60.0);
+  EXPECT_DOUBLE_EQ(north.col_subtotal_values[0][0].as_number(), 90.0);
+}
+
+// ---------------------------------------------------------------------------
+// Label filters resolve a field by its display name
+// ---------------------------------------------------------------------------
+
+TEST(PivotEvaluator, LabelFilterResolvesFieldByCustomName) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.mutable_fields()[0].custom_name = "Area";
+
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Area";  // The display name, not the source name.
+  f.type = FilterType::LabelBeginsWith;
+  f.value = std::string("N");
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Only the North records survive, so both the axis and the aggregate move.
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "North");
+  ASSERT_EQ(r.values.size(), 1U);
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 175.0);  // 100 + 50 + 25
+  ASSERT_TRUE(r.grand_total.is_number());
+  EXPECT_DOUBLE_EQ(r.grand_total.as_number(), 175.0);
+}
+
+TEST(PivotEvaluator, LabelFilterResolvesFieldByDataFieldName) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+
+  // "Sum of Amount" is the data field's display name for the Amount field,
+  // so the filter applies to Amount's own values.
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Sum of Amount";
+  f.type = FilterType::LabelBeginsWith;
+  f.value = std::string("1");
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // Only the Amount=100 record starts with "1".
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "North");
+  ASSERT_TRUE(r.grand_total.is_number());
+  EXPECT_DOUBLE_EQ(r.grand_total.as_number(), 100.0);
+}
+
 }  // namespace
 }  // namespace formulon::pivot

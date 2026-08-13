@@ -11,13 +11,14 @@
 //   * Post-aggregation, per-leaf: `score_*_axis` + `build_value_filter_keep`
 //     score each axis leaf for the active value filter and produce a
 //     boolean keep mask aligned to `result.values`'s DFS pre-order leaf
-//     enumeration; `compact_*_axis_values` then collapses the matrix
-//     to the surviving leaves.
+//     enumeration; `compact_leaf_axis` then re-expresses the whole
+//     result in the surviving-leaf index space.
 
 #ifndef FORMULON_PIVOT_FILTER_ENGINE_H_
 #define FORMULON_PIVOT_FILTER_ENGINE_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -32,7 +33,9 @@ namespace formulon::pivot {
 /// field that declares one, AND the axis-level label filters in
 /// `active_filters`. Empty `items` lists match all values (Excel default
 /// — items[] is only authored when the user has hidden at least one
-/// value); axis filters with unresolved field names are skipped.
+/// value). An axis filter names its field under the shared resolution rule
+/// (`resolve_field_by_any_name`); a name that resolves to nothing is skipped
+/// here because the public mutators already reject one on entry.
 bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record);
 
 /// Per-axis scoring intermediate used by `build_value_filter_keep`.
@@ -58,21 +61,33 @@ AxisScores score_col_axis(const PivotResult& result, std::size_t col_count, std:
 /// shapes that should degrade to a no-op (e.g. unbounded `ValueBetween`).
 std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, const AxisScores& axis);
 
-/// Compacts `result.values` along the row axis according to `keep`.
-/// Rows whose mask is false are dropped; surviving rows preserve their
-/// relative order. Mirrors what `prune_top_level` does to the row
-/// hierarchy.
-void compact_row_axis_values(std::vector<std::vector<std::vector<Value>>>& values, const std::vector<bool>& keep);
+/// Which leaf axis a value filter pruned.
+enum class LeafAxis : std::uint8_t {
+  Row = 0,
+  Col = 1,
+};
 
-/// Compacts every row's per-column slice in `result.values` according
-/// to `keep`. Mirror of `compact_row_axis_values` for the column axis.
-void compact_col_axis_values(std::vector<std::vector<std::vector<Value>>>& values, const std::vector<bool>& keep);
-
-/// Compacts a per-leaf totals vector (`row_leaf_totals` / `col_leaf_totals`,
-/// shape `[leaf][data_field]`) according to `keep`, dropping the leaves a
-/// value filter pruned so the totals stay index-aligned with
-/// `result.values`.
-void compact_leaf_totals(std::vector<std::vector<Value>>& totals, const std::vector<bool>& keep);
+/// Re-expresses every leaf-indexed structure of `result` in the surviving-leaf
+/// index space of `axis` after a value filter produced `keep` (one entry per
+/// pre-filter leaf, in the DFS pre-order `finalize_hierarchy` assigned).
+///
+/// Compacting only part of that state would leave the remainder indexed by the
+/// pre-filter leaf space, so a subtotal would silently read a filter-excluded
+/// leaf. Rewritten here for a row-axis prune: `values` rows, `row_leaf_totals`,
+/// every `ColSubtotal::values` row slot, and the row-subtotal leaf sets; for a
+/// column-axis prune: every `values` row's column slice, `col_leaf_totals`,
+/// every `RowSubtotal::col_values` slot, and the column-subtotal leaf sets.
+///
+/// A subtotal whose leaf set becomes empty describes a label path that no
+/// longer exists in the pruned hierarchy and is dropped, together with its
+/// leaf set, its `PivotResult::subtotals` compatibility entry (row axis), and
+/// its slot in every `RowSubtotal::col_subtotal_values` (column axis).
+///
+/// The caller keeps ownership of the leaf-set vectors because they outlive the
+/// result only as evaluator locals handed to the show-values-as pass.
+void compact_leaf_axis(PivotResult& result, const std::vector<bool>& keep, LeafAxis axis,
+                       std::vector<std::vector<std::size_t>>& row_subtotal_leaf_sets,
+                       std::vector<std::vector<std::size_t>>& col_subtotal_leaf_sets);
 
 }  // namespace formulon::pivot
 
