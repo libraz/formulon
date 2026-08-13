@@ -2,11 +2,11 @@
   "suite": "dfunc_field_range_arg",
   "description": "D-functions (DCOUNT, DGET, DSUM, etc.) accept a `field` argument that is conventionally a single cell or a column index. IronCalc's fixtures pass a multi-cell range like `$E$1:$F$1` as the field argument and expect `#VALUE!`. Pre-Excel-365 implicit-intersection rejects this shape, but Excel 365 dynamic-array spill projects to the top-left. This suite probes Mac Excel 365 (ja-JP) behavior to decide whether Formulon's new spill-anchor semantics are correct.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

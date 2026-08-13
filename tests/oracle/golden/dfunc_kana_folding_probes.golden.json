@@ -2,11 +2,11 @@
   "suite": "dfunc_kana_folding_probes",
   "description": "Mac Excel ja-JP D-functions (DSUM/DCOUNT/DGET/DAVERAGE/DMAX/DMIN) flow criterion text-equality through the same matcher that COUNTIF uses, so the kana fold from criteria.cpp should already cover the criterion-cell side. What is unverified is whether Mac also folds on the two header paths: (1) the `field` text argument resolved against database headers in resolve_field_column, and (2) the criteria-block header row resolved against database headers in find_db_column. These probes pin Mac's behaviour empirically before deciding whether database_lazy.cpp needs the same fold.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

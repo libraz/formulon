@@ -2,11 +2,11 @@
   "suite": "countif_kana_folding_probes",
   "description": "Mac Excel ja-JP COUNTIF text-equality folds certain Japanese character classes onto a canonical form before comparing. The two existing divergences (countif_jp_katakana_vs_hiragana, countif_fullwidth_star_literal) pin two specific behaviours but do not delineate the full extent of the folding. These probes map out the boundaries — hiragana/katakana, half-width/full-width katakana, full-width punctuation, full-width digits, voiced-mark normalisation — before designing the criteria.cpp matcher fix.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

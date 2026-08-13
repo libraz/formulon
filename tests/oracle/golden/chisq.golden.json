@@ -2,11 +2,11 @@
   "suite": "chisq",
   "description": "CHISQ.DIST / CHISQ.DIST.RT / CHISQ.INV / CHISQ.INV.RT — chi-squared distribution family",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 1e-06,

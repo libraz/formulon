@@ -2,11 +2,11 @@
   "suite": "code_char_jp_probes",
   "description": "Mac Excel ja-JP CODE returns the JIS X 0208 row-cell encoding for DBCS characters (e.g. CODE(\"あ\") = 9250 = 0x2422 = row 4, cell 2). For ASCII it returns the byte value; for half-width katakana it returns the CP932 single-byte code (0xA1..0xDF). CHAR is the inverse but accepts only single-byte codes 1..255 in many Excel versions; ja-JP semantics for higher integers are unverified. These probes pin Mac's exact algorithm before designing a CP932-based implementation.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,
