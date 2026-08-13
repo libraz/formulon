@@ -40,6 +40,26 @@ inline Expected<std::size_t, Error> checked_mul_size_t(std::size_t a, std::size_
   return a * b;
 }
 
+/// Multiplies two operands as `std::uint64_t` with overflow detection.
+/// Returns `kFnOverflow` when the product would exceed
+/// `std::numeric_limits<std::uint64_t>::max()`.
+///
+/// Use this — not `checked_mul_size_t` — whenever the product is a count of
+/// grid cells or work units rather than a byte size: `size_t` is 32-bit on
+/// the WASM main build, so a `size_t` guard rejects products that are
+/// perfectly representable and, on 64-bit hosts, is no guard at all for a
+/// count later charged to a `uint64_t` budget.
+inline Expected<std::uint64_t, Error> checked_mul_u64(std::uint64_t a, std::uint64_t b) {
+  if (a == 0U || b == 0U) {
+    return std::uint64_t{0};
+  }
+  if (a > std::numeric_limits<std::uint64_t>::max() / b) {
+    return make_error(FormulonErrorCode::kFnOverflow, "checked_mul_u64: uint64 overflow",
+                      "a=" + std::to_string(a) + " b=" + std::to_string(b));
+  }
+  return a * b;
+}
+
 }  // namespace formulon
 
 #endif  // FORMULON_UTILS_CHECKED_MUL_H_

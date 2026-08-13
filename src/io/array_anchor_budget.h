@@ -9,10 +9,10 @@
 #include <cstdint>
 #include <limits>
 #include <string>
-#include <string_view>
 #include <utility>
 
 #include "sheet.h"
+#include "utils/budget_charge.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
@@ -44,18 +44,7 @@ inline Expected<std::uint64_t, Error> checked_array_anchor_cells(std::uint32_t r
 /// `used/requested/ceiling` diagnostics.
 inline Expected<void, Error> consume_array_anchor_budget(ResourceBudget& budget, std::uint64_t cell_count,
                                                          std::string context) {
-  auto charged = budget.consume(cell_count);
-  if (charged) {
-    return Expected<void, Error>::Ok();
-  }
-  const std::string_view budget_context = charged.error().context;
-  if (!context.empty() && !budget_context.empty()) {
-    context.push_back(' ');
-  }
-  context.append(budget_context);
-  Error error = charged.error();
-  error.context = std::move(context);
-  return error;
+  return charge(budget, cell_count, std::move(context));
 }
 
 }  // namespace io
