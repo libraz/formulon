@@ -7,7 +7,9 @@
 #include <string>
 #include <string_view>
 
+#include "eval/spill_potential.h"
 #include "gtest/gtest.h"
+#include "parser/parser.h"
 #include "utils/arena.h"
 #include "value.h"
 
@@ -23,6 +25,27 @@ Value StubImpl(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/)
 
 Value SecondImpl(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return Value::number(99.0);
+}
+
+bool FormulaMaySpill(std::string_view formula) {
+  Arena arena;
+  if (!formula.empty() && formula.front() == '=') {
+    formula.remove_prefix(1);
+  }
+  parser::AstNode* root = parser::parse_strict(formula, arena);
+  return root != nullptr && may_produce_spill(*root);
+}
+
+SpillPotential FormulaPotential(std::string_view formula, const FunctionRegistry* registry = nullptr) {
+  Arena arena;
+  if (!formula.empty() && formula.front() == '=') {
+    formula.remove_prefix(1);
+  }
+  parser::AstNode* root = parser::parse_strict(formula, arena);
+  if (root == nullptr) {
+    return SpillPotential::kMaySpill;
+  }
+  return registry == nullptr ? spill_potential(*root) : spill_potential(*root, *registry);
 }
 
 TEST(FunctionRegistry, RegisterAndExactCaseLookup) {
@@ -105,6 +128,85 @@ TEST(FunctionRegistry, DefaultRegistryContainsExpectedBuiltins) {
   EXPECT_NE(r.lookup("CONCAT"), nullptr);
   EXPECT_NE(r.lookup("CONCATENATE"), nullptr);
   EXPECT_NE(r.lookup("LEN"), nullptr);
+  ASSERT_NE(r.lookup("SEQUENCE"), nullptr);
+  EXPECT_EQ(r.lookup("SEQUENCE")->result_shape, FunctionDef::ResultShape::kArray);
+  ASSERT_NE(r.lookup("ABS"), nullptr);
+  EXPECT_EQ(r.lookup("ABS")->result_shape, FunctionDef::ResultShape::kBroadcast);
+  ASSERT_NE(r.lookup("FILTERXML"), nullptr);
+  EXPECT_EQ(r.lookup("FILTERXML")->result_shape, FunctionDef::ResultShape::kArray);
+}
+
+TEST(FunctionRegistry, CustomFunctionDefaultsToArrayCapableShape) {
+  FunctionRegistry r;
+  ASSERT_TRUE(r.register_function(FunctionDef{"CUSTOMSPILL", 0u, kVariadic, &StubImpl}));
+  ASSERT_NE(r.lookup("CUSTOMSPILL"), nullptr);
+  EXPECT_EQ(r.lookup("CUSTOMSPILL")->result_shape, FunctionDef::ResultShape::kArray);
+}
+
+TEST(FunctionRegistry, SpillPotentialHonoursScalarizationAndBroadcast) {
+  EXPECT_FALSE(FormulaMaySpill("=SUM(B:B)"));
+  EXPECT_FALSE(FormulaMaySpill("=NOW()"));
+  EXPECT_FALSE(FormulaMaySpill("=@SEQUENCE(1,2)"));
+  EXPECT_TRUE(FormulaMaySpill("=ABS(SEQUENCE(1,2))"));
+  EXPECT_TRUE(FormulaMaySpill("=SIN(SEQUENCE(1,2))"));
+  EXPECT_TRUE(FormulaMaySpill("=IF(TRUE,SEQUENCE(1,2),0)"));
+  EXPECT_TRUE(FormulaMaySpill("=LET(x,SEQUENCE(1,2),x)"));
+  EXPECT_TRUE(FormulaMaySpill("=MY_DEFINED_NAME"));
+  EXPECT_TRUE(FormulaMaySpill("=CUSTOMSPILL(1)"));
+}
+
+TEST(FunctionRegistry, SpillPotentialCoversLazyReturnShapes) {
+  EXPECT_FALSE(FormulaMaySpill("=DATE(2020,1,1)"));
+  EXPECT_TRUE(FormulaMaySpill("=DATE(SEQUENCE(1,2),1,1)"));
+  EXPECT_FALSE(FormulaMaySpill("=REGEXTEST(\"a\",\"a\")"));
+  EXPECT_FALSE(FormulaMaySpill("=REGEXREPLACE(\"a\",\"a\",\"b\")"));
+  EXPECT_TRUE(FormulaMaySpill("=REGEXREPLACE(SEQUENCE(1,2),\"1\",\"x\")"));
+  EXPECT_TRUE(FormulaMaySpill("=REGEXEXTRACT(\"a\",\"a\")"));
+  EXPECT_TRUE(FormulaMaySpill("=LINEST(A:A,B:B)"));
+  EXPECT_TRUE(FormulaMaySpill("=TRIMRANGE(A1:B2)"));
+  EXPECT_TRUE(FormulaMaySpill("=XLOOKUP(1,A:A,B:C)"));
+  EXPECT_FALSE(FormulaMaySpill("=LOOKUP(1,A:A,B:B)"));
+  EXPECT_FALSE(FormulaMaySpill("=ROW(A1)"));
+  EXPECT_TRUE(FormulaMaySpill("=ROW(A1:A2)"));
+  EXPECT_TRUE(FormulaMaySpill("=CELL(\"width\",A1)"));
+  EXPECT_TRUE(FormulaMaySpill("=TEXT(SEQUENCE(1,2),\"0\")"));
+  EXPECT_TRUE(FormulaMaySpill("=FILTERXML(\"<a><b>1</b><b>2</b></a>\",\"//b\")"));
+  EXPECT_TRUE(FormulaMaySpill("=REDUCE(0,A1:B2,LAMBDA(a,b,a+b))"));
+  EXPECT_TRUE(FormulaMaySpill("=MODE.MULT(1,2,1,2)"));
+}
+
+TEST(FunctionRegistry, SpillPotentialLetUsesOnlyTheBodyShape) {
+  EXPECT_FALSE(FormulaMaySpill("=LET(x,SEQUENCE(1,2),42)"));
+  EXPECT_TRUE(FormulaMaySpill("=LET(x,SEQUENCE(1,2),x)"));
+}
+
+TEST(FunctionRegistry, SpillPotentialRechecksKnownNamesAgainstRuntimeRegistry) {
+  EXPECT_EQ(FormulaPotential("=ABS(1)"), SpillPotential::kNeedsRegistry);
+  EXPECT_EQ(FormulaPotential("=SEQUENCE(1,2)"), SpillPotential::kNeedsRegistry);
+
+  FunctionRegistry custom;
+  ASSERT_TRUE(custom.register_function(FunctionDef{"ABS", 1U, 1U, &StubImpl, true, false, false, false, false,
+                                                   FunctionDef::BlankScalarPolicy::Allow, ErrorCode::Value,
+                                                   FunctionDef::ResultShape::kArray}));
+  FunctionDef sum_def{"SUM", 1U, kVariadic, &StubImpl};
+  sum_def.accepts_ranges = true;
+  sum_def.result_shape = FunctionDef::ResultShape::kReduce;
+  ASSERT_TRUE(custom.register_function(sum_def));
+  for (const std::string_view name : {"SIN", "LEN"}) {
+    FunctionDef array_def{name, 1U, 1U, &StubImpl};
+    array_def.result_shape = FunctionDef::ResultShape::kArray;
+    ASSERT_TRUE(custom.register_function(array_def));
+  }
+  EXPECT_EQ(FormulaPotential("=ABS(1)", &custom), SpillPotential::kMaySpill);
+  EXPECT_EQ(FormulaPotential("=SUM(A:A)", &custom), SpillPotential::kNever);
+  EXPECT_EQ(FormulaPotential("=SIN(1)", &custom), SpillPotential::kMaySpill);
+  EXPECT_EQ(FormulaPotential("=LEN(1)", &custom), SpillPotential::kMaySpill);
+
+  FunctionRegistry scalar_override;
+  FunctionDef sequence_def{"SEQUENCE", 1U, kVariadic, &StubImpl};
+  sequence_def.result_shape = FunctionDef::ResultShape::kScalar;
+  ASSERT_TRUE(scalar_override.register_function(sequence_def));
+  EXPECT_EQ(FormulaPotential("=SEQUENCE(1,2)", &scalar_override), SpillPotential::kNever);
 }
 
 TEST(FunctionRegistry, DefaultRegistryDoesNotContainIf) {

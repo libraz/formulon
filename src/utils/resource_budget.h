@@ -51,6 +51,24 @@ inline constexpr std::uint64_t kMaxDynamicArrayCells = 1048576U;  // 2^20
 /// Maximum cells eagerly materialised from one rectangular reference.
 inline constexpr std::uint64_t kMaxRangeExpansionCells = 10'000'000U;
 
+/// Maximum cells one rectangular reference may materialise as individual
+/// dependency-graph edges.
+///
+/// This is a *graph-footprint* bound and is deliberately not
+/// `kMaxRangeExpansionCells`: that ceiling sizes a transient `vector<Value>`
+/// released as soon as one evaluation finishes, whereas every edge admitted
+/// here is retained for the lifetime of the formula and is carried three
+/// times over (forward adjacency, reverse adjacency, and the source index),
+/// so its per-cell cost is ~100-160 bytes of permanently resident memory.
+/// Rectangles above the ceiling are registered as a single compact rectangle
+/// dependency instead, which the recalc engine expands lazily.
+///
+/// 1024 keeps per-cell edges — and with them the exact evaluation ordering
+/// they give against formulas inside the rectangle — for the hand-authored
+/// aggregates that dominate real workbooks, while capping one formula's
+/// permanent graph footprint at ~160 KB.
+inline constexpr std::uint64_t kMaxMaterializedDependencyCells = 1024U;
+
 /// Maximum span slots one REGEX* call may accumulate, counted as
 /// `matches * (capture_count + 1)`. PCRE2's own `match_limit` bounds the
 /// work spent inside a single match attempt but says nothing about how many

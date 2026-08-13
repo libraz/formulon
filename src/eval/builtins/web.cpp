@@ -315,7 +315,8 @@ void register_web_builtins(FunctionRegistry& registry) {
   // propagate_errors = true) before the fixed return fires.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"ENCODEURL", 1u, 1u, &EncodeUrl},
-      {"FILTERXML", 2u, 2u, &FilterXml},
+      {"FILTERXML", 2u, 2u, &FilterXml, true, false, false, false, false, FunctionDef::BlankScalarPolicy::Allow,
+       ErrorCode::Value, FunctionDef::ResultShape::kArray},
       {"WEBSERVICE", 1u, 1u, &WebService},
       {"PY", 1u, 1u, &Py},
   };

@@ -298,12 +298,15 @@ void register_dynamic_array_builtins(FunctionRegistry& registry) {
   // scalar-coercion path, and any pre-evaluated error short-circuits before
   // the impl runs.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"SEQUENCE", 1u, 4u, &Sequence},
+      {"SEQUENCE", 1u, 4u, &Sequence, true, false, false, false, false, FunctionDef::BlankScalarPolicy::Allow,
+       ErrorCode::Value, FunctionDef::ResultShape::kArray},
       // RANDARRAY: zero required + five optional (rows, cols, min, max,
       // whole_number). Same dispatcher policy as SEQUENCE.
-      {"RANDARRAY", 0u, 5u, &RandArray},
+      {"RANDARRAY", 0u, 5u, &RandArray, true, false, false, false, false, FunctionDef::BlankScalarPolicy::Allow,
+       ErrorCode::Value, FunctionDef::ResultShape::kArray},
       // MUNIT: single required arg (matrix size).
-      {"MUNIT", 1u, 1u, &MUnit},
+      {"MUNIT", 1u, 1u, &MUnit, true, false, false, false, false, FunctionDef::BlankScalarPolicy::Allow,
+       ErrorCode::Value, FunctionDef::ResultShape::kArray},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

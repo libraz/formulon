@@ -34,6 +34,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
+#include "utils/resource_budget.h"
 #include "workbook.h"
 
 namespace formulon::eval {
@@ -225,17 +226,99 @@ TEST(DepExtractor, WholeRowRefUsesCompactRangeDependency) {
   EXPECT_EQ(deps.range_deps[0].col_last, Sheet::kMaxCols - 1U);
 }
 
-TEST(DepExtractor, OversizedRectIsVolatileWithoutEnumeratingCells) {
+TEST(DepExtractor, WholeAxisSpanNormalizesEveryAstForm) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+
+  const parser::AstNode* columns = ParseFormula("SUM(A:C)", arena);
+  ASSERT_NE(columns, nullptr);
+  const ExtractedDeps column_deps = extract_deps(*columns, 0U, wb);
+  ASSERT_EQ(column_deps.range_deps.size(), 1U);
+  EXPECT_EQ(column_deps.range_deps[0].row_first, 0U);
+  EXPECT_EQ(column_deps.range_deps[0].row_last, Sheet::kMaxRows - 1U);
+  EXPECT_EQ(column_deps.range_deps[0].col_first, 0U);
+  EXPECT_EQ(column_deps.range_deps[0].col_last, 2U);
+
+  arena.reset();
+  const parser::AstNode* rows = ParseFormula("SUM(1:3)", arena);
+  ASSERT_NE(rows, nullptr);
+  const ExtractedDeps row_deps = extract_deps(*rows, 0U, wb);
+  ASSERT_EQ(row_deps.range_deps.size(), 1U);
+  EXPECT_EQ(row_deps.range_deps[0].row_first, 0U);
+  EXPECT_EQ(row_deps.range_deps[0].row_last, 2U);
+  EXPECT_EQ(row_deps.range_deps[0].col_first, 0U);
+  EXPECT_EQ(row_deps.range_deps[0].col_last, Sheet::kMaxCols - 1U);
+}
+
+TEST(DepExtractor, WholeAxisSpanNormalizationReachesNamesAndLambdas) {
+  Workbook wb = Workbook::create();
+  wb.set_defined_names({io::DefinedName{"Cols", "A:C", -1, false, ""},
+                        io::DefinedName{"Apply", "LAMBDA(x,SUM(Cols)+x)", -1, false, ""}});
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("Apply(1)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ASSERT_EQ(deps.range_deps.size(), 1U);
+  EXPECT_EQ(deps.range_deps[0].row_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].row_last, Sheet::kMaxRows - 1U);
+  EXPECT_EQ(deps.range_deps[0].col_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].col_last, 2U);
+}
+
+TEST(DepExtractor, BoundedRectAtLimitStillFlattens) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  // Exactly `kMaxMaterializedDependencyCells` cells: the ceiling is
+  // inclusive, so this rectangle keeps its per-cell edges and the exact
+  // ordering guarantees they carry.
+  const parser::AstNode* root = ParseFormula("SUM(A1:A1024)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.range_deps.empty());
+  EXPECT_EQ(deps.cell_deps.size(), kMaxMaterializedDependencyCells);
+}
+
+TEST(DepExtractor, BoundedRectAboveLimitUsesCompactRangeDependency) {
+  Workbook wb = Workbook::create();
+  Arena arena;
+  // One cell past the ceiling. Flattening a lookup table costs one permanent
+  // graph edge per cell in three indexes, so the rectangle is retained whole
+  // instead.
+  const parser::AstNode* root = ParseFormula("SUM(A1:A1025)", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+  ASSERT_EQ(deps.range_deps.size(), 1U);
+  EXPECT_EQ(deps.range_deps[0].sheet_id, 0U);
+  EXPECT_EQ(deps.range_deps[0].row_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].row_last, 1024U);
+  EXPECT_EQ(deps.range_deps[0].col_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].col_last, 0U);
+}
+
+TEST(DepExtractor, OversizedRectUsesCompactRangeDependency) {
   Workbook wb = Workbook::create();
   Arena arena;
   // This is a valid bounded rectangle, but expands to the entire grid.
   // Registering all of its direct dependencies would allocate ~17 billion
-  // graph nodes while merely loading a workbook.
+  // graph nodes while merely loading a workbook. It is not volatile either:
+  // volatility would re-execute the formula on every pass whether or not
+  // anything it reads changed, and would still leave a write inside the
+  // rectangle unable to dirty anything on its own. The compact rectangle
+  // keeps the dependency real at a fixed cost.
   const parser::AstNode* root = ParseFormula("SUM(A1:XFD1048576)", arena);
   ASSERT_NE(root, nullptr);
-  ExtractedDeps deps = extract_deps(*root, 0U, wb);
-  EXPECT_TRUE(deps.is_volatile);
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
   EXPECT_TRUE(deps.cell_deps.empty());
+  ASSERT_EQ(deps.range_deps.size(), 1U);
+  EXPECT_EQ(deps.range_deps[0].row_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].row_last, Sheet::kMaxRows - 1U);
+  EXPECT_EQ(deps.range_deps[0].col_first, 0U);
+  EXPECT_EQ(deps.range_deps[0].col_last, Sheet::kMaxCols - 1U);
 }
 
 TEST(DepExtractor, UnresolvedNameRefIsSkipped) {
@@ -677,6 +760,30 @@ TEST(DepExtractor, StructuredRefDefaultModifierFlattensDataColumn) {
   EXPECT_EQ(Sorted(deps.cell_deps), Sorted(expected));
 }
 
+TEST(DepExtractor, StructuredRefAboveLimitUsesCompactRangeDependency) {
+  Workbook wb = Workbook::create();
+  // A table column is as tall as the table, so the structured-ref path needs
+  // the same graph-footprint ceiling the RangeOp path has: the data area of
+  // this column is 4,000 cells.
+  std::vector<io::TableMetadata> tables;
+  tables.push_back(MakeTable("Sales", "A1:C4001", /*sheet_index=*/0, /*header_row=*/true, /*totals_row=*/false,
+                             {"Region", "Amount", "Date"}));
+  wb.set_tables(std::move(tables));
+
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(Sales[Amount])", arena);
+  ASSERT_NE(root, nullptr);
+  const ExtractedDeps deps = extract_deps(*root, /*current_sheet_id=*/0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+  ASSERT_EQ(deps.range_deps.size(), 1U);
+  EXPECT_EQ(deps.range_deps[0].sheet_id, 0U);
+  EXPECT_EQ(deps.range_deps[0].row_first, 1U);
+  EXPECT_EQ(deps.range_deps[0].row_last, 4000U);
+  EXPECT_EQ(deps.range_deps[0].col_first, 1U);
+  EXPECT_EQ(deps.range_deps[0].col_last, 1U);
+}
+
 TEST(DepExtractor, StructuredRefDataExcludesTotalsRow) {
   Workbook wb = Workbook::create();
   // Same table, now with a totals row. kData must skip both header (row 0)
@@ -1016,6 +1123,57 @@ TEST(DepExtractor, ThreeDFullColumnUsesCompactRangeDependencies) {
     EXPECT_EQ(deps.range_deps[i].row_last, Sheet::kMaxRows - 1U);
     EXPECT_EQ(deps.range_deps[i].col_first, 0U);
     EXPECT_EQ(deps.range_deps[i].col_last, 0U);
+  }
+}
+
+TEST(DepExtractor, ThreeDRangeAboveLimitUsesCompactRangeDependencyPerSheet) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  Arena arena;
+  // The shared rectangle is read once per sheet in the span, so the ceiling
+  // is applied before the span multiplies the cost: 3 x 2,000 cells would be
+  // 6,000 permanent edges from one formula.
+  const parser::AstNode* root = ParseFormula("SUM(Sheet1:Sheet3!A1:B1000)", arena);
+  ASSERT_NE(root, nullptr);
+
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  EXPECT_FALSE(deps.is_volatile);
+  EXPECT_TRUE(deps.cell_deps.empty());
+  ASSERT_EQ(deps.range_deps.size(), 3U);
+  for (std::size_t sheet = 0; sheet < deps.range_deps.size(); ++sheet) {
+    EXPECT_EQ(deps.range_deps[sheet].sheet_id, sheet);
+    EXPECT_EQ(deps.range_deps[sheet].row_first, 0U);
+    EXPECT_EQ(deps.range_deps[sheet].row_last, 999U);
+    EXPECT_EQ(deps.range_deps[sheet].col_first, 0U);
+    EXPECT_EQ(deps.range_deps[sheet].col_last, 1U);
+  }
+}
+
+TEST(DepExtractor, ThreeDWholeAxisSpansPreserveBothAxes) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  Arena arena;
+  const parser::AstNode* root = ParseFormula("SUM(Sheet1:Sheet3!A:C)+SUM(Sheet1:Sheet3!1:3)", arena);
+  ASSERT_NE(root, nullptr);
+
+  const ExtractedDeps deps = extract_deps(*root, 0U, wb);
+  ASSERT_EQ(deps.range_deps.size(), 6U);
+  for (std::size_t sheet = 0; sheet < 3U; ++sheet) {
+    const CellRangeDependency& columns = deps.range_deps[sheet];
+    EXPECT_EQ(columns.sheet_id, sheet);
+    EXPECT_EQ(columns.row_first, 0U);
+    EXPECT_EQ(columns.row_last, Sheet::kMaxRows - 1U);
+    EXPECT_EQ(columns.col_first, 0U);
+    EXPECT_EQ(columns.col_last, 2U);
+
+    const CellRangeDependency& rows = deps.range_deps[3U + sheet];
+    EXPECT_EQ(rows.sheet_id, sheet);
+    EXPECT_EQ(rows.row_first, 0U);
+    EXPECT_EQ(rows.row_last, 2U);
+    EXPECT_EQ(rows.col_first, 0U);
+    EXPECT_EQ(rows.col_last, Sheet::kMaxCols - 1U);
   }
 }
 

@@ -30,6 +30,23 @@ inline constexpr std::uint32_t kVariadic = std::numeric_limits<std::uint32_t>::m
 /// extension) is described by a `FunctionDef` and looked up by its canonical
 /// UPPERCASE name.
 struct FunctionDef {
+  /// Result-shape policy used by dependency/partial-recalc analysis. Scalar
+  /// functions collapse their inputs; Broadcast functions preserve an array
+  /// input's shape; Array functions originate an array independently of
+  /// their inputs; Reduce functions are explicit scalar aggregators. A host
+  /// extension that does not opt into a policy remains conservatively
+  /// array-capable so a custom dynamic-array UDF is not missed by partial
+  /// closure discovery.
+  enum class ResultShape : std::uint8_t {
+    kScalar = 0,
+    kBroadcast = 1,
+    kArray = 2,
+    kReduce = 3,
+    /// Internal BuiltinRegistration sentinel. Host FunctionDef values should
+    /// use one of the four concrete policies above.
+    kAuto = 4,
+  };
+
   /// Canonical UPPERCASE name (e.g. `"SUM"`). Must be ASCII.
   std::string_view canonical_name;
   /// Inclusive minimum number of arguments accepted.
@@ -110,6 +127,11 @@ struct FunctionDef {
   /// the policy is `Allow`. Defaults to `Value` purely so the field has a
   /// well-defined value; consumers must set this together with the policy.
   ErrorCode blank_scalar_error = ErrorCode::Value;
+
+  /// Appended after the historical fields so aggregate initialization by
+  /// host code remains source-compatible. Custom FunctionDef values default
+  /// to the conservative array-capable policy.
+  ResultShape result_shape = ResultShape::kArray;
 };
 
 /// Case-insensitive function lookup table. Names are stored UPPERCASE

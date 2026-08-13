@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -127,6 +128,56 @@ void add_three_d_span_dep(WalkState& state, std::size_t sheet_first, std::size_t
   }
 }
 
+/// Canonical inclusive rectangle for one dependency shape. Full-axis
+/// endpoints carry a meaningful coordinate only on their bounded axis (the
+/// parser's other coordinate is intentionally unspecified), so normalization
+/// must branch on the axis before validating bounds. Mixed-axis pairs are not
+/// rectangles and are rejected rather than silently shrinking to one row or
+/// column.
+struct NormalizedDependencyRange {
+  std::uint32_t row_first = 0;
+  std::uint32_t row_last = 0;
+  std::uint32_t col_first = 0;
+  std::uint32_t col_last = 0;
+  bool whole_axis = false;
+};
+
+std::optional<NormalizedDependencyRange> normalize_dependency_range(const parser::Reference& lhs,
+                                                                    const parser::Reference& rhs) noexcept {
+  if ((lhs.is_full_col && lhs.is_full_row) || (rhs.is_full_col && rhs.is_full_row)) {
+    return std::nullopt;
+  }
+
+  const bool full_col = lhs.is_full_col || rhs.is_full_col;
+  const bool full_row = lhs.is_full_row || rhs.is_full_row;
+  if (full_col && full_row) {
+    return std::nullopt;
+  }
+
+  if (full_col) {
+    if (!lhs.is_full_col || !rhs.is_full_col || lhs.col >= Sheet::kMaxCols || rhs.col >= Sheet::kMaxCols) {
+      return std::nullopt;
+    }
+    return NormalizedDependencyRange{0U, Sheet::kMaxRows - 1U, std::min(lhs.col, rhs.col), std::max(lhs.col, rhs.col),
+                                     true};
+  }
+
+  if (full_row) {
+    if (!lhs.is_full_row || !rhs.is_full_row || lhs.row >= Sheet::kMaxRows || rhs.row >= Sheet::kMaxRows) {
+      return std::nullopt;
+    }
+    return NormalizedDependencyRange{std::min(lhs.row, rhs.row), std::max(lhs.row, rhs.row), 0U, Sheet::kMaxCols - 1U,
+                                     true};
+  }
+
+  if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols || rhs.row >= Sheet::kMaxRows ||
+      rhs.col >= Sheet::kMaxCols) {
+    return std::nullopt;
+  }
+  return NormalizedDependencyRange{std::min(lhs.row, rhs.row), std::max(lhs.row, rhs.row), std::min(lhs.col, rhs.col),
+                                   std::max(lhs.col, rhs.col), false};
+}
+
 // Flattens the rectangle [lhs, rhs] into per-cell dependencies. Both
 // endpoints must be plain `Ref` nodes; complex ranges (OFFSET-based,
 // INDIRECT, etc.) are silently ignored — dynamic shapes cannot be statically
@@ -157,30 +208,23 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
     return;
   }
 
-  // Bounds: clamp out-of-range coordinates by skipping. The evaluator turns
-  // these into #REF! at evaluation time; for static dep tracking they are
-  // simply absent.
-  if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols ||  //
-      rhs.row >= Sheet::kMaxRows || rhs.col >= Sheet::kMaxCols) {
+  const auto normalized = normalize_dependency_range(lhs, rhs);
+  if (!normalized.has_value()) {
+    // The evaluator reports malformed or mixed-axis references as an error;
+    // static extraction simply omits a shape it cannot model safely.
     return;
   }
+  const std::uint32_t r_min = normalized->row_first;
+  const std::uint32_t r_max = normalized->row_last;
+  const std::uint32_t c_min = normalized->col_first;
+  const std::uint32_t c_max = normalized->col_last;
 
-  const std::uint32_t r_min = std::min(lhs.row, rhs.row);
-  const std::uint32_t r_max = std::max(lhs.row, rhs.row);
-  const std::uint32_t c_min = std::min(lhs.col, rhs.col);
-  const std::uint32_t c_max = std::max(lhs.col, rhs.col);
-
-  if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
+  // Every rectangle leaves here as either at most
+  // `kMaxMaterializedDependencyCells` per-cell edges or exactly one compact
+  // rectangle; no shape registers nothing.
+  const std::uint64_t area = static_cast<std::uint64_t>(r_max - r_min + 1U) * (c_max - c_min + 1U);
+  if (normalized->whole_axis || area > kMaxMaterializedDependencyCells) {
     add_range_dep(state, CellRangeDependency{target_sheet_id, r_min, r_max, c_min, c_max});
-    return;
-  }
-
-  const std::uint64_t total = static_cast<std::uint64_t>(r_max - r_min + 1U) * (c_max - c_min + 1U);
-  if (total > kMaxRangeExpansionCells) {
-    // Preserve correctness without exploding the graph: a later recalc sees
-    // this cell in the volatile seed set, just as it does for whole rows and
-    // columns that cannot be pinned as individual graph edges.
-    state.out->is_volatile = true;
     return;
   }
 
@@ -353,6 +397,17 @@ void walk_structured_ref(const parser::AstNode& node, WalkState& state) {
     return;
   }
 
+  // A table column is unbounded from the extractor's point of view — the
+  // table's own row count decides the area — so the rectangle passes the same
+  // graph-footprint ceiling every other range shape does.
+  const std::uint64_t area = (static_cast<std::uint64_t>(rect.row_last - rect.row_first) + 1U) *
+                             (static_cast<std::uint64_t>(rect.col_last - rect.col_first) + 1U);
+  if (area > kMaxMaterializedDependencyCells) {
+    add_range_dep(state,
+                  CellRangeDependency{target_sheet_id, rect.row_first, rect.row_last, rect.col_first, rect.col_last});
+    return;
+  }
+
   for (auto [r, c] : utils::RectRange(rect.row_first, rect.col_first, rect.row_last, rect.col_last)) {
     add_cell_dep(state, CellNodeId{target_sheet_id, r, c});
   }
@@ -389,25 +444,18 @@ void walk(const parser::AstNode& node, WalkState& state) {
 
     case parser::NodeKind::Ref: {
       const parser::Reference& ref = node.as_ref();
-      // Whole-column / whole-row used as a bare scalar (rare in practice but
-      // legal): retain a compact range dependency rather than enumerating it.
-      if (ref.is_full_col || ref.is_full_row) {
-        std::uint16_t sheet_id = state.current_sheet_id;
-        if (resolve_sheet_id(ref, state, &sheet_id)) {
-          const std::uint32_t row_first = ref.is_full_col ? 0U : ref.row;
-          const std::uint32_t row_last = ref.is_full_col ? Sheet::kMaxRows - 1U : ref.row;
-          const std::uint32_t col_first = ref.is_full_row ? 0U : ref.col;
-          const std::uint32_t col_last = ref.is_full_row ? Sheet::kMaxCols - 1U : ref.col;
-          add_range_dep(state, CellRangeDependency{sheet_id, row_first, row_last, col_first, col_last});
-        }
+      const auto normalized = normalize_dependency_range(ref, ref);
+      if (!normalized.has_value()) {
         return;
-      }
-      if (ref.row >= Sheet::kMaxRows || ref.col >= Sheet::kMaxCols) {
-        return;  // Out-of-bounds: evaluator surfaces #REF! at eval time.
       }
       std::uint16_t sheet_id = state.current_sheet_id;
       if (!resolve_sheet_id(ref, state, &sheet_id)) {
         return;  // Unknown sheet: skip silently.
+      }
+      if (normalized->whole_axis) {
+        add_range_dep(state, CellRangeDependency{sheet_id, normalized->row_first, normalized->row_last,
+                                                 normalized->col_first, normalized->col_last});
+        return;
       }
       add_cell_dep(state, CellNodeId{sheet_id, ref.row, ref.col});
       return;
@@ -457,11 +505,8 @@ void walk(const parser::AstNode& node, WalkState& state) {
       const parser::Reference& cell = node.as_ref3d_cell();
       const bool is_range = node.as_ref3d_is_range();
       const parser::Reference& cell_end = node.as_ref3d_cell_end();
-      const bool full_col = cell.is_full_col || (is_range && cell_end.is_full_col);
-      const bool full_row = cell.is_full_row || (is_range && cell_end.is_full_row);
-      const bool has_full_range = full_col || full_row;
-      if (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
-          (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))) {
+      const auto normalized = normalize_dependency_range(cell, is_range ? cell_end : cell);
+      if (!normalized.has_value()) {
         return;
       }
       if (state.workbook == nullptr) {
@@ -475,19 +520,20 @@ void walk(const parser::AstNode& node, WalkState& state) {
       const std::size_t lo = std::min(begin_idx, end_idx);
       const std::size_t hi = std::max(begin_idx, end_idx);
       add_three_d_span_dep(state, lo, hi);
-      const std::uint32_t r_lo = full_col ? 0U : (is_range ? std::min(cell.row, cell_end.row) : cell.row);
-      const std::uint32_t r_hi =
-          full_col ? Sheet::kMaxRows - 1U : (is_range ? std::max(cell.row, cell_end.row) : cell.row);
-      const std::uint32_t c_lo = full_row ? 0U : (is_range ? std::min(cell.col, cell_end.col) : cell.col);
-      const std::uint32_t c_hi =
-          full_row ? Sheet::kMaxCols - 1U : (is_range ? std::max(cell.col, cell_end.col) : cell.col);
+      // The shared rectangle is read once per sheet in the span, so the
+      // graph-footprint ceiling is applied to it before the span multiplies
+      // the cost.
+      const std::uint64_t area = (static_cast<std::uint64_t>(normalized->row_last - normalized->row_first) + 1U) *
+                                 (static_cast<std::uint64_t>(normalized->col_last - normalized->col_first) + 1U);
+      const bool compact = normalized->whole_axis || area > kMaxMaterializedDependencyCells;
       for (std::size_t s = lo; s <= hi; ++s) {
-        if (has_full_range) {
-          add_range_dep(state, CellRangeDependency{static_cast<std::uint16_t>(s), r_lo, r_hi, c_lo, c_hi});
+        if (compact) {
+          add_range_dep(state, CellRangeDependency{static_cast<std::uint16_t>(s), normalized->row_first,
+                                                   normalized->row_last, normalized->col_first, normalized->col_last});
           continue;
         }
-        for (std::uint32_t r = r_lo; r <= r_hi; ++r) {
-          for (std::uint32_t c = c_lo; c <= c_hi; ++c) {
+        for (std::uint32_t r = normalized->row_first; r <= normalized->row_last; ++r) {
+          for (std::uint32_t c = normalized->col_first; c <= normalized->col_last; ++c) {
             add_cell_dep(state, CellNodeId{static_cast<std::uint16_t>(s), r, c});
           }
         }

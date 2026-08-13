@@ -20,6 +20,7 @@
 #ifndef FORMULON_EVAL_TREE_WALKER_LAZY_TABLE_H_
 #define FORMULON_EVAL_TREE_WALKER_LAZY_TABLE_H_
 
+#include <cstdint>
 #include <string_view>
 
 #include "eval/lazy_impls.h"
@@ -27,12 +28,27 @@
 namespace formulon {
 namespace eval {
 
+/// Result-shape policy used by the partial-recalculation potential-producer
+/// index.  Lazy forms are kept in the same table as their dispatch function
+/// so shape metadata cannot silently drift away from evaluation semantics.
+enum class LazyResultShape : std::uint8_t {
+  kNotLazy,
+  kScalar,
+  kBroadcast,
+  kArray,
+  kReduce,
+};
+
 /// Looks up `name` (canonical UPPERCASE, case-insensitive) in the lazy
 /// dispatch table. Returns the bound `LazyImpl` pointer on hit, or
 /// `nullptr` when the name is not registered as a lazy form. Callers
 /// invoke the returned pointer directly with the `Call` AST node + the
 /// usual `Arena` / `FunctionRegistry` / `EvalContext` triple.
 LazyImpl find_lazy_impl(std::string_view name) noexcept;
+
+/// Returns the result-shape policy for a lazy form, or `kNotLazy` when the
+/// name is not present in the dispatch table.
+LazyResultShape find_lazy_result_shape(std::string_view name) noexcept;
 
 /// Returns a nullptr-terminated array of canonical UPPERCASE names in
 /// the lazy dispatch table. Storage has static duration; callers must

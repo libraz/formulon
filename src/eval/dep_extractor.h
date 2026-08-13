@@ -6,12 +6,13 @@
 //
 //   1. The set of *cell* references the formula reads, expressed as
 //      `CellNodeId`s. Plain `NodeKind::Ref` nodes contribute one cell each;
-//      `NodeKind::RangeOp` rectangles are flattened into the cells they
-//      cover. Whole-column / whole-row references are represented as compact
-//      rectangles, so mutations within their bounds dirty the formula without
-//      turning it into an Excel-volatile formula. Sheet qualifiers are
-//      resolved against the bound `Workbook` so cross-sheet references land
-//      on the correct `sheet_id`.
+//      small `NodeKind::RangeOp` rectangles are flattened into the cells they
+//      cover. Whole-column / whole-row references, and any rectangle above
+//      `kMaxMaterializedDependencyCells`, are represented as compact
+//      rectangles instead, so mutations within their bounds dirty the formula
+//      without either enumerating the area or turning the formula into an
+//      Excel-volatile one. Sheet qualifiers are resolved against the bound
+//      `Workbook` so cross-sheet references land on the correct `sheet_id`.
 //   2. Whether any function call in the tree is one of the nine Excel
 //      Volatile functions (per `VolatileTracker::is_volatile_function`).
 //      The recalc engine uses this to add the formula's cell to the
@@ -71,9 +72,10 @@ namespace eval {
 /// `cell_deps` is the deduplicated list of cells the formula reads. Order is
 /// not guaranteed; callers that need a stable order must sort externally.
 /// A compact, inclusive rectangle dependency. It is used for whole-column /
-/// whole-row references, whose individual cells must not be materialised in
-/// the graph. `dependent` is added by the recalc engine when it registers a
-/// formula; extraction only supplies the referenced rectangle.
+/// whole-row references and for any bounded rectangle wider than
+/// `kMaxMaterializedDependencyCells`, whose individual cells must not be
+/// materialised in the graph. `dependent` is added by the recalc engine when
+/// it registers a formula; extraction only supplies the referenced rectangle.
 struct CellRangeDependency {
   std::uint16_t sheet_id = 0;
   std::uint32_t row_first = 0;
@@ -84,6 +86,31 @@ struct CellRangeDependency {
   bool contains(CellNodeId cell) const noexcept {
     return cell.sheet_id == sheet_id && cell.row >= row_first && cell.row <= row_last && cell.col >= col_first &&
            cell.col <= col_last;
+  }
+
+  friend bool operator==(const CellRangeDependency& lhs, const CellRangeDependency& rhs) noexcept {
+    return lhs.sheet_id == rhs.sheet_id && lhs.row_first == rhs.row_first && lhs.row_last == rhs.row_last &&
+           lhs.col_first == rhs.col_first && lhs.col_last == rhs.col_last;
+  }
+  friend bool operator!=(const CellRangeDependency& lhs, const CellRangeDependency& rhs) noexcept {
+    return !(lhs == rhs);
+  }
+};
+
+/// Hash for `CellRangeDependency`, so identical rectangles authored by many
+/// formulas (a lookup dragged down a column) can be interned into one entry.
+/// Mixes the five coordinates with the same multiply-and-add strategy
+/// `CellNodeIdHash` uses; the constant is truncated to `size_t` so the WASM
+/// 32-bit build stays warning-clean alongside the 64-bit native build.
+struct CellRangeDependencyHash {
+  std::size_t operator()(const CellRangeDependency& range) const noexcept {
+    constexpr std::size_t kMix = static_cast<std::size_t>(0x9e3779b97f4a7c15ULL);
+    std::size_t hash = static_cast<std::size_t>(range.sheet_id);
+    hash = (hash * kMix) + static_cast<std::size_t>(range.row_first);
+    hash = (hash * kMix) + static_cast<std::size_t>(range.row_last);
+    hash = (hash * kMix) + static_cast<std::size_t>(range.col_first);
+    hash = (hash * kMix) + static_cast<std::size_t>(range.col_last);
+    return hash;
   }
 };
 
@@ -130,11 +157,15 @@ struct ExtractedDeps {
 /// dependency nor a volatility trigger). The function never mutates
 /// `workbook`.
 ///
-/// `RangeOp` rectangles are flattened cell-by-cell unless an endpoint is a
-/// whole-column / whole-row reference, in which case the range is retained
-/// in `range_deps` without enumerating its cells. Endpoints that are
-/// not plain `Ref` nodes (e.g. OFFSET / INDIRECT call results) are ignored;
-/// dynamic ranges are out of scope for static dependency analysis.
+/// `RangeOp` rectangles are flattened cell-by-cell only while they cover at
+/// most `kMaxMaterializedDependencyCells` cells. A wider rectangle — and any
+/// rectangle with a whole-column / whole-row endpoint — is retained in
+/// `range_deps` without enumerating its cells, so registration memory is
+/// bounded by the formula text rather than by the referenced area. The same
+/// ceiling applies to structured (table) references and to the per-sheet
+/// rectangle of a 3-D reference. Endpoints that are not plain `Ref` nodes
+/// (e.g. OFFSET / INDIRECT call results) are ignored; dynamic ranges are out
+/// of scope for static dependency analysis.
 ExtractedDeps extract_deps(const parser::AstNode& node, std::uint16_t current_sheet_id, const Workbook& workbook);
 
 }  // namespace eval
