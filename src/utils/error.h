@@ -210,6 +210,12 @@ enum class FormulonErrorCode : int32_t {
   kPrintInvalidArea = 9002,
   kUiViewStateInvalid = 9003,
   kUiSnapshotFailed = 9004,
+  /// The physical page count of a pagination request exceeds
+  /// `kMaxPaginationPages`. A page grid may be split by one manual break per
+  /// grid row and per grid column, so a crafted break configuration reaches a
+  /// count no 32-bit total can hold; pagination reports this instead of
+  /// returning a truncated count.
+  kPrintPageCountOverflow = 9005,
 
   // ----- Workbook structural mutation (5050-5069) -----
   // Reuse the I/O band: sheet name validation, sheet rearrangement, and
@@ -228,6 +234,11 @@ enum class FormulonErrorCode : int32_t {
   /// `save()` cannot land in the empty-sheet-list state Excel itself
   /// refuses to open.
   kCannotRemoveLastSheet = 5052,
+  /// Appending a sheet would push `sheet_count()` past `Workbook::kMaxSheets`.
+  /// The dependency graph identifies a cell by a 16-bit sheet id, so a
+  /// workbook holding more sheets than that could not address the excess
+  /// ones without aliasing an existing sheet.
+  kSheetCountLimitExceeded = 5053,
 };
 
 /// Structured error payload returned by every fallible internal API.
@@ -516,6 +527,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kPrintLayoutConvergence";
     case FormulonErrorCode::kPrintInvalidArea:
       return "kPrintInvalidArea";
+    case FormulonErrorCode::kPrintPageCountOverflow:
+      return "kPrintPageCountOverflow";
     case FormulonErrorCode::kUiViewStateInvalid:
       return "kUiViewStateInvalid";
     case FormulonErrorCode::kUiSnapshotFailed:
@@ -528,6 +541,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kInvalidSheetName";
     case FormulonErrorCode::kCannotRemoveLastSheet:
       return "kCannotRemoveLastSheet";
+    case FormulonErrorCode::kSheetCountLimitExceeded:
+      return "kSheetCountLimitExceeded";
   }
   return "kUnknownError";
 }

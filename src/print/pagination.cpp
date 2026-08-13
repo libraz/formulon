@@ -13,6 +13,7 @@
 #include "print/page_setup.h"
 #include "print/print_area.h"
 #include "sheet.h"
+#include "utils/resource_budget.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -404,7 +405,11 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   // of breaks across all areas; the page count sums across areas.
   std::vector<std::uint32_t> all_h;
   std::vector<std::uint32_t> all_v;
-  std::uint32_t total_pages = 0;
+  // Accumulated in 64 bits: one axis can produce a page per grid track, so
+  // the per-area product reaches 2^34 and the sum across areas grows past
+  // that again. A 32-bit accumulator would wrap and report a count that is
+  // simply wrong, with no diagnostic.
+  std::uint64_t total_pages = 0;
   for (const CellRange& rect : effective_areas) {
     // Row axis: automatic overflow breaks plus manual row breaks within the
     // area's rows, counted per area.
@@ -443,7 +448,11 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
     col_axis.limit_pt = std::numeric_limits<double>::infinity();
     const std::uint32_t col_pages = WalkAxis(col_axis, &all_v);
 
-    total_pages += col_pages * row_pages;
+    total_pages += static_cast<std::uint64_t>(col_pages) * static_cast<std::uint64_t>(row_pages);
+    if (total_pages > kMaxPaginationPages) {
+      return make_error(FormulonErrorCode::kPrintPageCountOverflow, "Pagination page count exceeds the supported limit",
+                        "pages=" + std::to_string(total_pages) + " limit=" + std::to_string(kMaxPaginationPages));
+    }
   }
 
   // 5. Sort and de-duplicate aggregated break positions: Excel's COM
@@ -457,7 +466,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
 
   result.h_breaks = std::move(all_h);
   result.v_breaks = std::move(all_v);
-  result.page_count = total_pages;
+  // Bounded by `kMaxPaginationPages` above, so the narrowing is exact.
+  result.page_count = static_cast<std::uint32_t>(total_pages);
   return result;
 }
 

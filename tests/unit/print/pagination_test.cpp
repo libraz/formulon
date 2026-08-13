@@ -412,6 +412,98 @@ TEST(PaginationTest, MultiAreaRowAndColumnBreaksAreSymmetric) {
   EXPECT_EQ(cols_result.value().page_count, rows_result.value().page_count);
 }
 
+// Gives rows [0, count) a height that no page body can hold two of, so each
+// row occupies a page of its own and the row-page count equals `count`.
+// 409.5 pt is the tallest height OOXML can express for a row.
+void SetOnePageEachRowHeights(Sheet* sheet, std::uint32_t count) {
+  constexpr double kMaxRowHeightPt = 409.5;
+  sheet->mutable_layout().row_overrides.reserve(count);
+  for (std::uint32_t row = 0; row < count; ++row) {
+    sheet->mutable_layout().row_overrides.push_back(RowLayout{row, kMaxRowHeightPt, false, 0U, true});
+  }
+}
+
+// Adds a manual column break before every column in [1, count), giving the
+// column axis `count` pages.
+void SetManualBreakBeforeEveryColumn(Sheet* sheet, std::uint32_t count) {
+  auto& breaks = sheet->mutable_print_settings().manual_col_breaks;
+  breaks.reserve(count);
+  for (std::uint32_t col = 1; col < count; ++col) {
+    ManualBreak brk;
+    brk.id = col;
+    brk.manual = true;
+    breaks.push_back(brk);
+  }
+}
+
+TEST(PaginationTest, PageGridBeyondTheCeilingIsRejected) {
+  // A break before every track of a 524,288-row by 8,192-column grid is a
+  // legal thing for a file to declare: neither `<row ht>` nor `<colBreaks>`
+  // caps how many entries it may carry. Its true page count is 2^32, which a
+  // 32-bit product wraps to 0. Pagination must refuse the request instead of
+  // reporting a count it cannot represent.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  constexpr std::uint32_t kRows = 524288U;  // 2^19
+  constexpr std::uint32_t kCols = 8192U;    // 2^13
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(kRows - 1U, kCols - 1U, Value::number(1.0));
+  SetOnePageEachRowHeights(&sheet, kRows);
+  SetManualBreakBeforeEveryColumn(&sheet, kCols);
+
+  auto result = paginate(wb, 0);
+  ASSERT_FALSE(static_cast<bool>(result)) << "page_count=" << result.value().page_count;
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kPrintPageCountOverflow);
+}
+
+TEST(PaginationTest, LargePageCountBelowTheCeilingIsExact) {
+  // 100,000 row-pages across 101 column-pages is 10,100,000 pages: far past
+  // what a 32-bit multiply of the two axes handles comfortably, yet inside
+  // `kMaxPaginationPages`, so it must be counted rather than rejected.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  constexpr std::uint32_t kRows = 100000U;
+  constexpr std::uint32_t kCols = 101U;
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(kRows - 1U, kCols - 1U, Value::number(1.0));
+  SetOnePageEachRowHeights(&sheet, kRows);
+  SetManualBreakBeforeEveryColumn(&sheet, kCols);
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().page_count, kRows * kCols);
+  EXPECT_EQ(result.value().h_breaks.size(), kRows - 1U);
+  EXPECT_EQ(result.value().v_breaks.size(), kCols - 1U);
+}
+
+TEST(PaginationTest, MultiAreaPageCountIsExact) {
+  // Two stacked areas, each split by a manual row break and the shared manual
+  // column break: 2 row-pages * 2 column-pages per area, summed over both.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  wb.set_defined_names({PrintArea("Sheet1!$A$1:$F$6,Sheet1!$A$8:$F$13", 0)});
+  sheet.set_cell_value(0, 0, Value::number(1.0));
+  sheet.set_cell_value(5, 5, Value::number(1.0));
+  sheet.set_cell_value(7, 0, Value::number(1.0));
+  sheet.set_cell_value(12, 5, Value::number(1.0));
+  ManualBreak col_brk;
+  col_brk.id = 3;  // Column D, inside both areas.
+  col_brk.manual = true;
+  sheet.mutable_print_settings().manual_col_breaks.push_back(col_brk);
+  for (std::uint32_t row : {3U, 10U}) {  // One row break inside each area.
+    ManualBreak row_brk;
+    row_brk.id = row;
+    row_brk.manual = true;
+    sheet.mutable_print_settings().manual_row_breaks.push_back(row_brk);
+  }
+
+  auto result = paginate(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().page_count, 8U);
+  EXPECT_EQ(result.value().h_breaks, (std::vector<std::uint32_t>{3U, 10U}));
+  EXPECT_EQ(result.value().v_breaks, (std::vector<std::uint32_t>{3U}));
+}
+
 }  // namespace
 }  // namespace print
 }  // namespace formulon

@@ -78,6 +78,19 @@ inline constexpr std::uint64_t kMaxMaterializedDependencyCells = 1024U;
 /// result, so accumulating more could never produce a usable value.
 inline constexpr std::uint64_t kMaxRegexMatchSlots = kMaxDynamicArrayCells;
 
+/// Maximum physical page count one pagination request may report.
+///
+/// A manual page break may sit before every track of the grid, so the finest
+/// page grid a file can declare is one page per row and per column:
+/// `Sheet::kMaxRows * Sheet::kMaxCols` is 2^34 pages, past what the reported
+/// 32-bit count can hold, and the print area list multiplies that again. The
+/// ceiling is therefore a policy bound rather than a grid-derived one. 2^24
+/// sits three orders of magnitude above the tallest job the grid can actually
+/// print — the full 1,048,576-row sheet at the default row height paginates
+/// to roughly 21,800 pages — so it rejects only break configurations whose
+/// count could never be reported faithfully.
+inline constexpr std::uint64_t kMaxPaginationPages = 16777216U;  // 2^24
+
 /// Ceiling on the arena backing one evaluation, in bytes.
 ///
 /// The evaluator's arena is reset between cells and every allocation site
