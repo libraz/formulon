@@ -12,6 +12,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -20,10 +22,13 @@
 #include "eval/groupby_pivotby/common.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_layout.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
+#include "pivot/record_access.h"
 #include "pivot/value_order.h"
+#include "utils/checked_index.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -301,6 +306,98 @@ TEST(PivotEvaluator, FieldSortByValueFieldReordersAxisAndValues) {
   EXPECT_DOUBLE_EQ(r.values[0][1][0].as_number(), 300.0);  // South/Gadget
   EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 125.0);  // North/Widget
   EXPECT_DOUBLE_EQ(r.values[1][1][0].as_number(), 50.0);   // North/Gadget
+}
+
+TEST(PivotEvaluator, SortedSubtotalWalkPreservesTypedDuplicateDisplayLabels) {
+  PivotCache cache;
+  cache.set_cache_id(17);
+  cache.mutable_fields().push_back(PivotCacheField{"Group", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Kind", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Item", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+
+  auto add = [&](const char* group, Value kind, double amount) {
+    PivotCacheRecord record;
+    record.cells.push_back(owned_text(cache, group));
+    record.cells.push_back(std::move(kind));
+    record.cells.push_back(owned_text(cache, "Item"));
+    record.cells.push_back(Value::number(amount));
+    cache.mutable_records().push_back(std::move(record));
+  };
+  // Number(1) and Text("1") render to the same label, but remain distinct
+  // hierarchy owners. The same is repeated under two sorted groups.
+  add("S", Value::number(3.0), 10.0);
+  add("S", owned_text(cache, "3"), 20.0);
+  add("D", Value::number(1.0), 30.0);
+  add("D", owned_text(cache, "1"), 40.0);
+
+  PivotTable table;
+  table.set_pivot_cache_id(17);
+  for (const char* name : {"Group", "Kind", "Item"}) {
+    PivotField field;
+    field.source_name = name;
+    field.axis = PivotAxis::Row;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  PivotField amount_field;
+  amount_field.source_name = "Amount";
+  amount_field.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(amount_field));
+  table.mutable_row_field_order() = {0, 1, 2};
+  PivotDataField sum_amount;
+  sum_amount.name = "Sum of Amount";
+  sum_amount.field_index = 3;
+  sum_amount.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum_amount));
+  table.mutable_fields()[0].sort.ascending = false;
+  table.mutable_fields()[1].subtotal_fns = {SubtotalFn::Sum, SubtotalFn::Average};
+  table.mutable_fields()[0].subtotal_top = true;
+  table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+  table.set_anchor(0, 0, 1, 1);
+
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const PivotResult& result = result_or.value();
+  ASSERT_EQ(result.rows.size(), 2U);
+  ASSERT_EQ(result.rows[0].label, "S");
+  ASSERT_EQ(result.rows[1].label, "D");
+  ASSERT_EQ(result.row_subtotals.size(), 10U);
+
+  PivotLayoutOptions options;
+  options.row_labels_label = "Row Labels";
+  auto cells_or = layout(table, result, options);
+  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message << " " << cells_or.error().context;
+  const PivotCells& cells = cells_or.value();
+
+  std::vector<std::pair<PivotCellKind, double>> cells_in_render_order;
+  for (const PivotCell& cell : cells.cells) {
+    if (cell.col != cells.left + 1U || !cell.value.is_number()) {
+      continue;
+    }
+    if (cell.kind == PivotCellKind::Data || cell.kind == PivotCellKind::RowSubtotal ||
+        cell.kind == PivotCellKind::GrandTotal) {
+      cells_in_render_order.emplace_back(cell.kind, cell.value.as_number());
+    }
+  }
+  EXPECT_EQ(cells_in_render_order, (std::vector<std::pair<PivotCellKind, double>>{
+                                       {PivotCellKind::RowSubtotal, 30.0},  // S subtotal.
+                                       {PivotCellKind::RowSubtotal, 10.0},  // S / Number(3) SUM.
+                                       {PivotCellKind::RowSubtotal, 10.0},  // S / Number(3) AVERAGE.
+                                       {PivotCellKind::Data, 10.0},         // S / Number(3) detail.
+                                       {PivotCellKind::RowSubtotal, 20.0},  // S / Text("3") SUM.
+                                       {PivotCellKind::RowSubtotal, 20.0},  // S / Text("3") AVERAGE.
+                                       {PivotCellKind::Data, 20.0},         // S / Text("3") detail.
+                                       {PivotCellKind::RowSubtotal, 70.0},  // D subtotal.
+                                       {PivotCellKind::RowSubtotal, 30.0},  // D / Number(1) SUM.
+                                       {PivotCellKind::RowSubtotal, 30.0},  // D / Number(1) AVERAGE.
+                                       {PivotCellKind::Data, 30.0},         // D / Number(1) detail.
+                                       {PivotCellKind::RowSubtotal, 40.0},  // D / Text("1") SUM.
+                                       {PivotCellKind::RowSubtotal, 40.0},  // D / Text("1") AVERAGE.
+                                       {PivotCellKind::Data, 40.0},         // D / Text("1") detail.
+                                       {PivotCellKind::GrandTotal, 100.0},
+                                   }));
+  EXPECT_EQ(cells.cols, 2U);
+  EXPECT_GT(cells.rows, result.row_subtotals.size());
 }
 
 TEST(PivotEvaluator, SparseRowColumnIntersectionIsBlank) {
@@ -2764,6 +2861,141 @@ TEST(PivotComparatorParity, FoldsHalfWidthKatakana) {
   EXPECT_FALSE(value_less(half, full));
   // GROUPBY / SORT agrees they are equal.
   EXPECT_EQ(eval::cmp_value_asc(full, half), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Narrowing an embedder-supplied double to an index.
+//
+// A hand-built cache stores whatever number the embedder passed, and a value
+// filter stores whatever count it was given. Both reach a `std::size_t`
+// narrowing, which is undefined for NaN, for either infinity, and for any
+// magnitude the destination cannot represent — and a trap, not a wrong
+// answer, once the same code is compiled to wasm32.
+// ---------------------------------------------------------------------------
+
+TEST(CheckedIndex, RejectsEveryDoubleOutsideTheContainerBound) {
+  constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+  constexpr double kInf = std::numeric_limits<double>::infinity();
+  constexpr std::size_t kLimit = 4;
+
+  EXPECT_FALSE(index_from_double(kNaN, kLimit).has_value());
+  EXPECT_FALSE(index_from_double(kInf, kLimit).has_value());
+  EXPECT_FALSE(index_from_double(-kInf, kLimit).has_value());
+  EXPECT_FALSE(index_from_double(-1.0, kLimit).has_value());
+  EXPECT_FALSE(index_from_double(static_cast<double>(kLimit), kLimit).has_value());
+  EXPECT_FALSE(index_from_double(static_cast<double>(kLimit) + 1.0, kLimit).has_value());
+  EXPECT_FALSE(index_from_double(1e30, kLimit).has_value());
+  EXPECT_FALSE(index_from_double(9007199254740992.0, kLimit).has_value());  // 2^53.
+
+  // In-domain values, including the negative zero that compares equal to 0.
+  EXPECT_EQ(index_from_double(0.0, kLimit), std::optional<std::size_t>{0});
+  EXPECT_EQ(index_from_double(-0.0, kLimit), std::optional<std::size_t>{0});
+  EXPECT_EQ(index_from_double(0.5, kLimit), std::optional<std::size_t>{0});
+  EXPECT_EQ(index_from_double(static_cast<double>(kLimit) - 1.0, kLimit), std::optional<std::size_t>{kLimit - 1});
+
+  // An empty container has no valid index at all.
+  EXPECT_FALSE(index_from_double(0.0, 0U).has_value());
+  EXPECT_FALSE(index_from_double(kNaN, 0U).has_value());
+}
+
+TEST(PivotRecordAccess, OutOfDomainSharedItemIndexCollapsesToBlank) {
+  // One shared item, so index 0 is the only resolvable reference. A cache
+  // built through the mutation API leaves `cell_is_index` empty, which is
+  // what makes a numeric cell in a shared field be read as an index.
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {Value::number(42.0)}});
+
+  const struct {
+    double stored;
+    bool resolves;
+  } cases[] = {
+      {std::numeric_limits<double>::quiet_NaN(), false},
+      {std::numeric_limits<double>::infinity(), false},
+      {-std::numeric_limits<double>::infinity(), false},
+      {-1.0, false},
+      {1e30, false},
+      {4.3e9, false},  // Past the wasm32 `size_t` range as well as past the container.
+      {1.0, false},    // One past the only shared item.
+      {0.0, true},
+      {0.5, true},
+  };
+
+  for (const auto& c : cases) {
+    PivotCacheRecord record;
+    record.cells.push_back(Value::number(c.stored));
+    ASSERT_TRUE(record.cell_is_index.empty());
+    const Value v = cell_value(cache, record, 0);
+    if (c.resolves) {
+      ASSERT_TRUE(v.is_number()) << "stored=" << c.stored;
+      EXPECT_DOUBLE_EQ(v.as_number(), 42.0) << "stored=" << c.stored;
+    } else {
+      EXPECT_TRUE(v.is_blank()) << "stored=" << c.stored;
+    }
+  }
+}
+
+TEST(PivotEvaluator, ValueTop10FilterSaturatesOutOfDomainCounts) {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  auto add = [&](const char* region, double amount) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(Value::number(amount));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+  add("A", 10.0);
+  add("B", 50.0);
+  add("C", 30.0);
+  add("D", 20.0);
+
+  // Returns how many row leaves survive a Top-N filter asking for `requested`.
+  auto rows_kept = [&cache](double requested) -> std::size_t {
+    PivotTable table;
+    table.set_pivot_cache_id(1);
+    PivotField rf;
+    rf.source_name = "Region";
+    rf.axis = PivotAxis::Row;
+    PivotField af;
+    af.source_name = "Amount";
+    af.axis = PivotAxis::Value;
+    table.mutable_fields().push_back(std::move(rf));
+    table.mutable_fields().push_back(std::move(af));
+    table.mutable_row_field_order() = {0};
+    PivotDataField sum;
+    sum.name = "Sum of Amount";
+    sum.field_index = 1;
+    sum.aggregation = Aggregation::Sum;
+    table.mutable_data_fields().push_back(std::move(sum));
+    table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+    PivotFilter f;
+    f.axis = PivotAxis::Row;
+    f.field_name = "Region";
+    f.type = FilterType::ValueTop10;
+    f.value = requested;
+    table.mutable_active_filters().push_back(f);
+
+    auto r_or = evaluate(table, cache);
+    EXPECT_TRUE(static_cast<bool>(r_or)) << "requested=" << requested;
+    if (!r_or) {
+      return 0;
+    }
+    return r_or.value().rows.size();
+  };
+
+  // NaN loses every comparison and a negative count asks for nothing.
+  EXPECT_EQ(rows_kept(std::numeric_limits<double>::quiet_NaN()), 0U);
+  EXPECT_EQ(rows_kept(-1.0), 0U);
+  EXPECT_EQ(rows_kept(0.0), 0U);
+  // A count at or beyond the axis keeps every leaf.
+  EXPECT_EQ(rows_kept(1e30), 4U);
+  EXPECT_EQ(rows_kept(std::numeric_limits<double>::infinity()), 4U);
+  EXPECT_EQ(rows_kept(4.0), 4U);
+  // And an ordinary count still ranks.
+  EXPECT_EQ(rows_kept(2.0), 2U);
 }
 
 }  // namespace

@@ -57,6 +57,40 @@ struct HierLevel {
   std::optional<Aggregation> value_sort_aggregation;
 };
 
+struct OrderedHierarchyChild {
+  const Value* key;
+  HierNode* node;
+};
+
+/// Returns children in the same display order used by both hierarchy
+/// finalisation and subtotal emission. Keeping this comparator in one place
+/// is important: the raw map order is not necessarily the rendered order
+/// when a field is descending or sorted by a value field.
+inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const std::vector<HierLevel>& levels,
+                                                           std::size_t depth) {
+  std::vector<OrderedHierarchyChild> entries;
+  entries.reserve(tree.children.size());
+  for (auto& [key, child] : tree.children) {
+    entries.push_back({&key, &child});
+  }
+  const bool ascending = depth >= levels.size() || levels[depth].ascending;
+  const bool sort_by_value = depth < levels.size() && levels[depth].value_sort_field.has_value();
+  std::sort(entries.begin(), entries.end(), [&](const OrderedHierarchyChild& lhs, const OrderedHierarchyChild& rhs) {
+    if (sort_by_value && lhs.node->value_sort_key.has_value() && rhs.node->value_sort_key.has_value()) {
+      const ValueLess less;
+      if (less(*lhs.node->value_sort_key, *rhs.node->value_sort_key)) {
+        return ascending;
+      }
+      if (less(*rhs.node->value_sort_key, *lhs.node->value_sort_key)) {
+        return !ascending;
+      }
+    }
+    const ValueLess less;
+    return ascending ? less(*lhs.key, *rhs.key) : less(*rhs.key, *lhs.key);
+  });
+  return entries;
+}
+
 /// Inserts `record` into `tree`, walking `levels`. Returns the leaf
 /// `HierNode*`. The caller assigns leaf indices in a second pass. When
 /// a level carries a `date_group`, the cache value is bucketed first;
@@ -83,30 +117,7 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
     return;
   }
   out.reserve(tree.children.size());
-  struct ChildEntry {
-    const Value* key;
-    HierNode* node;
-  };
-  std::vector<ChildEntry> entries;
-  entries.reserve(tree.children.size());
-  for (auto& [key, child] : tree.children) {
-    entries.push_back({&key, &child});
-  }
-  const bool ascending = depth >= levels.size() || levels[depth].ascending;
-  const bool sort_by_value = depth < levels.size() && levels[depth].value_sort_field.has_value();
-  std::sort(entries.begin(), entries.end(), [&](const ChildEntry& lhs, const ChildEntry& rhs) {
-    if (sort_by_value && lhs.node->value_sort_key.has_value() && rhs.node->value_sort_key.has_value()) {
-      const ValueLess less;
-      if (less(*lhs.node->value_sort_key, *rhs.node->value_sort_key)) {
-        return ascending;
-      }
-      if (less(*rhs.node->value_sort_key, *lhs.node->value_sort_key)) {
-        return !ascending;
-      }
-    }
-    const ValueLess less;
-    return ascending ? less(*lhs.key, *rhs.key) : less(*rhs.key, *lhs.key);
-  });
+  const std::vector<OrderedHierarchyChild> entries = ordered_children(tree, levels, depth);
   const auto append = [&](const Value& key, HierNode& child) {
     Node node;
     node.label = node_label(key, child);
@@ -118,7 +129,7 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
     }
     out.push_back(std::move(node));
   };
-  for (const ChildEntry& entry : entries) {
+  for (const OrderedHierarchyChild& entry : entries) {
     append(*entry.key, *entry.node);
   }
 }
@@ -165,7 +176,7 @@ void prune_top_level(std::vector<Node>& roots, const std::vector<bool>& keep) {
   roots = std::move(kept);
 }
 
-/// Walks `tree` in document order. At every non-leaf level whose
+/// Walks `tree` in display order. At every non-leaf level whose
 /// `PivotField` declares `subtotal_top` or any `subtotal_fns`, calls
 /// `emit_subtotal(labels, depth, collected_start, stack_leaves)` after
 /// all descendant leaves have been pushed onto `stack_leaves`.
@@ -190,18 +201,19 @@ void walk_subtotal_tree(HierNode& tree, const std::vector<HierLevel>& levels, co
 
   struct Frame {
     HierNode* node;
-    std::map<Value, HierNode, ValueLess>::iterator it;
+    std::vector<OrderedHierarchyChild> children;
+    std::size_t child_cursor;
     std::size_t depth;
     std::size_t collected_start;
     std::vector<std::string> labels;
   };
 
   std::vector<Frame> stack;
-  stack.push_back({&tree, tree.children.begin(), 0, 0, {}});
+  stack.push_back({&tree, ordered_children(tree, levels, 0), 0, 0, 0, {}});
 
   while (!stack.empty()) {
     Frame& top = stack.back();
-    if (top.it == top.node->children.end()) {
+    if (top.child_cursor == top.children.size()) {
       if (top.depth > 0 && !top.node->children.empty()) {
         const PivotField* field = field_at_depth(top.depth - 1);
         // `subtotal_top` is only the position (top vs bottom) of the
@@ -216,15 +228,16 @@ void walk_subtotal_tree(HierNode& tree, const std::vector<HierLevel>& levels, co
       stack.pop_back();
       continue;
     }
-    HierNode* child = &top.it->second;
-    const std::string label = node_label(top.it->first, *child);
-    ++top.it;
+    const OrderedHierarchyChild& entry = top.children[top.child_cursor++];
+    HierNode* child = entry.node;
+    const std::string label = node_label(*entry.key, *child);
     if (child->children.empty()) {
       stack_leaves.push_back(child->leaf_index);
     } else {
       std::vector<std::string> labels = top.labels;
       labels.push_back(label);
-      stack.push_back({child, child->children.begin(), top.depth + 1, stack_leaves.size(), std::move(labels)});
+      stack.push_back({child, ordered_children(*child, levels, top.depth + 1U), 0, top.depth + 1U, stack_leaves.size(),
+                       std::move(labels)});
     }
   }
 }

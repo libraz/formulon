@@ -222,6 +222,115 @@ PivotTable build_region_channel_by_year_quarter_table() {
   return table;
 }
 
+const PivotCell* find_cell(const PivotCells& cells, std::uint32_t row, std::uint32_t col);
+
+PivotTable build_deep_layout_table() {
+  PivotTable table;
+  table.set_name("PivotDeepLayout");
+  table.set_pivot_cache_id(99);
+  table.set_anchor(0, 0, 1, 1);
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  for (const char* name : {"Level 1", "Level 2", "Level 3", "Level 4"}) {
+    PivotField field;
+    field.source_name = name;
+    field.axis = PivotAxis::Row;
+    table.mutable_fields().push_back(std::move(field));
+  }
+  PivotField amount;
+  amount.source_name = "Amount";
+  amount.axis = PivotAxis::Value;
+  table.mutable_fields().push_back(std::move(amount));
+  table.mutable_row_field_order() = {0, 1, 2, 3};
+
+  PivotDataField sum_amount;
+  sum_amount.name = "Sum of Amount";
+  sum_amount.field_index = 4;
+  sum_amount.aggregation = Aggregation::Sum;
+  table.mutable_data_fields().push_back(std::move(sum_amount));
+  return table;
+}
+
+PivotResult build_deep_layout_result(bool multiple_subtotals) {
+  auto leaf = [](const char* label) { return RowHierarchyNode{label, {}}; };
+  RowHierarchyNode a1x{"A1x", {leaf("A1x-1"), leaf("A1x-2")}};
+  RowHierarchyNode a1y{"A1y", {leaf("A1y-1")}};
+  RowHierarchyNode a1{"A1", {std::move(a1x), std::move(a1y)}};
+  RowHierarchyNode a2x{"A2x", {leaf("A2x-1")}};
+  RowHierarchyNode a2{"A2", {std::move(a2x)}};
+  RowHierarchyNode b1x{"B1x", {leaf("B1x-1")}};
+  RowHierarchyNode b1{"B1", {std::move(b1x)}};
+
+  PivotResult result;
+  result.rows = {RowHierarchyNode{"A", {std::move(a1), std::move(a2)}}, RowHierarchyNode{"B", {std::move(b1)}}};
+  for (double value : {1.0, 2.0, 3.0, 4.0, 5.0}) {
+    result.values.push_back({{Value::number(value)}});
+  }
+
+  auto add_subtotal = [&](std::vector<std::string> labels, std::uint32_t depth, double value) {
+    RowSubtotal subtotal;
+    subtotal.labels = std::move(labels);
+    subtotal.depth = depth;
+    subtotal.values.push_back(Value::number(value));
+    result.row_subtotals.push_back(std::move(subtotal));
+  };
+
+  // The evaluator's contract is post-order: descendants are emitted before
+  // the current node, and custom functions stay contiguous for one node.
+  if (multiple_subtotals) {
+    add_subtotal({"A", "A1", "A1x"}, 2, 201.0);
+    add_subtotal({"A", "A1", "A1x"}, 2, 202.0);
+    add_subtotal({"A", "A1", "A1y"}, 2, 203.0);
+    add_subtotal({"A", "A1", "A1y"}, 2, 211.0);
+    add_subtotal({"A", "A1"}, 1, 204.0);
+    add_subtotal({"A", "A2", "A2x"}, 2, 205.0);
+    add_subtotal({"A", "A2", "A2x"}, 2, 212.0);
+    add_subtotal({"A", "A2"}, 1, 206.0);
+    add_subtotal({"A"}, 0, 207.0);
+    add_subtotal({"B", "B1", "B1x"}, 2, 208.0);
+    add_subtotal({"B", "B1", "B1x"}, 2, 213.0);
+    add_subtotal({"B", "B1"}, 1, 209.0);
+    add_subtotal({"B"}, 0, 210.0);
+  } else {
+    add_subtotal({"A", "A1", "A1x"}, 2, 101.0);
+    add_subtotal({"A", "A1", "A1y"}, 2, 102.0);
+    add_subtotal({"A", "A1"}, 1, 103.0);
+    add_subtotal({"A", "A2", "A2x"}, 2, 104.0);
+    add_subtotal({"A", "A2"}, 1, 105.0);
+    add_subtotal({"A"}, 0, 106.0);
+    add_subtotal({"B", "B1", "B1x"}, 2, 107.0);
+    add_subtotal({"B", "B1"}, 1, 108.0);
+    add_subtotal({"B"}, 0, 109.0);
+  }
+  return result;
+}
+
+std::vector<double> projected_data_values(const PivotCells& cells, std::uint32_t data_col) {
+  std::vector<double> values;
+  for (std::uint32_t row = cells.top + 1; row < cells.top + cells.rows; ++row) {
+    const PivotCell* cell = find_cell(cells, row, data_col);
+    if (cell == nullptr) {
+      continue;
+    }
+    EXPECT_TRUE(cell->value.is_number());
+    if (cell->value.is_number()) {
+      values.push_back(cell->value.as_number());
+    }
+  }
+  return values;
+}
+
+std::vector<PivotCellKind> projected_data_kinds(const PivotCells& cells, std::uint32_t data_col) {
+  std::vector<PivotCellKind> kinds;
+  for (std::uint32_t row = cells.top + 1; row < cells.top + cells.rows; ++row) {
+    const PivotCell* cell = find_cell(cells, row, data_col);
+    if (cell != nullptr) {
+      kinds.push_back(cell->kind);
+    }
+  }
+  return kinds;
+}
+
 const PivotCell* find_cell(const PivotCells& cells, std::uint32_t row, std::uint32_t col) {
   for (const PivotCell& cell : cells.cells) {
     if (cell.row == row && cell.col == col) {
@@ -589,6 +698,267 @@ TEST(PivotLayout, InsertsSubtotalIntersectionValues) {
   EXPECT_EQ(south_2025_subtotal->kind, PivotCellKind::RowSubtotal);
   ASSERT_TRUE(south_2025_subtotal->value.is_number());
   EXPECT_DOUBLE_EQ(south_2025_subtotal->value.as_number(), 97.0);
+}
+
+TEST(PivotLayout, ProjectsDeepPostOrderSubtotalsAccordingToSubtotalTop) {
+  PivotTable table = build_deep_layout_table();
+  PivotResult result = build_deep_layout_result(/*multiple_subtotals=*/false);
+  PivotLayoutOptions options;
+  options.row_labels_label = "Row Labels";
+
+  const std::vector<double> post_order = {1.0,   2.0,   101.0, 3.0, 102.0, 103.0, 4.0,
+                                          104.0, 105.0, 106.0, 5.0, 107.0, 108.0, 109.0};
+  // The index is (level-one-top << 2) | (level-two-top << 1) |
+  // level-three-top. Compact and Outline both apply each field's flag to
+  // its own node block, so every combination has a distinct exact order.
+  const std::vector<std::vector<double>> expected_by_flags = {
+      post_order,
+      {101.0, 1.0, 2.0, 102.0, 3.0, 103.0, 104.0, 4.0, 105.0, 106.0, 107.0, 5.0, 108.0, 109.0},
+      {103.0, 1.0, 2.0, 101.0, 3.0, 102.0, 105.0, 4.0, 104.0, 106.0, 108.0, 5.0, 107.0, 109.0},
+      {103.0, 101.0, 1.0, 2.0, 102.0, 3.0, 105.0, 104.0, 4.0, 106.0, 108.0, 107.0, 5.0, 109.0},
+      {106.0, 1.0, 2.0, 101.0, 3.0, 102.0, 103.0, 4.0, 104.0, 105.0, 109.0, 5.0, 107.0, 108.0},
+      {106.0, 101.0, 1.0, 2.0, 102.0, 3.0, 103.0, 104.0, 4.0, 105.0, 109.0, 107.0, 5.0, 108.0},
+      {106.0, 103.0, 1.0, 2.0, 101.0, 3.0, 102.0, 105.0, 4.0, 104.0, 109.0, 108.0, 5.0, 107.0},
+      {106.0, 103.0, 101.0, 1.0, 2.0, 102.0, 3.0, 105.0, 104.0, 4.0, 109.0, 108.0, 107.0, 5.0},
+  };
+
+  auto assert_projection = [&](PivotLayout layout_mode, bool level_one_top, bool level_two_top, bool level_three_top,
+                               const std::vector<double>& expected) {
+    table.set_layout(layout_mode);
+    table.mutable_fields()[0].subtotal_top = level_one_top;
+    table.mutable_fields()[1].subtotal_top = level_two_top;
+    table.mutable_fields()[2].subtotal_top = level_three_top;
+    table.mutable_fields()[3].subtotal_top = false;
+
+    auto cells_or = layout(table, result, options);
+    ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message << " " << cells_or.error().context;
+    const PivotCells& cells = cells_or.value();
+    const std::uint32_t data_col = cells.left + (layout_mode == PivotLayout::Compact ? 1U : 4U);
+    EXPECT_EQ(projected_data_values(cells, data_col), expected);
+    const std::vector<PivotCellKind> kinds = projected_data_kinds(cells, data_col);
+    ASSERT_EQ(kinds.size(), expected.size());
+    std::size_t projected_subtotals = 0;
+    for (PivotCellKind kind : kinds) {
+      if (kind == PivotCellKind::RowSubtotal) {
+        ++projected_subtotals;
+      }
+    }
+    EXPECT_EQ(projected_subtotals, result.row_subtotals.size());
+    EXPECT_EQ(cells.rows, expected.size() + 1U);
+  };
+
+  // Compact and Outline apply the flag at each of the three non-leaf
+  // hierarchy levels. Exercise all eight combinations rather than only the
+  // all-false/all-true endpoints and one mixed case.
+  for (std::size_t mask = 0; mask < expected_by_flags.size(); ++mask) {
+    const bool level_one_top = (mask & 4U) != 0;
+    const bool level_two_top = (mask & 2U) != 0;
+    const bool level_three_top = (mask & 1U) != 0;
+    assert_projection(PivotLayout::Compact, level_one_top, level_two_top, level_three_top, expected_by_flags[mask]);
+    assert_projection(PivotLayout::Outline, level_one_top, level_two_top, level_three_top, expected_by_flags[mask]);
+  }
+
+  // Tabular form deliberately keeps its historical below-group placement for
+  // every flag combination; the metadata is still consumed exactly once.
+  for (std::size_t mask = 0; mask < expected_by_flags.size(); ++mask) {
+    assert_projection(PivotLayout::Tabular, (mask & 4U) != 0, (mask & 2U) != 0, (mask & 1U) != 0, post_order);
+  }
+}
+
+TEST(PivotLayout, ProjectsMultipleCustomSubtotalsAsOneContiguousNodeBlock) {
+  PivotTable table = build_deep_layout_table();
+  PivotResult result = build_deep_layout_result(/*multiple_subtotals=*/true);
+  PivotLayoutOptions options;
+  options.row_labels_label = "Row Labels";
+  table.mutable_fields()[0].subtotal_top = true;
+  table.mutable_fields()[1].subtotal_top = true;
+  table.mutable_fields()[2].subtotal_top = true;
+  table.mutable_fields()[2].subtotal_fns = {SubtotalFn::Average, SubtotalFn::Max};
+
+  auto cells_or = layout(table, result, options);
+  ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message << " " << cells_or.error().context;
+  const PivotCells& cells = cells_or.value();
+  const std::vector<double> expected = {207.0, 204.0, 201.0, 202.0, 1.0,   2.0,   203.0, 211.0, 3.0,
+                                        206.0, 205.0, 212.0, 4.0,   210.0, 209.0, 208.0, 213.0, 5.0};
+  EXPECT_EQ(projected_data_values(cells, cells.left + 1U), expected);
+  EXPECT_EQ(cells.rows, expected.size() + 1U);
+  std::size_t subtotal_rows = 0;
+  for (PivotCellKind kind : projected_data_kinds(cells, cells.left + 1U)) {
+    if (kind == PivotCellKind::RowSubtotal) {
+      ++subtotal_rows;
+    }
+  }
+  EXPECT_EQ(subtotal_rows, result.row_subtotals.size());
+}
+
+TEST(PivotLayout, RejectsRowSubtotalMetadataInconsistentWithHierarchy) {
+  PivotTable table = build_deep_layout_table();
+  PivotLayoutOptions options;
+  options.row_labels_label = "Row Labels";
+
+  PivotResult wrong_depth = build_deep_layout_result(/*multiple_subtotals=*/false);
+  wrong_depth.row_subtotals[0].depth = 1;
+  auto depth_or = layout(table, wrong_depth, options);
+  ASSERT_FALSE(static_cast<bool>(depth_or));
+  EXPECT_EQ(depth_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
+
+  PivotResult wrong_order = build_deep_layout_result(/*multiple_subtotals=*/false);
+  wrong_order.row_subtotals[0].labels[2] = "not-A1x";
+  auto order_or = layout(table, wrong_order, options);
+  ASSERT_FALSE(static_cast<bool>(order_or));
+  EXPECT_EQ(order_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
+}
+
+TEST(PivotLayout, RejectsStrayAndMalformedSubtotalMetadata) {
+  PivotLayoutOptions options;
+  options.row_labels_label = "Row Labels";
+
+  auto expect_invalid = [&](const PivotTable& table, const PivotResult& result) {
+    auto cells_or = layout(table, result, options);
+    ASSERT_FALSE(static_cast<bool>(cells_or));
+    EXPECT_EQ(cells_or.error().code, FormulonErrorCode::kEvalPivotInvalid);
+  };
+
+  // A subtotal entry cannot exist when its axis has no hierarchy.
+  {
+    PivotTable table = build_table(/*row=*/{}, /*col=*/{});
+    PivotResult result;
+    result.values = {{{Value::number(1.0)}}};
+    RowSubtotal stray;
+    stray.labels = {"Orphan"};
+    stray.depth = 0;
+    stray.values = {Value::number(1.0)};
+    result.row_subtotals.push_back(std::move(stray));
+    expect_invalid(table, result);
+  }
+  {
+    PivotTable table = build_table(/*row=*/{0}, /*col=*/{});
+    PivotResult result;
+    result.rows = {RowHierarchyNode{"North", {}}};
+    result.values = {{{Value::number(1.0)}}};
+    ColSubtotal stray;
+    stray.labels = {"Orphan"};
+    stray.depth = 0;
+    stray.values = {{Value::number(1.0)}};
+    result.col_subtotals.push_back(std::move(stray));
+    expect_invalid(table, result);
+  }
+
+  PivotCache cache = build_region_year_quarter_cache();
+  PivotTable table = build_region_year_quarter_table();
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  ASSERT_EQ(result_or.value().col_subtotals.size(), 2U);
+  const PivotResult valid_result = result_or.value();
+
+  // Missing one expected owner block, a bad depth, and a bad path must all
+  // fail before any partially projected column layout can escape.
+  {
+    PivotResult insufficient = valid_result;
+    insufficient.col_subtotals.pop_back();
+    expect_invalid(table, insufficient);
+  }
+  {
+    PivotResult wrong_depth = valid_result;
+    wrong_depth.col_subtotals[0].depth = 1;
+    expect_invalid(table, wrong_depth);
+  }
+  {
+    PivotResult wrong_path = valid_result;
+    wrong_path.col_subtotals[0].labels[0] = "Missing";
+    expect_invalid(table, wrong_path);
+  }
+  {
+    PivotResult unconsumed = valid_result;
+    ColSubtotal orphan;
+    orphan.labels = {"Orphan"};
+    orphan.depth = 0;
+    orphan.values = {{Value::number(0.0)}, {Value::number(0.0)}};
+    unconsumed.col_subtotals.push_back(std::move(orphan));
+    expect_invalid(table, unconsumed);
+  }
+
+  // A field-order index outside the table definition cannot silently turn a
+  // valid subtotal stream into a partially consumed projection.
+  {
+    PivotTable bad_field = build_deep_layout_table();
+    bad_field.mutable_row_field_order()[0] = 999U;
+    PivotResult result = build_deep_layout_result(/*multiple_subtotals=*/false);
+    expect_invalid(bad_field, result);
+  }
+}
+
+TEST(PivotLayout, SortIndependentSubtotalProjectionKeepsBothAxesAndGrandTotals) {
+  auto assert_sorted_layout = [](bool sort_by_value) {
+    PivotCache cache = build_region_year_quarter_channel_cache();
+    PivotTable table = build_region_channel_by_year_quarter_table();
+    table.set_grand_totals(/*rows=*/true, /*cols=*/true);
+    for (const std::uint32_t field_index : {0U, 1U, 2U, 3U}) {
+      table.mutable_fields()[field_index].sort.ascending = false;
+      if (sort_by_value) {
+        table.mutable_fields()[field_index].sort.by_field = "Amount";
+      }
+    }
+
+    auto result_or = evaluate(table, cache);
+    ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+    const PivotResult& result = result_or.value();
+    ASSERT_EQ(result.row_subtotals.size(), 2U);
+    ASSERT_EQ(result.col_subtotals.size(), 2U);
+
+    PivotLayoutOptions options;
+    options.row_labels_label = "Row Labels";
+    auto cells_or = layout(table, result, options);
+    ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message << " " << cells_or.error().context;
+    const PivotCells& cells = cells_or.value();
+
+    // Three header rows (two column levels plus the compact row-label row),
+    // four leaves + two row subtotals, and a bottom grand-total row.
+    EXPECT_EQ(cells.rows, 10U);
+    // One row-label column, three column leaves + two column subtotals, and
+    // one right-hand grand-total column.
+    EXPECT_EQ(cells.cols, 7U);
+
+    std::size_t row_subtotal_labels = 0;
+    for (const PivotCell& cell : cells.cells) {
+      if (cell.col == cells.left && cell.kind == PivotCellKind::RowSubtotal) {
+        ++row_subtotal_labels;
+      }
+    }
+    EXPECT_EQ(row_subtotal_labels, result.row_subtotals.size());
+
+    const std::uint32_t first_data_row = cells.top + 3U;
+    std::vector<std::uint32_t> header_col_subtotal_columns;
+    for (const PivotCell& cell : cells.cells) {
+      if (cell.row < first_data_row && cell.kind == PivotCellKind::ColSubtotal) {
+        bool already_seen = false;
+        for (const std::uint32_t column : header_col_subtotal_columns) {
+          if (column == cell.col) {
+            already_seen = true;
+            break;
+          }
+        }
+        if (!already_seen) {
+          header_col_subtotal_columns.push_back(cell.col);
+        }
+      }
+    }
+    EXPECT_EQ(header_col_subtotal_columns.size(), result.col_subtotals.size());
+
+    bool saw_bottom_grand_total = false;
+    for (const PivotCell& cell : cells.cells) {
+      if (cell.kind == PivotCellKind::GrandTotal && cell.row == cells.top + cells.rows - 1U) {
+        saw_bottom_grand_total = true;
+        break;
+      }
+    }
+    EXPECT_TRUE(saw_bottom_grand_total);
+  };
+
+  // Exercise ordinary descending hierarchy sorting and value-field sorting;
+  // both differ from the evaluator's raw map traversal in at least one axis.
+  assert_sorted_layout(/*sort_by_value=*/false);
+  assert_sorted_layout(/*sort_by_value=*/true);
 }
 
 TEST(PivotLayout, RejectsMismatchedResultShape) {

@@ -525,6 +525,47 @@ TEST(FormulonCApiPivot, PivotCacheSharedItemsAcceptErrorValues) {
   EXPECT_EQ(count, 3U);
 }
 
+TEST(FormulonCApiPivot, PivotCacheSharedItemIndexToleratesOutOfDomainNumbers) {
+  // `BuildScratchPivot` leaves `cell_is_index` empty, so "Region" (field 0)
+  // reads its numeric cells as indices into its two shared items. The record
+  // setter accepts any double, so the layout below is the point where an
+  // out-of-domain index would be narrowed. It must resolve to a blank label
+  // rather than reading past the shared items or trapping the instance.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  const double bad_indices[] = {
+      std::numeric_limits<double>::quiet_NaN(),
+      std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity(),
+      -1.0,
+      1e30,
+      4.3e9,  // Past the wasm32 `size_t` range.
+      2.0,    // One past the last shared item.
+  };
+  for (const double bad : bad_indices) {
+    ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, 0, bad), 0) << fm_last_error_message();
+    PivotCellsGuard projected;
+    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+    EXPECT_FALSE(CollectCells(projected.handle).empty());
+  }
+
+  // A valid index still resolves after all of that.
+  ASSERT_EQ(fm_workbook_pivot_cache_record_set_number(wb.handle, cache_id, 0, 0, 0.0), 0) << fm_last_error_message();
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+  bool saw_north_total = false;
+  for (const fm_pivot_cell_t& c : CollectCells(projected.handle)) {
+    if (c.kind == FM_PIVOT_CELL_DATA && c.value.kind == FM_VAL_NUMBER && c.value.u.number == 400.0) {
+      saw_north_total = true;
+    }
+  }
+  EXPECT_TRUE(saw_north_total);
+}
+
 TEST(FormulonCApiPivot, PivotCacheWorksheetSourceRoundTripsThroughApi) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);

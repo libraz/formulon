@@ -21,6 +21,7 @@
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
 #include "pivot/value_order.h"
+#include "utils/checked_index.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -250,7 +251,13 @@ std::optional<std::vector<bool>> build_value_filter_keep(const PivotFilter& f, c
   const std::size_t n = axis.scores.size();
   std::vector<bool> keep(n, false);
   if (f.type == FilterType::ValueTop10) {
-    const auto top_n = static_cast<std::size_t>(filter_number_value(f));
+    // The filter value is embedder-supplied, so saturate it instead of
+    // narrowing it blind: a request larger than the axis keeps every leaf,
+    // while a negative one — and NaN, which loses every comparison — keeps
+    // none.
+    const double requested = filter_number_value(f);
+    const std::size_t top_n =
+        index_from_double(requested, n + 1U).value_or(requested > static_cast<double>(n) ? n : 0U);
     // Sort indices by score descending; all-blank leaves sink to the
     // bottom regardless of N.
     std::vector<std::size_t> order(n);

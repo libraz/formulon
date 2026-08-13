@@ -114,45 +114,91 @@ bool labels_equal(const std::vector<std::string>& a, const std::vector<std::stri
   return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
 }
 
-void collect_row_entries_impl(const RowHierarchyNode& node, std::vector<std::string>& path,
-                              const std::vector<RowSubtotal>& subtotals, std::size_t& subtotal_cursor,
-                              std::vector<RowEntry>& rows, const std::vector<bool>& subtotal_first_by_depth) {
+std::vector<std::size_t> subtotal_counts_for_axis(const PivotTable& table,
+                                                  const std::vector<std::uint32_t>& field_order) {
+  std::vector<std::size_t> counts(field_order.size(), 0);
+  for (std::size_t depth = 0; depth < field_order.size(); ++depth) {
+    const std::uint32_t field_index = field_order[depth];
+    if (field_index >= table.fields().size()) {
+      continue;
+    }
+    const PivotField& field = table.fields()[field_index];
+    counts[depth] = !field.subtotal_fns.empty() ? field.subtotal_fns.size() : (field.default_subtotal ? 1U : 0U);
+  }
+  return counts;
+}
+
+Expected<void, Error> collect_row_entries_impl(const RowHierarchyNode& node, std::vector<std::string>& path,
+                                               const std::vector<RowSubtotal>& subtotals, std::size_t& subtotal_cursor,
+                                               std::vector<RowEntry>& rows,
+                                               const std::vector<bool>& subtotal_first_by_depth,
+                                               const std::vector<std::size_t>& subtotal_counts) {
   path.push_back(node.label);
   if (node.children.empty()) {
     rows.push_back({AxisLeaf{path}, false, 0});
+    path.pop_back();
+    return Expected<void, Error>::Ok();
   } else {
-    // A group may own more than one subtotal row (one per custom subtotal
-    // function). They appear consecutively in the evaluator's sequence with
-    // the same label path, so consume every consecutive match here to keep
-    // the cursor in monotonic lock-step with that sequence.
-    auto matches_here = [&](std::size_t idx) {
-      return idx < subtotals.size() && labels_equal(subtotals[idx].labels, path);
-    };
     const std::size_t depth = path.size() - 1;
     const bool subtotal_first = depth < subtotal_first_by_depth.size() && subtotal_first_by_depth[depth];
-    if (subtotal_first) {
-      while (matches_here(subtotal_cursor)) {
-        rows.push_back({AxisLeaf{path}, true, subtotal_cursor});
-        ++subtotal_cursor;
-      }
-    }
+
+    // The evaluator emits row subtotals in the same sorted post-order as the
+    // hierarchy. Consume exactly this node's expected block; using the field
+    // count as the boundary also preserves distinct nodes whose display
+    // labels happen to be identical after formatting.
+    const std::size_t subtree_begin = rows.size();
     for (const RowHierarchyNode& child : node.children) {
-      collect_row_entries_impl(child, path, subtotals, subtotal_cursor, rows, subtotal_first_by_depth);
-    }
-    if (!subtotal_first) {
-      while (matches_here(subtotal_cursor)) {
-        rows.push_back({AxisLeaf{path}, true, subtotal_cursor});
-        ++subtotal_cursor;
+      auto child_or = collect_row_entries_impl(child, path, subtotals, subtotal_cursor, rows, subtotal_first_by_depth,
+                                               subtotal_counts);
+      if (!child_or) {
+        path.pop_back();
+        return child_or.error();
       }
+    }
+
+    const std::size_t subtotal_begin = rows.size();
+    const std::size_t expected_count = depth < subtotal_counts.size() ? subtotal_counts[depth] : 0;
+    if (subtotal_cursor + expected_count > subtotals.size()) {
+      path.pop_back();
+      return make_error(
+          FormulonErrorCode::kEvalPivotInvalid, "pivot layout: row subtotal metadata ended before hierarchy projection",
+          "depth=" + std::to_string(depth) + " cursor=" + std::to_string(subtotal_cursor) +
+              " expected=" + std::to_string(expected_count) + " total=" + std::to_string(subtotals.size()));
+    }
+    for (std::size_t offset = 0; offset < expected_count; ++offset) {
+      const RowSubtotal& subtotal = subtotals[subtotal_cursor];
+      if (subtotal.depth != depth || !labels_equal(subtotal.labels, path)) {
+        path.pop_back();
+        return make_error(FormulonErrorCode::kEvalPivotInvalid,
+                          "pivot layout: row subtotal metadata does not match sorted hierarchy projection",
+                          "index=" + std::to_string(subtotal_cursor) + " depth=" + std::to_string(subtotal.depth) +
+                              " expected_depth=" + std::to_string(depth));
+      }
+      rows.push_back({AxisLeaf{path}, true, subtotal_cursor});
+      ++subtotal_cursor;
+    }
+    const std::size_t subtotal_end = rows.size();
+    if (subtotal_first && subtotal_begin != subtotal_end) {
+      std::rotate(rows.begin() + static_cast<std::ptrdiff_t>(subtree_begin),
+                  rows.begin() + static_cast<std::ptrdiff_t>(subtotal_begin),
+                  rows.begin() + static_cast<std::ptrdiff_t>(subtotal_end));
     }
   }
   path.pop_back();
+  return Expected<void, Error>::Ok();
 }
 
-std::vector<RowEntry> collect_row_entries(const PivotResult& result, std::size_t depth, bool include_subtotals,
-                                          const std::vector<bool>& subtotal_first_by_depth) {
+Expected<std::vector<RowEntry>, Error> collect_row_entries(const PivotResult& result, std::size_t depth,
+                                                           bool include_subtotals,
+                                                           const std::vector<bool>& subtotal_first_by_depth,
+                                                           const std::vector<std::size_t>& subtotal_counts) {
   if (depth == 0) {
-    return {RowEntry{}};
+    if (include_subtotals) {
+      return make_error(FormulonErrorCode::kEvalPivotInvalid,
+                        "pivot layout: row subtotals require a non-empty row hierarchy",
+                        "subtotals=" + std::to_string(result.row_subtotals.size()));
+    }
+    return std::vector<RowEntry>{RowEntry{}};
   }
   if (!include_subtotals) {
     std::vector<RowEntry> entries;
@@ -161,11 +207,22 @@ std::vector<RowEntry> collect_row_entries(const PivotResult& result, std::size_t
     }
     return entries;
   }
+
   std::vector<RowEntry> entries;
   std::vector<std::string> path;
   std::size_t subtotal_cursor = 0;
   for (const RowHierarchyNode& root : result.rows) {
-    collect_row_entries_impl(root, path, result.row_subtotals, subtotal_cursor, entries, subtotal_first_by_depth);
+    auto root_or = collect_row_entries_impl(root, path, result.row_subtotals, subtotal_cursor, entries,
+                                            subtotal_first_by_depth, subtotal_counts);
+    if (!root_or) {
+      return root_or.error();
+    }
+  }
+  if (subtotal_cursor != result.row_subtotals.size()) {
+    return make_error(
+        FormulonErrorCode::kEvalPivotInvalid,
+        "pivot layout: row subtotal metadata was not consumed by sorted hierarchy projection",
+        "consumed=" + std::to_string(subtotal_cursor) + " total=" + std::to_string(result.row_subtotals.size()));
   }
   return entries;
 }
@@ -196,27 +253,57 @@ std::vector<AxisLeaf> collect_col_leaves(const std::vector<ColHierarchyNode>& ro
   return leaves;
 }
 
-void collect_col_entries_impl(const ColHierarchyNode& node, std::vector<std::string>& path,
-                              const std::vector<ColSubtotal>& subtotals, std::size_t& subtotal_cursor,
-                              std::vector<ColEntry>& cols) {
+Expected<void, Error> collect_col_entries_impl(const ColHierarchyNode& node, std::vector<std::string>& path,
+                                               const std::vector<ColSubtotal>& subtotals, std::size_t& subtotal_cursor,
+                                               const std::vector<std::size_t>& subtotal_counts,
+                                               std::vector<ColEntry>& cols) {
   path.push_back(node.label);
   if (node.children.empty()) {
     cols.push_back({AxisLeaf{path}, false, 0});
   } else {
     for (const ColHierarchyNode& child : node.children) {
-      collect_col_entries_impl(child, path, subtotals, subtotal_cursor, cols);
+      auto child_or = collect_col_entries_impl(child, path, subtotals, subtotal_cursor, subtotal_counts, cols);
+      if (!child_or) {
+        path.pop_back();
+        return child_or.error();
+      }
     }
-    while (subtotal_cursor < subtotals.size() && labels_equal(subtotals[subtotal_cursor].labels, path)) {
+    const std::size_t depth = path.size() - 1U;
+    const std::size_t expected_count = depth < subtotal_counts.size() ? subtotal_counts[depth] : 0;
+    if (subtotal_cursor + expected_count > subtotals.size()) {
+      path.pop_back();
+      return make_error(FormulonErrorCode::kEvalPivotInvalid,
+                        "pivot layout: column subtotal metadata ended before hierarchy projection",
+                        "depth=" + std::to_string(depth) + " cursor=" + std::to_string(subtotal_cursor) + " expected=" +
+                            std::to_string(expected_count) + " total=" + std::to_string(subtotals.size()));
+    }
+    for (std::size_t offset = 0; offset < expected_count; ++offset) {
+      const ColSubtotal& subtotal = subtotals[subtotal_cursor];
+      if (subtotal.depth != depth || !labels_equal(subtotal.labels, path)) {
+        path.pop_back();
+        return make_error(FormulonErrorCode::kEvalPivotInvalid,
+                          "pivot layout: column subtotal metadata does not match sorted hierarchy projection",
+                          "index=" + std::to_string(subtotal_cursor) + " depth=" + std::to_string(subtotal.depth) +
+                              " expected_depth=" + std::to_string(depth));
+      }
       cols.push_back({AxisLeaf{path}, true, subtotal_cursor});
       ++subtotal_cursor;
     }
   }
   path.pop_back();
+  return Expected<void, Error>::Ok();
 }
 
-std::vector<ColEntry> collect_col_entries(const PivotResult& result, std::size_t depth, bool include_subtotals) {
+Expected<std::vector<ColEntry>, Error> collect_col_entries(const PivotResult& result, std::size_t depth,
+                                                           bool include_subtotals,
+                                                           const std::vector<std::size_t>& subtotal_counts) {
   if (depth == 0) {
-    return {ColEntry{}};
+    if (include_subtotals) {
+      return make_error(FormulonErrorCode::kEvalPivotInvalid,
+                        "pivot layout: column subtotals require a non-empty column hierarchy",
+                        "subtotals=" + std::to_string(result.col_subtotals.size()));
+    }
+    return std::vector<ColEntry>{ColEntry{}};
   }
   if (!include_subtotals) {
     std::vector<ColEntry> entries;
@@ -229,7 +316,17 @@ std::vector<ColEntry> collect_col_entries(const PivotResult& result, std::size_t
   std::vector<std::string> path;
   std::size_t subtotal_cursor = 0;
   for (const ColHierarchyNode& root : result.cols) {
-    collect_col_entries_impl(root, path, result.col_subtotals, subtotal_cursor, entries);
+    auto root_or =
+        collect_col_entries_impl(root, path, result.col_subtotals, subtotal_cursor, subtotal_counts, entries);
+    if (!root_or) {
+      return root_or.error();
+    }
+  }
+  if (subtotal_cursor != result.col_subtotals.size()) {
+    return make_error(
+        FormulonErrorCode::kEvalPivotInvalid,
+        "pivot layout: column subtotal metadata was not consumed by sorted hierarchy projection",
+        "consumed=" + std::to_string(subtotal_cursor) + " total=" + std::to_string(result.col_subtotals.size()));
   }
   return entries;
 }
@@ -300,10 +397,20 @@ Expected<PivotCells, Error> layout(const PivotTable& table, const PivotResult& r
       }
     }
   }
-  std::vector<RowEntry> row_entries =
-      collect_row_entries(result, row_depth, include_row_subtotals, subtotal_first_by_depth);
+  const std::vector<std::size_t> row_subtotal_counts = subtotal_counts_for_axis(table, table.row_field_order());
+  auto row_entries_or =
+      collect_row_entries(result, row_depth, include_row_subtotals, subtotal_first_by_depth, row_subtotal_counts);
+  if (!row_entries_or) {
+    return row_entries_or.error();
+  }
+  std::vector<RowEntry> row_entries = row_entries_or.take();
   const bool include_col_subtotals = !result.col_subtotals.empty();
-  std::vector<ColEntry> col_entries = collect_col_entries(result, col_depth, include_col_subtotals);
+  const std::vector<std::size_t> col_subtotal_counts = subtotal_counts_for_axis(table, table.col_field_order());
+  auto col_entries_or = collect_col_entries(result, col_depth, include_col_subtotals, col_subtotal_counts);
+  if (!col_entries_or) {
+    return col_entries_or.error();
+  }
+  std::vector<ColEntry> col_entries = col_entries_or.take();
 
   auto valid_or = validate_result_shape(table, result, row_leaves.size(), col_leaves.size());
   if (!valid_or) {

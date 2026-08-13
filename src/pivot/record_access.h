@@ -7,8 +7,10 @@
 #define FORMULON_PIVOT_RECORD_ACCESS_H_
 
 #include <cstddef>
+#include <optional>
 
 #include "pivot/pivot_cache.h"
+#include "utils/checked_index.h"
 #include "value.h"
 
 namespace formulon::pivot {
@@ -39,15 +41,15 @@ inline Value cell_value(const PivotCache& cache, const PivotCacheRecord& record,
   if (!cell.is_number()) {
     return cell;  // Defensive: an index flag on a non-numeric cell.
   }
-  const double idx = cell.as_number();
-  if (idx < 0.0) {
+  // A hand-built cache carries whatever number the embedder stored, so the
+  // index is validated against `shared_items` before it is narrowed rather
+  // than after. Negative, NaN, infinite and oversized indices all collapse to
+  // Blank like any other out-of-range reference here.
+  const std::optional<std::size_t> index = index_from_double(cell.as_number(), field.shared_items.size());
+  if (!index.has_value()) {
     return Value::blank();
   }
-  const auto i = static_cast<std::size_t>(idx);
-  if (i >= field.shared_items.size()) {
-    return Value::blank();
-  }
-  return field.shared_items[i];
+  return field.shared_items[*index];
 }
 
 }  // namespace formulon::pivot
