@@ -970,6 +970,29 @@ entries:
     first_noted: 2026-08-05
     last_verified_excel_version: "Excel 365 (Mac, ja-JP, 16.111.2)"
 
+# -- Parser internal-safety limits ------------------------------------------
+  # `Parser::parse_expression`'s recursion-depth guard (`kMaxFormulaAstDepth`,
+  # 128) is shared between true nesting and a flat left-associative operator
+  # chain assembled without extra recursion frames (`Parser::parse()` still
+  # validates the completed tree with the same cap). Excel's real ceiling on
+  # a flat chain is the 8,192-character formula-length limit (Microsoft 365
+  # Excel specifications and limits), not a term-count / nesting-depth bound,
+  # so `=A1+A2+...+A150` (150 terms, ~640 characters) evaluates to a number
+  # in Excel but is rejected by Formulon with `NestedFormulaTooDeep`. The
+  # cap stays shared on purpose: `ast_format::FormatNode`, `ast_shift`, and
+  # the XLSB `ptg_reader` decode-time check all recurse over the same tree
+  # and must not overflow the native stack on adversarial input, so raising
+  # the constant alone would reopen that stack-safety hole for genuinely
+  # pathological (deeply nested, not merely long) input.
+  - id: left_associative_chain_default_depth_cap
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/parser/parser_error_test.cpp]
+    reason: "Excel's formula-length limit (8,192 characters) is the real ceiling on a flat operator chain; Formulon additionally rejects a flat chain past kMaxFormulaAstDepth (128) terms because the recursion-depth guard is shared with true nesting for native-stack safety across ast_format / ast_shift / the XLSB ptg_reader. Not raised without also bounding those recursive consumers independently. See DefaultDepthCapRejectsLongLeftAssociativeChain."
+    prefer: formulon
+    first_noted: 2026-08-13
+    last_verified_excel_version: "16.111.3"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

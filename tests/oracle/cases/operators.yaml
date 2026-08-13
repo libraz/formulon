@@ -242,6 +242,18 @@ cases:
     description: "0^0 — IEEE returns 1; Excel agrees"
     formula: "=0^0"
 
+  - id: power_chain_left_assoc_2_3_2
+    description: "Excel evaluates repeated ^ left-to-right: (2^3)^2 = 64, not 2^(3^2) = 512"
+    formula: "=2^3^2"
+
+  - id: power_chain_left_assoc_4_3_2
+    description: "Same left-associativity probe with a different base/exponent pair"
+    formula: "=4^3^2"
+
+  - id: power_chain_left_assoc_triple
+    description: "Three chained ^: ((2^3)^2)^2 = 4096"
+    formula: "=2^3^2^2"
+
   - id: power_negative_base_fractional_exp
     description: "(-2)^0.5 — non-real result; Excel: #NUM!"
     formula: "=(-2)^0.5"

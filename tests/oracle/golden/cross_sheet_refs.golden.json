@@ -2,11 +2,11 @@
   "suite": "cross_sheet_refs",
   "description": "Cross-sheet and 3-D references. The case formula sits at Sheet1!Z1 (the oracle driver convention) and reaches into other sheets via direct Sheet2!A1 references, INDIRECT(\"Sheet2!A1\") runtime resolution, and Excel's 3-D-range syntax (Sheet1:Sheet3!A1). Setup keys carry the Sheet!Addr form; the driver creates the referenced sheet inside the per-case workbook on first use, and the C++ verifier mirrors that inside a single Workbook by adding sheets via add_sheet on first occurrence.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -121,6 +121,28 @@
       "expect": {
         "kind": "number",
         "value": 12.0
+      }
+    },
+    {
+      "id": "three_d_sum_spilled_whole_column",
+      "formula": "=SUM(Sheet1:Sheet3!B:B)",
+      "setup": {
+        "Sheet1!A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3,2,1)"
+        },
+        "Sheet2!A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3,2,7)"
+        },
+        "Sheet3!A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3,2,13)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 90.0
       }
     }
   ]

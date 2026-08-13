@@ -92,3 +92,18 @@ cases:
       'Sheet2!A1': 5
       'Sheet3!A1': 12
     formula: '=MAX(Sheet2:Sheet3!A1)'
+
+  # =========================================================================
+  # 3-D whole-column scan over dynamic-array spills. Each sheet contributes
+  # SEQUENCE(3,2) to A1:B3, so the B-column sums are 12 + 30 + 48 = 90.
+  # This pins both the inclusive sheet span and the populated extent on the
+  # referenced whole column; the remaining rows of B:B are phantom.
+  # =========================================================================
+
+  - id: three_d_sum_spilled_whole_column
+    description: '=SUM(Sheet1:Sheet3!B:B) with A1=SEQUENCE(3,2,start=1/7/13) on Sheet1/2/3 -> 90; pins 3-D whole-column spill extent.'
+    setup:
+      'Sheet1!A1': '=SEQUENCE(3,2,1)'
+      'Sheet2!A1': '=SEQUENCE(3,2,7)'
+      'Sheet3!A1': '=SEQUENCE(3,2,13)'
+    formula: '=SUM(Sheet1:Sheet3!B:B)'

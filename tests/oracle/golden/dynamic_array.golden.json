@@ -2,11 +2,11 @@
   "suite": "dynamic_array",
   "description": "Dynamic-array (spilling) functions. SEQUENCE is the first acceptance case for cell-level spill machinery; the oracle reads back the anchor scalar (top-left of the spill region) since xlwings does not surface phantom cells through a single-cell read.",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T02:43:45Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -259,6 +259,90 @@
       "expect": {
         "kind": "number",
         "value": 6.0
+      }
+    },
+    {
+      "id": "whole_column_sum_sequence_5",
+      "formula": "=SUM(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "whole_column_count_sequence_5",
+      "formula": "=COUNT(A:A)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(5)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "whole_column_sum_sequence_3x2",
+      "formula": "=SUM(B:B)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(3,2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "whole_row_sum_sequence_2x3",
+      "formula": "=SUM(2:2)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2,3)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "whole_column_sum_xfd_sequence_2",
+      "formula": "=SUM(XFD:XFD)",
+      "setup": {
+        "XFD1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "explicit_xfd_range_sum_sequence_2",
+      "formula": "=SUM(XFD1:XFD2)",
+      "setup": {
+        "XFD1": {
+          "kind": "formula",
+          "formula": "=SEQUENCE(2)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
       }
     },
     {

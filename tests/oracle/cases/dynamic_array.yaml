@@ -73,6 +73,47 @@ cases:
       A1: "=SEQUENCE(3)"
     formula: "=SUM(A1#)"
 
+  # -- Whole-row / whole-column references over spills -------------------
+  # These cases pin the populated extent rather than the nominal anchor:
+  # the SUM/COUNT scan must visit the spill cells, while the unbounded
+  # remainder of the row/column stays phantom and contributes nothing.
+
+  - id: whole_column_sum_sequence_5
+    description: "A1=SEQUENCE(5); SUM(A:A)=15. Pins whole-column scans to the five populated spill cells, not just the anchor."
+    setup:
+      A1: "=SEQUENCE(5)"
+    formula: "=SUM(A:A)"
+
+  - id: whole_column_count_sequence_5
+    description: "A1=SEQUENCE(5); COUNT(A:A)=5. Pins COUNT's whole-column extent to the spill's five numeric cells."
+    setup:
+      A1: "=SEQUENCE(5)"
+    formula: "=COUNT(A:A)"
+
+  - id: whole_column_sum_sequence_3x2
+    description: "A1=SEQUENCE(3,2); SUM(B:B)=12. Pins a phantom-only spill column (B) to its populated extent."
+    setup:
+      A1: "=SEQUENCE(3,2)"
+    formula: "=SUM(B:B)"
+
+  - id: whole_row_sum_sequence_2x3
+    description: "A1=SEQUENCE(2,3); SUM(2:2)=15. Pins a spill row to its populated extent without any helper-cell contamination."
+    setup:
+      A1: "=SEQUENCE(2,3)"
+    formula: "=SUM(2:2)"
+
+  - id: whole_column_sum_xfd_sequence_2
+    description: "XFD1=SEQUENCE(2); SUM(XFD:XFD)=3. Pins the last worksheet column while ensuring shape capture never writes helper cells there."
+    setup:
+      XFD1: "=SEQUENCE(2)"
+    formula: "=SUM(XFD:XFD)"
+
+  - id: explicit_xfd_range_sum_sequence_2
+    description: "XFD1=SEQUENCE(2); SUM(XFD1:XFD2)=3. Pins explicit access to the worksheet's last two cells."
+    setup:
+      XFD1: "=SEQUENCE(2)"
+    formula: "=SUM(XFD1:XFD2)"
+
   # -- ANCHORARRAY (OOXML internal `_xlfn.` form of `ref#`) ---------------
   # ANCHORARRAY(ref) returns the spill region anchored at `ref` as an
   # array, mirroring the postfix `#` operator. xlsx serialises `=ref#` as

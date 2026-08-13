@@ -2,11 +2,11 @@
   "suite": "operators",
   "description": "Arithmetic / comparison / concatenation operators with coercion",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:14:50Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -560,6 +560,33 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "power_chain_left_assoc_2_3_2",
+      "formula": "=2^3^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "power_chain_left_assoc_4_3_2",
+      "formula": "=4^3^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4096.0
+      }
+    },
+    {
+      "id": "power_chain_left_assoc_triple",
+      "formula": "=2^3^2^2",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4096.0
       }
     },
     {
