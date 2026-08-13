@@ -2,11 +2,11 @@
   "suite": "range_endpoint_calls",
   "description": "`:` operator with OFFSET / INDIRECT calls on either or both endpoints. Excel 365 accepts these syntactically and unions the resolved rectangles. IronCalc's `range_operator` fixture exercises the same shapes; this file reuses representative cases so we can pin Mac Excel 365 (ja-JP) directly rather than depending on IronCalc's documented values. Each setup is small and self-contained.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

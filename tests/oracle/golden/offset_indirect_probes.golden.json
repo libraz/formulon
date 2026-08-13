@@ -2,11 +2,11 @@
   "suite": "offset_indirect_probes",
   "description": "Mac Excel 365 (ja-JP) probe for two narrow questions that cannot be inferred from existing oracle suites:\n\n  1. OFFSET with negative height/width: IronCalc rejects with #VALUE!.\n     The IronCalc workbook itself has the comment \"Negative values in\n     width/height produce #VALUE!\", but the probe pins Mac's actual\n     behavior to confirm — Formulon currently returns 0 (a silent\n     fall-through) and we need to know whether to fix the validator\n     or list this as a divergence.\n\n  2. ROW / COLUMN of INDIRECT pointing to a non-existent sheet:\n     IronCalc returns the row/column index of the referenced cell\n     (5 / 4 for \"OTHER!D5\") on the theory that ROW/COLUMN only\n     extract the index without resolving the value, even if the\n     sheet is missing. Formulon currently propagates #REF! from\n     INDIRECT. Mac's truth becomes the reference.\n\nSpill / IIE behavior (the other 11 IronCalc failures in this cluster) is already settled by tests/oracle/cases/implicit_intersection.yaml, so this probe focuses only on the two open questions above.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "implicit_intersection",
   "description": "Implicit intersection semantics for Mac Excel 365 (ja-JP). The xlwings driver places the formula under test at cell Z1 (row 1, column Z=26) on a fresh sheet per case. We use that fixed position to design differential tests: ranges that either include or exclude Z1's row / column. The two candidate behaviors are:\n\n  * Pre-365 implicit intersection: range -> single cell at the row /\n    column that aligns with the formula cell, or #VALUE! if no axis\n    aligns.\n  * Excel 365 dynamic-array spill: range stays as an array, and\n    xlwings reads back the spill anchor (top-left of the rectangle\n    placed at the formula cell).\n\nMac Excel 365 with @-prefix auto-conversion on legacy files lands on implicit intersection; fresh formulas typed in the formula bar use spill. This suite probes which behavior surfaces through xlwings.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

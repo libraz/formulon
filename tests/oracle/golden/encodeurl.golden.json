@@ -2,11 +2,11 @@
   "suite": "encodeurl",
   "description": "ENCODEURL -- RFC 3986 percent-encoding with uppercase hex (Excel 365 Mac ja-JP)",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -17,7 +17,7 @@
       "id": "encodeurl_space",
       "formula": "=ENCODEURL(\"hello world\")",
       "setup": {},
-      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Windows Excel 365 variant goldens provide live coverage for available-host behavior."
+      "skipped": "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Historical Windows files are reference-only until a product-verified Microsoft 365 capture is available; no live Windows coverage is asserted here."
     },
     {
       "id": "encodeurl_query_string_chars",

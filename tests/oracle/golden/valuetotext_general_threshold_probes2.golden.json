@@ -2,11 +2,11 @@
   "suite": "valuetotext_general_threshold_probes2",
   "description": "Round-2 probes: pin the exact threshold transitions. Boundary 1: between 1E+17 and 1E+20 - find the integer-decimal -> sci switch. Boundary 2: between 1E-15 and 1E-20 - find the small-decimal -> sci switch. Boundary 3: mantissa-width effect - vary sig digits from 1..15 at fixed\n  exponent (e.g. ?E-9) to determine whether the rule is \"decimal width <=\n  N chars\" or \"leading-zero count + sig digits <= N\".\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T01:12:43Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "groupby",
   "description": "GROUPBY dynamic-array group-and-aggregate (Excel 365). Six perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-06T01:56:08Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 1e-12,

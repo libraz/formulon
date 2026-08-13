@@ -2,11 +2,11 @@
   "suite": "engineering",
   "description": "Simple integer-only engineering built-ins: base conversion (BIN/OCT/HEX <-> DEC), bit operations (BITAND / BITOR / BITXOR / BITLSHIFT / BITRSHIFT), and the two comparators DELTA and GESTEP. Cases focus on Excel-observable semantic edges: two's complement decoding, lowercase hex input, `places` padding, shift sign flipping, and #NUM! surfacing on out-of-range input.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

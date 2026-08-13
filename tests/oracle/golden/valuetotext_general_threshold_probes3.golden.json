@@ -2,11 +2,11 @@
   "suite": "valuetotext_general_threshold_probes3",
   "description": "Round-3 probes: confirm the 20-char threshold and verify whether the negative sign counts toward the limit. Also pin a few mantissa-precision edge cases.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T01:13:28Z"
   },
   "tolerance": {
     "abs": 0.0,

@@ -2,11 +2,11 @@
   "suite": "references",
   "description": "ADDRESS / INDIRECT / OFFSET reference-manipulation builtins. ADDRESS is a pure scalar text builder; INDIRECT resolves runtime-constructed A1 text to a single cell; OFFSET synthesises a reference (scalar or range) that aggregator-family callers consume through the shared `resolve_range_arg` seam. Range-producing INDIRECT and R1C1 INDIRECT are deferred until `Value::Array` lands; those cases are deliberately absent here.",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

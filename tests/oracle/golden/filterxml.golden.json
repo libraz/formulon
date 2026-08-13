@@ -2,11 +2,11 @@
   "suite": "filterxml",
   "description": "FILTERXML(xml, xpath) parses `xml` and runs `xpath` against it. Excel's documented contract:\n\n  * Empty node set            → #N/A\n  * Malformed XML             → #VALUE!\n  * Malformed XPath           → #VALUE!\n  * Single-node match         → scalar text (the node's inner text)\n  * Multi-node match          → vertical N x 1 spill of node texts\n  * Attribute axis            → attribute value (one per matched attr)\n\nFormulon implements this against pugixml's XPath 1.0 engine. The two engines (MSXML6 on Windows, equivalent on Mac, pugixml here) all nominally implement XPath 1.0, but each carries subtle quirks worth pinning per host:\n\n  * Default-namespace handling — MSXML/Excel typically requires\n    `local-name()=...` workarounds because FILTERXML does not expose a\n    namespace-prefix registration API. pugixml is the same in that\n    respect, so the probes below pin the workaround pattern.\n  * Non-node-set XPath returns (e.g. `count()`, `string()`, `true()`).\n    Excel docs say xpath must evaluate to a node set; we probe what each\n    host actually returns.\n  * Entity decoding (`&amp;`, `&#10;`, `&#x41;`) — XML parsing should\n    decode these; what reaches FILTERXML is the decoded text.\n  * CDATA sections — content reaches the caller as inner text.\n  * Whitespace in mixed content — `text()` vs element node string-value.\n  * Comment / processing-instruction nodes — `comment()` and\n    `processing-instruction()` axes return inner-text in pugixml; Excel\n    may differ.\n  * XPath 2.0+ features (`for`, `let`, `matches`, sequence types) —\n    must reject as #VALUE!.\n\nSpill model: in a sheet context the multi-node return spills into adjacent cells via `EvalContext::dispatch_array_result`. In the oracle pipeline each case is written to a single cell so multi-node cases spill below the anchor; the verifier reads the anchor cell, which sees the first node's text. The setup of these probes uses an anchor read, so the recorded golden value is always a scalar text; the full spill shape is exercised separately in `tests/unit/eval/builtins_web_test.cpp`.\nPlatform note: current Mac Excel reports FILTERXML as #NAME?, so the primary Mac golden keeps these cases skipped. Windows variant goldens provide the live Excel coverage for the XPath contract.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T02:43:42Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

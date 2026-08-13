@@ -2,11 +2,11 @@
   "suite": "text_to_bool_probes",
   "description": "Mac Excel 365 (ja-JP) probe for whether text strings \"TRUE\"/\"true\"/ \"FALSE\"/\"false\" coerce to bool when passed to a function argument that expects a logical value. IronCalc accepts these strings (e.g. BETA.DIST(..., \"TRUE\", ...)), but Formulon's `coerce_to_bool` currently rejects them and surfaces #VALUE! — based on a comment that claims Excel does the same. This probe settles the question by asking Mac directly across IF, NOT, AND, BETA.DIST cumulative, and direct coercion via N(). Mac's truth becomes the reference; we update `coerce_to_bool` only if Mac actually accepts these strings.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T01:12:00Z"
   },
   "tolerance": {
     "abs": 1e-12,

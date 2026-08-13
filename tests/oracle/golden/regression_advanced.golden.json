@@ -2,11 +2,11 @@
   "suite": "regression_advanced",
   "description": "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Array-aware oracle capture makes most spill outputs live; remaining skip-oracle entries are limited to numerically unstable perfect-fit F-statistic slots and an empty bins-array literal read-back quirk. Tolerance widened to 1e-10 for stats-block fit metrics.",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 1e-10,
@@ -33,7 +33,7 @@
       "id": "linest_univariate_stats_true",
       "formula": "=LINEST({1;2;3;4;5}, {1;2;3;4;5}, TRUE, TRUE)",
       "setup": {},
-      "skipped": "Perfect-fit LINEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 reports a huge finite F statistic while Formulon currently surfaces #N/A for the unstable F slot. Other stats cells are covered by unit tests."
+      "skipped": "Perfect-fit LINEST stats=TRUE drives the residual sum to exactly 0, so the F statistic is infinite in the limit. Both engines report a huge finite F — Formulon by flooring the residual at the squared rounding error the data's scale can still resolve, Mac Excel 16.109 by whatever residual its own arithmetic happens to leave — and the two magnitudes differ by a numerically unstable factor. Same class as logest_univariate_stats_true. Other stats cells are covered by unit tests."
     },
     {
       "id": "linest_multivariate_basic",

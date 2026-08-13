@@ -2,11 +2,11 @@
   "suite": "lowrisk_probes",
   "description": "Mac Excel 365 (ja-JP) probe for the small \"low-risk\" cluster of IronCalc divergences identified in the 218-case survey: MROUND with empty/blank scalar args, GCD/LCM with all-blank scalar args, and OFFSET with negative height/width or fractional width. IronCalc returns #N/A / #VALUE! / #REF! for these shapes; we want to confirm whether Mac agrees, disagrees, or exhibits a third outcome before changing Formulon. Each case is intentionally minimal — no dependency on table/spill semantics — so the probe results are unambiguous. Once the golden is written this suite doubles as a regression fence for the chosen behavior.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

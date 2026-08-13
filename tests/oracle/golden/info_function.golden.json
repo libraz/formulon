@@ -2,11 +2,11 @@
   "suite": "info_function",
   "description": "INFO returns environment-specific strings (release version, OS version, system identifier, recalc mode, current directory, open file count). The values are intrinsically host-bound: Mac Excel 365 ja-JP returns Microsoft-version strings, Formulon returns its own engine identifier. Every probe is a documented divergence (`mode: skip-oracle`) — closure is a divergence-only declaration.\n",
   "environment": {
-    "excel_version": "16.111.2",
+    "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-05T01:06:33Z"
+    "generated_at": "2026-08-13T00:16:13Z"
   },
   "tolerance": {
     "abs": 0.0,

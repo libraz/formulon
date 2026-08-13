@@ -28,27 +28,13 @@ cases:
     description: "Hiragana is unchanged by ASC"
     formula: "=ASC(\"ひらがな\")"
 
-  # -- JIS: ASCII -> full-width --------------------------------------------
-  - id: jis_ascii_and_space
-    description: "ASCII space (0x20) maps to U+3000; other ASCII via +0xFEE0"
-    formula: "=JIS(\"ABC 123\")"
-
-  # -- JIS: katakana recompose --------------------------------------------
-  - id: jis_voiced_recompose
-    description: "ｶ + dakuten recomposes to ガ"
-    formula: "=JIS(\"ｶﾞ\")"
-
-  - id: jis_semivoiced_row
-    description: "ﾊ + handakuten etc. recomposes to パピプペポ"
-    formula: "=JIS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")"
-
-  - id: jis_unvoiced_row
-    description: "Plain half-width katakana row maps 1:1 to full-width"
-    formula: "=JIS(\"ｱｲｳｴｵ\")"
-
-  # -- DBCS is an alias of JIS --------------------------------------------
+  # -- Half-width -> full-width --------------------------------------------
+  # `DBCS` is the name Excel stores; `JIS` is only the ja-JP formula-bar
+  # spelling of it, which Excel resolves to `DBCS` before evaluating, so
+  # the conversion is exercised under the stored name throughout. See the
+  # note above the mirror block below.
   - id: dbcs_alias_ascii
-    description: "DBCS = JIS (both names point at the same impl)"
+    description: "The stored spelling of the half-to-full-width conversion"
     formula: "=DBCS(\"ABC\")"
 
   # =========================================================================
@@ -57,10 +43,6 @@ cases:
   # =========================================================================
 
   # -- ASC round-trips ---------------------------------------------------
-  - id: asc_jis_round_trip
-    description: "JIS(ASC(...)) is identity for the canonical input set"
-    formula: "=JIS(ASC(\"ＡＢＣ１２３\"))"
-
   - id: asc_idempotent_on_halfwidth
     description: "ASC of already-half-width is unchanged"
     formula: "=ASC(\"ABC123\")"
@@ -89,95 +71,73 @@ cases:
     description: "Full voiced ka-row ガギグゲゴ"
     formula: "=ASC(\"ガギグゲゴ\")"
 
-  # -- JIS round-trips ---------------------------------------------------
-  - id: jis_idempotent_on_fullwidth
-    formula: "=JIS(\"ＡＢＣ\")"
-
-  - id: jis_idempotent_on_kanji
-    formula: "=JIS(\"漢字\")"
-
-  - id: jis_mixed_halfkata_kanji
-    description: "Half-width kata mixed with kanji"
-    formula: "=JIS(\"漢ｱ字\")"
-
-  - id: jis_orphan_dakuten
-    description: "ﾞ alone (no preceding letter) — Excel may recompose or pass-through"
-    formula: "=JIS(\"ﾞ\")"
-
-  - id: jis_half_punctuation
-    description: "Half-width punctuation (!@#$%)"
-    formula: "=JIS(\"!@#$%\")"
-
-  - id: jis_round_trip
-    description: "ASC(JIS(...)) is identity for the canonical full-width input"
-    formula: "=ASC(JIS(\"ABC123\"))"
-
-  # -- DBCS / JIS equivalence -------------------------------------------
-  # Mac Excel 16.108.1 ja-JP returns #NAME? for every JIS call (verified
-  # 2026-04-26 via tests/oracle/cases/jis_recheck.yaml during probe). The
-  # JIS-named cases above are therefore skip-oracle in tests/divergence.yaml.
-  # Formulon registers JIS and DBCS to the same internal Jis() (see
-  # src/eval/builtins/text_width.cpp:466-467), so the DBCS mirrors below
-  # provide a Mac-verified parity oracle for the impl. Whenever a new JIS
-  # case is added above, add the corresponding dbcs_* mirror here so the
-  # underlying conversion stays verified against Mac.
+  # -- Half-width -> full-width conversion -------------------------------
+  # Every case here is spelled `DBCS` because that is the only spelling
+  # Excel stores. `JIS` is the ja-JP formula bar's name for the same
+  # function: Excel rewrites it to `DBCS` when the formula is committed
+  # (`Range.formula_local` reads `JIS(...)` where `Range.formula` and the
+  # `<f>` text read `DBCS(...)`), so a `JIS`-spelled case would ask the
+  # identical question and record the identical golden. Formulon accepts
+  # both spellings — `register_text_width_builtins` binds them to one
+  # implementation — and that alias is an internal invariant the oracle
+  # cannot check, because Excel resolves the name before evaluating;
+  # `builtins_width_test.cpp` covers it instead.
   - id: dbcs_voiced_recompose
-    description: "DBCS recomposes ｶﾞ → ガ same as JIS"
+    description: "ｶ + dakuten recomposes to ガ"
     formula: "=DBCS(\"ｶﾞ\")"
 
   - id: dbcs_kanji_passthrough
     formula: "=DBCS(\"漢字\")"
 
   - id: dbcs_ascii_and_space
-    description: "DBCS mirror of jis_ascii_and_space (Mac-verified parity)"
+    description: "ASCII space (0x20) maps to U+3000; other ASCII via +0xFEE0"
     formula: "=DBCS(\"ABC 123\")"
 
   - id: dbcs_semivoiced_row
-    description: "DBCS mirror of jis_semivoiced_row"
+    description: "ﾊ + handakuten etc. recomposes to パピプペポ"
     formula: "=DBCS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")"
 
   - id: dbcs_unvoiced_row
-    description: "DBCS mirror of jis_unvoiced_row"
+    description: "Plain half-width katakana row maps 1:1 to full-width"
     formula: "=DBCS(\"ｱｲｳｴｵ\")"
 
   - id: dbcs_idempotent_on_fullwidth
-    description: "DBCS mirror of jis_idempotent_on_fullwidth"
+    description: "Identity on already-full-width input"
     formula: "=DBCS(\"ＡＢＣ\")"
 
   - id: dbcs_idempotent_on_kanji
-    description: "DBCS mirror of jis_idempotent_on_kanji"
+    description: "Kanji passes through unchanged"
     formula: "=DBCS(\"漢字\")"
 
   - id: dbcs_mixed_halfkata_kanji
-    description: "DBCS mirror of jis_mixed_halfkata_kanji"
+    description: "Half-width kata mixed with kanji"
     formula: "=DBCS(\"漢ｱ字\")"
 
   - id: dbcs_orphan_dakuten
-    description: "DBCS mirror of jis_orphan_dakuten"
+    description: "ﾞ alone (no preceding letter) — Excel may recompose or pass-through"
     formula: "=DBCS(\"ﾞ\")"
 
   - id: dbcs_half_punctuation
-    description: "DBCS mirror of jis_half_punctuation"
+    description: "Half-width punctuation (!@#$%)"
     formula: "=DBCS(\"!@#$%\")"
 
   - id: dbcs_round_trip
-    description: "DBCS mirror of jis_round_trip — ASC(DBCS(...)) is identity"
+    description: "ASC(DBCS(...)) is identity for the canonical full-width input"
     formula: "=ASC(DBCS(\"ABC123\"))"
 
   - id: dbcs_asc_round_trip
-    description: "DBCS mirror of asc_jis_round_trip — DBCS(ASC(...)) is identity"
+    description: "DBCS(ASC(...)) is identity for the canonical input set"
     formula: "=DBCS(ASC(\"ＡＢＣ１２３\"))"
 
   - id: dbcs_bool_coerces
-    description: "DBCS mirror of jis_bool_coerces"
+    description: "DBCS(TRUE) coerces to text \"TRUE\" then converts"
     formula: "=DBCS(TRUE)"
 
   - id: dbcs_error_propagates
-    description: "DBCS mirror of jis_error_propagates"
     formula: "=DBCS(#DIV/0!)"
 
   - id: dbcs_long_halfkana_string
-    description: "DBCS mirror of jis_long_halfkana_string"
+    description: "Whole half-width katakana table"
     formula: "=DBCS(\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\")"
 
   # Empty-string / blank-cell probes omitted — xlwings cannot write the
@@ -189,21 +149,11 @@ cases:
     description: "ASC(123) coerces 123 to text \"123\" first"
     formula: "=ASC(123)"
 
-  - id: jis_bool_coerces
-    description: "JIS(TRUE) coerces to text \"TRUE\" then converts"
-    formula: "=JIS(TRUE)"
-
   # -- Error propagation -----------------------------------------------
   - id: asc_error_propagates
     formula: "=ASC(#REF!)"
-
-  - id: jis_error_propagates
-    formula: "=JIS(#DIV/0!)"
 
   # -- Long string ------------------------------------------------------
   - id: asc_long_kana_string
     description: "Whole katakana table"
     formula: "=ASC(\"アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン\")"
-
-  - id: jis_long_halfkana_string
-    formula: "=JIS(\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\")"

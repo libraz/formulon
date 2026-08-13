@@ -68,30 +68,6 @@
       }
     },
     {
-      "id": "jis_ascii_and_space",
-      "formula": "=JIS(\"ABC 123\")",
-      "setup": {},
-      "skipped": "JIS returns #NAME? on current Mac Excel (16.108.1, ja-JP); Formulon's mapping is correct."
-    },
-    {
-      "id": "jis_voiced_recompose",
-      "formula": "=JIS(\"ｶﾞ\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; Formulon recomposes ｶﾞ → ガ correctly."
-    },
-    {
-      "id": "jis_semivoiced_row",
-      "formula": "=JIS(\"ﾊﾟﾋﾟﾌﾟﾍﾟﾎﾟ\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; Formulon handles handakuten row correctly."
-    },
-    {
-      "id": "jis_unvoiced_row",
-      "formula": "=JIS(\"ｱｲｳｴｵ\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; Formulon's plain katakana mapping is correct."
-    },
-    {
       "id": "dbcs_alias_ascii",
       "formula": "=DBCS(\"ABC\")",
       "setup": {},
@@ -99,12 +75,6 @@
         "kind": "text",
         "value": "ＡＢＣ"
       }
-    },
-    {
-      "id": "asc_jis_round_trip",
-      "formula": "=JIS(ASC(\"ＡＢＣ１２３\"))",
-      "setup": {},
-      "skipped": "JIS half of round-trip returns #NAME?, so JIS(ASC(...)) cannot complete."
     },
     {
       "id": "asc_idempotent_on_halfwidth",
@@ -168,42 +138,6 @@
         "kind": "text",
         "value": "ｶﾞｷﾞｸﾞｹﾞｺﾞ"
       }
-    },
-    {
-      "id": "jis_idempotent_on_fullwidth",
-      "formula": "=JIS(\"ＡＢＣ\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; Formulon: identity on already-full-width input."
-    },
-    {
-      "id": "jis_idempotent_on_kanji",
-      "formula": "=JIS(\"漢字\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; kanji passthrough."
-    },
-    {
-      "id": "jis_mixed_halfkata_kanji",
-      "formula": "=JIS(\"漢ｱ字\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; mixed half-kata + kanji."
-    },
-    {
-      "id": "jis_orphan_dakuten",
-      "formula": "=JIS(\"ﾞ\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; orphan ﾞ probe."
-    },
-    {
-      "id": "jis_half_punctuation",
-      "formula": "=JIS(\"!@#$%\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; ASCII punctuation mapping."
-    },
-    {
-      "id": "jis_round_trip",
-      "formula": "=ASC(JIS(\"ABC123\"))",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME? so ASC(JIS(...)) cannot complete."
     },
     {
       "id": "dbcs_voiced_recompose",
@@ -350,12 +284,6 @@
       }
     },
     {
-      "id": "jis_bool_coerces",
-      "formula": "=JIS(TRUE)",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; bool->text coercion path."
-    },
-    {
       "id": "asc_error_propagates",
       "formula": "=ASC(#REF!)",
       "setup": {},
@@ -365,12 +293,6 @@
       }
     },
     {
-      "id": "jis_error_propagates",
-      "formula": "=JIS(#DIV/0!)",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME? on every input so error propagation cannot be tested."
-    },
-    {
       "id": "asc_long_kana_string",
       "formula": "=ASC(\"アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン\")",
       "setup": {},
@@ -378,12 +300,6 @@
         "kind": "text",
         "value": "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ"
       }
-    },
-    {
-      "id": "jis_long_halfkana_string",
-      "formula": "=JIS(\"ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜｦﾝ\")",
-      "setup": {},
-      "skipped": "Mac JIS returns #NAME?; full half-katakana table."
     }
   ]
 }
