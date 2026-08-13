@@ -18,12 +18,18 @@
 // change in `ValueKind` (Number -> Text, Number -> Error, etc.) bumps the
 // delta to +infinity so a "value flip" never reads as converged.
 //
-// The solver is single-threaded and synchronous. It owns nothing: callers
-// supply the SCC list, the per-cell evaluation lambda, and the per-cell
-// commit lambda. The caller is also responsible for snapshotting and
-// restoring any state that should not be visible to the solver — once
-// `run_iterative_solve` returns, the cell store has been mutated to the
-// converged values or the last finite-budget approximation.
+// The solver is single-threaded and synchronous. It does not own the values
+// returned by either callback, but it does keep an owned convergence snapshot
+// between sweeps: scalar payloads are copied by value and Text payloads are
+// copied into a solver-owned, kMaxEvalArenaBytes-capped Arena. Array, Lambda,
+// and Ref payloads are deliberately never retained or dereferenced by the
+// convergence checker; they produce an infinite residual. If a Text snapshot
+// cannot be copied within that cap, it is incomparable and also produces an
+// infinite residual. Callers supply the SCC list, the per-cell evaluation
+// lambda, and the per-cell commit lambda. The caller is also responsible for
+// snapshotting and restoring any state that should not be visible to the
+// solver — once `run_iterative_solve` returns, the cell store has been mutated
+// to the converged values or the last finite-budget approximation.
 
 #ifndef FORMULON_EVAL_ITERATIVE_SOLVER_H_
 #define FORMULON_EVAL_ITERATIVE_SOLVER_H_
@@ -90,8 +96,9 @@ struct IterativeOutcome {
 ///   max_residual      — the maximum |new - old| across all formula cells
 ///                       updated during the sweep that just completed.
 ///                       `+infinity` for any iteration in which a cell's
-///                       value kind changed (Number -> Text etc.) or in
-///                       which any cell produced NaN.
+///                       value kind changed (Number -> Text etc.), in which
+///                       any cell produced NaN, or in which a cell produced
+///                       a non-scalar Array/Lambda/Ref value.
 ///   max_iterations    — the iteration cap configured for this solve.
 ///   user_data         — the opaque pointer the caller passed alongside
 ///                       the callback; the solver does not interpret it.
@@ -112,6 +119,11 @@ using IterativeProgressCb = bool (*)(std::uint32_t iteration, double max_residua
 /// update the cell store so the *next* `evaluate_one` call observes the
 /// new value (typically `Sheet::set_cell_cached_value`). Both callbacks
 /// are invoked synchronously and serially; no thread safety is required.
+/// Values returned from `evaluate_one` may borrow a per-pass arena: the
+/// solver copies the scalar or Text bytes into its owned convergence snapshot
+/// before invoking `commit`, and never uses a borrowed Text/Array/Lambda/Ref
+/// payload after that snapshot point. Text allocation failure is treated as
+/// an incomparable snapshot, never as equal to an empty string.
 ///
 /// `progress` is an optional callback invoked once per Gauss-Seidel
 /// sweep. Pass `nullptr` to opt out — behaviour is then identical to

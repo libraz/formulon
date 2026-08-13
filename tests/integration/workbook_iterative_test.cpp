@@ -129,6 +129,33 @@ TEST(WorkbookIterative, EnabledAveragingCycleConvergesToSharedValue) {
   EXPECT_NEAR(b1.as_number(), 20.0, 0.001);
 }
 
+TEST(WorkbookIterative, WholeColumnAggregateCycleConvergesAndCountsBothCells) {
+  Workbook wb = Workbook::create();
+  // A1 = C1 * 0.5 + 1 and C1 = SUM(A:A) form a cycle through a compact
+  // whole-column dependency. The ordering edge must preserve the fresh A1
+  // value before C1 is evaluated on each Gauss-Seidel sweep.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=C1*0.5+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(A:A)")));
+
+  eval::IterativeOptions opts;
+  opts.enabled = true;
+  opts.max_iterations = 200U;
+  opts.max_change = 1e-9;
+  wb.set_iterative_options(opts);
+
+  auto stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().iterative_cells, 2U);
+  EXPECT_EQ(stats.value().cycle_cells, 0U);
+
+  const Value a1 = StoredValue(wb, 0U, 0U, 0U);
+  const Value c1 = StoredValue(wb, 0U, 0U, 2U);
+  ASSERT_TRUE(a1.is_number());
+  ASSERT_TRUE(c1.is_number());
+  EXPECT_NEAR(a1.as_number(), 2.0, 1e-6);
+  EXPECT_NEAR(c1.as_number(), 2.0, 1e-6);
+}
+
 TEST(WorkbookIterative, EnabledGrowingCycleKeepsFiniteApproximation) {
   // A1 = 2 * A1 + 1: a single-cell self-referential SCC whose recurrence
   // grows without bound. Excel has no residual-growth cutoff, so 100

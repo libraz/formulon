@@ -9,15 +9,72 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "eval/dep_graph.h"
+#include "utils/arena.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 
 namespace formulon::eval {
 namespace {
+
+// A Value may borrow the evaluator's per-pass Arena. Keeping a borrowed Value
+// as the previous-iteration baseline is therefore unsafe: the next member of
+// an SCC can reset the arena and free that payload before the baseline is
+// compared. ConvergenceSnapshot owns the only payloads that participate in
+// convergence (scalar values and Text bytes) and intentionally treats all
+// pointer-shaped kinds as unstable without retaining or dereferencing them.
+// Text bytes are copied into a solver-owned, capped Arena; the view is valid
+// only while the snapshot's corresponding Arena remains the previous/current
+// sweep buffer.
+struct ConvergenceSnapshot {
+  ValueKind kind = ValueKind::Blank;
+  // Scalar kinds are copied by value. This member is never populated for
+  // Text, Array, Lambda, or Ref, so it cannot retain a borrowed pointer.
+  Value scalar = Value::blank();
+  // Text is copied with an explicit byte length so embedded NUL bytes remain
+  // part of the convergence baseline. An allocation failure makes the
+  // snapshot incomparable rather than allowing a false convergence result.
+  std::string_view text;
+  bool comparable = true;
+
+  static ConvergenceSnapshot capture(const Value& value, Arena& arena) noexcept {
+    ConvergenceSnapshot snapshot;
+    snapshot.kind = value.kind();
+    switch (snapshot.kind) {
+      case ValueKind::Blank:
+      case ValueKind::Number:
+      case ValueKind::Bool:
+      case ValueKind::Error:
+        snapshot.scalar = value;
+        break;
+      case ValueKind::Text: {
+        const std::string_view bytes = value.as_text();
+        if (bytes.empty()) {
+          break;
+        }
+        snapshot.text = arena.intern(bytes);
+        if (snapshot.text.size() != bytes.size()) {
+          snapshot.comparable = false;
+        }
+        break;
+      }
+      case ValueKind::Array:
+      case ValueKind::Ref:
+      case ValueKind::Lambda:
+        // Never call an accessor for pointer-shaped payloads. Their shape,
+        // contents, and pointer identity are all arena-lifetime dependent;
+        // any such result must keep the residual at +infinity.
+        snapshot.comparable = false;
+        break;
+    }
+    return snapshot;
+  }
+};
 
 // Returns the absolute delta between `prev` and `curr` for the purpose of
 // the convergence test.
@@ -27,29 +84,36 @@ namespace {
 // formula that converged onto NaN never claims convergence (Excel surfaces
 // NaN as `#NUM!` in practice, but we play it safe at the solver layer).
 //
-// Any kind change, or any non-numeric pair, returns +infinity. This makes
-// "Number -> Text" or "Number -> Error" or "Text -> Text" never read as
-// converged, which is the correct Excel-observable behaviour: iterative
-// calc is fundamentally a numeric fixed-point search, and a kind flip
-// means the formula has not stabilised. (A genuine `=42` cell does not
-// participate in a cycle SCC in the first place, so this is not a
-// regression for literal cells.)
-double abs_delta(const Value& prev, const Value& curr) noexcept {
-  if (prev.kind() != curr.kind()) {
+// Any kind change, an incomparable snapshot, or any non-numeric pair returns
+// +infinity. Same-kind Text, Bool, Error, and Blank values compare their
+// copied payloads. Array, Lambda, and Ref snapshots always return +infinity:
+// no arena-backed payload is retained or dereferenced by the convergence
+// checker.
+double abs_delta(const ConvergenceSnapshot& prev, const ConvergenceSnapshot& curr) noexcept {
+  if (!prev.comparable || !curr.comparable || prev.kind != curr.kind) {
     return std::numeric_limits<double>::infinity();
   }
-  if (curr.kind() != ValueKind::Number) {
-    // Same kind, non-numeric: equal -> 0, otherwise infinity. Equality
-    // for the non-numeric kinds we care about (Text, Bool, Error) is
-    // total and cheap.
-    return (prev == curr) ? 0.0 : std::numeric_limits<double>::infinity();
+  switch (curr.kind) {
+    case ValueKind::Blank:
+    case ValueKind::Bool:
+    case ValueKind::Error:
+      return (prev.scalar == curr.scalar) ? 0.0 : std::numeric_limits<double>::infinity();
+    case ValueKind::Number: {
+      const double prev_num = prev.scalar.as_number();
+      const double curr_num = curr.scalar.as_number();
+      if (std::isnan(prev_num) || std::isnan(curr_num)) {
+        return std::numeric_limits<double>::infinity();
+      }
+      return std::fabs(curr_num - prev_num);
+    }
+    case ValueKind::Text:
+      return (prev.text == curr.text) ? 0.0 : std::numeric_limits<double>::infinity();
+    case ValueKind::Array:
+    case ValueKind::Ref:
+    case ValueKind::Lambda:
+      return std::numeric_limits<double>::infinity();
   }
-  const double prev_num = prev.as_number();
-  const double curr_num = curr.as_number();
-  if (std::isnan(prev_num) || std::isnan(curr_num)) {
-    return std::numeric_limits<double>::infinity();
-  }
-  return std::fabs(curr_num - prev_num);
+  return std::numeric_limits<double>::infinity();
 }
 
 }  // namespace
@@ -73,23 +137,32 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
   // check inspects a delta.
   const std::uint32_t max_iters = (opts.max_iterations == 0U) ? 1U : opts.max_iterations;
 
-  // Per-cell snapshot of the *previous* iteration's value. Initialised
-  // from the per-cell `evaluate_one` snapshot caller is responsible for —
-  // the caller passes a live evaluator, so the natural seed is the
-  // current `cached_value`. We do not have direct access to that here, so
-  // we rely on the protocol: the *first* iteration always reports an
-  // infinite delta (because `prev_values` starts empty / Blank), which
-  // means the first iteration is never confused for convergence.
-  std::unordered_map<CellNodeId, Value, CellNodeIdHash> prev_values;
-  prev_values.reserve(scc.size());
+  // Per-cell snapshots of the previous and current iterations. Seed the
+  // previous map with comparable Blank values to preserve the legacy solver
+  // contract: a Blank result can converge on the first sweep, while Number
+  // and Text results still see the initial kind mismatch as +infinity. Text
+  // views point into the matching Arena only:
+  // `previous_snapshots` is never reset while it is the baseline, and the
+  // two map/Arena pairs are swapped only after the current sweep finishes.
+  // This bounds retained Text storage to at most two sweep buffers instead of
+  // accumulating one heap string per cell per iteration.
+  std::unordered_map<CellNodeId, ConvergenceSnapshot, CellNodeIdHash> previous_snapshots;
+  std::unordered_map<CellNodeId, ConvergenceSnapshot, CellNodeIdHash> current_snapshots;
+  previous_snapshots.reserve(scc.size());
+  current_snapshots.reserve(scc.size());
+  Arena previous_arena(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes);
+  Arena current_arena(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes);
   for (CellNodeId cell : scc) {
-    // Seed with Blank; `abs_delta(Blank, anything)` is +infinity for
-    // numeric outputs (kind mismatch) which is exactly what we want for
-    // the first iteration.
-    prev_values.emplace(cell, Value::blank());
+    previous_snapshots.emplace(cell, ConvergenceSnapshot{});
   }
 
   for (std::uint32_t iter = 0U; iter < max_iters; ++iter) {
+    // At this point current_arena/current_snapshots belong to the sweep that
+    // is no longer the convergence baseline. Drop its views before resetting
+    // the Arena; previous_arena/previous_snapshots still hold the complete
+    // prior sweep.
+    current_snapshots.clear();
+    current_arena.reset();
     double max_delta = 0.0;
 
     // Single Gauss-Seidel-style pass: evaluate each member in `scc` order
@@ -101,27 +174,22 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
     // which is what Excel does when iterative calc is enabled.
     for (CellNodeId cell : scc) {
       Value curr = evaluate_one(cell);
-      // Compute delta against the snapshot *before* committing the new
-      // value, so the next member of the SCC observes the freshest
-      // value but the convergence calculation still sees the inter-
-      // iteration change. `prev_values` was seeded for every member in
-      // `scc` above; `find()` is therefore guaranteed to hit, but we
-      // guard defensively for SCCs with duplicate ids (a logic-bug
-      // shape that should never reach here).
-      auto entry = prev_values.find(cell);
-      const double delta =
-          (entry != prev_values.end()) ? abs_delta(entry->second, curr) : std::numeric_limits<double>::infinity();
+      // Capture the result before committing it. `commit` may copy the value
+      // into workbook storage or otherwise advance/reset the evaluator
+      // Arena; the convergence check must only inspect the current sweep's
+      // owned snapshot.
+      ConvergenceSnapshot curr_snapshot = ConvergenceSnapshot::capture(curr, current_arena);
+      auto previous_entry = previous_snapshots.find(cell);
+      const double delta = (previous_entry != previous_snapshots.end())
+                               ? abs_delta(previous_entry->second, curr_snapshot)
+                               : std::numeric_limits<double>::infinity();
       if (delta > max_delta) {
         max_delta = delta;
       }
       // Commit so subsequent members in this iteration (and the next
       // iteration) see the new value.
       commit(cell, curr);
-      if (entry != prev_values.end()) {
-        entry->second = curr;
-      } else {
-        prev_values.emplace(cell, curr);
-      }
+      current_snapshots.insert_or_assign(cell, std::move(curr_snapshot));
     }
 
     out.iterations_run = iter + 1U;
@@ -148,6 +216,12 @@ IterativeOutcome run_iterative_solve_impl(const std::vector<CellNodeId>& scc, co
       out.converged = true;
       return out;
     }
+
+    // The current map's views now become the next iteration's baseline. The
+    // old baseline is moved to the current buffer and will be reset only at
+    // the top of the next sweep, after all of its views are no longer read.
+    std::swap(previous_snapshots, current_snapshots);
+    std::swap(previous_arena, current_arena);
   }
 
   // Excel has no residual-growth cutoff. Iteration-limit exhaustion leaves
