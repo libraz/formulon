@@ -9,7 +9,9 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -343,11 +345,25 @@ std::vector<std::uint8_t> BuildEntriesZip(
   return out;
 }
 
-constexpr std::size_t kCumulativeChunkBytes = 64ULL * 1024ULL * 1024ULL;
+/// The cumulative-budget tests exercise the boundary through `open()`'s
+/// lower-only ceiling parameter rather than the 256 MiB production constant.
+/// The shape under test is identical — four chunks reach the ceiling exactly
+/// and a trailing one-byte entry proves it is exhausted — but the arithmetic
+/// runs on 4 MiB instead of 256 MiB, which keeps a security boundary in the
+/// fast tier instead of pushing 768 MiB of decompression through it.
+constexpr std::size_t kCumulativeChunkBytes = 1ULL * 1024ULL * 1024ULL;
+constexpr std::size_t kCumulativeCeilingBytes = 4ULL * kCumulativeChunkBytes;
+
+/// Renders the `used=/requested=/ceiling=` tail of a cumulative-budget error
+/// context, so the expectations stay tied to the constants above.
+std::string CumulativeOverflowContext(std::string_view entry, std::size_t used, std::size_t requested) {
+  return "limit=total entry=" + std::string(entry) + " used=" + std::to_string(used) +
+         " requested=" + std::to_string(requested) + " ceiling=" + std::to_string(kCumulativeCeilingBytes);
+}
 
 /// Builds the exact-boundary archive used by cumulative-budget tests. The
 /// archive is small on disk because the repeated pattern compresses well, but
-/// each central-directory entry still advertises a 64 MiB extraction.
+/// each central-directory entry still advertises a full chunk of extraction.
 std::vector<std::uint8_t> BuildCumulativeBoundaryZip() {
   std::vector<std::uint8_t> payload(kCumulativeChunkBytes, 0u);
   for (std::size_t i = 0; i < payload.size(); ++i) {
@@ -501,13 +517,13 @@ TEST(ZipReader, ReadEntryRejectsHighRatioEntry) {
 }
 
 TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
-  // Four 64 MiB entries land exactly on the 256 MiB session ceiling. A
-  // same-entry reread and a one-byte fifth entry both fail before allocation;
-  // the latter makes the +1 boundary explicit. Reopening resets the budget.
+  // Four chunks land exactly on the session ceiling. A same-entry reread and a
+  // one-byte fifth entry both fail before allocation; the latter makes the +1
+  // boundary explicit. Reopening resets the budget.
   const std::vector<std::uint8_t> bytes = BuildCumulativeBoundaryZip();
 
   ZipReader zip;
-  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes), kCumulativeCeilingBytes)));
   ASSERT_EQ(zip.entry_count(), 5U);
 
   for (int i = 0; i < 4; ++i) {
@@ -520,12 +536,13 @@ TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
   auto reread = zip.read_entry("blob_0.bin");
   ASSERT_FALSE(static_cast<bool>(reread));
   EXPECT_EQ(reread.error().code, FormulonErrorCode::kIoFileTooLarge);
-  EXPECT_EQ(reread.error().context, "limit=total entry=blob_0.bin used=268435456 requested=67108864 ceiling=268435456");
+  EXPECT_EQ(reread.error().context,
+            CumulativeOverflowContext("blob_0.bin", kCumulativeCeilingBytes, kCumulativeChunkBytes));
 
   auto over = zip.read_entry("one.bin");
   ASSERT_FALSE(static_cast<bool>(over));
   EXPECT_EQ(over.error().code, FormulonErrorCode::kIoFileTooLarge);
-  EXPECT_EQ(over.error().context, "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+  EXPECT_EQ(over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
 
   // A miniz validation failure after the budget charge must also consume the
   // advertised bytes. The corrupted first entry plus three valid entries
@@ -534,7 +551,7 @@ TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
   std::vector<std::uint8_t> corrupt_bytes = bytes;
   ASSERT_TRUE(CorruptCentralDirectoryCrc(corrupt_bytes, "blob_0.bin"));
   ZipReader corrupt_zip;
-  ASSERT_TRUE(static_cast<bool>(corrupt_zip.open(SpanOf(corrupt_bytes))));
+  ASSERT_TRUE(static_cast<bool>(corrupt_zip.open(SpanOf(corrupt_bytes), kCumulativeCeilingBytes)));
   auto failed_extract = corrupt_zip.read_entry("blob_0.bin");
   ASSERT_FALSE(static_cast<bool>(failed_extract));
   EXPECT_EQ(failed_extract.error().code, FormulonErrorCode::kIoZipCorrupt);
@@ -547,21 +564,48 @@ TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
   auto charged_failure_over = corrupt_zip.read_entry("one.bin");
   ASSERT_FALSE(static_cast<bool>(charged_failure_over));
   EXPECT_EQ(charged_failure_over.error().code, FormulonErrorCode::kIoFileTooLarge);
-  EXPECT_EQ(charged_failure_over.error().context,
-            "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+  EXPECT_EQ(charged_failure_over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
 
-  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes), kCumulativeCeilingBytes)));
   auto reopened = zip.read_entry("one.bin");
   ASSERT_TRUE(static_cast<bool>(reopened)) << "post-reopen read_entry failed: " << reopened.error().message;
   ASSERT_EQ(reopened.value().size(), 1U);
   EXPECT_EQ(reopened.value()[0], 0xA5u);
 }
 
+TEST(ZipReader, OpenCeilingOnlyTightensTheCumulativeBudget) {
+  const std::vector<std::uint8_t> bytes = BuildCumulativeBoundaryZip();
+
+  // A ceiling below the default is honoured: two chunks exhaust it.
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes), 2U * kCumulativeChunkBytes)));
+  for (int i = 0; i < 2; ++i) {
+    const std::string name = "blob_" + std::to_string(i) + ".bin";
+    ASSERT_TRUE(static_cast<bool>(zip.read_entry(name))) << "read_entry failed at i=" << i;
+  }
+  auto over = zip.read_entry("blob_2.bin");
+  ASSERT_FALSE(static_cast<bool>(over));
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_NE(over.error().context.find("ceiling=" + std::to_string(2U * kCumulativeChunkBytes)), std::string::npos);
+
+  // A request above the default cannot raise it. The archive stays well inside
+  // `kMaxTotalExtractedBytes`, so every entry reads: what is pinned here is
+  // that the oversized request is accepted and clamped rather than rejected or
+  // honoured verbatim. Driving the clamped ceiling to overflow would take a
+  // 256 MiB extraction, which does not belong in the fast tier.
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes), std::numeric_limits<std::size_t>::max())));
+  for (int i = 0; i < 4; ++i) {
+    const std::string name = "blob_" + std::to_string(i) + ".bin";
+    ASSERT_TRUE(static_cast<bool>(zip.read_entry(name))) << "post-clamp read failed at i=" << i;
+  }
+  EXPECT_TRUE(static_cast<bool>(zip.read_entry("one.bin")));
+}
+
 TEST(ZipReader, CumulativeBudgetSurvivesMoveConstructionAndAssignment) {
   const std::vector<std::uint8_t> bytes = BuildCumulativeBoundaryZip();
 
   ZipReader construct_source;
-  ASSERT_TRUE(static_cast<bool>(construct_source.open(SpanOf(bytes))));
+  ASSERT_TRUE(static_cast<bool>(construct_source.open(SpanOf(bytes), kCumulativeCeilingBytes)));
   auto construct_prefix = construct_source.read_entry("blob_0.bin");
   ASSERT_TRUE(static_cast<bool>(construct_prefix));
   EXPECT_EQ(construct_prefix.value().size(), kCumulativeChunkBytes);
@@ -576,14 +620,14 @@ TEST(ZipReader, CumulativeBudgetSurvivesMoveConstructionAndAssignment) {
   auto construct_over = move_constructed.read_entry("one.bin");
   ASSERT_FALSE(static_cast<bool>(construct_over));
   EXPECT_EQ(construct_over.error().code, FormulonErrorCode::kIoFileTooLarge);
-  EXPECT_EQ(construct_over.error().context, "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+  EXPECT_EQ(construct_over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
 
   ZipReader move_assigned;
   move_assigned = std::move(move_constructed);
   auto assignment_over = move_assigned.read_entry("one.bin");
   ASSERT_FALSE(static_cast<bool>(assignment_over));
   EXPECT_EQ(assignment_over.error().code, FormulonErrorCode::kIoFileTooLarge);
-  EXPECT_EQ(assignment_over.error().context, "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+  EXPECT_EQ(assignment_over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
 }
 
 TEST(ZipReader, PolicyRejectionsDoNotConsumeCumulativeBudget) {
@@ -612,7 +656,7 @@ TEST(ZipReader, PolicyRejectionsDoNotConsumeCumulativeBudget) {
   const auto assert_boundary_after_rejection = [&](const std::string& rejected_name, FormulonErrorCode expected_code,
                                                    std::string_view expected_limit) {
     ZipReader zip;
-    ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+    ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes), kCumulativeCeilingBytes)));
     auto rejected = zip.read_entry(rejected_name);
     ASSERT_FALSE(static_cast<bool>(rejected));
     EXPECT_EQ(rejected.error().code, expected_code);
@@ -628,7 +672,7 @@ TEST(ZipReader, PolicyRejectionsDoNotConsumeCumulativeBudget) {
     auto over = zip.read_entry("one.bin");
     ASSERT_FALSE(static_cast<bool>(over));
     EXPECT_EQ(over.error().code, FormulonErrorCode::kIoFileTooLarge);
-    EXPECT_EQ(over.error().context, "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+    EXPECT_EQ(over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
   };
 
   assert_boundary_after_rejection("encrypted.bin", FormulonErrorCode::kIoZipEncrypted, "entry=encrypted.bin");

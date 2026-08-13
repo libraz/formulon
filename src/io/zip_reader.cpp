@@ -5,6 +5,7 @@
 
 #include "io/zip_reader.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -79,11 +80,13 @@ ZipReader::~ZipReader() = default;
 ZipReader::ZipReader(ZipReader&&) noexcept = default;
 ZipReader& ZipReader::operator=(ZipReader&&) noexcept = default;
 
-Expected<void, Error> ZipReader::open(ByteSpan bytes) {
+Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extracted_bytes) {
   // Reset any previously opened archive first so callers can reuse the
   // instance (idempotent open).
   impl_->close();
-  impl_->total_extracted_bytes = ResourceBudget(kMaxTotalExtractedBytes, FormulonErrorCode::kIoFileTooLarge);
+  // Clamped, so the parameter can only tighten the bound.
+  const std::size_t ceiling = std::min(max_total_extracted_bytes, kMaxTotalExtractedBytes);
+  impl_->total_extracted_bytes = ResourceBudget(ceiling, FormulonErrorCode::kIoFileTooLarge);
 
   if (bytes.data == nullptr || bytes.size == 0) {
     return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: empty buffer",

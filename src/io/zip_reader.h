@@ -90,7 +90,13 @@ class ZipReader {
   /// initialise from the buffer (truncated central directory, wrong
   /// magic, etc.). Calling `open()` a second time on the same instance
   /// closes the previous archive first.
-  Expected<void, Error> open(ByteSpan bytes);
+  ///
+  /// `max_total_extracted_bytes` lowers this session's cumulative
+  /// extraction budget below `kMaxTotalExtractedBytes`. It is clamped to
+  /// that constant, so the ceiling can only be tightened, never raised: a
+  /// caller handling untrusted input can budget more strictly than the
+  /// default, and no caller can weaken the ZIP-bomb bound.
+  Expected<void, Error> open(ByteSpan bytes, std::size_t max_total_extracted_bytes = kMaxTotalExtractedBytes);
 
   /// Number of entries in the open archive. Returns 0 if the reader has
   /// not been opened.
