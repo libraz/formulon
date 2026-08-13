@@ -221,6 +221,9 @@ class JsWorkbook {
 
   JsStatus addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, const std::string& target,
                         const std::string& display, const std::string& tooltip, const std::string& location);
+  JsStatus addHyperlinkRange(uint32_t sheet, uint32_t row, uint32_t col, uint32_t lastRow, uint32_t lastCol,
+                             const std::string& target, const std::string& display, const std::string& tooltip,
+                             const std::string& location);
   JsStatus removeHyperlink(uint32_t sheet, uint32_t row, uint32_t col);
   JsStatus removeHyperlinkAt(uint32_t sheet, uint32_t index);
   JsStatus clearHyperlinks(uint32_t sheet);

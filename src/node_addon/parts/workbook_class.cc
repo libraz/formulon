@@ -180,6 +180,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           InstanceMethod<&Workbook::AddFill>("addFill"),
           InstanceMethod<&Workbook::AddFont>("addFont"),
           InstanceMethod<&Workbook::AddHyperlink>("addHyperlink"),
+          InstanceMethod<&Workbook::AddHyperlinkRange>("addHyperlinkRange"),
           InstanceMethod<&Workbook::AddMerge>("addMerge"),
           InstanceMethod<&Workbook::AddNumFmt>("addNumFmt"),
           InstanceMethod<&Workbook::AddSheet>("addSheet"),

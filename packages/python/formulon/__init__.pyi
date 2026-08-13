@@ -186,6 +186,8 @@ class MergeRange:
 class Hyperlink:
     row: int
     col: int
+    last_row: int
+    last_col: int
     target: str
     location: str
     display: str
@@ -789,6 +791,18 @@ class Workbook:
         sheet: int,
         row: int,
         col: int,
+        target: str,
+        display: str = ...,
+        tooltip: str = ...,
+        location: str = ...,
+    ) -> None: ...
+    def add_hyperlink_range(
+        self,
+        sheet: int,
+        row: int,
+        col: int,
+        last_row: int,
+        last_col: int,
         target: str,
         display: str = ...,
         tooltip: str = ...,

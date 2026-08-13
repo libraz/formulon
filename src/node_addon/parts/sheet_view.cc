@@ -619,6 +619,44 @@ Napi::Value Workbook::AddHyperlink(const Napi::CallbackInfo& info) {
   fm_hyperlink hl{};
   hl.row = row;
   hl.col = col;
+  hl.last_row = row;
+  hl.last_col = col;
+  hl.target = target.empty() ? nullptr : target.c_str();
+  hl.location = location.empty() ? nullptr : location.c_str();
+  hl.display = display.empty() ? nullptr : display.c_str();
+  hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
+  fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
+  return MakeStatus(env, rc);
+}
+
+Napi::Value Workbook::AddHyperlinkRange(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return NullHandleError(env);
+  }
+  if (info.Length() < 9 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsNumber() ||
+      !info[4].IsNumber() || !info[5].IsString() || !info[6].IsString() || !info[7].IsString() || !info[8].IsString()) {
+    Napi::TypeError::New(env,
+                         "addHyperlinkRange expects (sheet:number, row:number, col:number, "
+                         "lastRow:number, lastCol:number, target:string, display:string, "
+                         "tooltip:string, location:string)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const uint32_t sheet = ArgU32(info, 0);
+  const uint32_t row = ArgU32(info, 1);
+  const uint32_t col = ArgU32(info, 2);
+  const uint32_t last_row = ArgU32(info, 3);
+  const uint32_t last_col = ArgU32(info, 4);
+  const std::string target = ArgString(info, 5);
+  const std::string display = ArgString(info, 6);
+  const std::string tooltip = ArgString(info, 7);
+  const std::string location = ArgString(info, 8);
+  fm_hyperlink hl{};
+  hl.row = row;
+  hl.col = col;
+  hl.last_row = last_row;
+  hl.last_col = last_col;
   hl.target = target.empty() ? nullptr : target.c_str();
   hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
@@ -647,6 +685,8 @@ Napi::Value Workbook::GetHyperlinks(const Napi::CallbackInfo& info) {
     Napi::Object item = Napi::Object::New(env);
     item.Set("row", Napi::Number::New(env, h.row));
     item.Set("col", Napi::Number::New(env, h.col));
+    item.Set("lastRow", Napi::Number::New(env, h.last_row));
+    item.Set("lastCol", Napi::Number::New(env, h.last_col));
     item.Set("target", Napi::String::New(env, h.target != nullptr ? h.target : ""));
     item.Set("location", Napi::String::New(env, h.location != nullptr ? h.location : ""));
     item.Set("display", Napi::String::New(env, h.display != nullptr ? h.display : ""));

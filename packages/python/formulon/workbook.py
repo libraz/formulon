@@ -414,10 +414,12 @@ class MergeRange:
 
 @dataclass(frozen=True)
 class Hyperlink:
-    """A sheet hyperlink anchored at ``(row, col)``."""
+    """A sheet hyperlink covering an inclusive cell rectangle."""
 
     row: int
     col: int
+    last_row: int
+    last_col: int
     target: str
     location: str
     display: str
@@ -1777,7 +1779,53 @@ class Workbook:
         owned: List[int] = []
         ptr = S.alloc_struct(LIB, S.HYPERLINK)
         try:
-            S.HYPERLINK.pack(LIB, ptr, {"row": int(row), "col": int(col)})
+            S.HYPERLINK.pack(
+                LIB,
+                ptr,
+                {
+                    "row": int(row),
+                    "col": int(col),
+                    "last_row": int(row),
+                    "last_col": int(col),
+                },
+            )
+            S.write_str_field(LIB, ptr, S.HYPERLINK, "target", target, owned)
+            S.write_str_field(LIB, ptr, S.HYPERLINK, "location", location, owned)
+            S.write_str_field(LIB, ptr, S.HYPERLINK, "display", display, owned)
+            S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", tooltip, owned)
+            _check(LIB.fm_sheet_add_hyperlink(h, int(sheet), ptr), "fm_sheet_add_hyperlink")
+        finally:
+            LIB.free(ptr)
+            for p in owned:
+                LIB.free(p)
+
+    def add_hyperlink_range(
+        self,
+        sheet: int,
+        row: int,
+        col: int,
+        last_row: int,
+        last_col: int,
+        target: str,
+        display: str = "",
+        tooltip: str = "",
+        location: str = "",
+    ) -> None:
+        """Append a hyperlink covering the inclusive cell rectangle."""
+        h = self._require()
+        owned: List[int] = []
+        ptr = S.alloc_struct(LIB, S.HYPERLINK)
+        try:
+            S.HYPERLINK.pack(
+                LIB,
+                ptr,
+                {
+                    "row": int(row),
+                    "col": int(col),
+                    "last_row": int(last_row),
+                    "last_col": int(last_col),
+                },
+            )
             S.write_str_field(LIB, ptr, S.HYPERLINK, "target", target, owned)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "location", location, owned)
             S.write_str_field(LIB, ptr, S.HYPERLINK, "display", display, owned)
@@ -1831,6 +1879,8 @@ class Workbook:
                     Hyperlink(
                         row=d["row"],
                         col=d["col"],
+                        last_row=d["last_row"],
+                        last_col=d["last_col"],
                         target=LIB.read_cstr(d["target"]),
                         location=LIB.read_cstr(d["location"]),
                         display=LIB.read_cstr(d["display"]),

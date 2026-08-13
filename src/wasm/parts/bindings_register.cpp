@@ -153,6 +153,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addFill", &JsWorkbook::addFill)
       .function("addFont", &JsWorkbook::addFont)
       .function("addHyperlink", &JsWorkbook::addHyperlink)
+      .function("addHyperlinkRange", &JsWorkbook::addHyperlinkRange)
       .function("addMerge", &JsWorkbook::addMerge)
       .function("addNumFmt", &JsWorkbook::addNumFmt)
       .function("addSheet", &JsWorkbook::addSheet)

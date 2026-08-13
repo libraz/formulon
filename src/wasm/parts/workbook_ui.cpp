@@ -208,6 +208,27 @@ JsStatus JsWorkbook::addHyperlink(uint32_t sheet, uint32_t row, uint32_t col, co
   fm_hyperlink hl{};
   hl.row = row;
   hl.col = col;
+  hl.last_row = row;
+  hl.last_col = col;
+  hl.target = target.empty() ? nullptr : target.c_str();
+  hl.location = location.empty() ? nullptr : location.c_str();
+  hl.display = display.empty() ? nullptr : display.c_str();
+  hl.tooltip = tooltip.empty() ? nullptr : tooltip.c_str();
+  fm_status_t rc = fm_sheet_add_hyperlink(handle_, sheet, hl);
+  return status_from_rc(rc);
+}
+
+JsStatus JsWorkbook::addHyperlinkRange(uint32_t sheet, uint32_t row, uint32_t col, uint32_t lastRow, uint32_t lastCol,
+                                       const std::string& target, const std::string& display,
+                                       const std::string& tooltip, const std::string& location) {
+  if (handle_ == nullptr) {
+    return error_status(7000);
+  }
+  fm_hyperlink hl{};
+  hl.row = row;
+  hl.col = col;
+  hl.last_row = lastRow;
+  hl.last_col = lastCol;
   hl.target = target.empty() ? nullptr : target.c_str();
   hl.location = location.empty() ? nullptr : location.c_str();
   hl.display = display.empty() ? nullptr : display.c_str();
@@ -263,6 +284,8 @@ emscripten::val JsWorkbook::getHyperlinks(uint32_t sheet) const {
     emscripten::val item = emscripten::val::object();
     item.set("row", h.row);
     item.set("col", h.col);
+    item.set("lastRow", h.last_row);
+    item.set("lastCol", h.last_col);
     item.set("target", h.target != nullptr ? std::string(h.target) : std::string());
     item.set("location", h.location != nullptr ? std::string(h.location) : std::string());
     item.set("display", h.display != nullptr ? std::string(h.display) : std::string());

@@ -9,6 +9,7 @@
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
+#include "sheet.h"
 #include "utils/error.h"
 
 namespace {
@@ -46,6 +47,8 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
   fm_hyperlink hl{};
   hl.row = 1;
   hl.col = 2;
+  hl.last_row = 1;
+  hl.last_col = 2;
   hl.target = "https://example.com";
   hl.display = "Click";
   hl.tooltip = "Open site";
@@ -57,16 +60,53 @@ TEST_F(FormulonCApiSheetFeatures, HyperlinkAddAndIterate) {
   ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0, 0, &out), 0);
   EXPECT_EQ(out.row, 1U);
   EXPECT_EQ(out.col, 2U);
+  EXPECT_EQ(out.last_row, 1U);
+  EXPECT_EQ(out.last_col, 2U);
   ASSERT_NE(out.target, nullptr);
   EXPECT_STREQ(out.target, "https://example.com");
   EXPECT_STREQ(out.display, "Click");
   EXPECT_STREQ(out.tooltip, "Open site");
 }
 
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRangeAddAndIterate) {
+  fm_hyperlink hl{};
+  hl.row = 7U;
+  hl.col = 8U;
+  hl.last_row = 9U;
+  hl.last_col = 10U;
+  hl.target = "https://range.example";
+  ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0U, hl), 0);
+
+  fm_hyperlink out{};
+  ASSERT_EQ(fm_sheet_get_hyperlink_at(wb_, 0U, 0U, &out), 0);
+  EXPECT_EQ(out.row, 7U);
+  EXPECT_EQ(out.col, 8U);
+  EXPECT_EQ(out.last_row, 9U);
+  EXPECT_EQ(out.last_col, 10U);
+  EXPECT_STREQ(out.target, "https://range.example");
+}
+
+TEST_F(FormulonCApiSheetFeatures, HyperlinkRejectsInvertedRectangleAtomically) {
+  const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  fm_hyperlink hl{};
+  hl.row = 9U;
+  hl.col = 8U;
+  hl.last_row = 7U;
+  hl.last_col = 10U;
+  hl.target = "https://invalid.example";
+  EXPECT_EQ(fm_sheet_add_hyperlink(wb_, 0U, hl), invalid);
+
+  std::uint32_t count = 99U;
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0U, &count), 0);
+  EXPECT_EQ(count, 0U);
+}
+
 TEST_F(FormulonCApiSheetFeatures, HyperlinkAcceptsNullStringFields) {
   fm_hyperlink hl{};
   hl.row = 0;
   hl.col = 0;
+  hl.last_row = 0;
+  hl.last_col = 0;
   // All string pointers null => empty target/display/etc.
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, hl), 0);
   fm_hyperlink got{};
@@ -239,14 +279,20 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowCol) {
   fm_hyperlink a{};
   a.row = 1;
   a.col = 2;
+  a.last_row = 1;
+  a.last_col = 2;
   a.target = "https://a.example";
   fm_hyperlink b{};
   b.row = 3;
   b.col = 4;
+  b.last_row = 3;
+  b.last_col = 4;
   b.target = "https://b.example";
   fm_hyperlink c{};
   c.row = 1;
   c.col = 2;
+  c.last_row = 1;
+  c.last_col = 2;
   c.target = "https://dup.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, b), 0);
@@ -267,6 +313,8 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkByRowColNoMatch) {
   fm_hyperlink a{};
   a.row = 1;
   a.col = 2;
+  a.last_row = 1;
+  a.last_col = 2;
   a.target = "https://a.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, a), 0);
   // No hyperlink anchored at (5, 5); call is still kOk.
@@ -280,10 +328,14 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtValid) {
   fm_hyperlink a{};
   a.row = 1;
   a.col = 1;
+  a.last_row = 1;
+  a.last_col = 1;
   a.target = "https://a.example";
   fm_hyperlink b{};
   b.row = 2;
   b.col = 2;
+  b.last_row = 2;
+  b.last_col = 2;
   b.target = "https://b.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, b), 0);
@@ -302,6 +354,8 @@ TEST_F(FormulonCApiSheetFeatures, RemoveHyperlinkAtOutOfRange) {
   fm_hyperlink a{};
   a.row = 0;
   a.col = 0;
+  a.last_row = 0;
+  a.last_col = 0;
   a.target = "https://a.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, a), 0);
   EXPECT_NE(fm_sheet_remove_hyperlink_at(wb_, 0, 99), 0);
@@ -314,14 +368,20 @@ TEST_F(FormulonCApiSheetFeatures, ClearHyperlinks) {
   fm_hyperlink a{};
   a.row = 0;
   a.col = 0;
+  a.last_row = 0;
+  a.last_col = 0;
   a.target = "https://a.example";
   fm_hyperlink b{};
   b.row = 1;
   b.col = 1;
+  b.last_row = 1;
+  b.last_col = 1;
   b.target = "https://b.example";
   fm_hyperlink c{};
   c.row = 2;
   c.col = 2;
+  c.last_row = 2;
+  c.last_col = 2;
   c.target = "https://c.example";
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, a), 0);
   ASSERT_EQ(fm_sheet_add_hyperlink(wb_, 0, b), 0);
@@ -541,6 +601,49 @@ TEST_F(FormulonCApiSheetFeatures, ValidationAddRejectsNullRangesWithCount) {
   std::uint32_t count = 0;
   ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0, &count), 0);
   EXPECT_EQ(count, 0U);
+}
+
+TEST_F(FormulonCApiSheetFeatures, MutatorsRejectOutOfGridCoordinatesBeforeMutation) {
+  const fm_status_t invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+
+  fm_hyperlink hyperlink{};
+  hyperlink.row = 0U;
+  hyperlink.col = formulon::Sheet::kMaxCols;
+  hyperlink.last_row = 0U;
+  hyperlink.last_col = formulon::Sheet::kMaxCols;
+  EXPECT_EQ(fm_sheet_add_hyperlink(wb_, 0U, hyperlink), invalid);
+  std::uint32_t count = 99U;
+  ASSERT_EQ(fm_sheet_get_hyperlink_count(wb_, 0U, &count), 0);
+  EXPECT_EQ(count, 0U);
+
+  fm_merge_range merge{0U, 0U, 0U, formulon::Sheet::kMaxCols};
+  EXPECT_EQ(fm_sheet_add_merge(wb_, 0U, merge), invalid);
+  ASSERT_EQ(fm_sheet_get_merge_count(wb_, 0U, &count), 0);
+  EXPECT_EQ(count, 0U);
+
+  EXPECT_EQ(fm_sheet_set_comment(wb_, 0U, 0U, formulon::Sheet::kMaxCols, "Alice", "invalid"), invalid);
+  ASSERT_EQ(fm_sheet_get_comment_count(wb_, 0U, &count), 0);
+  EXPECT_EQ(count, 0U);
+
+  const fm_merge_range validation_ranges[2] = {
+      {0U, 0U, 0U, 0U},
+      {0U, 0U, 0U, formulon::Sheet::kMaxCols},
+  };
+  fm_data_validation validation{};
+  validation.ranges = validation_ranges;
+  validation.range_count = 2U;
+  EXPECT_EQ(fm_sheet_add_validation(wb_, 0U, validation), invalid);
+  ASSERT_EQ(fm_sheet_get_validation_count(wb_, 0U, &count), 0);
+  EXPECT_EQ(count, 0U);
+
+  // Rejected metadata must not leave the workbook in a state that makes the
+  // writer abort. A normal save is the process-survival regression check.
+  std::uint8_t* saved = nullptr;
+  std::size_t saved_len = 0U;
+  ASSERT_EQ(fm_workbook_save(wb_, &saved, &saved_len), 0);
+  ASSERT_NE(saved, nullptr);
+  EXPECT_GT(saved_len, 0U);
+  fm_buffer_free(saved);
 }
 
 }  // namespace

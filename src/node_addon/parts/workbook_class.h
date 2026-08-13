@@ -248,6 +248,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetComments(const Napi::CallbackInfo& info);
   Napi::Value SetComment(const Napi::CallbackInfo& info);
   Napi::Value AddHyperlink(const Napi::CallbackInfo& info);
+  Napi::Value AddHyperlinkRange(const Napi::CallbackInfo& info);
   Napi::Value GetHyperlinks(const Napi::CallbackInfo& info);
   Napi::Value RemoveHyperlink(const Napi::CallbackInfo& info);
   Napi::Value RemoveHyperlinkAt(const Napi::CallbackInfo& info);

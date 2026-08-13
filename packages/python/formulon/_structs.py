@@ -124,6 +124,8 @@ HYPERLINK = Struct(
     [
         ("row", U32),
         ("col", U32),
+        ("last_row", U32),
+        ("last_col", U32),
         ("target", PTR),
         ("location", PTR),
         ("display", PTR),

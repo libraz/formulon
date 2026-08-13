@@ -1028,6 +1028,8 @@ typedef struct {
 typedef struct {
   uint32_t row;
   uint32_t col;
+  uint32_t last_row;
+  uint32_t last_col;
   const char* target;
   const char* location;
   const char* display;
@@ -1046,11 +1048,13 @@ typedef struct {
 } fm_comment;
 
 /**
- * @brief Appends a merge range to the sheet's merge list.
+ * @brief Appends a hyperlink covering the inclusive rectangle
+ *        `(hl.row, hl.col)..(hl.last_row, hl.last_col)` to `sheet`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
- *         `kInvalidArgument` when `sheet` is out of range.
+ *         `kInvalidArgument` when `sheet` is out of range or the hyperlink
+ *         rectangle is inverted or outside the Excel grid.
  */
 FM_API fm_status_t fm_sheet_add_hyperlink(fm_workbook_t* wb, uint32_t sheet, fm_hyperlink hl);
 
@@ -1086,6 +1090,13 @@ FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, uint32_t sheet);
 
 /**
  * @brief Appends a merge range to the sheet's merge list.
+ *        Corners are normalised internally. The resulting inclusive
+ *        rectangle must lie within the Excel grid.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range or the merge
+ *         rectangle is outside the Excel grid.
  */
 FM_API fm_status_t fm_sheet_add_merge(fm_workbook_t* wb, uint32_t sheet, fm_merge_range merge);
 
@@ -1191,8 +1202,13 @@ FM_API fm_status_t fm_sheet_get_merge_count(fm_workbook_t* wb, uint32_t sheet, u
 /**
  * @brief Inserts or replaces the comment at `(row, col)` on `sheet`.
  *        Pass `text == NULL || text[0] == '\0'` to remove an existing
- *        comment. The strings are copied into the workbook handle's
- *        text storage.
+ *        comment. The strings are copied into the workbook handle's text
+ *        storage. The coordinate must lie within the Excel grid.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `sheet` is out of range or the coordinate
+ *         is outside the Excel grid.
  */
 FM_API fm_status_t fm_sheet_set_comment(fm_workbook_t* wb, uint32_t sheet, uint32_t row, uint32_t col,
                                         const char* author, const char* text);
@@ -1280,12 +1296,14 @@ FM_API fm_status_t fm_sheet_get_validation_at(fm_workbook_t* wb, uint32_t sheet,
  * `v.range_count` consecutive `fm_merge_range` values that the
  * implementation copies into the rule's owned storage. Range corners
  * are not normalised — callers should pass already-normalised
- * `(first <= last)` rectangles.
+ * `(first <= last)` rectangles. Every rectangle must lie within the
+ * Excel grid; all ranges are validated before the rule is stored.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
  *         `kInvalidArgument` when `sheet` is out of range or
- *         `v.range_count > 0 && v.ranges == NULL`.
+ *         `v.range_count > 0 && v.ranges == NULL`, or any supplied range is
+ *         outside the Excel grid.
  */
 FM_API fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, uint32_t sheet, fm_data_validation v);
 

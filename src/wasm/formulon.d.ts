@@ -580,6 +580,9 @@ export interface MergeRange {
 export interface HyperlinkEntry {
   row: number;
   col: number;
+  /** Inclusive bottom-right endpoint of the hyperlink rectangle. */
+  lastRow: number;
+  lastCol: number;
   /** Absolute or relative target (URL, email, internal ref, …). */
   target: string;
   /** In-workbook destination (empty for an external target). */
@@ -1642,6 +1645,19 @@ export interface Workbook {
     sheet: number,
     row: number,
     col: number,
+    target: string,
+    display: string,
+    tooltip: string,
+    location: string,
+  ): Status;
+  /** Appends a hyperlink covering the inclusive rectangle from `(row, col)`
+   *  through `(lastRow, lastCol)`. */
+  addHyperlinkRange(
+    sheet: number,
+    row: number,
+    col: number,
+    lastRow: number,
+    lastCol: number,
     target: string,
     display: string,
     tooltip: string,

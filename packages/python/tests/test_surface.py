@@ -98,7 +98,7 @@ class StructLayoutTests(unittest.TestCase):
 
     EXPECTED_SIZES = {
         "MERGE_RANGE": 16,
-        "HYPERLINK": 24,
+        "HYPERLINK": 32,
         "COMMENT": 16,
         "DATA_VALIDATION": 52,
         "SHEET_PROTECTION": 88,
@@ -305,11 +305,21 @@ class MergeCommentHyperlinkTests(unittest.TestCase):
 
     def test_hyperlink_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
-            wb.add_hyperlink(0, 0, 0, "https://example.com", "Example", "tip")
+            wb.add_hyperlink(0, 2, 3, "https://example.com", "Example", "tip")
             links = wb.get_hyperlinks(0)
             self.assertEqual(len(links), 1)
+            self.assertEqual((links[0].row, links[0].col), (2, 3))
+            self.assertEqual((links[0].last_row, links[0].last_col), (2, 3))
             self.assertEqual(links[0].target, "https://example.com")
             self.assertEqual(links[0].display, "Example")
+
+    def test_hyperlink_range_roundtrip_at_nonzero_coordinate(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.add_hyperlink_range(0, 4, 6, 7, 9, "https://example.com", "Range", "tip")
+            links = wb.get_hyperlinks(0)
+            self.assertEqual(len(links), 1)
+            self.assertEqual((links[0].row, links[0].col), (4, 6))
+            self.assertEqual((links[0].last_row, links[0].last_col), (7, 9))
 
 
 class ValidationTests(unittest.TestCase):
