@@ -11,6 +11,7 @@
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
+#include "value.h"
 
 namespace {
 
@@ -264,4 +265,40 @@ TEST(WorkbookSheetOpsCApi, EmptyMetadataListsExposeTheirCAbiContracts) {
 
   const char* path = nullptr;
   EXPECT_NE(fm_workbook_passthrough_at(wb.handle, 0, &path), 0);
+}
+
+TEST(WorkbookSheetOpsCApi, RenameAndRemoveRewriteFormulaThroughPublicPath) {
+  WorkbookGuard wb;
+  MakeThreeSheets(wb);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 2, 0, 0, 42.0), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=Gamma!A1"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  ASSERT_EQ(fm_workbook_rename_sheet(wb.handle, 2, "Delta"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  size_t cell_count = 0;
+  ASSERT_EQ(fm_workbook_cell_count(wb.handle, 0, &cell_count), 0);
+  ASSERT_EQ(cell_count, 1U);
+  uint32_t row = 99;
+  uint32_t col = 99;
+  const char* formula = nullptr;
+  fm_value_t cached{};
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, &formula, &cached), 0);
+  EXPECT_EQ(row, 0U);
+  EXPECT_EQ(col, 0U);
+  ASSERT_NE(formula, nullptr);
+  EXPECT_STREQ(formula, "=Delta!A1");
+  EXPECT_EQ(cached.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(cached.u.number, 42.0);
+
+  ASSERT_EQ(fm_workbook_remove_sheet(wb.handle, 2), 0);
+  ASSERT_EQ(fm_workbook_cell_at(wb.handle, 0, 0, &row, &col, &formula, &cached), 0);
+  ASSERT_NE(formula, nullptr);
+  EXPECT_STREQ(formula, "=#REF!");
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Delta"), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 2, 0, 0, 99.0), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &cached), 0);
+  EXPECT_EQ(cached.kind, FM_VAL_ERROR);
+  EXPECT_EQ(cached.u.error_code, static_cast<fm_error_code_t>(formulon::ErrorCode::Ref));
 }

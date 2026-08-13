@@ -150,14 +150,11 @@ class Workbook {
 
   /// Renames the sheet at `index` to `new_name`.
   ///
-  /// Updates the sheet's stored name and any workbook-scoped defined-name
-  /// targets that referenced the sheet by its old name. Cell formulas
-  /// inside the renamed sheet (and other sheets) are LEFT UNTOUCHED:
-  /// post-rename, cell formulas may carry stale sheet references; the
-  /// AST-level reference shifter generalisation handles those in a
-  /// separate follow-up bundle. Tables and pivot caches likewise keep
-  /// their authored sheet identifiers — they reference sheets by index,
-  /// not by name, so the rename is invisible to them.
+  /// Updates the sheet's stored name and rewrites every affected local
+  /// reference in cell formulas, defined names, conditional-format and
+  /// validation formulas, hyperlinks, table formulas, and pivot sources.
+  /// Unrelated literals, unresolved references, and external-workbook
+  /// references remain byte-identical.
   ///
   /// Errors:
   ///   * `kSheetIndexOutOfRange` when `index >= sheet_count()`.
@@ -171,14 +168,13 @@ class Workbook {
 
   /// Removes the sheet at `index`.
   ///
-  /// Defined names that reference the removed sheet are dropped (after
-  /// a future ref-shifter bundle they would surface `#REF!` instead;
-  /// the simpler drop semantics are an explicit limitation of this
-  /// bundle). The recalc engine's dep-graph entries for every cell on
-  /// the removed sheet are also dropped so subsequent recalcs do not
-  /// chase dangling references; cells on remaining sheets keep their
-  /// edges, but any edges that pointed into the removed sheet are
-  /// gone.
+  /// References to the removed sheet are rewritten to `#REF!` at the
+  /// affected AST subtree, preserving partial expressions and literals.
+  /// Sheet-scoped names and tables owned by the removed sheet are dropped;
+  /// surviving scopes and table indices are remapped. Pivot caches whose
+  /// real worksheet source was removed, and pivot tables bound to those
+  /// caches, are dropped. One final dependency-graph rebuild runs against
+  /// the final workbook topology.
   ///
   /// Errors:
   ///   * `kSheetIndexOutOfRange` when `index >= sheet_count()`.

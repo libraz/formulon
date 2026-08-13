@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -37,6 +38,7 @@
 #include "parser/parser.h"
 #include "parser/ref_transforms.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -75,11 +77,13 @@ std::string_view Workbook::intern_text(std::string_view text) {
 }
 
 Sheet& Workbook::add_sheet(std::string name) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   sheets_.emplace_back(Sheet{std::move(name)});
   return sheets_.back();
 }
 
 Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(validate_sheet_name(name));
   for (const Sheet& existing : sheets_) {
     if (strings::case_insensitive_eq(existing.name(), name)) {
@@ -107,8 +111,17 @@ namespace {
 // Precondition: the caller holds the engine mutex for the lifetime of the
 // `LockedMutator&`, and `sheets` is already in its final post-permutation
 // order.
-void reindex_all_formulas(const std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
+void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::LockedMutator& mutator,
                           const Workbook& workbook) {
+  // Defined-name retargets and sheet permutations invalidate every cached
+  // formula result. Clear both committed and blocked spill geometry before
+  // rebuilding edges; otherwise a NameRef that changed from SEQUENCE to a
+  // scalar expression could leave stale phantom values visible to a range
+  // watcher. Structural row/column edits snapshot and restore blocked
+  // records around this helper, so their pending-spill contract is retained.
+  for (Sheet& sheet : sheets) {
+    sheet.clear_all_spills();
+  }
   mutator.reset_graph();
   Arena parser_arena;
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
@@ -133,68 +146,6 @@ void reindex_all_formulas(const std::vector<Sheet>& sheets, const eval::RecalcEn
         }
         // Every formula cell recomputes after a rearrangement, regardless
         // of whether its refs changed.
-        mutator.mark_dirty(node);
-      }
-    }
-  }
-}
-
-// Forward declaration: the text-level sheet-rename rewriter lives further
-// down in this anonymous namespace but is needed by the cell rewriter.
-std::string replace_sheet_in_formula(std::string_view formula, std::string_view old_name, std::string_view new_name);
-bool formula_references_sheet(std::string_view formula, std::string_view sheet_name) noexcept;
-
-// Rewrites every cell formula that references `old_name` to `new_name`
-// after a sheet rename. Cell formulas store sheet qualifiers by name and
-// resolve them at evaluation time, so without this rewrite a renamed
-// sheet's dependents keep the stale name and surface `#REF!` / `#NAME?` on
-// the next recalc. Each rewritten cell is re-registered (its
-// `CellNodeId.sheet_id` is unchanged by a rename, but re-registration
-// keeps the graph in lockstep with the new text) and marked dirty so the
-// blanked cached value is restored by the next recalc.
-//
-// Precondition: the caller holds the engine mutex for the lifetime of the
-// `LockedMutator&`.
-void rewrite_cell_formulas_for_sheet_rename(std::vector<Sheet>& sheets,
-                                            const eval::RecalcEngine::LockedMutator& mutator, const Workbook& workbook,
-                                            std::string_view old_name, std::string_view new_name) {
-  Arena parser_arena;
-  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
-    Sheet& sheet = sheets[sheet_idx];
-    std::vector<std::uint32_t> row_keys;
-    row_keys.reserve(sheet.rows().size());
-    for (const auto& kv : sheet.rows()) {
-      row_keys.push_back(kv.first);
-    }
-    for (std::uint32_t row : row_keys) {
-      const auto it = sheet.rows().find(row);
-      if (it == sheet.rows().end()) {
-        continue;
-      }
-      const std::size_t col_count = it->second.size();
-      for (std::size_t col = 0; col < col_count; ++col) {
-        const Cell& cell = sheet.rows().at(row)[col];
-        if (cell.formula_text.empty() || !formula_references_sheet(cell.formula_text, old_name)) {
-          continue;
-        }
-        std::string rewritten = replace_sheet_in_formula(cell.formula_text, old_name, new_name);
-        if (rewritten == cell.formula_text) {
-          continue;  // Name matched a substring only; nothing to rewrite.
-        }
-        sheet.set_cell_formula(row, static_cast<std::uint32_t>(col), std::move(rewritten));
-
-        const eval::CellNodeId node{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)};
-        std::string_view body = sheet.rows().at(row)[col].formula_text;
-        if (!body.empty() && body.front() == '=') {
-          body.remove_prefix(1);
-        }
-        if (!body.empty()) {
-          parser_arena.reset();
-          parser::AstNode* root = parser::parse_strict(body, parser_arena);
-          if (root != nullptr) {
-            mutator.register_formula(node, *root, workbook);
-          }
-        }
         mutator.mark_dirty(node);
       }
     }
@@ -252,190 +203,6 @@ Expected<void, Error> validate_sheet_name(std::string_view name) {
   return Expected<void, Error>::Ok();
 }
 
-// Quotes `sheet` for use in a formula reference. Excel quotes a sheet
-// name with single quotes when the name contains anything other than
-// alphanumerics, underscores or periods. We err on the side of always
-// considering both shapes (raw and quoted) when matching defined-name
-// targets so a rename catches both.
-std::string single_quote_sheet(std::string_view sheet) {
-  std::string out;
-  out.reserve(sheet.size() + 4U);
-  out.push_back('\'');
-  for (char byte : sheet) {
-    if (byte == '\'') {
-      // Embedded single quotes double up in OOXML formula syntax.
-      out.append("''");
-    } else {
-      out.push_back(byte);
-    }
-  }
-  out.push_back('\'');
-  return out;
-}
-
-// Returns true if `byte` is part of an unquoted Excel identifier
-// (letter, digit, underscore). UTF-8 continuation bytes (high bit set)
-// are deliberately excluded so a sheet name whose preceding byte is a
-// multi-byte CJK character still treats the sheet token as starting
-// fresh.
-constexpr unsigned char kAsciiHighBit = 0x80U;
-constexpr bool is_id_byte(char byte) noexcept {
-  const auto value = static_cast<unsigned char>(byte);
-  if (value >= kAsciiHighBit) {
-    return false;
-  }
-  return (byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') || byte == '_';
-}
-
-// Returns true iff `formula` references the sheet `sheet_name` by name
-// (either bare `Sheet1!` or quoted `'Sheet One'!`). Strict prefix match
-// of the bang-suffixed sheet token followed by a `!`. The check is
-// case-insensitive, mirroring Excel's sheet-name resolution semantics.
-//
-// This is a textual scan deliberately kept out of the parser: the
-// AST-level reference shifter (a separate follow-up bundle) handles the
-// general case. For this bundle we only need to decide whether a
-// defined-name target string mentions the renamed sheet at all so the
-// bulk-replace helper below knows whether the entry is affected.
-bool formula_references_sheet(std::string_view formula, std::string_view sheet_name) noexcept {
-  // Exhaustive bare-token scan: walk every position and check whether a
-  // sheet token followed by `!` matches `sheet_name` (case-insensitive).
-  // Quoted-sheet matches are handled by also scanning for the
-  // single-quoted form.
-  const std::string quoted = single_quote_sheet(sheet_name);
-  for (std::size_t pos = 0; pos + sheet_name.size() < formula.size(); ++pos) {
-    if (formula[pos + sheet_name.size()] != '!') {
-      continue;
-    }
-    if (strings::case_insensitive_eq(formula.substr(pos, sheet_name.size()), sheet_name)) {
-      // Reject matches that are part of a longer identifier (e.g. the
-      // suffix of `OtherSheet1` should not match `Sheet1`). A sheet
-      // token starts at pos==0 or after a non-identifier byte.
-      const bool token_start = pos == 0 || !is_id_byte(formula[pos - 1]);
-      if (token_start) {
-        return true;
-      }
-    }
-  }
-  if (quoted.size() + 1U <= formula.size()) {
-    for (std::size_t pos = 0; pos + quoted.size() < formula.size(); ++pos) {
-      if (formula[pos + quoted.size()] != '!') {
-        continue;
-      }
-      if (strings::case_insensitive_eq(formula.substr(pos, quoted.size()), quoted)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-// Rewrites every reference to sheet `old_name` in `formula` to
-// `new_name` by parsing through the AST and re-formatting. Both bare
-// and quoted forms are recognised by the parser; the formatter emits
-// the canonical shape (quoted only when the new name's bytes demand
-// it). On parse failure or arena exhaustion the input is returned
-// unchanged so the caller's behaviour stays conservative — a formula
-// we cannot understand is left alone rather than corrupted.
-std::string replace_sheet_in_formula(std::string_view formula, std::string_view old_name, std::string_view new_name) {
-  // Defined-name targets are typically authored without a leading `=`;
-  // tolerate either by parsing the body and prepending the marker back
-  // when the source had one.
-  std::string_view body = formula;
-  bool had_equals = false;
-  if (!body.empty() && body.front() == '=') {
-    body = body.substr(1);
-    had_equals = true;
-  }
-  Arena arena;
-  parser::Parser parser(body, arena);
-  parser::AstNode* root = parser.parse();
-  if (root == nullptr || !parser.errors().empty()) {
-    return std::string(formula);
-  }
-  const parser::SheetRenameTransform transform(old_name, new_name);
-  const parser::AstNode* shifted = parser::shift_refs(*root, arena, transform);
-  if (shifted == nullptr) {
-    return std::string(formula);
-  }
-  std::string out;
-  if (had_equals) {
-    out.push_back('=');
-  }
-  out.append(parser::format_formula(*shifted));
-  return out;
-}
-
-std::string replace_sheet_in_hyperlink_location(std::string_view location, std::string_view old_name,
-                                                std::string_view new_name) {
-  if (location.empty()) {
-    return std::string(location);
-  }
-  const bool has_fragment_prefix = location.front() == '#';
-  const std::string_view formula = has_fragment_prefix ? location.substr(1) : location;
-  if (!formula_references_sheet(formula, old_name)) {
-    return std::string(location);
-  }
-  std::string rewritten = replace_sheet_in_formula(formula, old_name, new_name);
-  if (has_fragment_prefix) {
-    rewritten.insert(rewritten.begin(), '#');
-  }
-  return rewritten;
-}
-
-void rewrite_sheet_named_metadata(std::vector<Sheet>& sheets, std::vector<io::DefinedName>& defined_names,
-                                  Workbook& workbook, std::string_view old_name, std::string_view new_name) {
-  for (io::DefinedName& entry : defined_names) {
-    if (formula_references_sheet(entry.formula, old_name)) {
-      entry.formula = replace_sheet_in_formula(entry.formula, old_name, new_name);
-    }
-  }
-  for (Sheet& sheet : sheets) {
-    for (Hyperlink& hyperlink : sheet.mutable_hyperlinks()) {
-      hyperlink.location = replace_sheet_in_hyperlink_location(hyperlink.location, old_name, new_name);
-    }
-    for (DataValidation& validation : sheet.mutable_validations()) {
-      if (formula_references_sheet(validation.formula1, old_name)) {
-        validation.formula1 = replace_sheet_in_formula(validation.formula1, old_name, new_name);
-      }
-      if (formula_references_sheet(validation.formula2, old_name)) {
-        validation.formula2 = replace_sheet_in_formula(validation.formula2, old_name, new_name);
-      }
-    }
-  }
-  for (std::unique_ptr<pivot::PivotCache>& cache : workbook.mutable_pivot_caches()) {
-    if (cache == nullptr) {
-      continue;
-    }
-    pivot::WorksheetSource& source = cache->mutable_worksheet_source();
-    if (strings::case_insensitive_eq(source.sheet, old_name)) {
-      source.sheet.assign(new_name);
-    }
-    if (formula_references_sheet(source.ref, old_name)) {
-      source.ref = replace_sheet_in_formula(source.ref, old_name, new_name);
-    }
-  }
-}
-
-void freeze_cell_formulas_referencing_sheet(std::vector<Sheet>& sheets, std::uint32_t removed_index,
-                                            std::string_view removed_name) {
-  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
-    if (sheet_idx == removed_index) {
-      continue;
-    }
-    Sheet& sheet = sheets[sheet_idx];
-    for (const auto& row_entry : sheet.rows()) {
-      const std::uint32_t row = row_entry.first;
-      for (std::size_t col = 0; col < row_entry.second.size(); ++col) {
-        const Cell& cell = row_entry.second[col];
-        if (!cell.formula_text.empty() && formula_references_sheet(cell.formula_text, removed_name)) {
-          sheet.set_cell_formula(row, static_cast<std::uint32_t>(col), "=#REF!");
-        }
-      }
-    }
-  }
-}
-
 void remove_and_reindex_tables(std::vector<io::TableMetadata>& tables, std::size_t removed_sheet_index) {
   std::vector<io::TableMetadata> retained;
   retained.reserve(tables.size());
@@ -451,26 +218,18 @@ void remove_and_reindex_tables(std::vector<io::TableMetadata>& tables, std::size
   tables = std::move(retained);
 }
 
-void remove_pivot_caches_referencing_sheet(std::vector<std::unique_ptr<pivot::PivotCache>>& caches,
-                                           std::string_view removed_sheet_name) {
-  std::vector<std::unique_ptr<pivot::PivotCache>> retained;
-  retained.reserve(caches.size());
-  for (std::unique_ptr<pivot::PivotCache>& cache : caches) {
-    if (cache == nullptr) {
-      continue;
-    }
-    const pivot::WorksheetSource& source = cache->worksheet_source();
-    // A cache whose worksheet source was removed can no longer refresh and
-    // is not valid for any surviving pivot table. Source-less caches remain
-    // supported as deliberate static snapshots.
-    if (source.present && (strings::case_insensitive_eq(source.sheet, removed_sheet_name) ||
-                           formula_references_sheet(source.ref, removed_sheet_name))) {
-      continue;
-    }
-    retained.push_back(std::move(cache));
-  }
-  caches = std::move(retained);
-}
+// The shared AST visitor is defined next to `rewrite_formula`, below, once
+// the generic formula-rewrite result type is available. Structural sheet
+// mutations use this one path for cells and every formula-bearing metadata
+// holder, so string literals, unresolved names, and external references do
+// not accidentally participate in a sheet mutation.
+void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<io::DefinedName>& defined_names,
+                                 std::vector<io::TableMetadata>& tables,
+                                 std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
+                                 const parser::RefTransform& transform,
+                                 const eval::RecalcEngine::LockedMutator& mutator, std::string_view direct_sheet_old,
+                                 std::string_view direct_sheet_new, std::string_view removed_sheet_name,
+                                 std::vector<std::uint32_t>& dropped_cache_ids, bool& defined_names_changed);
 
 void move_table_sheet_indices(std::vector<io::TableMetadata>& tables, std::size_t from_index, std::size_t to_index) {
   for (io::TableMetadata& table : tables) {
@@ -487,6 +246,7 @@ void move_table_sheet_indices(std::vector<io::TableMetadata>& tables, std::size_
 }  // namespace
 
 Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string new_name) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (static_cast<std::size_t>(index) >= sheets_.size()) {
     return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "rename_sheet: index out of range",
                       "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
@@ -509,24 +269,43 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
 
   const std::string old_name = sheets_[index].name();
 
-  // Rewrite cell formulas that reference the renamed sheet, and apply the
-  // sheet rename, under a single hold of the engine mutex so a concurrent
-  // `recalc_parallel` never observes a half-renamed state (some formulas
-  // still naming the old sheet while the sheet already carries the new
-  // name). See `set_cell_value` for the full rationale.
-  {
-    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    rewrite_cell_formulas_for_sheet_rename(sheets_, mutator, *this, old_name, new_name);
-    rewrite_sheet_named_metadata(sheets_, defined_names_, *this, old_name, new_name);
-    // Move the rename into the sheet last so the rewriter above still has
-    // the pre-move name state to read from.
-    sheets_[index].set_name(std::move(new_name));
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  std::vector<std::uint32_t> ignored_cache_ids;
+  bool defined_names_changed = false;
+  const parser::SheetRenameTransform transform(old_name, new_name);
+  // Keep the sheet name in its pre-rename state until every formula and
+  // metadata holder has been transformed. In particular, do not re-register
+  // a changed formula against `new_name` before the workbook can resolve it.
+  rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, old_name, new_name,
+                              {}, ignored_cache_ids, defined_names_changed);
+  if (defined_names_changed) {
+    // Defined-name expansion can change a formula's value without changing
+    // the formula cell's own text. Sheet ids survive a rename, so retaining
+    // the existing graph edges is safe; dirty every formula so those cached
+    // values are nevertheless refreshed on the next pass.
+    for (std::size_t sheet_idx = 0; sheet_idx < sheets_.size(); ++sheet_idx) {
+      for (const auto& [row, cells] : sheets_[sheet_idx].rows()) {
+        for (std::size_t col = 0; col < cells.size(); ++col) {
+          if (!cells[col].formula_text.empty()) {
+            mutator.mark_dirty(
+                eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, static_cast<std::uint32_t>(col)});
+          }
+        }
+      }
+    }
   }
+  // Rename last: the transform above intentionally reads the old workbook
+  // name while formatting, then the final name makes all newly-written text
+  // resolvable for the next recalc.
+  sheets_[index].set_name(std::move(new_name));
   return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
+  // Hold the engine mutex from the first workbook-state read through the
+  // final graph rebuild. A parallel recalc therefore observes one complete
+  // pre-removal or post-removal workbook, never the metadata halfway state.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (static_cast<std::size_t>(index) >= sheets_.size()) {
     return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "remove_sheet: index out of range",
                       "index=" + std::to_string(index) + " sheet_count=" + std::to_string(sheets_.size()));
@@ -538,40 +317,27 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
 
   const std::string removed_name = sheets_[index].name();
 
-  // Erase the sheet, then rebuild the dependency graph from scratch. A
-  // remove shifts the workbook-relative index of every sheet after the
-  // removed one, so their `CellNodeId.sheet_id`s — and the graph edges
-  // keyed by them — are all invalidated at once; a full re-registration
-  // is the safe baseline. Both halves run under a single hold of the
-  // engine mutex so a concurrent `recalc_parallel` either sees the sheet
-  // (and its graph nodes) fully present or fully gone, never a
-  // half-erased intermediate.
-  {
-    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    freeze_cell_formulas_referencing_sheet(sheets_, index, removed_name);
-    sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
-    reindex_all_formulas(sheets_, mutator, *this);
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  std::vector<std::string_view> pre_removal_sheet_order;
+  pre_removal_sheet_order.reserve(sheets_.size());
+  for (const Sheet& sheet : sheets_) {
+    pre_removal_sheet_order.push_back(sheet.name());
   }
 
-  // Drop defined names that target the removed sheet. We compare against
-  // the removed sheet's name verbatim; sheet-scoped names whose
-  // local_sheet_id matches the removed index are also dropped (the
-  // index they referenced no longer exists). Note: indices for
-  // sheet-scoped names that point at sheets *after* the removed one are
-  // shifted down by 1 to preserve the binding. This matches Excel's UI
-  // observation that sheet-scoped names stay attached to the same sheet
-  // as the workbook is rearranged.
+  const parser::SheetRemovalTransform transform(pre_removal_sheet_order, index);
+  std::vector<std::uint32_t> dropped_cache_ids;
+  bool defined_names_changed = false;
+  rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, removed_name,
+                              dropped_cache_ids, defined_names_changed);
+  (void)defined_names_changed;
+
+  // Sheet-scoped names owned by the removed sheet disappear; names scoped to
+  // later sheets follow their owner as the sheet vector closes the gap.
   std::vector<io::DefinedName> retained;
   retained.reserve(defined_names_.size());
   for (io::DefinedName& entry : defined_names_) {
     if (entry.local_sheet_id == static_cast<std::int32_t>(index)) {
       continue;
-    }
-    if (formula_references_sheet(entry.formula, removed_name)) {
-      // Keep surviving names but freeze their target. This prevents a later
-      // newly-created sheet with the same name from silently rebinding it.
-      entry.formula = "#REF!";
     }
     if (entry.local_sheet_id > static_cast<std::int32_t>(index)) {
       entry.local_sheet_id -= 1;
@@ -580,11 +346,54 @@ Expected<void, Error> Workbook::remove_sheet(std::uint32_t index) {
   }
   defined_names_ = std::move(retained);
   remove_and_reindex_tables(tables_, index);
-  remove_pivot_caches_referencing_sheet(pivot_caches_, removed_name);
+
+  // Remove caches whose worksheet source resolved to the deleted sheet and
+  // remove every surviving pivot table that would otherwise retain one of
+  // those cache ids. This keeps the workbook graph free of dangling cache
+  // bindings after the structural mutation.
+  std::vector<std::unique_ptr<pivot::PivotCache>> retained_caches;
+  retained_caches.reserve(pivot_caches_.size());
+  for (std::unique_ptr<pivot::PivotCache>& cache : pivot_caches_) {
+    if (cache == nullptr) {
+      continue;
+    }
+    const bool dropped =
+        std::find(dropped_cache_ids.begin(), dropped_cache_ids.end(), cache->cache_id()) != dropped_cache_ids.end();
+    if (!dropped) {
+      retained_caches.push_back(std::move(cache));
+    }
+  }
+  pivot_caches_ = std::move(retained_caches);
+  const auto cache_survives = [this](std::uint32_t cache_id) {
+    return std::any_of(pivot_caches_.begin(), pivot_caches_.end(),
+                       [cache_id](const auto& cache) { return cache != nullptr && cache->cache_id() == cache_id; });
+  };
+  for (Sheet& sheet : sheets_) {
+    std::vector<std::unique_ptr<pivot::PivotTable>> retained_pivots;
+    retained_pivots.reserve(sheet.pivot_tables().size());
+    for (std::unique_ptr<pivot::PivotTable>& pivot_table : sheet.mutable_pivot_tables()) {
+      if (pivot_table == nullptr) {
+        continue;
+      }
+      const std::uint32_t cache_id = pivot_table->pivot_cache_id();
+      if (cache_survives(cache_id) &&
+          std::find(dropped_cache_ids.begin(), dropped_cache_ids.end(), cache_id) == dropped_cache_ids.end()) {
+        retained_pivots.push_back(std::move(pivot_table));
+      }
+    }
+    sheet.mutable_pivot_tables() = std::move(retained_pivots);
+  }
+
+  // Erase only after all transforms have resolved against the pre-removal
+  // order. One and only one final reindex sees the final sheet/name/table/
+  // cache topology and dirties every surviving formula consistently.
+  sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(index));
+  reindex_all_formulas(sheets_, mutator, *this);
   return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32_t to_index) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (static_cast<std::size_t>(from_index) >= sheets_.size() || static_cast<std::size_t>(to_index) >= sheets_.size()) {
     return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "move_sheet: index out of range",
                       "from=" + std::to_string(from_index) + " to=" + std::to_string(to_index) +
@@ -603,7 +412,6 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
   // unchanged) or the fully patched one, never a half-applied move
   // where `sheets_` has been reordered but the dep-graph still indexes
   // cells by their pre-move sheet_id.
-  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
   Sheet moving = std::move(sheets_[from_index]);
   sheets_.erase(sheets_.begin() + static_cast<std::ptrdiff_t>(from_index));
@@ -647,6 +455,11 @@ Expected<void, Error> Workbook::set_defined_name(std::string name, std::string f
 
 Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::string formula,
                                                         std::int32_t local_sheet_id) {
+  // Validation, mutation, and the dependent graph rebuild must share one
+  // critical section. Otherwise a concurrent sheet removal can change the
+  // count between validation and insertion, or a recalc can observe the
+  // new definition before its graph is rebuilt.
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   if (name.empty()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "set_defined_name_scoped: name is empty");
   }
@@ -674,11 +487,8 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
       // dirty so the next recalc re-resolves the name. Redefinition is a rare
       // user edit; workbook load appends fresh unique names and never reaches
       // this branch, so the load path keeps its per-name cost.
-      {
-        std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-        const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-        reindex_all_formulas(sheets_, mutator, *this);
-      }
+      const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+      reindex_all_formulas(sheets_, mutator, *this);
       return Expected<void, Error>::Ok();
     }
   }
@@ -697,11 +507,8 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   // Its old dependency entry was extracted without this definition, so use
   // the same full rebuild as name updates and removals before the next
   // recalc.
-  {
-    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    reindex_all_formulas(sheets_, mutator, *this);
-  }
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  reindex_all_formulas(sheets_, mutator, *this);
   return Expected<void, Error>::Ok();
 }
 
@@ -1226,6 +1033,222 @@ FormulaRewriteResult rewrite_formula(std::string_view formula, const parser::Ref
   return out;
 }
 
+// Applies a per-sheet AST transform to every non-cell formula holder:
+// conditional-format rules and their formula thresholds, hyperlink locations,
+// data validations, table refs and calculated columns, and pivot-cache
+// worksheet sources.
+//
+// `per_sheet[i]` governs the metadata owned by `sheets[i]`. A row/column edit
+// needs `local_means_target` enabled only on the edited sheet — an unqualified
+// reference on any other sheet names that other sheet and must be left alone —
+// while a rename or removal passes the same transform in every slot.
+//
+// Tables and pivot caches hang off the workbook rather than off a `Sheet`, so
+// each resolves its own owner: a table through its `sheet_index`, a cache
+// through the sheet name recorded in its worksheet source. An owner that does
+// not resolve falls back to the first slot, which is the whole table whenever
+// the transform is uniform.
+//
+// `direct_sheet_old/new` covers OOXML's worksheetSource/@sheet field, which is
+// a plain metadata string rather than a formula AST. For removal,
+// `removed_sheet_name` additionally reports cache ids whose real worksheet
+// source became unavailable.
+//
+// Callers pass one slot per sheet. A short `per_sheet` degrades the excess
+// sheets to the first slot rather than skipping the rewrite, so no exit path
+// leaves a formula holder describing pre-edit coordinates.
+void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
+                                     const std::vector<const parser::RefTransform*>& per_sheet,
+                                     std::vector<io::TableMetadata>& tables,
+                                     std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
+                                     std::string_view direct_sheet_old, std::string_view direct_sheet_new,
+                                     std::string_view removed_sheet_name,
+                                     std::vector<std::uint32_t>& dropped_cache_ids) {
+  dropped_cache_ids.clear();
+  if (per_sheet.empty()) {
+    // No transform to apply at all. A short `per_sheet` is instead absorbed
+    // per sheet below: degrading one sheet to the first slot keeps the rest
+    // rewritten, whereas returning here would silently rewrite nothing and
+    // leave every holder pointing at pre-edit coordinates.
+    return;
+  }
+
+  const auto rewrite_field = [](std::string& field, const parser::RefTransform& transform) {
+    const FormulaRewriteResult result = rewrite_formula(field, transform);
+    if (!result.changed) {
+      return false;
+    }
+    field = result.text;
+    return true;
+  };
+
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    Sheet& sheet = sheets[sheet_idx];
+    const parser::RefTransform& transform = *per_sheet[sheet_idx < per_sheet.size() ? sheet_idx : 0U];
+    for (cf::ConditionalFormat& conditional_format : sheet.mutable_conditional_formats()) {
+      for (cf::CFRule& rule : conditional_format.rules) {
+        if (rule.formula1.has_value()) {
+          rewrite_field(*rule.formula1, transform);
+        }
+        if (rule.formula2.has_value()) {
+          rewrite_field(*rule.formula2, transform);
+        }
+        const auto rewrite_cfvo = [&rewrite_field, &transform](cf::CfValueObject& value) {
+          if (value.type == cf::CfvoType::Formula) {
+            rewrite_field(value.value, transform);
+          }
+        };
+        if (rule.color_scale.has_value()) {
+          for (cf::CfValueObject& value : rule.color_scale->thresholds) {
+            rewrite_cfvo(value);
+          }
+        }
+        if (rule.icon_set.has_value()) {
+          for (cf::CfValueObject& value : rule.icon_set->thresholds) {
+            rewrite_cfvo(value);
+          }
+        }
+        if (rule.data_bar.has_value()) {
+          rewrite_cfvo(rule.data_bar->min);
+          rewrite_cfvo(rule.data_bar->max);
+        }
+      }
+    }
+
+    for (Hyperlink& hyperlink : sheet.mutable_hyperlinks()) {
+      if (hyperlink.location.empty()) {
+        continue;
+      }
+      const bool has_fragment_prefix = hyperlink.location.front() == '#';
+      const std::string_view body =
+          has_fragment_prefix ? std::string_view(hyperlink.location).substr(1) : std::string_view(hyperlink.location);
+      const FormulaRewriteResult result = rewrite_formula(body, transform);
+      if (!result.changed) {
+        continue;
+      }
+      // A fragment marker is a transport prefix, not part of the formula.
+      // Avoid turning the removal result `#REF!` into the invalid `##REF!`.
+      if (has_fragment_prefix && result.text == "#REF!") {
+        hyperlink.location = "#REF!";
+      } else {
+        std::string rewritten;
+        rewritten.reserve(result.text.size() + (has_fragment_prefix ? 1U : 0U));
+        if (has_fragment_prefix) {
+          rewritten.push_back('#');
+        }
+        rewritten.append(result.text);
+        hyperlink.location = std::move(rewritten);
+      }
+    }
+
+    for (DataValidation& validation : sheet.mutable_validations()) {
+      rewrite_field(validation.formula1, transform);
+      rewrite_field(validation.formula2, transform);
+    }
+  }
+
+  for (io::TableMetadata& table : tables) {
+    const parser::RefTransform& transform = *per_sheet[table.sheet_index < per_sheet.size() ? table.sheet_index : 0U];
+    rewrite_field(table.ref, transform);
+    for (io::TableColumn& column : table.columns) {
+      rewrite_field(column.calculated_column_formula, transform);
+    }
+  }
+
+  for (std::unique_ptr<pivot::PivotCache>& cache : pivot_caches) {
+    if (cache == nullptr) {
+      continue;
+    }
+    pivot::WorksheetSource& source = cache->mutable_worksheet_source();
+    if (!direct_sheet_old.empty() && strings::case_insensitive_eq(source.sheet, direct_sheet_old)) {
+      source.sheet.assign(direct_sheet_new);
+    }
+    std::size_t owner_sheet = 0;
+    for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+      if (strings::case_insensitive_eq(sheets[sheet_idx].name(), source.sheet)) {
+        owner_sheet = sheet_idx;
+        break;
+      }
+    }
+    const FormulaRewriteResult ref_result = rewrite_formula(source.ref, *per_sheet[owner_sheet]);
+    if (ref_result.changed) {
+      source.ref = ref_result.text;
+    }
+    if (!removed_sheet_name.empty() && source.present &&
+        (strings::case_insensitive_eq(source.sheet, removed_sheet_name) || ref_result.changed)) {
+      dropped_cache_ids.push_back(cache->cache_id());
+    }
+  }
+}
+
+// Applies one AST transform to every formula-bearing holder in the workbook.
+// The caller supplies the transform policy, so rename and removal share the
+// exact same parse/identity/error behaviour. `direct_sheet_old/new` covers
+// OOXML's worksheetSource/@sheet field, which is a plain metadata string
+// rather than a formula AST. For removal, `removed_sheet_name` additionally
+// reports cache ids whose real worksheet source became unavailable.
+//
+// Precondition: caller holds the engine mutex. Formula writes use
+// `Sheet::set_cell_formula` directly and never route through the public
+// Workbook setter (which would attempt to acquire this mutex again).
+void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<io::DefinedName>& defined_names,
+                                 std::vector<io::TableMetadata>& tables,
+                                 std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
+                                 const parser::RefTransform& transform,
+                                 const eval::RecalcEngine::LockedMutator& mutator, std::string_view direct_sheet_old,
+                                 std::string_view direct_sheet_new, std::string_view removed_sheet_name,
+                                 std::vector<std::uint32_t>& dropped_cache_ids, bool& defined_names_changed) {
+  defined_names_changed = false;
+
+  struct CellUpdate {
+    std::size_t sheet_index = 0;
+    std::uint32_t row = 0;
+    std::uint32_t col = 0;
+    std::string formula;
+  };
+  std::vector<CellUpdate> cell_updates;
+
+  // Collect first so replacing a formula cannot invalidate the row/cell
+  // references used by the scan. The cell store's physical coordinates do
+  // not move during a sheet rename/removal transform.
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    const Sheet& sheet = sheets[sheet_idx];
+    for (const auto& [row, cells] : sheet.rows()) {
+      for (std::size_t col = 0; col < cells.size(); ++col) {
+        if (cells[col].formula_text.empty()) {
+          continue;
+        }
+        const FormulaRewriteResult result = rewrite_formula(cells[col].formula_text, transform);
+        if (result.changed) {
+          cell_updates.push_back(CellUpdate{sheet_idx, row, static_cast<std::uint32_t>(col), result.text});
+        }
+      }
+    }
+  }
+  for (CellUpdate& update : cell_updates) {
+    sheets[update.sheet_index].set_cell_formula(update.row, update.col, std::move(update.formula));
+    // A rename preserves workbook-relative sheet ids and therefore keeps the
+    // existing dependency edges valid. Dirtying the changed owner is enough
+    // to propagate through those edges; removal performs one final full
+    // reindex after the sheet vector and metadata reach their final shape.
+    mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(update.sheet_index), update.row, update.col});
+  }
+
+  for (io::DefinedName& entry : defined_names) {
+    const FormulaRewriteResult result = rewrite_formula(entry.formula, transform);
+    if (result.changed) {
+      entry.formula = result.text;
+      defined_names_changed = true;
+    }
+  }
+
+  // A sheet mutation applies the same policy everywhere, so every slot of the
+  // per-sheet table points at the single transform the caller supplied.
+  const std::vector<const parser::RefTransform*> uniform(sheets.size(), &transform);
+  rewrite_sheet_metadata_formulas(sheets, uniform, tables, pivot_caches, direct_sheet_old, direct_sheet_new,
+                                  removed_sheet_name, dropped_cache_ids);
+}
+
 // Walks every formula cell in `sheets`, applying a row/col shift
 // transform. The transform is rebuilt per sheet so its
 // `local_means_target` flag tracks whether the current sheet's
@@ -1452,47 +1475,6 @@ void reregister_three_d_span_owners_after_row_col_edit(const std::vector<eval::C
   }
 }
 
-void rewrite_conditional_format_formulas(std::vector<cf::ConditionalFormat>& formats,
-                                         const parser::RefTransform& transform) {
-  for (cf::ConditionalFormat& format : formats) {
-    for (cf::CFRule& rule : format.rules) {
-      if (rule.formula1.has_value()) {
-        FormulaRewriteResult result = rewrite_formula(*rule.formula1, transform);
-        if (result.changed) {
-          rule.formula1 = std::move(result.text);
-        }
-      }
-      if (rule.formula2.has_value()) {
-        FormulaRewriteResult result = rewrite_formula(*rule.formula2, transform);
-        if (result.changed) {
-          rule.formula2 = std::move(result.text);
-        }
-      }
-    }
-  }
-}
-
-void rewrite_tables_for_row_col_edit(std::vector<io::TableMetadata>& tables, std::size_t target_sheet_index,
-                                     const parser::RefTransform& transform) {
-  for (io::TableMetadata& table : tables) {
-    if (table.sheet_index != target_sheet_index) {
-      continue;
-    }
-    FormulaRewriteResult range = rewrite_formula(table.ref, transform);
-    if (range.changed) {
-      table.ref = std::move(range.text);
-    }
-    for (io::TableColumn& column : table.columns) {
-      if (!column.calculated_column_formula.empty()) {
-        FormulaRewriteResult formula = rewrite_formula(column.calculated_column_formula, transform);
-        if (formula.changed) {
-          column.calculated_column_formula = std::move(formula.text);
-        }
-      }
-    }
-  }
-}
-
 std::vector<BlockedSpillFootprint> remap_blocked_spill_footprints(const std::vector<BlockedSpillFootprint>& footprints,
                                                                   parser::RowColAxis axis, parser::RowColEdit edit,
                                                                   std::uint32_t index, std::uint32_t count) {
@@ -1585,13 +1567,30 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   // `Sheet::set_cell_formula` quite correctly clears a user-overwritten
   // blocked anchor; a structural rewrite of that same formula is not a user
   // overwrite, so restore the mapped record after the physical move below.
+  // Keep the other sheets too: a name rewrite can force the full graph reset,
+  // whose spill invalidation must not silently discard unrelated pending
+  // producers.
+  std::vector<std::vector<BlockedSpillFootprint>> blocked_before_all;
+  blocked_before_all.reserve(sheets.size());
+  for (const Sheet& sheet : sheets) {
+    blocked_before_all.push_back(sheet.blocked_spill_footprints());
+  }
   Sheet& target = sheets[sheet_index];
-  const std::vector<BlockedSpillFootprint> blocked_before = target.blocked_spill_footprints();
+  const std::vector<BlockedSpillFootprint> blocked_before = blocked_before_all[sheet_index];
   rewrite_formulas_for_row_col_edit(sheets, mutator, wb, target_sheet_name, axis, edit, origin, count);
-  const parser::RowColShiftTransform cf_transform(target_sheet_name, axis, edit, origin, count,
-                                                  /*local_means_target=*/true);
-  rewrite_conditional_format_formulas(target.mutable_conditional_formats(), cf_transform);
-  rewrite_tables_for_row_col_edit(wb.mutable_tables(), sheet_index, cf_transform);
+  // Metadata formulas follow the same per-sheet policy as cell formulas: a
+  // qualified reference to the edited sheet shifts no matter which sheet owns
+  // the rule, while an unqualified one is in scope only on the edited sheet.
+  // The text is rewritten against pre-edit coordinates, like the cells above
+  // and unlike the sqref/anchor rectangles, which `Sheet::insert_rows` and
+  // friends move afterwards.
+  const parser::RowColShiftTransform local_transform(target_sheet_name, axis, edit, origin, count,
+                                                     /*local_means_target=*/true);
+  std::vector<const parser::RefTransform*> per_sheet_transforms(sheets.size(), &name_transform);
+  per_sheet_transforms[sheet_index] = &local_transform;
+  std::vector<std::uint32_t> ignored_cache_ids;
+  rewrite_sheet_metadata_formulas(sheets, per_sheet_transforms, wb.mutable_tables(), wb.mutable_pivot_caches(), {}, {},
+                                  {}, ignored_cache_ids);
   if (axis == parser::RowColAxis::kRow) {
     if (edit == parser::RowColEdit::kInsert) {
       target.insert_rows(origin, count);
@@ -1609,6 +1608,12 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
   // stale coordinates and leave duplicate registry entries behind.
   if (names_changed) {
     reindex_all_formulas(sheets, mutator, wb);
+    for (std::size_t preserved_sheet = 0; preserved_sheet < sheets.size(); ++preserved_sheet) {
+      if (preserved_sheet == sheet_index) {
+        continue;
+      }
+      sheets[preserved_sheet].restore_blocked_spill_footprints(std::move(blocked_before_all[preserved_sheet]));
+    }
   }
   reregister_three_d_span_owners_after_row_col_edit(three_d_owners, sheets, mutator, wb, sheet_index, axis, edit,
                                                     origin, count);
