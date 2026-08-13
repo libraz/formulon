@@ -76,10 +76,37 @@ std::string_view Workbook::intern_text(std::string_view text) {
   return std::string_view(text_storage_.back());
 }
 
+namespace {
+// Rejects an append that would take the workbook past `kMaxSheets`. Every
+// append routes through here, so `sheets_.size() <= kMaxSheets` holds for
+// the lifetime of the workbook and each narrowing of a sheet index to the
+// dep graph's 16-bit `sheet_id` is lossless by construction.
+Expected<void, Error> check_sheet_headroom(std::size_t current_count) {
+  if (current_count >= Workbook::kMaxSheets) {
+    return make_error(FormulonErrorCode::kSheetCountLimitExceeded,
+                      "add_sheet: workbook already holds the maximum sheets",
+                      "limit=" + std::to_string(Workbook::kMaxSheets));
+  }
+  return {};
+}
+}  // namespace
+
 Sheet& Workbook::add_sheet(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  // No error channel here; at the ceiling the workbook is left as-is and
+  // the caller sees the existing last sheet (see the header contract).
+  if (!check_sheet_headroom(sheets_.size()).has_value()) {
+    return sheets_.back();
+  }
   sheets_.emplace_back(Sheet{std::move(name)});
   return sheets_.back();
+}
+
+Expected<Sheet*, Error> Workbook::add_sheet_checked(std::string name) {
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
+  sheets_.emplace_back(Sheet{std::move(name)});
+  return &sheets_.back();
 }
 
 Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
@@ -91,6 +118,7 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
                         "name=\"" + name + "\"");
     }
   }
+  RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
   sheets_.emplace_back(Sheet{std::move(name)});
   return &sheets_.back();
 }
@@ -608,9 +636,10 @@ Expected<std::vector<std::uint8_t>, Error> Workbook::save_ex(io::WorkbookFormat 
 
 namespace {
 
-// Builds a CellNodeId for a workbook-relative coordinate. Sheet ids fit in
-// uint16_t per the dep graph contract; Excel allows at most a few thousand
-// sheets per workbook, well within range.
+// Builds a CellNodeId for a workbook-relative coordinate. `sheet_index` is
+// below `sheet_count()`, which every append path bounds by
+// `Workbook::kMaxSheets`, so the narrowing to the dep graph's 16-bit sheet
+// id is lossless.
 eval::CellNodeId make_node(std::size_t sheet_index, std::uint32_t row, std::uint32_t col) {
   return eval::CellNodeId{static_cast<std::uint16_t>(sheet_index), row, col};
 }
@@ -1550,9 +1579,11 @@ Expected<void, Error> apply_row_col_edit_operation(Workbook& wb, std::vector<She
                                                    std::uint32_t origin, std::uint32_t count, const char* op_name) {
   RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, axis, edit, origin, count, op_name));
   const std::string target_sheet_name = sheets[sheet_index].name();
+  // `apply_row_col_edit` above rejected an out-of-range `sheet_index`, and
+  // `Workbook::kMaxSheets` bounds `sheet_count()`, so the narrowing to the
+  // dep graph's 16-bit sheet id keeps the index intact.
   const std::vector<eval::CellNodeId> three_d_owners =
-      sheet_index <= 0xFFFFU ? mutator.three_d_span_owners_covering_sheet(static_cast<std::uint16_t>(sheet_index))
-                             : std::vector<eval::CellNodeId>{};
+      mutator.three_d_span_owners_covering_sheet(static_cast<std::uint16_t>(sheet_index));
   // Defined names are rewritten before cell formulas, and a change to any of
   // them forces a full re-index afterwards. A formula that reaches a shifted
   // range only through a name — `=MyRef*1` — is textually unchanged by the

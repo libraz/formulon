@@ -95,8 +95,18 @@ class Workbook {
   Workbook& operator=(Workbook&&) noexcept;
   ~Workbook();
 
+  /// Hard ceiling on `sheet_count()`.
+  ///
+  /// `eval::CellNodeId` addresses a sheet with a 16-bit id, so a sheet at
+  /// index 65536 would alias sheet 0 in the dependency graph and silently
+  /// register and dirty the wrong cells. Every append path enforces this
+  /// bound, which is what makes each `static_cast<std::uint16_t>` of a
+  /// sheet index lossless. Excel itself caps sheets at available memory
+  /// and no real workbook approaches this number.
+  static constexpr std::size_t kMaxSheets = 0xFFFFU;
+
   /// Number of sheets in the workbook. Always at least 1 for
-  /// `create()`-constructed instances.
+  /// `create()`-constructed instances, never more than `kMaxSheets`.
   std::size_t sheet_count() const noexcept { return sheets_.size(); }
 
   /// Estimated heap bytes this workbook holds.
@@ -135,10 +145,27 @@ class Workbook {
   /// underlying vector). Duplicate names are not rejected at this layer;
   /// OOXML-level name validation lives at the I/O boundary.
   ///
-  /// This unchecked overload is for trusted callers (the package reader,
-  /// which trusts names Excel already wrote, and internal setup). Public
-  /// API callers should use `add_sheet_validated`.
+  /// This name-unchecked overload is for in-process setup that builds a
+  /// workbook it fully controls. It cannot report the `kMaxSheets`
+  /// ceiling: at the ceiling the workbook is left unchanged and the
+  /// existing last sheet is returned. Callers that append from external
+  /// input use `add_sheet_checked`; public API callers that also want
+  /// name validation use `add_sheet_validated`.
   Sheet& add_sheet(std::string name);
+
+  /// Appends a new sheet with display name `name`, rejecting the append
+  /// once the workbook holds `kMaxSheets` sheets.
+  ///
+  /// The name itself is taken verbatim, so this is the entry point for
+  /// callers that must preserve whatever name their source carried while
+  /// still refusing a sheet count the dependency graph cannot address.
+  /// The file readers do not use it: a name arriving from a file is
+  /// untrusted input and goes through `add_sheet_validated`, because a
+  /// duplicate name silently resolves every lookup to the first match.
+  ///
+  /// Errors:
+  ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
+  Expected<Sheet*, Error> add_sheet_checked(std::string name);
 
   /// Appends a new sheet after validating `name` the same way
   /// `rename_sheet` does: non-empty, at most 31 UTF-16 code units, no
@@ -146,6 +173,16 @@ class Workbook {
   /// collision with an existing sheet. Returns a pointer to the new sheet
   /// on success (owned by the Workbook, invalidated by later structural
   /// mutations) or `kInvalidSheetName` on any violation.
+  ///
+  /// This is also the append path the OOXML and XLSB readers use, so the
+  /// name validation `add_sheet` defers to the I/O boundary is in fact
+  /// enforced there. After a successful load `sheet_by_name` and
+  /// `sheet_index_by_name` therefore resolve unambiguously: no two sheets
+  /// share a case-folded name.
+  ///
+  /// Errors:
+  ///   * `kInvalidSheetName` on any name violation.
+  ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
   Expected<Sheet*, Error> add_sheet_validated(std::string name);
 
   /// Renames the sheet at `index` to `new_name`.

@@ -491,6 +491,36 @@ TEST(WorkbookSheetOps, RemoveFreezesReferencingFormulaBeforeSameNameIsReadded) {
   EXPECT_EQ(value.as_error(), ErrorCode::Ref);
 }
 
+// A `CellNodeId` names its sheet with a 16-bit id, so the workbook stops
+// accepting sheets at `kMaxSheets`. The ceiling is only observable with the
+// sheets actually present — every append path shares one headroom check,
+// and there is no seam that reports the rejection without the vector being
+// full — so the workbook is filled to the boundary here.
+TEST(WorkbookSheetOps, AppendStopsAtTheSheetIdCeiling) {
+  Workbook wb = Workbook::create_empty();
+  std::string name;
+  for (std::size_t i = 0; i < Workbook::kMaxSheets; ++i) {
+    name.assign("S");
+    name.append(std::to_string(i));
+    ASSERT_TRUE(static_cast<bool>(wb.add_sheet_checked(name))) << "rejected at sheet " << i;
+  }
+  ASSERT_EQ(wb.sheet_count(), Workbook::kMaxSheets);
+
+  auto checked = wb.add_sheet_checked("Overflow");
+  ASSERT_FALSE(static_cast<bool>(checked));
+  EXPECT_EQ(checked.error().code, FormulonErrorCode::kSheetCountLimitExceeded);
+
+  auto validated = wb.add_sheet_validated("Overflow");
+  ASSERT_FALSE(static_cast<bool>(validated));
+  EXPECT_EQ(validated.error().code, FormulonErrorCode::kSheetCountLimitExceeded);
+
+  // The name-unchecked overload has no error channel, but it must not grow
+  // the workbook past the ceiling either.
+  wb.add_sheet("Overflow");
+  EXPECT_EQ(wb.sheet_count(), Workbook::kMaxSheets);
+  EXPECT_EQ(wb.sheet(Workbook::kMaxSheets - 1U).name(), "S" + std::to_string(Workbook::kMaxSheets - 1U));
+}
+
 TEST(WorkbookSheetOps, RemoveRejectsLastSheet) {
   Workbook wb = Workbook::create();  // single Sheet1
   auto r = wb.remove_sheet(0);
