@@ -684,7 +684,7 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
   const bool has_text = !spec["valueText"].isUndefined() && !spec["valueText"].isNull();
   const std::string value_text = has_text ? spec["valueText"].as<std::string>() : std::string();
 
-  fm_pivot_filter_spec_ex_t c_spec{};
+  fm_pivot_filter_spec_t c_spec{};
   c_spec.axis = static_cast<fm_pivot_axis_t>(js_pull_u32(spec, "axis", 0U));
   c_spec.field_name = field_name.c_str();
   c_spec.type = static_cast<fm_pivot_filter_type_t>(js_pull_u32(spec, "type", 0U));
@@ -712,7 +712,7 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
                                  : 0.0;
   c_spec.data_field_index = js_pull_u32(spec, "dataFieldIndex", 0U);
 
-  fm_status_t rc = fm_workbook_pivot_filter_add_ex(handle_, sheet, pivotIdx, &c_spec);
+  fm_status_t rc = fm_workbook_pivot_filter_add(handle_, sheet, pivotIdx, &c_spec);
   return status_from_rc(rc);
 }
 

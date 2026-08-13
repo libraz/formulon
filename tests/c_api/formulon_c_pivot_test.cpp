@@ -799,14 +799,14 @@ TEST(FormulonCApiPivot, MutateExistingPivotFilter) {
   EXPECT_EQ(after_count, 0U);
 }
 
-TEST(FormulonCApiPivot, PivotFilterExRejectsInvalidDataFieldWithoutMutation) {
+TEST(FormulonCApiPivot, PivotFilterRejectsInvalidDataFieldWithoutMutation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
 
-  fm_pivot_filter_spec_ex_t spec{};
+  fm_pivot_filter_spec_t spec{};
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_VALUE_TOP_10;
@@ -815,14 +815,14 @@ TEST(FormulonCApiPivot, PivotFilterExRejectsInvalidDataFieldWithoutMutation) {
   spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
   spec.data_field_index = 1;  // BuildScratchPivot has only slot 0.
   const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_filter_add_ex(wb.handle, 0, pivot_idx, &spec), invalid);
+  EXPECT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), invalid);
 
   std::size_t count = 99;
   ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &count), 0);
   EXPECT_EQ(count, 0U);
 }
 
-TEST(FormulonCApiPivot, PivotFilterExRejectsSelectorWhenNoDataFields) {
+TEST(FormulonCApiPivot, PivotFilterRejectsSelectorWhenNoDataFields) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   std::uint32_t cache_id = 0;
@@ -830,7 +830,7 @@ TEST(FormulonCApiPivot, PivotFilterExRejectsSelectorWhenNoDataFields) {
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
   ASSERT_EQ(fm_workbook_pivot_data_field_clear(wb.handle, 0, pivot_idx), 0) << fm_last_error_message();
 
-  fm_pivot_filter_spec_ex_t spec{};
+  fm_pivot_filter_spec_t spec{};
   spec.axis = FM_PIVOT_AXIS_ROW;
   spec.field_name = "Region";
   spec.type = FM_PIVOT_FILTER_VALUE_TOP_10;
@@ -839,72 +839,45 @@ TEST(FormulonCApiPivot, PivotFilterExRejectsSelectorWhenNoDataFields) {
   spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
   spec.data_field_index = 0;
   const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(fm_workbook_pivot_filter_add_ex(wb.handle, 0, pivot_idx, &spec), invalid);
+  EXPECT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), invalid);
 
   std::size_t count = 99;
   ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &count), 0);
   EXPECT_EQ(count, 0U);
 }
 
-TEST(FormulonCApiPivot, LegacyValueFilterCanPrecedeDataField) {
+TEST(FormulonCApiPivot, PivotFilterRejectsUnknownFieldNameWithoutMutation) {
+  // A label filter naming no pivot field would be a silent no-op inside the
+  // engine, so the mutator rejects it instead of reporting success.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   std::size_t pivot_idx = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
-  ASSERT_EQ(fm_workbook_pivot_data_field_clear(wb.handle, 0, pivot_idx), 0) << fm_last_error_message();
 
-  fm_pivot_filter_spec_t filter_spec{};
-  filter_spec.axis = FM_PIVOT_AXIS_ROW;
-  filter_spec.field_name = "Region";
-  filter_spec.type = FM_PIVOT_FILTER_VALUE_TOP_10;
-  filter_spec.value_kind = FM_PIVOT_FILTER_VALUE_INT;
-  filter_spec.value_int = 1;
-  filter_spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
-  ASSERT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &filter_spec), 0) << fm_last_error_message();
+  fm_pivot_filter_spec_t spec{};
+  spec.axis = FM_PIVOT_AXIS_ROW;
+  spec.field_name = "NoSuchField";
+  spec.type = FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
+  spec.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
+  spec.value_text = "N";
+  spec.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  const auto invalid = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), invalid);
 
-  std::size_t filter_count = 0;
-  ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &filter_count), 0);
-  EXPECT_EQ(filter_count, 1U);
+  std::size_t count = 99;
+  ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &count), 0);
+  EXPECT_EQ(count, 0U);
 
-  // With no data field, value-axis filtering is deliberately a no-op.
-  PivotCellsGuard no_data_projection;
-  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &no_data_projection.handle), 0)
-      << fm_last_error_message();
-
-  fm_pivot_data_field_spec_t data_spec{};
-  data_spec.name = "Sum of Amount";
-  data_spec.field_index = 1U;
-  data_spec.aggregation = FM_PIVOT_AGG_SUM;
-  data_spec.number_format = "";
-  data_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
-  data_spec.show_as_base_field = -1;
-  data_spec.show_as_base_item = -1;
-  std::size_t data_field_idx = 99;
-  ASSERT_EQ(fm_workbook_pivot_data_field_add(wb.handle, 0, pivot_idx, &data_spec, &data_field_idx), 0)
-      << fm_last_error_message();
-  EXPECT_EQ(data_field_idx, 0U);
-
-  PivotCellsGuard projected;
-  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
-  bool saw_north = false;
-  bool saw_south = false;
-  for (const fm_pivot_cell_t& c : CollectCells(projected.handle)) {
-    if (c.kind != FM_PIVOT_CELL_ROW_LABEL || c.value.kind != FM_VAL_TEXT || c.value.u.text == nullptr) {
-      continue;
-    }
-    if (std::string_view(c.value.u.text) == "North") {
-      saw_north = true;
-    }
-    if (std::string_view(c.value.u.text) == "South") {
-      saw_south = true;
-    }
-  }
-  EXPECT_FALSE(saw_north);
-  EXPECT_TRUE(saw_south);
+  // The data field's display name resolves through to its source field, so
+  // the same call shape is accepted for it.
+  spec.field_name = "Sum of Amount";
+  ASSERT_EQ(fm_workbook_pivot_filter_add(wb.handle, 0, pivot_idx, &spec), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_workbook_pivot_filter_count(wb.handle, 0, pivot_idx, &count), 0);
+  EXPECT_EQ(count, 1U);
 }
 
-TEST(FormulonCApiPivot, LegacyFilterErrorUsesLegacyApiName) {
+TEST(FormulonCApiPivot, FilterErrorUsesApiName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   std::uint32_t cache_id = 0;

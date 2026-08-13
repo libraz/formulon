@@ -937,6 +937,26 @@ export interface CellXfResult {
   xfId?: number;
 }
 
+/** How an OOXML `<color>` element expressed its value.
+ *  Mirrors `formulon::io::ColorSpec`.
+ *
+ *  A record read from a workbook carries the original specification here
+ *  while the sibling `*Argb` field carries the resolved colour. Pass it
+ *  back unchanged to reproduce the source markup; leave `kind` at 0 on a
+ *  record built from scratch and the writer emits the resolved value. */
+export interface ColorSpec {
+  /** 0=none, 1=rgb, 2=theme, 3=indexed, 4=auto. */
+  kind: number;
+  /** AARRGGBB; meaningful when `kind` is 1. */
+  rgb: number;
+  /** Theme index; meaningful when `kind` is 2. */
+  theme: number;
+  /** Theme tint in -1..1; meaningful when `kind` is 2. */
+  tint: number;
+  /** Legacy palette index; meaningful when `kind` is 3. */
+  indexed: number;
+}
+
 /** Plain-data shape of a font record. Mirrors `formulon::io::FontRecord`. */
 export interface FontRecord {
   name: string;
@@ -944,12 +964,30 @@ export interface FontRecord {
   bold: boolean;
   italic: boolean;
   strike: boolean;
+  /** Whether the source carried a `<b>` element at all. An absent element
+   *  on a differential font means "leave bold unchanged"; `hasBold` with
+   *  `bold: false` means "switch bold off". */
+  hasBold: boolean;
+  /** Whether the source carried an `<i>` element at all. */
+  hasItalic: boolean;
+  /** Whether the source carried a `<strike>` element at all. */
+  hasStrike: boolean;
   /** 0=none, 1=single, 2=double, 3=singleAccounting, 4=doubleAccounting. */
   underline: number;
   /** 0=baseline, 1=superscript, 2=subscript. */
   vertAlign: number;
+  /** Whether the source carried a `<family>` element. */
+  hasFamily: boolean;
+  /** OOXML font-family class (0..5). */
+  family: number;
+  /** Whether the source carried a `<charset>` element. */
+  hasCharset: boolean;
+  /** OOXML charset codepage id (e.g. 128 = Shift_JIS). */
+  charset: number;
   /** AARRGGBB packed colour. */
   colorArgb: number;
+  /** Original `<color>` specification, preserved for round-tripping. */
+  color: ColorSpec;
 }
 
 /** Plain-data shape of a fill record. Mirrors `formulon::io::FillRecord`. */
@@ -960,6 +998,10 @@ export interface FillRecord {
   fgArgb: number;
   /** Background AARRGGBB colour. */
   bgArgb: number;
+  /** Original `<fgColor>` specification, preserved for round-tripping. */
+  fg: ColorSpec;
+  /** Original `<bgColor>` specification, preserved for round-tripping. */
+  bg: ColorSpec;
 }
 
 /** One side of a `BorderRecord`. */
@@ -968,6 +1010,8 @@ export interface BorderSide {
   style: number;
   /** AARRGGBB packed colour. */
   colorArgb: number;
+  /** Original `<color>` specification, preserved for round-tripping. */
+  color: ColorSpec;
 }
 
 /** Plain-data shape of a border record. Mirrors `formulon::io::BorderRecord`. */

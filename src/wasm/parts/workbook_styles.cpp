@@ -92,6 +92,83 @@ void js_pull_cell_xf_ex2(const emscripten::val& record, fm_cell_xf_ex2* xf) {
   }
 }
 
+/// Builds the JS mirror of a font record. Shared by `getFont` and the
+/// `<dxf>` font projection so both surface the same field set.
+emscripten::val js_font_record(const fm_font_record& f) {
+  emscripten::val o = emscripten::val::object();
+  o.set("name", std::string(f.name != nullptr ? f.name : ""));
+  o.set("size", f.size);
+  o.set("colorArgb", f.color_argb);
+  o.set("bold", f.bold != 0);
+  o.set("italic", f.italic != 0);
+  o.set("strike", f.strike != 0);
+  o.set("hasBold", f.has_bold != 0);
+  o.set("hasItalic", f.has_italic != 0);
+  o.set("hasStrike", f.has_strike != 0);
+  o.set("underline", static_cast<std::uint32_t>(f.underline));
+  o.set("vertAlign", static_cast<std::uint32_t>(f.vert_align));
+  o.set("hasFamily", f.has_family != 0);
+  o.set("family", static_cast<std::uint32_t>(f.family));
+  o.set("hasCharset", f.has_charset != 0);
+  o.set("charset", static_cast<std::uint32_t>(f.charset));
+  o.set("color", js_color_spec(f.color));
+  return o;
+}
+
+/// Reads a font record out of a JS object. `name_storage` owns the font
+/// name for the duration of the C ABI call, which borrows the pointer.
+void js_pull_font_record(const emscripten::val& record, std::string* name_storage, fm_font_record* out) {
+  *name_storage = js_pull_string(record, "name");
+  out->name = name_storage->c_str();
+  out->size = js_pull_double(record, "size", 11.0);
+  out->bold = js_pull_bool(record, "bold", false) ? 1 : 0;
+  out->italic = js_pull_bool(record, "italic", false) ? 1 : 0;
+  out->strike = js_pull_bool(record, "strike", false) ? 1 : 0;
+  out->has_bold = js_pull_bool(record, "hasBold", false) ? 1 : 0;
+  out->has_italic = js_pull_bool(record, "hasItalic", false) ? 1 : 0;
+  out->has_strike = js_pull_bool(record, "hasStrike", false) ? 1 : 0;
+  out->underline = js_pull_u8(record, "underline", 0U);
+  out->vert_align = js_pull_u8(record, "vertAlign", 0U);
+  out->has_family = js_pull_bool(record, "hasFamily", false) ? 1 : 0;
+  out->family = js_pull_u8(record, "family", 0U);
+  out->has_charset = js_pull_bool(record, "hasCharset", false) ? 1 : 0;
+  out->charset = js_pull_u8(record, "charset", 0U);
+  out->color_argb = js_pull_u32(record, "colorArgb", 0xFF000000U);
+  out->color = js_pull_color_spec(record, "color");
+}
+
+emscripten::val js_fill_record(const fm_fill_record& f) {
+  emscripten::val o = emscripten::val::object();
+  o.set("pattern", static_cast<std::uint32_t>(f.pattern));
+  o.set("fgArgb", f.fg_argb);
+  o.set("bgArgb", f.bg_argb);
+  o.set("fg", js_color_spec(f.fg));
+  o.set("bg", js_color_spec(f.bg));
+  return o;
+}
+
+fm_fill_record js_pull_fill_record(const emscripten::val& record) {
+  fm_fill_record fr{};
+  fr.pattern = js_pull_u8(record, "pattern", 0U);
+  fr.fg_argb = js_pull_u32(record, "fgArgb", 0U);
+  fr.bg_argb = js_pull_u32(record, "bgArgb", 0U);
+  fr.fg = js_pull_color_spec(record, "fg");
+  fr.bg = js_pull_color_spec(record, "bg");
+  return fr;
+}
+
+emscripten::val js_border_record(const fm_border_record& b) {
+  emscripten::val o = emscripten::val::object();
+  o.set("left", js_border_side(b.left));
+  o.set("right", js_border_side(b.right));
+  o.set("top", js_border_side(b.top));
+  o.set("bottom", js_border_side(b.bottom));
+  o.set("diagonal", js_border_side(b.diagonal));
+  o.set("diagonalUp", b.diagonal_up != 0);
+  o.set("diagonalDown", b.diagonal_down != 0);
+  return o;
+}
+
 void js_set_cell_xf_alignment(const fm_cell_xf_ex2& xf, emscripten::val* object) {
   if (xf.has_text_rotation != 0) {
     object->set("textRotation", xf.text_rotation);
@@ -178,21 +255,14 @@ emscripten::val JsWorkbook::getFont(uint32_t font_index) const {
     o.set("status", error_status(7000));
     return o;
   }
-  fm_font_record_ex f{};
-  fm_status_t rc = fm_styles_get_font_ex(handle_, font_index, &f);
+  fm_font_record f{};
+  fm_status_t rc = fm_styles_get_font(handle_, font_index, &f);
   if (rc != 0) {
     o.set("status", error_status(rc));
     return o;
   }
+  o = js_font_record(f);
   o.set("status", ok_status());
-  o.set("name", std::string(f.base.name != nullptr ? f.base.name : ""));
-  o.set("size", f.base.size);
-  o.set("colorArgb", f.base.color_argb);
-  o.set("bold", f.base.bold != 0);
-  o.set("italic", f.base.italic != 0);
-  o.set("strike", f.base.strike != 0);
-  o.set("underline", static_cast<uint32_t>(f.base.underline));
-  o.set("vertAlign", static_cast<uint32_t>(f.vert_align));
   return o;
 }
 
@@ -208,10 +278,8 @@ emscripten::val JsWorkbook::getFill(uint32_t fill_index) const {
     o.set("status", error_status(rc));
     return o;
   }
+  o = js_fill_record(f);
   o.set("status", ok_status());
-  o.set("pattern", static_cast<uint32_t>(f.pattern));
-  o.set("fgArgb", f.fg_argb);
-  o.set("bgArgb", f.bg_argb);
   return o;
 }
 
@@ -227,20 +295,8 @@ emscripten::val JsWorkbook::getBorder(uint32_t border_index) const {
     o.set("status", error_status(rc));
     return o;
   }
-  auto side_obj = [](const fm_border_side& s) {
-    emscripten::val v = emscripten::val::object();
-    v.set("style", static_cast<uint32_t>(s.style));
-    v.set("colorArgb", s.color_argb);
-    return v;
-  };
+  o = js_border_record(b);
   o.set("status", ok_status());
-  o.set("left", side_obj(b.left));
-  o.set("right", side_obj(b.right));
-  o.set("top", side_obj(b.top));
-  o.set("bottom", side_obj(b.bottom));
-  o.set("diagonal", side_obj(b.diagonal));
-  o.set("diagonalUp", b.diagonal_up != 0);
-  o.set("diagonalDown", b.diagonal_down != 0);
   return o;
 }
 
@@ -276,39 +332,13 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
   }
   o.set("status", ok_status());
   if (d.font_engaged != 0) {
-    emscripten::val font = emscripten::val::object();
-    font.set("name", std::string(d.font.name != nullptr ? d.font.name : ""));
-    font.set("size", d.font.size);
-    font.set("colorArgb", d.font.color_argb);
-    font.set("bold", d.font.bold != 0);
-    font.set("italic", d.font.italic != 0);
-    font.set("strike", d.font.strike != 0);
-    font.set("underline", static_cast<uint32_t>(d.font.underline));
-    o.set("font", font);
+    o.set("font", js_font_record(d.font));
   }
   if (d.fill_engaged != 0) {
-    emscripten::val fill = emscripten::val::object();
-    fill.set("pattern", static_cast<uint32_t>(d.fill.pattern));
-    fill.set("fgArgb", d.fill.fg_argb);
-    fill.set("bgArgb", d.fill.bg_argb);
-    o.set("fill", fill);
+    o.set("fill", js_fill_record(d.fill));
   }
   if (d.border_engaged != 0) {
-    auto side_obj = [](const fm_border_side& s) {
-      emscripten::val v = emscripten::val::object();
-      v.set("style", static_cast<uint32_t>(s.style));
-      v.set("colorArgb", s.color_argb);
-      return v;
-    };
-    emscripten::val border = emscripten::val::object();
-    border.set("left", side_obj(d.border.left));
-    border.set("right", side_obj(d.border.right));
-    border.set("top", side_obj(d.border.top));
-    border.set("bottom", side_obj(d.border.bottom));
-    border.set("diagonal", side_obj(d.border.diagonal));
-    border.set("diagonalUp", d.border.diagonal_up != 0);
-    border.set("diagonalDown", d.border.diagonal_down != 0);
-    o.set("border", border);
+    o.set("border", js_border_record(d.border));
   }
   if (d.num_fmt_engaged != 0) {
     emscripten::val num_fmt = emscripten::val::object();
@@ -327,18 +357,11 @@ JsAddStyleResult JsWorkbook::addFont(emscripten::val record) {
     r.status = error_status(7000);
     return r;
   }
-  const std::string name = js_pull_string(record, "name");
-  fm_font_record_ex fr{};
-  fr.base.name = name.c_str();
-  fr.base.size = js_pull_double(record, "size", 11.0);
-  fr.base.bold = js_pull_bool(record, "bold", false) ? 1 : 0;
-  fr.base.italic = js_pull_bool(record, "italic", false) ? 1 : 0;
-  fr.base.strike = js_pull_bool(record, "strike", false) ? 1 : 0;
-  fr.base.underline = js_pull_u8(record, "underline", 0U);
-  fr.base.color_argb = js_pull_u32(record, "colorArgb", 0xFF000000U);
-  fr.vert_align = js_pull_u8(record, "vertAlign", 0U);
+  std::string name;
+  fm_font_record fr{};
+  js_pull_font_record(record, &name, &fr);
   uint32_t idx = 0;
-  fm_status_t rc = fm_styles_add_font_ex(handle_, fr, &idx);
+  fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
@@ -354,10 +377,7 @@ JsAddStyleResult JsWorkbook::addFill(emscripten::val record) {
     r.status = error_status(7000);
     return r;
   }
-  fm_fill_record fr{};
-  fr.pattern = js_pull_u8(record, "pattern", 0U);
-  fr.fg_argb = js_pull_u32(record, "fgArgb", 0U);
-  fr.bg_argb = js_pull_u32(record, "bgArgb", 0U);
+  const fm_fill_record fr = js_pull_fill_record(record);
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
   if (rc != 0) {
@@ -444,22 +464,13 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
   emscripten::val font = record["font"];
   if (!font.isUndefined() && !font.isNull()) {
     dxf.font_engaged = 1;
-    font_name = js_pull_string(font, "name");
-    dxf.font.name = font_name.c_str();
-    dxf.font.size = js_pull_double(font, "size", 11.0);
-    dxf.font.bold = js_pull_bool(font, "bold", false) ? 1 : 0;
-    dxf.font.italic = js_pull_bool(font, "italic", false) ? 1 : 0;
-    dxf.font.strike = js_pull_bool(font, "strike", false) ? 1 : 0;
-    dxf.font.underline = js_pull_u8(font, "underline", 0U);
-    dxf.font.color_argb = js_pull_u32(font, "colorArgb", 0xFF000000U);
+    js_pull_font_record(font, &font_name, &dxf.font);
   }
 
   emscripten::val fill = record["fill"];
   if (!fill.isUndefined() && !fill.isNull()) {
     dxf.fill_engaged = 1;
-    dxf.fill.pattern = js_pull_u8(fill, "pattern", 0U);
-    dxf.fill.fg_argb = js_pull_u32(fill, "fgArgb", 0U);
-    dxf.fill.bg_argb = js_pull_u32(fill, "bgArgb", 0U);
+    dxf.fill = js_pull_fill_record(fill);
   }
 
   emscripten::val border = record["border"];

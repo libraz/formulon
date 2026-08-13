@@ -49,6 +49,25 @@ namespace io {
 /// explicit schema defaults such as `horizontal="general"` and `wrapText="0"`.
 std::string write_styles(const StylesTable& table);
 
+/// Serialises one style record as the XML fragment `write_styles` emits
+/// for it inside a `<dxf>`.
+///
+/// These exist so a caller that deduplicates style tables can decide
+/// record identity by the writer's own rules instead of re-deriving which
+/// presence flags and colour specifications are observable in the output.
+/// Two records with equal fragments are indistinguishable in the emitted
+/// document; two with different fragments are not interchangeable.
+///
+/// The `<fonts>` section writer substitutes `<name val="Calibri"/>` for an
+/// empty font name where `font_fragment` omits `<name>` entirely, so the
+/// fragment distinguishes a nameless font from an explicitly-Calibri one
+/// that the section writer would render identically. That is the safe
+/// direction for a dedup key: it never merges records the writer keeps
+/// apart.
+std::string font_fragment(const FontRecord& font);
+std::string fill_fragment(const FillRecord& fill);
+std::string border_fragment(const BorderRecord& border);
+
 }  // namespace io
 }  // namespace formulon
 

@@ -250,7 +250,6 @@ fm_workbook_pivot_data_field_clear
 fm_workbook_pivot_data_field_set
 fm_workbook_pivot_filter_count
 fm_workbook_pivot_filter_add
-fm_workbook_pivot_filter_add_ex
 fm_workbook_pivot_filter_clear
 fm_workbook_pivot_filter_remove_at
 

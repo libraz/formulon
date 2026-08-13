@@ -33,6 +33,13 @@ Checks:
                   `enum_<T>`, so the `.d.ts` copy is the only place the
                   ordinal values live on the JS side) matches its
                   source enum's ordinal sequence.
+  style-record-fields
+                  Every public type that projects a style record
+                  (`ColorSpec` / `FontRecord` / `FillRecord` /
+                  `BorderSide`) carries the same field set as its C ABI
+                  struct, across the WASM `.d.ts`, the Node `.d.ts` and
+                  the Python dataclasses. Deliberate omissions live in
+                  `_STYLE_RECORD_EXEMPT_TYPES`.
   all             Run every check above (default).
 
 Stdlib only; no build artifacts or network access required.
@@ -250,9 +257,11 @@ def check_python_struct_layouts() -> List[str]:
         "fm_value_t": (16, 8),
         "fm_cf_color_t": (4, 1),
         "fm_cfvo_t": (12, 4),
-        "fm_font_record": (40, 8),
-        "fm_fill_record": (12, 4),
-        "fm_border_record": (48, 4),
+        "fm_color_spec": (24, 8),
+        "fm_border_side": (32, 8),
+        "fm_font_record": (80, 8),
+        "fm_fill_record": (64, 8),
+        "fm_border_record": (168, 8),
     }
     # Versioned style records embed the stable ``fm_cell_xf`` prefix rather
     # than repeating its fields. Expand that nested POD here so the Python
@@ -297,9 +306,6 @@ def check_python_struct_layouts() -> List[str]:
                         c_fields.append((name, 4, 1))
                     else:
                         c_fields.extend((f"{name}_{channel}", 1, 1) for channel in ("r", "g", "b", "a"))
-                    continue
-                if ctype == "fm_border_side":
-                    c_fields.extend(((f"{name}_style", 1, 1), (f"{name}_color_argb", 4, 4)))
                     continue
                 if ctype not in primitive:
                     problems.append(f"python-struct-layout: unknown {layout.name} field type {ctype!r}")
@@ -622,6 +628,124 @@ def check_dts_enums() -> List[str]:
     return problems
 
 
+# ---------------------------------------------------------------------------
+# Check 6: public style-record field sets <-> their C ABI struct.
+#
+# `FontRecord` and friends are declared independently in three public
+# surfaces and each one claims to mirror the C struct. Method-level drift
+# checking cannot see a field that one surface forgot, which is how a font's
+# `vertAlign` reached the WASM `.d.ts` alone: reading a superscript font and
+# writing it back through the other bindings silently demoted it.
+# ---------------------------------------------------------------------------
+
+PYTHON_WORKBOOK = PYTHON_PKG_DIR / "workbook.py"
+
+# Public type name -> the C struct it projects.
+_STYLE_RECORD_STRUCTS = {
+    "ColorSpec": "fm_color_spec",
+    "FontRecord": "fm_font_record",
+    "FillRecord": "fm_fill_record",
+    "BorderSide": "fm_border_side",
+}
+
+# Deliberate omissions, keyed by (surface, type name). Python models a border
+# side as a plain dict rather than a dataclass, so it has no `BorderSide` type
+# to compare; the dict shape is covered by the wasm32 struct-layout check.
+_STYLE_RECORD_EXEMPT_TYPES = {
+    ("python", "BorderSide"),
+}
+
+_TS_FIELD_RE = re.compile(r"^\s*([A-Za-z_$][A-Za-z0-9_$]*)\??\s*:", re.MULTILINE)
+_PY_FIELD_RE = re.compile(r"^    ([a-z_][A-Za-z0-9_]*)\s*:", re.MULTILINE)
+
+
+def _snake_to_camel(name: str) -> str:
+    head, *rest = name.split("_")
+    return head + "".join(part.capitalize() for part in rest)
+
+
+def _c_struct_fields(header: str, struct_name: str, source: Path) -> List[str]:
+    blocks = {
+        name: body for body, name in re.findall(r"typedef\s+struct\s*\{(.*?)\}\s*(fm_[A-Za-z0-9_]+)\s*;", header, re.S)
+    }
+    body = blocks.get(struct_name)
+    if body is None:
+        print(f"check_binding_drift: struct {struct_name!r} not found in {source}", file=sys.stderr)
+        sys.exit(2)
+    fields: List[str] = []
+    for declaration in body.split(";"):
+        declaration = " ".join(declaration.split())
+        if not declaration:
+            continue
+        match = re.fullmatch(r"(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\[(\d+)\])?", declaration)
+        if match and not match.group(2).startswith("_pad"):
+            fields.append(match.group(2))
+    return fields
+
+
+def _python_class_fields(text: str, class_name: str) -> Optional[Set[str]]:
+    match = re.search(r"^class %s:\s*$" % re.escape(class_name), text, re.MULTILINE)
+    if not match:
+        return None
+    rest = text[match.end() :]
+    end = re.search(r"^(?:@|class |def )", rest, re.MULTILINE)
+    body = rest[: end.start()] if end else rest
+    return set(_PY_FIELD_RE.findall(body))
+
+
+def check_style_record_fields() -> List[str]:
+    problems: List[str] = []
+    header = re.sub(r"/\*.*?\*/", "", _read(CAPI_HEADER), flags=re.S)
+    wasm_dts = _read(WASM_DTS)
+    node_dts = _read(NODE_DTS)
+    python_text = _read(PYTHON_WORKBOOK)
+
+    for type_name, struct_name in sorted(_STYLE_RECORD_STRUCTS.items()):
+        c_fields = _c_struct_fields(header, struct_name, CAPI_HEADER)
+        camel_fields = {_snake_to_camel(name) for name in c_fields}
+        for surface, source, dts_text in (
+            ("wasm", WASM_DTS, wasm_dts),
+            ("node", NODE_DTS, node_dts),
+        ):
+            if (surface, type_name) in _STYLE_RECORD_EXEMPT_TYPES:
+                continue
+            ts_fields = set(_TS_FIELD_RE.findall(_find_interface_body(dts_text, type_name, source)))
+            diff = _format_diff(
+                f"{struct_name} in {CAPI_HEADER.relative_to(REPO_ROOT)}",
+                camel_fields - ts_fields,
+                f"{type_name} in {source.relative_to(REPO_ROOT)}",
+                ts_fields - camel_fields,
+            )
+            if diff:
+                problems.append(f"style-record-fields: {surface} {type_name} mismatch:\n" + "\n".join(diff))
+
+        if ("python", type_name) in _STYLE_RECORD_EXEMPT_TYPES:
+            continue
+        py_fields = _python_class_fields(python_text, type_name)
+        if py_fields is None:
+            problems.append(
+                f"style-record-fields: dataclass {type_name!r} not found in {PYTHON_WORKBOOK.relative_to(REPO_ROOT)}"
+            )
+            continue
+        diff = _format_diff(
+            f"{struct_name} in {CAPI_HEADER.relative_to(REPO_ROOT)}",
+            set(c_fields) - py_fields,
+            f"{type_name} in {PYTHON_WORKBOOK.relative_to(REPO_ROOT)}",
+            py_fields - set(c_fields),
+        )
+        if diff:
+            problems.append(f"style-record-fields: python {type_name} mismatch:\n" + "\n".join(diff))
+
+    stale = {
+        (surface, type_name)
+        for surface, type_name in _STYLE_RECORD_EXEMPT_TYPES
+        if type_name not in _STYLE_RECORD_STRUCTS
+    }
+    if stale:
+        problems.append(f"style-record-fields: stale exemption entries: {sorted(stale)}")
+    return problems
+
+
 CHECKS = {
     "python-exports": check_python_exports,
     "python-struct-layouts": check_python_struct_layouts,
@@ -629,6 +753,7 @@ CHECKS = {
     "dts-node": check_dts_node,
     "readme-counts": check_readme_counts,
     "dts-enums": check_dts_enums,
+    "style-record-fields": check_style_record_fields,
 }
 
 

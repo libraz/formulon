@@ -669,6 +669,45 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(rfmt.formatCode, '"USD" #,##0');
 });
 
+test('addFont / getFont preserve superscript and round-trip to the same index', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const superscript = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
+  assert.ok(superscript.status.ok, `addFont: ${JSON.stringify(superscript.status)}`);
+  assert.equal(wb.getFont(superscript.index).vertAlign, 1);
+
+  const before = wb.fontCount();
+  const again = wb.addFont(wb.getFont(superscript.index));
+  assert.ok(again.status.ok);
+  assert.equal(again.index, superscript.index);
+  assert.equal(wb.fontCount(), before);
+
+  const edited = wb.getFont(superscript.index);
+  edited.colorArgb = 0xff00ff00;
+  const recolored = wb.addFont(edited);
+  assert.ok(recolored.status.ok);
+  assert.notEqual(recolored.index, superscript.index);
+  const reread = wb.getFont(recolored.index);
+  assert.equal(reread.vertAlign, 1);
+  assert.equal(reread.colorArgb, 0xff00ff00);
+});
+
+test('addDxf / getDxf round-trip a superscript differential font', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const added = wb.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
+  assert.ok(added.status.ok, `addDxf: ${JSON.stringify(added.status)}`);
+  const readBack = wb.getDxf(added.index);
+  assert.ok(readBack.status.ok);
+  assert.equal(readBack.font.vertAlign, 1);
+
+  const before = wb.dxfCount();
+  const again = wb.addDxf(readBack);
+  assert.ok(again.status.ok);
+  assert.equal(again.index, added.index);
+  assert.equal(wb.dxfCount(), before);
+});
+
 test('addXf rejects out-of-range font_index', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();

@@ -325,7 +325,37 @@ inline std::string js_pull_string(const emscripten::val& v, const char* key) {
   return f.as<std::string>();
 }
 
-/// Pulls a `{style, colorArgb}` border-side record out of `v`,
+/// Pulls the `{kind, rgb, theme, tint, indexed}` colour specification out
+/// of `v[key]`. An absent object leaves `kind` at `kFmColorNone`, which
+/// makes the writer fall back to the sibling resolved `*Argb` value.
+inline fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key) {
+  fm_color_spec spec{};
+  emscripten::val f = v[key];
+  if (f.isUndefined() || f.isNull()) {
+    return spec;
+  }
+  spec.kind = js_pull_u8(f, "kind", 0);
+  spec.rgb = js_pull_u32(f, "rgb", 0U);
+  spec.theme = js_pull_u32(f, "theme", 0U);
+  spec.tint = js_pull_double(f, "tint", 0.0);
+  spec.indexed = js_pull_u32(f, "indexed", 0U);
+  return spec;
+}
+
+/// Builds the JS mirror of a colour specification. Reads emit it
+/// unconditionally so a get / edit / add cycle passes the theme or
+/// indexed colour straight back and keeps hitting style-table dedup.
+inline emscripten::val js_color_spec(const fm_color_spec& spec) {
+  emscripten::val o = emscripten::val::object();
+  o.set("kind", static_cast<uint32_t>(spec.kind));
+  o.set("rgb", spec.rgb);
+  o.set("theme", spec.theme);
+  o.set("tint", spec.tint);
+  o.set("indexed", spec.indexed);
+  return o;
+}
+
+/// Pulls a `{style, colorArgb, color}` border-side record out of `v`,
 /// defaulting every absent field to zero.
 inline fm_border_side js_pull_border_side(const emscripten::val& v) {
   fm_border_side s{};
@@ -334,7 +364,17 @@ inline fm_border_side js_pull_border_side(const emscripten::val& v) {
   }
   s.style = js_pull_u8(v, "style", 0);
   s.color_argb = js_pull_u32(v, "colorArgb", 0U);
+  s.color = js_pull_color_spec(v, "color");
   return s;
+}
+
+/// Builds the JS mirror of a border side.
+inline emscripten::val js_border_side(const fm_border_side& s) {
+  emscripten::val o = emscripten::val::object();
+  o.set("style", static_cast<uint32_t>(s.style));
+  o.set("colorArgb", s.color_argb);
+  o.set("color", js_color_spec(s.color));
+  return o;
 }
 
 }  // namespace parts

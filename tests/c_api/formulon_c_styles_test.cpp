@@ -219,6 +219,59 @@ TEST(FormulonCApiStyles, AddDxfDedupsAndReadsBack) {
   EXPECT_STREQ(out.num_fmt_code, "0.00");
 }
 
+TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_dxf_record dxf{};
+  dxf.font_engaged = 1;
+  dxf.font.name = "Calibri";
+  dxf.font.size = 9.0;
+  dxf.font.color_argb = 0xFF112233U;
+  dxf.font.vert_align = 1;  // superscript
+  uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, dxf, &index), 0);
+
+  const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
+  EXPECT_NE(xml.find("<vertAlign val=\"superscript\"/>"), std::string::npos);
+
+  fm_dxf_record loaded{};
+  ASSERT_EQ(fm_styles_get_dxf(wb.handle, index, &loaded), 0);
+  EXPECT_EQ(loaded.font.vert_align, 1U);
+
+  uint32_t count_before = 0;
+  ASSERT_EQ(fm_styles_get_dxf_count(wb.handle, &count_before), 0);
+  uint32_t reindex = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, loaded, &reindex), 0);
+  EXPECT_EQ(reindex, index);
+  uint32_t count_after = 0;
+  ASSERT_EQ(fm_styles_get_dxf_count(wb.handle, &count_after), 0);
+  EXPECT_EQ(count_after, count_before);
+}
+
+TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  formulon::io::DifferentialFormat stored;
+  stored.has_font = true;
+  stored.font.has_bold = true;  // `<b val="0"/>`: switch bold off
+  stored.font.bold = false;
+  wb.handle->workbook().mutable_styles().dxfs.push_back(stored);
+
+  // A rule that leaves bold alone must not fold onto the switch-it-off one.
+  fm_dxf_record leave_bold_alone{};
+  leave_bold_alone.font_engaged = 1;
+  leave_bold_alone.font.name = "";
+  leave_bold_alone.font.size = 11.0;
+  leave_bold_alone.font.color_argb = 0xFF000000U;
+  uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, leave_bold_alone, &index), 0);
+  EXPECT_NE(index, 0U);
+
+  const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
+  EXPECT_NE(xml.find("<b val=\"0\"/>"), std::string::npos);
+}
+
 TEST(FormulonCApiStyles, GetCellXfRejectsOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -483,25 +536,223 @@ TEST(FormulonCApiStyles, AddFontGrowsTable) {
   EXPECT_EQ(out.bold, 1);
 }
 
-TEST(FormulonCApiStyles, AddFontExPreservesVerticalAlignmentWithoutChangingLegacyRecord) {
+TEST(FormulonCApiStyles, GetFontRoundTripIsIdentityForSuperscript) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_font_record_ex superscript{};
-  superscript.base = MakeArial();
+  fm_font_record superscript = MakeArial();
   superscript.vert_align = 1;
   uint32_t idx = 0;
-  ASSERT_EQ(fm_styles_add_font_ex(wb.handle, superscript, &idx), 0);
+  ASSERT_EQ(fm_styles_add_font(wb.handle, superscript, &idx), 0);
 
-  fm_font_record_ex loaded{};
-  ASSERT_EQ(fm_styles_get_font_ex(wb.handle, idx, &loaded), 0);
-  EXPECT_STREQ(loaded.base.name, "Arial");
+  fm_font_record loaded{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &loaded), 0);
+  EXPECT_STREQ(loaded.name, "Arial");
   EXPECT_EQ(loaded.vert_align, 1U);
 
-  fm_font_record legacy{};
-  ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &legacy), 0);
-  EXPECT_STREQ(legacy.name, "Arial");
-  EXPECT_EQ(legacy.underline, 0U);
+  uint32_t count_before = 0;
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &count_before), 0);
+  uint32_t reindex = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, loaded, &reindex), 0);
+  EXPECT_EQ(reindex, idx);
+  uint32_t count_after = 0;
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &count_after), 0);
+  EXPECT_EQ(count_after, count_before);
+}
+
+TEST(FormulonCApiStyles, GetEditAddFontPreservesTheUneditedFields) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_font_record superscript = MakeArial();
+  superscript.vert_align = 1;
+  superscript.has_family = 1;
+  superscript.family = 2;
+  superscript.has_charset = 1;
+  superscript.charset = 128;
+  uint32_t idx = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, superscript, &idx), 0);
+
+  fm_font_record edited{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, idx, &edited), 0);
+  edited.color_argb = 0xFF00FF00U;
+  uint32_t recolored = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, edited, &recolored), 0);
+  EXPECT_NE(recolored, idx);
+
+  fm_font_record reread{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, recolored, &reread), 0);
+  EXPECT_EQ(reread.color_argb, 0xFF00FF00U);
+  EXPECT_EQ(reread.vert_align, 1U);
+  EXPECT_EQ(reread.has_family, 1);
+  EXPECT_EQ(reread.family, 2U);
+  EXPECT_EQ(reread.has_charset, 1);
+  EXPECT_EQ(reread.charset, 128U);
+}
+
+namespace {
+
+// An Excel-authored `<fonts>` section: the theme colour, `<family>` and
+// `<charset>` children are what a template carries and what a record built
+// from scratch through the C ABI cannot reproduce unless the ABI exposes
+// them.
+constexpr char kExcelAuthoredStyles[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+    "<fonts count=\"3\">"
+    "<font><sz val=\"11\"/><color theme=\"1\"/><name val=\"Calibri\"/><family val=\"2\"/>"
+    "<charset val=\"128\"/></font>"
+    "<font><b/><sz val=\"11\"/><color theme=\"0\" tint=\"-0.25\"/><name val=\"Calibri\"/>"
+    "<family val=\"2\"/></font>"
+    "<font><vertAlign val=\"superscript\"/><sz val=\"9\"/><color rgb=\"FF112233\"/>"
+    "<name val=\"Calibri\"/></font>"
+    "</fonts>"
+    "<fills count=\"2\">"
+    "<fill><patternFill patternType=\"none\"/></fill>"
+    "<fill><patternFill patternType=\"solid\"><fgColor theme=\"4\" tint=\"0.5\"/>"
+    "<bgColor indexed=\"64\"/></patternFill></fill>"
+    "</fills>"
+    "<borders count=\"2\">"
+    "<border><left/><right/><top/><bottom/><diagonal/></border>"
+    "<border><left style=\"thin\"><color theme=\"3\"/></left><right/><top/><bottom/>"
+    "<diagonal/></border>"
+    "</borders>"
+    "<cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellXfs>"
+    "</styleSheet>";
+
+/// Installs `kExcelAuthoredStyles` as the workbook's styles table.
+void LoadExcelAuthoredStyles(fm_workbook_t* handle) {
+  const std::vector<std::uint8_t> bytes(kExcelAuthoredStyles, kExcelAuthoredStyles + std::strlen(kExcelAuthoredStyles));
+  auto parsed = formulon::io::read_styles(bytes);
+  ASSERT_TRUE(parsed.has_value());
+  handle->workbook().mutable_styles() = std::move(parsed.value());
+}
+
+}  // namespace
+
+TEST(FormulonCApiStyles, AddFontIsIdentityAgainstAFileLoadedTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadExcelAuthoredStyles(wb.handle));
+
+  uint32_t count = 0;
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &count), 0);
+  ASSERT_EQ(count, 3U);
+  for (uint32_t i = 0; i < count; ++i) {
+    fm_font_record loaded{};
+    ASSERT_EQ(fm_styles_get_font(wb.handle, i, &loaded), 0) << "font " << i;
+    uint32_t reindex = 0xFFFFFFFFU;
+    ASSERT_EQ(fm_styles_add_font(wb.handle, loaded, &reindex), 0) << "font " << i;
+    EXPECT_EQ(reindex, i);
+  }
+  uint32_t count_after = 0;
+  ASSERT_EQ(fm_styles_get_font_count(wb.handle, &count_after), 0);
+  EXPECT_EQ(count_after, count);
+}
+
+TEST(FormulonCApiStyles, AddFillAndBorderAreIdentityAgainstAFileLoadedTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadExcelAuthoredStyles(wb.handle));
+
+  uint32_t fills = 0;
+  ASSERT_EQ(fm_styles_get_fill_count(wb.handle, &fills), 0);
+  ASSERT_EQ(fills, 2U);
+  for (uint32_t i = 0; i < fills; ++i) {
+    fm_fill_record loaded{};
+    ASSERT_EQ(fm_styles_get_fill(wb.handle, i, &loaded), 0) << "fill " << i;
+    uint32_t reindex = 0xFFFFFFFFU;
+    ASSERT_EQ(fm_styles_add_fill(wb.handle, loaded, &reindex), 0) << "fill " << i;
+    EXPECT_EQ(reindex, i);
+  }
+
+  uint32_t borders = 0;
+  ASSERT_EQ(fm_styles_get_border_count(wb.handle, &borders), 0);
+  ASSERT_EQ(borders, 2U);
+  for (uint32_t i = 0; i < borders; ++i) {
+    fm_border_record loaded{};
+    ASSERT_EQ(fm_styles_get_border(wb.handle, i, &loaded), 0) << "border " << i;
+    uint32_t reindex = 0xFFFFFFFFU;
+    ASSERT_EQ(fm_styles_add_border(wb.handle, loaded, &reindex), 0) << "border " << i;
+    EXPECT_EQ(reindex, i);
+  }
+
+  uint32_t fills_after = 0;
+  uint32_t borders_after = 0;
+  ASSERT_EQ(fm_styles_get_fill_count(wb.handle, &fills_after), 0);
+  ASSERT_EQ(fm_styles_get_border_count(wb.handle, &borders_after), 0);
+  EXPECT_EQ(fills_after, fills);
+  EXPECT_EQ(borders_after, borders);
+}
+
+TEST(FormulonCApiStyles, AddFontDoesNotAliasAThemeColourOntoAResolvedRgb) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadExcelAuthoredStyles(wb.handle));
+
+  // Font 0 is `<color theme="1"/>`, which the reader resolves to the same
+  // AARRGGBB a caller would pass for plain black. Folding the two together
+  // is what turned a template's body text white.
+  fm_font_record themed{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, 0U, &themed), 0);
+  ASSERT_EQ(themed.color.kind, static_cast<uint8_t>(kFmColorTheme));
+
+  fm_font_record resolved = themed;
+  resolved.color = fm_color_spec{};
+  uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, resolved, &index), 0);
+  EXPECT_NE(index, 0U);
+
+  // The theme record is untouched and still serialises as a theme colour.
+  const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
+  EXPECT_NE(xml.find("<color theme=\"1\"/>"), std::string::npos);
+  EXPECT_NE(xml.find("<color theme=\"0\" tint=\"-0.25\"/>"), std::string::npos);
+}
+
+TEST(FormulonCApiStyles, AddFillAndBorderDistinguishColourSpecifications) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadExcelAuthoredStyles(wb.handle));
+
+  fm_fill_record themed_fill{};
+  ASSERT_EQ(fm_styles_get_fill(wb.handle, 1U, &themed_fill), 0);
+  ASSERT_EQ(themed_fill.fg.kind, static_cast<uint8_t>(kFmColorTheme));
+  fm_fill_record resolved_fill = themed_fill;
+  resolved_fill.fg = fm_color_spec{};
+  resolved_fill.fg_argb = themed_fill.fg_argb;
+  uint32_t fill_index = 0;
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, resolved_fill, &fill_index), 0);
+  EXPECT_NE(fill_index, 1U);
+
+  fm_border_record themed_border{};
+  ASSERT_EQ(fm_styles_get_border(wb.handle, 1U, &themed_border), 0);
+  ASSERT_EQ(themed_border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  fm_border_record resolved_border = themed_border;
+  resolved_border.left.color = fm_color_spec{};
+  uint32_t border_index = 0;
+  ASSERT_EQ(fm_styles_add_border(wb.handle, resolved_border, &border_index), 0);
+  EXPECT_NE(border_index, 1U);
+
+  const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
+  EXPECT_NE(xml.find("<fgColor theme=\"4\" tint=\"0.5\"/>"), std::string::npos);
+  EXPECT_NE(xml.find("<bgColor indexed=\"64\"/>"), std::string::npos);
+}
+
+TEST(FormulonCApiStyles, AddFontDistinguishesAnExplicitOffToggleFromAnAbsentOne) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_font_record absent = MakeArial();
+  absent.bold = 0;
+  absent.has_bold = 0;
+  fm_font_record explicit_off = absent;
+  explicit_off.has_bold = 1;
+
+  uint32_t absent_index = 0;
+  uint32_t explicit_index = 0;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, absent, &absent_index), 0);
+  ASSERT_EQ(fm_styles_add_font(wb.handle, explicit_off, &explicit_index), 0);
+  EXPECT_NE(absent_index, explicit_index);
 }
 
 TEST(FormulonCApiStyles, AddFillDedupReturnsExistingIndex) {

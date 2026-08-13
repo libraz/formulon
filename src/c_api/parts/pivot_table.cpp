@@ -16,6 +16,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/pivot_internal.h"
+#include "pivot/field_lookup.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -742,8 +743,7 @@ extern "C" fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, std::
 namespace {
 
 fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
-                                  const fm_pivot_filter_spec_ex_t* spec, bool validate_data_field_index,
-                                  const char* api) {
+                                  const fm_pivot_filter_spec_t* spec, const char* api) {
   if (wb == nullptr || spec == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              (std::string(api) + ": NULL argument").c_str());
@@ -759,10 +759,19 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
   const bool is_value_filter = spec->type == FM_PIVOT_FILTER_VALUE_TOP_10 ||
                                spec->type == FM_PIVOT_FILTER_VALUE_GREATER_THAN ||
                                spec->type == FM_PIVOT_FILTER_VALUE_BETWEEN;
-  if (validate_data_field_index && is_value_filter && spec->data_field_index >= table->data_fields().size()) {
+  if (is_value_filter && spec->data_field_index >= table->data_fields().size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                              (std::string(api) + ": data_field_index out of range").c_str(),
                              "data_field_index=" + std::to_string(spec->data_field_index));
+  }
+  // A label/date filter is applied per record against the named field, so an
+  // unresolvable name would leave the filter a silent no-op. Value filters
+  // select their axis through `axis` + `data_field_index` instead and accept
+  // any field name.
+  if (!is_value_filter && !formulon::pivot::resolve_field_by_any_name(*table, spec->field_name).has_value()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             (std::string(api) + ": field_name does not name a pivot field").c_str(),
+                             std::string("field_name=") + spec->field_name);
   }
   formulon::pivot::PivotFilter filter;
   filter.axis = pivot_axis_from_fm(spec->axis);
@@ -827,31 +836,10 @@ extern "C" fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, s
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_pivot_filter_add_ex(fm_workbook_t* wb, std::size_t sheet_index,
-                                                       std::size_t pivot_index, const fm_pivot_filter_spec_ex_t* spec) {
-  clear_last_error();
-  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, true, "fm_workbook_pivot_filter_add_ex");
-}
-
 extern "C" fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                                     const fm_pivot_filter_spec_t* spec) {
   clear_last_error();
-  fm_pivot_filter_spec_ex_t ex{};
-  if (spec != nullptr) {
-    ex.axis = spec->axis;
-    ex.field_name = spec->field_name;
-    ex.type = spec->type;
-    ex.value_kind = spec->value_kind;
-    ex.value_int = spec->value_int;
-    ex.value_double = spec->value_double;
-    ex.value_text = spec->value_text;
-    ex.value_high_kind = spec->value_high_kind;
-    ex.value_high_int = spec->value_high_int;
-    ex.value_high_double = spec->value_high_double;
-  }
-  ex.data_field_index = 0;
-  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec == nullptr ? nullptr : &ex, false,
-                               "fm_workbook_pivot_filter_add");
+  return add_pivot_filter_impl(wb, sheet_index, pivot_index, spec, "fm_workbook_pivot_filter_add");
 }
 
 extern "C" fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, std::size_t sheet_index,

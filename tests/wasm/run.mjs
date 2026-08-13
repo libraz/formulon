@@ -1091,6 +1091,57 @@ async function run() {
     }
   });
 
+  test('addFont(getFont(i)) is the identity and does not grow the table', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
+      assert.ok(added.status.ok);
+      const before = wb.fontCount();
+      const readBack = wb.getFont(added.index);
+      const again = wb.addFont(readBack);
+      assert.ok(again.status.ok);
+      assert.equal(again.index, added.index);
+      assert.equal(wb.fontCount(), before);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('a one-field font rewrite keeps the superscript', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const added = wb.addFont({ name: 'Arial', size: 12, vertAlign: 1, colorArgb: 0xff112233 });
+      assert.ok(added.status.ok);
+      const edited = wb.getFont(added.index);
+      edited.colorArgb = 0xff00ff00;
+      const recolored = wb.addFont(edited);
+      assert.ok(recolored.status.ok);
+      assert.notEqual(recolored.index, added.index);
+      const reread = wb.getFont(recolored.index);
+      assert.equal(reread.vertAlign, 1);
+      assert.equal(reread.colorArgb, 0xff00ff00);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('addDxf / getDxf round-trip a superscript differential font', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const added = wb.addDxf({ font: { name: 'Calibri', size: 9, vertAlign: 1 } });
+      assert.ok(added.status.ok);
+      const readBack = wb.getDxf(added.index);
+      assert.equal(readBack.font.vertAlign, 1);
+      const before = wb.dxfCount();
+      const again = wb.addDxf(readBack);
+      assert.ok(again.status.ok);
+      assert.equal(again.index, added.index);
+      assert.equal(wb.dxfCount(), before);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('addXf rejects out-of-range font_index', () => {
     const wb = Module.Workbook.createDefault();
     try {

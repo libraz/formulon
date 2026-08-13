@@ -880,6 +880,24 @@ const char* builtin_num_fmt(std::uint16_t id) {
   return kBuiltinNumFmts[id];
 }
 
+std::string font_fragment(const FontRecord& font) {
+  std::string out;
+  AppendFontFragment(out, font);
+  return out;
+}
+
+std::string fill_fragment(const FillRecord& fill) {
+  std::string out;
+  AppendFillFragment(out, fill);
+  return out;
+}
+
+std::string border_fragment(const BorderRecord& border) {
+  std::string out;
+  AppendBorderFragment(out, border);
+  return out;
+}
+
 std::string write_styles(const StylesTable& table) {
   std::string out;
   out.reserve(1024);

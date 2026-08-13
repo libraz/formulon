@@ -54,6 +54,146 @@ Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
   return out;
 }
 
+/// Reads the `{kind, rgb, theme, tint, indexed}` colour specification out
+/// of `owner[key]`. An absent object leaves `kind` at `kFmColorNone`, so
+/// the writer falls back to the sibling resolved `*Argb` value.
+fm_color_spec PullColorSpec(const Napi::Object& owner, const char* key) {
+  fm_color_spec spec{};
+  if (!SpecHas(owner, key) || !owner.Get(key).IsObject()) {
+    return spec;
+  }
+  Napi::Object v = owner.Get(key).As<Napi::Object>();
+  spec.kind = static_cast<uint8_t>(SpecPullU32(v, "kind", 0U) & 0xFFU);
+  spec.rgb = SpecPullU32(v, "rgb", 0U);
+  spec.theme = SpecPullU32(v, "theme", 0U);
+  spec.tint = SpecPullDouble(v, "tint", 0.0);
+  spec.indexed = SpecPullU32(v, "indexed", 0U);
+  return spec;
+}
+
+Napi::Object ColorSpecToJs(Napi::Env env, const fm_color_spec& spec) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("kind", Napi::Number::New(env, static_cast<uint32_t>(spec.kind)));
+  out.Set("rgb", Napi::Number::New(env, spec.rgb));
+  out.Set("theme", Napi::Number::New(env, spec.theme));
+  out.Set("tint", Napi::Number::New(env, spec.tint));
+  out.Set("indexed", Napi::Number::New(env, spec.indexed));
+  return out;
+}
+
+/// Builds the JS mirror of a font record. Shared by `getFont` and the
+/// `<dxf>` font projection so both surface the same field set.
+Napi::Object FontRecordToJs(Napi::Env env, const fm_font_record& f) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("name", Napi::String::New(env, f.name != nullptr ? f.name : ""));
+  out.Set("size", Napi::Number::New(env, f.size));
+  out.Set("colorArgb", Napi::Number::New(env, f.color_argb));
+  out.Set("bold", Napi::Boolean::New(env, f.bold != 0));
+  out.Set("italic", Napi::Boolean::New(env, f.italic != 0));
+  out.Set("strike", Napi::Boolean::New(env, f.strike != 0));
+  out.Set("hasBold", Napi::Boolean::New(env, f.has_bold != 0));
+  out.Set("hasItalic", Napi::Boolean::New(env, f.has_italic != 0));
+  out.Set("hasStrike", Napi::Boolean::New(env, f.has_strike != 0));
+  out.Set("underline", Napi::Number::New(env, static_cast<uint32_t>(f.underline)));
+  out.Set("vertAlign", Napi::Number::New(env, static_cast<uint32_t>(f.vert_align)));
+  out.Set("hasFamily", Napi::Boolean::New(env, f.has_family != 0));
+  out.Set("family", Napi::Number::New(env, static_cast<uint32_t>(f.family)));
+  out.Set("hasCharset", Napi::Boolean::New(env, f.has_charset != 0));
+  out.Set("charset", Napi::Number::New(env, static_cast<uint32_t>(f.charset)));
+  out.Set("color", ColorSpecToJs(env, f.color));
+  return out;
+}
+
+/// Reads a font record out of a JS object. `name_storage` owns the font
+/// name for the duration of the C ABI call, which borrows the pointer.
+void PullFontRecord(const Napi::Object& record, std::string* name_storage, fm_font_record* out) {
+  if (SpecHas(record, "name")) {
+    *name_storage = record.Get("name").ToString().Utf8Value();
+  } else {
+    name_storage->clear();
+  }
+  out->name = name_storage->c_str();
+  out->size = SpecPullDouble(record, "size", 11.0);
+  out->bold = SpecPullBool(record, "bold", false) ? 1 : 0;
+  out->italic = SpecPullBool(record, "italic", false) ? 1 : 0;
+  out->strike = SpecPullBool(record, "strike", false) ? 1 : 0;
+  out->has_bold = SpecPullBool(record, "hasBold", false) ? 1 : 0;
+  out->has_italic = SpecPullBool(record, "hasItalic", false) ? 1 : 0;
+  out->has_strike = SpecPullBool(record, "hasStrike", false) ? 1 : 0;
+  out->underline = static_cast<uint8_t>(SpecPullU32(record, "underline", 0U) & 0xFFU);
+  out->vert_align = static_cast<uint8_t>(SpecPullU32(record, "vertAlign", 0U) & 0xFFU);
+  out->has_family = SpecPullBool(record, "hasFamily", false) ? 1 : 0;
+  out->family = static_cast<uint8_t>(SpecPullU32(record, "family", 0U) & 0xFFU);
+  out->has_charset = SpecPullBool(record, "hasCharset", false) ? 1 : 0;
+  out->charset = static_cast<uint8_t>(SpecPullU32(record, "charset", 0U) & 0xFFU);
+  out->color_argb = SpecPullU32(record, "colorArgb", 0xFF000000U);
+  out->color = PullColorSpec(record, "color");
+}
+
+Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_record& f) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(f.pattern)));
+  out.Set("fgArgb", Napi::Number::New(env, f.fg_argb));
+  out.Set("bgArgb", Napi::Number::New(env, f.bg_argb));
+  out.Set("fg", ColorSpecToJs(env, f.fg));
+  out.Set("bg", ColorSpecToJs(env, f.bg));
+  return out;
+}
+
+fm_fill_record PullFillRecord(const Napi::Object& record) {
+  fm_fill_record out{};
+  out.pattern = static_cast<uint8_t>(SpecPullU32(record, "pattern", 0U) & 0xFFU);
+  out.fg_argb = SpecPullU32(record, "fgArgb", 0U);
+  out.bg_argb = SpecPullU32(record, "bgArgb", 0U);
+  out.fg = PullColorSpec(record, "fg");
+  out.bg = PullColorSpec(record, "bg");
+  return out;
+}
+
+Napi::Object BorderSideToJs(Napi::Env env, const fm_border_side& s) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("style", Napi::Number::New(env, static_cast<uint32_t>(s.style)));
+  out.Set("colorArgb", Napi::Number::New(env, s.color_argb));
+  out.Set("color", ColorSpecToJs(env, s.color));
+  return out;
+}
+
+Napi::Object BorderRecordToJs(Napi::Env env, const fm_border_record& b) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", BorderSideToJs(env, b.left));
+  out.Set("right", BorderSideToJs(env, b.right));
+  out.Set("top", BorderSideToJs(env, b.top));
+  out.Set("bottom", BorderSideToJs(env, b.bottom));
+  out.Set("diagonal", BorderSideToJs(env, b.diagonal));
+  out.Set("diagonalUp", Napi::Boolean::New(env, b.diagonal_up != 0));
+  out.Set("diagonalDown", Napi::Boolean::New(env, b.diagonal_down != 0));
+  return out;
+}
+
+fm_border_side PullBorderSide(const Napi::Object& owner, const char* key) {
+  fm_border_side s{};
+  if (!SpecHas(owner, key) || !owner.Get(key).IsObject()) {
+    return s;
+  }
+  Napi::Object v = owner.Get(key).As<Napi::Object>();
+  s.style = static_cast<uint8_t>(SpecPullU32(v, "style", 0U) & 0xFFU);
+  s.color_argb = SpecPullU32(v, "colorArgb", 0U);
+  s.color = PullColorSpec(v, "color");
+  return s;
+}
+
+fm_border_record PullBorderRecord(const Napi::Object& record) {
+  fm_border_record out{};
+  out.left = PullBorderSide(record, "left");
+  out.right = PullBorderSide(record, "right");
+  out.top = PullBorderSide(record, "top");
+  out.bottom = PullBorderSide(record, "bottom");
+  out.diagonal = PullBorderSide(record, "diagonal");
+  out.diagonal_up = SpecPullBool(record, "diagonalUp", false) ? 1 : 0;
+  out.diagonal_down = SpecPullBool(record, "diagonalDown", false) ? 1 : 0;
+  return out;
+}
+
 }  // namespace
 
 // ---- Cell-XF index --------------------------------------------------
@@ -150,14 +290,8 @@ Napi::Value Workbook::GetFont(const Napi::CallbackInfo& info) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
+  out = FontRecordToJs(env, f);
   out.Set("status", MakeOkStatus(env));
-  out.Set("name", Napi::String::New(env, f.name != nullptr ? f.name : ""));
-  out.Set("size", Napi::Number::New(env, f.size));
-  out.Set("colorArgb", Napi::Number::New(env, f.color_argb));
-  out.Set("bold", Napi::Boolean::New(env, f.bold != 0));
-  out.Set("italic", Napi::Boolean::New(env, f.italic != 0));
-  out.Set("strike", Napi::Boolean::New(env, f.strike != 0));
-  out.Set("underline", Napi::Number::New(env, static_cast<uint32_t>(f.underline)));
   return out;
 }
 
@@ -175,10 +309,8 @@ Napi::Value Workbook::GetFill(const Napi::CallbackInfo& info) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
+  out = FillRecordToJs(env, f);
   out.Set("status", MakeOkStatus(env));
-  out.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(f.pattern)));
-  out.Set("fgArgb", Napi::Number::New(env, f.fg_argb));
-  out.Set("bgArgb", Napi::Number::New(env, f.bg_argb));
   return out;
 }
 
@@ -196,20 +328,8 @@ Napi::Value Workbook::GetBorder(const Napi::CallbackInfo& info) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
-  auto side_obj = [&](const fm_border_side& s) {
-    Napi::Object so = Napi::Object::New(env);
-    so.Set("style", Napi::Number::New(env, static_cast<uint32_t>(s.style)));
-    so.Set("colorArgb", Napi::Number::New(env, s.color_argb));
-    return so;
-  };
+  out = BorderRecordToJs(env, b);
   out.Set("status", MakeOkStatus(env));
-  out.Set("left", side_obj(b.left));
-  out.Set("right", side_obj(b.right));
-  out.Set("top", side_obj(b.top));
-  out.Set("bottom", side_obj(b.bottom));
-  out.Set("diagonal", side_obj(b.diagonal));
-  out.Set("diagonalUp", Napi::Boolean::New(env, b.diagonal_up != 0));
-  out.Set("diagonalDown", Napi::Boolean::New(env, b.diagonal_down != 0));
   return out;
 }
 
@@ -249,39 +369,13 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
   }
   out.Set("status", MakeOkStatus(env));
   if (d.font_engaged != 0) {
-    Napi::Object font = Napi::Object::New(env);
-    font.Set("name", Napi::String::New(env, d.font.name != nullptr ? d.font.name : ""));
-    font.Set("size", Napi::Number::New(env, d.font.size));
-    font.Set("colorArgb", Napi::Number::New(env, d.font.color_argb));
-    font.Set("bold", Napi::Boolean::New(env, d.font.bold != 0));
-    font.Set("italic", Napi::Boolean::New(env, d.font.italic != 0));
-    font.Set("strike", Napi::Boolean::New(env, d.font.strike != 0));
-    font.Set("underline", Napi::Number::New(env, static_cast<uint32_t>(d.font.underline)));
-    out.Set("font", font);
+    out.Set("font", FontRecordToJs(env, d.font));
   }
   if (d.fill_engaged != 0) {
-    Napi::Object fill = Napi::Object::New(env);
-    fill.Set("pattern", Napi::Number::New(env, static_cast<uint32_t>(d.fill.pattern)));
-    fill.Set("fgArgb", Napi::Number::New(env, d.fill.fg_argb));
-    fill.Set("bgArgb", Napi::Number::New(env, d.fill.bg_argb));
-    out.Set("fill", fill);
+    out.Set("fill", FillRecordToJs(env, d.fill));
   }
   if (d.border_engaged != 0) {
-    auto side_obj = [&](const fm_border_side& s) {
-      Napi::Object so = Napi::Object::New(env);
-      so.Set("style", Napi::Number::New(env, static_cast<uint32_t>(s.style)));
-      so.Set("colorArgb", Napi::Number::New(env, s.color_argb));
-      return so;
-    };
-    Napi::Object border = Napi::Object::New(env);
-    border.Set("left", side_obj(d.border.left));
-    border.Set("right", side_obj(d.border.right));
-    border.Set("top", side_obj(d.border.top));
-    border.Set("bottom", side_obj(d.border.bottom));
-    border.Set("diagonal", side_obj(d.border.diagonal));
-    border.Set("diagonalUp", Napi::Boolean::New(env, d.border.diagonal_up != 0));
-    border.Set("diagonalDown", Napi::Boolean::New(env, d.border.diagonal_down != 0));
-    out.Set("border", border);
+    out.Set("border", BorderRecordToJs(env, d.border));
   }
   if (d.num_fmt_engaged != 0) {
     Napi::Object num_fmt = Napi::Object::New(env);
@@ -301,17 +395,8 @@ Napi::Value Workbook::AddFont(const Napi::CallbackInfo& info) {
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
   std::string name;
-  if (record.Has("name") && !record.Get("name").IsUndefined() && !record.Get("name").IsNull()) {
-    name = record.Get("name").ToString().Utf8Value();
-  }
   fm_font_record fr{};
-  fr.name = name.c_str();
-  fr.size = record.Has("size") ? record.Get("size").ToNumber().DoubleValue() : 11.0;
-  fr.bold = (record.Has("bold") && record.Get("bold").ToBoolean().Value()) ? 1 : 0;
-  fr.italic = (record.Has("italic") && record.Get("italic").ToBoolean().Value()) ? 1 : 0;
-  fr.strike = (record.Has("strike") && record.Get("strike").ToBoolean().Value()) ? 1 : 0;
-  fr.underline = record.Has("underline") ? static_cast<uint8_t>(record.Get("underline").ToNumber().Uint32Value()) : 0U;
-  fr.color_argb = record.Has("colorArgb") ? record.Get("colorArgb").ToNumber().Uint32Value() : 0xFF000000U;
+  PullFontRecord(record, &name, &fr);
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_font(handle_, fr, &idx);
   if (rc != 0) {
@@ -326,10 +411,7 @@ Napi::Value Workbook::AddFill(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
-  fm_fill_record fr{};
-  fr.pattern = record.Has("pattern") ? static_cast<uint8_t>(record.Get("pattern").ToNumber().Uint32Value()) : 0U;
-  fr.fg_argb = record.Has("fgArgb") ? record.Get("fgArgb").ToNumber().Uint32Value() : 0U;
-  fr.bg_argb = record.Has("bgArgb") ? record.Get("bgArgb").ToNumber().Uint32Value() : 0U;
+  const fm_fill_record fr = PullFillRecord(record);
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_fill(handle_, fr, &idx);
   if (rc != 0) {
@@ -344,27 +426,7 @@ Napi::Value Workbook::AddBorder(const Napi::CallbackInfo& info) {
     return MakeNumberFieldResult(env, NullHandleError(env), "index", 0);
   }
   Napi::Object record = (info.Length() > 0 && info[0].IsObject()) ? info[0].As<Napi::Object>() : Napi::Object::New(env);
-  auto pull_side = [&](const char* key) {
-    fm_border_side s{};
-    if (record.Has(key) && record.Get(key).IsObject()) {
-      Napi::Object so = record.Get(key).As<Napi::Object>();
-      if (so.Has("style")) {
-        s.style = static_cast<uint8_t>(so.Get("style").ToNumber().Uint32Value());
-      }
-      if (so.Has("colorArgb")) {
-        s.color_argb = so.Get("colorArgb").ToNumber().Uint32Value();
-      }
-    }
-    return s;
-  };
-  fm_border_record br{};
-  br.left = pull_side("left");
-  br.right = pull_side("right");
-  br.top = pull_side("top");
-  br.bottom = pull_side("bottom");
-  br.diagonal = pull_side("diagonal");
-  br.diagonal_up = (record.Has("diagonalUp") && record.Get("diagonalUp").ToBoolean().Value()) ? 1 : 0;
-  br.diagonal_down = (record.Has("diagonalDown") && record.Get("diagonalDown").ToBoolean().Value()) ? 1 : 0;
+  const fm_border_record br = PullBorderRecord(record);
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_border(handle_, br, &idx);
   if (rc != 0) {
@@ -466,47 +528,18 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
   fm_dxf_record dxf{};
 
   if (record.Has("font") && record.Get("font").IsObject()) {
-    Napi::Object font = record.Get("font").As<Napi::Object>();
     dxf.font_engaged = 1;
-    if (font.Has("name") && !font.Get("name").IsUndefined() && !font.Get("name").IsNull()) {
-      font_name = font.Get("name").ToString().Utf8Value();
-    }
-    dxf.font.name = font_name.c_str();
-    dxf.font.size = font.Has("size") ? font.Get("size").ToNumber().DoubleValue() : 11.0;
-    dxf.font.bold = SpecPullBool(font, "bold", false) ? 1 : 0;
-    dxf.font.italic = SpecPullBool(font, "italic", false) ? 1 : 0;
-    dxf.font.strike = SpecPullBool(font, "strike", false) ? 1 : 0;
-    dxf.font.underline = static_cast<uint8_t>(SpecPullU32(font, "underline", 0U) & 0xFFU);
-    dxf.font.color_argb = SpecPullU32(font, "colorArgb", 0xFF000000U);
+    PullFontRecord(record.Get("font").As<Napi::Object>(), &font_name, &dxf.font);
   }
 
   if (record.Has("fill") && record.Get("fill").IsObject()) {
-    Napi::Object fill = record.Get("fill").As<Napi::Object>();
     dxf.fill_engaged = 1;
-    dxf.fill.pattern = static_cast<uint8_t>(SpecPullU32(fill, "pattern", 0U) & 0xFFU);
-    dxf.fill.fg_argb = SpecPullU32(fill, "fgArgb", 0U);
-    dxf.fill.bg_argb = SpecPullU32(fill, "bgArgb", 0U);
+    dxf.fill = PullFillRecord(record.Get("fill").As<Napi::Object>());
   }
 
   if (record.Has("border") && record.Get("border").IsObject()) {
-    Napi::Object border = record.Get("border").As<Napi::Object>();
-    auto pull_side = [&](const char* key) {
-      fm_border_side s{};
-      if (border.Has(key) && border.Get(key).IsObject()) {
-        Napi::Object so = border.Get(key).As<Napi::Object>();
-        s.style = static_cast<uint8_t>(SpecPullU32(so, "style", 0U) & 0xFFU);
-        s.color_argb = SpecPullU32(so, "colorArgb", 0U);
-      }
-      return s;
-    };
     dxf.border_engaged = 1;
-    dxf.border.left = pull_side("left");
-    dxf.border.right = pull_side("right");
-    dxf.border.top = pull_side("top");
-    dxf.border.bottom = pull_side("bottom");
-    dxf.border.diagonal = pull_side("diagonal");
-    dxf.border.diagonal_up = SpecPullBool(border, "diagonalUp", false) ? 1 : 0;
-    dxf.border.diagonal_down = SpecPullBool(border, "diagonalDown", false) ? 1 : 0;
+    dxf.border = PullBorderRecord(record.Get("border").As<Napi::Object>());
   }
 
   if (record.Has("numFmt") && record.Get("numFmt").IsObject()) {

@@ -15,6 +15,7 @@
 #include "c_api/parts/common.h"
 #include "cell.h"
 #include "io/styles_reader.h"
+#include "io/styles_writer.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -170,6 +171,65 @@ extern "C" fm_status_t fm_styles_get_cell_xf_ex2(fm_workbook_t* wb, uint32_t xf_
   return 0;
 }
 
+namespace {
+
+void color_to_c(const formulon::io::ColorSpec& src, fm_color_spec* out) noexcept {
+  out->tint = src.tint;
+  out->rgb = src.rgb;
+  out->theme = src.theme;
+  out->indexed = src.indexed;
+  out->kind = static_cast<uint8_t>(src.kind);
+}
+
+/// Projects a model font onto the public record. Every field the styles
+/// writer can observe is carried, including the presence flags and the
+/// round-trip colour specification, so `fm_styles_add_font(out)` names the
+/// record it was read from instead of appending a lossy copy of it.
+void font_to_c(const formulon::io::FontRecord& f, fm_font_record* out) noexcept {
+  out->name = f.name.c_str();
+  out->size = f.size;
+  out->color_argb = f.color_argb;
+  out->bold = f.bold ? 1 : 0;
+  out->italic = f.italic ? 1 : 0;
+  out->strike = f.strike ? 1 : 0;
+  out->has_bold = f.has_bold ? 1 : 0;
+  out->has_italic = f.has_italic ? 1 : 0;
+  out->has_strike = f.has_strike ? 1 : 0;
+  out->has_family = f.has_family ? 1 : 0;
+  out->has_charset = f.has_charset ? 1 : 0;
+  out->underline = f.underline;
+  out->vert_align = f.vert_align;
+  out->family = f.family;
+  out->charset = f.charset;
+  color_to_c(f.color, &out->color);
+}
+
+void fill_to_c(const formulon::io::FillRecord& f, fm_fill_record* out) noexcept {
+  out->pattern = f.pattern;
+  out->fg_argb = f.fg_argb;
+  out->bg_argb = f.bg_argb;
+  color_to_c(f.fg, &out->fg);
+  color_to_c(f.bg, &out->bg);
+}
+
+void border_side_to_c(const formulon::io::BorderSide& src, fm_border_side* out) noexcept {
+  out->style = src.style;
+  out->color_argb = src.color_argb;
+  color_to_c(src.color, &out->color);
+}
+
+void border_to_c(const formulon::io::BorderRecord& b, fm_border_record* out) noexcept {
+  border_side_to_c(b.left, &out->left);
+  border_side_to_c(b.right, &out->right);
+  border_side_to_c(b.top, &out->top);
+  border_side_to_c(b.bottom, &out->bottom);
+  border_side_to_c(b.diagonal, &out->diagonal);
+  out->diagonal_up = b.diagonal_up ? 1 : 0;
+  out->diagonal_down = b.diagonal_down ? 1 : 0;
+}
+
+}  // namespace
+
 extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
@@ -181,27 +241,7 @@ extern "C" fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index
         formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_font: font_index out of range",
         "font_index=" + std::to_string(font_index) + " fonts_count=" + std::to_string(styles.fonts.size()));
   }
-  const formulon::io::FontRecord& f = styles.fonts[font_index];
-  out->name = f.name.c_str();
-  out->size = f.size;
-  out->color_argb = f.color_argb;
-  out->bold = f.bold ? 1 : 0;
-  out->italic = f.italic ? 1 : 0;
-  out->strike = f.strike ? 1 : 0;
-  out->underline = f.underline;
-  return 0;
-}
-
-extern "C" fm_status_t fm_styles_get_font_ex(fm_workbook_t* wb, uint32_t font_index, fm_font_record_ex* out) {
-  clear_last_error();
-  if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_get_font_ex: out is NULL");
-  }
-  const fm_status_t rc = fm_styles_get_font(wb, font_index, &out->base);
-  if (rc != 0) {
-    return rc;
-  }
-  out->vert_align = wb->workbook().styles().fonts[font_index].vert_align;
+  font_to_c(styles.fonts[font_index], out);
   return 0;
 }
 
@@ -245,10 +285,7 @@ extern "C" fm_status_t fm_styles_get_fill(fm_workbook_t* wb, uint32_t fill_index
         formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_fill: fill_index out of range",
         "fill_index=" + std::to_string(fill_index) + " fills_count=" + std::to_string(styles.fills.size()));
   }
-  const formulon::io::FillRecord& f = styles.fills[fill_index];
-  out->pattern = f.pattern;
-  out->fg_argb = f.fg_argb;
-  out->bg_argb = f.bg_argb;
+  fill_to_c(styles.fills[fill_index], out);
   return 0;
 }
 
@@ -263,54 +300,9 @@ extern "C" fm_status_t fm_styles_get_border(fm_workbook_t* wb, uint32_t border_i
         formulon::FormulonErrorCode::kInvalidArgument, "fm_styles_get_border: border_index out of range",
         "border_index=" + std::to_string(border_index) + " borders_count=" + std::to_string(styles.borders.size()));
   }
-  const formulon::io::BorderRecord& b = styles.borders[border_index];
-  auto fill_side = [](const formulon::io::BorderSide& src, fm_border_side& dst) noexcept {
-    dst.style = src.style;
-    dst.color_argb = src.color_argb;
-  };
-  fill_side(b.left, out->left);
-  fill_side(b.right, out->right);
-  fill_side(b.top, out->top);
-  fill_side(b.bottom, out->bottom);
-  fill_side(b.diagonal, out->diagonal);
-  out->diagonal_up = b.diagonal_up ? 1 : 0;
-  out->diagonal_down = b.diagonal_down ? 1 : 0;
+  border_to_c(styles.borders[border_index], out);
   return 0;
 }
-
-namespace {
-
-void font_to_c(const formulon::io::FontRecord& f, fm_font_record* out) {
-  out->name = f.name.c_str();
-  out->size = f.size;
-  out->color_argb = f.color_argb;
-  out->bold = f.bold ? 1 : 0;
-  out->italic = f.italic ? 1 : 0;
-  out->strike = f.strike ? 1 : 0;
-  out->underline = f.underline;
-}
-
-void fill_to_c(const formulon::io::FillRecord& f, fm_fill_record* out) {
-  out->pattern = f.pattern;
-  out->fg_argb = f.fg_argb;
-  out->bg_argb = f.bg_argb;
-}
-
-void border_to_c(const formulon::io::BorderRecord& b, fm_border_record* out) {
-  auto fill_side = [](const formulon::io::BorderSide& src, fm_border_side& dst) noexcept {
-    dst.style = src.style;
-    dst.color_argb = src.color_argb;
-  };
-  fill_side(b.left, out->left);
-  fill_side(b.right, out->right);
-  fill_side(b.top, out->top);
-  fill_side(b.bottom, out->bottom);
-  fill_side(b.diagonal, out->diagonal);
-  out->diagonal_up = b.diagonal_up ? 1 : 0;
-  out->diagonal_down = b.diagonal_down ? 1 : 0;
-}
-
-}  // namespace
 
 extern "C" fm_status_t fm_styles_get_dxf_count(fm_workbook_t* wb, uint32_t* out_count) {
   clear_last_error();
@@ -455,91 +447,44 @@ extern "C" fm_status_t fm_styles_get_cell_style_xf_ex2(fm_workbook_t* wb, uint32
 
 namespace {
 
-/// Field-for-field equality for the C++ side `FontRecord`. Excluded
-/// from `<algorithm>` because the struct has no `operator==`; defining
-/// one here keeps the dedup-comparator confined to the C ABI's needs.
+/// Dedup identity for the font / fill / border tables.
+///
+/// `fm_styles_add_*` may only hand back an existing index when the styles
+/// writer cannot tell the stored record from the candidate, so identity is
+/// the XML fragment the writer emits for the record. Deriving the key from
+/// the writer rather than restating its rules here folds in every
+/// writer-visible field by construction — the presence flags, `<family>` /
+/// `<charset>`, and the round-trip colour specifications that a
+/// hand-written comparator kept missing — and keeps the linear-scan
+/// comparison below and the batch hash key from drifting apart, because
+/// they are the same function.
+std::string font_key(const formulon::io::FontRecord& value) {
+  return formulon::io::font_fragment(value);
+}
+
+std::string fill_key(const formulon::io::FillRecord& value) {
+  return formulon::io::fill_fragment(value);
+}
+
+std::string border_key(const formulon::io::BorderRecord& value) {
+  return formulon::io::border_fragment(value);
+}
+
 bool font_records_equal(const formulon::io::FontRecord& a, const formulon::io::FontRecord& b) {
-  return a.name == b.name && a.size == b.size && a.bold == b.bold && a.italic == b.italic && a.strike == b.strike &&
-         a.underline == b.underline && a.vert_align == b.vert_align && a.color_argb == b.color_argb;
+  return font_key(a) == font_key(b);
 }
 
-bool fill_records_equal(const formulon::io::FillRecord& a, const formulon::io::FillRecord& b) noexcept {
-  return a.pattern == b.pattern && a.fg_argb == b.fg_argb && a.bg_argb == b.bg_argb;
+bool fill_records_equal(const formulon::io::FillRecord& a, const formulon::io::FillRecord& b) {
+  return fill_key(a) == fill_key(b);
 }
 
-bool border_sides_equal(const formulon::io::BorderSide& a, const formulon::io::BorderSide& b) noexcept {
-  return a.style == b.style && a.color_argb == b.color_argb;
-}
-
-bool border_records_equal(const formulon::io::BorderRecord& a, const formulon::io::BorderRecord& b) noexcept {
-  return border_sides_equal(a.left, b.left) && border_sides_equal(a.right, b.right) &&
-         border_sides_equal(a.top, b.top) && border_sides_equal(a.bottom, b.bottom) &&
-         border_sides_equal(a.diagonal, b.diagonal) && a.diagonal_up == b.diagonal_up &&
-         a.diagonal_down == b.diagonal_down;
-}
-
-template <typename T>
-bool optional_xf_field_equal(bool a_has, const T& a_value, bool b_has, const T& b_value) noexcept {
-  return a_has == b_has && (!a_has || a_value == b_value);
-}
-
-bool cell_xfs_equal(const formulon::io::CellXf& a, const formulon::io::CellXf& b) noexcept {
-  return a.font_index == b.font_index && a.fill_index == b.fill_index && a.border_index == b.border_index &&
-         a.num_fmt_id == b.num_fmt_id && a.xf_id == b.xf_id && a.apply_number_format == b.apply_number_format &&
-         a.apply_font == b.apply_font && a.apply_fill == b.apply_fill && a.apply_border == b.apply_border &&
-         a.apply_alignment == b.apply_alignment && a.apply_protection == b.apply_protection &&
-         a.quote_prefix == b.quote_prefix && formulon::io::HasAlignment(a) == formulon::io::HasAlignment(b) &&
-         optional_xf_field_equal(formulon::io::HasHorizontalAlign(a), a.horizontal_align,
-                                 formulon::io::HasHorizontalAlign(b), b.horizontal_align) &&
-         optional_xf_field_equal(formulon::io::HasVerticalAlign(a), a.vertical_align, formulon::io::HasVerticalAlign(b),
-                                 b.vertical_align) &&
-         optional_xf_field_equal(formulon::io::HasWrapText(a), a.wrap_text, formulon::io::HasWrapText(b),
-                                 b.wrap_text) &&
-         optional_xf_field_equal(formulon::io::HasJustifyLastLine(a), a.justify_last_line,
-                                 formulon::io::HasJustifyLastLine(b), b.justify_last_line) &&
-         optional_xf_field_equal(a.has_text_rotation, a.text_rotation, b.has_text_rotation, b.text_rotation) &&
-         optional_xf_field_equal(a.has_indent, a.indent, b.has_indent, b.indent) &&
-         optional_xf_field_equal(a.has_relative_indent, a.relative_indent, b.has_relative_indent, b.relative_indent) &&
-         optional_xf_field_equal(a.has_shrink_to_fit, a.shrink_to_fit, b.has_shrink_to_fit, b.shrink_to_fit) &&
-         optional_xf_field_equal(a.has_reading_order, a.reading_order, b.has_reading_order, b.reading_order) &&
-         a.has_protection == b.has_protection && (!a.has_protection || (a.locked == b.locked && a.hidden == b.hidden));
+bool border_records_equal(const formulon::io::BorderRecord& a, const formulon::io::BorderRecord& b) {
+  return border_key(a) == border_key(b);
 }
 
 template <typename T>
 void append_key_scalar(std::string& out, const T& value) {
   out.append(reinterpret_cast<const char*>(&value), sizeof(value));
-}
-
-std::string font_key(const formulon::io::FontRecord& value) {
-  std::string out = value.name;
-  out.push_back('\0');
-  append_key_scalar(out, value.size);
-  append_key_scalar(out, value.bold);
-  append_key_scalar(out, value.italic);
-  append_key_scalar(out, value.strike);
-  append_key_scalar(out, value.underline);
-  append_key_scalar(out, value.vert_align);
-  append_key_scalar(out, value.color_argb);
-  return out;
-}
-
-std::string fill_key(const formulon::io::FillRecord& value) {
-  std::string out;
-  append_key_scalar(out, value.pattern);
-  append_key_scalar(out, value.fg_argb);
-  append_key_scalar(out, value.bg_argb);
-  return out;
-}
-
-std::string border_key(const formulon::io::BorderRecord& value) {
-  std::string out;
-  for (const formulon::io::BorderSide* side : {&value.left, &value.right, &value.top, &value.bottom, &value.diagonal}) {
-    append_key_scalar(out, side->style);
-    append_key_scalar(out, side->color_argb);
-  }
-  append_key_scalar(out, value.diagonal_up);
-  append_key_scalar(out, value.diagonal_down);
-  return out;
 }
 
 std::string cell_xf_key(const formulon::io::CellXf& value) {
@@ -606,7 +551,19 @@ std::string cell_xf_key(const formulon::io::CellXf& value) {
   return out;
 }
 
-bool dxf_records_equal(const formulon::io::DifferentialFormat& a, const formulon::io::DifferentialFormat& b) noexcept {
+bool cell_xfs_equal(const formulon::io::CellXf& a, const formulon::io::CellXf& b) {
+  return cell_xf_key(a) == cell_xf_key(b);
+}
+
+/// A dxf's engaged children are compared through the same writer-derived
+/// keys as the global tables, so a differential font that only differs in
+/// `<vertAlign>` or in an explicit `<b val="0"/>` is a distinct record.
+///
+/// `alignment_xml` / `protection_xml` are deliberately excluded: the C
+/// record has no projection for them, so folding them in would make
+/// `fm_styles_add_dxf(fm_styles_get_dxf(i))` append instead of resolving
+/// to `i` for every dxf that carries one.
+bool dxf_records_equal(const formulon::io::DifferentialFormat& a, const formulon::io::DifferentialFormat& b) {
   return a.has_font == b.has_font && (!a.has_font || font_records_equal(a.font, b.font)) && a.has_fill == b.has_fill &&
          (!a.has_fill || fill_records_equal(a.fill, b.fill)) && a.has_border == b.has_border &&
          (!a.has_border || border_records_equal(a.border, b.border)) && a.has_num_fmt == b.has_num_fmt &&
@@ -706,6 +663,21 @@ fm_status_t validate_xf_alignment_enums(const fm_cell_xf& record, const char* ap
   return 0;
 }
 
+/// Accepts a colour specification from the caller. An out-of-range `kind`
+/// degrades to `kNone`, which makes the writer fall back to the sibling
+/// resolved `*_argb` value rather than emitting an unknown attribute.
+formulon::io::ColorSpec color_from_c(const fm_color_spec& src) noexcept {
+  formulon::io::ColorSpec out;
+  out.kind = (src.kind <= static_cast<uint8_t>(formulon::io::ColorSpec::Kind::kAuto))
+                 ? static_cast<formulon::io::ColorSpec::Kind>(src.kind)
+                 : formulon::io::ColorSpec::Kind::kNone;
+  out.rgb = src.rgb;
+  out.theme = src.theme;
+  out.tint = src.tint;
+  out.indexed = src.indexed;
+  return out;
+}
+
 formulon::io::FontRecord font_from_c(const fm_font_record& record) {
   formulon::io::FontRecord out;
   out.name = (record.name != nullptr) ? std::string(record.name) : std::string();
@@ -713,14 +685,17 @@ formulon::io::FontRecord font_from_c(const fm_font_record& record) {
   out.bold = record.bold != 0;
   out.italic = record.italic != 0;
   out.strike = record.strike != 0;
+  out.has_bold = record.has_bold != 0;
+  out.has_italic = record.has_italic != 0;
+  out.has_strike = record.has_strike != 0;
+  out.has_family = record.has_family != 0;
+  out.has_charset = record.has_charset != 0;
   out.underline = record.underline;
-  out.color_argb = record.color_argb;
-  return out;
-}
-
-formulon::io::FontRecord font_from_c_ex(const fm_font_record_ex& record) {
-  formulon::io::FontRecord out = font_from_c(record.base);
   out.vert_align = record.vert_align;
+  out.family = record.family;
+  out.charset = record.charset;
+  out.color_argb = record.color_argb;
+  out.color = color_from_c(record.color);
   return out;
 }
 
@@ -729,6 +704,8 @@ formulon::io::FillRecord fill_from_c(const fm_fill_record& record) noexcept {
   out.pattern = record.pattern;
   out.fg_argb = record.fg_argb;
   out.bg_argb = record.bg_argb;
+  out.fg = color_from_c(record.fg);
+  out.bg = color_from_c(record.bg);
   return out;
 }
 
@@ -736,6 +713,7 @@ formulon::io::BorderSide border_side_from_c(const fm_border_side& src) noexcept 
   formulon::io::BorderSide dst;
   dst.style = src.style;
   dst.color_argb = src.color_argb;
+  dst.color = color_from_c(src.color);
   return dst;
 }
 
@@ -760,24 +738,6 @@ extern "C" fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record reco
   }
   formulon::io::FontRecord candidate = font_from_c(record);
 
-  formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
-  for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
-    if (font_records_equal(styles.fonts[i], candidate)) {
-      *out_index = static_cast<uint32_t>(i);
-      return 0;
-    }
-  }
-  styles.fonts.push_back(std::move(candidate));
-  *out_index = static_cast<uint32_t>(styles.fonts.size() - 1);
-  return 0;
-}
-
-extern "C" fm_status_t fm_styles_add_font_ex(fm_workbook_t* wb, fm_font_record_ex record, uint32_t* out_index) {
-  clear_last_error();
-  if (wb == nullptr || out_index == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_styles_add_font_ex: NULL argument");
-  }
-  formulon::io::FontRecord candidate = font_from_c_ex(record);
   formulon::io::StylesTable& styles = wb->workbook().mutable_styles();
   for (std::size_t i = 0; i < styles.fonts.size(); ++i) {
     if (font_records_equal(styles.fonts[i], candidate)) {

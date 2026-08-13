@@ -1679,6 +1679,12 @@ typedef struct {
  *
  * `sheet_index` is 0-based. Release a successful result with
  * `fm_pagination_destroy`.
+ *
+ * Fails with `kPrintPageCountOverflow` (9005) when the page grid the sheet
+ * declares exceeds the supported page count, which a file listing a manual
+ * break before nearly every row and column can reach. On success the count
+ * `fm_pagination_page_count` reports is the true total; it is never a
+ * truncated one.
  */
 FM_API fm_status_t fm_workbook_paginate(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out);
 
@@ -2345,29 +2351,9 @@ typedef struct {
  *                        For range filters, must be `INT` or `DOUBLE`
  *                        (text upper bounds are not modelled).
  *   * `value_high_int` / `value_high_double` — upper bound payload.
- */
-typedef struct {
-  fm_pivot_axis_t axis;
-  const char* field_name;
-  fm_pivot_filter_type_t type;
-  fm_pivot_filter_value_kind_t value_kind;
-  int32_t value_int;
-  double value_double;
-  const char* value_text;
-  fm_pivot_filter_value_kind_t value_high_kind;
-  int32_t value_high_int;
-  double value_high_double;
-} fm_pivot_filter_spec_t;
-
-/**
- * @brief Extended plain-data spec for `fm_workbook_pivot_filter_add_ex`.
- *
- * This is the ABI-safe successor to `fm_pivot_filter_spec_t`: the original
- * struct remains unchanged so existing callers retain its layout. The
- * additional selector chooses which data-field aggregate a value filter
- * scores; label/date filters ignore it. When the pivot has a data-field slot
- * zero, a zero selector is equivalent to the legacy API; otherwise the
- * extended selector is validated against the pivot's available data fields.
+ *   * `data_field_index` — which data-field aggregate a value filter scores.
+ *                        Validated against the pivot's data fields for the
+ *                        value filter types; label/date filters ignore it.
  */
 typedef struct {
   fm_pivot_axis_t axis;
@@ -2381,7 +2367,7 @@ typedef struct {
   int32_t value_high_int;
   double value_high_double;
   uint32_t data_field_index;
-} fm_pivot_filter_spec_ex_t;
+} fm_pivot_filter_spec_t;
 
 /* --- Pivot caches (workbook-owned) --------------------------------------- */
 
@@ -2715,13 +2701,17 @@ FM_API fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, size_
  *        `spec->value_kind == FM_PIVOT_FILTER_VALUE_TEXT`. The optional
  *        upper-bound payload is honoured only for range filter types
  *        (`VALUE_BETWEEN`, `LABEL_DATE`).
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb`, `spec`, `spec->field_name` or a
+ *         required `spec->value_text` is `NULL`;
+ *         `kInvalidArgument` if the sheet/pivot indices do not resolve, the
+ *         value payload discriminators are unusable, `data_field_index` is
+ *         out of range for a value filter, or a label/date filter's
+ *         `field_name` names no pivot field.
  */
 FM_API fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                 const fm_pivot_filter_spec_t* spec);
-
-/** @brief Appends an active filter with an explicit data-field selector. */
-FM_API fm_status_t fm_workbook_pivot_filter_add_ex(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                   const fm_pivot_filter_spec_ex_t* spec);
 
 /** @brief Drops every active filter from the pivot. */
 FM_API fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
@@ -3345,42 +3335,81 @@ typedef struct {
   int32_t has_justify_last_line; /* 0=omitted, 1=explicit `justifyLastLine` */
 } fm_cell_xf_ex2;
 
+/** Discriminator for `fm_color_spec::kind`, mirroring
+ *  `formulon::io::ColorSpec::Kind`. */
+typedef enum {
+  kFmColorNone = 0,    /**< No `<color>` element; the sibling `*_argb` value applies. */
+  kFmColorRgb = 1,     /**< `rgb="AARRGGBB"`. */
+  kFmColorTheme = 2,   /**< `theme="N"` with optional `tint`. */
+  kFmColorIndexed = 3, /**< `indexed="N"` legacy palette index. */
+  kFmColorAuto = 4,    /**< `auto="1"` system foreground / background. */
+} fm_color_kind_t;
+
+/**
+ * @brief Plain-data projection of a `formulon::io::ColorSpec`.
+ *
+ * How the OOXML `<color>` element expressed its value. A record read from
+ * a file carries the original specification here while the sibling
+ * `*_argb` field carries the resolved AARRGGBB value; the writer re-emits
+ * the specification verbatim, so a caller that wants a record to serialise
+ * exactly like an Excel-authored one must pass the spec back unchanged.
+ * `kind == kFmColorNone` makes the writer fall back to the sibling
+ * `*_argb` value, which is what a record built from scratch wants.
+ */
+typedef struct {
+  double tint;      /* theme tint (-1..1); meaningful when kind == kFmColorTheme */
+  uint32_t rgb;     /* AARRGGBB; meaningful when kind == kFmColorRgb */
+  uint32_t theme;   /* theme index; meaningful when kind == kFmColorTheme */
+  uint32_t indexed; /* palette index; meaningful when kind == kFmColorIndexed */
+  uint8_t kind;     /* fm_color_kind_t ordinal */
+} fm_color_spec;
+
 /**
  * @brief Plain-data projection of a `formulon::io::FontRecord`.
  *
  * `name` is a NUL-terminated UTF-8 model-backed view into the workbook's
  * styles table; it is valid until the next mutation that replaces the
  * styles table or until the handle is destroyed. Reads do not invalidate it.
+ *
+ * The `has_*` flags distinguish an absent OOXML element from an explicit
+ * `val="0"`. They matter for a differential font, where an absent `<b>`
+ * means "leave the source formatting unchanged" while `<b val="0"/>`
+ * means "switch bold off"; on a cell font a `has_*` flag without its
+ * value emits the explicit-off form.
  */
 typedef struct {
   const char* name; /* NUL-terminated UTF-8, model-backed view */
   double size;
   uint32_t color_argb;
-  int32_t bold;      /* 0=false, 1=true */
-  int32_t italic;    /* 0=false, 1=true */
-  int32_t strike;    /* 0=false, 1=true */
-  uint8_t underline; /* 0=none, 1=single, 2=double, 3/4=accounting variants */
+  int32_t bold;        /* 0=false, 1=true */
+  int32_t italic;      /* 0=false, 1=true */
+  int32_t strike;      /* 0=false, 1=true */
+  int32_t has_bold;    /* 0= no `<b>` element, 1= element present */
+  int32_t has_italic;  /* 0= no `<i>` element, 1= element present */
+  int32_t has_strike;  /* 0= no `<strike>` element, 1= element present */
+  int32_t has_family;  /* 0= no `<family>` element, 1= element present */
+  int32_t has_charset; /* 0= no `<charset>` element, 1= element present */
+  uint8_t underline;   /* 0=none, 1=single, 2=double, 3/4=accounting variants */
+  uint8_t vert_align;  /* 0=baseline, 1=superscript, 2=subscript */
+  uint8_t family;      /* `<family>` font-family class (0..5) */
+  uint8_t charset;     /* `<charset>` codepage id (e.g. 128 = Shift_JIS) */
+  fm_color_spec color;
 } fm_font_record;
-
-/** Versioned font record including OOXML `vertAlign` (`0=baseline`,
- * `1=superscript`, `2=subscript`). `base` preserves the stable
- * `fm_font_record` layout for existing ABI consumers. */
-typedef struct {
-  fm_font_record base;
-  uint8_t vert_align;
-} fm_font_record_ex;
 
 /**
  * @brief Plain-data projection of a `formulon::io::FillRecord`.
  *
  * `pattern` is the OOXML pattern index: `0=none`, `1=solid`,
  * `2..18=standard pattern set`. `fg_argb` and `bg_argb` are AARRGGBB
- * packed colours.
+ * packed colours; `fg` and `bg` carry the original `<fgColor>` /
+ * `<bgColor>` specifications for round-tripping.
  */
 typedef struct {
   uint8_t pattern;  /* 0=none, 1=solid, 2..18=standard pattern set */
   uint32_t fg_argb; /* foreground colour, AARRGGBB */
   uint32_t bg_argb; /* background colour, AARRGGBB */
+  fm_color_spec fg;
+  fm_color_spec bg;
 } fm_fill_record;
 
 /**
@@ -3389,11 +3418,12 @@ typedef struct {
  *
  * `style` is the OOXML border-style ordinal: `0=none`, `1=thin`,
  * `2=medium`, `3=dashed`, ..., `13=slantDashDot`. `color_argb` is
- * AARRGGBB.
+ * AARRGGBB; `color` carries the original `<color>` specification.
  */
 typedef struct {
   uint8_t style;       /* 0=none, 1=thin, ..., 13=slantDashDot */
   uint32_t color_argb; /* AARRGGBB */
+  fm_color_spec color;
 } fm_border_side;
 
 /**
@@ -3547,8 +3577,6 @@ FM_API fm_status_t fm_styles_get_cell_xf_ex2(fm_workbook_t* wb, uint32_t xf_inde
  *         `kInvalidArgument` when `font_index >= fonts.size()`.
  */
 FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out);
-
-FM_API fm_status_t fm_styles_get_font_ex(fm_workbook_t* wb, uint32_t font_index, fm_font_record_ex* out);
 
 /**
  * @brief Looks up the format string for `num_fmt_id` (built-in 0..163
@@ -3711,11 +3739,15 @@ FM_API fm_status_t fm_styles_get_cell_style_xf_ex2(fm_workbook_t* wb, uint32_t i
  * @brief Adds a font record to the workbook's styles table, deduplicating
  *        against existing entries.
  *
- * Linear-search dedup: returns the index of the first existing record
- * that is field-for-field equal to `record`. When no match exists the
- * record is appended and the new (now-largest) index is returned. The
- * dedup is `O(N)` per call; callers that bulk-build a workbook should
- * batch when possible.
+ * Linear-search dedup: returns the index of the first existing record the
+ * styles writer cannot distinguish from `record` — that is, one which
+ * serialises to the same `<font>` XML, presence flags and colour
+ * specification included. A record that differs only in its `color`
+ * specification, or only in a `has_*` flag that changes the emitted
+ * element, is therefore a distinct record and gets its own index. When no
+ * match exists the record is appended and the new (now-largest) index is
+ * returned. The dedup is `O(N)` per call; callers that bulk-build a
+ * workbook should batch when possible.
  *
  * `record.name` must be a NUL-terminated UTF-8 pointer; an empty /
  * `NULL` pointer is treated as the empty string. The string is copied
@@ -3727,14 +3759,13 @@ FM_API fm_status_t fm_styles_get_cell_style_xf_ex2(fm_workbook_t* wb, uint32_t i
  */
 FM_API fm_status_t fm_styles_add_font(fm_workbook_t* wb, fm_font_record record, uint32_t* out_index);
 
-FM_API fm_status_t fm_styles_add_font_ex(fm_workbook_t* wb, fm_font_record_ex record, uint32_t* out_index);
-
 /**
  * @brief Adds a fill record to the workbook's styles table, deduplicating
  *        against existing entries.
  *
- * Linear-search dedup: returns the index of the first existing record
- * that is field-for-field equal to `record`. When no match exists the
+ * Linear-search dedup on the same writer-visible-state basis as
+ * `fm_styles_add_font`: a record that differs only in its `fg` / `bg`
+ * colour specification gets its own index. When no match exists the
  * record is appended and the new (now-largest) index is returned. The
  * dedup is `O(N)` per call; callers that bulk-build a workbook should
  * batch when possible.
@@ -3748,11 +3779,12 @@ FM_API fm_status_t fm_styles_add_fill(fm_workbook_t* wb, fm_fill_record record, 
  * @brief Adds a border record to the workbook's styles table, deduplicating
  *        against existing entries.
  *
- * Linear-search dedup: returns the index of the first existing record
- * that is field-for-field equal to `record`. When no match exists the
- * record is appended and the new (now-largest) index is returned. The
- * dedup is `O(N)` per call; callers that bulk-build a workbook should
- * batch when possible.
+ * Linear-search dedup on the same writer-visible-state basis as
+ * `fm_styles_add_font`: a record whose sides differ only in their colour
+ * specification gets its own index. When no match exists the record is
+ * appended and the new (now-largest) index is returned. The dedup is
+ * `O(N)` per call; callers that bulk-build a workbook should batch when
+ * possible.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `out_index` is `NULL`.
