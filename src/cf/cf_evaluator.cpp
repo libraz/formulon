@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "cf/cf_helpers.h"
@@ -23,6 +24,7 @@
 #include "cf/rule_match.h"
 #include "cf/scale_evaluator.h"
 #include "sheet.h"
+#include "utils/error.h"
 #include "utils/rect_iterator.h"
 #include "value.h"
 
@@ -181,38 +183,127 @@ std::vector<CFMatch> evaluate_cf_at_impl(const Sheet& sheet, CellAddress target,
   return matches;
 }
 
+/// Overlapping part of `a` and `b`, or `nullopt` when they are disjoint
+/// (which includes either input being an inverted rectangle).
+std::optional<CFCellRange> intersect_ranges(CFCellRange a, CFCellRange b) {
+  CFCellRange hit{};
+  hit.first.row = std::max(a.first.row, b.first.row);
+  hit.first.col = std::max(a.first.col, b.first.col);
+  hit.last.row = std::min(a.last.row, b.last.row);
+  hit.last.col = std::min(a.last.col, b.last.col);
+  if (hit.first.row > hit.last.row || hit.first.col > hit.last.col) {
+    return std::nullopt;
+  }
+  return hit;
+}
+
+/// Inclusive `[first, last]` interval along one axis.
+struct Span {
+  std::uint32_t first;
+  std::uint32_t last;
+};
+
+/// Sorts `spans` ascending and coalesces the overlapping ones in place,
+/// leaving a disjoint ascending sequence. Adjacent-but-disjoint spans
+/// stay separate; the sweep visits them in order either way.
+void merge_spans(std::vector<Span>& spans) {
+  std::sort(spans.begin(), spans.end(), [](const Span& lhs, const Span& rhs) {
+    return lhs.first < rhs.first || (lhs.first == rhs.first && lhs.last < rhs.last);
+  });
+  std::size_t out = 0;
+  for (std::size_t i = 0; i < spans.size(); ++i) {
+    if (out > 0 && spans[i].first <= spans[out - 1].last) {
+      spans[out - 1].last = std::max(spans[out - 1].last, spans[i].last);
+      continue;
+    }
+    spans[out] = spans[i];
+    ++out;
+  }
+  spans.resize(out);
+}
+
 }  // namespace
 
 std::vector<CFMatch> evaluate_cf_at(const Sheet& sheet, CellAddress target, const CFHost& host) {
   return evaluate_cf_at_impl(sheet, target, host, /*cache=*/nullptr);
 }
 
-std::vector<CFRangeCellMatches> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range, const CFHost& host) {
+Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range,
+                                                                       const CFHost& host) {
+  const utils::RectRange request(range.first.row, range.first.col, range.last.row, range.last.col);
+  if (request.size() > kCfMaxViewportCells) {
+    return make_error(FormulonErrorCode::kSecResourceLimit, "conditional-format range exceeds the viewport ceiling",
+                      "cells=" + std::to_string(request.size()) + " ceiling=" + std::to_string(kCfMaxViewportCells));
+  }
+
   std::vector<CFRangeCellMatches> results;
   if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
     return results;
   }
+
+  // Only cells a `<conditionalFormatting>` block covers can produce a
+  // match, so the walk is driven by the blocks rather than by the
+  // request: each sqref range is clipped to the request up front and
+  // the sweep below visits the union of those clips. A viewport that
+  // spans far more than the sheet's formatted area therefore costs the
+  // formatted area, not the viewport.
+  std::vector<CFCellRange> covered;
+  for (const ConditionalFormat& block : sheet.conditional_formats()) {
+    for (const CFCellRange& sqref_range : block.sqref) {
+      if (std::optional<CFCellRange> clipped = intersect_ranges(sqref_range, range); clipped.has_value()) {
+        covered.push_back(*clipped);
+      }
+    }
+  }
+  if (covered.empty()) {
+    return results;
+  }
+
   // One cache for the whole range. Slots are sized to match the
   // sheet's block count; each slot is populated lazily the first time
   // a range-aware rule needs it, then reused across every subsequent
   // cell in the same block.
   PopulationCache cache(sheet.conditional_formats().size());
-  // Iterate row-major over the inclusive range. The boundary check is
-  // `<=` so a single-cell range (first == last) still produces one
-  // visit. Callers who need to evaluate one cell should prefer the
-  // direct `evaluate_cf_at`; this helper exists for the viewport case.
-  for (auto [row, col] : utils::RectRange(range.first.row, range.first.col, range.last.row, range.last.col)) {
-    CellAddress cell{};
-    cell.row = row;
-    cell.col = col;
-    std::vector<CFMatch> matches = evaluate_cf_at_impl(sheet, cell, host, &cache);
-    if (matches.empty()) {
-      continue;
+
+  // Row-major sweep over the union of the clipped rectangles. Rows come
+  // from their merged row spans (ascending, disjoint) and each row's
+  // columns from the merged column spans of the rectangles covering
+  // that row, so the emitted order is exactly what a dense walk of the
+  // request would produce — overlapping blocks visit a shared cell
+  // once. A single-cell request (first == last) yields one visit.
+  std::vector<Span> row_spans;
+  row_spans.reserve(covered.size());
+  for (const CFCellRange& rect : covered) {
+    row_spans.push_back({rect.first.row, rect.last.row});
+  }
+  merge_spans(row_spans);
+
+  std::vector<Span> col_spans;
+  for (const Span& rows : row_spans) {
+    for (std::uint32_t row = rows.first; row <= rows.last; ++row) {
+      col_spans.clear();
+      for (const CFCellRange& rect : covered) {
+        if (row >= rect.first.row && row <= rect.last.row) {
+          col_spans.push_back({rect.first.col, rect.last.col});
+        }
+      }
+      merge_spans(col_spans);
+      for (const Span& cols : col_spans) {
+        for (std::uint32_t col = cols.first; col <= cols.last; ++col) {
+          CellAddress cell{};
+          cell.row = row;
+          cell.col = col;
+          std::vector<CFMatch> matches = evaluate_cf_at_impl(sheet, cell, host, &cache);
+          if (matches.empty()) {
+            continue;
+          }
+          CFRangeCellMatches entry;
+          entry.cell = cell;
+          entry.matches = std::move(matches);
+          results.push_back(std::move(entry));
+        }
+      }
     }
-    CFRangeCellMatches entry;
-    entry.cell = cell;
-    entry.matches = std::move(matches);
-    results.push_back(std::move(entry));
   }
   return results;
 }

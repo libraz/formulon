@@ -152,6 +152,61 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   EXPECT_EQ(m.dxf_id, 7U);
 }
 
+TEST(FormulonCApiCf, EvaluateRangeRejectsRequestPastViewportCeiling) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  // Two full columns are past the viewport ceiling the engine enforces;
+  // the binding must surface the refusal instead of returning a handle.
+  CfResultsGuard results;
+  EXPECT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 0, formulon::cf::kCfMaxRows - 1U, 1, std::nan(""),
+                                          &results.handle),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecResourceLimit));
+  EXPECT_EQ(results.handle, nullptr);
+}
+
+TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
+  WorkbookGuard wb = WorkbookFromMutator([](formulon::Workbook& w) {
+    auto& sheet = w.sheet(0);
+    sheet.set_cell_value(0, 0, formulon::Value::number(10.0));
+    sheet.set_cell_value(1, 0, formulon::Value::number(60.0));
+
+    formulon::cf::ConditionalFormat block{};
+    block.sqref.push_back(MakeRange(0, 0, 1, 0));
+    formulon::cf::CFRule rule;
+    rule.type = formulon::cf::RuleType::CellIs;
+    rule.priority = 1;
+    rule.dxf_id = 7U;
+    rule.op = formulon::cf::CellIsOperator::GreaterThan;
+    rule.formula1 = "50";
+    block.rules.push_back(std::move(rule));
+    sheet.mutable_conditional_formats().push_back(std::move(block));
+  });
+  ASSERT_NE(wb.handle, nullptr);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  // A whole column sits exactly at the ceiling and is answered from the
+  // block, not from the column's million rows.
+  CfResultsGuard results;
+  ASSERT_EQ(fm_workbook_cf_evaluate_range(wb.handle, 0, 0, 0, formulon::cf::kCfMaxRows - 1U, 0, std::nan(""),
+                                          &results.handle),
+            0)
+      << fm_last_error_message();
+  ASSERT_EQ(fm_cf_results_cell_count(results.handle), 1U);
+
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::size_t match_count = 0;
+  ASSERT_EQ(fm_cf_results_cell_at(results.handle, 0, &row, &col, &match_count), 0);
+  EXPECT_EQ(row, 1U);
+  EXPECT_EQ(col, 0U);
+  ASSERT_EQ(match_count, 1U);
+  fm_cf_match_t m{};
+  ASSERT_EQ(fm_cf_results_match_at(results.handle, 0, 0, &m), 0);
+  EXPECT_EQ(m.dxf_id_engaged, 1);
+  EXPECT_EQ(m.dxf_id, 7U);
+}
+
 TEST(FormulonCApiCf, EvaluateRangeWithColorScale) {
   WorkbookGuard wb = WorkbookFromMutator([](formulon::Workbook& w) {
     auto& sheet = w.sheet(0);

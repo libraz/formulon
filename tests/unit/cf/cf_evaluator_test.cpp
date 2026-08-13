@@ -9,6 +9,10 @@
 
 #include "cf/cf_evaluator.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "cell.h"
@@ -2270,7 +2274,7 @@ TEST(CFEvaluator, EvaluateCfForRangeReturnsOneEntryPerMatchedCell) {
       MakeBlock({MakeRange(0, 0, 2, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
 
   const auto host = MakeHost(harness);
-  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
   ASSERT_EQ(matches.size(), 2u);
   EXPECT_EQ(matches[0].cell.row, 0u);
   EXPECT_EQ(matches[0].cell.col, 0u);
@@ -2287,7 +2291,7 @@ TEST(CFEvaluator, EvaluateCfForRangeEmitsRowMajorOrder) {
       MakeBlock({MakeRange(0, 0, 1, 1)}, {MakeBlanksRule(1, 7, "blanks")}));
 
   const auto host = MakeHost(harness);
-  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 1, 1), host);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 1, 1), host).value();
   ASSERT_EQ(matches.size(), 4u);
   // Row-major: (0,0), (0,1), (1,0), (1,1).
   EXPECT_EQ(matches[0].cell.row, 0u);
@@ -2307,7 +2311,7 @@ TEST(CFEvaluator, EvaluateCfForRangeSkipsCellsWithNoMatches) {
       MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
   const auto host = MakeHost(harness);
   // Viewport spans A1:B1 → only A1 should appear in the result.
-  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 1), host);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 1), host).value();
   ASSERT_EQ(matches.size(), 1u);
   EXPECT_EQ(matches[0].cell.row, 0u);
   EXPECT_EQ(matches[0].cell.col, 0u);
@@ -2319,7 +2323,7 @@ TEST(CFEvaluator, EvaluateCfForRangeSingleCellRangeStillVisited) {
       MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
   const auto host = MakeHost(harness);
   // first == last (A1:A1).
-  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 0), host);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 0), host).value();
   ASSERT_EQ(matches.size(), 1u);
   EXPECT_EQ(matches[0].cell.row, 0u);
   EXPECT_EQ(matches[0].cell.col, 0u);
@@ -2330,7 +2334,7 @@ TEST(CFEvaluator, EvaluateCfForRangeReturnsEmptyForEmptyHost) {
   harness.sheet.mutable_conditional_formats().push_back(
       MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
   CFHost host;  // null fields.
-  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 0), host);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 0), host).value();
   EXPECT_TRUE(matches.empty());
 }
 
@@ -2341,12 +2345,122 @@ TEST(CFEvaluator, EvaluateCfForRangeAggregatesPriorityOrderPerCell) {
   harness.sheet.mutable_conditional_formats().push_back(
       MakeBlock({MakeRange(0, 0, 0, 1)}, {MakeBlanksRule(2, 20, "later"), MakeBlanksRule(1, 10, "earlier")}));
   const auto host = MakeHost(harness);
-  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 1), host);
+  std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 0, 1), host).value();
   ASSERT_EQ(matches.size(), 2u);
   for (const auto& cell : matches) {
     ASSERT_EQ(cell.matches.size(), 2u);
     EXPECT_EQ(cell.matches[0].rule_id, "earlier");
     EXPECT_EQ(cell.matches[1].rule_id, "later");
+  }
+}
+
+CFRule MakeGreaterThanRule(std::int32_t priority, std::uint32_t dxf_id, std::string id, std::string threshold) {
+  CFRule rule;
+  rule.type = RuleType::CellIs;
+  rule.op = CellIsOperator::GreaterThan;
+  rule.priority = priority;
+  rule.dxf_id = dxf_id;
+  rule.id = std::move(id);
+  rule.formula1 = std::move(threshold);
+  return rule;
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeWholeColumnWalksOnlyTheBlock) {
+  // One 3x3 block on a sheet; the request is the whole of column A. The
+  // walk must cost the block's overlap with the column (three cells),
+  // not the column's million rows — this test finishing inside the fast
+  // tier is that bound's evidence.
+  CFEvalHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::number(10.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(60.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(90.0));
+  harness.sheet.set_cell_value(1, 1, Value::number(70.0));
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 2, 2)}, {MakeGreaterThanRule(1, 7, "gt50", "50")}));
+
+  const auto host = MakeHost(harness);
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, kCfMaxRows - 1U, 0), host);
+  ASSERT_TRUE(static_cast<bool>(result));
+  const std::vector<CFRangeCellMatches>& matches = result.value();
+  ASSERT_EQ(matches.size(), 2u);
+  EXPECT_EQ(matches[0].cell.row, 1u);
+  EXPECT_EQ(matches[0].cell.col, 0u);
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].rule_id, "gt50");
+  EXPECT_EQ(matches[0].matches[0].dxf_id, 7u);
+  EXPECT_EQ(matches[1].cell.row, 2u);
+  EXPECT_EQ(matches[1].cell.col, 0u);
+  ASSERT_EQ(matches[1].matches.size(), 1u);
+  EXPECT_EQ(matches[1].matches[0].rule_id, "gt50");
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeRejectsRequestPastViewportCeiling) {
+  // Two full columns are past the viewport ceiling: the request is
+  // refused before any cell is visited.
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 0, 0)}, {MakeBlanksRule(1, 7, "blanks")}));
+
+  const auto host = MakeHost(harness);
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, kCfMaxRows - 1U, 1), host);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecResourceLimit);
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeOverlappingBlocksVisitEachCellOnce) {
+  // Two blocks share column B. Every cell of the viewport must appear
+  // exactly once and in row-major order, with the shared cells carrying
+  // both blocks' matches in priority order.
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 1, 1)}, {MakeBlanksRule(2, 20, "left")}));
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 1, 1, 2)}, {MakeBlanksRule(1, 10, "right")}));
+
+  const auto host = MakeHost(harness);
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 1, 2), host);
+  ASSERT_TRUE(static_cast<bool>(result));
+  const std::vector<CFRangeCellMatches>& matches = result.value();
+  ASSERT_EQ(matches.size(), 6u);
+  const std::vector<std::pair<std::uint32_t, std::uint32_t>> expected_cells{{0, 0}, {0, 1}, {0, 2},
+                                                                            {1, 0}, {1, 1}, {1, 2}};
+  for (std::size_t i = 0; i < expected_cells.size(); ++i) {
+    EXPECT_EQ(matches[i].cell.row, expected_cells[i].first) << "i=" << i;
+    EXPECT_EQ(matches[i].cell.col, expected_cells[i].second) << "i=" << i;
+  }
+  // Column A sees only the left block, column C only the right one, and
+  // column B both — priority-ascending.
+  ASSERT_EQ(matches[0].matches.size(), 1u);
+  EXPECT_EQ(matches[0].matches[0].rule_id, "left");
+  ASSERT_EQ(matches[1].matches.size(), 2u);
+  EXPECT_EQ(matches[1].matches[0].rule_id, "right");
+  EXPECT_EQ(matches[1].matches[1].rule_id, "left");
+  ASSERT_EQ(matches[2].matches.size(), 1u);
+  EXPECT_EQ(matches[2].matches[0].rule_id, "right");
+}
+
+TEST(CFEvaluator, EvaluateCfForRangeClipsBlocksOutsideTheRequest) {
+  // A block sitting entirely outside the viewport contributes nothing,
+  // and a block straddling the viewport edge contributes only the cells
+  // inside it.
+  CFEvalHarness harness;
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(0, 0, 3, 3)}, {MakeBlanksRule(1, 7, "straddling")}));
+  harness.sheet.mutable_conditional_formats().push_back(
+      MakeBlock({MakeRange(10, 10, 12, 12)}, {MakeBlanksRule(1, 8, "far-away")}));
+
+  const auto host = MakeHost(harness);
+  const auto result = evaluate_cf_for_range(harness.sheet, MakeRange(1, 1, 2, 2), host);
+  ASSERT_TRUE(static_cast<bool>(result));
+  const std::vector<CFRangeCellMatches>& matches = result.value();
+  ASSERT_EQ(matches.size(), 4u);
+  EXPECT_EQ(matches[0].cell.row, 1u);
+  EXPECT_EQ(matches[0].cell.col, 1u);
+  EXPECT_EQ(matches[3].cell.row, 2u);
+  EXPECT_EQ(matches[3].cell.col, 2u);
+  for (const auto& cell : matches) {
+    ASSERT_EQ(cell.matches.size(), 1u);
+    EXPECT_EQ(cell.matches[0].rule_id, "straddling");
   }
 }
 
@@ -2387,7 +2501,7 @@ TEST(CFEvaluator, EvaluateCfForRangeCachedPathMatchesUncached) {
       MakeBlock({MakeRange(0, 0, 4, 0)}, {MakeColorScaleBlock(1, "color-scale")}));
 
   const auto host = MakeHost(harness);
-  std::vector<CFRangeCellMatches> ranged = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+  std::vector<CFRangeCellMatches> ranged = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host).value();
   ASSERT_EQ(ranged.size(), 5u);
 
   for (std::uint32_t row = 0; row < 5; ++row) {
@@ -2414,7 +2528,7 @@ TEST(CFEvaluator, EvaluateCfForRangeCachedPathPreservesTop10Behavior) {
       MakeBlock({MakeRange(0, 0, 4, 0)}, {MakeTop10Rule(1, "top2", 2)}));
 
   const auto host = MakeHost(harness);
-  std::vector<CFRangeCellMatches> ranged = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+  std::vector<CFRangeCellMatches> ranged = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host).value();
 
   // Row-major: only rows 3 and 4 should appear.
   ASSERT_EQ(ranged.size(), 2u);

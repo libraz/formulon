@@ -75,13 +75,14 @@
 //     positive match yields a `CFMatch`; `stop_if_true` halts the
 //     walk early. The result list is priority-ascending.
 //   * `evaluate_cf_for_range(sheet, range, host)` — runs the same
-//     walk for every cell in `range` and returns one
-//     `CFRangeCellMatches` entry per cell that produced at least one
-//     match. Sparse-by-default: cells outside any block's sqref do
-//     not appear in the result.
+//     walk over the part of `range` that a `<conditionalFormatting>`
+//     block actually covers and returns one `CFRangeCellMatches` entry
+//     per cell that produced at least one match. Sparse-by-default:
+//     cells outside any block's sqref do not appear in the result.
+//     Requests larger than a viewport are rejected outright.
 //
-// Each step extends `match_rule` and the public `evaluate_*` helpers
-// without changing the existing call signatures.
+// Rule kinds are added by extending `match_rule` and the public
+// `evaluate_*` helpers.
 //
 // Design references:
 //   * src/cf/cf_match.h (return-type contract)
@@ -89,12 +90,15 @@
 #ifndef FORMULON_CF_CF_EVALUATOR_H_
 #define FORMULON_CF_CF_EVALUATOR_H_
 
+#include <cstdint>
 #include <optional>
 #include <vector>
 
 #include "cell.h"
 #include "cf/cf_match.h"
 #include "cf/cf_types.h"
+#include "utils/error.h"
+#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -269,11 +273,31 @@ struct CFRangeCellMatches {
   std::vector<CFMatch> matches;
 };
 
-/// Walks every cell in `range` (inclusive on both corners) and returns
-/// one `CFRangeCellMatches` entry for each cell that produced at least
-/// one match. The result is sparse: cells outside any
-/// `<conditionalFormatting>` block's sqref, and cells whose rules all
-/// failed to match, do not appear. Order is row-major over `range`.
+/// Largest request `evaluate_cf_for_range` accepts, in cells.
+///
+/// The walker exists to answer "what does the host paint in the region
+/// it is currently drawing", so the ceiling is sized from what a
+/// viewport can be: even a wall-sized display at the smallest usable
+/// zoom shows on the order of a few thousand cells. One full Excel
+/// column leaves three orders of magnitude of headroom above that while
+/// still rejecting whole-sheet rectangles, whose ~17e9 coordinates
+/// would occupy the calling thread indefinitely. A request past this
+/// point is a caller mistake, not work worth attempting.
+inline constexpr std::uint64_t kCfMaxViewportCells = 1048576U;  // 2^20
+
+/// Returns one `CFRangeCellMatches` entry for each cell of `range`
+/// (inclusive on both corners) that produced at least one match. The
+/// result is sparse: cells outside any `<conditionalFormatting>`
+/// block's sqref, and cells whose rules all failed to match, do not
+/// appear. Order is row-major over `range`.
+///
+/// A `range` wider than `kCfMaxViewportCells` cells is rejected with
+/// `kSecResourceLimit` before any cell is visited.
+///
+/// The walk is driven by the sheet's CF blocks, not by `range`: each
+/// block's sqref is intersected with `range` and only the resulting
+/// cells are evaluated, so a request spanning a whole column against a
+/// sheet carrying one small block costs the block, not the column.
 ///
 /// Equivalent to calling `evaluate_cf_at` once per cell in `range` and
 /// dropping cells with empty match lists, but the implementation
@@ -282,7 +306,8 @@ struct CFRangeCellMatches {
 /// IconSet, AboveAverage, Top10) consume the cached population through
 /// `CFEvalContext::cached_population`; cells inside the same block see
 /// identical statistics regardless of where they sit in the viewport.
-std::vector<CFRangeCellMatches> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range, const CFHost& host);
+Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const Sheet& sheet, CFCellRange range,
+                                                                       const CFHost& host);
 
 /// Context-aware `make_match` overload. Identical to the value-only
 /// overload for `DifferentialFormat` rules; for visual rules it

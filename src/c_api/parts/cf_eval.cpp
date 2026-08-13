@@ -27,12 +27,14 @@
 #include "eval/function_registry.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::set_binding_error;
+using formulon::c_api::parts::set_last_error;
 
 // Opaque results handle. Owns the engine-produced match list verbatim so
 // the address / index accessors can return data without re-walking the
@@ -127,7 +129,10 @@ extern "C" fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, si
   // Stack-allocated arena and eval context: the CF walker is purely
   // synchronous and the engine consumes both before returning. Binding
   // them here keeps the C ABI free of long-lived per-handle CF state.
-  formulon::Arena arena;
+  // The arena carries the same explicit ceiling every other evaluation
+  // arena does, so a hostile rule formula surfaces as a failed
+  // evaluation instead of exhausting the host's memory.
+  formulon::Arena arena(/*initial_chunk_bytes=*/4096, formulon::kMaxEvalArenaBytes);
   formulon::eval::EvalState eval_state;
   formulon::eval::EvalContext eval_ctx(wb->workbook(), wb->workbook().sheet(sheet_index), eval_state);
   formulon::cf::CFHost host;
@@ -141,9 +146,12 @@ extern "C" fm_status_t fm_workbook_cf_evaluate_range(const fm_workbook_t* wb, si
   range.last = formulon::CellAddress{last_row, last_col};
 
   auto matches = formulon::cf::evaluate_cf_for_range(wb->workbook().sheet(sheet_index), range, host);
+  if (!matches) {
+    return set_last_error(matches.error());
+  }
 
   auto handle = std::unique_ptr<fm_cf_results_t>(new fm_cf_results_t{});
-  handle->matches = std::move(matches);
+  handle->matches = matches.take();
   *out = handle.release();
   return 0;
 }

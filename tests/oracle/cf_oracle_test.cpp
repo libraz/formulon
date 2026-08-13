@@ -316,7 +316,8 @@ TEST(CfOracleSmoke, CellIsGreaterThan50) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("cellis_greater_than_50", matches);
 }
@@ -355,7 +356,8 @@ TEST(CfOracleSmoke, ColorScaleThreeStop) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("colorscale_three_stop_red_yellow_green", matches);
 }
@@ -388,7 +390,8 @@ TEST(CfOracleSmoke, Top10Top2) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host).value();
 
   VerifyAgainstGolden("top10_top2_of_a1_to_a5", matches);
 }
@@ -419,7 +422,8 @@ TEST(CfOracleSmoke, AboveAverage) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host).value();
 
   VerifyAgainstGolden("above_average_a1_to_a5", matches);
 }
@@ -447,7 +451,8 @@ TEST(CfOracleSmoke, BeginsWithFoo) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("begins_with_foo", matches);
 }
@@ -475,7 +480,8 @@ TEST(CfOracleSmoke, EndsWithBar) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("ends_with_bar", matches);
 }
@@ -503,7 +509,8 @@ TEST(CfOracleSmoke, NotContainsQux) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("not_contains_qux", matches);
 }
@@ -530,7 +537,8 @@ TEST(CfOracleSmoke, ContainsBlanks) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("contains_blanks_a2", matches);
 }
@@ -556,7 +564,8 @@ TEST(CfOracleSmoke, NotContainsBlanks) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("not_contains_blanks_a1_a3", matches);
 }
@@ -582,7 +591,8 @@ TEST(CfOracleSmoke, ContainsErrors) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("contains_errors_a2", matches);
 }
@@ -609,7 +619,8 @@ TEST(CfOracleSmoke, NotContainsErrors) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("not_contains_errors_a1_a3", matches);
 }
@@ -635,7 +646,8 @@ TEST(CfOracleSmoke, DuplicateValues) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("duplicate_values_a1_a3", matches);
 }
@@ -661,7 +673,8 @@ TEST(CfOracleSmoke, UniqueValues) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("unique_values_a2", matches);
 }
@@ -690,7 +703,8 @@ TEST(CfOracleSmoke, ExpressionEvenRow) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 3, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 3, 0), host).value();
 
   VerifyAgainstGolden("expression_even_row", matches);
 }
@@ -718,7 +732,8 @@ TEST(CfOracleSmoke, ContainsTextFoo) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden("contains_text_foo", matches);
 }
@@ -757,7 +772,8 @@ TEST(CfOracleSmoke, DataBarMin0Max100) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host).value();
 
   VerifyAgainstGolden("databar_min0_max100", matches);
 }
@@ -795,7 +811,8 @@ TEST(CfOracleSmoke, IconSetThreeArrows) {
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 4, 0), host).value();
 
   VerifyAgainstGolden("iconset_three_arrows", matches);
 }
@@ -836,7 +853,8 @@ void RunTimePeriodExpressionCase(const double sheet_values[3], const char* formu
   harness.sheet.mutable_conditional_formats().push_back(std::move(block));
 
   const CFHost host = harness.MakeHost();
-  const std::vector<CFRangeCellMatches> matches = evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host);
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 2, 0), host).value();
 
   VerifyAgainstGolden(case_id, matches);
 }
