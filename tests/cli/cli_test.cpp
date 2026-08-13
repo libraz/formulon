@@ -10,6 +10,7 @@
 
 #include "cli/cli.h"
 
+#include <fcntl.h>
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -343,6 +344,21 @@ TEST(FormulonCli, HelpExitsZero) {
   CliRun r = run_cli({"--help"});
   EXPECT_EQ(r.exit_code, 0);
   EXPECT_NE(r.stdout_text.find("Usage"), std::string::npos);
+}
+
+TEST(FormulonCli, VersionIsAcceptedBySubcommandsLikeHelp) {
+  // The usage banner lists `--version` under the same "Common options"
+  // heading as `-h`, so every subcommand must accept it and print the
+  // same line the top-level flag prints.
+  CliRun top = run_cli({"--version"});
+  ASSERT_EQ(top.exit_code, 0);
+  ASSERT_FALSE(top.stdout_text.empty());
+
+  for (const char* subcommand : {"eval", "recalc", "dump", "paginate"}) {
+    CliRun r = run_cli({subcommand, "--version"});
+    EXPECT_EQ(r.exit_code, 0) << subcommand << " stderr=" << r.stderr_text;
+    EXPECT_EQ(r.stdout_text, top.stdout_text) << subcommand;
+  }
 }
 
 TEST(FormulonCli, RecalcHelpDocumentsActualSuccessStatus) {
@@ -752,6 +768,43 @@ TEST(FormulonCli, RecalcPreservesExistingOutputPermissions) {
   struct stat saved_stat {};
   ASSERT_EQ(::stat(out_path.c_str(), &saved_stat), 0);
   EXPECT_EQ(saved_stat.st_mode & 0777U, 0600U);
+}
+
+TEST(FormulonCli, RecalcCreatesNewOutputWithUmaskDefaultPermissions) {
+  // A fresh output path must come out with the mode an ordinary file
+  // creation would produce, not the private mode the atomic-write
+  // temporary is created with. The reference file below is created the
+  // ordinary way, so the expectation follows whatever umask is in effect.
+  std::string in = "/tmp/fm_cli_newmode_in.xlsx";
+  std::string out_path = "/tmp/fm_cli_newmode_out.xlsx";
+  std::string reference = "/tmp/fm_cli_newmode_reference";
+  PathGuard g_in(in);
+  PathGuard g_out(out_path);
+  PathGuard g_reference(reference);
+  ASSERT_TRUE(write_fixture_workbook(in));
+  std::remove(out_path.c_str());
+  std::remove(reference.c_str());
+
+  const int reference_fd = ::open(reference.c_str(), O_CREAT | O_WRONLY | O_EXCL, 0666);
+  ASSERT_GE(reference_fd, 0);
+  ASSERT_EQ(::close(reference_fd), 0);
+  struct stat reference_stat {};
+  ASSERT_EQ(::stat(reference.c_str(), &reference_stat), 0);
+
+  CliRun r = run_cli({"recalc", in, "-o", out_path, "--quiet"});
+  ASSERT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+
+  struct stat created_stat {};
+  ASSERT_EQ(::stat(out_path.c_str(), &created_stat), 0);
+  EXPECT_EQ(created_stat.st_mode & 0777U, reference_stat.st_mode & 0777U);
+
+  // Re-running against the now-existing path keeps that same mode, so the
+  // permissions do not depend on whether the output already existed.
+  CliRun again = run_cli({"recalc", in, "-o", out_path, "--quiet"});
+  ASSERT_EQ(again.exit_code, 0) << "stderr=" << again.stderr_text;
+  struct stat rerun_stat {};
+  ASSERT_EQ(::stat(out_path.c_str(), &rerun_stat), 0);
+  EXPECT_EQ(rerun_stat.st_mode & 0777U, created_stat.st_mode & 0777U);
 }
 
 TEST(FormulonCli, RecalcIterativePreservesExistingIterationSettings) {

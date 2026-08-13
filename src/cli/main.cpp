@@ -14,7 +14,6 @@
 #include <string_view>
 #include <vector>
 
-#include "c_api/formulon_c.h"
 #include "cli/cli.h"
 
 namespace {
@@ -61,9 +60,7 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (cmd == "--version") {
-    const char* v = fm_version_string();
-    std::cout << (v != nullptr ? v : "") << '\n';
-    return 0;
+    return formulon::cli::print_version(std::cout);
   }
 
   // Pack the post-subcommand args into a `string_view` vector so the

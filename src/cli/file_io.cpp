@@ -70,6 +70,22 @@ std::string resolve_link_target(const std::string& path) {
   return resolved;
 }
 
+/// The process umask, sampled once before `main` runs.
+///
+/// `umask(2)` has no read-only form: the only way to observe the mask is
+/// to install a new one and put the old one back. Doing that during a
+/// write would leave a window in which any concurrent file creation sees
+/// mask 0, so the set-and-restore pair runs during static initialization
+/// instead — before `main`, hence before any thread exists and before the
+/// engine creates anything. The umask is inherited at exec and nothing in
+/// the CLI changes it, so one sample stays accurate for the whole run and
+/// the process mask is left exactly as it was found.
+const mode_t kProcessUmask = [] {
+  const mode_t previous = ::umask(0);
+  ::umask(previous);
+  return previous;
+}();
+
 }  // namespace
 
 fm_status_t write_file_atomically(const std::string& link_or_path, const std::uint8_t* bytes, std::size_t len) {
@@ -89,7 +105,14 @@ fm_status_t write_file_atomically(const std::string& link_or_path, const std::ui
     std::remove(tmp_path.c_str());
     return static_cast<fm_status_t>(FormulonErrorCode::kCliOutputFailed);
   };
-  if (preserve_existing_mode && ::fchmod(fd, target_stat.st_mode & 0777U) != 0) {
+  // Replacing a file keeps its identity, including its permissions; creating
+  // one gives what an ordinary `open(path, O_CREAT|O_WRONLY, 0666)` would
+  // give under the current umask. Either way the 0600 that `mkstemp` forces
+  // on its temporary must not be observable in the final artifact.
+  const mode_t result_mode = preserve_existing_mode
+                                 ? static_cast<mode_t>(target_stat.st_mode & 0777U)
+                                 : static_cast<mode_t>(0666U & ~static_cast<unsigned int>(kProcessUmask));
+  if (::fchmod(fd, result_mode) != 0) {
     return fail(/*close_fd=*/true);
   }
 

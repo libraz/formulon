@@ -4,7 +4,12 @@
 // command sources because the formatting rules are CLI-policy, not
 // engine policy.
 //
-// The exact format mirrors what Excel prints in a cell:
+// The format mirrors Excel's General format only: rendering is driven by
+// the value kind alone, because `fm_value_t` carries no number format. A
+// date-formatted cell therefore prints its raw serial, and currency,
+// percentage and similar formats are likewise not applied.
+//
+// Per-kind rules:
 //
 //   * Number  — `format_double` (locale-independent shortest form).
 //   * Bool    — `TRUE` / `FALSE`.

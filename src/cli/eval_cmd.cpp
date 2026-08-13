@@ -161,6 +161,9 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
       print_eval_usage(out);
       return 0;
     }
+    if (!options_ended && a == "--version") {
+      return print_version(out);
+    }
     if (!options_ended && a == "--json") {
       want_json = true;
       continue;

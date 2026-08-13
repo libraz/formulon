@@ -142,6 +142,9 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
       print_recalc_usage(out);
       return 0;
     }
+    if (a == "--version") {
+      return print_version(out);
+    }
     if (a == "--iterative") {
       iterative = true;
       continue;

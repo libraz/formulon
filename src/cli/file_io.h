@@ -24,6 +24,11 @@ fm_status_t read_file(const std::string& path, std::vector<std::uint8_t>& out);
 /// A `path` that is a symlink is resolved first, so the replace lands on
 /// the file the link names and the link itself survives. A dangling link
 /// is replaced as-is: there is no target to keep.
+///
+/// Permissions on success: an existing `path` keeps its own mode, and a
+/// path created by this call gets `0666` masked by the process umask, the
+/// same mode a plain `open(path, O_CREAT|O_WRONLY, 0666)` would produce.
+/// The temporary's own restrictive creation mode is never observable.
 fm_status_t write_file_atomically(const std::string& path, const std::uint8_t* bytes, std::size_t len);
 
 }  // namespace formulon::cli

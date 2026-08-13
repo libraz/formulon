@@ -208,6 +208,9 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
       print_dump_usage(out);
       return 0;
     }
+    if (a == "--version") {
+      return print_version(out);
+    }
     if (a == "--formulas") {
       if (!select_mode(DumpMode::kFormulas, a)) {
         return kExitUsage;

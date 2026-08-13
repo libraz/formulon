@@ -32,6 +32,7 @@
 #include <string_view>
 #include <vector>
 
+#include "c_api/formulon_c.h"
 #include "utils/error.h"
 
 namespace formulon {
@@ -68,14 +69,30 @@ inline int flush_output(std::ostream& out, std::ostream& err, std::string_view s
   return static_cast<int>(FormulonErrorCode::kCliOutputFailed);
 }
 
+/// Prints the engine version line to `out` and returns `0`. The usage
+/// banner lists `--version` alongside `-h | --help` as a common option, so
+/// every handler short-circuits on it through this helper and the flag
+/// means the same thing wherever it appears.
+inline int print_version(std::ostream& out) {
+  const char* version = fm_version_string();
+  out << (version != nullptr ? version : "") << '\n';
+  return 0;
+}
+
 /// `eval` handler: evaluate a single formula on a fresh empty workbook.
 ///
 /// `args` carries the post-`eval` arguments. The first non-flag argument
 /// is the formula text (with or without a leading `=`).
 ///
-/// Supported flags: `--json` (object output), `--repeat N` (re-evaluate
-/// `N` times and report timing on stderr), `-h | --help`, and `--` to end
-/// option parsing before a formula beginning with `-`.
+/// Supported flags: `--json`, `--repeat N` (re-evaluate `N` times and
+/// report timing on stderr), `-h | --help`, and `--` to end option
+/// parsing before a formula beginning with `-`.
+///
+/// `--json` has two shapes, selected by the result's dimensions: a single
+/// `{"kind": ..., "value": ...}` object when the result is exactly one row
+/// by one column, and otherwise a row-major array of arrays of those
+/// objects (one inner array per row). A formula that spills therefore
+/// produces the nested shape and a scalar one does not.
 int run_eval(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `recalc` handler: load `.xlsx`, recalc, save to `--output`.

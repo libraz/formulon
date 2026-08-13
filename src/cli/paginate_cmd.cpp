@@ -63,6 +63,9 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
       print_paginate_usage(out);
       return 0;
     }
+    if (arg == "--version") {
+      return print_version(out);
+    }
     if (arg == "--sheet") {
       if (i + 1 == args.size() || !parse_sheet_index(args[i + 1], sheet_index)) {
         err << "formulon: paginate: --sheet requires a non-negative integer\n";
