@@ -47,8 +47,18 @@ Expected<std::vector<std::string>, Error> load_sheet_table_targets(const ZipRead
 }
 
 Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::string_view sheet_rels_path,
-                                                  std::string_view sheet_dir) {
+                                                  std::string_view sheet_dir,
+                                                  std::string_view legacy_drawing_body_rid) {
   SheetAuxRels out;
+  // A sheet may declare up to two `kRelVmlDrawing` relationships (comment
+  // geometry and header/footer image); collect every candidate here and
+  // resolve which one is the modelled comment-VML slot after the walk,
+  // once `out.comments_path` and every candidate id/target is known.
+  struct VmlCandidate {
+    std::string id;
+    std::string path;
+  };
+  std::vector<VmlCandidate> vml_candidates;
   auto visit_status = visit_relationship_nodes(
       zip, sheet_rels_path, "sheet rels", [&](const pugi::xml_node& rel) -> Expected<void, Error> {
         const std::string_view type = rel.attribute("Type").value();
@@ -75,7 +85,7 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
           if (!resolved) {
             return resolved.error();
           }
-          out.vml_path = std::move(resolved).value();
+          vml_candidates.push_back(VmlCandidate{std::string(rel.attribute("Id").value()), std::move(resolved).value()});
         } else if (type == kRelPrinterSettings) {
           auto resolved = resolve_relative_path(sheet_dir, target);
           if (!resolved) {
@@ -111,6 +121,42 @@ Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::str
       });
   if (!visit_status) {
     return visit_status.error();
+  }
+  // Select the one `kRelVmlDrawing` candidate that models comment
+  // geometry: prefer the id the worksheet body's `<legacyDrawing>`
+  // element names, since that is the unambiguous signal a producer
+  // gives us. When nothing matches (no `<legacyDrawing>` element, or its
+  // id names no relationship in this file) but the sheet does have
+  // comments, fall back to the first candidate in document order so a
+  // single-VML sheet still round-trips its comment geometry. Every
+  // other candidate is preserved verbatim in `unknown_rels` instead of
+  // being silently dropped.
+  std::size_t selected = vml_candidates.size();
+  if (!legacy_drawing_body_rid.empty()) {
+    for (std::size_t i = 0; i < vml_candidates.size(); ++i) {
+      if (vml_candidates[i].id == legacy_drawing_body_rid) {
+        selected = i;
+        break;
+      }
+    }
+  }
+  if (selected == vml_candidates.size() && !out.comments_path.empty() && !vml_candidates.empty()) {
+    selected = 0;
+  }
+  for (std::size_t i = 0; i < vml_candidates.size(); ++i) {
+    if (i == selected) {
+      out.vml_path = vml_candidates[i].path;
+      continue;
+    }
+    if (vml_candidates[i].id.empty()) {
+      continue;
+    }
+    UnknownRelationship entry;
+    entry.id = vml_candidates[i].id;
+    entry.type = std::string(kRelVmlDrawing);
+    entry.target = vml_candidates[i].path;
+    entry.target_external = false;
+    out.unknown_rels.push_back(std::move(entry));
   }
   return out;
 }

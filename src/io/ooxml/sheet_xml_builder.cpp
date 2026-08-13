@@ -11,7 +11,9 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "io/cf_writer.h"
@@ -241,11 +243,10 @@ std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::stri
   for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
     const Hyperlink& h = sheet.hyperlinks()[i];
     out.append("<hyperlink ref=\"");
-    if (h.ref_span.empty()) {
-      AppendCellRefForRef(out, h.row, h.col);
-    } else {
-      // Range hyperlink: re-emit the captured multi-cell ref verbatim.
-      AppendXmlEscaped(out, h.ref_span);
+    AppendCellRefForRef(out, h.row, h.col);
+    if (h.row != h.last_row || h.col != h.last_col) {
+      out.push_back(':');
+      AppendCellRefForRef(out, h.last_row, h.last_col);
     }
     out.append("\"");
     if (i < rid_per_hyperlink.size() && !rid_per_hyperlink[i].empty()) {
@@ -632,6 +633,7 @@ std::string BuildDimensionXml(const Sheet& sheet) {
 }  // namespace
 
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
+                              const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings) {
@@ -835,8 +837,14 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
     out.append(std::to_string(sheet_tables.size()));
     out.append("\">\n");
     for (std::size_t i = 0; i < sheet_tables.size(); ++i) {
-      out.append("    <tablePart r:id=\"rId");
-      out.append(std::to_string(i + 1));
+      out.append("    <tablePart r:id=\"");
+      // `table_rids` is index-aligned with `sheet_tables`: it names the
+      // id `BuildSheetRels` actually assigned to this table's
+      // relationship, which may not be `rId(i+1)` when the sheet also
+      // carries unknown relationships occupying lower-numbered ids.
+      if (i < table_rids.size()) {
+        out.append(table_rids[i]);
+      }
       out.append("\"/>\n");
     }
     out.append("  </tableParts>\n");
@@ -880,21 +888,34 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     used_rids.insert(rid);
     return rid;
   };
+  // Every relationship this function writes goes through `add_rel` so
+  // `res.relationship_count` always reflects exactly the `<Relationship>`
+  // elements present in `res.xml`, whichever `AppendRelationship`
+  // overload the call site uses.
+  auto add_rel = [&](auto&&... args) {
+    AppendRelationship(out, std::forward<decltype(args)>(args)...);
+    ++res.relationship_count;
+  };
+  res.table_rids.reserve(sheet_tables.size());
   for (std::size_t i = 0; i < sheet_tables.size(); ++i) {
     const std::string target = "../tables/table" + std::to_string(sheet_tables[i].numeric_id) + ".xml";
-    AppendRelationship(out, next_unique_rid(), kRelTable, target);
+    const std::string rid = next_unique_rid();
+    add_rel(rid, kRelTable, target);
+    res.table_rids.push_back(rid);
   }
   // Pivot-table relationships follow the table relationships, with rId
   // numbering continuing in sequence so each rel id is unique within
   // the sheet rels file.
   for (std::size_t i = 0; i < sheet_pivot_tables.size(); ++i) {
     const std::string target = "../pivotTables/pivotTable" + std::to_string(sheet_pivot_tables[i].numeric_id) + ".xml";
-    AppendRelationship(out, next_unique_rid(), kRelPivotTable, target);
+    add_rel(next_unique_rid(), kRelPivotTable, target);
   }
   // Hyperlink relationships. Each external hyperlink target gets one
   // entry. Relative ordering is preserved so the round-trip writes the
   // rIds in the same order the reader observed.
   res.hyperlink_rids.reserve(sheet.hyperlinks().size());
+  std::unordered_map<std::string, std::string> hyperlink_targets;
+  hyperlink_targets.reserve(sheet.hyperlinks().size());
   for (const Hyperlink& h : sheet.hyperlinks()) {
     if (h.target.empty()) {
       // Pure internal links carry their target through the inline
@@ -905,14 +926,25 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     // Reuse the source `rid` when present so byte-identical round-trips
     // are possible; otherwise mint a fresh rIdN counter.
     std::string rid;
-    if (!h.rid.empty() && used_rids.count(h.rid) == 0U) {
-      rid = h.rid;
-      used_rids.insert(rid);
-    } else {
+    if (!h.rid.empty()) {
+      const auto assigned = hyperlink_targets.find(h.rid);
+      if (assigned != hyperlink_targets.end() && assigned->second == h.target) {
+        // Multiple hyperlink elements may share one relationship when they
+        // point at the same external target. Preserve that source sharing.
+        res.hyperlink_rids.push_back(h.rid);
+        continue;
+      }
+      if (used_rids.count(h.rid) == 0U) {
+        rid = h.rid;
+        used_rids.insert(rid);
+      }
+    }
+    if (rid.empty()) {
       rid = next_unique_rid();
     }
+    hyperlink_targets.emplace(rid, h.target);
     res.hyperlink_rids.push_back(rid);
-    AppendRelationship(out, rid, kRelHyperlink, h.target, /*target_external=*/true, /*escape_target=*/true);
+    add_rel(rid, kRelHyperlink, h.target, /*target_external=*/true, /*escape_target=*/true);
   }
   const SheetPrintSettings& print = sheet.print_settings();
   if (!print.printer_settings_path.empty()) {
@@ -922,15 +954,14 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     } else {
       res.printer_settings_rid = next_unique_rid();
     }
-    AppendRelationship(out, res.printer_settings_rid, kRelPrinterSettings,
-                       TargetRelativeToWorksheet(print.printer_settings_path));
+    add_rel(res.printer_settings_rid, kRelPrinterSettings, TargetRelativeToWorksheet(print.printer_settings_path));
   }
   // Drawing (DrawingML) relationship. The part body, its own rels, and
   // any anchored media round-trip through passthrough; here we re-mint a
   // fresh rId so the worksheet's `<drawing r:id>` element resolves.
   if (!sheet.drawing_rel_target().empty()) {
     res.drawing_rid = next_unique_rid();
-    AppendRelationship(out, res.drawing_rid, kRelDrawing, TargetRelativeToWorksheet(sheet.drawing_rel_target()));
+    add_rel(res.drawing_rid, kRelDrawing, TargetRelativeToWorksheet(sheet.drawing_rel_target()));
   }
   // Comments + VML relationships when the sheet has comments. The
   // comments rel comes first; the VML rel follows so the two ids are
@@ -938,9 +969,9 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
   if (comments_plan.numeric_id != 0) {
     const std::string comments_target = "../comments" + std::to_string(comments_plan.numeric_id) + ".xml";
     const std::string vml_target = "../drawings/vmlDrawing" + std::to_string(comments_plan.numeric_id) + ".vml";
-    AppendRelationship(out, next_unique_rid(), kRelComments, comments_target);
+    add_rel(next_unique_rid(), kRelComments, comments_target);
     res.legacy_drawing_rid = next_unique_rid();
-    AppendRelationship(out, res.legacy_drawing_rid, kRelVmlDrawing, vml_target);
+    add_rel(res.legacy_drawing_rid, kRelVmlDrawing, vml_target);
   }
   for (const UnknownRelationship& relationship : sheet.unknown_relationships()) {
     if (relationship.id.empty() || (!relationship.target_external && relationship.target.empty())) {
@@ -948,8 +979,7 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     }
     const std::string target =
         relationship.target_external ? relationship.target : TargetRelativeToWorksheet(relationship.target);
-    AppendRelationship(out, relationship.id, relationship.type, target, relationship.target_external,
-                       /*escape_target=*/true);
+    add_rel(relationship.id, relationship.type, target, relationship.target_external, /*escape_target=*/true);
   }
   out.append("</Relationships>\n");
   return res;

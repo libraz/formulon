@@ -46,9 +46,14 @@ namespace ooxml {
 ///     OOXML producer emitted (no resolution).
 ///   * `comments_path` — resolved path of the `kRelComments` target, or
 ///     empty when the sheet has none.
-///   * `vml_path` — resolved path of the `kRelVmlDrawing` target, or
-///     empty. Used to detect the legacy bounding-box stub so it gets
-///     marked consumed (passthrough re-emits the bytes).
+///   * `vml_path` — resolved path of the `kRelVmlDrawing` target bound
+///     to comment geometry (matched to the worksheet body's
+///     `<legacyDrawing r:id>`, see `load_sheet_aux_rels`), or empty. Used
+///     to detect the legacy bounding-box stub so it gets marked consumed
+///     (passthrough re-emits the bytes). A sheet may carry a *second*
+///     `kRelVmlDrawing` relationship for `<legacyDrawingHF>` (header /
+///     footer image); that one is never bound here and instead surfaces
+///     through `unknown_rels` so its id and target round-trip.
 ///   * `printer_settings_path` — resolved path of the binary printer
 ///     settings part referenced by `<pageSetup r:id="...">`, or empty.
 ///   * `drawing_path` — resolved path of the DrawingML part referenced
@@ -87,8 +92,23 @@ Expected<std::vector<std::string>, Error> load_sheet_pivot_table_targets(const Z
 /// printer-settings entries; returns the aggregated lookup. The walker
 /// silently ignores unrelated relationship types so each consumer site
 /// reads only the slice it cares about.
+///
+/// `legacy_drawing_body_rid` is the `r:id` value of the worksheet body's
+/// `<legacyDrawing>` element (empty when the sheet has none). A sheet
+/// may carry up to two `kRelVmlDrawing` relationships — one for comment
+/// geometry (referenced by `<legacyDrawing>`) and one for a
+/// header/footer image (referenced by `<legacyDrawingHF>`, which is
+/// captured separately as raw XML and is not this function's concern).
+/// The relationship whose `Id` matches `legacy_drawing_body_rid` becomes
+/// `vml_path`; when no candidate matches (including when the body
+/// carries no `<legacyDrawing>` element at all) the first `kRelVmlDrawing`
+/// relationship found is used as a best-effort fallback whenever the
+/// sheet also has a `kRelComments` relationship, since a sheet with
+/// comments needs exactly one candidate to serve as its comment VML.
+/// Every `kRelVmlDrawing` relationship not selected this way is added to
+/// `unknown_rels` instead, preserving its id and target verbatim.
 Expected<SheetAuxRels, Error> load_sheet_aux_rels(const ZipReader& zip, std::string_view sheet_rels_path,
-                                                  std::string_view sheet_dir);
+                                                  std::string_view sheet_dir, std::string_view legacy_drawing_body_rid);
 
 }  // namespace ooxml
 }  // namespace io

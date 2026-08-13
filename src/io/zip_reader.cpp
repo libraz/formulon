@@ -18,6 +18,7 @@
 #include "miniz.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 
 namespace formulon {
 namespace io {
@@ -38,8 +39,14 @@ struct ZipReader::Impl {
   // requires a caller-supplied buffer. We keep one resident on the impl
   // so `entry_name` does not allocate per call.
   mutable std::string name_buf;
+  // Running charge for every extraction attempt in the current open
+  // session. `ResourceBudget` deliberately charges before allocation, so a
+  // failed extraction remains charged and cannot be retried indefinitely.
+  mutable ResourceBudget total_extracted_bytes;
 
-  Impl() { name_buf.resize(kInitialNameCapacity); }
+  Impl() : total_extracted_bytes(kMaxTotalExtractedBytes, FormulonErrorCode::kIoFileTooLarge) {
+    name_buf.resize(kInitialNameCapacity);
+  }
 
   // The miniz archive holds internal pointers into the user's input
   // buffer (after `init_mem`); copying or moving the struct would
@@ -76,6 +83,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes) {
   // Reset any previously opened archive first so callers can reuse the
   // instance (idempotent open).
   impl_->close();
+  impl_->total_extracted_bytes = ResourceBudget(kMaxTotalExtractedBytes, FormulonErrorCode::kIoFileTooLarge);
 
   if (bytes.data == nullptr || bytes.size == 0) {
     return make_error(FormulonErrorCode::kIoZipCorrupt, "ZipReader::open: empty buffer",
@@ -265,10 +273,10 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
                       std::move(ctx));
   }
 
-  // Reject pathological compression ratios. miniz reports `m_comp_size = 0`
-  // for stored (uncompressed) entries; treat that as ratio 1 to avoid a
-  // division by zero and to skip the check for entries that cannot bomb
-  // by construction.
+  // Reject pathological compression ratios. The compressed size comes from
+  // the central directory; it can be zero for an empty/malformed entry, so
+  // keep the guard to avoid division by zero. A stored non-empty entry has a
+  // non-zero compressed size equal to its uncompressed size.
   if (stat.m_comp_size > 0) {
     const std::uint64_t ratio =
         static_cast<std::uint64_t>(stat.m_uncomp_size) / static_cast<std::uint64_t>(stat.m_comp_size);
@@ -288,11 +296,31 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     }
   }
 
+  // Charge the advertised size before touching the destination allocation.
+  // `ResourceBudget::consume()` is uint64/overflow-safe and leaves the used
+  // count unchanged on refusal. A successful charge is intentionally not
+  // rolled back if miniz later rejects the bytes: failed extraction attempts
+  // still consume the session's bounded work budget.
+  auto charged = impl_->total_extracted_bytes.consume(static_cast<std::uint64_t>(stat.m_uncomp_size));
+  if (!charged) {
+    const std::string_view budget_context = charged.error().context;
+    std::string context("limit=total entry=");
+    context.append(c_name);
+    if (!budget_context.empty()) {
+      context.push_back(' ');
+      context.append(budget_context);
+    }
+    Error error = charged.error();
+    error.message = "ZipReader::read_entry: cumulative extracted bytes exceed cap";
+    error.context = std::move(context);
+    return error;
+  }
+
   const std::size_t advertised = static_cast<std::size_t>(stat.m_uncomp_size);
 
   // Extract straight into the caller-owned vector. `advertised` is the
-  // stat's `m_uncomp_size`, already validated against the per-entry and
-  // ratio caps above. Sizing the destination once and
+  // stat's `m_uncomp_size`, already validated against the per-entry, ratio,
+  // and cumulative caps above. Sizing the destination once and
   // decompressing into it avoids the second full-size buffer that
   // `extract_to_heap` + `memcpy` + `mz_free` would hold simultaneously,
   // halving the extraction's peak footprint.

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "io/defined_names_internal.h"
+#include "io/formula_prefix.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -122,6 +123,13 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
     // formula that genuinely contains spaces is faithful.
     entry.formula = dn.child_value();
     TrimAsciiWhitespace(entry.formula);
+    // Canonicalise the storage prefixes Excel tags post-2007 / LET-LAMBDA
+    // constructs with (`_xlfn.`, `_xlfn._xlws.`, `_xlws.`, `_xlpm.`) so a
+    // defined name holding `_xlfn.LAMBDA(_xlpm.x, ...)` is stored and
+    // surfaced in `formula_text` the way Excel's formula bar shows it, and
+    // so downstream consumers that re-parse `entry.formula` do not need to
+    // special-case the prefixed spelling.
+    entry.formula = strip_storage_prefixes(entry.formula);
 
     out.push_back(std::move(entry));
   }

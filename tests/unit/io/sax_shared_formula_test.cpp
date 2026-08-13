@@ -106,6 +106,40 @@ TEST(SaxSharedFormula, UnknownSharedSiIsRejected) {
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoSheetCorrupt);
 }
 
+TEST(SaxArrayAnchor, RejectsFullGridBeforeSpillWalk) {
+  constexpr std::string_view kXml =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<sheetData><row r=\"1\"><c r=\"A1\"><f t=\"array\" ref=\"A1:XFD1048576\">1</f>"
+      "</c></row></sheetData></worksheet>";
+  Workbook wb = Workbook::create();
+  std::deque<std::string>& text_storage = wb.mutable_text_storage();
+  SheetReadContext ctx;
+  auto rs = read_sheet_data_sax(SpanOf(kXml), 0U, wb, ctx, text_storage);
+  ASSERT_FALSE(static_cast<bool>(rs));
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+}
+
+TEST(SaxArrayAnchor, RejectsCumulativeAnchorsOverSheetBudget) {
+  constexpr std::string_view kXml =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<sheetData><row r=\"1\">"
+      "<c r=\"A1\"><f t=\"array\" ref=\"A1:A600000\">1</f></c>"
+      "<c r=\"B1\"><f t=\"array\" ref=\"B1:B600000\">1</f></c>"
+      "</row></sheetData></worksheet>";
+  Workbook wb = Workbook::create();
+  std::deque<std::string>& text_storage = wb.mutable_text_storage();
+  SheetReadContext ctx;
+  auto rs = read_sheet_data_sax(SpanOf(kXml), 0U, wb, ctx, text_storage);
+  ASSERT_FALSE(static_cast<bool>(rs));
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_NE(rs.error().context.find("format=ooxml"), std::string::npos);
+  EXPECT_NE(rs.error().context.find("anchor_row=0 anchor_col=1"), std::string::npos);
+  EXPECT_NE(rs.error().context.find("used=600000 requested=600000 ceiling=1048576"), std::string::npos);
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 1U), nullptr);
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon

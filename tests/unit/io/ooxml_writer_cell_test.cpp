@@ -200,10 +200,10 @@ TEST(BuildSheetDataXml, ControlCharacterEscapedInText) {
   // carries it losslessly instead of dropping the character.
   Sheet s("Sheet1");
   // "ab\x01cd\x0Bef" — \x01 (SOH) and \x0B (VT) take the OOXML escape.
-  s.set_cell_value(0U, 0U,
-                   Value::text(std::string("ab\x01"
-                                           "cd\x0B"
-                                           "ef")));
+  s.set_cell_text(0U, 0U,
+                  "ab\x01"
+                  "cd\x0B"
+                  "ef");
   const std::string xml = BuildSheetDataXml(s);
   EXPECT_EQ(xml.find('\x01'), std::string::npos) << xml;
   EXPECT_EQ(xml.find('\x0B'), std::string::npos) << xml;

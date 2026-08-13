@@ -71,6 +71,8 @@ TEST(SheetFeaturesRoundTrip, Hyperlinks) {
   Hyperlink h;
   h.row = 0;
   h.col = 0;
+  h.last_row = 0;
+  h.last_col = 0;
   h.target = "https://example.com";
   h.tooltip = "Click here";
   h.display = "Example";
@@ -80,6 +82,8 @@ TEST(SheetFeaturesRoundTrip, Hyperlinks) {
   Hyperlink h2;
   h2.row = 1;
   h2.col = 2;
+  h2.last_row = 1;
+  h2.last_col = 2;
   h2.location = "Sheet1!A1";  // internal anchor; no target
   h2.display = "Go to A1";
   s.mutable_hyperlinks().push_back(h2);
@@ -245,6 +249,8 @@ TEST(SheetFeaturesRoundTrip, AllFeaturesCombined) {
   Hyperlink h;
   h.row = 1;
   h.col = 0;
+  h.last_row = 1;
+  h.last_col = 0;
   h.target = "https://example.com";
   s.mutable_hyperlinks().push_back(h);
   s.mutable_comments() = {CellComment{2, 0, "Alice", "comment"}};

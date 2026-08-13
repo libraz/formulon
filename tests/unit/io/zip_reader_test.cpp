@@ -51,6 +51,37 @@ void MarkZipEntriesEncrypted(std::vector<std::uint8_t>& bytes) {
   }
 }
 
+/// Marks only the local and central headers for `name` as encrypted. The
+/// payload remains ordinary plaintext; miniz rejects the entry from its
+/// flags before attempting to interpret those bytes.
+bool MarkZipEntryEncrypted(std::vector<std::uint8_t>& bytes, const std::string& name) {
+  bool found = false;
+  for (std::size_t i = 0; i + 8U <= bytes.size(); ++i) {
+    const bool local = bytes[i] == 'P' && bytes[i + 1U] == 'K' && bytes[i + 2U] == 3U && bytes[i + 3U] == 4U;
+    const bool central = bytes[i] == 'P' && bytes[i + 1U] == 'K' && bytes[i + 2U] == 1U && bytes[i + 3U] == 2U;
+    if (!local && !central) {
+      continue;
+    }
+    const std::size_t filename_length_offset = i + (local ? 26U : 28U);
+    const std::size_t filename_offset = i + (local ? 30U : 46U);
+    if (filename_length_offset + 2U > bytes.size()) {
+      return false;
+    }
+    const std::size_t filename_length = static_cast<std::size_t>(bytes[filename_length_offset]) |
+                                        (static_cast<std::size_t>(bytes[filename_length_offset + 1U]) << 8U);
+    if (filename_offset + filename_length > bytes.size()) {
+      return false;
+    }
+    if (std::string(reinterpret_cast<const char*>(bytes.data() + filename_offset), filename_length) != name) {
+      continue;
+    }
+    const std::size_t flag_offset = i + (local ? 6U : 8U);
+    bytes[flag_offset] = static_cast<std::uint8_t>(bytes[flag_offset] | 0x01U);
+    found = true;
+  }
+  return found;
+}
+
 TEST(ZipReader, OpenSucceedsOnWriterOutput) {
   const std::vector<std::uint8_t> bytes = MakeMinimalXlsx();
   ZipReader zip;
@@ -284,17 +315,23 @@ std::vector<std::uint8_t> BuildManyEmptyEntriesZip(std::size_t count) {
   return out;
 }
 
-/// Builds an in-memory ZIP containing `count` entries that each carry the
-/// same `payload`. All entries share the supplied compression level so the
-/// sequential extraction test exercises independent per-entry allocations.
-std::vector<std::uint8_t> BuildMultiEntryZip(std::size_t count, const std::vector<std::uint8_t>& payload,
-                                             mz_uint compression = static_cast<mz_uint>(MZ_NO_COMPRESSION)) {
+/// Builds an archive from entry names and borrowed payloads. This keeps the
+/// exact-boundary cumulative-budget fixture from making four independent
+/// 64 MiB copies in the test process.
+std::vector<std::uint8_t> BuildEntriesZip(
+    const std::vector<std::pair<std::string, const std::vector<std::uint8_t>*>>& entries,
+    mz_uint compression = static_cast<mz_uint>(MZ_NO_COMPRESSION)) {
   mz_zip_archive archive{};
   std::memset(&archive, 0, sizeof(archive));
   EXPECT_EQ(mz_zip_writer_init_heap(&archive, 0, 0), MZ_TRUE);
-  for (std::size_t i = 0; i < count; ++i) {
-    std::string name = "blob_" + std::to_string(i) + ".bin";
-    EXPECT_EQ(mz_zip_writer_add_mem(&archive, name.c_str(), payload.data(), payload.size(), compression), MZ_TRUE);
+  for (const auto& entry : entries) {
+    EXPECT_NE(entry.second, nullptr);
+    if (entry.second == nullptr) {
+      continue;
+    }
+    EXPECT_EQ(
+        mz_zip_writer_add_mem(&archive, entry.first.c_str(), entry.second->data(), entry.second->size(), compression),
+        MZ_TRUE);
   }
   void* heap = nullptr;
   std::size_t heap_size = 0;
@@ -304,6 +341,82 @@ std::vector<std::uint8_t> BuildMultiEntryZip(std::size_t count, const std::vecto
   std::memcpy(out.data(), heap, heap_size);
   mz_free(heap);
   return out;
+}
+
+constexpr std::size_t kCumulativeChunkBytes = 64ULL * 1024ULL * 1024ULL;
+
+/// Builds the exact-boundary archive used by cumulative-budget tests. The
+/// archive is small on disk because the repeated pattern compresses well, but
+/// each central-directory entry still advertises a 64 MiB extraction.
+std::vector<std::uint8_t> BuildCumulativeBoundaryZip() {
+  std::vector<std::uint8_t> payload(kCumulativeChunkBytes, 0u);
+  for (std::size_t i = 0; i < payload.size(); ++i) {
+    payload[i] = static_cast<std::uint8_t>(i & 0xFFu);
+  }
+  const std::vector<std::uint8_t> one_byte{0xA5u};
+  std::vector<std::pair<std::string, const std::vector<std::uint8_t>*>> entries;
+  for (int i = 0; i < 4; ++i) {
+    entries.emplace_back("blob_" + std::to_string(i) + ".bin", &payload);
+  }
+  entries.emplace_back("one.bin", &one_byte);
+  return BuildEntriesZip(entries, static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
+}
+
+void WriteLittleEndian32(std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint32_t value) {
+  ASSERT_LE(offset + 4U, bytes.size());
+  bytes[offset] = static_cast<std::uint8_t>(value & 0xFFU);
+  bytes[offset + 1U] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
+  bytes[offset + 2U] = static_cast<std::uint8_t>((value >> 16U) & 0xFFU);
+  bytes[offset + 3U] = static_cast<std::uint8_t>((value >> 24U) & 0xFFU);
+}
+
+/// Rewrites central-directory size fields for a policy-priority fixture. The
+/// reader's policy checks intentionally precede local-header validation and
+/// extraction, so tiny payloads can exercise advertised oversized/ratio
+/// metadata without allocating another 100 MiB test vector.
+bool RewriteCentralDirectorySizes(std::vector<std::uint8_t>& bytes, const std::string& name,
+                                  std::uint32_t compressed_size, std::uint32_t uncompressed_size) {
+  for (std::size_t i = 0; i + 46U <= bytes.size(); ++i) {
+    if (bytes[i] != 'P' || bytes[i + 1U] != 'K' || bytes[i + 2U] != 1U || bytes[i + 3U] != 2U) {
+      continue;
+    }
+    const std::size_t filename_length =
+        static_cast<std::size_t>(bytes[i + 28U]) | (static_cast<std::size_t>(bytes[i + 29U]) << 8U);
+    const std::size_t filename_offset = i + 46U;
+    if (filename_offset + filename_length > bytes.size()) {
+      return false;
+    }
+    if (std::string(reinterpret_cast<const char*>(bytes.data() + filename_offset), filename_length) != name) {
+      continue;
+    }
+    WriteLittleEndian32(bytes, i + 20U, compressed_size);
+    WriteLittleEndian32(bytes, i + 24U, uncompressed_size);
+    return true;
+  }
+  return false;
+}
+
+/// Changes only the central-directory CRC for `name`, leaving the local
+/// header and payload intact. miniz then rejects extraction after the reader
+/// has charged the advertised size, which locks the failed-extraction budget
+/// contract without making a malformed archive fail during `open()`.
+bool CorruptCentralDirectoryCrc(std::vector<std::uint8_t>& bytes, const std::string& name) {
+  for (std::size_t i = 0; i + 46U <= bytes.size(); ++i) {
+    if (bytes[i] != 'P' || bytes[i + 1U] != 'K' || bytes[i + 2U] != 1U || bytes[i + 3U] != 2U) {
+      continue;
+    }
+    const std::size_t filename_length =
+        static_cast<std::size_t>(bytes[i + 28U]) | (static_cast<std::size_t>(bytes[i + 29U]) << 8U);
+    const std::size_t filename_offset = i + 46U;
+    if (filename_offset + filename_length > bytes.size()) {
+      return false;
+    }
+    if (std::string(reinterpret_cast<const char*>(bytes.data() + filename_offset), filename_length) == name) {
+      bytes[i + 16U] ^= 0x01U;
+      return true;
+    }
+  }
+  return false;
 }
 
 TEST(ZipReader, ReadEntryRejectsZipBombSizedEntry) {
@@ -387,30 +500,140 @@ TEST(ZipReader, ReadEntryRejectsHighRatioEntry) {
   EXPECT_NE(result.error().context.find("entry=zeros.bin"), std::string::npos);
 }
 
-TEST(ZipReader, ReadEntryAllowsCumulativePartsWithinPerEntryPolicy) {
-  // Six 50 MiB entries remain valid: each extraction is bounded by the
-  // per-entry and ratio policies, and returned buffers belong to the caller
-  // rather than being retained by ZipReader.
-  constexpr std::size_t kPayloadBytes = 50ULL * 1024ULL * 1024ULL;
-  std::vector<std::uint8_t> payload(kPayloadBytes, 0u);
-  // Fill with a low-entropy but non-uniform pattern: ratio ~10 with the
-  // default deflate level, well under the 1024 ratio cap.
-  for (std::size_t i = 0; i < payload.size(); ++i) {
-    payload[i] = static_cast<std::uint8_t>(i & 0xFFu);
-  }
-  const std::vector<std::uint8_t> bytes =
-      BuildMultiEntryZip(/*count=*/6, payload, /*compression=*/static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
+TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
+  // Four 64 MiB entries land exactly on the 256 MiB session ceiling. A
+  // same-entry reread and a one-byte fifth entry both fail before allocation;
+  // the latter makes the +1 boundary explicit. Reopening resets the budget.
+  const std::vector<std::uint8_t> bytes = BuildCumulativeBoundaryZip();
 
   ZipReader zip;
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
-  ASSERT_EQ(zip.entry_count(), 6U);
+  ASSERT_EQ(zip.entry_count(), 5U);
 
-  for (int i = 0; i < 6; ++i) {
+  for (int i = 0; i < 4; ++i) {
     const std::string name = "blob_" + std::to_string(i) + ".bin";
     auto ok = zip.read_entry(name);
     ASSERT_TRUE(static_cast<bool>(ok)) << "read_entry failed at i=" << i << ": " << ok.error().message;
-    EXPECT_EQ(ok.value().size(), kPayloadBytes);
+    EXPECT_EQ(ok.value().size(), kCumulativeChunkBytes);
   }
+
+  auto reread = zip.read_entry("blob_0.bin");
+  ASSERT_FALSE(static_cast<bool>(reread));
+  EXPECT_EQ(reread.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(reread.error().context, "limit=total entry=blob_0.bin used=268435456 requested=67108864 ceiling=268435456");
+
+  auto over = zip.read_entry("one.bin");
+  ASSERT_FALSE(static_cast<bool>(over));
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(over.error().context, "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+
+  // A miniz validation failure after the budget charge must also consume the
+  // advertised bytes. The corrupted first entry plus three valid entries
+  // reaches the same exact ceiling, so the trailing one-byte entry proves
+  // that the failed extraction was not refunded.
+  std::vector<std::uint8_t> corrupt_bytes = bytes;
+  ASSERT_TRUE(CorruptCentralDirectoryCrc(corrupt_bytes, "blob_0.bin"));
+  ZipReader corrupt_zip;
+  ASSERT_TRUE(static_cast<bool>(corrupt_zip.open(SpanOf(corrupt_bytes))));
+  auto failed_extract = corrupt_zip.read_entry("blob_0.bin");
+  ASSERT_FALSE(static_cast<bool>(failed_extract));
+  EXPECT_EQ(failed_extract.error().code, FormulonErrorCode::kIoZipCorrupt);
+  for (int i = 1; i < 4; ++i) {
+    const std::string name = "blob_" + std::to_string(i) + ".bin";
+    auto ok = corrupt_zip.read_entry(name);
+    ASSERT_TRUE(static_cast<bool>(ok)) << "read_entry failed at i=" << i << ": " << ok.error().message;
+    EXPECT_EQ(ok.value().size(), kCumulativeChunkBytes);
+  }
+  auto charged_failure_over = corrupt_zip.read_entry("one.bin");
+  ASSERT_FALSE(static_cast<bool>(charged_failure_over));
+  EXPECT_EQ(charged_failure_over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(charged_failure_over.error().context,
+            "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+  auto reopened = zip.read_entry("one.bin");
+  ASSERT_TRUE(static_cast<bool>(reopened)) << "post-reopen read_entry failed: " << reopened.error().message;
+  ASSERT_EQ(reopened.value().size(), 1U);
+  EXPECT_EQ(reopened.value()[0], 0xA5u);
+}
+
+TEST(ZipReader, CumulativeBudgetSurvivesMoveConstructionAndAssignment) {
+  const std::vector<std::uint8_t> bytes = BuildCumulativeBoundaryZip();
+
+  ZipReader construct_source;
+  ASSERT_TRUE(static_cast<bool>(construct_source.open(SpanOf(bytes))));
+  auto construct_prefix = construct_source.read_entry("blob_0.bin");
+  ASSERT_TRUE(static_cast<bool>(construct_prefix));
+  EXPECT_EQ(construct_prefix.value().size(), kCumulativeChunkBytes);
+
+  ZipReader move_constructed(std::move(construct_source));
+  for (int i = 1; i < 4; ++i) {
+    const std::string name = "blob_" + std::to_string(i) + ".bin";
+    auto ok = move_constructed.read_entry(name);
+    ASSERT_TRUE(static_cast<bool>(ok)) << "move-construction read failed at i=" << i << ": " << ok.error().message;
+    EXPECT_EQ(ok.value().size(), kCumulativeChunkBytes);
+  }
+  auto construct_over = move_constructed.read_entry("one.bin");
+  ASSERT_FALSE(static_cast<bool>(construct_over));
+  EXPECT_EQ(construct_over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(construct_over.error().context, "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+
+  ZipReader move_assigned;
+  move_assigned = std::move(move_constructed);
+  auto assignment_over = move_assigned.read_entry("one.bin");
+  ASSERT_FALSE(static_cast<bool>(assignment_over));
+  EXPECT_EQ(assignment_over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(assignment_over.error().context, "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+}
+
+TEST(ZipReader, PolicyRejectionsDoNotConsumeCumulativeBudget) {
+  // Keep the policy-rejected entries tiny and rewrite only their central
+  // directory metadata. Their policy checks must return before miniz reaches
+  // local-header validation, while the four legitimate entries still prove
+  // the exact 256 MiB cumulative boundary in each independent session.
+  std::vector<std::uint8_t> marker{0x11u};
+  std::vector<std::uint8_t> payload(kCumulativeChunkBytes, 0u);
+  for (std::size_t i = 0; i < payload.size(); ++i) {
+    payload[i] = static_cast<std::uint8_t>(i & 0xFFu);
+  }
+  std::vector<std::pair<std::string, const std::vector<std::uint8_t>*>> entries{
+      {"encrypted.bin", &marker}, {"huge.bin", &marker}, {"ratio.bin", &marker}};
+  for (int i = 0; i < 4; ++i) {
+    entries.emplace_back("blob_" + std::to_string(i) + ".bin", &payload);
+  }
+  entries.emplace_back("one.bin", &marker);
+  std::vector<std::uint8_t> bytes = BuildEntriesZip(entries, static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION));
+  ASSERT_TRUE(MarkZipEntryEncrypted(bytes, "encrypted.bin"));
+  ASSERT_TRUE(RewriteCentralDirectorySizes(bytes, "huge.bin", /*compressed_size=*/1U,
+                                           static_cast<std::uint32_t>(kMaxExtractedBytesPerEntry + 1U)));
+  ASSERT_TRUE(RewriteCentralDirectorySizes(bytes, "ratio.bin", /*compressed_size=*/1U,
+                                           /*uncompressed_size=*/4U * 1024U * 1024U));
+
+  const auto assert_boundary_after_rejection = [&](const std::string& rejected_name, FormulonErrorCode expected_code,
+                                                   std::string_view expected_limit) {
+    ZipReader zip;
+    ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes))));
+    auto rejected = zip.read_entry(rejected_name);
+    ASSERT_FALSE(static_cast<bool>(rejected));
+    EXPECT_EQ(rejected.error().code, expected_code);
+    EXPECT_NE(rejected.error().context.find(expected_limit), std::string::npos);
+
+    for (int i = 0; i < 4; ++i) {
+      const std::string name = "blob_" + std::to_string(i) + ".bin";
+      auto ok = zip.read_entry(name);
+      ASSERT_TRUE(static_cast<bool>(ok)) << "read after " << rejected_name << " failed at i=" << i << ": "
+                                         << ok.error().message;
+      EXPECT_EQ(ok.value().size(), kCumulativeChunkBytes);
+    }
+    auto over = zip.read_entry("one.bin");
+    ASSERT_FALSE(static_cast<bool>(over));
+    EXPECT_EQ(over.error().code, FormulonErrorCode::kIoFileTooLarge);
+    EXPECT_EQ(over.error().context, "limit=total entry=one.bin used=268435456 requested=1 ceiling=268435456");
+  };
+
+  assert_boundary_after_rejection("encrypted.bin", FormulonErrorCode::kIoZipEncrypted, "entry=encrypted.bin");
+  assert_boundary_after_rejection("huge.bin", FormulonErrorCode::kIoZipBomb, "limit=entry");
+  assert_boundary_after_rejection("ratio.bin", FormulonErrorCode::kIoZipBomb, "limit=ratio");
 }
 
 TEST(ZipReader, IdempotentReopen) {

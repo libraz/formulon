@@ -26,6 +26,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -245,9 +246,16 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     return make_error(FormulonErrorCode::kIoWriteFailed, "miniz mz_zip_writer_init_heap failed", "context=write_ooxml");
   }
 
+  // Tracks every path written so far. `AddPart` / `AddPartBytes` refuse
+  // a repeat instead of silently producing a duplicate zip entry, which
+  // readers resolve inconsistently (see `EmissionPlan`'s collision
+  // detection for the deliberate-drop path; this guard catches anything
+  // that slips past it).
+  std::unordered_set<std::string> written_paths;
+
   // 1. [Content_Types].xml
   {
-    auto result = AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(wb, plan));
+    auto result = AddPart(writer.get(), "[Content_Types].xml", BuildContentTypes(wb, plan), &written_paths);
     if (!result) {
       return result.error();
     }
@@ -255,7 +263,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 2. _rels/.rels
   {
-    auto result = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(wb, plan));
+    auto result = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(wb, plan), &written_paths);
     if (!result) {
       return result.error();
     }
@@ -263,7 +271,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 3. xl/workbook.xml
   {
-    auto result = AddPart(writer.get(), "xl/workbook.xml", BuildWorkbookXml(wb, plan));
+    auto result = AddPart(writer.get(), "xl/workbook.xml", BuildWorkbookXml(wb, plan), &written_paths);
     if (!result) {
       return result.error();
     }
@@ -271,48 +279,46 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 4. xl/_rels/workbook.xml.rels
   {
-    auto result = AddPart(writer.get(), "xl/_rels/workbook.xml.rels", BuildWorkbookRels(sheet_count, plan, wb));
+    auto result =
+        AddPart(writer.get(), "xl/_rels/workbook.xml.rels", BuildWorkbookRels(sheet_count, plan, wb), &written_paths);
     if (!result) {
       return result.error();
     }
   }
 
-  // 5. Per-sheet: worksheet, sheet rels (when the sheet owns tables,
-  // pivot tables, hyperlinks, or comments).
+  // 5. Per-sheet: worksheet, sheet rels (when the sheet's rels file
+  // declares at least one relationship).
   for (std::size_t i = 0; i < sheet_count; ++i) {
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
       continue;
     }
     const auto& sheet_tables = plan.tables_by_sheet[i];
-    const auto& sheet_pivot_tables = plan.pivot_tables_by_sheet[i];
-    const auto& comments_plan = plan.comments_by_sheet[i];
-    const bool has_hyperlinks = !wb.sheet(i).hyperlinks().empty();
-    const bool has_comments = comments_plan.numeric_id != 0;
-    const bool has_print_settings = !wb.sheet(i).print_settings().printer_settings_path.empty();
-    const bool has_drawing = !wb.sheet(i).drawing_rel_target().empty();
-    const bool has_unknown_rels = !wb.sheet(i).unknown_relationships().empty();
-    const bool has_rels = !sheet_tables.empty() || !sheet_pivot_tables.empty() || has_hyperlinks || has_comments ||
-                          has_print_settings || has_drawing || has_unknown_rels;
-    // Build the rels first because the hyperlink rId vector feeds into
-    // the worksheet's <hyperlinks> block. When the sheet has no rels we
-    // still call BuildSheetRels with an empty comments plan to get a
-    // (possibly-empty) hyperlink_rids vector.
-    SheetRelsResult rels_result = BuildSheetRels(wb.sheet(i), sheet_tables, sheet_pivot_tables, comments_plan);
+    // Built once in `BuildEmissionPlan`; reused verbatim here so the
+    // worksheet body's `r:id` references and the rels file this writer
+    // emits always agree on which id names which relationship.
+    const SheetRelsResult& rels_result = plan.sheet_rels[i];
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto wresult = AddPart(
-        writer.get(), part_path,
-        BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.hyperlink_rids, rels_result.printer_settings_rid,
-                          rels_result.drawing_rid, rels_result.legacy_drawing_rid, &shared_strings));
+    auto wresult = AddPart(writer.get(), part_path,
+                           BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids,
+                                             rels_result.hyperlink_rids, rels_result.printer_settings_rid,
+                                             rels_result.drawing_rid, rels_result.legacy_drawing_rid, &shared_strings),
+                           &written_paths);
     if (!wresult) {
       return wresult.error();
     }
-    if (has_rels) {
+    // An empty rels file is invalid OOXML; Excel repairs the package and
+    // drops it. `relationship_count` is the single predicate for whether
+    // this sheet's rels part is worth writing at all — for example, a
+    // sheet whose only hyperlinks are purely internal (target carried in
+    // the inline `location=` attribute) declares zero relationships and
+    // gets no rels part.
+    if (rels_result.relationship_count > 0) {
       std::string rels_path("xl/worksheets/_rels/sheet");
       rels_path.append(std::to_string(i + 1));
       rels_path.append(".xml.rels");
-      auto rels_add = AddPart(writer.get(), rels_path, rels_result.xml);
+      auto rels_add = AddPart(writer.get(), rels_path, rels_result.xml, &written_paths);
       if (!rels_add) {
         return rels_add.error();
       }
@@ -321,7 +327,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 6. xl/styles.xml
   {
-    auto result = AddPart(writer.get(), "xl/styles.xml", write_styles(wb.styles()));
+    auto result = AddPart(writer.get(), "xl/styles.xml", write_styles(wb.styles()), &written_paths);
     if (!result) {
       return result.error();
     }
@@ -331,7 +337,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   // present. The matching relationship and content-type Override are
   // generated from the same plan flag above.
   if (!shared_strings.empty()) {
-    auto result = AddPart(writer.get(), "xl/sharedStrings.xml", WriteSharedStrings(shared_strings));
+    auto result = AddPart(writer.get(), "xl/sharedStrings.xml", WriteSharedStrings(shared_strings), &written_paths);
     if (!result) {
       return result.error();
     }
@@ -340,7 +346,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   // 7. xl/tables/tableN.xml — one per planned table.
   for (const auto& per_sheet : plan.tables_by_sheet) {
     for (const EmissionPlan::PerSheetTable& t : per_sheet) {
-      auto result = AddPart(writer.get(), t.path, BuildTableXml(*t.table, t.numeric_id));
+      auto result = AddPart(writer.get(), t.path, BuildTableXml(*t.table, t.numeric_id), &written_paths);
       if (!result) {
         return result.error();
       }
@@ -354,13 +360,13 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   // directory (`xl/pivotCache/`).
   for (const EmissionPlan::PivotCachePlan& c : plan.pivot_caches) {
     {
-      auto result = AddPart(writer.get(), c.definition_path, write_pivot_cache_definition(*c.cache));
+      auto result = AddPart(writer.get(), c.definition_path, write_pivot_cache_definition(*c.cache), &written_paths);
       if (!result) {
         return result.error();
       }
     }
     {
-      auto result = AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache));
+      auto result = AddPart(writer.get(), c.records_path, write_pivot_cache_records(*c.cache), &written_paths);
       if (!result) {
         return result.error();
       }
@@ -374,7 +380,8 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
       const std::string_view records_filename = slash == std::string::npos
                                                     ? std::string_view(c.records_path)
                                                     : std::string_view(c.records_path).substr(slash + 1);
-      auto result = AddPart(writer.get(), c.definition_rels_path, BuildPivotCacheDefinitionRels(records_filename));
+      auto result = AddPart(writer.get(), c.definition_rels_path, BuildPivotCacheDefinitionRels(records_filename),
+                            &written_paths);
       if (!result) {
         return result.error();
       }
@@ -385,7 +392,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   // Sheet-rels emission in step 5 already wired a rId to each part.
   for (const auto& per_sheet : plan.pivot_tables_by_sheet) {
     for (const EmissionPlan::PivotTablePlan& t : per_sheet) {
-      auto result = AddPart(writer.get(), t.path, write_pivot_table_definition(*t.table));
+      auto result = AddPart(writer.get(), t.path, write_pivot_table_definition(*t.table), &written_paths);
       if (!result) {
         return result.error();
       }
@@ -393,7 +400,8 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
       // from. A table whose cache id resolved to no planned cache gets
       // no rels part, so the package never carries a dangling target.
       if (!t.cache_definition_target.empty()) {
-        auto rels_result = AddPart(writer.get(), t.rels_path, BuildPivotTableRels(t.cache_definition_target));
+        auto rels_result =
+            AddPart(writer.get(), t.rels_path, BuildPivotTableRels(t.cache_definition_target), &written_paths);
         if (!rels_result) {
           return rels_result.error();
         }
@@ -413,7 +421,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
       continue;
     }
     std::string rels_path = ooxml::rels_path_for_part(e.record->part_path);
-    auto result = AddPart(writer.get(), rels_path, std::move(rels_xml));
+    auto result = AddPart(writer.get(), rels_path, rels_xml, &written_paths);
     if (!result) {
       return result.error();
     }
@@ -428,17 +436,17 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     if (cplan.numeric_id == 0) {
       continue;
     }
-    auto cresult = AddPart(writer.get(), cplan.comments_path, write_comments(wb.sheet(i).comments()));
+    auto cresult = AddPart(writer.get(), cplan.comments_path, write_comments(wb.sheet(i).comments()), &written_paths);
     if (!cresult) {
       return cresult.error();
     }
     if (cplan.vml_source != nullptr) {
-      auto vresult = AddPartBytes(writer.get(), cplan.vml_path, cplan.vml_source->bytes);
+      auto vresult = AddPartBytes(writer.get(), cplan.vml_path, cplan.vml_source->bytes, &written_paths);
       if (!vresult) {
         return vresult.error();
       }
     } else {
-      auto vresult = AddPart(writer.get(), cplan.vml_path, write_vml_drawing_stub());
+      auto vresult = AddPart(writer.get(), cplan.vml_path, write_vml_drawing_stub(), &written_paths);
       if (!vresult) {
         return vresult.error();
       }
@@ -455,7 +463,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
                         "context=write_ooxml part=" + part->path);
     }
-    auto result = AddPartBytes(writer.get(), part->path, part->bytes);
+    auto result = AddPartBytes(writer.get(), part->path, part->bytes, &written_paths);
     if (!result) {
       return result.error();
     }

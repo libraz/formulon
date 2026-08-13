@@ -16,8 +16,10 @@
 #include "io/defined_names.h"
 #include "io/passthrough_part.h"
 #include "io/styles_reader.h"
+#include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_writer.h"
 #include "io/xlsb/styles_writer.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
@@ -384,6 +386,210 @@ TEST(XlsbWriter, EmitsDynamicArrayMetadataForSpillAnchors) {
   EXPECT_TRUE(found_cell_metadata);
 }
 
+// ---------------------------------------------------------------------------
+// A `BrtCellMeta` index names an entry of the metadata part that actually
+// ships. The generated part declares one entry, so index 1 is right by
+// construction; a retained passthrough part carries its own numbering, and
+// its first entry may be rich-value or cube-function metadata rather than the
+// dynamic-array one. An index that misses makes Excel repair the file, so an
+// unidentifiable entry means no `BrtCellMeta` record at all.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Builds a metadata part declaring `type_names` in order, followed by one
+// cell-metadata entry per name (entry N names type N). Mirrors the record
+// framing Excel writes, so the writer's finder sees a realistic part.
+std::vector<std::uint8_t> BuildMetadataPart(const std::vector<std::string>& type_names) {
+  constexpr std::uint16_t kBrtBeginMetadata = 332;
+  constexpr std::uint16_t kBrtEndMetadata = 333;
+  constexpr std::uint16_t kBrtBeginEsmdtinfo = 334;
+  constexpr std::uint16_t kBrtMdtinfo = 335;
+  constexpr std::uint16_t kBrtEndEsmdtinfo = 336;
+  constexpr std::uint16_t kBrtBeginEsfmd = 337;
+  constexpr std::uint16_t kBrtEndEsfmd = 338;
+  constexpr std::uint16_t kBrtMdb = 51;
+
+  std::vector<std::uint8_t> out;
+  std::vector<std::uint8_t> payload;
+  emit_record(out, kBrtBeginMetadata, ByteSpan{});
+
+  emit_u32(payload, static_cast<std::uint32_t>(type_names.size()));
+  emit_record(out, kBrtBeginEsmdtinfo, payload);
+  for (const std::string& name : type_names) {
+    payload.clear();
+    emit_u32(payload, 0xD86AC0B0U);
+    emit_u32(payload, 0x0001D4C0U);
+    emit_xlwidestring(payload, name);
+    emit_record(out, kBrtMdtinfo, payload);
+  }
+  emit_record(out, kBrtEndEsmdtinfo, ByteSpan{});
+
+  payload.clear();
+  emit_u32(payload, static_cast<std::uint32_t>(type_names.size()));
+  emit_u32(payload, 1U);
+  emit_record(out, kBrtBeginEsfmd, payload);
+  for (std::size_t i = 0; i < type_names.size(); ++i) {
+    payload.clear();
+    emit_u32(payload, 1U);                                 // One (type, id) pair.
+    emit_u32(payload, static_cast<std::uint32_t>(i + 1));  // 1-based type ordinal.
+    emit_u32(payload, 0U);
+    emit_record(out, kBrtMdb, payload);
+  }
+  emit_record(out, kBrtEndEsfmd, ByteSpan{});
+  emit_record(out, kBrtEndMetadata, ByteSpan{});
+  return out;
+}
+
+Workbook SpillWorkbookWithRetainedMetadata(std::vector<std::uint8_t> metadata_bytes) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Spill");
+  sheet.set_cell_formula(0U, 0U, "=SEQUENCE(2)");
+  EXPECT_TRUE(sheet.commit_spill(0U, 0U, 2U, 1U, {Value::number(1.0), Value::number(2.0)}));
+  PassthroughPart metadata;
+  metadata.path = "xl/metadata.bin";
+  metadata.content_type = "application/vnd.ms-excel.sheetMetadata";
+  metadata.bytes = std::move(metadata_bytes);
+  wb.set_passthrough_parts({metadata});
+  return wb;
+}
+
+// Collects every `BrtCellMeta` index in a worksheet body, and reports whether
+// the body carries an array-formula record at all.
+struct SheetMetaScan {
+  std::vector<std::uint32_t> cell_meta_indices;
+  bool has_array_formula = false;
+};
+
+SheetMetaScan ScanSheetForCellMeta(const std::vector<std::uint8_t>& sheet_bytes) {
+  SheetMetaScan scan;
+  ByteSpan cursor = SpanOf(sheet_bytes);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    EXPECT_TRUE(static_cast<bool>(record_or));
+    if (!record_or) {
+      break;
+    }
+    if (record_or.value().type == static_cast<std::uint16_t>(XlsbRecordType::BrtArrFmla)) {
+      scan.has_array_formula = true;
+      continue;
+    }
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta)) {
+      continue;
+    }
+    ByteSpan payload = record_or.value().payload;
+    auto index_or = read_u32(payload);
+    EXPECT_TRUE(static_cast<bool>(index_or));
+    if (index_or) {
+      scan.cell_meta_indices.push_back(index_or.value());
+    }
+  }
+  return scan;
+}
+
+// Writes `wb`, then returns the scan of its first worksheet body.
+SheetMetaScan WriteAndScanFirstSheet(const Workbook& wb) {
+  auto bytes_or = write_xlsb(wb);
+  EXPECT_TRUE(static_cast<bool>(bytes_or));
+  if (!bytes_or) {
+    return SheetMetaScan{};
+  }
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  EXPECT_TRUE(static_cast<bool>(sheet_or));
+  if (!sheet_or) {
+    return SheetMetaScan{};
+  }
+  return ScanSheetForCellMeta(sheet_or.value());
+}
+
+}  // namespace
+
+TEST(XlsbMetadataBin, FindsDynamicArrayEntryBehindOtherTypes) {
+  const std::vector<std::uint8_t> part = BuildMetadataPart({"XLRICHVALUE", "XLDAPR", "XLMDX"});
+  EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), 2U);
+}
+
+TEST(XlsbMetadataBin, ReportsZeroWhenNoDynamicArrayTypeIsDeclared) {
+  const std::vector<std::uint8_t> part = BuildMetadataPart({"XLRICHVALUE", "XLMDX"});
+  EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), 0U);
+}
+
+TEST(XlsbMetadataBin, GeneratedPartResolvesToIndexOne) {
+  const std::vector<std::uint8_t> part = build_dynamic_array_metadata_bin();
+  EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), 1U);
+}
+
+TEST(XlsbMetadataBin, ReportsZeroForEveryTruncationOfAValidPart) {
+  const std::vector<std::uint8_t> part = BuildMetadataPart({"XLRICHVALUE", "XLDAPR"});
+  ASSERT_EQ(find_dynamic_array_cell_meta_index(SpanOf(part)), 2U);
+  // Every strict prefix is either unreadable or missing the entry it would
+  // have to name. None may produce an index.
+  for (std::size_t length = 0; length < part.size(); ++length) {
+    const ByteSpan prefix{part.data(), length};
+    EXPECT_EQ(find_dynamic_array_cell_meta_index(prefix), 0U) << "prefix length " << length;
+  }
+}
+
+TEST(XlsbMetadataBin, ReportsZeroForMalformedBytes) {
+  EXPECT_EQ(find_dynamic_array_cell_meta_index(ByteSpan{}), 0U);
+  // A record header promising more payload than the buffer holds.
+  const std::vector<std::uint8_t> overrun = {0x4C, 0x02, 0x7F, 0x01, 0x02};
+  EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(overrun)), 0U);
+  // A type table whose entry payload ends before its name.
+  std::vector<std::uint8_t> short_name;
+  std::vector<std::uint8_t> payload;
+  emit_u32(payload, 1U);
+  emit_record(short_name, 334U, payload);
+  payload.clear();
+  emit_u32(payload, 0U);
+  emit_record(short_name, 335U, payload);
+  emit_record(short_name, 336U, ByteSpan{});
+  EXPECT_EQ(find_dynamic_array_cell_meta_index(SpanOf(short_name)), 0U);
+}
+
+TEST(XlsbWriter, SpillAnchorNamesTheRetainedPartsDynamicArrayEntry) {
+  const Workbook wb = SpillWorkbookWithRetainedMetadata(BuildMetadataPart({"XLRICHVALUE", "XLDAPR", "XLMDX"}));
+  const SheetMetaScan scan = WriteAndScanFirstSheet(wb);
+  ASSERT_EQ(scan.cell_meta_indices.size(), 1U);
+  EXPECT_EQ(scan.cell_meta_indices[0], 2U) << "the anchor named the retained part's first entry instead of its "
+                                              "dynamic-array entry";
+  EXPECT_TRUE(scan.has_array_formula);
+}
+
+TEST(XlsbWriter, SpillAnchorEmitsNoCellMetaWhenRetainedPartHasNoDynamicArrayEntry) {
+  const Workbook wb = SpillWorkbookWithRetainedMetadata(BuildMetadataPart({"XLRICHVALUE", "XLMDX"}));
+  const SheetMetaScan scan = WriteAndScanFirstSheet(wb);
+  EXPECT_TRUE(scan.cell_meta_indices.empty()) << "a BrtCellMeta index that names no dynamic-array entry";
+  EXPECT_TRUE(scan.has_array_formula) << "the anchor must still be written as an array formula";
+}
+
+TEST(XlsbWriter, SpillAnchorEmitsNoCellMetaWhenRetainedPartIsMalformed) {
+  const Workbook wb = SpillWorkbookWithRetainedMetadata({0x4C, 0x02, 0x7F, 0x01, 0x02});
+  const SheetMetaScan scan = WriteAndScanFirstSheet(wb);
+  EXPECT_TRUE(scan.cell_meta_indices.empty()) << "a dangling BrtCellMeta index from unreadable metadata bytes";
+  EXPECT_TRUE(scan.has_array_formula);
+}
+
+TEST(XlsbWriter, RetainedMetadataPartShipsVerbatimAndIsNotRegenerated) {
+  const std::vector<std::uint8_t> part = BuildMetadataPart({"XLRICHVALUE", "XLDAPR"});
+  const Workbook wb = SpillWorkbookWithRetainedMetadata(part);
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto shipped_or = zip.read_entry("xl/metadata.bin");
+  ASSERT_TRUE(static_cast<bool>(shipped_or));
+  EXPECT_EQ(shipped_or.value(), part) << "the generated part displaced the retained one";
+  // The index the sheet carries must resolve inside the part that shipped.
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const SheetMetaScan scan = ScanSheetForCellMeta(sheet_or.value());
+  ASSERT_EQ(scan.cell_meta_indices.size(), 1U);
+  EXPECT_EQ(scan.cell_meta_indices[0], find_dynamic_array_cell_meta_index(SpanOf(shipped_or.value())));
+}
+
 TEST(XlsbWriter, EmitsDynamicArrayMetadataForSingleCellArrayAnchors) {
   Workbook wb = Workbook::create_empty();
   Sheet& sheet = wb.add_sheet("SingleArray");
@@ -670,10 +876,130 @@ TEST(XlsbWriter, ReportsDeferredSheetFeatures) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  // Hyperlink, validation, and auto-filter state are explicitly counted
-  // until their XLSB record emitters land; frozen panes and merges are
-  // supported and do not inflate this counter.
-  EXPECT_EQ(write_or.value().deferred_feature_count, 3U);
+  // Validation and auto-filter state remain deferred; hyperlinks now emit as
+  // BrtHLink records and therefore no longer inflate this counter.
+  EXPECT_EQ(write_or.value().deferred_feature_count, 2U);
+}
+
+TEST(XlsbWriter, RejectsInvalidHyperlinkRectangle) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("InvalidHyperlink");
+  Hyperlink inverted;
+  inverted.row = 4U;
+  inverted.col = 5U;
+  inverted.last_row = 3U;
+  inverted.last_col = 6U;
+  inverted.target = "https://invalid.example";
+  sheet.mutable_hyperlinks().push_back(inverted);
+
+  auto inverted_write = write_xlsb(wb);
+  ASSERT_FALSE(static_cast<bool>(inverted_write));
+  EXPECT_EQ(inverted_write.error().code, FormulonErrorCode::kInvalidArgument);
+
+  sheet.mutable_hyperlinks().clear();
+  Hyperlink out_of_grid;
+  out_of_grid.row = 0U;
+  out_of_grid.col = 0U;
+  out_of_grid.last_row = Sheet::kMaxRows;
+  out_of_grid.last_col = 0U;
+  out_of_grid.target = "https://invalid.example";
+  sheet.mutable_hyperlinks().push_back(out_of_grid);
+  auto out_of_grid_write = write_xlsb(wb);
+  ASSERT_FALSE(static_cast<bool>(out_of_grid_write));
+  EXPECT_EQ(out_of_grid_write.error().code, FormulonErrorCode::kInvalidArgument);
+}
+
+TEST(XlsbWriter, RoundTripsExternalAndInternalHyperlinkRectangles) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("Hyperlinks");
+  Hyperlink external;
+  external.row = 1U;
+  external.col = 2U;
+  external.last_row = 3U;
+  external.last_col = 4U;
+  external.target = "https://external.example/book.xlsx";
+  external.location = "#Sheet2!A1";
+  external.tooltip = "external";
+  external.display = "Open";
+  sheet.mutable_hyperlinks().push_back(external);
+  Hyperlink internal;
+  internal.row = 6U;
+  internal.col = 7U;
+  internal.last_row = 8U;
+  internal.last_col = 9U;
+  internal.location = "Sheet1!A1";
+  internal.tooltip = "internal";
+  internal.display = "Jump";
+  sheet.mutable_hyperlinks().push_back(internal);
+
+  auto first_write = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(first_write)) << first_write.error().message << " | " << first_write.error().context;
+  auto first_read = read_xlsb(SpanOf(first_write.value()));
+  ASSERT_TRUE(static_cast<bool>(first_read)) << first_read.error().message << " | " << first_read.error().context;
+  Workbook edited = std::move(first_read.value().workbook);
+  ASSERT_EQ(edited.sheet(0).hyperlinks().size(), 2U);
+  edited.sheet(0).mutable_hyperlinks()[0].row = 2U;
+  edited.sheet(0).mutable_hyperlinks()[0].last_row = 4U;
+
+  auto second_write = write_xlsb(edited);
+  ASSERT_TRUE(static_cast<bool>(second_write)) << second_write.error().message << " | " << second_write.error().context;
+  auto second_read = read_xlsb(SpanOf(second_write.value()));
+  ASSERT_TRUE(static_cast<bool>(second_read)) << second_read.error().message << " | " << second_read.error().context;
+  const auto& hyperlinks = second_read.value().workbook.sheet(0).hyperlinks();
+  ASSERT_EQ(hyperlinks.size(), 2U);
+  EXPECT_EQ(hyperlinks[0].row, 2U);
+  EXPECT_EQ(hyperlinks[0].col, 2U);
+  EXPECT_EQ(hyperlinks[0].last_row, 4U);
+  EXPECT_EQ(hyperlinks[0].last_col, 4U);
+  EXPECT_EQ(hyperlinks[0].target, "https://external.example/book.xlsx");
+  EXPECT_FALSE(hyperlinks[0].rid.empty());
+  EXPECT_EQ(hyperlinks[1].row, 6U);
+  EXPECT_EQ(hyperlinks[1].col, 7U);
+  EXPECT_EQ(hyperlinks[1].last_row, 8U);
+  EXPECT_EQ(hyperlinks[1].last_col, 9U);
+  EXPECT_TRUE(hyperlinks[1].rid.empty());
+  EXPECT_EQ(hyperlinks[1].location, "Sheet1!A1");
+}
+
+TEST(XlsbWriter, ReusesSharedSourceRelationshipIdForMatchingTargets) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("SharedRids");
+  Hyperlink first;
+  first.row = 1U;
+  first.col = 1U;
+  first.last_row = 1U;
+  first.last_col = 2U;
+  first.target = "https://shared.example/target";
+  first.rid = "rIdShared";
+  sheet.mutable_hyperlinks().push_back(first);
+  Hyperlink second;
+  second.row = 3U;
+  second.col = 1U;
+  second.last_row = 3U;
+  second.last_col = 2U;
+  second.target = "https://shared.example/target";
+  second.rid = "rIdShared";
+  sheet.mutable_hyperlinks().push_back(second);
+
+  auto write_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value()))));
+  auto rels_or = zip.read_entry("xl/worksheets/_rels/sheet1.bin.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  const std::string rels(rels_or.value().begin(), rels_or.value().end());
+  const std::string id_token = "Id=\"rIdShared\"";
+  const std::size_t first_id = rels.find(id_token);
+  ASSERT_NE(first_id, std::string::npos) << rels;
+  EXPECT_EQ(rels.find(id_token, first_id + id_token.size()), std::string::npos) << rels;
+
+  auto read_or = read_xlsb(SpanOf(write_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const auto& hyperlinks = read_or.value().workbook.sheet(0).hyperlinks();
+  ASSERT_EQ(hyperlinks.size(), 2U);
+  EXPECT_EQ(hyperlinks[0].rid, "rIdShared");
+  EXPECT_EQ(hyperlinks[1].rid, "rIdShared");
+  EXPECT_EQ(hyperlinks[0].target, hyperlinks[1].target);
 }
 
 TEST(XlsbWriter, GeneratesStylesPartForModelledStyles) {

@@ -24,6 +24,8 @@
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
+#include "utils/error.h"
+#include "utils/expected.h"
 
 namespace formulon {
 namespace io {
@@ -43,10 +45,12 @@ struct ExternalLinkLoadResult {
 /// against `wb_rels` to build per-link records. For each resolved body
 /// part the helper classifies the link kind by peeking at the body's
 /// root element and captures the target URL + TargetMode from the
-/// per-link rels file. Failure-tolerant: malformed sections produce
-/// `kUnknown` records.
-ExternalLinkLoadResult load_external_links(const ZipReader& zip, const pugi::xml_node& wb_root,
-                                           const WorkbookRels& wb_rels);
+/// per-link rels file. Missing parts and successfully-read malformed XML
+/// remain failure-tolerant and produce `kUnknown`/partial records. A
+/// `ZipReader::read_entry` failure is returned unchanged so callers do not
+/// silently continue with a corrupted package.
+Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip, const pugi::xml_node& wb_root,
+                                                            const WorkbookRels& wb_rels);
 
 }  // namespace ooxml
 }  // namespace io

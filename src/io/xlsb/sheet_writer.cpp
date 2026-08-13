@@ -8,7 +8,9 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -255,13 +257,127 @@ void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndMergeCells), ByteSpan{});
 }
 
+Expected<void, Error> EmitBoundedHyperlinkWideString(std::vector<std::uint8_t>& dst, std::string_view text,
+                                                     std::uint32_t max_units, const char* field) {
+  const std::size_t start = dst.size();
+  emit_xlwidestring(dst, text);
+  const std::uint32_t cch =
+      static_cast<std::uint32_t>(dst[start]) | (static_cast<std::uint32_t>(dst[start + 1U]) << 8U) |
+      (static_cast<std::uint32_t>(dst[start + 2U]) << 16U) | (static_cast<std::uint32_t>(dst[start + 3U]) << 24U);
+  if (cch > max_units) {
+    dst.resize(start);
+    return make_error(FormulonErrorCode::kInvalidArgument,
+                      std::string("xlsb BrtHLink ") + field + " exceeds string limit",
+                      "context=xlsb_sheet_writer cch=" + std::to_string(cch));
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet& sheet,
+                                     const std::vector<std::string>& relationship_ids) {
+  constexpr std::uint32_t kMaxRelIdUnits = 32767U;
+  constexpr std::uint32_t kMaxLocationUnits = 2083U;
+  constexpr std::uint32_t kMaxTooltipUnits = 255U;
+  constexpr std::uint32_t kMaxDisplayUnits = 32767U;
+  for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
+    const Hyperlink& hyperlink = sheet.hyperlinks()[i];
+    if (!Sheet::rect_in_grid(hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col)) {
+      return make_error(
+          FormulonErrorCode::kInvalidArgument, "xlsb hyperlink rectangle out of grid",
+          "context=xlsb_sheet_writer row=" + std::to_string(hyperlink.row) + " col=" + std::to_string(hyperlink.col) +
+              " last_row=" + std::to_string(hyperlink.last_row) + " last_col=" + std::to_string(hyperlink.last_col));
+    }
+    std::vector<std::uint8_t> payload;
+    emit_u32(payload, hyperlink.row);
+    emit_u32(payload, hyperlink.last_row);
+    emit_u32(payload, hyperlink.col);
+    emit_u32(payload, hyperlink.last_col);
+    const std::string_view rid =
+        i < relationship_ids.size() ? std::string_view(relationship_ids[i]) : std::string_view{};
+    // RelID is always present in BrtHLink. Empty-but-present is the internal
+    // hyperlink form; null would be malformed on read.
+    emit_xlnullablewidestring(payload, std::optional<std::string_view>(rid));
+    if (!rid.empty()) {
+      const std::size_t rid_start = 16U;
+      const std::uint32_t rid_units = static_cast<std::uint32_t>(payload[rid_start]) |
+                                      (static_cast<std::uint32_t>(payload[rid_start + 1U]) << 8U) |
+                                      (static_cast<std::uint32_t>(payload[rid_start + 2U]) << 16U) |
+                                      (static_cast<std::uint32_t>(payload[rid_start + 3U]) << 24U);
+      if (rid_units > kMaxRelIdUnits) {
+        return make_error(FormulonErrorCode::kInvalidArgument, "xlsb BrtHLink relationship id exceeds string limit",
+                          "context=xlsb_sheet_writer cch=" + std::to_string(rid_units));
+      }
+    }
+    if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.location, kMaxLocationUnits, "location"); !r) {
+      return r.error();
+    }
+    if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.tooltip, kMaxTooltipUnits, "tooltip"); !r) {
+      return r.error();
+    }
+    if (auto r = EmitBoundedHyperlinkWideString(payload, hyperlink.display, kMaxDisplayUnits, "display"); !r) {
+      return r.error();
+    }
+    emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtHLink), payload);
+  }
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace
+
+std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet) {
+  std::unordered_set<std::string> used;
+  std::unordered_map<std::string, std::string> assigned_targets;
+  used.reserve(sheet.unknown_relationships().size() + sheet.hyperlinks().size());
+  assigned_targets.reserve(sheet.hyperlinks().size());
+  for (const io::UnknownRelationship& relationship : sheet.unknown_relationships()) {
+    if (!relationship.id.empty()) {
+      used.insert(relationship.id);
+    }
+  }
+  std::size_t next_id = 1U;
+  std::vector<std::string> ids;
+  ids.reserve(sheet.hyperlinks().size());
+  auto fresh_id = [&]() {
+    std::string id;
+    do {
+      id = "rId" + std::to_string(next_id++);
+    } while (used.count(id) != 0U);
+    used.insert(id);
+    return id;
+  };
+  for (const Hyperlink& hyperlink : sheet.hyperlinks()) {
+    if (hyperlink.target.empty()) {
+      ids.emplace_back();
+      continue;
+    }
+    if (!hyperlink.rid.empty()) {
+      const auto assigned = assigned_targets.find(hyperlink.rid);
+      if (assigned != assigned_targets.end() && assigned->second == hyperlink.target) {
+        // Multiple BrtHLink records may legitimately share one relationship
+        // when they point at the same external target. Preserve that source
+        // sharing instead of minting a semantically equivalent duplicate.
+        ids.push_back(hyperlink.rid);
+        continue;
+      }
+      if (used.count(hyperlink.rid) == 0U) {
+        ids.push_back(hyperlink.rid);
+        used.insert(hyperlink.rid);
+        assigned_targets.emplace(hyperlink.rid, hyperlink.target);
+        continue;
+      }
+    }
+    const std::string fresh = fresh_id();
+    assigned_targets.emplace(fresh, hyperlink.target);
+    ids.push_back(fresh);
+  }
+  return ids;
+}
 
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBuilder& sst,
                                                       const std::vector<std::string>& sheet_names,
                                                       const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                                       std::uint32_t* downgraded_formula_count,
-                                                      bool emit_dynamic_metadata) {
+                                                      std::uint32_t dynamic_array_ifmd) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -406,9 +522,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
           const std::uint32_t last_col = col + region->cols - 1U;
           const Value& anchor_value = !region->cells.empty() ? region->cells.front() : cell->cached_value;
           bool downgraded_to_literal = false;
-          if (emit_dynamic_metadata) {
+          if (dynamic_array_ifmd != 0U) {
             std::vector<std::uint8_t> metadata_index;
-            emit_u32(metadata_index, 1U);  // XLDAPR dynamic-array metadata entry
+            emit_u32(metadata_index, dynamic_array_ifmd);  // XLDAPR dynamic-array metadata entry
             emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), metadata_index);
           }
           if (auto r =
@@ -446,9 +562,14 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   // auto-filter and print setup in their original stream positions. The
   // buffers hold already-framed records, so this is a byte append.
   const XlsbSheetTail& tail = sheet.xlsb_tail();
+  const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
-  body.insert(body.end(), tail.after_merges.begin(), tail.after_merges.end());
+  body.insert(body.end(), tail.after_merges_before_hyperlinks.begin(), tail.after_merges_before_hyperlinks.end());
+  if (auto hyperlinks = EmitHyperlinks(body, sheet, hyperlink_rids); !hyperlinks) {
+    return hyperlinks.error();
+  }
+  body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheet), ByteSpan{});
   return body;
 }

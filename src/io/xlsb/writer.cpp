@@ -27,6 +27,7 @@
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/passthrough_part.h"
+#include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -82,6 +83,8 @@ constexpr std::string_view kRelSharedStrings =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
 constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
 constexpr std::string_view kRelTheme = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
+constexpr std::string_view kRelHyperlink =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 constexpr std::string_view kRelSheetMetadata =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
 constexpr std::string_view kRelCoreProps =
@@ -143,7 +146,6 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "conditional_formats", sheet.conditional_formats().size(), i);
     ReportDeferred(&count, "data_validations", sheet.validations().size(), i);
-    ReportDeferred(&count, "hyperlinks", sheet.hyperlinks().size(), i);
     ReportDeferred(&count, "auto_filter", sheet.auto_filter_xml().empty() ? 0U : 1U, i);
     const SheetPrintSettings& print = sheet.print_settings();
     const bool has_print = !print.sheet_pr_xml.empty() || !print.page_margins_xml.empty() ||
@@ -209,69 +211,44 @@ bool HasDynamicArrayMetadata(const Workbook& wb) {
   return false;
 }
 
-// Emits the XLDAPR metadata stream Excel uses to mark spilled dynamic-array
-// anchors. The record sequence and constant GUID are the canonical dynamic
-// array metadata shape Excel writes in XLSB workbooks. Cell records refer to
-// its sole entry with BrtCellMeta index 1.
-std::vector<std::uint8_t> BuildDynamicArrayMetadataBin() {
-  constexpr std::uint16_t kBrtBeginMetadata = 332;
-  constexpr std::uint16_t kBrtEndMetadata = 333;
-  constexpr std::uint16_t kBrtBeginEsmdtinfo = 334;
-  constexpr std::uint16_t kBrtMdtinfo = 335;
-  constexpr std::uint16_t kBrtEndEsmdtinfo = 336;
-  constexpr std::uint16_t kBrtBeginEsfmd = 337;
-  constexpr std::uint16_t kBrtEndEsfmd = 338;
-  constexpr std::uint16_t kBrtBeginEsfmdInfo = 339;
-  constexpr std::uint16_t kBrtEndEsfmdInfo = 340;
-  constexpr std::uint16_t kBrtBeginExt = 52;
-  constexpr std::uint16_t kBrtBeginFRT = 35;
-  constexpr std::uint16_t kBrtBeginDynamicArrayExt = 4096;
-  constexpr std::uint16_t kBrtDynamicArrayProperties = 4097;
-  constexpr std::uint16_t kBrtEndFRT = 36;
-  constexpr std::uint16_t kBrtEndExt = 53;
-  constexpr std::uint16_t kBrtCellMetaEntry = 51;
+// Whether a dynamic-array metadata part is needed, and which cell-metadata
+// entry a spill anchor's `BrtCellMeta` record must name.
+//
+// `ifmd` is 1-based, and 0 means no anchor may emit a `BrtCellMeta` record at
+// all: either the workbook has no spill anchors, or the metadata part that
+// ships is a retained passthrough whose dynamic-array entry could not be
+// identified. Both the index and the part are decided here, once, so the
+// worksheet bodies and the package can never disagree about which entry a
+// cell names.
+struct DynamicArrayMetadataPlan {
+  bool generate_part = false;
+  std::uint32_t ifmd = 0;
+};
 
-  std::vector<std::uint8_t> out;
-  std::vector<std::uint8_t> payload;
-  emit_record(out, kBrtBeginMetadata, ByteSpan{});
-
-  emit_u32(payload, 1U);
-  emit_record(out, kBrtBeginEsmdtinfo, payload);
-  payload.clear();
-  emit_u32(payload, 0xD86AC0B0U);
-  emit_u32(payload, 0x0001D4C0U);
-  emit_xlwidestring(payload, "XLDAPR");
-  emit_record(out, kBrtMdtinfo, payload);
-  emit_record(out, kBrtEndEsmdtinfo, ByteSpan{});
-
-  payload.clear();
-  emit_u32(payload, 1U);
-  emit_xlwidestring(payload, "XLDAPR");
-  emit_record(out, kBrtBeginEsfmdInfo, payload);
-  emit_record(out, kBrtBeginExt, ByteSpan{});
-  payload.clear();
-  emit_u32(payload, 0x00020002U);
-  emit_record(out, kBrtBeginFRT, payload);
-  emit_record(out, kBrtBeginDynamicArrayExt, ByteSpan{});
-  payload.clear();
-  emit_u16(payload, 1U);
-  emit_record(out, kBrtDynamicArrayProperties, payload);
-  emit_record(out, kBrtEndFRT, ByteSpan{});
-  emit_record(out, kBrtEndExt, ByteSpan{});
-  emit_record(out, kBrtEndEsfmdInfo, ByteSpan{});
-
-  payload.clear();
-  emit_u32(payload, 1U);
-  emit_u32(payload, 1U);
-  emit_record(out, kBrtBeginEsfmd, payload);
-  payload.clear();
-  emit_u32(payload, 1U);
-  emit_u32(payload, 1U);
-  emit_u32(payload, 0U);
-  emit_record(out, kBrtCellMetaEntry, payload);
-  emit_record(out, kBrtEndEsfmd, ByteSpan{});
-  emit_record(out, kBrtEndMetadata, ByteSpan{});
-  return out;
+DynamicArrayMetadataPlan BuildDynamicArrayMetadataPlan(const Workbook& wb) {
+  DynamicArrayMetadataPlan plan;
+  if (!HasDynamicArrayMetadata(wb)) {
+    return plan;
+  }
+  // The first passthrough part wins the path; `BuildEmissionPlan` drops any
+  // later duplicate, so that is the one whose numbering ships.
+  const PassthroughPart* retained = nullptr;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.path == "xl/metadata.bin") {
+      retained = &part;
+      break;
+    }
+  }
+  if (retained == nullptr) {
+    plan.generate_part = true;
+    plan.ifmd = 1U;  // The generated part declares exactly one entry.
+    return plan;
+  }
+  // A retained part carries its own numbering, and its first entry is not
+  // necessarily the dynamic-array one — it may hold rich-value or
+  // cube-function metadata instead, or no dynamic-array type at all.
+  plan.ifmd = find_dynamic_array_cell_meta_index(ByteSpan{retained->bytes.data(), retained->bytes.size()});
+  return plan;
 }
 
 std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part, bool emit_styles_part,
@@ -297,7 +274,7 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   return paths;
 }
 
-Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present) {
+Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_dynamic_metadata) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
   // Existing XLSB packages retain their original styles bytes verbatim.  This
@@ -305,10 +282,9 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
   // (notably differential formats).  XLSX/native workbooks have no raw part,
   // so their modelled style table becomes a fresh styles.bin instead.
   plan.has_generated_styles = !HasRawStylesPart(wb) && HasModelledStyles(wb);
-  plan.has_generated_dynamic_metadata =
-      HasDynamicArrayMetadata(wb) &&
-      !std::any_of(wb.passthrough_parts().begin(), wb.passthrough_parts().end(),
-                   [](const PassthroughPart& part) { return part.path == "xl/metadata.bin"; });
+  // Decided by `BuildDynamicArrayMetadataPlan`, which the sheet bodies were
+  // already emitted against.
+  plan.has_generated_dynamic_metadata = generate_dynamic_metadata;
 
   const std::unordered_set<std::string> generated =
       BuildGeneratedPathSet(wb, sst_present, plan.has_generated_styles, plan.has_generated_dynamic_metadata);
@@ -454,7 +430,8 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     append_override("_rels/.rels", kCtPackageRels);
     append_override("xl/_rels/workbook.bin.rels", kCtPackageRels);
     for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-      bool has_emitted_sheet_rels = false;
+      bool has_emitted_sheet_rels = std::any_of(wb.sheet(i).hyperlinks().begin(), wb.sheet(i).hyperlinks().end(),
+                                                [](const Hyperlink& hyperlink) { return !hyperlink.target.empty(); });
       for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
         if (rel.target_external) {
           has_emitted_sheet_rels = true;
@@ -572,11 +549,11 @@ std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
 // Builds `xl/worksheets/_rels/sheet<N>.bin.rels`, or an empty string when the
 // sheet has nothing to relate to.
 //
-// Relationship ids are preserved verbatim rather than renumbered: the retained
-// worksheet-tail records (`Sheet::xlsb_tail`) address hyperlink targets,
-// drawings and table parts by the source package's rId, and the writer does
-// not decode those records to rewrite them. A relationship whose target part
-// is not in the package is dropped so the emitted rels never dangle.
+// Retained relationship ids remain verbatim so opaque worksheet-tail records
+// (drawings, tables, and similar features) continue to resolve. Model-owned
+// BrtHLink records are emitted separately and get ids from the same collision
+// set; a relationship whose target part is not in the package is dropped so
+// the emitted rels never dangle.
 std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan) {
   std::string entries;
   for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
@@ -600,6 +577,25 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan) {
     } else {
       entries.append("\"/>\n");
     }
+  }
+  const std::vector<std::string> hyperlink_rids = hyperlink_relationship_ids(sheet);
+  std::unordered_set<std::string> emitted_hyperlink_rids;
+  emitted_hyperlink_rids.reserve(hyperlink_rids.size());
+  for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
+    const Hyperlink& hyperlink = sheet.hyperlinks()[i];
+    if (hyperlink.target.empty() || i >= hyperlink_rids.size() || hyperlink_rids[i].empty()) {
+      continue;
+    }
+    if (!emitted_hyperlink_rids.insert(hyperlink_rids[i]).second) {
+      continue;
+    }
+    entries.append("  <Relationship Id=\"");
+    AppendXmlEscaped(entries, hyperlink_rids[i]);
+    entries.append("\" Type=\"");
+    AppendXmlEscaped(entries, kRelHyperlink);
+    entries.append("\" Target=\"");
+    AppendXmlEscaped(entries, hyperlink.target);
+    entries.append("\" TargetMode=\"External\"/>\n");
   }
   if (entries.empty()) {
     return {};
@@ -1032,14 +1028,14 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const SheetRangeTable sheet_ranges = BuildSheetRangeTable(workbook, sheet_names);
 
   SstBuilder sst;
-  const bool emit_dynamic_metadata = HasDynamicArrayMetadata(workbook);
+  const DynamicArrayMetadataPlan dynamic_array = BuildDynamicArrayMetadataPlan(workbook);
   std::uint32_t downgraded_formula_count = 0;
   const std::uint32_t deferred_feature_count = ReportDeferredSheetFeatures(workbook);
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
   for (std::size_t i = 0; i < sheet_count; ++i) {
     auto sheet_body_or = emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, name_table,
-                                    &downgraded_formula_count, emit_dynamic_metadata);
+                                    &downgraded_formula_count, dynamic_array.ifmd);
     if (!sheet_body_or) {
       return sheet_body_or.error();
     }
@@ -1047,7 +1043,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   const bool emit_sst_part = !sst.empty();
 
-  auto plan_or = BuildEmissionPlan(workbook, emit_sst_part);
+  auto plan_or = BuildEmissionPlan(workbook, emit_sst_part, dynamic_array.generate_part);
   if (!plan_or) {
     return plan_or.error();
   }
@@ -1097,7 +1093,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // 4c. xl/metadata.bin for dynamic-array spill anchors. The worksheet
   // BrtCellMeta records and workbook relationship are emitted in lockstep.
   if (plan.has_generated_dynamic_metadata) {
-    const std::vector<std::uint8_t> metadata_bytes = BuildDynamicArrayMetadataBin();
+    const std::vector<std::uint8_t> metadata_bytes = build_dynamic_array_metadata_bin();
     if (auto r = AddPartBytes(writer.get(), "xl/metadata.bin", metadata_bytes); !r) {
       return r.error();
     }

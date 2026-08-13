@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/array_anchor_budget.h"
 #include "io/cell_parser.h"
 #include "io/sax_xml_reader.h"
 #include "io/xml_utils.h"
@@ -119,17 +120,37 @@ void RecordArrayAnchor(SheetReadContext& ctx, std::string_view ref, std::uint32_
 /// surfaces `#SPILL!`. The phantom values are captured into the region and
 /// the underlying non-anchor cells are blanked so recalc can overwrite the
 /// footprint freely.
-void RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
+Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
+  // Validate and charge every footprint before the first reserve or cell
+  // walk. This keeps a later malformed/over-budget anchor from arriving
+  // after an earlier one has already started an attacker-sized operation.
+  ResourceBudget budget(kMaxDynamicArrayCells, FormulonErrorCode::kIoSheetCorrupt);
   for (const ArrayAnchor& a : anchors) {
-    // Keep this defensive check here as well as in RecordArrayAnchor: this
-    // helper performs unsigned extent arithmetic and may gain other callers.
-    if (a.last_row < a.row || a.last_col < a.col) {
-      continue;
+    auto cells_or = checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, FormulonErrorCode::kIoSheetCorrupt,
+                                               "context=sheet_reader array_anchor");
+    if (!cells_or) {
+      return cells_or.error();
     }
+    std::string context("context=sheet_reader format=ooxml anchor_row=");
+    context.append(std::to_string(a.row));
+    context.append(" anchor_col=");
+    context.append(std::to_string(a.col));
+    context.append(" last_row=");
+    context.append(std::to_string(a.last_row));
+    context.append(" last_col=");
+    context.append(std::to_string(a.last_col));
+    auto charged = consume_array_anchor_budget(budget, cells_or.value(), std::move(context));
+    if (!charged) {
+      return charged.error();
+    }
+  }
+
+  for (const ArrayAnchor& a : anchors) {
     const std::uint32_t rows = a.last_row - a.row + 1U;
     const std::uint32_t cols = a.last_col - a.col + 1U;
+    const std::uint64_t cell_count = static_cast<std::uint64_t>(rows) * cols;
     std::vector<Value> values;
-    values.reserve(static_cast<std::size_t>(rows) * cols);
+    values.reserve(static_cast<std::size_t>(cell_count));
     for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
       for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
         const Cell* cell = sheet.cell_at(r, c);
@@ -149,6 +170,7 @@ void RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) 
     }
     sheet.commit_spill(a.row, a.col, rows, cols, std::move(values));
   }
+  return Expected<void, Error>::Ok();
 }
 
 /// Reads the `<f>` child of `c_node` and updates `formula_out`. Returns
@@ -336,8 +358,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       }
     }
   }
-  RegisterArraySpills(workbook.sheet(sheet_index), ctx.array_anchors);
-  return Expected<void, Error>::Ok();
+  return RegisterArraySpills(workbook.sheet(sheet_index), ctx.array_anchors);
 }
 
 // ---------------------------------------------------------------------------
@@ -774,8 +795,7 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
   if (!scanned) {
     return scanned.error();
   }
-  RegisterArraySpills(workbook.sheet(sheet_index), ctx.array_anchors);
-  return Expected<void, Error>::Ok();
+  return RegisterArraySpills(workbook.sheet(sheet_index), ctx.array_anchors);
 }
 
 #endif  // !FORMULON_WASM || FORMULON_WASM_ENABLE_SAX
@@ -890,23 +910,20 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
                         "context=sheet_reader part=hyperlinks");
     }
     // Hyperlinks may span a range (`ref="A1:B2"`); Excel applies the link
-    // to every cell. We anchor `row`/`col` at the range's top-left and
-    // preserve the full ref in `ref_span` for verbatim re-emission. A
-    // single-cell ref leaves `ref_span` empty.
-    const std::size_t colon = ref.find(':');
-    const std::string_view anchor = colon == std::string_view::npos ? ref : ref.substr(0, colon);
-    auto rc = parse_a1(anchor);
-    if (!rc) {
+    // to every cell. Keep both corners in the model so structural edits can
+    // shrink/shift the complete rectangle and the writer can regenerate the
+    // A1 reference from numeric coordinates.
+    auto range_or = ParseA1RangeMerge(ref);
+    if (!range_or) {
       std::string ctx("context=sheet_reader part=hyperlinks ref=");
       ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "hyperlink: ref anchor unparseable", std::move(ctx));
+      return make_error(FormulonErrorCode::kIoSheetCorrupt, "hyperlink: ref range unparseable", std::move(ctx));
     }
     Hyperlink hl;
-    hl.row = rc.value().first;
-    hl.col = rc.value().second;
-    if (colon != std::string_view::npos) {
-      hl.ref_span.assign(ref);
-    }
+    hl.row = range_or.value().first_row;
+    hl.col = range_or.value().first_col;
+    hl.last_row = range_or.value().last_row;
+    hl.last_col = range_or.value().last_col;
     // Accept both Office-namespaced ("r:id") and bare "id" attribute spellings.
     const std::string_view rid_v = attr_str(h, "r:id");
     if (!rid_v.empty()) {

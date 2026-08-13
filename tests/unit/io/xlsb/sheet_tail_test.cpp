@@ -35,14 +35,15 @@ namespace {
 // engine understanding them.
 constexpr std::uint16_t kBrtBeginAFilter = 161;
 constexpr std::uint16_t kBrtEndAFilter = 162;
-constexpr std::uint16_t kBrtBeginCondFmt = 463;
-constexpr std::uint16_t kBrtEndCondFmt = 464;
-constexpr std::uint16_t kBrtBeginCFRule = 465;
-constexpr std::uint16_t kBrtEndCFRule = 466;
+constexpr std::uint16_t kBrtBeginCondFmt = 461;
+constexpr std::uint16_t kBrtEndCondFmt = 462;
+constexpr std::uint16_t kBrtBeginCFRule = 463;
+constexpr std::uint16_t kBrtEndCFRule = 464;
 constexpr std::uint16_t kBrtDVal = 64;
 constexpr std::uint16_t kBrtBeginDVals = 573;
 constexpr std::uint16_t kBrtEndDVals = 574;
 constexpr std::uint16_t kBrtHLink = 494;
+constexpr std::uint16_t kBrtPrintOptions = 477;
 
 constexpr std::uint16_t kBrtBeginSheet = 129;
 constexpr std::uint16_t kBrtEndSheet = 130;
@@ -184,7 +185,11 @@ std::vector<std::uint8_t> WorkbookBin() {
 /// Builds `xl/worksheets/sheet1.bin`: one numeric cell, then a tail holding
 /// an auto-filter block, a merged-cell block, a conditional-formatting block,
 /// a data-validation block and a hyperlink — in the order Excel emits them.
-std::vector<std::uint8_t> SheetBinWithTail(bool with_merges) {
+std::vector<std::uint8_t> SheetBinWithTail(bool with_merges, bool with_sheet_rels,
+                                           bool with_post_hyperlink_tail = false,
+                                           std::string_view hyperlink_location = "",
+                                           std::string_view hyperlink_tooltip = "open site",
+                                           std::string_view hyperlink_display = "Click") {
   std::vector<std::uint8_t> body;
   AppendRecord(body, kBrtBeginSheet, {});
   AppendRecord(body, kBrtBeginSheetData, {});
@@ -231,14 +236,23 @@ std::vector<std::uint8_t> SheetBinWithTail(bool with_merges) {
   AppendRecord(body, kBrtDVal, Marker(0xD1D1D1D1U));
   AppendRecord(body, kBrtEndDVals, {});
 
-  {
+  if (with_sheet_rels) {
     std::vector<std::uint8_t> payload;
     AppendU32(payload, 0U);  // first row
     AppendU32(payload, 0U);  // last row
     AppendU32(payload, 0U);  // first col
     AppendU32(payload, 0U);  // last col
     AppendXLNullableWideString(payload, "rIdHyperlink");
+    AppendXLWideString(payload, hyperlink_location);
+    AppendXLWideString(payload, hyperlink_tooltip);
+    AppendXLWideString(payload, hyperlink_display);
     AppendRecord(body, kBrtHLink, payload);
+  }
+  if (!with_merges && (with_sheet_rels || with_post_hyperlink_tail)) {
+    // PrintOptions is a real post-HLink grammar record. Keeping it here also
+    // exercises the no-source-HLink case where the writer inserts a model
+    // hyperlink before this retained record.
+    AppendRecord(body, kBrtPrintOptions, Marker(0xE1E1E1E1U));
   }
 
   AppendRecord(body, kBrtEndSheet, {});
@@ -293,13 +307,18 @@ std::vector<std::uint8_t> BuildZip(const std::vector<PartFile>& parts) {
   return out;
 }
 
-std::vector<PartFile> SourceParts(bool with_merges, bool with_sheet_rels, bool with_drawing_part) {
+std::vector<PartFile> SourceParts(bool with_merges, bool with_sheet_rels, bool with_drawing_part,
+                                  bool with_post_hyperlink_tail = false, std::string_view hyperlink_location = "",
+                                  std::string_view hyperlink_tooltip = "open site",
+                                  std::string_view hyperlink_display = "Click") {
   std::vector<PartFile> parts;
   parts.push_back({"[Content_Types].xml", BytesOf(ContentTypesXml(with_drawing_part))});
   parts.push_back({"_rels/.rels", BytesOf(PackageRelsXml())});
   parts.push_back({"xl/_rels/workbook.bin.rels", BytesOf(WorkbookRelsXml())});
   parts.push_back({"xl/workbook.bin", WorkbookBin()});
-  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinWithTail(with_merges)});
+  parts.push_back(
+      {"xl/worksheets/sheet1.bin", SheetBinWithTail(with_merges, with_sheet_rels, with_post_hyperlink_tail,
+                                                    hyperlink_location, hyperlink_tooltip, hyperlink_display)});
   if (with_sheet_rels) {
     parts.push_back({"xl/worksheets/_rels/sheet1.bin.rels", BytesOf(SheetRelsXml())});
   }
@@ -379,17 +398,29 @@ TEST(XlsbSheetTail, ReaderRetainsRecordsAfterTheCellTable) {
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
 
   const XlsbSheetTail& tail = read_or.value().workbook.sheet(0).xlsb_tail();
+  const auto& hyperlinks = read_or.value().workbook.sheet(0).hyperlinks();
+  ASSERT_EQ(hyperlinks.size(), 1U);
+  EXPECT_EQ(hyperlinks[0].row, 0U);
+  EXPECT_EQ(hyperlinks[0].last_row, 0U);
+  EXPECT_EQ(hyperlinks[0].col, 0U);
+  EXPECT_EQ(hyperlinks[0].last_col, 0U);
+  EXPECT_EQ(hyperlinks[0].rid, "rIdHyperlink");
+  EXPECT_EQ(hyperlinks[0].target, "https://example.invalid/a");
+  EXPECT_EQ(hyperlinks[0].tooltip, "open site");
+  EXPECT_EQ(hyperlinks[0].display, "Click");
   EXPECT_FALSE(tail.empty());
 
   // The merged-cell block splits the tail: the auto-filter is captured before
-  // it, everything else after. The merge records themselves are not retained
-  // — the writer re-emits them from `Sheet::merges()`.
+  // it, everything else before the model-owned hyperlink block. The raw
+  // BrtHLink itself is decoded into the model and is never retained — the
+  // writer re-emits it from `Sheet::hyperlinks()`.
   const std::vector<std::uint16_t> before = RecordTypes(tail.before_merges);
   EXPECT_EQ(before, (std::vector<std::uint16_t>{kBrtBeginAFilter, kBrtEndAFilter}));
 
-  const std::vector<std::uint16_t> after = RecordTypes(tail.after_merges);
+  const std::vector<std::uint16_t> after = RecordTypes(tail.after_merges_before_hyperlinks);
   EXPECT_EQ(after, (std::vector<std::uint16_t>{kBrtBeginCondFmt, kBrtBeginCFRule, kBrtEndCFRule, kBrtEndCondFmt,
-                                               kBrtBeginDVals, kBrtDVal, kBrtEndDVals, kBrtHLink}));
+                                               kBrtBeginDVals, kBrtDVal, kBrtEndDVals}));
+  EXPECT_TRUE(tail.after_hyperlinks.empty());
 }
 
 TEST(XlsbSheetTail, RoundTripKeepsEverySheetLevelFeature) {
@@ -438,7 +469,7 @@ TEST(XlsbSheetTail, TailSurvivesACellEdit) {
   const std::vector<std::uint16_t> types = RecordTypes(PartOf(write_or.value(), "xl/worksheets/sheet1.bin"));
   EXPECT_EQ(CountOfType(types, kBrtBeginCondFmt), 1U);
   EXPECT_EQ(CountOfType(types, kBrtDVal), 1U);
-  EXPECT_EQ(CountOfType(types, kBrtHLink), 1U);
+  EXPECT_EQ(CountOfType(types, kBrtHLink), 0U);
 
   // Without a merged-cell block in the source the whole tail lands in one
   // buffer, and still precedes the end of the sheet.
@@ -478,6 +509,80 @@ TEST(XlsbSheetTail, SheetWithoutRelationshipsEmitsNoRelsPart) {
   ZipReader zip;
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(rewritten))));
   EXPECT_FALSE(zip.has_entry("xl/worksheets/_rels/sheet1.bin.rels"));
+}
+
+TEST(XlsbSheetTail, NoMergeTailKeepsRecordsAfterHyperlinkAfterModelBlock) {
+  const std::vector<std::uint8_t> archive = BuildZip(SourceParts(
+      /*with_merges=*/false, /*with_sheet_rels=*/true, /*with_drawing_part=*/false));
+  auto read_or = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const XlsbSheetTail& tail = read_or.value().workbook.sheet(0).xlsb_tail();
+  EXPECT_EQ(RecordTypes(tail.after_merges_before_hyperlinks),
+            (std::vector<std::uint16_t>{kBrtBeginCondFmt, kBrtBeginCFRule, kBrtEndCFRule, kBrtEndCondFmt,
+                                        kBrtBeginDVals, kBrtDVal, kBrtEndDVals}));
+  EXPECT_EQ(RecordTypes(tail.after_hyperlinks), (std::vector<std::uint16_t>{kBrtPrintOptions}));
+
+  auto write_or = write_xlsb(read_or.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message;
+  const std::vector<std::uint16_t> types = RecordTypes(PartOf(write_or.value(), "xl/worksheets/sheet1.bin"));
+  EXPECT_LT(IndexOfType(types, kBrtEndSheetData), IndexOfType(types, kBrtHLink));
+  EXPECT_LT(IndexOfType(types, kBrtHLink), IndexOfType(types, kBrtPrintOptions));
+  EXPECT_LT(IndexOfType(types, kBrtPrintOptions), IndexOfType(types, kBrtEndSheet));
+}
+
+TEST(XlsbSheetTail, NoSourceHyperlinkKeepsPostHyperlinkTailAfterNewModelLink) {
+  const std::vector<std::uint8_t> archive = BuildZip(SourceParts(
+      /*with_merges=*/false, /*with_sheet_rels=*/false, /*with_drawing_part=*/false,
+      /*with_post_hyperlink_tail=*/true));
+  auto read_or = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  Workbook wb = std::move(read_or.value().workbook);
+  ASSERT_TRUE(wb.sheet(0).hyperlinks().empty());
+
+  Hyperlink hyperlink;
+  hyperlink.row = 2U;
+  hyperlink.col = 3U;
+  hyperlink.last_row = 4U;
+  hyperlink.last_col = 5U;
+  hyperlink.target = "https://new.example/target";
+  wb.sheet(0).mutable_hyperlinks().push_back(std::move(hyperlink));
+
+  auto write_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  const std::vector<std::uint16_t> types = RecordTypes(PartOf(write_or.value(), "xl/worksheets/sheet1.bin"));
+  EXPECT_EQ(CountOfType(types, kBrtHLink), 1U);
+  EXPECT_EQ(CountOfType(types, kBrtPrintOptions), 1U);
+  EXPECT_LT(IndexOfType(types, kBrtHLink), IndexOfType(types, kBrtPrintOptions));
+  EXPECT_LT(IndexOfType(types, kBrtPrintOptions), IndexOfType(types, kBrtEndSheet));
+
+  const std::vector<std::uint8_t> rels_bytes = PartOf(write_or.value(), "xl/worksheets/_rels/sheet1.bin.rels");
+  const std::string rels(rels_bytes.begin(), rels_bytes.end());
+  EXPECT_NE(rels.find("Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink\""),
+            std::string::npos);
+  EXPECT_NE(rels.find("Target=\"https://new.example/target\""), std::string::npos);
+}
+
+TEST(XlsbSheetTail, RejectsHyperlinkFieldWireLengthLimits) {
+  const std::string oversized_location(2084U, 'l');
+  auto location_read = read_xlsb(SpanOf(BuildZip(SourceParts(
+      /*with_merges=*/true, /*with_sheet_rels=*/true, /*with_drawing_part=*/false,
+      /*with_post_hyperlink_tail=*/false, oversized_location))));
+  ASSERT_FALSE(static_cast<bool>(location_read));
+  EXPECT_EQ(location_read.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+
+  const std::string oversized_tooltip(256U, 't');
+  auto tooltip_read = read_xlsb(SpanOf(BuildZip(SourceParts(
+      /*with_merges=*/true, /*with_sheet_rels=*/true, /*with_drawing_part=*/false,
+      /*with_post_hyperlink_tail=*/false, /*location=*/"", oversized_tooltip))));
+  ASSERT_FALSE(static_cast<bool>(tooltip_read));
+  EXPECT_EQ(tooltip_read.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+
+  const std::string oversized_display(32768U, 'd');
+  auto display_read = read_xlsb(SpanOf(BuildZip(SourceParts(
+      /*with_merges=*/true, /*with_sheet_rels=*/true, /*with_drawing_part=*/false,
+      /*with_post_hyperlink_tail=*/false, /*location=*/"", /*tooltip=*/"open site", oversized_display))));
+  ASSERT_FALSE(static_cast<bool>(display_read));
+  EXPECT_EQ(display_read.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
 
 TEST(XlsbSheetTail, ModelBuiltWorkbookCarriesNoTail) {

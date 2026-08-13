@@ -75,6 +75,7 @@ enum class XlsbRecordType : std::uint16_t {
   BrtCellMeta = 49,    ///< Cell metadata index (for dynamic-array anchors).
   BrtColInfo = 60,     ///< Column width / visibility / outline span.
   BrtMergeCell = 176,  ///< One merged-cell rectangle.
+  BrtHLink = 494,      ///< One hyperlink rectangle plus relationship/text fields.
 
   // Container records (begin/end markers).
   BrtBeginSheet = 129,       ///< Start of a worksheet stream.

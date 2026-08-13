@@ -228,6 +228,42 @@ TEST(SheetReader, RetainsSingleCellArrayFormulaAnchor) {
   EXPECT_EQ(region->cols, 1U);
 }
 
+TEST(SheetReader, RejectsFullGridArrayAnchorBeforeSpillWalk) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(
+      doc.load_string("<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><f t=\"array\" ref=\"A1:XFD1048576\">1</f>"
+                      "</c></row></sheetData></worksheet>"));
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+
+  auto result = read_sheet_data(doc, 0U, wb, ctx, text_storage);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+}
+
+TEST(SheetReader, RejectsCumulativeArrayAnchorsOverSheetBudget) {
+  pugi::xml_document doc;
+  ASSERT_TRUE(
+      doc.load_string("<worksheet><sheetData><row r=\"1\">"
+                      "<c r=\"A1\"><f t=\"array\" ref=\"A1:A600000\">1</f></c>"
+                      "<c r=\"B1\"><f t=\"array\" ref=\"B1:B600000\">1</f></c>"
+                      "</row></sheetData></worksheet>"));
+  Workbook wb = Workbook::create();
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+
+  auto result = read_sheet_data(doc, 0U, wb, ctx, text_storage);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_NE(result.error().context.find("format=ooxml"), std::string::npos);
+  EXPECT_NE(result.error().context.find("anchor_row=0 anchor_col=1"), std::string::npos);
+  EXPECT_NE(result.error().context.find("used=600000 requested=600000 ceiling=1048576"), std::string::npos);
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
+  EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 1U), nullptr);
+}
+
 TEST(SheetReader, PendingSstCellsCollected) {
   const char* xml =
       "<worksheet><sheetData>"

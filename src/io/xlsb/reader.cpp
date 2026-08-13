@@ -26,6 +26,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/array_anchor_budget.h"
 #include "io/default_content_type.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/rels_walker.h"
@@ -71,6 +72,8 @@ constexpr std::string_view kRelWorksheet =
 constexpr std::string_view kRelSharedStrings =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings";
 constexpr std::string_view kRelStyles = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
+constexpr std::string_view kRelHyperlink =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
 // `[Content_Types].xml` registers the workbook part under the binary
 // content type for `.xlsb`. The reader gates on this content type to
@@ -763,10 +766,117 @@ struct SheetDecodeState {
   /// True once `BrtEndSheetData` has been seen: everything from there to
   /// `BrtEndSheet` is tail.
   bool in_tail = false;
-  /// True once the merged-cell block has been passed, which selects which
-  /// of `tail`'s two buffers subsequent records append to.
+  /// True once the merged-cell block has been passed. This is the fallback
+  /// grammar phase for tail records not covered by an explicit slot id.
   bool merges_seen = false;
+  /// True once the first raw BrtHLink has been encountered. Raw hyperlink
+  /// records are model-owned and are never retained, but this marker keeps
+  /// unrelated records after them in the correct post-hyperlink buffer.
+  bool hyperlinks_seen = false;
 };
+
+constexpr std::uint32_t kMaxHyperlinkRelIdUnits = 32767U;
+constexpr std::uint32_t kMaxHyperlinkLocationUnits = 2083U;
+constexpr std::uint32_t kMaxHyperlinkTooltipUnits = 255U;
+constexpr std::uint32_t kMaxHyperlinkDisplayUnits = 32767U;
+
+Expected<std::string, Error> ReadHyperlinkWideString(ByteSpan& cursor, const char* field, std::uint32_t max_units) {
+  if (cursor.size < 4U) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
+                      std::string("xlsb BrtHLink ") + field + " length truncated", "context=xlsb_reader");
+  }
+  const std::uint32_t cch =
+      static_cast<std::uint32_t>(cursor.data[0]) | (static_cast<std::uint32_t>(cursor.data[1]) << 8U) |
+      (static_cast<std::uint32_t>(cursor.data[2]) << 16U) | (static_cast<std::uint32_t>(cursor.data[3]) << 24U);
+  if (cch > max_units) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
+                      std::string("xlsb BrtHLink ") + field + " exceeds string limit",
+                      "context=xlsb_reader cch=" + std::to_string(cch));
+  }
+  return read_xlwidestring(cursor);
+}
+
+/// Tail records in this slot occur after the model-owned merge block and
+/// before the model-owned hyperlink block, even when the source stream omits
+/// BrtBeginMergeCells/BrtEndMergeCells entirely.  The worksheet grammar uses
+/// these ids for phonetic metadata, conditional formatting and data
+/// validations; relying only on `merges_seen` would put them before newly
+/// added model hyperlinks on a no-merge sheet.
+bool IsAfterMergesBeforeHyperlinks(XlsbRecordType type) {
+  switch (static_cast<std::uint16_t>(type)) {
+    case 537:  // BrtPhoneticInfo
+    case 461:  // BrtBeginConditionalFormatting
+    case 462:  // BrtEndConditionalFormatting
+    case 463:  // BrtBeginCFRule
+    case 464:  // BrtEndCFRule
+    case 465:  // BrtBeginIconSet
+    case 466:  // BrtEndIconSet
+    case 467:  // BrtBeginDataBar
+    case 468:  // BrtEndDataBar
+    case 469:  // BrtBeginColorScale
+    case 470:  // BrtEndColorScale
+    case 471:  // BrtCFVO
+    case 564:  // BrtColor (conditional-formatting color)
+    case 573:  // BrtBeginDVals
+    case 64:   // BrtDVal
+    case 574:  // BrtEndDVals
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Tail records in this slot are emitted after the model-owned hyperlink
+/// block.  This explicit grammar classification is needed when the source
+/// has no BrtHLink at all but the in-memory caller adds one before writing.
+bool IsAfterHyperlinks(XlsbRecordType type) {
+  switch (static_cast<std::uint16_t>(type)) {
+    case 477:  // BrtPrintOptions
+    case 476:  // BrtMargins
+    case 479:  // BrtBeginHeaderFooter
+    case 480:  // BrtEndHeaderFooter
+    case 478:  // BrtPageSetup
+    case 392:  // BrtBeginRwBrk
+    case 396:  // BrtBrk
+    case 393:  // BrtEndRwBrk
+    case 394:  // BrtBeginColBrk
+    case 395:  // BrtEndColBrk
+    case 625:  // BrtBigName
+    case 605:  // BrtBeginCellWatches
+    case 607:  // BrtCellWatch
+    case 606:  // BrtEndCellWatches
+    case 648:  // BrtBeginCellIgnoreECs
+    case 649:  // BrtCellIgnoreEC
+    case 650:  // BrtEndCellIgnoreECs
+    case 594:  // BrtBeginSmartTags
+    case 592:  // BrtBeginCellSmartTags
+    case 590:  // BrtBeginCellSmartTag
+    case 589:  // BrtCellSmartTagProperty
+    case 591:  // BrtEndCellSmartTag
+    case 593:  // BrtEndCellSmartTags
+    case 595:  // BrtEndSmartTags
+    case 550:  // BrtDrawing
+    case 551:  // BrtLegacyDrawing
+    case 552:  // BrtLegacyDrawingHF
+    case 562:  // BrtBkhim
+    case 638:  // BrtBeginOleObjects
+    case 639:  // BrtOleObject
+    case 640:  // BrtEndOleObjects
+    case 643:  // BrtBeginActiveXControls
+    case 644:  // BrtActiveX
+    case 645:  // BrtEndActiveXControls
+    case 554:  // BrtBeginWebPubItems
+    case 556:  // BrtBeginWebPubItem
+    case 557:  // BrtEndWebPubItem
+    case 555:  // BrtEndWebPubItems
+    case 660:  // BrtBeginTableParts
+    case 661:  // BrtTablePart
+    case 662:  // BrtEndTableParts
+      return true;
+    default:
+      return false;
+  }
+}
 
 /// True for a tail record the writer re-emits from the model, which must
 /// therefore not also be retained verbatim (or it would be emitted twice).
@@ -776,22 +886,27 @@ bool IsModelOwnedTailRecord(XlsbRecordType type) {
     case XlsbRecordType::BrtBeginMergeCells:
     case XlsbRecordType::BrtMergeCell:
     case XlsbRecordType::BrtEndMergeCells:
+    case XlsbRecordType::BrtHLink:
       return true;
     default:
       return false;
   }
 }
 
-/// Appends the framed bytes of one worksheet-tail record to whichever
-/// `XlsbSheetTail` buffer matches its position relative to the merged-cell
-/// block. `framed` spans the record header *and* payload, so re-emission is
-/// a plain byte copy rather than a re-encode.
+/// Appends the framed bytes of one worksheet-tail record to the grammar slot
+/// represented by `XlsbSheetTail`. `framed` spans the record header *and*
+/// payload, so re-emission is a plain byte copy rather than a re-encode.
 void RetainTailRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed, std::size_t size) {
   if (IsModelOwnedTailRecord(type)) {
     return;
   }
-  std::vector<std::uint8_t>& dst = state.merges_seen ? state.tail.after_merges : state.tail.before_merges;
-  dst.insert(dst.end(), framed, framed + size);
+  std::vector<std::uint8_t>* dst = &state.tail.before_merges;
+  if (state.hyperlinks_seen || IsAfterHyperlinks(type)) {
+    dst = &state.tail.after_hyperlinks;
+  } else if (state.merges_seen || IsAfterMergesBeforeHyperlinks(type)) {
+    dst = &state.tail.after_merges_before_hyperlinks;
+  }
+  dst->insert(dst->end(), framed, framed + size);
 }
 
 /// Reads every entry of a worksheet's `.rels` part, keeping the original
@@ -828,6 +943,48 @@ Expected<std::vector<io::UnknownRelationship>, Error> LoadSheetRelationships(con
     return status.error();
   }
   return out;
+}
+
+/// Resolves the relationship ids carried by model-owned BrtHLink records.
+/// Only relationships actually consumed by a hyperlink are removed from the
+/// sheet's unknown relationship list; unrelated drawing/table/custom rels,
+/// including unused hyperlink rels, remain available to the writer.
+Expected<void, Error> ResolveSheetHyperlinks(Sheet& sheet, std::vector<io::UnknownRelationship>& relationships) {
+  std::unordered_set<std::string> consumed;
+  for (Hyperlink& hyperlink : sheet.mutable_hyperlinks()) {
+    if (hyperlink.rid.empty()) {
+      // A present-but-empty RelID is the internal target form. Its location
+      // string carries the destination and no relationship is consumed.
+      continue;
+    }
+    const io::UnknownRelationship* matched = nullptr;
+    for (const io::UnknownRelationship& relationship : relationships) {
+      if (relationship.id != hyperlink.rid) {
+        continue;
+      }
+      if (matched != nullptr) {
+        return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink relationship id is duplicated",
+                          "context=xlsb_reader rid=" + hyperlink.rid);
+      }
+      matched = &relationship;
+    }
+    if (matched == nullptr || matched->type != kRelHyperlink || !matched->target_external || matched->target.empty()) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
+                        matched == nullptr ? "xlsb BrtHLink relationship id is dangling"
+                                           : "xlsb BrtHLink relationship has wrong type or target mode",
+                        "context=xlsb_reader rid=" + hyperlink.rid);
+    }
+    hyperlink.target = matched->target;
+    consumed.insert(hyperlink.rid);
+  }
+  if (!consumed.empty()) {
+    relationships.erase(std::remove_if(relationships.begin(), relationships.end(),
+                                       [&consumed](const io::UnknownRelationship& relationship) {
+                                         return consumed.count(relationship.id) != 0U;
+                                       }),
+                        relationships.end());
+  }
+  return Expected<void, Error>::Ok();
 }
 
 /// Column + style-table index decoded by `ReadCellHeader`.
@@ -891,18 +1048,39 @@ Expected<void, Error> ApplyXfIndex(Workbook& wb, std::size_t sheet_index, std::u
 /// been decoded -- see the `BrtArrFmla` case's comment in
 /// `DecodeSheetBin` for why registering inline (while later rows in the
 /// footprint have not been decoded yet) does not work.
-void RegisterArraySpills(Workbook& wb, std::size_t sheet_index, const std::vector<ArrayAnchor>& anchors) {
+Expected<void, Error> RegisterArraySpills(Workbook& wb, std::size_t sheet_index,
+                                          const std::vector<ArrayAnchor>& anchors) {
+  // Validate and charge every footprint before the first reserve or cell
+  // walk. Keep the budget local to this decoded sheet so independent sheets
+  // cannot consume one another's dynamic-array allowance.
+  ResourceBudget budget(kMaxDynamicArrayCells, FormulonErrorCode::kIoXlsbRecordCorrupt);
   for (const ArrayAnchor& a : anchors) {
-    // Reversed rects are rejected at decode time (`BrtArrFmla` case in
-    // `DecodeSheetBin`); guard again here so the size math below can
-    // never underflow-wrap.
-    if (a.last_row < a.row || a.last_col < a.col) {
-      continue;
+    auto cells_or =
+        checked_array_anchor_cells(a.row, a.col, a.last_row, a.last_col, FormulonErrorCode::kIoXlsbRecordCorrupt,
+                                   "context=xlsb_reader array_anchor");
+    if (!cells_or) {
+      return cells_or.error();
     }
+    std::string context("context=xlsb_reader format=xlsb anchor_row=");
+    context.append(std::to_string(a.row));
+    context.append(" anchor_col=");
+    context.append(std::to_string(a.col));
+    context.append(" last_row=");
+    context.append(std::to_string(a.last_row));
+    context.append(" last_col=");
+    context.append(std::to_string(a.last_col));
+    auto charged = consume_array_anchor_budget(budget, cells_or.value(), std::move(context));
+    if (!charged) {
+      return charged.error();
+    }
+  }
+
+  for (const ArrayAnchor& a : anchors) {
     const std::uint32_t rows = a.last_row - a.row + 1U;
     const std::uint32_t cols = a.last_col - a.col + 1U;
+    const std::uint64_t cell_count = static_cast<std::uint64_t>(rows) * cols;
     std::vector<Value> values;
-    values.reserve(static_cast<std::size_t>(rows) * cols);
+    values.reserve(static_cast<std::size_t>(cell_count));
     for (std::uint32_t r = a.row; r <= a.last_row; ++r) {
       for (std::uint32_t c = a.col; c <= a.last_col; ++c) {
         const Cell* cell = wb.sheet(sheet_index).cell_at(r, c);
@@ -919,6 +1097,7 @@ void RegisterArraySpills(Workbook& wb, std::size_t sheet_index, const std::vecto
     }
     wb.sheet(sheet_index).commit_spill(a.row, a.col, rows, cols, std::move(values));
   }
+  return Expected<void, Error>::Ok();
 }
 
 /// Decodes one sheet binary part. Cells (literal + formula) flow into
@@ -942,6 +1121,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
     }
     const XlsbRecord& rec = rec_or.value();
     const auto type = static_cast<XlsbRecordType>(rec.type);
+    if (type == XlsbRecordType::BrtHLink) {
+      state.hyperlinks_seen = true;
+    }
     // Retain worksheet-tail records before dispatching: the tail carries the
     // sheet-level features the model does not express, and the sheet part is
     // consumed whole so package passthrough cannot rescue them.
@@ -1110,6 +1292,77 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
             .mutable_merges()
             .push_back(
                 MergeRange{first_row_or.value(), first_col_or.value(), last_row_or.value(), last_col_or.value()});
+        break;
+      }
+      case XlsbRecordType::BrtHLink: {
+        // BrtHLink ([MS-XLSB] §2.4.494): RfX followed by a non-null
+        // relationship id and three XLWideStrings (location, tooltip,
+        // display). A present-but-empty relationship id is the internal
+        // hyperlink form; external links must resolve that id through the
+        // sheet relationship part after the record stream is decoded.
+        ByteSpan p = rec.payload;
+        auto first_row_or = read_u32(p);
+        auto last_row_or = read_u32(p);
+        auto first_col_or = read_u32(p);
+        auto last_col_or = read_u32(p);
+        if (!first_row_or || !last_row_or || !first_col_or || !last_col_or) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink range truncated",
+                            "context=xlsb_reader");
+        }
+        if (!Sheet::rect_in_grid(first_row_or.value(), first_col_or.value(), last_row_or.value(),
+                                 last_col_or.value())) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink range out of bounds",
+                            "context=xlsb_reader");
+        }
+        // `read_xlnullablewidestring` intentionally maps both a null value
+        // and a present empty value to `""`; inspect the sentinel first so a
+        // null RelID cannot be mistaken for the required internal form.
+        if (p.size < 4U) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtHLink relationship id truncated",
+                            "context=xlsb_reader");
+        }
+        const std::uint32_t rel_len =
+            static_cast<std::uint32_t>(p.data[0]) | (static_cast<std::uint32_t>(p.data[1]) << 8U) |
+            (static_cast<std::uint32_t>(p.data[2]) << 16U) | (static_cast<std::uint32_t>(p.data[3]) << 24U);
+        if (rel_len == 0xFFFFFFFFU) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink relationship id is null",
+                            "context=xlsb_reader");
+        }
+        if (rel_len > kMaxHyperlinkRelIdUnits) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
+                            "xlsb BrtHLink relationship id exceeds string limit",
+                            "context=xlsb_reader cch=" + std::to_string(rel_len));
+        }
+        auto rid_or = read_xlnullablewidestring(p);
+        if (!rid_or) {
+          return rid_or.error();
+        }
+        auto location_or = ReadHyperlinkWideString(p, "location", kMaxHyperlinkLocationUnits);
+        if (!location_or) {
+          return location_or.error();
+        }
+        auto tooltip_or = ReadHyperlinkWideString(p, "tooltip", kMaxHyperlinkTooltipUnits);
+        if (!tooltip_or) {
+          return tooltip_or.error();
+        }
+        auto display_or = ReadHyperlinkWideString(p, "display", kMaxHyperlinkDisplayUnits);
+        if (!display_or) {
+          return display_or.error();
+        }
+        if (p.size != 0U) {
+          return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink has trailing bytes",
+                            "context=xlsb_reader trailing=" + std::to_string(p.size));
+        }
+        Hyperlink hyperlink;
+        hyperlink.row = first_row_or.value();
+        hyperlink.col = first_col_or.value();
+        hyperlink.last_row = last_row_or.value();
+        hyperlink.last_col = last_col_or.value();
+        hyperlink.rid = std::move(rid_or.value());
+        hyperlink.location = std::move(location_or.value());
+        hyperlink.tooltip = std::move(tooltip_or.value());
+        hyperlink.display = std::move(display_or.value());
+        wb.sheet(sheet_index).mutable_hyperlinks().push_back(std::move(hyperlink));
         break;
       }
       case XlsbRecordType::BrtCellBlank: {
@@ -1507,7 +1760,10 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         break;
     }
   }
-  RegisterArraySpills(wb, sheet_index, state.array_anchors);
+  auto spills = RegisterArraySpills(wb, sheet_index, state.array_anchors);
+  if (!spills) {
+    return spills.error();
+  }
   if (!state.tail.empty()) {
     wb.sheet(sheet_index).set_xlsb_tail(state.tail);
   }
@@ -1726,8 +1982,19 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       if (!rels_or) {
         return rels_or.error();
       }
-      wb.sheet(i).set_unknown_relationships(std::move(rels_or.value()));
+      auto relationships = std::move(rels_or.value());
+      auto hyperlinks = ResolveSheetHyperlinks(wb.sheet(i), relationships);
+      if (!hyperlinks) {
+        return hyperlinks.error();
+      }
+      wb.sheet(i).set_unknown_relationships(std::move(relationships));
       consumed_parts.insert(sheet_rels_path);
+    } else {
+      std::vector<io::UnknownRelationship> no_relationships;
+      auto hyperlinks = ResolveSheetHyperlinks(wb.sheet(i), no_relationships);
+      if (!hyperlinks) {
+        return hyperlinks.error();
+      }
     }
   }
 

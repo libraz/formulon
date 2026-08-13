@@ -163,6 +163,7 @@ set(FORMULON_CORE_SOURCES
   src/io/zip_reader.cpp
   src/io/xlsb/cell_writer.cpp
   src/io/xlsb/func_id_table.cpp
+  src/io/xlsb/metadata_bin.cpp
   src/io/xlsb/ptg.cpp
   src/io/xlsb/ptg_reader.cpp
   src/io/xlsb/ptg_writer.cpp
@@ -207,12 +208,14 @@ set(FORMULON_CORE_SOURCES
   src/eval/dep_extractor.cpp
   src/eval/defined_name_resolve.cpp
   src/eval/dirty_set.cpp
+  src/eval/range_dep_index.cpp
   src/eval/iterative_solver.cpp
   src/eval/recalc_engine.cpp
   src/eval/cell_evaluator.cpp
   src/eval/adhoc_eval.cpp
   src/eval/scheduler.cpp
   src/eval/spill_release.cpp
+  src/eval/spill_potential.cpp
   src/eval/volatile_tracker.cpp
   src/eval/function_registry.cpp
   src/eval/special_forms_catalog.cpp

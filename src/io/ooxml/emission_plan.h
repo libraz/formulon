@@ -10,6 +10,7 @@
 #ifndef FORMULON_IO_OOXML_EMISSION_PLAN_H_
 #define FORMULON_IO_OOXML_EMISSION_PLAN_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -30,6 +31,39 @@ namespace io {
 struct PassthroughPart;
 struct TableMetadata;
 struct ExternalLinkRecord;
+
+/// Result of building a single per-sheet `_rels` file: the serialised
+/// XML alongside the rId strings the writer assigned to each
+/// rId-bearing feature in document order. The orchestrator threads
+/// these back into the worksheet body so its `r:id` references always
+/// name a relationship that actually exists in this same result's
+/// `xml`. Defined here (rather than alongside `BuildSheetRels` in
+/// `sheet_xml_builder.h`) so `EmissionPlan` can hold one precomputed
+/// instance per sheet and every consumer reads that single build
+/// instead of re-deriving it.
+struct SheetRelsResult {
+  std::string xml;
+  // Number of `<Relationship>` elements actually written into `xml`.
+  // An empty rels file is invalid OOXML (Excel repairs it away), so
+  // callers gate the `_rels/sheetN.xml.rels` part on this being > 0
+  // instead of re-deriving their own "does this sheet have rels"
+  // predicate from the sheet's feature flags.
+  std::size_t relationship_count = 0;
+  // rId assigned to each entry of the sheet's `sheet_tables` list, in
+  // the same order, so `<tablePart r:id>` always names the id this
+  // rels file actually declared for that table -- independent of
+  // whatever other relationship types occupy lower-numbered ids.
+  std::vector<std::string> table_rids;
+  std::vector<std::string> hyperlink_rids;
+  std::string printer_settings_rid;
+  // rId minted for the sheet's DrawingML relationship, or empty when the
+  // sheet anchors no drawing. Threaded back into the worksheet body so
+  // its `<drawing r:id>` element matches the rels entry.
+  std::string drawing_rid;
+  // rId minted for the comments' legacy VML drawing, or empty when the
+  // sheet has no comments.
+  std::string legacy_drawing_rid;
+};
 
 /// Plan we build up before any miniz call: which sheets own which
 /// table parts, what filename each table uses, what passthrough parts
@@ -113,6 +147,11 @@ struct EmissionPlan {
   // generated path are dropped here (with a warning) so downstream
   // emission can blindly write everything in the list.
   std::vector<const PassthroughPart*> passthrough_kept;
+  // Per-sheet rels build, indexed by sheet index (opaque sheets carry a
+  // default-constructed, unused entry). Built once here so the writer
+  // and the collision-detection pass below both consult the exact same
+  // result instead of separately re-deriving whether a sheet has rels.
+  std::vector<SheetRelsResult> sheet_rels;
 };
 
 /// Builds the emission plan. Performs collision detection between

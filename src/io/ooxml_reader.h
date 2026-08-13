@@ -112,10 +112,12 @@ struct OoxmlReadResult {
 ///     round-trip but not yet wired into evaluation.
 ///
 /// Returns `FormulonErrorCode::kIoZipCorrupt` for archive-level failures,
-/// `kIoXmlParse` for malformed XML, and `kIoRelationshipBroken` /
-/// `kIoContentTypeInvalid` when required relationships or content types
-/// are missing. `kIoSheetCorrupt` surfaces for an empty sheet list, a
-/// malformed `<c>` element, or an unresolved shared-formula reference.
+/// `kIoFileTooLarge` when cumulative decompression exceeds the per-open
+/// 256 MiB budget, `kIoXmlParse` for malformed XML, and
+/// `kIoRelationshipBroken` / `kIoContentTypeInvalid` when required
+/// relationships or content types are missing. `kIoSheetCorrupt` surfaces
+/// for an empty sheet list, a malformed `<c>` element, or an unresolved
+/// shared-formula reference.
 Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes);
 
 namespace internal {

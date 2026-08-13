@@ -25,30 +25,16 @@ class Sheet;
 namespace io {
 class SharedStrings;
 
-/// Result of building a single per-sheet `_rels` file: the serialised
-/// XML alongside the rId strings (`"rIdN"`) the writer assigned to each
-/// hyperlink in document order. The orchestrator threads the rId vector
-/// into the sheet part's `<hyperlinks>` block so the two stay in sync.
-struct SheetRelsResult {
-  std::string xml;
-  std::vector<std::string> hyperlink_rids;
-  std::string printer_settings_rid;
-  // rId minted for the sheet's DrawingML relationship, or empty when the
-  // sheet anchors no drawing. Threaded back into the worksheet body so
-  // its `<drawing r:id>` element matches the rels entry.
-  std::string drawing_rid;
-  // rId minted for the comments' legacy VML drawing, or empty when the
-  // sheet has no comments.
-  std::string legacy_drawing_rid;
-};
-
 /// Builds the worksheet part body (`xl/worksheets/sheetN.xml`) for a
 /// single sheet. `sheet_tables` is the planner-assigned table list owned
-/// by this sheet; `hyperlink_rids` carries the per-hyperlink rId strings
-/// minted by the matching `BuildSheetRels` call; `printer_settings_rid`
-/// is the rId of the printer-settings rel (empty when the sheet has no
-/// printer settings).
+/// by this sheet; `table_rids` carries the per-table rId strings minted
+/// by the matching `BuildSheetRels` call, index-aligned with
+/// `sheet_tables` so every `<tablePart r:id>` names the id that rels
+/// file actually declared; `hyperlink_rids` carries the per-hyperlink
+/// rId strings the same way; `printer_settings_rid` is the rId of the
+/// printer-settings rel (empty when the sheet has no printer settings).
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
+                              const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings);

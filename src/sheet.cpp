@@ -370,6 +370,75 @@ std::size_t Sheet::cell_count() const noexcept {
   return total;
 }
 
+std::optional<Sheet::PopulatedExtent> Sheet::populated_extent(std::uint32_t first_row, std::uint32_t first_col,
+                                                              std::uint32_t last_row,
+                                                              std::uint32_t last_col) const noexcept {
+  if (!rect_in_grid(first_row, first_col, last_row, last_col)) {
+    return std::nullopt;
+  }
+
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  PopulatedExtent extent;
+  bool any = false;
+  const auto include = [&](std::uint32_t row, std::uint32_t col) {
+    if (!any) {
+      extent.first_row = extent.last_row = row;
+      extent.first_col = extent.last_col = col;
+      any = true;
+      return;
+    }
+    extent.first_row = std::min(extent.first_row, row);
+    extent.first_col = std::min(extent.first_col, col);
+    extent.last_row = std::max(extent.last_row, row);
+    extent.last_col = std::max(extent.last_col, col);
+  };
+
+  // RowCells stores an absolute-origin run. Restrict the scan to the run's
+  // materialised interval and inspect only non-blank/formula slots; leading
+  // gaps are not represented and default-constructed slots are not content.
+  for (const auto& [row, cells] : rows_) {
+    if (row < first_row || row > last_row || cells.empty()) {
+      continue;
+    }
+    const std::size_t begin = std::max<std::size_t>(first_col, cells.first_col());
+    const std::size_t end = std::min<std::size_t>(static_cast<std::size_t>(last_col) + 1U, cells.size());
+    if (begin >= end) {
+      continue;
+    }
+    for (std::size_t col = begin; col < end; ++col) {
+      const Cell& cell = cells[col];
+      if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
+        include(row, static_cast<std::uint32_t>(col));
+      }
+    }
+  }
+
+  // A committed spill is represented by one rectangle, so fold its clipped
+  // intersection into the result without walking its phantom payload.
+  if (spill_table_ != nullptr) {
+    for (const auto& [unused, region] : spill_table_->by_anchor) {
+      (void)unused;
+      const std::uint64_t region_last_row = static_cast<std::uint64_t>(region.anchor_row) + region.rows - 1U;
+      const std::uint64_t region_last_col = static_cast<std::uint64_t>(region.anchor_col) + region.cols - 1U;
+      if (region.anchor_row > last_row || region.anchor_col > last_col || region_last_row < first_row ||
+          region_last_col < first_col) {
+        continue;
+      }
+      const std::uint32_t clipped_first_row = std::max(first_row, region.anchor_row);
+      const std::uint32_t clipped_first_col = std::max(first_col, region.anchor_col);
+      const std::uint32_t clipped_last_row = std::min(last_row, static_cast<std::uint32_t>(region_last_row));
+      const std::uint32_t clipped_last_col = std::min(last_col, static_cast<std::uint32_t>(region_last_col));
+      include(clipped_first_row, clipped_first_col);
+      include(clipped_last_row, clipped_last_col);
+    }
+  }
+
+  if (!any) {
+    return std::nullopt;
+  }
+  return extent;
+}
+
 std::vector<CellAddress> Sheet::spill_phantom_addresses() const {
   std::vector<CellAddress> out;
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
@@ -486,6 +555,20 @@ std::optional<BlockedSpillFootprint> Sheet::committed_spill_footprint_covering(s
     return BlockedSpillFootprint{region.anchor_row, region.anchor_col, region.rows, region.cols};
   }
   return std::nullopt;
+}
+
+std::vector<SpillFootprint> Sheet::committed_spill_footprints() const {
+  std::vector<SpillFootprint> out;
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  if (spill_table_ == nullptr) {
+    return out;
+  }
+  out.reserve(spill_table_->by_anchor.size());
+  for (const auto& [unused, region] : spill_table_->by_anchor) {
+    (void)unused;
+    out.push_back(SpillFootprint{region.anchor_row, region.anchor_col, region.rows, region.cols});
+  }
+  return out;
 }
 
 void Sheet::restore_blocked_spill_footprints(std::vector<BlockedSpillFootprint> footprints) {
@@ -967,6 +1050,34 @@ void ShiftRangeList(std::vector<MergeRange>& ranges, std::uint32_t index, std::u
   ranges = std::move(retained);
 }
 
+// Hyperlinks use the same inclusive rectangle semantics as merge ranges.
+// Keeping this conversion next to ShiftRangeList is intentional: row/column
+// insertions and deletions must apply the exact same shift, shrink, clamp and
+// drop rules to both metadata shapes.
+void ShiftHyperlinkList(std::vector<Hyperlink>& hyperlinks, std::uint32_t index, std::uint32_t count, bool is_delete,
+                        bool row_axis) {
+  std::vector<Hyperlink> retained;
+  retained.reserve(hyperlinks.size());
+  for (Hyperlink& hyperlink : hyperlinks) {
+    MergeRange range{hyperlink.row, hyperlink.col, hyperlink.last_row, hyperlink.last_col};
+    bool drop = false;
+    if (row_axis) {
+      ShiftRowRange(range, index, count, is_delete, &drop);
+    } else {
+      ShiftColRange(range, index, count, is_delete, &drop);
+    }
+    if (drop) {
+      continue;
+    }
+    hyperlink.row = range.first_row;
+    hyperlink.col = range.first_col;
+    hyperlink.last_row = range.last_row;
+    hyperlink.last_col = range.last_col;
+    retained.push_back(std::move(hyperlink));
+  }
+  hyperlinks = std::move(retained);
+}
+
 void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, std::uint32_t index, std::uint32_t count,
                              bool is_delete, bool row_axis) {
   std::vector<cf::ConditionalFormat> retained_formats;
@@ -1077,10 +1188,10 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   const bool is_delete = edit.is_delete;
   const bool row_axis = edit.row_axis;
   if (row_axis) {
-    ShiftRowAnchored(hyperlinks_, index, count, is_delete);
+    ShiftHyperlinkList(hyperlinks_, index, count, is_delete, /*row_axis=*/true);
     ShiftRowAnchored(comments_, index, count, is_delete);
   } else {
-    ShiftColAnchored(hyperlinks_, index, count, is_delete);
+    ShiftHyperlinkList(hyperlinks_, index, count, is_delete, /*row_axis=*/false);
     ShiftColAnchored(comments_, index, count, is_delete);
   }
   ShiftRangeList(merges_, index, count, is_delete, row_axis);

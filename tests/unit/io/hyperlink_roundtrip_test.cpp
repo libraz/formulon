@@ -90,10 +90,11 @@ TEST(HyperlinkRoundTrip, RangeRefAccepted) {
   ASSERT_TRUE(static_cast<bool>(out)) << out.error().message;
   ASSERT_EQ(out.value().size(), 1U);
   const Hyperlink& h = out.value().front();
-  // Anchor is the range's top-left; the full span is preserved verbatim.
+  // Both corners are decoded into the numeric model rectangle.
   EXPECT_EQ(h.row, 0U);
   EXPECT_EQ(h.col, 0U);
-  EXPECT_EQ(h.ref_span, "A1:B2");
+  EXPECT_EQ(h.last_row, 1U);
+  EXPECT_EQ(h.last_col, 1U);
   EXPECT_EQ(h.location, "Sheet2!A1");
 }
 

@@ -53,7 +53,9 @@ struct MergeRange {
   std::uint32_t last_col = 0;
 };
 
-/// One `<hyperlink>` entry attached to a sheet. The OOXML wire form is
+/// One `<hyperlink>` entry attached to a sheet. The numeric rectangle is the
+/// sole source of truth; the OOXML writer regenerates its `ref` attribute from
+/// these four 0-based inclusive endpoints. The OOXML wire form is
 ///
 ///     <hyperlink ref="A1" r:id="rId3" tooltip="..." display="..."/>
 ///
@@ -71,16 +73,13 @@ struct MergeRange {
 struct Hyperlink {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
+  std::uint32_t last_row = 0;
+  std::uint32_t last_col = 0;
   std::string target;    ///< External URL / mailto / file path. Empty for purely internal links.
   std::string location;  ///< `Sheet2!A1` style internal target, or empty.
   std::string display;   ///< Optional `display="..."` attribute.
   std::string tooltip;   ///< Optional `tooltip="..."` attribute.
   std::string rid;       ///< Reader populates from sheet rels; empty for fresh entries.
-  /// Original multi-cell `ref` when the hyperlink covers a range (e.g.
-  /// `"A1:B2"`). Empty for the common single-cell case, in which the
-  /// writer emits `ref` from `row` / `col`. When non-empty it is emitted
-  /// verbatim and `row` / `col` hold the range's top-left anchor.
-  std::string ref_span;
 };
 
 /// One per-cell text comment (`<comment ref="A1" authorId="N"><text>...</text></comment>`).
@@ -155,16 +154,18 @@ struct SpillRegion {
   std::vector<std::string> owned_strings;
 };
 
-/// The shape a dynamic-array formula tried to occupy when its spill was
-/// blocked.  Unlike `SpillRegion`, this stores no values: it is only a
-/// reverse index used to wake the anchor when a blocker is removed or moved.
-/// The entry is keyed by `(anchor_row, anchor_col)` in `SpillTable`.
-struct BlockedSpillFootprint {
+/// The geometry of a dynamic-array spill footprint. It stores no values and
+/// is safe to copy while the sheet spill mutex is held. The same value type
+/// is used for committed and blocked spill snapshots.
+struct SpillFootprint {
   std::uint32_t anchor_row = 0;
   std::uint32_t anchor_col = 0;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
 };
+
+/// Backwards-compatible name for the blocked-spill reverse-index record.
+using BlockedSpillFootprint = SpillFootprint;
 
 /// Per-sheet view state (zoom, frozen panes, tab visibility).
 ///
@@ -436,10 +437,11 @@ struct WorksheetRawExtensions {
 /// record stream the reader consumes whole, so neither mechanism reaches it.
 /// Retaining the framed record bytes is the binary equivalent.
 ///
-/// The two buffers bracket the merged-cell block, which is the only tail
-/// construct the model owns and re-emits itself; keeping the split preserves
-/// the source stream's record order without the writer having to know the
-/// worksheet grammar.
+/// The three buffers represent the grammar slots before merges, after merges
+/// and before hyperlinks, and after hyperlinks. The merge and hyperlink
+/// blocks are the only tail constructs the model owns and re-emits itself;
+/// keeping these slots preserves source order even when a source omits one of
+/// those blocks.
 ///
 /// Retention is byte-verbatim, with the same consequences the raw-XML
 /// retention already carries: a row/column edit does not remap coordinates
@@ -449,10 +451,16 @@ struct WorksheetRawExtensions {
 struct XlsbSheetTail {
   /// Records between the end of the cell table and the merged-cell block.
   std::vector<std::uint8_t> before_merges;
-  /// Records after the merged-cell block, up to the end of the sheet.
-  std::vector<std::uint8_t> after_merges;
+  /// Records after the merged-cell block and before the model-owned
+  /// `BrtHLink` block. Raw `BrtHLink` records are decoded into
+  /// `Sheet::hyperlinks()` and are never retained here.
+  std::vector<std::uint8_t> after_merges_before_hyperlinks;
+  /// Records after the model-owned `BrtHLink` block, up to `BrtEndSheet`.
+  std::vector<std::uint8_t> after_hyperlinks;
 
-  bool empty() const noexcept { return before_merges.empty() && after_merges.empty(); }
+  bool empty() const noexcept {
+    return before_merges.empty() && after_merges_before_hyperlinks.empty() && after_hyperlinks.empty();
+  }
 };
 
 /// Hash for `CellAddress` suitable for `std::unordered_map`.
@@ -563,6 +571,16 @@ class Sheet {
   /// Excel 365 maximum column count (columns are addressable as
   /// 0..kMaxCols-1, mapping to A..XFD).
   static constexpr std::uint32_t kMaxCols = 16384U;
+
+  /// Inclusive bounding box of populated coordinates returned by
+  /// `populated_extent`. The fields are copies; no sheet storage is exposed
+  /// and the sheet lock may be released before the caller consumes them.
+  struct PopulatedExtent {
+    std::uint32_t first_row = 0;
+    std::uint32_t first_col = 0;
+    std::uint32_t last_row = 0;
+    std::uint32_t last_col = 0;
+  };
 
   /// True when `(row, col)` addresses a cell inside the Excel grid.
   /// The single predicate every public coordinate entry point (C ABI
@@ -754,6 +772,20 @@ class Sheet {
   /// and as a coarse memory-footprint indicator.
   std::size_t cell_count() const noexcept;
 
+  /// Returns the inclusive bounding box of every populated coordinate that
+  /// intersects `[first_row..last_row] x [first_col..last_col]`, or
+  /// `std::nullopt` when the query is invalid, empty, or contains no content.
+  ///
+  /// A stored coordinate is populated when its cell has formula text or a
+  /// non-blank cached value. A committed dynamic-array spill contributes its
+  /// whole rectangle (clipped to the query), without enumerating phantom
+  /// cells. Blocked spill footprints are intentionally not included. The
+  /// complete read takes `spill_mutex_` once, so the returned copy is an
+  /// atomic snapshot relative to cell and spill mutations; no row, cell, or
+  /// spill-table references escape the lock.
+  std::optional<PopulatedExtent> populated_extent(std::uint32_t first_row, std::uint32_t first_col,
+                                                  std::uint32_t last_row, std::uint32_t last_col) const noexcept;
+
   /// Monotonically changes whenever the flat stored-cell / spill-phantom
   /// address set changes. C-ABI iteration uses it to invalidate its
   /// per-handle sorted-address cache after any sheet mutation.
@@ -837,6 +869,11 @@ class Sheet {
   /// The anchor itself is included, unlike `spill_region_covering`, because
   /// mutation callers need the complete rectangle before they clear it.
   std::optional<BlockedSpillFootprint> committed_spill_footprint_covering(std::uint32_t row, std::uint32_t col) const;
+
+  /// Returns copies of every currently committed spill rectangle. The sheet
+  /// spill mutex is held exactly once for the snapshot and no references to
+  /// the spill table escape. Blocked footprints are intentionally excluded.
+  std::vector<SpillFootprint> committed_spill_footprints() const;
 
   /// Restores blocked-footprint records at their already-mapped coordinates.
   /// Invalid/degenerate records are ignored.  Intended for the workbook's

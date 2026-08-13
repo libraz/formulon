@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "miniz.h"
@@ -59,12 +60,22 @@ class ZipWriterGuard {
 
 /// Adds a single text part to the archive. Returns an `Error` tagged
 /// with the part path when miniz refuses the write.
-Expected<void, Error> AddPart(mz_zip_archive* archive, std::string_view path, const std::string& body);
+///
+/// `seen_paths`, when non-null, is both consulted and updated: a path
+/// already present is refused with an `Error` instead of silently
+/// producing a duplicate zip entry (which reader implementations
+/// resolve inconsistently). Callers that want this guard own the set's
+/// lifetime across a single archive's worth of `AddPart` /
+/// `AddPartBytes` calls; passing `nullptr` (the default) skips the
+/// check, which existing callers that have not opted in still rely on.
+Expected<void, Error> AddPart(mz_zip_archive* archive, std::string_view path, const std::string& body,
+                              std::unordered_set<std::string>* seen_paths = nullptr);
 
 /// Adds a binary part — a passthrough blob, or an XLSB record stream.
-/// Same error contract as `AddPart`.
+/// Same error contract and `seen_paths` behaviour as `AddPart`.
 Expected<void, Error> AddPartBytes(mz_zip_archive* archive, std::string_view path,
-                                   const std::vector<std::uint8_t>& body);
+                                   const std::vector<std::uint8_t>& body,
+                                   std::unordered_set<std::string>* seen_paths = nullptr);
 
 }  // namespace io
 }  // namespace formulon

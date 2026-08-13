@@ -41,6 +41,13 @@ struct ByteSpan {
 /// DoS during `read_entry`.
 inline constexpr std::size_t kMaxExtractedBytesPerEntry = 100ULL * 1024ULL * 1024ULL;
 
+/// Hard cap on the cumulative uncompressed bytes charged to one successful
+/// `ZipReader::open()` session. The charge is made for every `read_entry()`
+/// attempt before its destination buffer is allocated, including rereads and
+/// attempts whose extraction later fails. Reopening the reader starts a new
+/// session and resets the budget.
+inline constexpr std::size_t kMaxTotalExtractedBytes = 256ULL * 1024ULL * 1024ULL;
+
 /// Hard cap on the number of entries in a ZIP. OOXML packages emitted by
 /// Excel rarely exceed a few hundred parts even with many sheets, drawings
 /// and embedded media; 2048 leaves plenty of headroom while preventing a
@@ -50,9 +57,10 @@ inline constexpr std::size_t kMaxParts = 2048;
 
 /// Hard cap on the per-entry uncompressed-to-compressed ratio. A ratio of
 /// 1024 is several orders of magnitude above what real OOXML payloads
-/// achieve (XML compresses ~10:1, image/binary parts ~1:1) but rules out
-/// 99999:1 zero-fill bombs that pass the per-entry size cap by being
-/// individually small but collectively catastrophic.
+/// achieve (XML compresses ~10:1, image/binary parts ~1:1) but rejects a
+/// single low-entropy entry whose compressed bytes are disproportionately
+/// small. The independent cumulative-session cap covers aggregate extraction
+/// volume.
 inline constexpr std::size_t kMaxRatio = 1024;
 
 /// Read-only accessor for a ZIP archive backed by an in-memory buffer.
@@ -100,11 +108,13 @@ class ZipReader {
   bool has_entry(std::string_view name) const noexcept;
 
   /// Reads the entire decompressed contents of `name` into a freshly
-  /// allocated buffer. Returns `kIoFileNotFound` when the entry is
-  /// absent, `kIoZipEncrypted` for an encrypted entry, and
-  /// `kIoZipCorrupt` on other miniz extraction failures (e.g. stored
-  /// size disagrees with central directory). The returned buffer is
-  /// independent of the underlying ZIP bytes.
+  /// allocated buffer. Returns `kIoFileNotFound` when the entry is absent,
+  /// `kIoZipEncrypted` for an encrypted entry, `kIoZipBomb` for the
+  /// per-entry/ratio policy, and `kIoFileTooLarge` when this open session's
+  /// cumulative budget would be exceeded. Returns `kIoZipCorrupt` on other
+  /// miniz extraction failures (e.g. stored size disagrees with central
+  /// directory). The returned buffer is independent of the underlying ZIP
+  /// bytes.
   Expected<std::vector<std::uint8_t>, Error> read_entry(std::string_view name) const;
 
   /// Returns every entry name in archive order. Convenience wrapper

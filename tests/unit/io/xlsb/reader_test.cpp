@@ -6,6 +6,7 @@
 
 #include "io/xlsb/reader.h"
 
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -245,6 +246,7 @@ std::vector<std::uint8_t> SheetBinReal(double cell_value, std::uint32_t row = 0,
 /// CellParsedFormula rgce is `rgce` (cb = 0).
 std::vector<std::uint8_t> SheetBinArrFmla(std::uint32_t rw_first, std::uint32_t rw_last, std::uint32_t col_first,
                                           std::uint32_t col_last, const std::vector<std::uint8_t>& rgce) {
+  const std::vector<std::array<std::uint32_t, 4>> rects = {{{rw_first, rw_last, col_first, col_last}}};
   std::vector<std::uint8_t> body;
   AppendRecord(body, 129, {});  // BrtBeginSheet
   AppendRecord(body, 145, {});  // BrtBeginSheetData
@@ -255,14 +257,44 @@ std::vector<std::uint8_t> SheetBinArrFmla(std::uint32_t rw_first, std::uint32_t 
     AppendRecord(body, 0, p);  // BrtRowHdr
   }
 
-  // BrtArrFmla (426): RfX (4 x u32) + reserved byte + cce (u32) + rgce
-  // + cb (u32).
+  for (const std::array<std::uint32_t, 4>& rect : rects) {
+    std::vector<std::uint8_t> p;
+    AppendU32(p, rect[0]);
+    AppendU32(p, rect[1]);
+    AppendU32(p, rect[2]);
+    AppendU32(p, rect[3]);
+    AppendU8(p, 0);  // reserved/flag
+    AppendU32(p, static_cast<std::uint32_t>(rgce.size()));
+    p.insert(p.end(), rgce.begin(), rgce.end());
+    AppendU32(p, 0);  // cb
+    AppendRecord(body, 426, p);
+  }
+
+  AppendRecord(body, 146, {});  // BrtEndSheetData
+  AppendRecord(body, 130, {});  // BrtEndSheet
+  return body;
+}
+
+std::vector<std::uint8_t> SheetBinArrFmlas(const std::vector<std::array<std::uint32_t, 4>>& rects,
+                                           const std::vector<std::uint8_t>& rgce) {
+  std::vector<std::uint8_t> body;
+  AppendRecord(body, 129, {});  // BrtBeginSheet
+  AppendRecord(body, 145, {});  // BrtBeginSheetData
+
   {
     std::vector<std::uint8_t> p;
-    AppendU32(p, rw_first);
-    AppendU32(p, rw_last);
-    AppendU32(p, col_first);
-    AppendU32(p, col_last);
+    AppendU32(p, rects.front()[0]);
+    AppendRecord(body, 0, p);  // BrtRowHdr
+  }
+
+  for (const std::array<std::uint32_t, 4>& rect : rects) {
+    // BrtArrFmla (426): RfX (4 x u32) + reserved byte + cce (u32) + rgce
+    // + cb (u32).
+    std::vector<std::uint8_t> p;
+    AppendU32(p, rect[0]);
+    AppendU32(p, rect[1]);
+    AppendU32(p, rect[2]);
+    AppendU32(p, rect[3]);
     AppendU8(p, 0);  // reserved/flag
     AppendU32(p, static_cast<std::uint32_t>(rgce.size()));
     p.insert(p.end(), rgce.begin(), rgce.end());
@@ -637,6 +669,47 @@ TEST(XlsbReader, InBoundsArrayFormulaRectStillDecodes) {
   const Cell* c = result.value().workbook.sheet(0).cell_at(0, 0);
   ASSERT_NE(c, nullptr);
   EXPECT_EQ(c->formula_text, "=5");
+}
+
+TEST(XlsbReader, RejectsFullGridArrayFormulaBeforeSpillWalk) {
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};  // PtgInt 5
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back(
+      {"xl/worksheets/sheet1.bin", SheetBinArrFmla(/*rw_first=*/0, /*rw_last=*/Sheet::kMaxRows - 1U, /*col_first=*/0,
+                                                   /*col_last=*/Sheet::kMaxCols - 1U, rgce)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
+TEST(XlsbReader, RejectsCumulativeArrayFormulasOverSheetBudget) {
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};  // PtgInt 5
+  const std::vector<std::array<std::uint32_t, 4>> rects = {
+      {0U, 599999U, 0U, 0U},
+      {0U, 599999U, 1U, 1U},
+  };
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinArrFmlas(rects, rgce)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+  EXPECT_NE(result.error().context.find("format=xlsb"), std::string::npos);
+  EXPECT_NE(result.error().context.find("anchor_row=0 anchor_col=1"), std::string::npos);
+  EXPECT_NE(result.error().context.find("used=600000 requested=600000 ceiling=1048576"), std::string::npos);
 }
 
 TEST(XlsbReader, MissingContentTypesIsContentTypeInvalid) {

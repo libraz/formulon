@@ -194,7 +194,10 @@ TEST(OoxmlSaxMetadata, LargeSheetRecoversMetadataAndSharedFormulas) {
 
   // Range-ref hyperlink loaded (would have aborted the whole read before).
   ASSERT_EQ(sheet.hyperlinks().size(), 1U);
-  EXPECT_EQ(sheet.hyperlinks()[0].ref_span, "A1:B2");
+  EXPECT_EQ(sheet.hyperlinks()[0].row, 0U);
+  EXPECT_EQ(sheet.hyperlinks()[0].col, 0U);
+  EXPECT_EQ(sheet.hyperlinks()[0].last_row, 1U);
+  EXPECT_EQ(sheet.hyperlinks()[0].last_col, 1U);
 }
 
 // A compact sheet exercising every metadata surface plus shared / array
@@ -268,7 +271,10 @@ void ExpectSheetsEquivalent(const Sheet& dom, const Sheet& sax) {
   EXPECT_EQ(dom.protection().sort, sax.protection().sort);
   ASSERT_EQ(dom.hyperlinks().size(), sax.hyperlinks().size());
   for (std::size_t i = 0; i < dom.hyperlinks().size(); ++i) {
-    EXPECT_EQ(dom.hyperlinks()[i].ref_span, sax.hyperlinks()[i].ref_span);
+    EXPECT_EQ(dom.hyperlinks()[i].row, sax.hyperlinks()[i].row);
+    EXPECT_EQ(dom.hyperlinks()[i].col, sax.hyperlinks()[i].col);
+    EXPECT_EQ(dom.hyperlinks()[i].last_row, sax.hyperlinks()[i].last_row);
+    EXPECT_EQ(dom.hyperlinks()[i].last_col, sax.hyperlinks()[i].last_col);
     EXPECT_EQ(dom.hyperlinks()[i].location, sax.hyperlinks()[i].location);
   }
   EXPECT_EQ(dom.print_settings().header_footer_xml, sax.print_settings().header_footer_xml);

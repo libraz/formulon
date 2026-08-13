@@ -681,7 +681,9 @@ TEST(FormulonCApi, SaveExWithDiagnosticsReportsBothXlsbCountersAndKeepsLegacySha
                                                  &downgraded, &deferred),
             0);
   EXPECT_EQ(downgraded, 1U);
-  EXPECT_EQ(deferred, 3U);
+  // Validation and auto-filter state remain deferred. Hyperlinks emit as
+  // BrtHLink records and are therefore not counted here.
+  EXPECT_EQ(deferred, 2U);
 
   BufferGuard legacy_buf;
   size_t legacy_downgraded = 0U;

@@ -42,7 +42,7 @@ std::vector<std::uint8_t> BuildRichSheetXlsx() {
   p.format_cells = false;        // non-default (schema default true)
   p.select_locked_cells = true;  // non-default (schema default false)
 
-  s.mutable_hyperlinks().push_back(Hyperlink{0, 0, "https://example.com", "", "", "tip", "", "A1:B2"});
+  s.mutable_hyperlinks().push_back(Hyperlink{0, 0, 1, 1, "https://example.com", "", "", "tip", ""});
 
   SheetPrintSettings& ps = s.mutable_print_settings();
   ps.print_options_xml = "<printOptions horizontalCentered=\"1\" gridLines=\"1\" headings=\"1\"/>";

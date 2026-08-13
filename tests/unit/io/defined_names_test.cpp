@@ -178,6 +178,27 @@ TEST(DefinedNamesReader, FormulaWhitespaceIsTrimmed) {
   EXPECT_EQ(names_or.value()[0].formula, "=SUM(A1, A2, A3)");
 }
 
+TEST(DefinedNamesReader, XlfnAndXlpmStoragePrefixesAreStripped) {
+  // Excel stores a reusable name-manager LAMBDA as
+  // `_xlfn.LAMBDA(_xlpm.x, _xlpm.x*2)` so older Excel versions don't
+  // misinterpret it. `formula_text` (surfaced through every binding) must
+  // match the formula bar, which shows the canonical, unprefixed spelling.
+  std::string xml(kXmlDecl);
+  xml.append("<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("  <definedNames>");
+  xml.append("    <definedName name=\"Doubler\">_xlfn.LAMBDA(_xlpm.x, _xlpm.x*2)</definedName>");
+  xml.append("  </definedNames>");
+  xml.append("</workbook>");
+
+  pugi::xml_document doc;
+  ASSERT_TRUE(LoadDoc(doc, xml));
+
+  auto names_or = read_defined_names(doc);
+  ASSERT_TRUE(static_cast<bool>(names_or));
+  ASSERT_EQ(names_or.value().size(), 1U);
+  EXPECT_EQ(names_or.value()[0].formula, "LAMBDA(x, x*2)");
+}
+
 TEST(DefinedNamesReader, CommentAttributeRoundTrips) {
   std::string xml(kXmlDecl);
   xml.append("<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");

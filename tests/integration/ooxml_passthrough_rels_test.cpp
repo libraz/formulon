@@ -6,6 +6,7 @@
 // passthrough but become orphans in the package graph and Excel opens
 // the result in "needs repair" mode.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -13,12 +14,16 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml_defs.h"
 #include "io/ooxml_reader.h"
 #include "io/passthrough_part.h"
+#include "io/tables_reader.h"
 #include "io/unknown_relationship.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
 #include "pugixml.hpp"
+#include "sheet.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -379,6 +384,352 @@ TEST(OoxmlPassthroughRels, UnknownWorkbookRelsRoundTrip) {
   EXPECT_TRUE(saw_theme_override) << "theme Override missing from [Content_Types].xml";
   // calcChain part is dropped, so its Override must not be emitted either.
   EXPECT_FALSE(saw_calc_chain_override) << "dropped calcChain must not leave an Override in [Content_Types].xml";
+}
+
+// ---------------------------------------------------------------------------
+// Sheet-rels rId integrity: the invariants below hold regardless of which
+// relationship types share a sheet's rels file — every r:id the worksheet
+// body references must resolve to a `<Relationship>` in that same sheet's
+// rels output, every rels file the writer emits must declare at least one
+// relationship, and no two zip entries may share a path.
+// ---------------------------------------------------------------------------
+
+/// Recursively collects every `r:id` attribute value under `node`, in
+/// document order. Used to check the property "every r:id the body
+/// references resolves to a Relationship Id" without hardcoding which
+/// specific elements carry one.
+void CollectRIds(const pugi::xml_node& node, std::vector<std::string>& out) {
+  for (pugi::xml_attribute attr = node.first_attribute(); attr; attr = attr.next_attribute()) {
+    if (std::string_view(attr.name()) == "r:id") {
+      out.emplace_back(attr.value());
+    }
+  }
+  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
+    CollectRIds(child, out);
+  }
+}
+
+/// Collects every `Id` attribute from a `<Relationships>` document's
+/// direct `<Relationship>` children.
+std::vector<std::string> CollectRelationshipIds(const pugi::xml_node& relationships_root) {
+  std::vector<std::string> ids;
+  for (pugi::xml_node rel = relationships_root.child("Relationship"); rel; rel = rel.next_sibling("Relationship")) {
+    ids.emplace_back(rel.attribute("Id").value());
+  }
+  return ids;
+}
+
+TEST(OoxmlSheetRelsIntegrity, TablePartRidMatchesItsOwnTableRelationship) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::text("Region"));
+  s.set_cell_value(1U, 0U, Value::text("North"));
+
+  io::TableMetadata table;
+  table.id = 1U;
+  table.name = "Regions";
+  table.display_name = "Regions";
+  table.ref = "A1:A2";
+  table.sheet_index = 0U;
+  table.header_row = true;
+  table.totals_row = false;
+  table.columns = {io::TableColumn{1U, "Region", "", "", ""}};
+  wb.set_tables({std::move(table)});
+
+  // An unknown relationship reserving the lowest rId ("rId1"): a writer
+  // that hardcodes the table's r:id to its positional rId(i+1) would
+  // collide with it instead of naming the id this rels file actually
+  // assigned to the table relationship.
+  io::UnknownRelationship unknown;
+  unknown.id = "rId1";
+  unknown.type = "urn:example:relationships/control";
+  unknown.target = "xl/controls/control1.xml";
+  s.set_unknown_relationships({unknown});
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  auto sheet_bytes_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(sheet_bytes_or));
+  pugi::xml_document sheet_doc;
+  ASSERT_TRUE(sheet_doc.load_buffer(sheet_bytes_or.value().data(), sheet_bytes_or.value().size()));
+  pugi::xml_node table_part = sheet_doc.child("worksheet").child("tableParts").child("tablePart");
+  ASSERT_TRUE(table_part) << "no <tablePart> in the saved worksheet body";
+  const std::string table_rid = table_part.attribute("r:id").value();
+  ASSERT_FALSE(table_rid.empty());
+  // The reserved unknown-relationship id must not have been silently
+  // reassigned to the table.
+  EXPECT_NE(table_rid, "rId1");
+
+  auto rels_bytes_or = zip.read_entry("xl/worksheets/_rels/sheet1.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_bytes_or));
+  pugi::xml_document rels_doc;
+  ASSERT_TRUE(rels_doc.load_buffer(rels_bytes_or.value().data(), rels_bytes_or.value().size()));
+  bool found = false;
+  for (pugi::xml_node rel = rels_doc.child("Relationships").child("Relationship"); rel;
+       rel = rel.next_sibling("Relationship")) {
+    if (std::string_view(rel.attribute("Id").value()) == table_rid) {
+      found = true;
+      EXPECT_EQ(std::string_view(rel.attribute("Type").value()), io::kRelTable)
+          << "the tablePart's r:id must resolve to a table-typed relationship";
+    }
+  }
+  EXPECT_TRUE(found) << "tablePart r:id \"" << table_rid << "\" has no matching Relationship";
+}
+
+/// Builds a package with a worksheet carrying two `kRelVmlDrawing`
+/// relationships: one bound to `<legacyDrawing>` (comment geometry) and
+/// one bound to `<legacyDrawingHF>` (header/footer image), plus a
+/// `<comments>` part. `with_comments = false` drops the comments part
+/// and the `<legacyDrawing>` element, leaving only the header/footer
+/// VML — the "logo without comments" shape.
+std::vector<std::uint8_t> BuildPackageWithTwoVmlDrawings(bool with_comments) {
+  std::string content_types =
+      "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+      "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+      "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+      "<Default Extension=\"vml\" ContentType=\"application/vnd.openxmlformats-officedocument.vmlDrawing\"/>"
+      "<Override PartName=\"/xl/workbook.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+      "<Override PartName=\"/xl/worksheets/sheet1.xml\" "
+      "ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+      "</Types>";
+  const std::string_view package_rels =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+      "Target=\"xl/workbook.xml\"/>"
+      "</Relationships>";
+  const std::string_view workbook_xml =
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>";
+  const std::string_view workbook_rels =
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+      "<Relationship Id=\"rId1\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+      "Target=\"worksheets/sheet1.xml\"/>"
+      "</Relationships>";
+
+  std::string sheet_xml =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheetData/>";
+  std::string sheet_rels = "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">";
+  if (with_comments) {
+    sheet_xml += "<legacyDrawing r:id=\"rId2\"/>";
+    sheet_rels +=
+        "<Relationship Id=\"rId1\" "
+        "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments\" "
+        "Target=\"../comments1.xml\"/>"
+        "<Relationship Id=\"rId2\" "
+        "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing\" "
+        "Target=\"../drawings/vmlDrawing1.vml\"/>";
+  }
+  sheet_xml += "<legacyDrawingHF r:id=\"rId3\"/></worksheet>";
+  sheet_rels +=
+      "<Relationship Id=\"rId3\" "
+      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing\" "
+      "Target=\"../drawings/vmlDrawing2.vml\"/></Relationships>";
+
+  const std::string_view comments_xml =
+      "<comments xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<authors><author>Alice</author></authors>"
+      "<commentList><comment ref=\"A1\" authorId=\"0\"><text><t>hi</t></text></comment></commentList>"
+      "</comments>";
+  const std::string_view comment_vml =
+      "<xml xmlns:v=\"urn:schemas-microsoft-com:vml\"><v:shape id=\"comment-shape\"/></xml>";
+  const std::string_view header_footer_vml =
+      "<xml xmlns:v=\"urn:schemas-microsoft-com:vml\"><v:shape id=\"hf-shape\"/></xml>";
+
+  std::vector<PartFile> parts = {
+      {"[Content_Types].xml", content_types},
+      {"_rels/.rels", package_rels},
+      {"xl/workbook.xml", workbook_xml},
+      {"xl/_rels/workbook.xml.rels", workbook_rels},
+      {"xl/worksheets/sheet1.xml", sheet_xml},
+      {"xl/worksheets/_rels/sheet1.xml.rels", sheet_rels},
+      {"xl/drawings/vmlDrawing2.vml", header_footer_vml},
+  };
+  if (with_comments) {
+    parts.push_back({"xl/comments1.xml", comments_xml});
+    parts.push_back({"xl/drawings/vmlDrawing1.vml", comment_vml});
+  }
+  return BuildZip(parts);
+}
+
+TEST(OoxmlSheetRelsIntegrity, TwoVmlDrawingRelationshipsBothSurviveRoundTrip) {
+  const std::vector<std::uint8_t> source = BuildPackageWithTwoVmlDrawings(/*with_comments=*/true);
+  auto load_or = io::read_ooxml(SpanOf(source));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+  const Sheet& loaded = load_or.value().workbook.sheet(0);
+  // The comment geometry VML is the one <legacyDrawing> names, not
+  // whichever kRelVmlDrawing relationship happened to be read last.
+  EXPECT_EQ(loaded.comment_vml_path(), "xl/drawings/vmlDrawing1.vml");
+  ASSERT_EQ(loaded.comments().size(), 1U);
+
+  // The header/footer VML relationship is preserved as an unknown
+  // relationship instead of being silently dropped.
+  bool saw_hf_relationship = false;
+  for (const io::UnknownRelationship& rel : loaded.unknown_relationships()) {
+    if (rel.id == "rId3") {
+      saw_hf_relationship = true;
+      EXPECT_EQ(rel.type, io::kRelVmlDrawing);
+      EXPECT_EQ(rel.target, "xl/drawings/vmlDrawing2.vml");
+    }
+  }
+  EXPECT_TRUE(saw_hf_relationship) << "legacyDrawingHF's vmlDrawing relationship was dropped instead of preserved";
+
+  auto save_or = load_or.value().workbook.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+
+  // Both VML parts round-trip with distinct bytes: comment geometry is
+  // not overwritten by (or confused with) the header/footer image.
+  ASSERT_TRUE(zip.has_entry("xl/drawings/vmlDrawing1.vml"));
+  ASSERT_TRUE(zip.has_entry("xl/drawings/vmlDrawing2.vml"));
+  auto comment_vml_or = zip.read_entry("xl/drawings/vmlDrawing1.vml");
+  auto hf_vml_or = zip.read_entry("xl/drawings/vmlDrawing2.vml");
+  ASSERT_TRUE(static_cast<bool>(comment_vml_or));
+  ASSERT_TRUE(static_cast<bool>(hf_vml_or));
+  const std::string comment_vml_text(comment_vml_or.value().begin(), comment_vml_or.value().end());
+  const std::string hf_vml_text(hf_vml_or.value().begin(), hf_vml_or.value().end());
+  EXPECT_NE(comment_vml_text.find("comment-shape"), std::string::npos);
+  EXPECT_NE(hf_vml_text.find("hf-shape"), std::string::npos);
+
+  // Property assertion: every r:id in the saved worksheet body resolves
+  // to a Relationship Id declared in that sheet's own rels file.
+  auto sheet_bytes_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(sheet_bytes_or));
+  pugi::xml_document sheet_doc;
+  ASSERT_TRUE(sheet_doc.load_buffer(sheet_bytes_or.value().data(), sheet_bytes_or.value().size()));
+  std::vector<std::string> body_rids;
+  CollectRIds(sheet_doc.child("worksheet"), body_rids);
+  ASSERT_FALSE(body_rids.empty());
+
+  ASSERT_TRUE(zip.has_entry("xl/worksheets/_rels/sheet1.xml.rels"));
+  auto rels_bytes_or = zip.read_entry("xl/worksheets/_rels/sheet1.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_bytes_or));
+  pugi::xml_document rels_doc;
+  ASSERT_TRUE(rels_doc.load_buffer(rels_bytes_or.value().data(), rels_bytes_or.value().size()));
+  const std::vector<std::string> rel_ids = CollectRelationshipIds(rels_doc.child("Relationships"));
+
+  for (const std::string& rid : body_rids) {
+    EXPECT_NE(std::find(rel_ids.begin(), rel_ids.end(), rid), rel_ids.end())
+        << "worksheet body r:id \"" << rid << "\" has no matching Relationship in the sheet's own rels file";
+  }
+}
+
+TEST(OoxmlSheetRelsIntegrity, HeaderFooterVmlWithoutCommentsSurvivesRoundTrip) {
+  const std::vector<std::uint8_t> source = BuildPackageWithTwoVmlDrawings(/*with_comments=*/false);
+  auto load_or = io::read_ooxml(SpanOf(source));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+  const Sheet& loaded = load_or.value().workbook.sheet(0);
+  // No comments on this sheet, so no relationship is modelled as the
+  // comment-VML slot.
+  EXPECT_TRUE(loaded.comment_vml_path().empty());
+  EXPECT_TRUE(loaded.comments().empty());
+
+  bool saw_hf_relationship = false;
+  for (const io::UnknownRelationship& rel : loaded.unknown_relationships()) {
+    if (rel.id == "rId3") {
+      saw_hf_relationship = true;
+      EXPECT_EQ(rel.type, io::kRelVmlDrawing);
+      EXPECT_EQ(rel.target, "xl/drawings/vmlDrawing2.vml");
+    }
+  }
+  EXPECT_TRUE(saw_hf_relationship)
+      << "the sole vmlDrawing relationship on a comment-less sheet must not be silently dropped";
+
+  auto save_or = load_or.value().workbook.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+
+  ASSERT_TRUE(zip.has_entry("xl/worksheets/_rels/sheet1.xml.rels"));
+  auto rels_bytes_or = zip.read_entry("xl/worksheets/_rels/sheet1.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_bytes_or));
+  const std::string rels_text(rels_bytes_or.value().begin(), rels_bytes_or.value().end());
+  EXPECT_NE(rels_text.find("Id=\"rId3\""), std::string::npos)
+      << "header/footer vmlDrawing relationship missing from the saved rels file";
+  EXPECT_NE(rels_text.find("../drawings/vmlDrawing2.vml"), std::string::npos);
+
+  ASSERT_TRUE(zip.has_entry("xl/drawings/vmlDrawing2.vml"));
+  auto vml_bytes_or = zip.read_entry("xl/drawings/vmlDrawing2.vml");
+  ASSERT_TRUE(static_cast<bool>(vml_bytes_or));
+  const std::string vml_text(vml_bytes_or.value().begin(), vml_bytes_or.value().end());
+  EXPECT_NE(vml_text.find("hf-shape"), std::string::npos);
+
+  auto sheet_bytes_or = zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(sheet_bytes_or));
+  const std::string sheet_text(sheet_bytes_or.value().begin(), sheet_bytes_or.value().end());
+  EXPECT_NE(sheet_text.find("legacyDrawingHF r:id=\"rId3\""), std::string::npos)
+      << "the worksheet body's legacyDrawingHF element must keep the rId its rels entry uses";
+}
+
+TEST(OoxmlSheetRelsIntegrity, UnknownRelationshipsOnlySheetDoesNotDuplicateRelsEntry) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  io::UnknownRelationship unknown;
+  unknown.id = "rId9";
+  unknown.type = "urn:example:relationships/control";
+  unknown.target = "xl/controls/control1.xml";
+  s.set_unknown_relationships({unknown});
+
+  // A stray passthrough part deliberately placed at the exact path the
+  // writer generates for this sheet's own rels file.
+  std::vector<io::PassthroughPart> parts = wb.passthrough_parts();
+  io::PassthroughPart bogus;
+  bogus.path = "xl/worksheets/_rels/sheet1.xml.rels";
+  bogus.bytes = {'b', 'o', 'g', 'u', 's'};
+  parts.push_back(bogus);
+  wb.set_passthrough_parts(std::move(parts));
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  const std::vector<std::string> entries = zip.list_entries();
+  const std::size_t count = static_cast<std::size_t>(
+      std::count(entries.begin(), entries.end(), std::string("xl/worksheets/_rels/sheet1.xml.rels")));
+  EXPECT_EQ(count, 1U) << "the sheet rels path must appear exactly once in the saved package";
+
+  // The surviving entry is the writer's own generated rels (the unknown
+  // relationship id survives), not the bogus passthrough bytes.
+  auto rels_or = zip.read_entry("xl/worksheets/_rels/sheet1.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  const std::string rels(rels_or.value().begin(), rels_or.value().end());
+  EXPECT_NE(rels.find("rId9"), std::string::npos);
+}
+
+TEST(OoxmlSheetRelsIntegrity, InternalOnlyHyperlinksProduceNoRelsPart) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  Hyperlink h;
+  h.row = 0U;
+  h.col = 0U;
+  h.last_row = 0U;
+  h.last_col = 0U;
+  h.location = "Sheet1!B2";  // purely internal; target left empty
+  h.display = "Go to B2";
+  s.mutable_hyperlinks().push_back(h);
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  EXPECT_FALSE(zip.has_entry("xl/worksheets/_rels/sheet1.xml.rels"))
+      << "a sheet whose only hyperlinks are purely internal must get no rels part";
+
+  // The hyperlink itself still round-trips via its inline location=.
+  auto reload_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(reload_or)) << "reload failed: " << reload_or.error().message;
+  ASSERT_EQ(reload_or.value().workbook.sheet(0).hyperlinks().size(), 1U);
+  EXPECT_EQ(reload_or.value().workbook.sheet(0).hyperlinks()[0].location, "Sheet1!B2");
+  EXPECT_TRUE(reload_or.value().workbook.sheet(0).hyperlinks()[0].target.empty());
 }
 
 }  // namespace

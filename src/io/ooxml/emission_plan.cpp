@@ -18,6 +18,8 @@
 #include "io/external_links.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
+#include "io/ooxml/sheet_xml_builder.h"
+#include "io/ooxml_defs.h"
 #include "io/passthrough_part.h"
 #include "io/tables_reader.h"
 #include "pivot/pivot_cache.h"
@@ -217,11 +219,35 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   // with at least one comment gets a `comments<N>.xml` and a matching
   // `vmlDrawing<N>.vml`. The numeric id matches between the two so the
   // sheet rels file pairs them by ordinal.
+  //
+  // A vmlDrawing target still named by some sheet's `unknown_relationships()`
+  // (for example a `<legacyDrawingHF>` header/footer VML preserved
+  // verbatim, see `sheet_aux_rels_reader.h`) already occupies a
+  // `xl/drawings/vmlDrawing<N>.vml` path the counter would otherwise
+  // assign. Skip any id that collides so the auto-numbered comment VML
+  // never overwrites a part a live relationship still points at.
+  //
+  // This is deliberately narrower than "any passthrough part at that
+  // path": an orphaned passthrough part left over from a since-removed
+  // sheet's comment VML is not referenced by anything anymore, and
+  // reusing its path for the next sheet's own renumbered comment VML is
+  // the desired outcome, not a collision.
+  std::unordered_set<std::string> retained_paths;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (const UnknownRelationship& rel : wb.sheet(s).unknown_relationships()) {
+      if (rel.type == kRelVmlDrawing && !rel.target_external) {
+        retained_paths.insert(rel.target);
+      }
+    }
+  }
   plan.comments_by_sheet.assign(wb.sheet_count(), EmissionPlan::CommentsPlan{});
   std::uint32_t next_comments_id = 1;
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     if (wb.sheet(s).comments().empty()) {
       continue;
+    }
+    while (retained_paths.count(NumberedPartPath("xl/drawings/vmlDrawing", next_comments_id, ".vml")) != 0U) {
+      ++next_comments_id;
     }
     EmissionPlan::CommentsPlan entry;
     entry.numeric_id = next_comments_id++;
@@ -256,23 +282,32 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     }
   }
 
+  // Build each sheet's rels file once, here, so every downstream
+  // consumer — the collision-detection pass immediately below, and the
+  // writer's `AddPart` call — reads the exact same result instead of
+  // separately re-deriving whether a sheet has relationships worth
+  // writing. `relationship_count` is the single source of truth for
+  // that decision; opaque sheets keep a default-constructed (unused)
+  // entry.
+  plan.sheet_rels.assign(wb.sheet_count(), SheetRelsResult{});
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
+      continue;
+    }
+    plan.sheet_rels[i] =
+        BuildSheetRels(wb.sheet(i), plan.tables_by_sheet[i], plan.pivot_tables_by_sheet[i], plan.comments_by_sheet[i]);
+  }
+
   // Collision detection between generated paths and passthrough paths.
   // Generated paths win; passthrough copy is dropped with a warning.
   std::unordered_set<std::string> generated = BuildGeneratedPathSet(
       wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet, generated_shared_strings);
-  // Sheet rels for sheets that own tables, pivot tables, hyperlinks,
-  // comments/VML, or printer settings are also generated.
-  for (std::size_t i = 0; i < plan.tables_by_sheet.size(); ++i) {
-    if (i < wb.sheet_count() && wb.sheet(i).is_opaque_ooxml_sheet()) {
-      continue;
-    }
-    const bool has_tables = !plan.tables_by_sheet[i].empty();
-    const bool has_pivots = i < plan.pivot_tables_by_sheet.size() && !plan.pivot_tables_by_sheet[i].empty();
-    const bool has_hyperlinks = i < wb.sheet_count() && !wb.sheet(i).hyperlinks().empty();
-    const bool has_comments = i < plan.comments_by_sheet.size() && plan.comments_by_sheet[i].numeric_id != 0;
-    const bool has_print_settings = i < wb.sheet_count() && !wb.sheet(i).print_settings().printer_settings_path.empty();
-    const bool has_drawing = i < wb.sheet_count() && !wb.sheet(i).drawing_rel_target().empty();
-    if (has_tables || has_pivots || has_hyperlinks || has_comments || has_print_settings || has_drawing) {
+  // A sheet's rels file is generated exactly when its built result
+  // declares at least one relationship — an empty rels file is invalid
+  // OOXML, so the writer never emits one (see `write_ooxml`'s use of
+  // this same `plan.sheet_rels` entry).
+  for (std::size_t i = 0; i < plan.sheet_rels.size(); ++i) {
+    if (plan.sheet_rels[i].relationship_count > 0) {
       generated.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
     }
   }
