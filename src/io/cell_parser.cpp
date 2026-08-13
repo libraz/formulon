@@ -34,6 +34,7 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
+#include "io/xsd_int.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -344,8 +345,16 @@ Expected<ParsedCell, Error> parse_cell_element(const pugi::xml_node& node, std::
   // t= — type.
   std::string_view t = node.attribute("t").value();
 
-  // s= — style index (xf row in xl/styles.xml). Default 0 when absent.
-  const std::uint32_t xf_index = node.attribute("s").as_uint(0U);
+  // s= — style index (xf row in xl/styles.xml). Absent or outside the
+  // shared non-negative-integer lexical space degrades to the schema
+  // default 0: a style index is cosmetic, so rejecting the whole workbook
+  // over one malformed value would trade a formatting loss for a load
+  // failure. The streaming reader applies the same lexer and the same
+  // disposition to the same attribute.
+  std::uint32_t xf_index = 0;
+  if (!parse_xsd_nonneg_int(attr_str(node, "s"), &xf_index)) {
+    xf_index = 0;
+  }
 
   // <f>...</f> — formula text (leading '=' stripped).
   std::string formula;

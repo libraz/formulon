@@ -93,8 +93,10 @@ struct CellRecord {
 /// so the streaming path can recover per-row overrides (height / hidden /
 /// outline) the DOM path reads off `<row>`. All views alias the source
 /// buffer and are valid only for the callback's duration; each is empty
-/// when the attribute is absent. `row_1based` is the `r="N"` value (0 when
-/// absent).
+/// when the attribute is absent. `row_1based` is the `r="N"` value, and 0
+/// when the attribute is absent or outside the non-negative-integer
+/// lexical space — the same "no usable row number" signal the DOM path
+/// produces for those inputs.
 struct RowRecord {
   std::uint32_t row_1based = 0;
   std::string_view ht;             ///< `ht=` (row height in points).

@@ -128,6 +128,20 @@ constexpr std::size_t kSaxThresholdBytes = 256U * 1024U;
 /// formula bookkeeping, same SST queueing); only the underlying parser
 /// differs.
 ///
+/// "Identical" is a load-bearing claim, not a summary: because the
+/// dispatch above turns on sheet size alone, any divergence would make
+/// the same bytes decode differently for reasons the file's author cannot
+/// see. So for any sheet XML byte sequence — well-formed or not — the two
+/// entry points produce the same workbook mutations and the same
+/// success / failure. Every attribute both consume goes through one
+/// lexer: `parse_a1_ref` for `r=` on `<c>`, `parse_xsd_nonneg_int`
+/// (`io/xsd_int.h`) for `s=` / `si=` / `r=` on `<row>`,
+/// `parse_xsd_bool` for `hidden=`, and `decode_cell_payload` for the
+/// whole `<v>` / `<is>` body. The disposition of a rejected value is
+/// per-attribute but shared across the paths: a bad `si=` fails the
+/// sheet, a bad `s=` degrades to the schema default 0, a bad `<row r=>`
+/// drops that row's layout override.
+///
 /// Used by the OOXML reader when the sheet's raw XML is at least
 /// `kSaxThresholdBytes`. The DOM path remains the default below the
 /// threshold so the WASM build does not pay the SAX setup cost on

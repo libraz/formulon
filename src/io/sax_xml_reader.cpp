@@ -37,6 +37,7 @@
 #include <utility>
 
 #include "io/a1_ref.h"
+#include "io/xsd_int.h"
 #include "io/zip_reader.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -65,17 +66,6 @@ void SkipSpace(const char* end, const char** p) noexcept {
 /// error code (`kIoXmlParse`) and a generic message.
 Error MakeXmlParseError(std::size_t /*offset*/, const char* /*what*/) {
   return make_error(FormulonErrorCode::kIoXmlParse, "sax: malformed sheet xml", "context=sax_xml_reader");
-}
-
-/// Decodes an unsigned decimal integer at `text[*i]`. Wraps the shared
-/// `parse_uint` helper, returning 0 (a sentinel because Excel rows are
-/// 1-based) on no-digit or overflow input.
-std::uint32_t DecodeUnsigned(std::string_view text, std::size_t* i) noexcept {
-  std::uint32_t v = 0;
-  if (!parse_uint(text, i, &v)) {
-    return 0U;
-  }
-  return v;
 }
 
 /// Wraps the shared `parse_a1_ref` helper. Preserved as a local thin
@@ -851,14 +841,15 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
 /// `header`.
 bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader& row_header,
              const SheetSaxCallbacks& cb, CellScratch* scratch, Error* err) {
-  // Decode r= (1-based). The row's `r` attribute reuses the cell-level
-  // `decoded_attr_r` scratch because the row scan is single-shot before
-  // any cell scan begins.
+  // Decode r= (1-based) through the shared strict lexer, so a malformed
+  // row number reads here exactly as it does on the DOM path: 0, meaning
+  // "no usable row number", which the consumer skips. The row's `r`
+  // attribute reuses the cell-level `decoded_attr_r` scratch because the
+  // row scan is single-shot before any cell scan begins.
   std::uint32_t row_1based = 0;
   const std::string_view r_attr = AttrOfDecoded(row_header, "r", &scratch->decoded_attr_r);
-  if (!r_attr.empty()) {
-    std::size_t i = 0;
-    row_1based = DecodeUnsigned(r_attr, &i);
+  if (!parse_xsd_nonneg_int(r_attr, &row_1based)) {
+    row_1based = 0;
   }
 
   if (cb.on_row_start != nullptr) {

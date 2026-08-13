@@ -31,6 +31,7 @@
 #include "io/sax_xml_reader.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
+#include "io/xsd_int.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
 #include "parser/parser.h"
@@ -57,6 +58,24 @@ struct SharedFormulaMaster {
   std::uint32_t row = 0;
   std::uint32_t col = 0;
 };
+
+/// Decodes a shared-formula `si` attribute under the shared XSD
+/// non-negative-integer lexer.
+///
+/// A malformed `si` is a hard error on both read paths: the index is what
+/// binds a follower cell to its group master, so accepting a prefix or
+/// defaulting it would either drop the follower's formula or attach it to
+/// an unrelated group — a wrong number rather than a wrong format.
+Expected<std::uint32_t, Error> ParseSharedFormulaSi(std::string_view raw) {
+  std::uint32_t si = 0;
+  if (!parse_xsd_nonneg_int(raw, &si)) {
+    std::string ctx("context=sheet_reader si=");
+    ctx.append(raw);
+    return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: 'si' is not a non-negative integer",
+                      std::move(ctx));
+  }
+  return si;
+}
 
 std::string ShiftSharedFormulaText(const SharedFormulaMaster& master, std::uint32_t target_row,
                                    std::uint32_t target_col) {
@@ -212,13 +231,11 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: <f t='shared'> missing 'si'",
                       "context=sheet_reader");
   }
-  const std::int64_t si_signed = si_attr.as_llong(-1);
-  if (si_signed < 0 || si_signed > 0xFFFFFFFFLL) {
-    std::string ctx("context=sheet_reader si=");
-    ctx.append(si_attr.value());
-    return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: 'si' out of range", std::move(ctx));
+  auto si_or = ParseSharedFormulaSi(si_attr.value());
+  if (!si_or) {
+    return si_or.error();
   }
-  const auto si = static_cast<std::uint32_t>(si_signed);
+  const std::uint32_t si = si_or.value();
 
   std::string body = f_node.text().get();
   if (!body.empty() && body.front() == '=') {
@@ -557,18 +574,22 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     if (!r_attr) {
       continue;
     }
-    const std::int32_t r_v = attr_i32(row, "r", 0);
-    if (r_v < 1) {
+    // A row number outside the shared non-negative-integer lexical space
+    // is treated as absent and the override is dropped, on both read
+    // paths: attaching the override to whatever prefix happened to parse
+    // would silently restyle an unrelated row.
+    std::uint32_t r_v = 0;
+    if (!parse_xsd_nonneg_int(attr_str(row, "r"), &r_v) || r_v < 1U) {
       continue;
     }
     RowLayout entry;
-    entry.row = static_cast<std::uint32_t>(r_v - 1);
+    entry.row = r_v - 1U;
     if (ht_attr) {
       entry.height = attr_f64(row, "ht");
       entry.has_height = true;
     }
     if (hidden_attr) {
-      entry.hidden = attr_bool(row, "hidden");
+      entry.hidden = read_xsd_bool(row, "hidden", false);
     }
     if (outline_attr) {
       entry.outline_level = ParseOutlineLevel(outline_attr.value());
@@ -622,17 +643,6 @@ Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet
 
 namespace {
 
-std::uint32_t ParseXfIndex(std::string_view text) {
-  std::uint32_t xf = 0;
-  for (char c : text) {
-    if (c < '0' || c > '9') {
-      return 0U;
-    }
-    xf = (xf * 10U) + static_cast<std::uint32_t>(c - '0');
-  }
-  return xf;
-}
-
 /// Per-call state passed through `SheetSaxCallbacks::user_data`. The
 /// scanner's callbacks need access to the workbook, the sheet index,
 /// the SST queue, and the text-storage deque; bundling them here
@@ -664,16 +674,11 @@ Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: <f t='shared'> missing 'si'",
                       "context=sheet_reader_sax");
   }
-  std::uint32_t si = 0;
-  for (const char ch : rec.f_si) {
-    if (ch < '0' || ch > '9') {
-      std::string ctx("context=sheet_reader_sax si=");
-      ctx.append(rec.f_si);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: 'si' not a non-negative integer",
-                        std::move(ctx));
-    }
-    si = (si * 10U) + static_cast<std::uint32_t>(ch - '0');
+  auto si_or = ParseSharedFormulaSi(rec.f_si);
+  if (!si_or) {
+    return si_or.error();
   }
+  const std::uint32_t si = si_or.value();
   std::string body(rec.formula);
   if (!body.empty()) {
     // Master occurrence: register and use its body verbatim.
@@ -712,12 +717,13 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   cell.col = rec.col;
 
   // Persist the cell's `s=` xf index when present. The SAX scanner
-  // surfaces it as a string view; parse to integer here. Empty / "0"
-  // collapses to the default sentinel and we skip the call to keep
-  // the row map sparse.
+  // surfaces it as a string view; parse to integer here through the same
+  // lexer and with the same degrade-to-0 disposition the DOM cell parser
+  // uses. Empty / "0" collapses to the default sentinel and we skip the
+  // call to keep the row map sparse.
   std::uint32_t xf = 0;
-  if (!rec.s.empty()) {
-    xf = ParseXfIndex(rec.s);
+  if (!parse_xsd_nonneg_int(rec.s, &xf)) {
+    xf = 0;
   }
   // Resolve shared-formula groups (plain formulas pass straight through).
   auto formula_or = ResolveSharedFromRecord(rec, shared);
@@ -765,7 +771,7 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
     entry.has_height = true;
   }
   if (!rec.hidden.empty()) {
-    entry.hidden = parse_xml_bool(rec.hidden);
+    entry.hidden = parse_xsd_bool(rec.hidden, false);
   }
   if (!rec.outline_level.empty()) {
     entry.outline_level = ParseOutlineLevel(std::string(rec.outline_level).c_str());
