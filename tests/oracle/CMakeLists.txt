@@ -501,6 +501,12 @@ if(Python3_Interpreter_FOUND)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   set_tests_properties(formulon_oracle_policy_unit PROPERTIES LABELS "oracle;oracle-metadata")
+  add_test(
+    NAME formulon_macos_excel_formula_unit
+    COMMAND ${_formulon_oracle_python} -m unittest tools.oracle.macos_excel_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(formulon_macos_excel_formula_unit PROPERTIES LABELS "oracle;oracle-metadata")
   option(FORMULON_ORACLE_RELEASE_GATES
     "Register strict external-capture oracle gates (release CI only)"
     OFF

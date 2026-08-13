@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import abc
 import datetime as _dt
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -47,6 +48,105 @@ _ERR_DISPLAY_NAMES = {
     "#PYTHON!",
     "#UNKNOWN!",
 }
+
+# Excel's worksheet dimensions are part of the oracle contract.  The spill
+# shape probe packs two positive dimensions into one scalar using
+# ``rows * _EXCEL_MAX_COLUMNS + columns``.  Keeping the constants here makes
+# the decoder platform-neutral and, importantly, keeps the Mac and Windows
+# adapters byte-for-byte aligned on the wire expression.
+_EXCEL_MAX_ROWS = 1_048_576
+_EXCEL_MAX_COLUMNS = 16_384
+# Formula-oracle capture materialises every cell through xlwings and emits
+# the flattened values into JSON.  Keep that bounded even when Excel reports
+# a valid but adversarially large spill.  This matches the existing 4096-cell
+# oracle import range budget and prevents an external result from turning the
+# shape probe into an unbounded offset loop.
+MAX_CAPTURE_CELLS = 4_096
+
+
+class SpillShapeProbeError(RuntimeError):
+    """Raised when a non-invasive dynamic-array shape probe is invalid."""
+
+
+def decode_spill_shape_probe(value: Any) -> tuple[int, int]:
+    """Decode and validate ``ROWS(anchor#)*16384+COLUMNS(anchor#)``.
+
+    ``COLUMNS`` is allowed to equal the column ceiling, so a zero remainder
+    is decoded as ``(rows - 1, 16384)``.  Every other non-finite, fractional,
+    boolean, zero, negative, or out-of-grid value is rejected rather than
+    silently falling back to a fake 1x1 result.
+    """
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise SpillShapeProbeError(f"spill shape probe returned non-numeric value: {value!r}")
+    numeric = float(value)
+    if not math.isfinite(numeric) or not numeric.is_integer():
+        raise SpillShapeProbeError(f"spill shape probe returned non-integral value: {value!r}")
+    encoded = int(numeric)
+    if encoded <= 0:
+        raise SpillShapeProbeError(f"spill shape probe returned non-positive value: {value!r}")
+
+    rows, columns = divmod(encoded, _EXCEL_MAX_COLUMNS)
+    if columns == 0:
+        rows -= 1
+        columns = _EXCEL_MAX_COLUMNS
+    if not (1 <= rows <= _EXCEL_MAX_ROWS and 1 <= columns <= _EXCEL_MAX_COLUMNS):
+        raise SpillShapeProbeError(f"spill shape probe is outside the Excel grid: {value!r}")
+    return rows, columns
+
+
+def probe_spill_shape(evaluate, anchor) -> tuple[int, int]:
+    """Evaluate the shared, non-invasive spill-shape expression once.
+
+    ``evaluate`` is a platform adapter around Excel's Application.Evaluate;
+    it receives the exact expression string and must not calculate, write, or
+    clear a worksheet.  The anchor address is obtained with
+    ``get_address(external=True)`` and is deliberately passed through
+    unmodified so workbook/sheet apostrophes remain escaped by xlwings.
+
+    Excel evaluates the postfix ``#`` expression for scalar/error/blank
+    anchors as the valid 1x1 encoding, so every result must pass through the
+    strict decoder.  A bridge failure or malformed value therefore remains a
+    hard probe error; callers must surface it as a skipped case rather than
+    inventing a 1x1 fallback.
+    """
+
+    try:
+        external_address = anchor.get_address(external=True)
+    except Exception as exc:
+        raise SpillShapeProbeError("could not obtain an external anchor address") from exc
+    if not isinstance(external_address, str) or not external_address.strip():
+        raise SpillShapeProbeError(f"anchor returned an invalid external address: {external_address!r}")
+
+    coordinates = {}
+    for name, limit in (("row", _EXCEL_MAX_ROWS), ("column", _EXCEL_MAX_COLUMNS)):
+        try:
+            coordinate = getattr(anchor, name)
+        except Exception as exc:
+            raise SpillShapeProbeError(f"anchor has no usable {name} coordinate") from exc
+        if type(coordinate) is not int or not 1 <= coordinate <= limit:
+            raise SpillShapeProbeError(f"anchor {name} coordinate is outside the Excel grid: {coordinate!r}")
+        coordinates[name] = coordinate
+
+    expression = f"ROWS({external_address}#)*{_EXCEL_MAX_COLUMNS}+COLUMNS({external_address}#)"
+    try:
+        value = evaluate(expression)
+    except Exception as exc:
+        raise SpillShapeProbeError(f"Excel shape probe failed for {external_address!r}") from exc
+
+    rows, columns = decode_spill_shape_probe(value)
+    available_rows = _EXCEL_MAX_ROWS - coordinates["row"] + 1
+    available_columns = _EXCEL_MAX_COLUMNS - coordinates["column"] + 1
+    if rows > available_rows or columns > available_columns:
+        raise SpillShapeProbeError(
+            f"spill shape {rows}x{columns} does not fit from anchor ({coordinates['row']},{coordinates['column']})"
+        )
+    cells = rows * columns
+    if cells > MAX_CAPTURE_CELLS:
+        raise SpillShapeProbeError(
+            f"spill shape {rows}x{columns} exceeds the oracle capture ceiling of {MAX_CAPTURE_CELLS} cells"
+        )
+    return rows, columns
 
 
 @dataclass

@@ -68,12 +68,16 @@ from .base import (
     EnvironmentInfo,
     OracleDriver,
     _datetime_to_serial,
+    probe_spill_shape,
 )
 
 try:
     import xlwings as xw  # type: ignore
 except ImportError as exc:  # pragma: no cover - handled in oracle_gen.py
-    raise RuntimeError("xlwings is not installed; run `make oracle-setup` first") from exc
+    xw = None  # type: ignore[assignment]
+    _XLWINGS_IMPORT_ERROR: Optional[ImportError] = exc
+else:
+    _XLWINGS_IMPORT_ERROR = None
 
 
 def _ensure_windows() -> None:
@@ -264,46 +268,16 @@ def _array_cell_from_scalar(result: CaseResult) -> Any:
     return {"kind": result.kind, "value": result.value}
 
 
-def _write_spill_shape_probe(sht, anchor_addr: str = "Z1") -> bool:
-    """Writes helper formulas that report the dynamic spill shape, if any."""
+def _evaluate_spill_shape(app, anchor) -> tuple[int, int]:
+    """Windows adapter for the shared COM Application.Evaluate probe."""
 
-    rows_cell = sht.range("XFD1")
-    cols_cell = sht.range("XFD2")
-    try:
-        rows_cell.formula2 = f"=ROWS({anchor_addr}#)"
-    except Exception:
-        try:
-            rows_cell.formula = f"=ROWS({anchor_addr}#)"
-        except Exception:
-            return False
-    try:
-        cols_cell.formula2 = f"=COLUMNS({anchor_addr}#)"
-    except Exception:
-        try:
-            cols_cell.formula = f"=COLUMNS({anchor_addr}#)"
-        except Exception:
-            return False
-    return True
+    return probe_spill_shape(lambda expression: app.api.Evaluate(expression), anchor)
 
 
-def _read_spill_shape_probe(sht) -> Optional["tuple[int, int]"]:
-    rows = _classify_value(sht.range("XFD1"))
-    cols = _classify_value(sht.range("XFD2"))
-    if not rows.kind == cols.kind == "number":
-        return None
-    row_count = int(rows.value)
-    col_count = int(cols.value)
-    if row_count <= 0 or col_count <= 0:
-        return None
-    return row_count, col_count
-
-
-def _classify_result_cell(sht, anchor_addr: str = "Z1") -> CaseResult:
+def _classify_result_cell(app, sht, anchor_addr: str = "Z1") -> CaseResult:
     """Classifies the anchor scalar or the full dynamic spill if present."""
 
-    shape = _read_spill_shape_probe(sht)
-    if shape is None:
-        return _classify_value(sht.range(anchor_addr))
+    shape = _evaluate_spill_shape(app, sht.range(anchor_addr))
     rows, cols = shape
     if rows == 1 and cols == 1:
         return _classify_value(sht.range(anchor_addr))
@@ -325,6 +299,8 @@ class WindowsExcelOracle(OracleDriver):
 
     def __init__(self, visible: bool = False) -> None:
         _ensure_windows()
+        if xw is None:
+            raise RuntimeError("xlwings is not installed; run `make oracle-setup` first") from _XLWINGS_IMPORT_ERROR
         self._app = xw.App(visible=visible, add_book=False)
         # Several Application properties are workbook-gated on Excel
         # 16.0 / Office 365: assigning to them while no book is open
@@ -491,10 +467,6 @@ class WindowsExcelOracle(OracleDriver):
                     write_errors[case["id"]] = _format_com_error(exc)
 
             self._app.calculate()
-            for case, sht in zip(cases, case_sheets):
-                if case["id"] not in write_errors:
-                    _write_spill_shape_probe(sht)
-            self._app.calculate()
 
             out: List[CaseResult] = []
             for case, sht in zip(cases, case_sheets):
@@ -508,7 +480,7 @@ class WindowsExcelOracle(OracleDriver):
                     )
                     continue
                 try:
-                    result = _classify_result_cell(sht)
+                    result = _classify_result_cell(self._app, sht)
                     result.id = case["id"]
                     out.append(result)
                 except Exception as exc:
@@ -594,9 +566,7 @@ class WindowsExcelOracle(OracleDriver):
                         out.append(CaseResult(id=case["id"], kind="skipped", value=write_error))
                         continue
                     try:
-                        _write_spill_shape_probe(sht)
-                        self._app.calculate()
-                        result = _classify_result_cell(sht)
+                        result = _classify_result_cell(self._app, sht)
                         result.id = case["id"]
                         out.append(result)
                     except Exception as exc:

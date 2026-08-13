@@ -46,12 +46,16 @@ from .base import (
     EnvironmentInfo,
     OracleDriver,
     _datetime_to_serial,
+    probe_spill_shape,
 )
 
 try:
     import xlwings as xw  # type: ignore
-except ImportError as exc:  # pragma: no cover - handled in oracle_gen.py
-    raise RuntimeError("xlwings is not installed; run `make oracle-setup` first") from exc
+except ImportError as exc:  # pragma: no cover - exercised on minimal CI hosts
+    xw = None  # type: ignore[assignment]
+    _XLWINGS_IMPORT_ERROR: Optional[ImportError] = exc
+else:
+    _XLWINGS_IMPORT_ERROR = None
 
 
 def _ensure_darwin() -> None:
@@ -71,6 +75,48 @@ def _set_iteration(app, enabled: bool) -> None:
     """Set Mac Excel's application-level iterative-calculation setting."""
 
     app.api.iteration.set(enabled)
+
+
+class _FormulaRetentionError(RuntimeError):
+    """Raised when Excel silently clears a formula after assignment."""
+
+
+def _formula_readback(cell) -> Optional[str]:
+    """Returns a non-empty formula readback from ``cell``, if available.
+
+    ``formula2`` is the preferred Mac Excel property, but older xlwings /
+    AppleScript combinations may expose only ``formula``.  A formula readback
+    is intentionally not compared with the input: Excel is allowed to
+    canonicalise formulas while retaining them.
+    """
+
+    for attr in ("formula2", "formula"):
+        try:
+            value = getattr(cell, attr)
+        except Exception:
+            continue
+        try:
+            value = value() if callable(value) else value
+        except Exception:
+            continue
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _assign_formula(cell, formula: Any, *, context: str) -> None:
+    """Assigns a formula and rejects Excel's silent-clear failure mode.
+
+    Assignment exceptions deliberately propagate unchanged.  The readback
+    check handles the distinct Mac failure mode where Excel accepts the
+    AppleEvent but leaves the cell empty.
+    """
+
+    cell.formula2 = formula
+    if isinstance(formula, str) and formula and formula.startswith("=") and _formula_readback(cell) is None:
+        raise _FormulaRetentionError(
+            f"Excel silently rejected formula for {context}: formula={formula!r}; formula2/formula readback was empty"
+        )
 
 
 def _cell_displayed_text(cell) -> Optional[str]:
@@ -248,45 +294,16 @@ def _array_cell_from_scalar(result: CaseResult) -> Any:
     return {"kind": result.kind, "value": result.value}
 
 
-def _write_spill_shape_probe(sht, anchor_addr: str = "Z1") -> bool:
-    """Writes helper formulas that report the dynamic spill shape, if any."""
+def _evaluate_spill_shape(app, anchor) -> tuple[int, int]:
+    """Mac adapter for the shared Application.Evaluate shape probe."""
 
-    try:
-        rows_cell = sht.range("XFD1")
-        cols_cell = sht.range("XFD2")
-        rows_cell.formula2 = f"=ROWS({anchor_addr}#)"
-        cols_cell.formula2 = f"=COLUMNS({anchor_addr}#)"
-    except Exception:
-        return False
-    return True
+    return probe_spill_shape(lambda expression: app.api.evaluate(name=expression), anchor)
 
 
-def _clear_spill_shape_probe(sht) -> None:
-    try:
-        sht.range("XFD1").clear_contents()
-        sht.range("XFD2").clear_contents()
-    except Exception:
-        pass
-
-
-def _read_spill_shape_probe(sht) -> Optional["tuple[int, int]"]:
-    rows = _classify_value(sht.range("XFD1"))
-    cols = _classify_value(sht.range("XFD2"))
-    if not rows.kind == cols.kind == "number":
-        return None
-    row_count = int(rows.value)
-    col_count = int(cols.value)
-    if row_count <= 0 or col_count <= 0:
-        return None
-    return row_count, col_count
-
-
-def _classify_result_cell(sht, anchor_addr: str = "Z1") -> CaseResult:
+def _classify_result_cell(app, sht, anchor_addr: str = "Z1") -> CaseResult:
     """Classifies the anchor scalar or the full dynamic spill if present."""
 
-    shape = _read_spill_shape_probe(sht)
-    if shape is None:
-        return _classify_value(sht.range(anchor_addr))
+    shape = _evaluate_spill_shape(app, sht.range(anchor_addr))
     rows, cols = shape
     if rows == 1 and cols == 1:
         return _classify_value(sht.range(anchor_addr))
@@ -308,6 +325,8 @@ class ExcelOracle(OracleDriver):
 
     def __init__(self, visible: bool = False) -> None:
         _ensure_darwin()
+        if xw is None:
+            raise RuntimeError("xlwings is not installed; run `make oracle-setup` first") from _XLWINGS_IMPORT_ERROR
         self._app = xw.App(visible=visible, add_book=False)
         self._app.calculation = "manual"
         self._app.screen_updating = False
@@ -430,7 +449,12 @@ class ExcelOracle(OracleDriver):
                     _apply_merges(sht, case.get("merges") or [])
                     setup = case.get("setup") or {}
                     for addr, rec in setup.items():
-                        _write_cell(sht, addr, rec)
+                        _write_cell(
+                            sht,
+                            addr,
+                            rec,
+                            context=f"case {case['id']!r} setup {addr!r}",
+                        )
                     result_cell = sht.range("Z1")
                     # Pin the result cell to General format. Otherwise Excel
                     # auto-formats DATE()/TIME() results as m/d/yyyy and
@@ -441,7 +465,11 @@ class ExcelOracle(OracleDriver):
                         result_cell.number_format = "General"
                     except Exception:
                         pass
-                    result_cell.formula2 = case["formula"]
+                    _assign_formula(
+                        result_cell,
+                        case["formula"],
+                        context=f"case {case['id']!r} result",
+                    )
                 except Exception as exc:
                     write_errors[case["id"]] = _format_mac_error(exc)
 
@@ -454,15 +482,11 @@ class ExcelOracle(OracleDriver):
                     out.append(CaseResult(id=case["id"], kind="skipped", value=write_errors[case["id"]]))
                     continue
                 try:
-                    if _write_spill_shape_probe(sht):
-                        self._app.calculate()
-                    result = _classify_result_cell(sht)
+                    result = _classify_result_cell(self._app, sht)
                     result.id = case["id"]
                     out.append(result)
                 except Exception as exc:
                     out.append(CaseResult(id=case["id"], kind="skipped", value=_format_mac_error(exc)))
-                finally:
-                    _clear_spill_shape_probe(sht)
             return out
         finally:
             try:
@@ -497,29 +521,55 @@ class ExcelOracle(OracleDriver):
                 wb = self._app.books.add()
                 try:
                     try:
-                        wb.api.date1904 = date1904
-                    except Exception:
-                        pass
-                    sht = wb.sheets[0]
-                    setup = case.get("setup") or {}
-                    _apply_merges(sht, case.get("merges") or [])
-                    for addr, rec in setup.items():
-                        sheet_name, bare_addr = _split_sheet_qualified_addr(addr)
-                        target_sht = sht if sheet_name is None else _get_or_add_sheet(wb, sheet_name)
-                        _write_cell(target_sht, bare_addr, rec)
-                    result_cell = sht.range("Z1")
+                        try:
+                            wb.api.date1904 = date1904
+                        except Exception:
+                            pass
+                        sht = wb.sheets[0]
+                        setup = case.get("setup") or {}
+                        _apply_merges(sht, case.get("merges") or [])
+                        for addr, rec in setup.items():
+                            sheet_name, bare_addr = _split_sheet_qualified_addr(addr)
+                            target_sht = sht if sheet_name is None else _get_or_add_sheet(wb, sheet_name)
+                            _write_cell(
+                                target_sht,
+                                bare_addr,
+                                rec,
+                                context=f"case {case['id']!r} setup {addr!r}",
+                            )
+                        result_cell = sht.range("Z1")
+                        try:
+                            result_cell.number_format = "General"
+                        except Exception:
+                            pass
+                        _assign_formula(
+                            result_cell,
+                            case["formula"],
+                            context=f"case {case['id']!r} result",
+                        )
+                    except Exception as exc:
+                        out.append(
+                            CaseResult(
+                                id=case["id"],
+                                kind="skipped",
+                                value=_format_mac_error(exc),
+                            )
+                        )
+                        continue
+
                     try:
-                        result_cell.number_format = "General"
-                    except Exception:
-                        pass
-                    result_cell.formula2 = case["formula"]
-                    self._app.calculate()
-                    if _write_spill_shape_probe(sht):
                         self._app.calculate()
-                    result = _classify_result_cell(sht)
-                    result.id = case["id"]
-                    out.append(result)
-                    _clear_spill_shape_probe(sht)
+                        result = _classify_result_cell(self._app, sht)
+                        result.id = case["id"]
+                        out.append(result)
+                    except Exception as exc:
+                        out.append(
+                            CaseResult(
+                                id=case["id"],
+                                kind="skipped",
+                                value=_format_mac_error(exc),
+                            )
+                        )
                 finally:
                     try:
                         wb.close()
@@ -611,7 +661,12 @@ class ExcelOracle(OracleDriver):
         for sheet_name, cells in sheets.items():
             sht = _get_or_add_sheet(wb, sheet_name)
             for addr, rec in (cells or {}).items():
-                _write_cell(sht, addr, rec)
+                _write_cell(
+                    sht,
+                    addr,
+                    rec,
+                    context=f"workbook case {case.get('id')!r} {sheet_name}!{addr!s}",
+                )
 
         widths = case.get("column_widths") or {}
         for col_key, width in widths.items():
@@ -789,7 +844,7 @@ def _apply_and_read_print(wb, print_spec: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
+def _write_cell(sht, addr: str, rec: Dict[str, Any], *, context: str = "setup cell") -> None:
     """Writes one normalised {kind, value} record to `sht!addr`."""
 
     kind = rec.get("kind")
@@ -810,14 +865,14 @@ def _write_cell(sht, addr: str, rec: Dict[str, Any]) -> None:
         rng.value = str(rec["value"])
         return
     if kind == "formula":
-        rng.formula2 = rec["formula"]
+        _assign_formula(rng, rec["formula"], context=context)
         return
     if kind == "error":
         # Seed errors via a formula since Excel has no API for "set this
         # cell to #DIV/0! without a formula". Use the canonical trigger
         # for each error code.
         trigger = _error_trigger(rec.get("code", "#VALUE!"))
-        rng.formula2 = trigger
+        _assign_formula(rng, trigger, context=f"{context} error trigger")
         return
     raise ValueError(f"unknown cell kind: {kind}")
 
