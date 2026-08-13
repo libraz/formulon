@@ -106,50 +106,11 @@ double RowHeightPoints(const Sheet& sheet, std::uint32_t row) {
 /// Computes the sheet's used range as a single rectangle, walking the
 /// populated cells. Returns false when the sheet has no non-blank cell.
 bool ComputeUsedRange(const Sheet& sheet, CellRange* out_range) {
-  bool any = false;
-  std::uint32_t min_row = 0;
-  std::uint32_t min_col = 0;
-  std::uint32_t max_row = 0;
-  std::uint32_t max_col = 0;
-  for (const auto& [row_index, cells] : sheet.rows()) {
-    for (std::size_t c = 0; c < cells.size(); ++c) {
-      const Cell& cell = cells[c];
-      if (cell.formula_text.empty() && cell.cached_value.is_blank()) {
-        continue;
-      }
-      const auto col_index = static_cast<std::uint32_t>(c);
-      if (!any) {
-        min_row = max_row = row_index;
-        min_col = max_col = col_index;
-        any = true;
-        continue;
-      }
-      min_row = std::min(min_row, row_index);
-      max_row = std::max(max_row, row_index);
-      min_col = std::min(min_col, col_index);
-      max_col = std::max(max_col, col_index);
-    }
-  }
-  // Dynamic-array spill phantoms occupy their coordinates in Excel's used
-  // range even though they hold no stored `Cell`; fold them into the bounding
-  // box so a spilled region paginates against its full extent, not just the
-  // anchor.
-  for (const CellAddress& addr : sheet.spill_phantom_addresses()) {
-    if (!any) {
-      min_row = max_row = addr.row;
-      min_col = max_col = addr.col;
-      any = true;
-      continue;
-    }
-    min_row = std::min(min_row, addr.row);
-    max_row = std::max(max_row, addr.row);
-    min_col = std::min(min_col, addr.col);
-    max_col = std::max(max_col, addr.col);
-  }
-  if (!any) {
+  const auto extent = sheet.populated_extent(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U);
+  if (!extent.has_value()) {
     return false;
   }
-  *out_range = CellRange{min_row, min_col, max_row, max_col};
+  *out_range = CellRange{extent->first_row, extent->first_col, extent->last_row, extent->last_col};
   return true;
 }
 

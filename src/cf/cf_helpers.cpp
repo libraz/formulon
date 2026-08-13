@@ -20,6 +20,7 @@
 #include "eval/eval_context.h"
 #include "eval/scalar_ops.h"
 #include "eval/tree_walker.h"
+#include "io/formula_prefix.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
 #include "parser/parser.h"
@@ -189,8 +190,14 @@ Value parse_shift_evaluate(const std::string& source, const CFEvalContext& ctx) 
   }
 
   // OOXML stores cellIs / expression `formula1` without a leading `=`;
-  // the parser is happy with that, so no stripping is required.
-  parser::Parser parser(source, *ctx.arena);
+  // the parser is happy with that, so no stripping is required. It may,
+  // however, carry Excel's `_xlfn.` / `_xlfn._xlws.` / `_xlws.` / `_xlpm.`
+  // storage prefixes (e.g. a rule using a post-2007 or dynamic-array
+  // function, or a LET / LAMBDA construct); canonicalise before parsing so
+  // the special-form and function-name grammar sees the same spelling the
+  // formula bar would show.
+  const std::string canonical_source = io::strip_storage_prefixes(source);
+  parser::Parser parser(canonical_source, *ctx.arena);
   const parser::AstNode* root = parser.parse();
   if (root == nullptr || !parser.errors().empty()) {
     return Value::error(ErrorCode::Name);
@@ -277,83 +284,6 @@ bool cf_values_equal(const Value& lhs, const Value& rhs) {
 
 namespace {
 
-// True when a stored cell carries observable content.
-bool cf_cell_has_content(const Cell& cell) {
-  return !cell.formula_text.empty() || !cell.cached_value.is_blank();
-}
-
-// Largest 0-based row holding content within columns [col_lo, col_hi].
-// Spill phantoms count as content: they live solely in the spill table
-// (absent from `rows()`) yet resolve to real values.
-bool cf_max_row_in_cols(const Sheet& sheet, std::uint32_t col_lo, std::uint32_t col_hi, std::uint32_t* out_max_row) {
-  bool any = false;
-  std::uint32_t max_row = 0;
-  for (const auto& [row_index, cells] : sheet.rows()) {
-    const std::size_t upper = std::min<std::size_t>(cells.size(), static_cast<std::size_t>(col_hi) + 1U);
-    for (std::size_t c = col_lo; c < upper; ++c) {
-      if (!cf_cell_has_content(cells[c])) {
-        continue;
-      }
-      if (!any || row_index > max_row) {
-        max_row = row_index;
-        any = true;
-      }
-      break;
-    }
-  }
-  for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
-    if (phantom.col < col_lo || phantom.col > col_hi) {
-      continue;
-    }
-    if (!any || phantom.row > max_row) {
-      max_row = phantom.row;
-      any = true;
-    }
-  }
-  if (!any) {
-    return false;
-  }
-  *out_max_row = max_row;
-  return true;
-}
-
-// Largest 0-based column holding content within rows [row_lo, row_hi].
-// Spill phantoms count as content (see `cf_max_row_in_cols`).
-bool cf_max_col_in_rows(const Sheet& sheet, std::uint32_t row_lo, std::uint32_t row_hi, std::uint32_t* out_max_col) {
-  bool any = false;
-  std::uint32_t max_col = 0;
-  for (const auto& [row_index, cells] : sheet.rows()) {
-    if (row_index < row_lo || row_index > row_hi) {
-      continue;
-    }
-    for (std::size_t c = cells.size(); c-- > 0;) {
-      if (!cf_cell_has_content(cells[c])) {
-        continue;
-      }
-      const auto col_index = static_cast<std::uint32_t>(c);
-      if (!any || col_index > max_col) {
-        max_col = col_index;
-        any = true;
-      }
-      break;
-    }
-  }
-  for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
-    if (phantom.row < row_lo || phantom.row > row_hi) {
-      continue;
-    }
-    if (!any || phantom.col > max_col) {
-      max_col = phantom.col;
-      any = true;
-    }
-  }
-  if (!any) {
-    return false;
-  }
-  *out_max_col = max_col;
-  return true;
-}
-
 // Rectangles at or below this cell count are iterated as-is; larger ones are
 // clamped to the sheet's populated extent first. The threshold keeps the
 // per-call extent scan (O(populated rows)) off the hot path for the small
@@ -378,20 +308,13 @@ bool resolve_sqref_rect(const CFCellRange& range, const Sheet& sheet, std::uint3
   if (utils::RectRange(*r0, *c0, *r1, *c1).size() <= kSqrefClampThresholdCells) {
     return true;
   }
-  std::uint32_t max_row = 0;
-  if (!cf_max_row_in_cols(sheet, *c0, *c1, &max_row)) {
+  const auto extent = sheet.populated_extent(*r0, *c0, *r1, *c1);
+  if (!extent.has_value()) {
     return false;
   }
-  *r1 = std::min(*r1, max_row);
-  if (*r0 > *r1) {
-    return false;
-  }
-  std::uint32_t max_col = 0;
-  if (!cf_max_col_in_rows(sheet, *r0, *r1, &max_col)) {
-    return false;
-  }
-  *c1 = std::min(*c1, max_col);
-  return *c0 <= *c1;
+  *r1 = std::min(*r1, extent->last_row);
+  *c1 = std::min(*c1, extent->last_col);
+  return *r0 <= *r1 && *c0 <= *c1;
 }
 
 // Keep the lightweight grid constants in `cf_types.h` in sync with the

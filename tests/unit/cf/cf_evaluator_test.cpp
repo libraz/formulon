@@ -18,12 +18,14 @@
 #include "cf/scale_evaluator.h"
 #include "eval/date_time.h"
 #include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon::cf {
 namespace {
@@ -83,6 +85,32 @@ TEST(CFEvaluator, RuleTypesNotYetImplementedReturnFalse) {
     EXPECT_FALSE(match_rule(r, Value::blank())) << "type=" << static_cast<int>(t);
     EXPECT_FALSE(match_rule(r, Value::text("x"))) << "type=" << static_cast<int>(t);
   }
+}
+
+// The context-aware overload routes Expression rules through
+// `helpers::parse_shift_evaluate`, which must canonicalise Excel's
+// `_xlfn.` / `_xlpm.` storage prefixes before parsing (see cf_helpers.cpp)
+// -- the CF-rule ingestion path does not go through the defined-names
+// reader's own stripping, so it needs its own.
+TEST(CFEvaluator, ExpressionRuleAcceptsXlfnPrefixedFunction) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.add_sheet("Sheet1");
+  eval::EvalState state;
+  eval::EvalContext eval_ctx(wb, s, state);
+  Arena arena;
+  const eval::FunctionRegistry& registry = eval::default_registry();
+
+  CFRule r = MakeRule(RuleType::Expression);
+  r.formula1 = "_xlfn.LET(_xlpm.x,TRUE,_xlpm.x)";
+
+  CFEvalContext ctx;
+  ctx.anchor = CellAddress{0U, 0U};
+  ctx.target = CellAddress{0U, 0U};
+  ctx.arena = &arena;
+  ctx.registry = &registry;
+  ctx.eval_ctx = &eval_ctx;
+
+  EXPECT_TRUE(match_rule(r, Value::blank(), ctx));
 }
 
 TEST(CFEvaluator, CellIsLessThanNumeric) {
@@ -2431,6 +2459,22 @@ TEST(CFHelpers, ExplicitGiantSqrefIsClampedToPopulatedExtent) {
     sum += n;
   }
   EXPECT_DOUBLE_EQ(sum, 24.0);
+}
+
+TEST(CFHelpers, WholeAxisExtentIncludesPhantomOnlyColumn) {
+  Sheet sheet("S");
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 2U,
+                                 {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0),
+                                  Value::number(5.0), Value::number(6.0)}));
+
+  const std::vector<CFCellRange> sqref{MakeRange(0U, 1U, kCfMaxRows - 1U, 1U)};
+  EXPECT_EQ(helpers::count_matches_in_sqref(Value::number(2.0), sqref, sheet), 1U);
+  EXPECT_EQ(helpers::count_matches_in_sqref(Value::number(4.0), sqref, sheet), 1U);
+  const std::vector<double> values = helpers::collect_numeric_values(sqref, sheet);
+  ASSERT_EQ(values.size(), 3U);
+  EXPECT_DOUBLE_EQ(values[0], 2.0);
+  EXPECT_DOUBLE_EQ(values[1], 4.0);
+  EXPECT_DOUBLE_EQ(values[2], 6.0);
 }
 
 }  // namespace
