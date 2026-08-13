@@ -53,6 +53,24 @@ TEST(SheetSpillTest, CommitThreeByOneSucceedsAndExposesValues) {
   EXPECT_NE(s.spill_region_covering(2U, 0U), nullptr);
 }
 
+TEST(SheetSpillTest, CommittedSpillFootprintSnapshotExcludesBlockedRecords) {
+  Sheet s("Sheet1");
+  ASSERT_TRUE(s.commit_spill(4U, 5U, 2U, 3U,
+                             {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0),
+                              Value::number(5.0), Value::number(6.0)}));
+  s.set_cell_value(10U, 10U, Value::number(9.0));
+  ASSERT_FALSE(s.commit_spill(9U, 10U, 2U, 2U,
+                              {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0)}));
+
+  const std::vector<SpillFootprint> footprints = s.committed_spill_footprints();
+  ASSERT_EQ(footprints.size(), 1U);
+  EXPECT_EQ(footprints[0].anchor_row, 4U);
+  EXPECT_EQ(footprints[0].anchor_col, 5U);
+  EXPECT_EQ(footprints[0].rows, 2U);
+  EXPECT_EQ(footprints[0].cols, 3U);
+  ASSERT_EQ(s.blocked_spill_footprints().size(), 1U);
+}
+
 TEST(SheetSpillTest, CommitTwoByThreeRowMajorOrderingMatches) {
   Sheet s("Sheet1");
   // 2x3 matrix:
@@ -544,6 +562,43 @@ TEST(SheetSpillTest, CellAtIsUnchangedForPhantomCoordinates) {
   EXPECT_EQ(s.cell_at(2U, 0U), nullptr);
   EXPECT_EQ(s.resolve_cell_value(1U, 0U), Value::number(2.0));
   EXPECT_EQ(s.resolve_cell_value(2U, 0U), Value::number(3.0));
+}
+
+TEST(SheetSpillTest, PopulatedExtentUnifiesStoredCellsAndCommittedSpills) {
+  Sheet s("Sheet1");
+  s.set_cell_value(10U, 2U, Value::number(7.0));
+  s.set_cell_formula(20U, 8U, "=1");
+  ASSERT_TRUE(s.commit_spill(30U, 4U, 3U, 2U,
+                             {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0),
+                              Value::number(5.0), Value::number(6.0)}));
+
+  const auto extent = s.populated_extent(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U);
+  ASSERT_TRUE(extent.has_value());
+  EXPECT_EQ(extent->first_row, 10U);
+  EXPECT_EQ(extent->first_col, 2U);
+  EXPECT_EQ(extent->last_row, 32U);
+  EXPECT_EQ(extent->last_col, 8U);
+
+  const auto phantom_only_column = s.populated_extent(0U, 5U, Sheet::kMaxRows - 1U, 5U);
+  ASSERT_TRUE(phantom_only_column.has_value());
+  EXPECT_EQ(phantom_only_column->first_row, 30U);
+  EXPECT_EQ(phantom_only_column->last_row, 32U);
+  EXPECT_EQ(phantom_only_column->first_col, 5U);
+  EXPECT_EQ(phantom_only_column->last_col, 5U);
+
+  const auto empty = s.populated_extent(0U, 0U, 9U, 1U);
+  EXPECT_FALSE(empty.has_value());
+}
+
+TEST(SheetSpillTest, PopulatedExtentExcludesBlockedSpillFootprints) {
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=SEQUENCE(1,3)");
+  s.set_cell_value(0U, 2U, Value::number(9.0));
+  EXPECT_FALSE(s.commit_spill(0U, 0U, 1U, 3U, {Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
+
+  // The failed footprint is retained for dependency invalidation, but its
+  // blank middle coordinate is not populated content.
+  EXPECT_FALSE(s.populated_extent(0U, 1U, 0U, 1U).has_value());
 }
 
 // ---------------------------------------------------------------------------

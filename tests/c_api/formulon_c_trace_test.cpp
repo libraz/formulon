@@ -72,6 +72,39 @@ TEST(FormulonCApiTrace, DirectDependentsOfRoot) {
   ASSERT_EQ(fm_cell_nodes_count(nodes.handle), 2U);
 }
 
+TEST(FormulonCApiTrace, CompactRangeIsVisibleInBothDirections) {
+  // A rectangle this wide is registered as one compact dependency and owns
+  // no per-cell graph edge, so trace has to expand it explicitly or the
+  // reference disappears from every binding's audit view. The expansion is
+  // clipped to cells that actually hold content.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 4999, 0, 2.0), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 1, "=SUM(A1:A60000)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  CellNodesGuard precedents;
+  ASSERT_EQ(fm_workbook_precedents(wb.handle, 0, 0, 1, 1, &precedents.handle), 0);
+  ASSERT_EQ(fm_cell_nodes_count(precedents.handle), 2U);
+  fm_cell_node_t first{};
+  fm_cell_node_t second{};
+  ASSERT_EQ(fm_cell_nodes_at(precedents.handle, 0, &first), 0);
+  ASSERT_EQ(fm_cell_nodes_at(precedents.handle, 1, &second), 0);
+  EXPECT_EQ(first.row, 0U);
+  EXPECT_EQ(first.col, 0U);
+  EXPECT_EQ(second.row, 4999U);
+  EXPECT_EQ(second.col, 0U);
+
+  CellNodesGuard dependents;
+  ASSERT_EQ(fm_workbook_dependents(wb.handle, 0, 4999, 0, 1, &dependents.handle), 0);
+  ASSERT_EQ(fm_cell_nodes_count(dependents.handle), 1U);
+  fm_cell_node_t watcher{};
+  ASSERT_EQ(fm_cell_nodes_at(dependents.handle, 0, &watcher), 0);
+  EXPECT_EQ(watcher.row, 0U);
+  EXPECT_EQ(watcher.col, 1U);
+}
+
 TEST(FormulonCApiTrace, DepthExpandsTransitively) {
   // A1=1, B1=A1, C1=B1 -> precedents(C1, depth=2) includes A1
   WorkbookGuard wb;

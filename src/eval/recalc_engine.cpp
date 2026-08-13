@@ -24,6 +24,7 @@
 #include "eval/spill_release.h"
 #include "eval/volatile_tracker.h"
 #include "parser/ast.h"
+#include "parser/parser.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -55,6 +56,21 @@ void mark_spill_release_wave(const RecalcEngine::LockedMutator& mutator, const s
     }
     mutator.mark_range_dependents_dirty(anchor);
   }
+}
+
+bool spill_intersects_range(const SpillFootprint& footprint, const CellRangeDependency& range) noexcept {
+  // Both records use inclusive endpoints / positive dimensions. Convert to
+  // half-open uint64 intervals before comparing so a max-grid coordinate or
+  // a malformed external record cannot wrap an end point.
+  const std::uint64_t spill_row_end = static_cast<std::uint64_t>(footprint.anchor_row) + footprint.rows;
+  const std::uint64_t spill_col_end = static_cast<std::uint64_t>(footprint.anchor_col) + footprint.cols;
+  const std::uint64_t range_row_end = static_cast<std::uint64_t>(range.row_last) + 1U;
+  const std::uint64_t range_col_end = static_cast<std::uint64_t>(range.col_last) + 1U;
+  return footprint.rows != 0U && footprint.cols != 0U &&
+         static_cast<std::uint64_t>(footprint.anchor_row) < range_row_end &&
+         static_cast<std::uint64_t>(range.row_first) < spill_row_end &&
+         static_cast<std::uint64_t>(footprint.anchor_col) < range_col_end &&
+         static_cast<std::uint64_t>(range.col_first) < spill_col_end;
 }
 
 }  // namespace
@@ -102,6 +118,72 @@ const DepGraph& RecalcEngine::LockedMutator::dep_graph() const noexcept {
   return engine_.graph_;
 }
 
+namespace {
+
+// Appends every populated coordinate of `range` to `out`. `extent` is the
+// rectangle's populated bounding box as reported by `Sheet::populated_extent`,
+// so the walk visits only rows that can carry content.
+void collect_populated_cells(const Sheet& sheet, const CellRangeDependency& range, const Sheet::PopulatedExtent& extent,
+                             std::vector<CellNodeId>& out) {
+  for (std::uint32_t row = extent.first_row; row <= extent.last_row; ++row) {
+    const auto it = sheet.rows().find(row);
+    if (it == sheet.rows().end()) {
+      continue;
+    }
+    const RowCells& cells = it->second;
+    const std::size_t begin = std::max<std::size_t>(extent.first_col, cells.first_col());
+    const std::size_t end = std::min<std::size_t>(static_cast<std::size_t>(extent.last_col) + 1U, cells.size());
+    for (std::size_t col = begin; col < end; ++col) {
+      const Cell& cell = cells[col];
+      if (!cell.formula_text.empty() || !cell.cached_value.is_blank()) {
+        out.push_back(CellNodeId{range.sheet_id, row, static_cast<std::uint32_t>(col)});
+      }
+    }
+  }
+}
+
+}  // namespace
+
+std::vector<CellNodeId> RecalcEngine::compact_range_precedents_of(CellNodeId cell, const Workbook& workbook) const {
+  std::lock_guard<std::mutex> guard(mutex_);
+  std::vector<CellNodeId> precedents;
+  range_dependencies_.for_each_range_of_owner(cell, [&](const CellRangeDependency& range) {
+    if (range.sheet_id >= workbook.sheet_count()) {
+      return;
+    }
+    const Sheet& sheet = workbook.sheet(range.sheet_id);
+    const auto extent = sheet.populated_extent(range.row_first, range.col_first, range.row_last, range.col_last);
+    if (!extent.has_value()) {
+      return;
+    }
+    collect_populated_cells(sheet, range, *extent, precedents);
+  });
+  // A cell can be reached through two overlapping rectangles of the same
+  // formula; the trace surface reports each precedent once.
+  std::sort(precedents.begin(), precedents.end(), [](CellNodeId lhs, CellNodeId rhs) {
+    if (lhs.sheet_id != rhs.sheet_id) {
+      return lhs.sheet_id < rhs.sheet_id;
+    }
+    if (lhs.row != rhs.row) {
+      return lhs.row < rhs.row;
+    }
+    return lhs.col < rhs.col;
+  });
+  precedents.erase(std::unique(precedents.begin(), precedents.end()), precedents.end());
+  return precedents;
+}
+
+std::vector<CellNodeId> RecalcEngine::compact_range_dependents_of(CellNodeId cell) const {
+  std::lock_guard<std::mutex> guard(mutex_);
+  std::vector<CellNodeId> owners;
+  range_dependencies_.for_each_owner_covering(cell, [&owners](CellNodeId owner) {
+    if (std::find(owners.begin(), owners.end(), owner) == owners.end()) {
+      owners.push_back(owner);
+    }
+  });
+  return owners;
+}
+
 std::vector<CellNodeId> RecalcEngine::LockedMutator::three_d_span_owners_covering_sheet(
     std::uint16_t edited_sheet) const {
   std::vector<CellNodeId> owners;
@@ -125,6 +207,52 @@ std::vector<CellNodeId> RecalcEngine::LockedMutator::three_d_span_owners_coverin
   return owners;
 }
 
+DepGraph::DependencyDelta RecalcEngine::reconcile_spill_dependencies_locked(const Workbook& workbook) {
+  // With no compact watchers and no old derived ownership there is nothing
+  // to snapshot or replace. This is the common scalar-only fast path.
+  if (range_dependencies_.empty() && !graph_.has_source_edges(DepGraph::DependencySource::kSpillFootprint)) {
+    return {};
+  }
+
+  // Copy every sheet's committed geometry before touching the graph. This
+  // keeps the lock order engine -> sheet/spill and ensures graph replacement
+  // never holds a Sheet spill mutex while another graph operation runs.
+  std::vector<std::vector<SpillFootprint>> committed(workbook.sheet_count());
+  std::unordered_set<std::uint16_t> referenced_sheets;
+  referenced_sheets.reserve(range_dependencies_.distinct_range_count());
+  range_dependencies_.for_each_distinct_range(
+      [&](std::uint32_t, const CellRangeDependency& range, const std::vector<CellNodeId>&) {
+        if (range.sheet_id < workbook.sheet_count()) {
+          referenced_sheets.insert(range.sheet_id);
+        }
+      });
+  for (std::uint16_t sheet_id : referenced_sheets) {
+    committed[sheet_id] = workbook.sheet(sheet_id).committed_spill_footprints();
+  }
+
+  std::vector<DepGraph::Edge> desired;
+  range_dependencies_.for_each_distinct_range(
+      [&](std::uint32_t, const CellRangeDependency& range, const std::vector<CellNodeId>& owners) {
+        if (range.sheet_id >= committed.size()) {
+          return;
+        }
+        for (const SpillFootprint& footprint : committed[range.sheet_id]) {
+          if (!spill_intersects_range(footprint, range)) {
+            continue;
+          }
+          const CellNodeId producer{range.sheet_id, footprint.anchor_row, footprint.anchor_col};
+          for (const CellNodeId owner : owners) {
+            // A self edge is retained: when a formula's compact range really
+            // reads its own committed spill, that is a genuine circular
+            // dependency and must reach the SCC/cycle handling path rather
+            // than being silently treated as an ordering artefact.
+            desired.emplace_back(owner, producer);
+          }
+        }
+      });
+  return graph_.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, desired);
+}
+
 // ---------------------------------------------------------------------------
 // Public mutating API: each entry acquires `mutex_` and delegates to the
 // `_locked` body. Internal callers (notably the parallel scheduler) take
@@ -138,13 +266,14 @@ void RecalcEngine::register_formula(CellNodeId cell, const parser::AstNode& ast,
 }
 
 void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNode& ast, const Workbook& workbook) {
+  // A rewrite can change a producer's result shape. Remove its previous
+  // candidate-index membership before replacing graph/volatile metadata.
+  update_potential_spill_producer_locked(cell, SpillPotential::kNever);
+
   // Drop the cell's previous outgoing edges so re-registration is a clean
   // rewrite (the new dependency set may differ from the old one).
   graph_.clear_dependencies_of(cell);
-  range_dependencies_.erase(
-      std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
-                     [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
-      range_dependencies_.end());
+  range_dependencies_.erase_owner(cell);
   three_d_span_dependencies_.erase(
       std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
                      [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
@@ -160,27 +289,58 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   for (const ThreeDSheetSpanDependency span : deps.three_d_spans) {
     three_d_span_dependencies_.push_back(RegisteredThreeDSpan{cell, span});
   }
-  for (CellRangeDependency range : deps.range_deps) {
-    range_dependencies_.push_back(RegisteredRangeDependency{cell, range});
+  for (const CellRangeDependency& range : deps.range_deps) {
+    range_dependencies_.add(cell, range);
 
     // Preserve evaluation order for formulas already inside the range. The
     // compact range table handles literal writes (including cells created in
     // the future); explicit graph edges are needed only for formula cells so
     // Tarjan evaluates their fresh cached values before this aggregate.
+    //
+    // `populated_extent` bounds that search by the rectangle's real content
+    // instead of its area, so an empty rectangle — however large — costs one
+    // sheet query and a rectangle spanning a whole column costs its populated
+    // bounding box.
     const Sheet& sheet = workbook.sheet(range.sheet_id);
-    for (const auto& [row, cells] : sheet.rows()) {
-      if (row < range.row_first || row > range.row_last) {
-        continue;
-      }
-      const std::uint32_t first_col = range.col_first;
-      const std::uint32_t last_col = std::min<std::uint32_t>(range.col_last, static_cast<std::uint32_t>(cells.size()));
-      for (std::uint32_t col = first_col; col < last_col; ++col) {
+    const auto extent = sheet.populated_extent(range.row_first, range.col_first, range.row_last, range.col_last);
+    if (!extent.has_value()) {
+      continue;
+    }
+    const auto add_ordering_edges = [&](std::uint32_t row, const RowCells& cells) {
+      // `RowCells::size()` is an absolute, exclusive column bound while the
+      // dependency rectangle stores an inclusive `col_last`. Intersect the
+      // two as size_t half-open bounds and honour the row run's origin so a
+      // far-right row does not index its leading gap as if it were stored.
+      const std::size_t first_col =
+          std::max<std::size_t>(extent->first_col, static_cast<std::size_t>(cells.first_col()));
+      const std::size_t extent_end = static_cast<std::size_t>(extent->last_col) + 1U;
+      const std::size_t last_col = std::min(extent_end, cells.size());
+      for (std::size_t col = first_col; col < last_col; ++col) {
         if (!cells[col].formula_text.empty()) {
-          const CellNodeId source{range.sheet_id, row, col};
+          const CellNodeId source{range.sheet_id, row, static_cast<std::uint32_t>(col)};
           if (source != cell) {
             graph_.add_dependency(cell, source);
           }
         }
+      }
+    };
+    // Whichever of "walk the populated rows" and "probe each row of the
+    // extent" is smaller wins: the first is proportional to the sheet, the
+    // second to the rectangle.
+    const std::uint64_t extent_rows = static_cast<std::uint64_t>(extent->last_row - extent->first_row) + 1U;
+    if (extent_rows <= sheet.rows().size()) {
+      for (std::uint32_t row = extent->first_row; row <= extent->last_row; ++row) {
+        const auto it = sheet.rows().find(row);
+        if (it != sheet.rows().end()) {
+          add_ordering_edges(row, it->second);
+        }
+      }
+    } else {
+      for (const auto& [row, cells] : sheet.rows()) {
+        if (row < extent->first_row || row > extent->last_row) {
+          continue;
+        }
+        add_ordering_edges(row, cells);
       }
     }
   }
@@ -189,14 +349,15 @@ void RecalcEngine::register_formula_locked(CellNodeId cell, const parser::AstNod
   // dependency of every existing range watcher that contains it. Otherwise
   // the watcher would be dirtied, but Tarjan would have no ordering edge to
   // ensure the new formula's cached value is refreshed first.
-  for (const RegisteredRangeDependency& entry : range_dependencies_) {
-    if (entry.dependent != cell && entry.range.contains(cell)) {
-      graph_.add_dependency(entry.dependent, cell);
+  range_dependencies_.for_each_owner_covering(cell, [this, cell](CellNodeId owner) {
+    if (owner != cell) {
+      graph_.add_dependency(owner, cell);
     }
-  }
+  });
   if (deps.is_volatile) {
     volatiles_.register_cell(cell);
   }
+  update_potential_spill_producer_locked(cell, spill_potential(ast));
 }
 
 void RecalcEngine::unregister_formula(CellNodeId cell) {
@@ -205,16 +366,22 @@ void RecalcEngine::unregister_formula(CellNodeId cell) {
 }
 
 void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
+  // Preserve the pre-unregistration reverse snapshot. Removing the node
+  // would otherwise erase the only path that can wake compact range
+  // watchers (including a watcher that was linked through a previous spill
+  // footprint), leaving them with a stale cached aggregate.
+  for (CellNodeId dependent : graph_.dependents_of(cell)) {
+    dirty_.mark(dependent);
+  }
+  mark_range_dependents_dirty_locked(cell);
   graph_.remove_node(cell);
-  range_dependencies_.erase(
-      std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
-                     [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
-      range_dependencies_.end());
+  range_dependencies_.erase_owner(cell);
   three_d_span_dependencies_.erase(
       std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
                      [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
       three_d_span_dependencies_.end());
   volatiles_.unregister_cell(cell);
+  update_potential_spill_producer_locked(cell, SpillPotential::kNever);
 }
 
 void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
@@ -224,15 +391,13 @@ void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
 
 void RecalcEngine::clear_cell_dependencies_locked(CellNodeId cell) {
   graph_.clear_dependencies_of(cell);
-  range_dependencies_.erase(
-      std::remove_if(range_dependencies_.begin(), range_dependencies_.end(),
-                     [cell](const RegisteredRangeDependency& entry) { return entry.dependent == cell; }),
-      range_dependencies_.end());
+  range_dependencies_.erase_owner(cell);
   three_d_span_dependencies_.erase(
       std::remove_if(three_d_span_dependencies_.begin(), three_d_span_dependencies_.end(),
                      [cell](const RegisteredThreeDSpan& entry) { return entry.owner == cell; }),
       three_d_span_dependencies_.end());
   volatiles_.unregister_cell(cell);
+  update_potential_spill_producer_locked(cell, SpillPotential::kNever);
 }
 
 void RecalcEngine::mark_dirty(CellNodeId cell) {
@@ -245,19 +410,31 @@ void RecalcEngine::mark_dirty_locked(CellNodeId cell) {
 }
 
 void RecalcEngine::mark_range_dependents_dirty_locked(CellNodeId cell) {
-  for (const RegisteredRangeDependency& entry : range_dependencies_) {
-    if (entry.range.contains(cell)) {
-      dirty_.mark(entry.dependent);
-    }
-  }
+  range_dependencies_.for_each_owner_covering(cell, [this](CellNodeId owner) { dirty_.mark(owner); });
 }
 
 void RecalcEngine::reset_graph_locked() {
   graph_ = DepGraph{};
   range_dependencies_.clear();
   three_d_span_dependencies_.clear();
+  potential_spill_producers_by_sheet_.clear();
   volatiles_.clear();
   dirty_.clear();
+}
+
+void RecalcEngine::update_potential_spill_producer_locked(CellNodeId cell, SpillPotential potential) {
+  if (cell.sheet_id >= potential_spill_producers_by_sheet_.size()) {
+    if (potential == SpillPotential::kNever) {
+      return;
+    }
+    potential_spill_producers_by_sheet_.resize(static_cast<std::size_t>(cell.sheet_id) + 1U);
+  }
+  auto& producers = potential_spill_producers_by_sheet_[cell.sheet_id];
+  if (potential == SpillPotential::kNever) {
+    producers.erase(cell);
+  } else {
+    producers.insert_or_assign(cell, potential);
+  }
 }
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {
@@ -281,6 +458,7 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
   SpillReleaseQueue release_queue{&workbook};
   const SpillReleaseCallback release_callback = &queue_spill_release;
   std::size_t release_waves = 0U;
+  std::size_t dependency_waves = 0U;
   std::size_t no_progress_waves = 0U;
   std::vector<BlockedSpillState> previous_release_state;
   std::vector<CellNodeId> previous_release_targets;
@@ -289,6 +467,18 @@ Expected<RecalcStats, Error> RecalcEngine::recalc_locked(Workbook& workbook, con
   // Per-wave locals begin after this label and are destroyed on the backward
   // jump, while the counters, queue, and accumulated stats above persist.
 recalc_next_wave:
+  // Reconcile before dirtiness propagation and SCC construction. A formula
+  // rewrite can clear a committed spill before this wave; removing the old
+  // derived edge here prevents a stale phantom-only cycle, while additions
+  // wake the watcher before topology is built.
+  const DepGraph::DependencyDelta pre_dependency_delta = reconcile_spill_dependencies_locked(workbook);
+  for (const DepGraph::Edge& edge : pre_dependency_delta.added) {
+    dirty_.mark(edge.first);
+  }
+  for (const DepGraph::Edge& edge : pre_dependency_delta.removed) {
+    dirty_.mark(edge.first);
+  }
+
   // ---- Phase 1: seed the dirty set with every volatile cell. ----
   // Volatile formulas re-execute every pass even if their inputs are
   // unchanged. Counting them here also reports how many of the eventually-
@@ -513,24 +703,41 @@ recalc_next_wave:
     ++stats.cells_evaluated;
   }
 
+  // Reconcile compact-range -> spill-producer edges only after every cell in
+  // this wave has committed its result. Newly acquired source edges schedule
+  // their watcher for one targeted follow-up wave; old edges remain active
+  // throughout the current wave, so a producer shrink still dirties and
+  // orders its watcher correctly.
+  const DepGraph::DependencyDelta dependency_delta = reconcile_spill_dependencies_locked(workbook);
+  const bool dependency_retry = !dependency_delta.added.empty();
+  if (dependency_retry) {
+    ++dependency_waves;
+    for (const DepGraph::Edge& edge : dependency_delta.added) {
+      dirty_.mark(edge.first);
+    }
+  }
+
   // A spill shape change can release cells that blocked a different pending
   // producer. Keep those anchors for a dependency-ordered next wave instead
   // of losing them when this pass clears its dirty set.
   const std::vector<CellNodeId> released = release_queue.take();
-  if (!released.empty()) {
+  if (!released.empty() || dependency_retry) {
     ++release_waves;
-    const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
-    const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
-    if (have_previous_release_state && release_state == previous_release_state &&
-        release_targets == previous_release_targets) {
-      ++no_progress_waves;
-    } else {
-      no_progress_waves = 0U;
+    if (!released.empty()) {
+      const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
+      const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
+      if (have_previous_release_state && release_state == previous_release_state &&
+          release_targets == previous_release_targets) {
+        ++no_progress_waves;
+      } else {
+        no_progress_waves = 0U;
+      }
+      previous_release_state = release_state;
+      previous_release_targets = release_targets;
+      have_previous_release_state = true;
     }
-    previous_release_state = release_state;
-    previous_release_targets = release_targets;
-    have_previous_release_state = true;
-    if (release_waves > kMaxSpillReleaseWaves || no_progress_waves >= kMaxNoProgressSpillWaves) {
+    if (release_waves > kMaxSpillReleaseWaves || dependency_waves > kMaxSpillReleaseWaves ||
+        (!released.empty() && no_progress_waves >= kMaxNoProgressSpillWaves)) {
       // Do not recurse through an unbounded chain of release waves. Preserve
       // the existing dirty set (including unrelated work) and keep the
       // release targets dirty for a caller retry after an external mutation.
@@ -542,6 +749,9 @@ recalc_next_wave:
     dirty_.clear();
     const LockedMutator mutator = locked_mutator();
     mark_spill_release_wave(mutator, released, graph_);
+    for (const DepGraph::Edge& edge : dependency_delta.added) {
+      mutator.mark_dirty(edge.first);
+    }
     goto recalc_next_wave;
   }
 
@@ -570,6 +780,7 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   SpillReleaseQueue release_queue{&workbook};
   const SpillReleaseCallback release_callback = &queue_spill_release;
   std::size_t release_waves = 0U;
+  std::size_t dependency_waves = 0U;
   std::size_t no_progress_waves = 0U;
   std::vector<BlockedSpillState> previous_release_state;
   std::vector<CellNodeId> previous_release_targets;
@@ -603,6 +814,18 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   // As in the full pass, this label keeps the release-wave loop iterative;
   // locals in each wave's body leave scope before the backward jump.
 partial_recalc_next_wave:
+  // Keep the graph's spill-derived topology current before forming the
+  // viewport closure. Both source additions and removals dirty their range
+  // watcher; this is essential when a producer rewrite has just invalidated
+  // its committed footprint.
+  const DepGraph::DependencyDelta pre_dependency_delta = reconcile_spill_dependencies_locked(workbook);
+  for (const DepGraph::Edge& edge : pre_dependency_delta.added) {
+    dirty_.mark(edge.first);
+  }
+  for (const DepGraph::Edge& edge : pre_dependency_delta.removed) {
+    dirty_.mark(edge.first);
+  }
+
   // ---- Phase 1: enumerate the viewport's seed cells. ----
   // Walk the requested rectangle and pull every populated cell into the
   // seed set. Cells outside the sheet's stored extent are silently
@@ -642,6 +865,81 @@ partial_recalc_next_wave:
     for (CellNodeId predecessor : graph_.dependencies_of_ref(current)) {
       if (closure.insert(predecessor).second) {
         bfs_queue.push_back(predecessor);
+      }
+    }
+  }
+
+  // Before the first committed spill exists there is no derived edge from a
+  // compact range watcher to its producer. A viewport containing that
+  // watcher must nevertheless pull in every indexed potential producer on
+  // the referenced sheet whose down/right geometry could intersect it. Clean
+  // candidates enter the closure so their dependencies can participate in
+  // graph expansion; only dirty members of the resulting closure evaluate.
+  // Each authored range entry is processed independently, and newly reached
+  // watchers are expanded in the same fixed-point loop.
+  bool expanded_potential_producers = true;
+  std::unordered_set<std::uint32_t> processed_range_entries;
+  processed_range_entries.reserve(range_dependencies_.distinct_range_count());
+  Arena potential_arena;
+  while (expanded_potential_producers) {
+    expanded_potential_producers = false;
+    range_dependencies_.for_each_distinct_range(
+        [&](std::uint32_t range_id, const CellRangeDependency& range, const std::vector<CellNodeId>& owners) {
+          if (range.sheet_id >= sheet_count || range.sheet_id >= potential_spill_producers_by_sheet_.size()) {
+            return;
+          }
+          if (processed_range_entries.count(range_id) != 0U) {
+            return;
+          }
+          const bool watched_from_closure = std::any_of(
+              owners.begin(), owners.end(), [&closure](CellNodeId owner) { return closure.count(owner) != 0U; });
+          if (!watched_from_closure) {
+            return;
+          }
+          processed_range_entries.insert(range_id);
+          for (const auto& [producer, static_potential] : potential_spill_producers_by_sheet_[range.sheet_id]) {
+            // Excel spills only down and right from the anchor. The producer may
+            // begin before the watcher's first row/column, but an anchor beyond
+            // either inclusive last bound cannot reach the compact rectangle.
+            if (producer.row > range.row_last || producer.col > range.col_last) {
+              continue;
+            }
+            SpillPotential candidate = static_potential;
+            if (candidate == SpillPotential::kNeedsRegistry) {
+              const Sheet& producer_sheet = workbook.sheet(producer.sheet_id);
+              const Cell* producer_cell = producer_sheet.cell_at(producer.row, producer.col);
+              if (producer_cell == nullptr || producer_cell->formula_text.empty()) {
+                continue;
+              }
+              std::string_view formula = producer_cell->formula_text;
+              if (!formula.empty() && formula.front() == '=') {
+                formula.remove_prefix(1);
+              }
+              potential_arena.reset();
+              parser::AstNode* producer_ast = parser::parse_strict(formula, potential_arena);
+              if (producer_ast == nullptr) {
+                // A stale/unparseable candidate cannot commit a spill; its cell
+                // will surface the ordinary formula error if it is dirty.
+                continue;
+              }
+              candidate = spill_potential(*producer_ast, registry);
+            }
+            if (candidate == SpillPotential::kNever) {
+              continue;
+            }
+            if (closure.insert(producer).second) {
+              expanded_potential_producers = true;
+              bfs_queue.push_back(producer);
+            }
+          }
+        });
+    while (bfs_head < bfs_queue.size()) {
+      const CellNodeId current = bfs_queue[bfs_head++];
+      for (CellNodeId predecessor : graph_.dependencies_of_ref(current)) {
+        if (closure.insert(predecessor).second) {
+          bfs_queue.push_back(predecessor);
+          expanded_potential_producers = true;
+        }
       }
     }
   }
@@ -855,6 +1153,19 @@ partial_recalc_next_wave:
     ++stats.cells_evaluated;
   }
 
+  // Reconcile globally after this partial wave. A newly discovered
+  // watcher-to-producer edge is retried here only when that watcher belongs
+  // to this viewport closure; a remote watcher remains dirty for a later
+  // full or overlapping partial pass.
+  const DepGraph::DependencyDelta dependency_delta = reconcile_spill_dependencies_locked(workbook);
+  bool dependency_retry_in_closure = false;
+  for (const DepGraph::Edge& edge : dependency_delta.added) {
+    dirty_.mark(edge.first);
+    if (closure.count(edge.first) != 0U) {
+      dependency_retry_in_closure = true;
+    }
+  }
+
   // ---- Phase 5: clear only the closure's dirty entries. ----
   // Cells outside the closure must remain dirty so a subsequent
   // `recalc()` (or an overlapping `partial_recalc`) revisits them.
@@ -870,13 +1181,18 @@ partial_recalc_next_wave:
   for (CellNodeId c : to_unmark) {
     dirty_.unmark(c);
   }
+  for (const DepGraph::Edge& edge : dependency_delta.added) {
+    if (closure.count(edge.first) != 0U) {
+      dirty_.mark(edge.first);
+    }
+  }
 
   // A committed spill can release a pending producer while this viewport is
   // being evaluated. Preserve releases outside the closure for a later full
   // or overlapping partial pass; releases inside the closure get a true
   // dependency-ordered next wave before this partial call returns.
   const std::vector<CellNodeId> released = release_queue.take();
-  if (!released.empty()) {
+  if (!released.empty() || dependency_retry_in_closure) {
     const LockedMutator mutator = locked_mutator();
     mark_spill_release_wave(mutator, released, graph_);
     bool release_in_closure = false;
@@ -886,20 +1202,26 @@ partial_recalc_next_wave:
         break;
       }
     }
-    if (release_in_closure) {
-      ++release_waves;
-      const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
-      const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
-      if (have_previous_release_state && release_state == previous_release_state &&
-          release_targets == previous_release_targets) {
-        ++no_progress_waves;
-      } else {
-        no_progress_waves = 0U;
+    if (release_in_closure || dependency_retry_in_closure) {
+      if (!released.empty()) {
+        ++release_waves;
+        const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(workbook);
+        const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
+        if (have_previous_release_state && release_state == previous_release_state &&
+            release_targets == previous_release_targets) {
+          ++no_progress_waves;
+        } else {
+          no_progress_waves = 0U;
+        }
+        previous_release_state = release_state;
+        previous_release_targets = release_targets;
+        have_previous_release_state = true;
       }
-      previous_release_state = release_state;
-      previous_release_targets = release_targets;
-      have_previous_release_state = true;
-      if (release_waves > kMaxSpillReleaseWaves || no_progress_waves >= kMaxNoProgressSpillWaves) {
+      if (dependency_retry_in_closure) {
+        ++dependency_waves;
+      }
+      if (release_waves > kMaxSpillReleaseWaves || dependency_waves > kMaxSpillReleaseWaves ||
+          (!released.empty() && no_progress_waves >= kMaxNoProgressSpillWaves)) {
         return make_error(FormulonErrorCode::kGraphScheduleFailed, "spill release waves made no progress",
                           "partial dynamic-array spill recovery exceeded its bounded wave budget");
       }

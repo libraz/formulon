@@ -9,14 +9,17 @@
 #include <cstdint>
 #include <string>
 
+#include "eval/adhoc_eval.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -179,6 +182,96 @@ TEST(EvalContextRecursive, FormulaChain) {
   const Value v = ResolveWithState(sheet, state, 2, 0);
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 12.0);
+}
+
+TEST(EvalContextRecursive, ReadOnlyRangeUsesCommittedSpillAnchorScalar) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(5)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+
+  Arena arena;
+  const Value sum = evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=SUM(A:A)", arena, default_registry());
+  ASSERT_TRUE(sum.is_number());
+  EXPECT_DOUBLE_EQ(sum.as_number(), 15.0);
+
+  arena.reset();
+  const Value count = evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=COUNT(A:A)", arena, default_registry());
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 5.0);
+
+  // Keep formula re-resolution live: a committed spill does not suppress a
+  // fresh recursive evaluation when a dependency changes after recalc. The
+  // scalar adhoc surface should see the new top-left value rather than the
+  // stale committed anchor cache.
+  Workbook fresh = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(fresh.set_cell_value(0U, 0U, 5U, Value::number(0.0))));  // F1
+  ASSERT_TRUE(static_cast<bool>(fresh.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(5)+F1")));
+  ASSERT_TRUE(static_cast<bool>(fresh.recalc(default_registry())));
+  ASSERT_TRUE(static_cast<bool>(fresh.set_cell_value(0U, 0U, 5U, Value::number(10.0))));
+  arena.reset();
+  const Value fresh_anchor = evaluate_formula_text(fresh, fresh.sheet(0), 0U, 25U, "=A1", arena, default_registry());
+  ASSERT_TRUE(fresh_anchor.is_number());
+  EXPECT_DOUBLE_EQ(fresh_anchor.as_number(), 11.0);
+
+  // The second column contains only phantom cells after a 3x2 spill. This
+  // also proves the read_range fix handles a committed anchor outside the
+  // queried column while resolving the phantom-only B:B extent.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  arena.reset();
+  const Value phantom_column = evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=SUM(B:B)", arena, default_registry());
+  ASSERT_TRUE(phantom_column.is_number());
+  EXPECT_DOUBLE_EQ(phantom_column.as_number(), 12.0);
+}
+
+TEST(EvalContextRecursive, ReadOnlyThreeDRangeUsesScalarFormulaAnchors) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  for (std::uint32_t sheet_index = 0U; sheet_index < 3U; ++sheet_index) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(sheet_index, 0U, 0U, "=SEQUENCE(3,2)")));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+
+  Arena arena;
+  const Value sum_a =
+      evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=SUM(Sheet1:Sheet3!A:A)", arena, default_registry());
+  ASSERT_TRUE(sum_a.is_number());
+  EXPECT_DOUBLE_EQ(sum_a.as_number(), 27.0);
+
+  arena.reset();
+  const Value sum_b =
+      evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=SUM(Sheet1:Sheet3!B:B)", arena, default_registry());
+  ASSERT_TRUE(sum_b.is_number());
+  EXPECT_DOUBLE_EQ(sum_b.as_number(), 36.0);
+
+  arena.reset();
+  const Value direct_anchor = evaluate_formula_text(wb, wb.sheet(0), 0U, 25U, "=A1", arena, default_registry());
+  ASSERT_TRUE(direct_anchor.is_number());
+  EXPECT_DOUBLE_EQ(direct_anchor.as_number(), 1.0);
+
+  arena.reset();
+  const Value explicit_spill = evaluate_formula_text_array(wb, wb.sheet(0), 0U, 25U, "=A1#", arena, default_registry());
+  ASSERT_TRUE(explicit_spill.is_array());
+  EXPECT_EQ(explicit_spill.as_array_rows(), 3U);
+  EXPECT_EQ(explicit_spill.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(explicit_spill.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(explicit_spill.as_array_cells()[5].as_number(), 6.0);
+}
+
+TEST(EvalContextRecursive, MutableThreeDRangeUsesScalarFormulaAnchors) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  for (std::uint32_t sheet_index = 0U; sheet_index < 3U; ++sheet_index) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(sheet_index, 0U, 0U, "=SEQUENCE(3,2)")));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SUM(Sheet1:Sheet3!A:A)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  const Value aggregate = wb.sheet(0).resolve_cell_value(0U, 3U);
+  ASSERT_TRUE(aggregate.is_number());
+  EXPECT_DOUBLE_EQ(aggregate.as_number(), 27.0);
 }
 
 TEST(EvalContextRecursive, DirectCycleReturnsRef) {

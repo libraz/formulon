@@ -106,6 +106,58 @@ TEST(DepGraph, IdempotentAddDependency) {
   EXPECT_EQ(g.dependents_of(b).size(), 1u);
 }
 
+TEST(DepGraph, SourceProvenancePreservesStaticOverlap) {
+  DepGraph g;
+  const CellNodeId watcher = Make(0, 1, 0);
+  const CellNodeId producer = Make(0, 2, 0);
+  g.add_dependency(watcher, producer);
+
+  const auto delta = g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, {{watcher, producer}});
+  ASSERT_EQ(delta.added.size(), 1U);
+  EXPECT_TRUE(g.has_dependency_source(watcher, producer, DepGraph::DependencySource::kAuthored));
+  EXPECT_TRUE(g.has_dependency_source(watcher, producer, DepGraph::DependencySource::kSpillFootprint));
+  EXPECT_EQ(g.dependencies_of(watcher), std::vector<CellNodeId>{producer});
+
+  const auto removed = g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, {});
+  ASSERT_EQ(removed.removed.size(), 1U);
+  EXPECT_TRUE(g.has_dependency_source(watcher, producer, DepGraph::DependencySource::kAuthored));
+  EXPECT_FALSE(g.has_dependency_source(watcher, producer, DepGraph::DependencySource::kSpillFootprint));
+  EXPECT_EQ(g.dependencies_of(watcher), std::vector<CellNodeId>{producer});
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kSpillFootprint), 0U);
+  EXPECT_EQ(g.source_edge_count(DepGraph::DependencySource::kAuthored), 1U);
+}
+
+TEST(DepGraph, SourceReplacementIsIdempotentAndRemovesDerivedOnlyEdges) {
+  DepGraph g;
+  const CellNodeId watcher = Make(0, 1, 0);
+  const CellNodeId first = Make(0, 2, 0);
+  const CellNodeId second = Make(0, 3, 0);
+  const std::vector<DepGraph::Edge> desired = {{watcher, first}, {watcher, second}};
+  EXPECT_EQ(g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, desired).added.size(), 2U);
+  EXPECT_TRUE(g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, desired).added.empty());
+  const auto delta = g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, {{watcher, second}});
+  ASSERT_EQ(delta.removed.size(), 1U);
+  const auto dependencies = g.dependencies_of(watcher);
+  EXPECT_NE(std::find(dependencies.begin(), dependencies.end(), second), dependencies.end());
+  EXPECT_EQ(std::find(dependencies.begin(), dependencies.end(), first), dependencies.end());
+}
+
+TEST(DepGraph, ClearAndRemoveNodeDropEveryProvenanceSource) {
+  DepGraph g;
+  const CellNodeId watcher = Make(0, 1, 0);
+  const CellNodeId producer = Make(0, 2, 0);
+  g.add_dependency(watcher, producer);
+  g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, {{watcher, producer}});
+  g.clear_dependencies_of(watcher);
+  EXPECT_TRUE(g.empty());
+  EXPECT_EQ(g.node_count(), 0U);
+
+  g.replace_dependencies(DepGraph::DependencySource::kSpillFootprint, {{watcher, producer}});
+  g.remove_node(producer);
+  EXPECT_TRUE(g.empty());
+  EXPECT_EQ(g.node_count(), 0U);
+}
+
 TEST(DepGraph, CrossSheetEdge) {
   DepGraph g;
   CellNodeId a = Make(0, 0, 0);  // Sheet1!A1

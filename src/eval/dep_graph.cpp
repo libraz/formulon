@@ -23,117 +23,203 @@ void erase_first(std::vector<CellNodeId>& vec, CellNodeId target) {
 
 }  // namespace
 
+namespace {
+
+constexpr std::uint8_t source_bit(DepGraph::DependencySource source) noexcept {
+  return static_cast<std::uint8_t>(source);
+}
+
+}  // namespace
+
 void DepGraph::add_dependency(CellNodeId dependent, CellNodeId dependency) {
-  // O(1) dedup via the parallel edge index. Idempotent on a duplicate
-  // edge so the surrounding recalc engine can re-record dependencies
-  // freely without quadratic blow-up on dense formulas (`SUM(A1:Z99)`
-  // would otherwise scan ~26*99 entries per duplicate insertion).
-  if (!edges_.insert(std::make_pair(dependent, dependency)).second) {
+  add_dependency_source(dependent, dependency, DependencySource::kAuthored);
+}
+
+void DepGraph::add_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source) {
+  const Edge edge{dependent, dependency};
+  const std::uint8_t bit = source_bit(source);
+  auto existing = edge_sources_.find(edge);
+  if (existing != edge_sources_.end()) {
+    if ((existing->second & bit) == 0U && source == DependencySource::kSpillFootprint) {
+      spill_footprint_edges_.insert(edge);
+    }
+    if ((existing->second & bit) == 0U && source == DependencySource::kAuthored) {
+      ++authored_edge_count_;
+    }
+    existing->second = static_cast<std::uint8_t>(existing->second | bit);
     return;
   }
-  // Record key existence BEFORE mutation so the counter sees a
-  // monotone delta. A key counts as "present" if it lives in either
-  // adjacency map; the union models the conceptual node set.
+
   const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
   const bool dependency_was_known = forward_.count(dependency) != 0U || reverse_.count(dependency) != 0U;
+  edge_sources_.emplace(edge, bit);
+  if (source == DependencySource::kSpillFootprint) {
+    spill_footprint_edges_.insert(edge);
+  } else if (source == DependencySource::kAuthored) {
+    ++authored_edge_count_;
+  }
   forward_[dependent].push_back(dependency);
   reverse_[dependency].push_back(dependent);
   if (!dependent_was_known) {
     ++node_count_;
   }
-  // Avoid double-counting the self-loop case where dependent ==
-  // dependency: it is a single new node, not two.
   if (!dependency_was_known && dependent != dependency) {
     ++node_count_;
   }
 }
 
-void DepGraph::clear_dependencies_of(CellNodeId dependent) {
-  auto fwd_pos = forward_.find(dependent);
-  if (fwd_pos == forward_.end()) {
-    return;
+bool DepGraph::remove_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source) {
+  const Edge edge{dependent, dependency};
+  const std::uint8_t bit = source_bit(source);
+  auto existing = edge_sources_.find(edge);
+  if (existing == edge_sources_.end() || (existing->second & bit) == 0U) {
+    return false;
   }
-  // Drop the matching reverse entry from each former dependency, and
-  // erase that node's reverse bucket entirely if it becomes empty AND the
-  // node itself has no outgoing edges either (i.e. it would otherwise be
-  // an orphan). Track each dependency that becomes unreferenced so the
-  // node-count counter can be adjusted exactly once at the end.
-  for (CellNodeId dependency : fwd_pos->second) {
-    edges_.erase(std::make_pair(dependent, dependency));
-    auto rev_pos = reverse_.find(dependency);
-    if (rev_pos == reverse_.end()) {
-      continue;
+  if (source == DependencySource::kSpillFootprint) {
+    spill_footprint_edges_.erase(edge);
+  } else if (source == DependencySource::kAuthored) {
+    --authored_edge_count_;
+  }
+  existing->second = static_cast<std::uint8_t>(existing->second & static_cast<std::uint8_t>(~bit));
+  if (existing->second != 0U) {
+    return false;
+  }
+  edge_sources_.erase(existing);
+
+  const bool dependent_was_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
+  const bool dependency_was_known = forward_.count(dependency) != 0U || reverse_.count(dependency) != 0U;
+  auto fwd = forward_.find(dependent);
+  if (fwd != forward_.end()) {
+    erase_first(fwd->second, dependency);
+    if (fwd->second.empty()) {
+      forward_.erase(fwd);
     }
-    erase_first(rev_pos->second, dependent);
-    if (rev_pos->second.empty()) {
-      reverse_.erase(rev_pos);
-      // `dependency` is fully gone from both maps only when it also has
-      // no outgoing edges. Skip the self-loop case (`dependency ==
-      // dependent`) because the dependent's own node-count delta is
-      // handled below after its forward bucket is erased.
-      if (forward_.find(dependency) == forward_.end() && dependency != dependent) {
-        --node_count_;
+  }
+  auto rev = reverse_.find(dependency);
+  if (rev != reverse_.end()) {
+    erase_first(rev->second, dependent);
+    if (rev->second.empty()) {
+      reverse_.erase(rev);
+    }
+  }
+
+  const bool dependent_is_known = forward_.count(dependent) != 0U || reverse_.count(dependent) != 0U;
+  const bool dependency_is_known = forward_.count(dependency) != 0U || reverse_.count(dependency) != 0U;
+  if (dependent_was_known && !dependent_is_known) {
+    --node_count_;
+  }
+  if (dependency != dependent && dependency_was_known && !dependency_is_known) {
+    --node_count_;
+  }
+  return true;
+}
+
+DepGraph::DependencyDelta DepGraph::replace_dependencies(DependencySource source, const std::vector<Edge>& desired) {
+  DependencyDelta delta;
+  const std::uint8_t bit = source_bit(source);
+  const std::size_t current_count = source_edge_count(source);
+  if (current_count == 0U && desired.empty()) {
+    return delta;
+  }
+  std::unordered_set<Edge, EdgeHash> wanted;
+  wanted.reserve(desired.size());
+  for (const Edge& edge : desired) {
+    wanted.insert(edge);
+  }
+
+  std::vector<Edge> stale;
+  if (source == DependencySource::kSpillFootprint) {
+    stale.reserve(spill_footprint_edges_.size());
+    for (const Edge& edge : spill_footprint_edges_) {
+      if (wanted.count(edge) == 0U) {
+        stale.push_back(edge);
+      }
+    }
+  } else {
+    stale.reserve(edge_sources_.size());
+    for (const auto& [edge, mask] : edge_sources_) {
+      if ((mask & bit) != 0U && wanted.count(edge) == 0U) {
+        stale.push_back(edge);
       }
     }
   }
-  forward_.erase(fwd_pos);
-  // `dependent` may still be referenced by `reverse_` (someone reads
-  // it). Only decrement when it has truly left the node set.
-  if (reverse_.find(dependent) == reverse_.end()) {
-    --node_count_;
+  for (const Edge& edge : stale) {
+    if (remove_dependency_source(edge.first, edge.second, source)) {
+      delta.removed.push_back(edge);
+    } else {
+      // The source bit was removed even when another source kept the
+      // adjacency pair. Preserve that source-level fact in the delta.
+      delta.removed.push_back(edge);
+    }
+  }
+
+  for (const Edge& edge : wanted) {
+    if (!has_dependency_source(edge.first, edge.second, source)) {
+      delta.added.push_back(edge);
+      add_dependency_source(edge.first, edge.second, source);
+    }
+  }
+  return delta;
+}
+
+bool DepGraph::has_dependency_source(CellNodeId dependent, CellNodeId dependency,
+                                     DependencySource source) const noexcept {
+  const auto pos = edge_sources_.find(Edge{dependent, dependency});
+  return pos != edge_sources_.end() && (pos->second & source_bit(source)) != 0U;
+}
+
+std::size_t DepGraph::source_edge_count(DependencySource source) const noexcept {
+  if (source == DependencySource::kSpillFootprint) {
+    return spill_footprint_edges_.size();
+  }
+  return source == DependencySource::kAuthored ? authored_edge_count_ : 0U;
+}
+
+void DepGraph::clear_dependencies_of(CellNodeId dependent) {
+  auto fwd = forward_.find(dependent);
+  if (fwd == forward_.end()) {
+    return;
+  }
+  const std::vector<CellNodeId> dependencies = fwd->second;
+  for (CellNodeId dependency : dependencies) {
+    const Edge edge{dependent, dependency};
+    const auto pos = edge_sources_.find(edge);
+    if (pos == edge_sources_.end()) {
+      continue;
+    }
+    const std::uint8_t mask = pos->second;
+    if ((mask & source_bit(DependencySource::kAuthored)) != 0U) {
+      remove_dependency_source(dependent, dependency, DependencySource::kAuthored);
+    }
+    if ((mask & source_bit(DependencySource::kSpillFootprint)) != 0U) {
+      remove_dependency_source(dependent, dependency, DependencySource::kSpillFootprint);
+    }
   }
 }
 
 void DepGraph::remove_node(CellNodeId node) {
-  // Capture pre-state so the final node-count adjustment knows whether
-  // `node` was ever in the graph.
-  const bool node_was_known = forward_.count(node) != 0U || reverse_.count(node) != 0U;
-
-  // Outgoing edges: drop `node` from each former dependency's reverse list.
-  auto fwd_pos = forward_.find(node);
-  if (fwd_pos != forward_.end()) {
-    for (CellNodeId dependency : fwd_pos->second) {
-      edges_.erase(std::make_pair(node, dependency));
-      auto rev_pos = reverse_.find(dependency);
-      if (rev_pos == reverse_.end()) {
-        continue;
-      }
-      erase_first(rev_pos->second, node);
-      if (rev_pos->second.empty() && forward_.find(dependency) == forward_.end()) {
-        reverse_.erase(rev_pos);
-        if (dependency != node) {
-          --node_count_;
-        }
-      }
-    }
-    forward_.erase(fwd_pos);
+  // Remove outgoing edges first, then use the now-stable reverse bucket to
+  // remove all incoming source bits. Copying both lists avoids invalidating
+  // an adjacency vector while the source-aware helper updates it.
+  clear_dependencies_of(node);
+  auto rev = reverse_.find(node);
+  if (rev == reverse_.end()) {
+    return;
   }
-
-  // Incoming edges: drop `node` from each dependent's forward list.
-  auto rev_pos = reverse_.find(node);
-  if (rev_pos != reverse_.end()) {
-    for (CellNodeId dependent : rev_pos->second) {
-      edges_.erase(std::make_pair(dependent, node));
-      auto fwd_other = forward_.find(dependent);
-      if (fwd_other == forward_.end()) {
-        continue;
-      }
-      erase_first(fwd_other->second, node);
-      if (fwd_other->second.empty() && reverse_.find(dependent) == reverse_.end()) {
-        forward_.erase(fwd_other);
-        if (dependent != node) {
-          --node_count_;
-        }
-      }
+  const std::vector<CellNodeId> dependents = rev->second;
+  for (CellNodeId dependent : dependents) {
+    const Edge edge{dependent, node};
+    const auto pos = edge_sources_.find(edge);
+    if (pos == edge_sources_.end()) {
+      continue;
     }
-    reverse_.erase(rev_pos);
-  }
-
-  // Final adjustment: `node` itself is now absent from both maps. The
-  // per-edge erasures above only decrement when *other* nodes become
-  // unreferenced, never `node` itself, so do that here.
-  if (node_was_known) {
-    --node_count_;
+    const std::uint8_t mask = pos->second;
+    if ((mask & source_bit(DependencySource::kAuthored)) != 0U) {
+      remove_dependency_source(dependent, node, DependencySource::kAuthored);
+    }
+    if ((mask & source_bit(DependencySource::kSpillFootprint)) != 0U) {
+      remove_dependency_source(dependent, node, DependencySource::kSpillFootprint);
+    }
   }
 }
 

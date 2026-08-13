@@ -38,12 +38,16 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "eval/dep_extractor.h"
 #include "eval/dep_graph.h"
 #include "eval/dirty_set.h"
 #include "eval/iterative_solver.h"
+#include "eval/range_dep_index.h"
+#include "eval/spill_potential.h"
 #include "eval/volatile_tracker.h"
 #include "parser/ast.h"
 #include "utils/error.h"
@@ -141,10 +145,11 @@ struct RecalcStats {
 /// `recalc_parallel` is additionally rejected up-front by the scheduler's
 /// `thread_local` re-entrancy guard.
 ///
-/// Workbook-wide lock order: Workbook -> Sheet -> DependencyGraph ->
-/// RecalcEngine -> SharedStrings. RecalcEngine never calls back into
-/// Workbook / Sheet mutators while holding `mutex_`, which keeps the order
-/// acyclic.
+/// Workbook-wide lock order: workbook compound mutation -> RecalcEngine
+/// mutex -> Sheet spill mutex (and, for parallel evaluation, the scheduler's
+/// write mutex before the Sheet spill mutex). Spill snapshots release the
+/// Sheet lock before graph replacement; the graph is immutable while workers
+/// run.
 class RecalcEngine {
  public:
   RecalcEngine();
@@ -282,6 +287,24 @@ class RecalcEngine {
 
   /// Returns the current dependency graph. Lifetime is tied to the engine.
   const DepGraph& dep_graph() const noexcept { return graph_; }
+
+  /// Returns the cells `cell` reads through a compact rectangle dependency.
+  ///
+  /// Rectangles above `kMaxMaterializedDependencyCells` never become graph
+  /// edges, so a formula-audit consumer that walks `dep_graph()` alone would
+  /// not see them at all. The expansion is clipped by
+  /// `Sheet::populated_extent` and reports only coordinates that hold content
+  /// (stored value / formula, or a committed spill), so a whole-column
+  /// reference on a sparse sheet costs the sheet's real content rather than
+  /// its 1,048,576 potential cells. Returns an empty vector when `cell` owns
+  /// no compact rectangle.
+  std::vector<CellNodeId> compact_range_precedents_of(CellNodeId cell, const Workbook& workbook) const;
+
+  /// Returns the formulas that read `cell` through a compact rectangle
+  /// dependency — the reverse direction of `compact_range_precedents_of`,
+  /// and equally invisible in `dep_graph()`. Order is unspecified;
+  /// duplicates are removed.
+  std::vector<CellNodeId> compact_range_dependents_of(CellNodeId cell) const;
   /// Returns the current volatile tracker.
   const VolatileTracker& volatiles() const noexcept { return volatiles_; }
   /// Returns the current dirty set (post-recalc this is empty).
@@ -363,9 +386,16 @@ class RecalcEngine {
   void mark_dirty_locked(CellNodeId cell);
   void mark_range_dependents_dirty_locked(CellNodeId cell);
   void reset_graph_locked();
+  void update_potential_spill_producer_locked(CellNodeId cell, SpillPotential potential);
   Expected<RecalcStats, Error> recalc_locked(Workbook& workbook, const FunctionRegistry& registry);
   Expected<RecalcStats, Error> partial_recalc_locked(Workbook& workbook, const FunctionRegistry& registry,
                                                      const SheetCellRange& viewport);
+
+  /// Rebuilds the spill-footprint-derived portion of the graph from one
+  /// snapshot of every sheet's committed spill rectangles. The caller holds
+  /// `mutex_`; each sheet lock is acquired only while copying geometry, and
+  /// graph mutation happens after those snapshots have been released.
+  DepGraph::DependencyDelta reconcile_spill_dependencies_locked(const Workbook& workbook);
 
   // Serialises every mutating access to `graph_`, `volatiles_`, `dirty_`,
   // and `arena_`. Held for the full duration of each public entry; the
@@ -373,13 +403,11 @@ class RecalcEngine {
   mutable std::mutex mutex_;
 
   DepGraph graph_;
-  struct RegisteredRangeDependency {
-    CellNodeId dependent;
-    CellRangeDependency range;
-  };
-  // Compact whole-row / whole-column dependencies. Unlike `graph_`, this
-  // stores one rectangle per authored range rather than one edge per cell.
-  std::vector<RegisteredRangeDependency> range_dependencies_;
+  // Compact rectangle dependencies (whole-row / whole-column references and
+  // every bounded rectangle above `kMaxMaterializedDependencyCells`). Unlike
+  // `graph_`, this stores one interned rectangle per authored range rather
+  // than one edge per cell.
+  RangeDepIndex range_dependencies_;
   struct RegisteredThreeDSpan {
     CellNodeId owner;
     ThreeDSheetSpanDependency span;
@@ -388,6 +416,10 @@ class RecalcEngine {
   // edits can wake every owner whose shared coordinates read the edited
   // sheet, including spans reached through defined-name expansion.
   std::vector<RegisteredThreeDSpan> three_d_span_dependencies_;
+  // Formula anchors grouped by sheet whose AST may produce an array. This is
+  // the bounded candidate source for partial range expansion; unlike the
+  // Sheet row map it never scans unrelated stored cells per wave.
+  std::vector<std::unordered_map<CellNodeId, SpillPotential, CellNodeIdHash>> potential_spill_producers_by_sheet_;
   VolatileTracker volatiles_;
   DirtySet dirty_;
   // Reused across `recalc()` calls so the bump-allocator's largest chunk

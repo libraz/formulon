@@ -462,6 +462,8 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
           (full_col && full_row) ||
           (is_range && (cell.is_full_col != cell_end.is_full_col || cell.is_full_row != cell_end.is_full_row));
       const bool corners_out_of_bounds =
+          (full_col && (cell.col >= Sheet::kMaxCols || (is_range && cell_end.col >= Sheet::kMaxCols))) ||
+          (full_row && (cell.row >= Sheet::kMaxRows || (is_range && cell_end.row >= Sheet::kMaxRows))) ||
           (!full_col && !full_row &&
            (cell.row >= Sheet::kMaxRows || cell.col >= Sheet::kMaxCols ||
             (is_range && (cell_end.row >= Sheet::kMaxRows || cell_end.col >= Sheet::kMaxCols))));
@@ -492,39 +494,21 @@ Value dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionReg
         if (full_col) {
           c_lo = is_range ? std::min(cell.col, cell_end.col) : cell.col;
           c_hi = is_range ? std::max(cell.col, cell_end.col) : cell.col;
-          bool any = false;
-          for (const auto& [row_index, cells] : target_sheet.rows()) {
-            const std::size_t upper = std::min<std::size_t>(cells.size(), static_cast<std::size_t>(c_hi) + 1U);
-            for (std::size_t c = c_lo; c < upper; ++c) {
-              if (!cells[c].formula_text.empty() || !cells[c].cached_value.is_blank()) {
-                r_hi = std::max(r_hi, row_index);
-                any = true;
-                break;
-              }
-            }
-          }
-          if (!any) {
+          const auto extent = target_sheet.populated_extent(0U, c_lo, Sheet::kMaxRows - 1U, c_hi);
+          if (!extent.has_value()) {
             continue;
           }
+          r_lo = 0U;
+          r_hi = extent->last_row;
         } else if (full_row) {
           r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
           r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;
-          bool any = false;
-          for (const auto& [row_index, cells] : target_sheet.rows()) {
-            if (row_index < r_lo || row_index > r_hi) {
-              continue;
-            }
-            for (std::size_t c = cells.size(); c-- > 0;) {
-              if (!cells[c].formula_text.empty() || !cells[c].cached_value.is_blank()) {
-                c_hi = std::max(c_hi, static_cast<std::uint32_t>(c));
-                any = true;
-                break;
-              }
-            }
-          }
-          if (!any) {
+          const auto extent = target_sheet.populated_extent(r_lo, 0U, r_hi, Sheet::kMaxCols - 1U);
+          if (!extent.has_value()) {
             continue;
           }
+          c_lo = 0U;
+          c_hi = extent->last_col;
         } else {
           r_lo = is_range ? std::min(cell.row, cell_end.row) : cell.row;
           r_hi = is_range ? std::max(cell.row, cell_end.row) : cell.row;

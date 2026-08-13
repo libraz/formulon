@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -60,69 +61,21 @@ const Sheet* resolve_target_sheet(std::string_view sheet_name, const Sheet* curr
   return target;
 }
 
-// True when a stored cell carries no observable content (neither a formula
-// nor a non-blank cached value). Mirrors the used-range predicate the
-// print-layout pagination pass applies so both agree on a sheet's extent.
-bool cell_is_blank(const Cell& cell) {
-  return cell.formula_text.empty() && cell.cached_value.is_blank();
-}
-
-// Largest 0-based row index holding a non-blank cell within columns
-// [col_lo, col_hi] (inclusive). Returns false when no such cell exists, in
-// which case `*out_max_row` is left untouched. Used to bound whole-column
-// expansion so `SUM(A:A)` walks only up to the column's populated extent
-// instead of all `Sheet::kMaxRows` rows.
-bool max_row_in_cols(const Sheet& sheet, std::uint32_t col_lo, std::uint32_t col_hi, std::uint32_t* out_max_row) {
-  bool any = false;
-  std::uint32_t max_row = 0;
-  for (const auto& [row_index, cells] : sheet.rows()) {
-    const std::size_t upper = std::min<std::size_t>(cells.size(), static_cast<std::size_t>(col_hi) + 1U);
-    for (std::size_t c = col_lo; c < upper; ++c) {
-      if (cell_is_blank(cells[c])) {
-        continue;
-      }
-      if (!any || row_index > max_row) {
-        max_row = row_index;
-        any = true;
-      }
-      break;
-    }
+// An ordinary cell reference is one scalar coordinate even when its fresh
+// recursive formula evaluation produces an Array (for example, SEQUENCE at
+// a committed spill anchor). The explicit SpillRef (`A1#`) path bypasses
+// resolve_ref and is therefore the only way to request the whole array.
+// Collapse here, at the shared reference boundary, so direct refs, normal
+// ranges and 3-D ranges all agree while stale formula caches still get fresh
+// recursive resolution. Preserve the empty-array error contract.
+Value scalarize_formula_ref(Value value) {
+  if (!value.is_array()) {
+    return value;
   }
-  if (!any) {
-    return false;
+  if (value.as_array_rows() == 0U || value.as_array_cols() == 0U) {
+    return Value::error(ErrorCode::Value);
   }
-  *out_max_row = max_row;
-  return true;
-}
-
-// Largest 0-based column index holding a non-blank cell within rows
-// [row_lo, row_hi] (inclusive). Returns false when no such cell exists.
-// Bounds whole-row expansion so `COUNTA(1:1)` walks only up to the row's
-// populated extent instead of all `Sheet::kMaxCols` columns.
-bool max_col_in_rows(const Sheet& sheet, std::uint32_t row_lo, std::uint32_t row_hi, std::uint32_t* out_max_col) {
-  bool any = false;
-  std::uint32_t max_col = 0;
-  for (const auto& [row_index, cells] : sheet.rows()) {
-    if (row_index < row_lo || row_index > row_hi) {
-      continue;
-    }
-    for (std::size_t c = cells.size(); c-- > 0;) {
-      if (cell_is_blank(cells[c])) {
-        continue;
-      }
-      const auto col_index = static_cast<std::uint32_t>(c);
-      if (!any || col_index > max_col) {
-        max_col = col_index;
-        any = true;
-      }
-      break;
-    }
-  }
-  if (!any) {
-    return false;
-  }
-  *out_max_col = max_col;
-  return true;
+  return value.as_array_cells()[0];
 }
 
 // Writes the computed shape into the optional out-params, tolerating null.
@@ -223,14 +176,22 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     return prefix.value;
   }
 
+  // Same-sheet mutable references are dispatched through SpillCommitter and
+  // therefore already return the anchor scalar. A read-only context must
+  // scalarize an ordinary formula reference itself. A cross-sheet reference
+  // from a mutable context remains an uncommitted Array for the outer formula
+  // owner; this preserves the existing no-cross-sheet-spill contract.
+  const bool mutable_target = mutable_sheet_ != nullptr && prefix.target_sheet == mutable_sheet_;
+  const bool scalarize_result = mutable_sheet_ == nullptr || mutable_target;
+
   // Formula cell. If no recursive state is bound, fall back to the
   // non-recursive behaviour so the two overloads agree.
   if (state_ == nullptr) {
-    return prefix.cell->cached_value;
+    return scalarize_result ? scalarize_formula_ref(prefix.cell->cached_value) : prefix.cell->cached_value;
   }
 
   if (const Value* memo = state_->lookup_memo(prefix.target_sheet, prefix.row, prefix.col); memo != nullptr) {
-    return *memo;
+    return scalarize_result ? scalarize_formula_ref(*memo) : *memo;
   }
 
   if (!state_->push_cell(prefix.target_sheet, prefix.row, prefix.col)) {
@@ -243,7 +204,7 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // shows 0 plus a circular-reference warning banner, which Formulon has
     // no surface for yet.
     if (workbook_ != nullptr && workbook_->iterative_options().enabled) {
-      return prefix.cell->cached_value;
+      return scalarize_result ? scalarize_formula_ref(prefix.cell->cached_value) : prefix.cell->cached_value;
     }
     return Value::error(ErrorCode::Ref);
   }
@@ -274,8 +235,13 @@ Value EvalContext::resolve_ref(const parser::Reference& ref, Arena& arena, const
     // committed as usual; scalar/error results clear any previously committed
     // or blocked state at the referenced formula anchor. Cross-sheet results
     // remain read-only because spill commits across sheets are out of scope.
-    if (mutable_sheet_ != nullptr && prefix.target_sheet == mutable_sheet_) {
+    if (mutable_target) {
       result = child_ctx.dispatch_array_result(result);
+    }
+    if (scalarize_result) {
+      // A read-only recursive context cannot commit a dynamic-array result,
+      // so an ordinary cell reference still exposes one scalar coordinate.
+      result = scalarize_formula_ref(result);
     }
   }
 
@@ -358,26 +324,28 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
       if (c_max >= Sheet::kMaxCols) {
         return ErrorCode::Ref;
       }
-      std::uint32_t max_row = 0;
-      if (!max_row_in_cols(*target_sheet, c_min, c_max, &max_row)) {
+      const std::optional<Sheet::PopulatedExtent> extent =
+          target_sheet->populated_extent(0U, c_min, Sheet::kMaxRows - 1U, c_max);
+      if (!extent.has_value()) {
         set_shape(out_rows, out_cols, 0, 0);
         return std::vector<Value>{};
       }
       r_min = 0;
-      r_max = max_row;
+      r_max = extent->last_row;
     } else {
       r_min = std::min(lhs.row, rhs.row);
       r_max = std::max(lhs.row, rhs.row);
       if (r_max >= Sheet::kMaxRows) {
         return ErrorCode::Ref;
       }
-      std::uint32_t max_col = 0;
-      if (!max_col_in_rows(*target_sheet, r_min, r_max, &max_col)) {
+      const std::optional<Sheet::PopulatedExtent> extent =
+          target_sheet->populated_extent(r_min, 0U, r_max, Sheet::kMaxCols - 1U);
+      if (!extent.has_value()) {
         set_shape(out_rows, out_cols, 0, 0);
         return std::vector<Value>{};
       }
       c_min = 0;
-      c_max = max_col;
+      c_max = extent->last_col;
     }
   } else {
     if (lhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols || rhs.row >= Sheet::kMaxRows ||
@@ -430,7 +398,8 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
     cell_ref.col = c_min + static_cast<std::uint32_t>(index % width);
     // Per-cell error Values (e.g. #DIV/0! from a formula cell, #REF!
     // from a cycle caught by EvalState) are pushed through unchanged so
-    // the dispatcher can honour `propagate_errors`.
+    // the dispatcher can honour `propagate_errors`. The shared resolver
+    // scalarizes ordinary formula references, including 3-D callers.
     out[index] = resolve_ref(cell_ref, arena, registry);
   }
   set_shape(out_rows, out_cols, r_max - r_min + 1U, c_max - c_min + 1U);

@@ -5,6 +5,7 @@
 
 #include "eval/recalc_engine.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 
@@ -88,6 +89,42 @@ TEST(RecalcEngine, WholeColumnDependencyTracksNewValuesAndFormulas) {
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 6.0);
 }
 
+TEST(RecalcEngine, WholeColumnOrderingEdgeRefreshesFormulaBeforeAggregate) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(10.0))));  // D1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=D1+1")));            // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A:A)")));        // B1
+
+  auto initial = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(initial));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 11.0);
+
+  const auto dependencies = wb.recalc_engine().dep_graph().dependencies_of(CellNodeId{0U, 0U, 1U});
+  EXPECT_NE(std::find(dependencies.begin(), dependencies.end(), CellNodeId{0U, 0U, 0U}), dependencies.end());
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(20.0))));
+  auto updated = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(updated));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 21.0);
+}
+
+TEST(RecalcEngine, MultiColumnWholeRangeDirtiesOnFarColumnWrite) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 999U, 2U, Value::number(4.0))));  // C1000
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SUM(A:C)")));         // D1
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 4.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 999U, 2U, Value::number(9.0))));
+  auto stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 1U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 9.0);
+}
+
 TEST(RecalcEngine, WholeRowDependencyTracksNewValues) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
@@ -98,6 +135,201 @@ TEST(RecalcEngine, WholeRowDependencyTracksNewValues) {
   ASSERT_TRUE(static_cast<bool>(stats));
   EXPECT_EQ(stats.value().volatile_cells, 0U);
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 5.0);
+}
+
+// Drives the ordering contract for a bounded rectangle wide enough to be
+// registered compactly, in one of the two registration orders. `D1` is the
+// literal both the interior formula and the aggregate ultimately read.
+void AssertLargeRangeOrdering(bool aggregate_first) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(10.0))));  // D1
+
+  const auto write_aggregate = [&wb]() {
+    return static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A1:A60000)"));  // B1
+  };
+  const auto write_interior = [&wb]() {
+    return static_cast<bool>(wb.set_cell_formula(0U, 5000U, 0U, "=D1+1"));  // A5001
+  };
+  if (aggregate_first) {
+    ASSERT_TRUE(write_aggregate());
+    ASSERT_TRUE(write_interior());
+  } else {
+    ASSERT_TRUE(write_interior());
+    ASSERT_TRUE(write_aggregate());
+  }
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 5000U, 0U).as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 11.0);
+
+  // The ordering edge exists in the graph even though the rectangle's cells
+  // do not: Tarjan needs it to refresh A5001 before B1 in one pass.
+  const auto dependencies = wb.recalc_engine().dep_graph().dependencies_of(CellNodeId{0U, 0U, 1U});
+  EXPECT_NE(std::find(dependencies.begin(), dependencies.end(), CellNodeId{0U, 5000U, 0U}), dependencies.end());
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(20.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 5000U, 0U).as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 21.0);
+}
+
+TEST(RecalcEngine, LargeRangeAggregateRecalcsWhenAnInteriorLiteralChanges) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));   // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A1:A60000)")));  // B1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 1.0);
+
+  // A40001 did not exist when B1 was registered, and the rectangle owns no
+  // per-cell edge to it. The compact watcher must still wake B1 — without
+  // making it volatile.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 40000U, 0U, Value::number(5.0))));
+  auto stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().volatile_cells, 0U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 6.0);
+}
+
+TEST(RecalcEngine, LargeRangeAggregateOrdersAgainstInteriorFormulaInBothRegistrationOrders) {
+  AssertLargeRangeOrdering(/*aggregate_first=*/true);
+  AssertLargeRangeOrdering(/*aggregate_first=*/false);
+}
+
+TEST(RecalcEngine, LargeRangeAggregateDropsWatcherWhenOwnerBecomesLiteral) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));   // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A1:A60000)")));  // B1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 1.0);
+
+  // Overwriting the watcher with a literal must retire its rectangle;
+  // otherwise every later write inside the range would keep dirtying a cell
+  // that no longer reads it.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(99.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 40000U, 0U, Value::number(5.0))));
+  auto stats = wb.recalc(default_registry());
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 0U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 99.0);
+}
+
+TEST(RecalcEngine, LargeRangeGraphFootprintIsIndependentOfArea) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));      // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 59999U, 1U, Value::number(2.0))));  // B60000
+  const std::size_t before = wb.recalc_engine().dep_graph().node_count();
+
+  // 120,000 cells, none of which may become a graph node: registration cost
+  // is bounded by the formula text plus one rectangle.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 3U, "=SUM(A1:B60000)")));  // D1
+  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), before);
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 3U).as_number(), 3.0);
+  EXPECT_EQ(wb.recalc_engine().dep_graph().node_count(), before);
+}
+
+void AssertPhantomOnlySpillSequence(Workbook& wb, bool producer_first) {
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  auto install_watcher = [&] { ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B:B)"))); };
+  auto install_producer = [&] { ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2)"))); };
+  if (producer_first) {
+    install_producer();
+    install_watcher();
+  } else {
+    install_watcher();
+    install_producer();
+  }
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 12.0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2,10)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 39.0);
+
+  // Replacing the producer with a scalar formula that reads the aggregate
+  // must clear the old spill-derived edge before SCC construction. The
+  // aggregate sees an empty B column and the producer then reads its fresh
+  // zero, without a false #REF! cycle.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=C1+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 1.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=1")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_FALSE(wb.recalc_engine().dep_graph().has_dependency_source(CellNodeId{0U, 0U, 2U}, CellNodeId{0U, 1U, 0U},
+                                                                    DepGraph::DependencySource::kSpillFootprint));
+}
+
+TEST(RecalcEngine, PhantomOnlySpillRangeWatcherWorksWatcherFirst) {
+  Workbook wb = Workbook::create();
+  AssertPhantomOnlySpillSequence(wb, false);
+}
+
+TEST(RecalcEngine, PhantomOnlySpillRangeWatcherWorksProducerFirst) {
+  Workbook wb = Workbook::create();
+  AssertPhantomOnlySpillSequence(wb, true);
+}
+
+TEST(RecalcEngine, CrossSheetPhantomOnlySpillRangeWatcherUpdates) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  wb.add_sheet("Producer");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SUM(Producer!B:B)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 1U, 0U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 12.0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 1U, 0U, "=SEQUENCE(3,2,10)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 39.0);
+}
+
+TEST(RecalcEngine, PhantomOnlySpillWholeRowWatcherUpdates) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  // A2 is outside row 3, while the second row of its 2x3 spill contributes
+  // three phantom-only cells to the compact whole-row dependency.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(2,3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 3U, 3U, "=SUM(3:3)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 3U, 3U).as_number(), 15.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(2,3,10)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 3U, 3U).as_number(), 42.0);
+}
+
+TEST(RecalcEngine, UnregisteringSpillProducerDirtiesRangeWatcherBeforeEdgeRemoval) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B:B)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "bad formula")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+}
+
+TEST(RecalcEngine, DefinedNameReindexClearsStaleSpillFootprint) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("MAKE", "SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=MAKE")));      // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B:B)")));  // C1
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 12.0);
+
+  // Retargeting the name from an array producer to a scalar formula must
+  // invalidate its old committed spill before graph re-registration. The
+  // aggregate then sees an empty B column, while A2 observes C1's fresh zero.
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("MAKE", "C1+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 1.0);
+  EXPECT_TRUE(wb.sheet(0).committed_spill_footprints().empty());
 }
 
 TEST(RecalcEngine, IterationLimitRetainsLastApproximation) {

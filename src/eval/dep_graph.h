@@ -87,6 +87,25 @@ struct CellNodeIdHash {
 /// in a later phase).
 class DepGraph {
  public:
+  /// The source of a directed dependency edge. Authored edges come from a
+  /// formula's static dependency extraction; spill-footprint edges are
+  /// derived from committed dynamic-array geometry. Both sources share one
+  /// union adjacency pair.
+  enum class DependencySource : std::uint8_t {
+    kAuthored = 1U,
+    kSpillFootprint = 2U,
+  };
+
+  using Edge = std::pair<CellNodeId, CellNodeId>;
+
+  /// Source-level changes made by `replace_dependencies`. These contain
+  /// pairs whose source bit changed, even when another source keeps the
+  /// pair in the union adjacency.
+  struct DependencyDelta {
+    std::vector<Edge> added;
+    std::vector<Edge> removed;
+  };
+
   DepGraph() = default;
 
   // Move-only.
@@ -101,6 +120,23 @@ class DepGraph {
   /// reverse edge). Idempotent: registering the same pair twice leaves the
   /// adjacency lists unchanged.
   void add_dependency(CellNodeId dependent, CellNodeId dependency);
+
+  /// Replaces all edges owned by `source` with `desired`. The operation is
+  /// idempotent and preserves a union adjacency when an edge has multiple
+  /// source bits. `added` identifies newly acquired source ownership, which
+  /// is useful for scheduling a targeted recalc wave.
+  DependencyDelta replace_dependencies(DependencySource source, const std::vector<Edge>& desired);
+
+  /// Returns whether the edge currently carries `source` provenance.
+  bool has_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source) const noexcept;
+
+  /// Returns the number of directed pairs carrying `source` provenance.
+  /// This is maintained incrementally and is useful to skip a spill snapshot
+  /// when no compact-range watcher or spill-owned edge exists.
+  std::size_t source_edge_count(DependencySource source) const noexcept;
+
+  /// Returns whether at least one edge carries `source` provenance.
+  bool has_source_edges(DependencySource source) const noexcept { return source_edge_count(source) != 0U; }
 
   /// Drops every outgoing edge of `dependent`.
   ///
@@ -179,6 +215,9 @@ class DepGraph {
   std::vector<std::vector<CellNodeId>> tarjan_scc_impl(
       const std::unordered_set<CellNodeId, CellNodeIdHash>* nodes) const;
 
+  void add_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
+  bool remove_dependency_source(CellNodeId dependent, CellNodeId dependency, DependencySource source);
+
   /// Hash for an ordered pair of `CellNodeId`s. Used to dedupe directed
   /// edges in O(1) on `add_dependency`. Combines the two component
   /// hashes with a boost-style mix so swapping the endpoints produces a
@@ -203,9 +242,19 @@ class DepGraph {
   AdjacencyMap forward_;
   // Reverse edges: `reverse_[b]` is the list of cells that read `b`.
   AdjacencyMap reverse_;
-  // Parallel edge index for O(1) dedup on `add_dependency`. Each entry
-  // is `(dependent, dependency)`; mirrors `forward_` exactly.
-  std::unordered_set<std::pair<CellNodeId, CellNodeId>, EdgeHash> edges_;
+  // Parallel edge index for O(1) source lookup. Each entry is `(dependent,
+  // dependency)` and a bit mask of `DependencySource` values. An adjacency
+  // pair is removed only when its mask reaches zero.
+  std::unordered_map<Edge, std::uint8_t, EdgeHash> edge_sources_;
+  // Spill-footprint pairs have their own index so a replacement scans only
+  // derived ownership, never authored/static edges. The set contains every
+  // pair whose source mask carries kSpillFootprint, including pairs that
+  // also carry kAuthored.
+  std::unordered_set<Edge, EdgeHash> spill_footprint_edges_;
+  // Authored ownership is counted separately so `source_edge_count` stays
+  // O(1) for both source kinds; unlike spill ownership it does not need a
+  // replacement iteration index.
+  std::size_t authored_edge_count_ = 0U;
   // Distinct-node counter kept in sync by `add_dependency` /
   // `clear_dependencies_of` / `remove_node`. Backs the `noexcept` /
   // O(1) `node_count()` accessor; without it, that accessor would

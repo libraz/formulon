@@ -407,6 +407,36 @@ TEST(Scheduler, CycleRecoveryViaIterativeSolver) {
   EXPECT_EQ(stats.cells_evaluated, 2U);
 }
 
+TEST(Scheduler, ParallelIterativeTextCycleSurvivesArenaResets) {
+  // The SCC is evaluated by one scheduler worker, but each member resets
+  // that worker's Arena before evaluating. Both formulas return the same
+  // Text value while depending on the other cell, so the second sweep must
+  // compare an owned convergence snapshot rather than an arena string_view.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(B1=1,\"stable\",\"stable\")")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=IF(A1=1,\"stable\",\"stable\")")));
+
+  IterativeOptions opts;
+  opts.enabled = true;
+  opts.max_iterations = 4U;
+  opts.max_change = 0.001;
+  wb.set_iterative_options(opts);
+
+  SchedulerStats stats;
+  SchedulerConfig cfg;
+  cfg.num_threads = 4U;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, &stats)));
+  EXPECT_EQ(stats.cycle_recoveries, 1U);
+  EXPECT_EQ(stats.cells_evaluated, 2U);
+
+  const Value a1 = StoredValue(wb, 0U, 0U, 0U);
+  const Value b1 = StoredValue(wb, 0U, 0U, 1U);
+  ASSERT_TRUE(a1.is_text());
+  ASSERT_TRUE(b1.is_text());
+  EXPECT_EQ(a1.as_text(), "stable");
+  EXPECT_EQ(b1.as_text(), "stable");
+}
+
 TEST(Scheduler, ZeroThreadsAutoDetectsAndExecutes) {
   // num_threads = 0 means "auto-detect, capped at 8". The scheduler must
   // still resolve a sensible worker count and successfully complete.

@@ -35,6 +35,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   table_boundary_test.cpp
   workbook_iterative_test.cpp
   workbook_recalc_test.cpp
+  zip_load_budget_test.cpp
 )
 
 add_executable(formulon_integration_tests ${FORMULON_INTEGRATION_TEST_SOURCES})
@@ -69,7 +70,7 @@ gtest_discover_tests(formulon_integration_tests)
 # Lives in its own executable so the per-binary fast-suite budget is not
 # inflated by 100 two-cycle pipelines (some of which exercise 100x100
 # cell shapes). The corresponding ctest cases are tagged with the
-# `SLOW` label so the default fast suite (`ctest -LE "SLOW|LOAD"`)
+# `SLOW` label so the default fast suite (`ctest -LE "SLOW|BENCH|TSAN"`)
 # skips them; opt-in invocations (`ctest -L SLOW` or the full suite)
 # pick them up.
 # ---------------------------------------------------------------------------
@@ -154,5 +155,34 @@ formulon_apply_warnings(formulon_sax_corpus_parity_tests)
 
 gtest_discover_tests(formulon_sax_corpus_parity_tests
   TEST_LIST formulon_sax_corpus_parity_test_list
+  PROPERTIES LABELS "SLOW"
+)
+
+# ---------------------------------------------------------------------------
+# Slow-labelled recalc registration-scale guard.
+#
+# Registers a thousand lookup formulas over a 300,000-cell rectangle and
+# asserts the dependency graph stays proportional to the formulas rather
+# than to the referenced area. Own executable so the fast tier's per-case
+# budget is untouched.
+# ---------------------------------------------------------------------------
+
+add_executable(formulon_recalc_scale_tests recalc_scale_test.cpp)
+
+target_link_libraries(formulon_recalc_scale_tests
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+
+target_include_directories(formulon_recalc_scale_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+formulon_apply_warnings(formulon_recalc_scale_tests)
+
+gtest_discover_tests(formulon_recalc_scale_tests
+  TEST_LIST formulon_recalc_scale_test_list
   PROPERTIES LABELS "SLOW"
 )

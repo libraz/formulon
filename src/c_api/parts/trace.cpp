@@ -89,13 +89,25 @@ fm_status_t trace_impl(const fm_workbook_t* wb, std::uint32_t sheet, std::uint32
   if (auto rc = check_sheet_u32(wb, sheet, fn_name); rc != 0) {
     return rc;
   }
-  const auto& graph = wb->workbook().recalc_engine().dep_graph();
+  const auto& workbook = wb->workbook();
+  const auto& engine = workbook.recalc_engine();
+  const auto& graph = engine.dep_graph();
   formulon::eval::CellNodeId seed{static_cast<std::uint16_t>(sheet), row, col};
-  auto neighbors = [&graph](formulon::eval::CellNodeId node) {
+  // A reference wide enough to be registered as a compact rectangle owns no
+  // per-cell graph edge, so the raw adjacency lists alone would hide
+  // `=SUM(A1:A5000)` from both trace directions. Fold the rectangle's
+  // content-clipped expansion into the neighbour set.
+  auto neighbors = [&](formulon::eval::CellNodeId node) {
     if constexpr (kPrecedents) {
-      return graph.dependencies_of(node);
+      auto nodes = graph.dependencies_of(node);
+      const auto compact = engine.compact_range_precedents_of(node, workbook);
+      nodes.insert(nodes.end(), compact.begin(), compact.end());
+      return nodes;
     } else {
-      return graph.dependents_of(node);
+      auto nodes = graph.dependents_of(node);
+      const auto compact = engine.compact_range_dependents_of(node);
+      nodes.insert(nodes.end(), compact.begin(), compact.end());
+      return nodes;
     }
   };
   auto nodes = bfs_collect(seed, effective_depth(depth), neighbors);

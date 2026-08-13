@@ -94,5 +94,58 @@ TEST(RecalcTextLifetime, RecalcTextResultSurvivesArenaReset) {
   EXPECT_EQ(a3b->cached_value.as_text(), "foobarHELLO");
 }
 
+TEST(RecalcTextLifetime, IterativeTextCycleSurvivesFullAndPartialArenaResets) {
+  // Both formulas intentionally depend on the other cell while returning the
+  // same Text literal from either IF branch. The iterative solver therefore
+  // reaches a Text fixed point on its second sweep, after the per-cell arena
+  // has reset at least once between the two SCC members.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(B1=1,\"stable\",\"stable\")")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=IF(A1=1,\"stable\",\"stable\")")));
+
+  eval::IterativeOptions opts;
+  opts.enabled = true;
+  opts.max_iterations = 4U;
+  opts.max_change = 0.001;
+  wb.set_iterative_options(opts);
+
+  const auto full_stats = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(full_stats));
+  EXPECT_EQ(full_stats.value().iterative_cells, 2U);
+  EXPECT_EQ(full_stats.value().cycle_cells, 0U);
+
+  const Sheet& sheet = wb.sheet(0U);
+  const Cell* a1 = sheet.cell_at(0U, 0U);
+  const Cell* b1 = sheet.cell_at(0U, 1U);
+  ASSERT_NE(a1, nullptr);
+  ASSERT_NE(b1, nullptr);
+  ASSERT_TRUE(a1->cached_value.is_text());
+  ASSERT_TRUE(b1->cached_value.is_text());
+  EXPECT_EQ(a1->cached_value.as_text(), "stable");
+  EXPECT_EQ(b1->cached_value.as_text(), "stable");
+
+  // Dirty the same SCC again and exercise the viewport-bounded solver path.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=IF(B1=1,\"stable\",\"stable\")")));
+  eval::SheetCellRange viewport;
+  viewport.sheet_id = 0U;
+  viewport.first_row = 0U;
+  viewport.last_row = 0U;
+  viewport.first_col = 0U;
+  viewport.last_col = 0U;
+  const auto partial_stats = wb.partial_recalc(eval::default_registry(), viewport);
+  ASSERT_TRUE(static_cast<bool>(partial_stats));
+  EXPECT_EQ(partial_stats.value().iterative_cells, 2U);
+  EXPECT_EQ(partial_stats.value().cycle_cells, 0U);
+
+  a1 = sheet.cell_at(0U, 0U);
+  b1 = sheet.cell_at(0U, 1U);
+  ASSERT_NE(a1, nullptr);
+  ASSERT_NE(b1, nullptr);
+  ASSERT_TRUE(a1->cached_value.is_text());
+  ASSERT_TRUE(b1->cached_value.is_text());
+  EXPECT_EQ(a1->cached_value.as_text(), "stable");
+  EXPECT_EQ(b1->cached_value.as_text(), "stable");
+}
+
 }  // namespace
 }  // namespace formulon

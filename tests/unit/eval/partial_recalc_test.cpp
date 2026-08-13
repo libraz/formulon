@@ -7,9 +7,12 @@
 #include <string>
 
 #include "cell.h"
+#include "eval/array_alloc.h"
+#include "eval/builtins.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "utils/arena.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -35,6 +38,38 @@ SheetCellRange SingleCell(std::uint32_t row, std::uint32_t col) {
   r.first_col = col;
   r.last_col = col;
   return r;
+}
+
+Value CustomSpill(const Value* /*args*/, std::uint32_t /*arity*/, Arena& arena) {
+  Value* cells = nullptr;
+  ArrayValue* array = allocate_array_value(1U, 2U, arena, cells);
+  if (array == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  cells[0] = Value::number(7.0);
+  cells[1] = Value::number(8.0);
+  return Value::array(array);
+}
+
+Value CustomArrayAbs(const Value* /*args*/, std::uint32_t /*arity*/, Arena& arena) {
+  Value* cells = nullptr;
+  ArrayValue* array = allocate_array_value(1U, 2U, arena, cells);
+  if (array == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  cells[0] = Value::number(7.0);
+  cells[1] = Value::number(8.0);
+  return Value::array(array);
+}
+
+Value CustomSum(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  double sum = 0.0;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].is_number()) {
+      sum += args[i].as_number();
+    }
+  }
+  return Value::number(sum);
 }
 
 TEST(PartialRecalc, EmptyViewportIsNoop) {
@@ -281,6 +316,286 @@ TEST(PartialRecalc, SpillReleaseRetriesBlockedAnchorInClosureNextWave) {
   EXPECT_DOUBLE_EQ(a2.as_number(), 1.0);
   EXPECT_DOUBLE_EQ(b4.as_number(), 6.0);
   EXPECT_TRUE(wb.sheet(0).blocked_spill_anchors().empty());
+}
+
+TEST(PartialRecalc, InitialPhantomOnlySpillDependencyAndRemoteDirtyContract) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  wb.add_sheet("Remote");
+
+  // The watcher is registered first and reads compact B:B. The producer's
+  // anchor is A2, outside that range, while its committed phantom values
+  // land in B2:B4. There is no derived edge before the first spill commit.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B:B)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2)")));
+
+  // Keep unrelated remote work dirty; a partial pass over Sheet1 must not
+  // force or clear it.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 0U, "=NOW()")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(1U, 0U, 1U, "=42")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 2U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 12.0);
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{1U, 0U, 0U}));
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{1U, 0U, 1U}));
+
+  const CellNodeId watcher{0U, 0U, 2U};
+  const CellNodeId producer{0U, 1U, 0U};
+  EXPECT_TRUE(wb.recalc_engine().dep_graph().has_dependency_source(watcher, producer,
+                                                                   DepGraph::DependencySource::kSpillFootprint));
+
+  // A changed producer is reached through the derived edge and refreshes the
+  // aggregate in the same partial call.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(3,2,10)")));
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 2U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 39.0);
+
+  // The producer may be rewritten to depend on the aggregate itself. The
+  // partial wave must remove the stale spill edge before SCC construction and
+  // evaluate the scalar dependency order in this same call.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=C1+1")));
+  SheetCellRange c1_a2;
+  c1_a2.sheet_id = 0U;
+  c1_a2.first_row = 0U;
+  c1_a2.last_row = 1U;
+  c1_a2.first_col = 0U;
+  c1_a2.last_col = 2U;
+  auto rewrite_stats = wb.partial_recalc(default_registry(), c1_a2);
+  ASSERT_TRUE(static_cast<bool>(rewrite_stats));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 1.0);
+
+  // A second overlapping partial call has no dirty or volatile formulas left
+  // in the closure and must preserve the scalar result without reevaluation.
+  auto repeat_stats = wb.partial_recalc(default_registry(), c1_a2);
+  ASSERT_TRUE(static_cast<bool>(repeat_stats));
+  EXPECT_EQ(repeat_stats.value().cells_evaluated, 0U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 1.0);
+
+  // Removing the spill leaves B:B empty. The old derived edge is active for
+  // this wave, so the watcher sees the shrink before the edge is removed.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=1")));
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 2U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_FALSE(wb.recalc_engine().dep_graph().has_dependency_source(watcher, producer,
+                                                                    DepGraph::DependencySource::kSpillFootprint));
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{1U, 0U, 0U}));
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{1U, 0U, 1U}));
+}
+
+TEST(PartialRecalc, DefinedNameReindexClearsStaleSpillInViewport) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("MAKE", "SEQUENCE(3,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=MAKE")));      // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B:B)")));  // C1
+
+  SheetCellRange c1_a2;
+  c1_a2.sheet_id = 0U;
+  c1_a2.first_row = 0U;
+  c1_a2.last_row = 1U;
+  c1_a2.first_col = 0U;
+  c1_a2.last_col = 2U;
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), c1_a2)));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 12.0);
+
+  // Reindexing must invalidate the committed spill before rebuilding the
+  // graph. The partial closure then evaluates C1 before A2=C1+1 without a
+  // stale phantom-derived SCC.
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("MAKE", "C1+1")));
+  auto rewrite_stats = wb.partial_recalc(default_registry(), c1_a2);
+  ASSERT_TRUE(static_cast<bool>(rewrite_stats));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 1.0);
+  EXPECT_TRUE(wb.sheet(0).committed_spill_footprints().empty());
+
+  auto repeat_stats = wb.partial_recalc(default_registry(), c1_a2);
+  ASSERT_TRUE(static_cast<bool>(repeat_stats));
+  EXPECT_EQ(repeat_stats.value().cells_evaluated, 0U);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 1.0);
+}
+
+TEST(PartialRecalc, ModeMultSpillReachesWholeRowWatcher) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+
+  // MODE.MULT returns the tied modes as a vertical array. Its second value
+  // lands in A100, where the row-100 watcher must observe it even though
+  // the producer anchor is A99 and there is no initial derived edge. Keep
+  // the watcher on row 101 so SUM(100:100) does not self-reference.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 98U, 0U, "=MODE.MULT(1,2,1,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 100U, 2U, "=SUM(100:100)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(100U, 2U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 100U, 2U).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(98U, 0U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(99U, 0U).as_number(), 2.0);
+}
+
+TEST(PartialRecalc, CustomPotentialProducerUsesDownRightGeometry) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  FunctionRegistry registry;
+  register_builtins(registry);
+  ASSERT_TRUE(registry.register_function(FunctionDef{"CUSTOMSPILL", 0U, kVariadic, &CustomSpill}));
+
+  // C1 watches B:B. A100 can spill right into B100 despite its anchor being
+  // outside the range; Z100 starts too far right and must remain untouched.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B:B)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 0U, "=CUSTOMSPILL()")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 25U, "=CUSTOMSPILL()")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(registry, SingleCell(0U, 2U))));
+  const Value aggregate = CellValue(wb, 0U, 0U, 2U);
+  ASSERT_TRUE(aggregate.is_number()) << "aggregate kind=" << static_cast<int>(aggregate.kind());
+  EXPECT_DOUBLE_EQ(aggregate.as_number(), 8.0);
+  const Value phantom = wb.sheet(0).resolve_cell_value(99U, 1U);
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 8.0);
+  EXPECT_TRUE(CellValue(wb, 0U, 99U, 25U).is_blank());
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 99U, 25U}));
+}
+
+TEST(PartialRecalc, BoundedCompactWatcherReachesInteriorWorkOutsideViewport) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  FunctionRegistry registry;
+  register_builtins(registry);
+  ASSERT_TRUE(registry.register_function(FunctionDef{"CUSTOMSPILL", 0U, kVariadic, &CustomSpill}));
+
+  // C1 watches a bounded rectangle wide enough to be registered compactly,
+  // so it owns no per-cell edge into the rectangle. Neither the interior
+  // formula (B2) nor the spill producer (A100, which spills right into B100)
+  // is inside the viewport, and both must still be evaluated before C1 can
+  // be correct.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B1:B60000)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=D1+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 0U, "=CUSTOMSPILL()")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(registry, SingleCell(0U, 2U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 1U).as_number(), 4.0);
+  const Value phantom = wb.sheet(0).resolve_cell_value(99U, 1U);
+  ASSERT_TRUE(phantom.is_number()) << "phantom kind=" << static_cast<int>(phantom.kind());
+  EXPECT_DOUBLE_EQ(phantom.as_number(), 8.0);
+  const Value aggregate = CellValue(wb, 0U, 0U, 2U);
+  ASSERT_TRUE(aggregate.is_number()) << "aggregate kind=" << static_cast<int>(aggregate.kind());
+  EXPECT_DOUBLE_EQ(aggregate.as_number(), 12.0);
+}
+
+TEST(PartialRecalc, RuntimeRegistryReclassifiesKnownEagerName) {
+  // The potential index is built without the caller's registry. A host may
+  // intentionally override an eager built-in name with an array-producing
+  // UDF, so the partial candidate must be classified again at admission time.
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  FunctionRegistry registry;
+  FunctionDef sum_def{"SUM", 1U, kVariadic, &CustomSum};
+  sum_def.accepts_ranges = true;
+  sum_def.result_shape = FunctionDef::ResultShape::kReduce;
+  ASSERT_TRUE(registry.register_function(sum_def));
+  FunctionDef abs_def{"ABS", 1U, 1U, &CustomArrayAbs};
+  abs_def.result_shape = FunctionDef::ResultShape::kArray;
+  ASSERT_TRUE(registry.register_function(abs_def));
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B:B)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=ABS(1)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(registry, SingleCell(0U, 2U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 8.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(1U, 1U).as_number(), 8.0);
+}
+
+TEST(PartialRecalc, RuntimeRegistryCanExcludeScalarIntrinsicOverride) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  FunctionRegistry registry;
+  FunctionDef sum_def{"SUM", 1U, kVariadic, &CustomSum};
+  sum_def.accepts_ranges = true;
+  sum_def.result_shape = FunctionDef::ResultShape::kReduce;
+  ASSERT_TRUE(registry.register_function(sum_def));
+
+  // The host deliberately replaces SEQUENCE with a scalar implementation.
+  // A potential index built without this runtime registry must retain the
+  // formula as registry-sensitive, then reject it during partial admission.
+  FunctionDef scalar_sequence{"SEQUENCE", 1U, kVariadic, &CustomSum};
+  scalar_sequence.result_shape = FunctionDef::ResultShape::kScalar;
+  ASSERT_TRUE(registry.register_function(scalar_sequence));
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=SUM(B:B)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(1,2)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(registry, SingleCell(0U, 2U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 0.0);
+  EXPECT_TRUE(CellValue(wb, 0U, 1U, 0U).is_blank());
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 1U, 0U}));
+}
+
+TEST(PartialRecalc, CleanIntermediateSpillChainCompletesInOneCall) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+
+  // C100 is initially clean and scalar because B:B is empty. E100 is also
+  // clean. A later A100 write must discover the clean intermediate C100 from
+  // E100's range watcher and complete both derived links in one call.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 2U, "=IF(SUM(B:B)>0,SEQUENCE(1,2),0)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 4U, "=SUM(D:D)")));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 99U, 2U).as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 99U, 4U).as_number(), 0.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 0U, "=SEQUENCE(1,2)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 25U, "=40+2")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 25U, "=SEQUENCE(1,2)")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(99U, 4U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 99U, 2U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(99U, 3U).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 99U, 4U).as_number(), 2.0);
+
+  // Neither unrelated formula is in the E100 closure. Both retain their
+  // blank cache and dirty state for a later full/overlapping pass.
+  EXPECT_TRUE(CellValue(wb, 0U, 0U, 25U).is_blank());
+  EXPECT_TRUE(CellValue(wb, 0U, 99U, 25U).is_blank());
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 25U}));
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 99U, 25U}));
+}
+
+TEST(PartialRecalc, WholeRowSpillGeometryPreservesUnrelatedDirtyCells) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 3U, 3U, "=SUM(3:3)")));        // D4
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 0U, "=SEQUENCE(2,3)")));   // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 25U, "=40+2")));           // Z1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 99U, 0U, "=SEQUENCE(1,2)")));  // A100
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(3U, 3U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 3U, 3U).as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 1U, 0U).as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(2U, 0U).as_number(), 4.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(2U, 2U).as_number(), 6.0);
+
+  EXPECT_TRUE(CellValue(wb, 0U, 0U, 25U).is_blank());
+  EXPECT_TRUE(CellValue(wb, 0U, 99U, 0U).is_blank());
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 0U, 25U}));
+  EXPECT_TRUE(wb.recalc_engine().dirty().contains(CellNodeId{0U, 99U, 0U}));
+}
+
+TEST(PartialRecalc, MultiStageSpillChainCompletesInOneCall) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(1.0))));           // A2
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=IF(A2,SEQUENCE(1,2),0)")));  // C1 -> D1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 4U, "=SUM(D:D)")));                // E1
+
+  // E1 initially has no committed edge to C1. Candidate closure expansion
+  // admits C1, evaluates its array, reconciles E1->C1, and retries E1 before
+  // this one partial call returns.
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 4U))));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 4U).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(0U, 3U).as_number(), 2.0);
 }
 
 }  // namespace

@@ -23,6 +23,7 @@
 #include "utils/arena.h"
 #include "utils/strings.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -733,6 +734,63 @@ TEST(TreeWalkerRanges, WholeColumnSumsPopulatedCells) {
   const Value v = EvalInSheet(sheet, "=SUM(A:A)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 6.0);
+}
+
+TEST(TreeWalkerRanges, WholeColumnAndRowAggregatesIncludeSpillPhantoms) {
+  Sheet sheet("Sheet1");
+  ASSERT_TRUE(sheet.commit_spill(
+      0U, 0U, 5U, 1U,
+      {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0), Value::number(5.0)}));
+
+  const Value sum_col = EvalInSheet(sheet, "=SUM(A:A)");
+  const Value count_col = EvalInSheet(sheet, "=COUNT(A:A)");
+  const Value sum_row = EvalInSheet(sheet, "=SUM(2:2)");
+  ASSERT_TRUE(sum_col.is_number());
+  ASSERT_TRUE(count_col.is_number());
+  ASSERT_TRUE(sum_row.is_number());
+  EXPECT_DOUBLE_EQ(sum_col.as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(count_col.as_number(), 5.0);
+  EXPECT_DOUBLE_EQ(sum_row.as_number(), 2.0);
+}
+
+TEST(TreeWalkerRanges, PhantomOnlyWholeColumnUsesSpillRectangleExtent) {
+  Sheet sheet("Sheet1");
+  // Column B has no stored slots: every value there is a spill phantom.
+  ASSERT_TRUE(sheet.commit_spill(0U, 0U, 3U, 2U,
+                                 {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0),
+                                  Value::number(5.0), Value::number(6.0)}));
+  const Value sum = EvalInSheet(sheet, "=SUM(B:B)");
+  const Value count = EvalInSheet(sheet, "=COUNT(B:B)");
+  ASSERT_TRUE(sum.is_number());
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(sum.as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(count.as_number(), 3.0);
+}
+
+TEST(TreeWalkerRanges, ThreeDWholeColumnAggregatesSpillPhantomsOnEverySheet) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  ASSERT_TRUE(wb.sheet(0).commit_spill(0U, 0U, 3U, 2U,
+                                       {Value::number(1.0), Value::number(2.0), Value::number(3.0), Value::number(4.0),
+                                        Value::number(5.0), Value::number(6.0)}));
+  ASSERT_TRUE(wb.sheet(1).commit_spill(0U, 0U, 3U, 2U,
+                                       {Value::number(7.0), Value::number(8.0), Value::number(9.0), Value::number(10.0),
+                                        Value::number(11.0), Value::number(12.0)}));
+  ASSERT_TRUE(wb.sheet(2).commit_spill(0U, 0U, 3U, 2U,
+                                       {Value::number(13.0), Value::number(14.0), Value::number(15.0),
+                                        Value::number(16.0), Value::number(17.0), Value::number(18.0)}));
+
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser parser("=SUM(Sheet1:Sheet3!B:B)", parse_arena);
+  parser::AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value sum = evaluate(*root, eval_arena, default_registry(), ctx);
+  ASSERT_TRUE(sum.is_number());
+  EXPECT_DOUBLE_EQ(sum.as_number(), 90.0);
 }
 
 TEST(TreeWalkerRanges, MultiColumnWholeRangeSums) {

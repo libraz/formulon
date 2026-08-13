@@ -493,6 +493,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   std::uint64_t serial_fallback_steps = 0;
   std::uint64_t cycle_recoveries = 0;
   std::size_t release_waves = 0U;
+  std::size_t dependency_waves = 0U;
   std::size_t no_progress_waves = 0U;
   std::vector<BlockedSpillState> previous_release_state;
   std::vector<CellNodeId> previous_release_targets;
@@ -508,6 +509,18 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   };
 
   for (;;) {
+    // Reconcile committed spill geometry before closure/SCC scheduling. A
+    // producer rewrite may have removed a previously valid phantom edge;
+    // dirtying its watcher before Tarjan avoids a stale cycle. Added and
+    // removed source ownership both wake the watcher at this boundary.
+    const DepGraph::DependencyDelta pre_dependency_delta = engine.reconcile_spill_dependencies_locked(wb);
+    for (const DepGraph::Edge& edge : pre_dependency_delta.added) {
+      engine.dirty_.mark(edge.first);
+    }
+    for (const DepGraph::Edge& edge : pre_dependency_delta.removed) {
+      engine.dirty_.mark(edge.first);
+    }
+
     // Phase 1 + 2: seed the dirty set with volatile cells, BFS-propagate
     // dirtiness through reverse edges. Mirrors `RecalcEngine::recalc`.
     engine.volatiles_.for_each([&](CellNodeId cell) {
@@ -647,21 +660,33 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       ++serial_fallback_steps;
     }
 
-    const std::vector<CellNodeId> released = release_queue.take();
-    if (!released.empty()) {
-      ++release_waves;
-      const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(wb);
-      const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
-      if (have_previous_release_state && release_state == previous_release_state &&
-          release_targets == previous_release_targets) {
-        ++no_progress_waves;
-      } else {
-        no_progress_waves = 0U;
+    const DepGraph::DependencyDelta dependency_delta = engine.reconcile_spill_dependencies_locked(wb);
+    const bool dependency_retry = !dependency_delta.added.empty();
+    if (dependency_retry) {
+      ++dependency_waves;
+      for (const DepGraph::Edge& edge : dependency_delta.added) {
+        engine.dirty_.mark(edge.first);
       }
-      previous_release_state = release_state;
-      previous_release_targets = release_targets;
-      have_previous_release_state = true;
-      if (release_waves > kMaxSpillReleaseWaves || no_progress_waves >= kMaxNoProgressSpillWaves) {
+    }
+
+    const std::vector<CellNodeId> released = release_queue.take();
+    if (!released.empty() || dependency_retry) {
+      ++release_waves;
+      if (!released.empty()) {
+        const std::vector<BlockedSpillState> release_state = snapshot_blocked_spills(wb);
+        const std::vector<CellNodeId> release_targets = canonical_release_targets(released);
+        if (have_previous_release_state && release_state == previous_release_state &&
+            release_targets == previous_release_targets) {
+          ++no_progress_waves;
+        } else {
+          no_progress_waves = 0U;
+        }
+        previous_release_state = release_state;
+        previous_release_targets = release_targets;
+        have_previous_release_state = true;
+      }
+      if (release_waves > kMaxSpillReleaseWaves || dependency_waves > kMaxSpillReleaseWaves ||
+          (!released.empty() && no_progress_waves >= kMaxNoProgressSpillWaves)) {
         // Keep the current dirty set, including unrelated work, while
         // retaining the release targets for a caller retry after an
         // external mutation.
@@ -671,6 +696,9 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       }
       engine.dirty_.clear();
       mark_release_targets_dirty(released);
+      for (const DepGraph::Edge& edge : dependency_delta.added) {
+        engine.dirty_.mark(edge.first);
+      }
       continue;
     }
 
