@@ -97,6 +97,9 @@ cases:
       A4: "=SUM(1,2)"         # shorthand: formula cell
       A5: { kind: error, code: "#DIV/0!" }  # explicit error
     formula: "=COUNT(A1:A4)"
+    formula_cell: AA5         # OPTIONAL, bare A1; default = Z1
+    capture: shape            # OPTIONAL, "cells" (default) or "shape"
+    samples: [AA5, AB5]       # required with capture: shape
     tolerance: { abs: 1e-10 } # optional, overrides suite default
     expect: { kind: number, value: 2 }  # OPTIONAL, author-side doc only
 ```
@@ -104,6 +107,23 @@ cases:
 `expect` in YAML is not consulted by the verifier. It's there so the
 YAML is self-documenting — what the author *believed* Excel does. Truth
 is whatever the golden captures.
+
+`formula_cell` moves the formula under test off the default `Z1` for
+cases whose result depends on where the formula sits — whether a
+whole-axis spill still fits below the formula row, or whether the
+formula's own cell falls inside the range it references. Both Excel
+drivers and this verifier honour it; the field is emitted into the
+golden only when a case declares it.
+
+`capture: shape` is for a result too large to record cell by cell. The
+default capture materialises every cell of a spill and stops at
+`MAX_CAPTURE_CELLS` (4,096); a whole-axis spill is 16,384 cells at the
+smallest. Shape capture instead records the dynamic-array shape plus the
+cells listed in `samples` (absolute A1 addresses inside the spill), and
+the verifier checks the shape first, then each sample at its offset from
+the formula cell. Excel answers the case identically either way — only
+the recording differs — so reach for it when the alternative would be
+skipping the case.
 
 ## Golden JSON format
 
@@ -124,7 +144,20 @@ is whatever the golden captures.
       "id": "unique_within_suite",
       "formula": "=COUNT(A1:A4)",
       "setup": {"A1": {"kind": "number", "value": 10}, "...": "..."},
+      "formula_cell": "AA5",
       "expect": {"kind": "number", "value": 3.0}
+    },
+    {
+      "id": "a_spill_too_large_to_materialise",
+      "formula": "=A:A",
+      "setup": {"A1": {"kind": "number", "value": 1}},
+      "formula_cell": "Z1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [1048576, 1],
+        "samples": {"Z1": 1.0, "Z2": 0.0}
+      }
     }
   ]
 }

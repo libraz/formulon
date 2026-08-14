@@ -1,0 +1,365 @@
+{
+  "suite": "whole_axis_spill",
+  "description": "Bare whole-axis references (`=A:A`, `=A:C`, `=1:2`) used as the whole formula, i.e. as a spilling expression rather than as a function argument. Every case declares its own `formula_cell`, because the observable result depends on where the formula sits.\nExcel 365 treats a bare whole-axis reference like any other bare range: the value is the array of the *declared* rectangle — rows 1..1048576 for a column span, columns A..XFD for a row span — and it spills from the formula cell. Nothing is trimmed to the populated extent, and cells with no content spill as 0. Three consequences are directly observable and are what this suite pins:\n\n  * the rectangle must fit inside the grid measured from the formula\n    cell, so a whole-column reference only spills from row 1 and a\n    whole-row reference only from column A; anywhere else is `#SPILL!`;\n  * any occupied cell anywhere in that rectangle blocks the spill, even\n    one far below or far to the right of the populated data, which is\n    what shows the footprint is the full declared rectangle;\n  * a formula that sits inside the axis it references is a circular\n    reference, so it never spills at all.\n\nThe four full-rectangle spills use `capture: shape`: their results are far larger than the cell-by-cell capture ceiling (the smallest is 16,384 cells against a 4,096 ceiling), so the golden records the dynamic-array shape plus the listed sample cells instead of every cell. Excel answers them normally; only the recording differs.\nThe remaining seven are recorded cell by cell and are currently registered in tests/divergence.yaml. Each `expect` block below is Excel's observed answer; deleting an entry and regenerating this suite turns the corresponding case back into a verified golden.\n",
+  "environment": {
+    "excel_version": "16.112",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-08-14T20:07:42Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "whole_col_below_row_one_overflows",
+      "formula": "=A:A",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "formula_cell": "Z2",
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "whole_multi_col_below_row_one_overflows",
+      "formula": "=A:C",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "Z2",
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "whole_row_right_of_column_a_overflows",
+      "formula": "=1:2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "B5",
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "whole_col_blocked_far_below_anchor",
+      "formula": "=A:A",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "Z500": {
+          "kind": "number",
+          "value": 7.0
+        }
+      },
+      "formula_cell": "Z1",
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "whole_row_blocked_right_of_anchor",
+      "formula": "=3:3",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "Z5": {
+          "kind": "number",
+          "value": 9.0
+        }
+      },
+      "formula_cell": "A5",
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "whole_col_containing_its_own_formula_cell",
+      "formula": "=A:A",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "A1",
+      "skipped": "=A:A at A1 with column A otherwise empty: the rectangle fits and the runway is clear, so only the cycle stops it; Excel leaves 0 in the cell with iterative calculation off. Formulon returns #VALUE! from the non-spilling whole-axis branch; once that branch spills, the reference contains the formula cell and Formulon's cycle policy returns #REF!."
+    },
+    {
+      "id": "whole_row_containing_its_own_formula_cell",
+      "formula": "=5:5",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "formula_cell": "A5",
+      "skipped": "=5:5 at A5 with row 5 otherwise empty: same isolation on the row axis; Excel leaves 0 with iterative calculation off. Formulon returns #VALUE! today and #REF! once the whole-axis branch spills, per its cycle policy."
+    },
+    {
+      "id": "whole_col_cycle_decided_before_blocking",
+      "formula": "=A:A",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        }
+      },
+      "formula_cell": "A1",
+      "skipped": "=A:A at A1 with A2/A3 occupied: circular and blocked at once. Excel answers 0, so it decides the cycle first. Formulon returns #SPILL!, i.e. it decides the blocking first -- a third behaviour distinct from the #VALUE! the two clear-runway self-reference cases produce."
+    },
+    {
+      "id": "whole_col_blocked_when_formula_cell_is_outside_the_axis",
+      "formula": "=B:B",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "formula_cell": "A1",
+      "expect": {
+        "kind": "error",
+        "code": "#SPILL!"
+      }
+    },
+    {
+      "id": "whole_col_spills_full_declared_rectangle",
+      "formula": "=A:A",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "formula_cell": "Z1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "Z1": 1.0,
+          "Z2": 2.0,
+          "Z3": 3.0,
+          "Z4": 0.0,
+          "Z1048576": 0.0
+        }
+      }
+    },
+    {
+      "id": "whole_multi_col_spills_full_declared_rectangle",
+      "formula": "=A:C",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "Z1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          3
+        ],
+        "samples": {
+          "Z1": 1.0,
+          "AA1": 10.0,
+          "AB1": 100.0,
+          "Z2": 2.0,
+          "AA2": 0.0,
+          "AB3": 0.0
+        }
+      }
+    },
+    {
+      "id": "whole_row_pair_spills_full_declared_rectangle",
+      "formula": "=1:2",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 100.0
+        }
+      },
+      "formula_cell": "A5",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          2,
+          16384
+        ],
+        "samples": {
+          "A5": 1.0,
+          "B5": 10.0,
+          "C5": 100.0,
+          "A6": 2.0,
+          "B6": 0.0,
+          "XFD5": 0.0,
+          "XFD6": 0.0
+        }
+      }
+    },
+    {
+      "id": "whole_single_row_spills_full_declared_rectangle",
+      "formula": "=3:3",
+      "setup": {
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "formula_cell": "A5",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1,
+          16384
+        ],
+        "samples": {
+          "A5": 3.0,
+          "B5": 30.0,
+          "C5": 0.0,
+          "XFD5": 0.0
+        }
+      }
+    }
+  ]
+}

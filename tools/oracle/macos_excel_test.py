@@ -71,11 +71,14 @@ class _FakeAnchor:
 
 
 class _FakeSheet:
-    def __init__(self, anchor):
+    def __init__(self, anchor, address="Z1"):
         self.anchor = anchor
+        self.address = address
+        self.range_calls = []
 
     def range(self, address):
-        if address != "Z1":
+        self.range_calls.append(address)
+        if address != self.address:
             raise AssertionError(f"unexpected worksheet access: {address!r}")
         return self.anchor
 
@@ -172,6 +175,18 @@ class _FakeBooks:
 class _FakeSuiteApp:
     def __init__(self, workbook):
         self.api = _FakeSuiteApi(16_385)
+        self.books = _FakeBooks(workbook)
+        self.calculate_calls = 0
+
+    def calculate(self):
+        self.calculate_calls += 1
+
+
+class _FakeWinSuiteApp:
+    """Windows counterpart of :class:`_FakeSuiteApp` (COM-style API names)."""
+
+    def __init__(self, workbook):
+        self.api = _FakeWinApi(16_385)
         self.books = _FakeBooks(workbook)
         self.calculate_calls = 0
 
@@ -318,6 +333,131 @@ class MacExcelFormulaAssignmentTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "formula2 setter failed"):
             macos_excel._assign_formula(SetterFailureCell(), "=SUM(1,2)", context="case setter-error")
+
+
+class FormulaPlacementTest(unittest.TestCase):
+    """The `formula_cell` override reaches both driver routes."""
+
+    def _oracle(self, sheet):
+        workbook = _FakeWorkbook(_FakeDate1904Reference(False), sheets=[sheet])
+        app = _FakeSuiteApp(workbook)
+        oracle = object.__new__(macos_excel.ExcelOracle)
+        oracle._app = app
+        return oracle
+
+    def test_absent_override_keeps_the_historical_z1_placement(self) -> None:
+        self.assertEqual(base.case_formula_cell({"id": "c"}), "Z1")
+        self.assertEqual(base.case_formula_cell({"id": "c", "formula_cell": None}), "Z1")
+
+    def test_override_is_upper_cased_and_trimmed(self) -> None:
+        self.assertEqual(base.case_formula_cell({"id": "c", "formula_cell": " aa5 "}), "AA5")
+
+    def test_unusable_override_raises_instead_of_silently_falling_back(self) -> None:
+        for value in ("", "   ", 5, ["Z1"]):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "unusable formula_cell"):
+                base.case_formula_cell({"id": "c", "formula_cell": value})
+
+    def test_batch_route_writes_and_reads_the_declared_cell(self) -> None:
+        sheet = _FakeSheet(_FakeAnchor(7), address="AA5")
+        oracle = self._oracle(sheet)
+
+        results = oracle.run_suite("placement", [{"id": "p", "formula": "=A:A", "formula_cell": "AA5", "setup": {}}])
+
+        self.assertEqual([(r.kind, r.value) for r in results], [("number", 7.0)])
+        self.assertEqual(set(sheet.range_calls), {"AA5"})
+        self.assertEqual(sheet.anchor.formula2, "=A:A")
+
+    def test_per_case_workbook_route_writes_and_reads_the_declared_cell(self) -> None:
+        sheet = _FakeSheet(_FakeAnchor(7), address="AA5")
+        oracle = self._oracle(sheet)
+        cases = [{"id": "p", "formula": "=A:A", "formula_cell": "AA5", "setup": {}}]
+
+        results = oracle._run_suite_per_case_workbook("placement", cases, date1904=False, iterative=False)
+
+        self.assertEqual([(r.kind, r.value) for r in results], [("number", 7.0)])
+        self.assertIn("AA5", sheet.range_calls)
+
+    def test_windows_batch_route_honours_the_same_override(self) -> None:
+        sheet = _FakeSheet(_FakeAnchor(7), address="AA5")
+        workbook = _FakeWorkbook(_FakeDate1904Reference(False), sheets=[sheet])
+        oracle = object.__new__(windows_excel.WindowsExcelOracle)
+        oracle._app = _FakeWinSuiteApp(workbook)
+
+        results = oracle.run_suite("placement", [{"id": "p", "formula": "=A:A", "formula_cell": "AA5", "setup": {}}])
+
+        self.assertEqual([(r.kind, r.value) for r in results], [("number", 7.0)])
+        self.assertEqual(set(sheet.range_calls), {"AA5"})
+
+    def test_malformed_override_is_skipped_with_a_reason(self) -> None:
+        sheet = _FakeSheet(_FakeAnchor(7), address="AA5")
+        oracle = self._oracle(sheet)
+
+        results = oracle.run_suite("placement", [{"id": "p", "formula": "=A:A", "formula_cell": "", "setup": {}}])
+
+        self.assertEqual(results[0].kind, "skipped")
+        self.assertIn("unusable formula_cell", results[0].value)
+
+
+class ShapeCaptureTest(unittest.TestCase):
+    """`capture: shape` records shape plus samples instead of every cell."""
+
+    def test_samples_are_none_for_the_default_cell_walk(self) -> None:
+        self.assertIsNone(base.case_shape_samples({"id": "c"}))
+        self.assertIsNone(base.case_shape_samples({"id": "c", "capture": "cells"}))
+
+    def test_samples_are_upper_cased(self) -> None:
+        self.assertEqual(
+            base.case_shape_samples({"id": "c", "capture": "shape", "samples": [" z1 ", "aa5"]}),
+            ["Z1", "AA5"],
+        )
+
+    def test_shape_capture_without_samples_raises(self) -> None:
+        for case in (
+            {"id": "c", "capture": "shape"},
+            {"id": "c", "capture": "shape", "samples": []},
+            {"id": "c", "capture": "shape", "samples": ["Z1", 5]},
+        ):
+            with self.subTest(case=case), self.assertRaisesRegex(ValueError, "samples"):
+                base.case_shape_samples(case)
+
+    def test_unknown_capture_mode_raises(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown capture mode"):
+            base.case_shape_samples({"id": "c", "capture": "everything"})
+
+    def test_shape_capture_reads_only_the_declared_cells(self) -> None:
+        # A shape far above the cell-walk ceiling: the probe must accept it
+        # and the driver must read exactly the sampled addresses.
+        anchor = _FakeAnchor(1)
+        sheet = _FakeSheet(anchor, address="Z1")
+        sheet.anchor = anchor
+        cells = {"Z1": _FakeCell(value=1), "Z2": _FakeCell(value=2)}
+
+        def range_(address):
+            sheet.range_calls.append(address)
+            if address == "Z1":
+                return anchor
+            return cells[address]
+
+        sheet.range = range_  # type: ignore[method-assign]
+        encoded = 1_048_576 * 16_384 + 1
+        result = macos_excel._classify_shape_result(_FakeApp(_FakeMacApi(encoded)), sheet, "Z1", ["Z1", "Z2"])
+
+        self.assertEqual(result.kind, "array_shape")
+        self.assertEqual(result.array_shape, [1_048_576, 1])
+        self.assertEqual(result.value, {"Z1": 1.0, "Z2": 2.0})
+        # One probe read plus one read per sample; no walk of the spill.
+        self.assertEqual(sheet.range_calls, ["Z1", "Z1", "Z2"])
+
+    def test_cell_walk_still_refuses_a_shape_past_the_ceiling(self) -> None:
+        anchor = _FakeAnchor(1)
+        with self.assertRaisesRegex(base.SpillShapeProbeError, "capture ceiling"):
+            base.probe_spill_shape(lambda _expression: 16_384 + base.MAX_CAPTURE_CELLS + 1, anchor)
+        # The same shape is accepted when the caller opts out because it
+        # reads a fixed sample list rather than walking.
+        self.assertEqual(
+            base.probe_spill_shape(lambda _expression: 16_384 + base.MAX_CAPTURE_CELLS + 1, anchor, max_cells=None),
+            (1, base.MAX_CAPTURE_CELLS + 1),
+        )
 
 
 class SpillShapeProbeTest(unittest.TestCase):

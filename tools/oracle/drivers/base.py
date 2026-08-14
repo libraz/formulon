@@ -64,8 +64,57 @@ _EXCEL_MAX_COLUMNS = 16_384
 MAX_CAPTURE_CELLS = 4_096
 
 
+# Where the formula under test is written on the case's own worksheet unless
+# the case carries a `formula_cell` override. `Z1` keeps the formula clear of
+# the A1-based setup block while staying in row 1.
+DEFAULT_FORMULA_CELL = "Z1"
+
+
 class SpillShapeProbeError(RuntimeError):
     """Raised when a non-invasive dynamic-array shape probe is invalid."""
+
+
+def case_shape_samples(case: Dict[str, Any]) -> Optional[List[str]]:
+    """Returns the sample addresses for a shape-captured case, else None.
+
+    A case whose true result is larger than :data:`MAX_CAPTURE_CELLS` cannot
+    be recorded cell by cell -- the smallest whole-axis spill alone is
+    16,384 cells. Such a case sets ``capture: shape`` and lists the
+    absolute A1 addresses it wants read back; the driver records the
+    dynamic-array shape plus exactly those cells. Excel is answering
+    normally in both modes; only our recording differs.
+    """
+
+    capture = case.get("capture")
+    if capture is None or capture == "cells":
+        return None
+    if capture != "shape":
+        raise ValueError(f"case {case.get('id')!r} has an unknown capture mode: {capture!r}")
+    samples = case.get("samples")
+    if (
+        not isinstance(samples, list)
+        or not samples
+        or not all(isinstance(item, str) and item.strip() for item in samples)
+    ):
+        raise ValueError(f"case {case.get('id')!r} declares capture: shape without a non-empty samples list")
+    return [item.strip().upper() for item in samples]
+
+
+def case_formula_cell(case: Dict[str, Any]) -> str:
+    """Returns the A1 address a case's formula under test is written to.
+
+    `formula_cell` is optional; absent, the driver uses the historical
+    :data:`DEFAULT_FORMULA_CELL`. A present-but-unusable value raises
+    instead of falling back, so a malformed override surfaces as a skipped
+    case with a reason rather than being observed at the wrong cell.
+    """
+
+    if "formula_cell" not in case or case["formula_cell"] is None:
+        return DEFAULT_FORMULA_CELL
+    addr = case["formula_cell"]
+    if not isinstance(addr, str) or not addr.strip():
+        raise ValueError(f"case {case.get('id')!r} has an unusable formula_cell: {addr!r}")
+    return addr.strip().upper()
 
 
 def decode_spill_shape_probe(value: Any) -> tuple[int, int]:
@@ -95,7 +144,7 @@ def decode_spill_shape_probe(value: Any) -> tuple[int, int]:
     return rows, columns
 
 
-def probe_spill_shape(evaluate, anchor) -> tuple[int, int]:
+def probe_spill_shape(evaluate, anchor, *, max_cells: Optional[int] = MAX_CAPTURE_CELLS) -> tuple[int, int]:
     """Evaluate the shared, non-invasive spill-shape expression once.
 
     ``evaluate`` is a platform adapter around Excel's Application.Evaluate;
@@ -109,6 +158,12 @@ def probe_spill_shape(evaluate, anchor) -> tuple[int, int]:
     strict decoder.  A bridge failure or malformed value therefore remains a
     hard probe error; callers must surface it as a skipped case rather than
     inventing a 1x1 fallback.
+
+    ``max_cells`` bounds the shape because the caller normally walks every
+    cell afterwards.  A shape-captured case reads a fixed, case-declared
+    sample list instead of walking, so it passes ``None`` -- there is no
+    offset loop for an adversarially large shape to run away with.  The
+    grid-fit check below is a correctness check and always applies.
     """
 
     try:
@@ -141,10 +196,9 @@ def probe_spill_shape(evaluate, anchor) -> tuple[int, int]:
         raise SpillShapeProbeError(
             f"spill shape {rows}x{columns} does not fit from anchor ({coordinates['row']},{coordinates['column']})"
         )
-    cells = rows * columns
-    if cells > MAX_CAPTURE_CELLS:
+    if max_cells is not None and rows * columns > max_cells:
         raise SpillShapeProbeError(
-            f"spill shape {rows}x{columns} exceeds the oracle capture ceiling of {MAX_CAPTURE_CELLS} cells"
+            f"spill shape {rows}x{columns} exceeds the oracle capture ceiling of {max_cells} cells"
         )
     return rows, columns
 
@@ -240,9 +294,10 @@ class OracleDriver(abc.ABC):
 
         Each `cases[i]` is a dict with keys `id`, `formula`, and `setup`
         (mapping A1 -> `{kind, value, ...}` record), plus the optional
-        `merges` list of inclusive A1 ranges on the default sheet. The
-        driver does not normalise; it trusts upstream `case_schema` to have
-        done so.
+        `merges` list of inclusive A1 ranges on the default sheet and the
+        optional `formula_cell` placement override (see
+        :func:`case_formula_cell`). The driver does not normalise; it
+        trusts upstream `case_schema` to have done so.
         """
 
     def assert_m365_or_abort(self) -> None:

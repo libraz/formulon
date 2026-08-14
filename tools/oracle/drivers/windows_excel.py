@@ -33,8 +33,9 @@ Windows-only. ``xlwings.App()`` here uses COM, so:
 ## Batch layout
 
 Mirrors :mod:`tools.oracle.drivers.macos_excel`: one worksheet per case,
-the case formula at ``Z1``, setup cells written verbatim at their absolute
-A1 addresses. A single ``app.calculate()`` resolves the whole batch.
+the case formula at ``Z1`` (or at the case's ``formula_cell`` override),
+setup cells written verbatim at their absolute A1 addresses. A single
+``app.calculate()`` resolves the whole batch.
 
 ## Wire-protocol entrypoints
 
@@ -64,10 +65,14 @@ from typing import Any, Dict, List, Optional
 from ._locale import detect_locale_from_app, normalise_error_token
 from .base import (
     _ERR_DISPLAY_NAMES,
+    DEFAULT_FORMULA_CELL,
+    MAX_CAPTURE_CELLS,
     CaseResult,
     EnvironmentInfo,
     OracleDriver,
     _datetime_to_serial,
+    case_formula_cell,
+    case_shape_samples,
     probe_spill_shape,
 )
 
@@ -268,13 +273,34 @@ def _array_cell_from_scalar(result: CaseResult) -> Any:
     return {"kind": result.kind, "value": result.value}
 
 
-def _evaluate_spill_shape(app, anchor) -> tuple[int, int]:
+def _evaluate_spill_shape(app, anchor, *, max_cells: Optional[int] = MAX_CAPTURE_CELLS) -> tuple[int, int]:
     """Windows adapter for the shared COM Application.Evaluate probe."""
 
-    return probe_spill_shape(lambda expression: app.api.Evaluate(expression), anchor)
+    return probe_spill_shape(lambda expression: app.api.Evaluate(expression), anchor, max_cells=max_cells)
 
 
-def _classify_result_cell(app, sht, anchor_addr: str = "Z1") -> CaseResult:
+def _classify_shape_result(app, sht, anchor_addr: str, samples: List[str]) -> CaseResult:
+    """Records a spill as its shape plus the case's declared sample cells.
+
+    Mirrors :func:`tools.oracle.drivers.macos_excel._classify_shape_result`.
+    """
+
+    rows, cols = _evaluate_spill_shape(app, sht.range(anchor_addr), max_cells=None)
+    values = {addr: _array_cell_from_scalar(_classify_value(sht.range(addr))) for addr in samples}
+    return CaseResult(id="", kind="array_shape", value=values, array_shape=[rows, cols])
+
+
+def _classify_case_result(app, sht, case: Dict[str, Any]) -> CaseResult:
+    """Reads one case's result in whichever capture mode it declares."""
+
+    anchor_addr = case_formula_cell(case)
+    samples = case_shape_samples(case)
+    if samples is not None:
+        return _classify_shape_result(app, sht, anchor_addr, samples)
+    return _classify_result_cell(app, sht, anchor_addr)
+
+
+def _classify_result_cell(app, sht, anchor_addr: str = DEFAULT_FORMULA_CELL) -> CaseResult:
     """Classifies the anchor scalar or the full dynamic spill if present."""
 
     shape = _evaluate_spill_shape(app, sht.range(anchor_addr))
@@ -447,7 +473,7 @@ class WindowsExcelOracle(OracleDriver):
                     setup = case.get("setup") or {}
                     for addr, rec in setup.items():
                         _write_cell(sht, addr, rec)
-                    result_cell = sht.range("Z1")
+                    result_cell = sht.range(case_formula_cell(case))
                     try:
                         result_cell.number_format = "General"
                     except Exception:
@@ -480,7 +506,7 @@ class WindowsExcelOracle(OracleDriver):
                     )
                     continue
                 try:
-                    result = _classify_result_cell(self._app, sht)
+                    result = _classify_case_result(self._app, sht, case)
                     result.id = case["id"]
                     out.append(result)
                 except Exception as exc:
@@ -550,7 +576,7 @@ class WindowsExcelOracle(OracleDriver):
                             sheet_name, bare_addr = _split_sheet_qualified_addr(addr)
                             target_sht = sht if sheet_name is None else _get_or_add_sheet(wb, sheet_name)
                             _write_cell(target_sht, bare_addr, rec)
-                        result_cell = sht.range("Z1")
+                        result_cell = sht.range(case_formula_cell(case))
                         try:
                             result_cell.number_format = "General"
                         except Exception:
@@ -566,7 +592,7 @@ class WindowsExcelOracle(OracleDriver):
                         out.append(CaseResult(id=case["id"], kind="skipped", value=write_error))
                         continue
                     try:
-                        result = _classify_result_cell(self._app, sht)
+                        result = _classify_case_result(self._app, sht, case)
                         result.id = case["id"]
                         out.append(result)
                     except Exception as exc:

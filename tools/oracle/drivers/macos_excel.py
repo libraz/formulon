@@ -26,7 +26,10 @@ have Automation permission for "System Events" + "Microsoft Excel".
 
 Each suite is written to one workbook with one worksheet per case. Setup
 cells are written at their absolute A1 address (as given in the YAML), and
-the formula under test is written to Z1 on that case's worksheet.
+the formula under test is written to Z1 on that case's worksheet — or to
+the case's `formula_cell` address when it declares one, which is how a
+case probes placement-dependent behaviour such as whether a whole-column
+spill still fits below the formula row.
 
 After writing, a single `app.calculate()` resolves the whole sheet; results
 are then read in a second pass and packaged into `CaseResult` records.
@@ -41,10 +44,14 @@ from typing import Any, Dict, List, Optional
 from ._locale import detect_locale_from_app, normalise_error_token
 from .base import (
     _ERR_DISPLAY_NAMES,
+    DEFAULT_FORMULA_CELL,
+    MAX_CAPTURE_CELLS,
     CaseResult,
     EnvironmentInfo,
     OracleDriver,
     _datetime_to_serial,
+    case_formula_cell,
+    case_shape_samples,
     probe_spill_shape,
 )
 
@@ -139,6 +146,20 @@ def _assign_formula(cell, formula: Any, *, context: str) -> None:
     canonicalise a formula it retains in full.  Only a readback that is a
     strict prefix of the input is treated as truncation, because
     canonicalisation rewrites tokens rather than dropping the tail.
+
+    The assignment goes through ``formula2`` and not ``formula_local``.
+    That is not a preference: the localised route is **inert on this
+    bridge**.  Assigning to ``formula_local`` leaves the cell blank and
+    raises nothing, for every formula including a trivial control -- a
+    third silent-non-retention mode, and the one this function cannot
+    catch because it never gets a chance to read anything back.  It
+    matters because ``formula_local`` is the route that carries localised
+    function names, so it is the natural place to look when a function
+    appears to be missing.  A blank read from it is a fact about the
+    bridge and not an observation about Excel; anything investigating an
+    apparently-unavailable function has to use ``formula2`` plus an
+    in-Excel probe such as ``ERROR.TYPE(f(...))``.  Verified on Excel
+    16.112 while establishing that FILTERXML is genuinely absent on Mac.
     """
 
     cell.formula2 = formula
@@ -335,13 +356,36 @@ def _array_cell_from_scalar(result: CaseResult) -> Any:
     return {"kind": result.kind, "value": result.value}
 
 
-def _evaluate_spill_shape(app, anchor) -> tuple[int, int]:
+def _evaluate_spill_shape(app, anchor, *, max_cells: Optional[int] = MAX_CAPTURE_CELLS) -> tuple[int, int]:
     """Mac adapter for the shared Application.Evaluate shape probe."""
 
-    return probe_spill_shape(lambda expression: app.api.evaluate(name=expression), anchor)
+    return probe_spill_shape(lambda expression: app.api.evaluate(name=expression), anchor, max_cells=max_cells)
 
 
-def _classify_result_cell(app, sht, anchor_addr: str = "Z1") -> CaseResult:
+def _classify_shape_result(app, sht, anchor_addr: str, samples: List[str]) -> CaseResult:
+    """Records a spill as its shape plus the case's declared sample cells.
+
+    For results too large to materialise cell by cell. The shape comes from
+    the same non-invasive probe the cell walk uses; only the listed cells
+    are read.
+    """
+
+    rows, cols = _evaluate_spill_shape(app, sht.range(anchor_addr), max_cells=None)
+    values = {addr: _array_cell_from_scalar(_classify_value(sht.range(addr))) for addr in samples}
+    return CaseResult(id="", kind="array_shape", value=values, array_shape=[rows, cols])
+
+
+def _classify_case_result(app, sht, case: Dict[str, Any]) -> CaseResult:
+    """Reads one case's result in whichever capture mode it declares."""
+
+    anchor_addr = case_formula_cell(case)
+    samples = case_shape_samples(case)
+    if samples is not None:
+        return _classify_shape_result(app, sht, anchor_addr, samples)
+    return _classify_result_cell(app, sht, anchor_addr)
+
+
+def _classify_result_cell(app, sht, anchor_addr: str = DEFAULT_FORMULA_CELL) -> CaseResult:
     """Classifies the anchor scalar or the full dynamic spill if present."""
 
     shape = _evaluate_spill_shape(app, sht.range(anchor_addr))
@@ -493,7 +537,7 @@ class ExcelOracle(OracleDriver):
                             rec,
                             context=f"case {case['id']!r} setup {addr!r}",
                         )
-                    result_cell = sht.range("Z1")
+                    result_cell = sht.range(case_formula_cell(case))
                     # Pin the result cell to General format. Otherwise Excel
                     # auto-formats DATE()/TIME() results as m/d/yyyy and
                     # xlwings hands us a Python datetime (or None for the
@@ -520,7 +564,7 @@ class ExcelOracle(OracleDriver):
                     out.append(CaseResult(id=case["id"], kind="skipped", value=write_errors[case["id"]]))
                     continue
                 try:
-                    result = _classify_result_cell(self._app, sht)
+                    result = _classify_case_result(self._app, sht, case)
                     result.id = case["id"]
                     out.append(result)
                 except Exception as exc:
@@ -575,7 +619,7 @@ class ExcelOracle(OracleDriver):
                                 rec,
                                 context=f"case {case['id']!r} setup {addr!r}",
                             )
-                        result_cell = sht.range("Z1")
+                        result_cell = sht.range(case_formula_cell(case))
                         try:
                             result_cell.number_format = "General"
                         except Exception:
@@ -597,7 +641,7 @@ class ExcelOracle(OracleDriver):
 
                     try:
                         self._app.calculate()
-                        result = _classify_result_cell(self._app, sht)
+                        result = _classify_case_result(self._app, sht, case)
                         result.id = case["id"]
                         out.append(result)
                     except Exception as exc:

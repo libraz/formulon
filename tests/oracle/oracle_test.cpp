@@ -484,6 +484,10 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
     return {};
   }
 
+  if (kind == "array_shape") {
+    return "golden 'expect' kind 'array_shape' must be compared with compare_array_shape";
+  }
+
   // Anchor projection: Excel reports the top-left scalar of any spill
   // region while xlwings reads back only that cell. Formulon's eval
   // surfaces the full Array; project it down so scalar expectations see
@@ -579,6 +583,64 @@ std::string compare_value(const JsonValue& expect, const Value& raw_actual, doub
     return std::string("error mismatch: expected ") + code_v->as_string() + ", got " + display_name(actual.as_error());
   }
   return "unknown expect kind: " + kind;
+}
+
+// Verifies a spill the oracle could not record cell by cell. The golden
+// carries the dynamic-array shape plus the cells the case asked to sample,
+// keyed by their absolute A1 address on the sheet Excel spilled into. Both
+// sides anchor the spill at the formula cell, so a sample resolves to the
+// array element at its offset from that cell.
+//
+// The shape is the load-bearing half: an implementation that trims a spill
+// to its populated extent, or collapses it to a scalar, fails here before
+// any sample is read.
+std::string compare_array_shape(const JsonValue& expect, const Value& actual, std::uint32_t case_row,
+                                std::uint32_t case_col, double tol_abs, double tol_rel, std::string_view compare_mode) {
+  if (!actual.is_array())
+    return "expected array, got " + format_value(actual);
+  const JsonValue* shape_v = expect.find("shape");
+  if (shape_v == nullptr || !shape_v->is_array())
+    return "array_shape golden missing 'shape'";
+  const auto& shape = shape_v->as_array();
+  if (shape.size() != 2 || !shape[0].is_number() || !shape[1].is_number())
+    return "array_shape golden has invalid 'shape'";
+  const auto want_rows = static_cast<std::uint32_t>(shape[0].as_number());
+  const auto want_cols = static_cast<std::uint32_t>(shape[1].as_number());
+  if (actual.as_array_rows() != want_rows || actual.as_array_cols() != want_cols) {
+    return "array shape mismatch: expected " + std::to_string(want_rows) + "x" + std::to_string(want_cols) + ", got " +
+           std::to_string(actual.as_array_rows()) + "x" + std::to_string(actual.as_array_cols());
+  }
+
+  const JsonValue* samples_v = expect.find("samples");
+  if (samples_v == nullptr || !samples_v->is_object())
+    return "array_shape golden missing 'samples'";
+  const auto& samples = samples_v->as_object();
+  if (samples.empty())
+    return "array_shape golden has an empty 'samples'";
+
+  const Value* cells = actual.as_array_cells();
+  for (const auto& entry : samples) {
+    std::uint32_t row = 0;
+    std::uint32_t col = 0;
+    if (!a1_to_row_col(entry.first, &row, &col))
+      return "array_shape sample '" + entry.first + "' is not an A1 address";
+    if (row < case_row || col < case_col) {
+      return "array_shape sample '" + entry.first + "' is above or left of the formula cell";
+    }
+    const std::uint32_t offset_row = row - case_row;
+    const std::uint32_t offset_col = col - case_col;
+    if (offset_row >= want_rows || offset_col >= want_cols) {
+      return "array_shape sample '" + entry.first + "' is outside the " + std::to_string(want_rows) + "x" +
+             std::to_string(want_cols) + " spill";
+    }
+    const std::size_t index = static_cast<std::size_t>(offset_row) * static_cast<std::size_t>(want_cols) +
+                              static_cast<std::size_t>(offset_col);
+    std::string diff = compare_json_scalar(entry.second, cells[index], tol_abs, tol_rel, compare_mode);
+    if (!diff.empty()) {
+      return "array_shape sample " + entry.first + ": " + diff;
+    }
+  }
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -680,10 +742,21 @@ TEST_P(OracleTest, Matches) {
   // formulas that reference the test cell via FORMULATEXT / ISFORMULA observe
   // the test cell as a formula cell. Setup overrides written below win because
   // they execute after this pre-registration.
+  // Placement precedence, highest first:
+  //   1. the case's explicit `formula_cell` (the drivers write the formula
+  //      there, so the native run must evaluate there too),
+  //   2. an `id` that is itself an A1 address,
+  //   3. Z1 = (row=0, col=25), the default driver placement.
   std::uint32_t case_row = 0;
-  std::uint32_t case_col = 0;
-  if (!a1_to_row_col(param.case_id, &case_row, &case_col)) {
-    // Z1 = (row=0, col=25). Match the xlwings driver convention.
+  std::uint32_t case_col = 25;
+  const JsonValue* formula_cell_v = param.raw_case.find("formula_cell");
+  if (formula_cell_v != nullptr && formula_cell_v->is_string()) {
+    if (!a1_to_row_col(formula_cell_v->as_string(), &case_row, &case_col)) {
+      FAIL() << param.suite << "." << param.case_id << ": invalid formula_cell address '" << formula_cell_v->as_string()
+             << "'";
+      return;
+    }
+  } else if (!a1_to_row_col(param.case_id, &case_row, &case_col)) {
     case_row = 0U;
     case_col = 25U;
   }
@@ -788,19 +861,24 @@ TEST_P(OracleTest, Matches) {
   eval::EvalState state;
   eval::EvalContext ctx =
       eval::EvalContext(wb, sheet, state).with_excel_profile(wb.excel_profile()).with_date1904(wb.date1904());
-  // Anchor the formula at its own cell so zero-arg ROW() / COLUMN() return
-  // the case's row / column. Cases whose `id` is an A1 address (e.g. "A1",
-  // "C5") use that address; all other cases (descriptive ids like
-  // "at_prefix_col_range_row_excluded") fall back to Z1 (computed above),
-  // which matches the xlwings driver convention: every oracle-generated
-  // formula is placed at cell Z1 on a fresh sheet. The Z1 anchor is what
+  // Anchor the formula at its own cell (resolved above) so zero-arg ROW() /
+  // COLUMN() return the case's row / column. The anchor is what
   // differentiates spill (top-left) from implicit intersection (row/col
   // projection) for the `implicit_intersection` suite and for any other suite
-  // that uses `@`-prefixed range arguments.
+  // that uses `@`-prefixed range arguments, and it decides whether a
+  // whole-axis spill footprint still fits inside the grid.
   ctx = ctx.with_formula_cell(case_row, case_col);
   Value actual = eval::evaluate(*root, eval_arena, registry, ctx);
 
-  std::string diff = compare_value(*expect_v, actual, param.tolerance_abs, param.tolerance_rel, param.compare_mode);
+  // A shape-captured golden needs the formula cell to resolve its sample
+  // addresses, which the value comparator does not carry.
+  const JsonValue* expect_kind = expect_v->find("kind");
+  const bool shape_capture =
+      expect_kind != nullptr && expect_kind->is_string() && expect_kind->as_string() == "array_shape";
+  std::string diff =
+      shape_capture ? compare_array_shape(*expect_v, actual, case_row, case_col, param.tolerance_abs,
+                                          param.tolerance_rel, param.compare_mode)
+                    : compare_value(*expect_v, actual, param.tolerance_abs, param.tolerance_rel, param.compare_mode);
   if (!diff.empty()) {
     FAIL() << param.suite << "." << param.case_id << ": " << diff << "\n"
            << "  formula: " << formula_src << "\n"

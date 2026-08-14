@@ -1,0 +1,202 @@
+suite: whole_axis_spill
+description: >
+  Bare whole-axis references (`=A:A`, `=A:C`, `=1:2`) used as the whole
+  formula, i.e. as a spilling expression rather than as a function
+  argument. Every case declares its own `formula_cell`, because the
+  observable result depends on where the formula sits.
+
+  Excel 365 treats a bare whole-axis reference like any other bare range:
+  the value is the array of the *declared* rectangle — rows 1..1048576 for
+  a column span, columns A..XFD for a row span — and it spills from the
+  formula cell. Nothing is trimmed to the populated extent, and cells with
+  no content spill as 0. Three consequences are directly observable and
+  are what this suite pins:
+
+    * the rectangle must fit inside the grid measured from the formula
+      cell, so a whole-column reference only spills from row 1 and a
+      whole-row reference only from column A; anywhere else is `#SPILL!`;
+    * any occupied cell anywhere in that rectangle blocks the spill, even
+      one far below or far to the right of the populated data, which is
+      what shows the footprint is the full declared rectangle;
+    * a formula that sits inside the axis it references is a circular
+      reference, so it never spills at all.
+
+  The four full-rectangle spills use `capture: shape`: their results are
+  far larger than the cell-by-cell capture ceiling (the smallest is 16,384
+  cells against a 4,096 ceiling), so the golden records the dynamic-array
+  shape plus the listed sample cells instead of every cell. Excel answers
+  them normally; only the recording differs.
+
+  The remaining seven are recorded cell by cell and are currently
+  registered in tests/divergence.yaml. Each `expect` block below is
+  Excel's observed answer; deleting an entry and regenerating this suite
+  turns the corresponding case back into a verified golden.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  # ------------------------------------------------------------------
+  # Geometry: the declared rectangle has to fit from the formula cell.
+  # ------------------------------------------------------------------
+
+  - id: whole_col_below_row_one_overflows
+    description: "=A:A at Z2; the 1048576-row rectangle no longer fits below row 2"
+    formula: "=A:A"
+    formula_cell: Z2
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+    expect: { kind: error, code: "#SPILL!" }
+
+  - id: whole_multi_col_below_row_one_overflows
+    description: "=A:C at Z2; same overflow with a three-column span"
+    formula: "=A:C"
+    formula_cell: Z2
+    setup:
+      A1: 1
+      A2: 2
+      B1: 10
+      C1: 100
+    expect: { kind: error, code: "#SPILL!" }
+
+  - id: whole_row_right_of_column_a_overflows
+    description: "=1:2 at B5; the 16384-column rectangle no longer fits right of column B"
+    formula: "=1:2"
+    formula_cell: B5
+    setup:
+      A1: 1
+      A2: 2
+      B1: 10
+      C1: 100
+    expect: { kind: error, code: "#SPILL!" }
+
+  # ------------------------------------------------------------------
+  # Footprint: a blocker anywhere in the declared rectangle stops the
+  # spill, including far outside the populated extent of the source.
+  # ------------------------------------------------------------------
+
+  - id: whole_col_blocked_far_below_anchor
+    description: "=A:A at Z1 with Z500 occupied; row 500 is inside the footprint"
+    formula: "=A:A"
+    formula_cell: Z1
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      Z500: 7
+    expect: { kind: error, code: "#SPILL!" }
+
+  - id: whole_row_blocked_right_of_anchor
+    description: "=3:3 at A5 with Z5 occupied; column Z is inside the footprint"
+    formula: "=3:3"
+    formula_cell: A5
+    setup:
+      A3: 3
+      B3: 30
+      Z5: 9
+    expect: { kind: error, code: "#SPILL!" }
+
+  # ------------------------------------------------------------------
+  # Self-reference: the formula cell lies inside the referenced axis.
+  # Both cases are laid out so the rectangle fits and the runway is
+  # clear, leaving circularity as the only thing that can stop the
+  # spill. Excel resolves the cycle to 0 with iterative calculation off.
+  # ------------------------------------------------------------------
+
+  - id: whole_col_containing_its_own_formula_cell
+    description: "=A:A at A1; column A is otherwise empty, so only the cycle stops the spill"
+    formula: "=A:A"
+    formula_cell: A1
+    setup:
+      B1: 10
+      C1: 100
+    expect: 0
+
+  - id: whole_row_containing_its_own_formula_cell
+    description: "=5:5 at A5; row 5 is otherwise empty, so only the cycle stops the spill"
+    formula: "=5:5"
+    formula_cell: A5
+    setup:
+      A1: 1
+      B1: 10
+    expect: 0
+
+  # The two cases above isolate circularity by clearing the runway. This
+  # pair instead makes both conditions true at once and shows which one
+  # Excel decides first: the footprint fits from row 1, A2 and A3 occupy
+  # it, and the formula cell is inside the referenced column. Excel
+  # answers 0, not #SPILL!, so the cycle is decided before the blocking
+  # check. Without the control below the observation would not be legible:
+  # it is the same geometry with the formula cell moved out of the
+  # referenced axis, and there the blocked spill does surface as #SPILL!.
+  - id: whole_col_cycle_decided_before_blocking
+    description: "=A:A at A1 with A2/A3 occupied; circular AND blocked -> Excel takes the cycle"
+    formula: "=A:A"
+    formula_cell: A1
+    setup:
+      A2: 2
+      A3: 3
+      B1: 10
+    expect: 0
+
+  - id: whole_col_blocked_when_formula_cell_is_outside_the_axis
+    description: "=B:B at A1 with A2/A3 occupied; not circular, so the blocked spill is #SPILL!"
+    formula: "=B:B"
+    formula_cell: A1
+    setup:
+      A2: 2
+      A3: 3
+      B1: 10
+      B3: 30
+    expect: { kind: error, code: "#SPILL!" }
+
+  # ------------------------------------------------------------------
+  # The full-rectangle spills. Excel produces them; the oracle capture
+  # ceiling (4096 cells) cannot record them, so these carry skip entries
+  # in tests/divergence.yaml that state the shape Excel returned.
+  # ------------------------------------------------------------------
+
+  - id: whole_col_spills_full_declared_rectangle
+    description: "=A:A at Z1; Excel spills 1048576x1, blanks below the data as 0"
+    formula: "=A:A"
+    formula_cell: Z1
+    capture: shape
+    samples: [Z1, Z2, Z3, Z4, Z1048576]
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+
+  - id: whole_multi_col_spills_full_declared_rectangle
+    description: "=A:C at Z1; Excel spills 1048576x3, blanks inside the span as 0"
+    formula: "=A:C"
+    formula_cell: Z1
+    capture: shape
+    samples: [Z1, AA1, AB1, Z2, AA2, AB3]
+    setup:
+      A1: 1
+      A2: 2
+      B1: 10
+      C1: 100
+
+  - id: whole_row_pair_spills_full_declared_rectangle
+    description: "=1:2 at A5; Excel spills 2x16384 across the full grid width"
+    formula: "=1:2"
+    formula_cell: A5
+    capture: shape
+    samples: [A5, B5, C5, A6, B6, XFD5, XFD6]
+    setup:
+      A1: 1
+      A2: 2
+      B1: 10
+      C1: 100
+
+  - id: whole_single_row_spills_full_declared_rectangle
+    description: "=3:3 at A5; Excel spills 1x16384 across the full grid width"
+    formula: "=3:3"
+    formula_cell: A5
+    capture: shape
+    samples: [A5, B5, C5, XFD5]
+    setup:
+      A3: 3
+      B3: 30

@@ -1,21 +1,28 @@
 suite: groupby
-description: GROUPBY dynamic-array group-and-aggregate (Excel 365). Six perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name -> #NAME?, field_headers out-of-range -> #VALUE!, filter_array length mismatch -> #VALUE!, and filter_array empty selection -> #CALC!. The two compact inline-array aggregator formulas are skipped for Mac Excel 16.109, which returns #VALUE! while Formulon implements the documented spill behavior.
+description: GROUPBY dynamic-array group-and-aggregate (Excel 365). Perspectives spanning bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name -> #NAME?, field_headers out-of-range -> #VALUE!, filter_array length mismatch -> #VALUE!, filter_array empty selection -> #VALUE!, and sort_order 0 -> #VALUE!. Inline array arguments are fine; it is a literal 0 in the sort_order slot that Excel rejects, since that argument is a signed column index with no zero member.
 tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # Mac Excel 16.109 returns #VALUE! for these compact inline-array
-  # aggregator formulas. Unit tests validate Formulon's documented spill
-  # behavior.
+  # Aggregator dispatch, bare name and inline LAMBDA. Both pass
+  # field_headers=0 and total_depth=0 and omit sort_order: Excel's
+  # sort_order domain is a signed column index with no zero member, so a
+  # literal 0 there is rejected with #VALUE! before any of this is
+  # reached. That rejection has its own cases below.
   # =========================================================================
 
   - id: groupby_bare_sum
-    description: 'GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0, 0) -> 2x2 spill {"A",40;"B",20} (anchor="A")'
-    formula: '=GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0, 0)'
+    description: 'GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0) -> 2x2 spill {"A",40;"B",20} (anchor="A")'
+    formula: '=GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0)'
 
   - id: groupby_lambda_sum
-    description: 'GROUPBY({"A";"B";"A";"C"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0) -> 3x2 spill (anchor="A")'
-    formula: '=GROUPBY({"A";"B";"A";"C"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0, 0)'
+    description: 'GROUPBY({"A";"B";"A";"C"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0) -> 3x2 spill (anchor="A")'
+    formula: '=GROUPBY({"A";"B";"A";"C"}, {10;20;30;40}, LAMBDA(v, SUM(v)), 0, 0)'
+
+  - id: groupby_sort_order_zero_rejected
+    description: 'GROUPBY(..., SUM, 0, 0, 0) -> #VALUE!: sort_order 0 is outside Excel''s signed-column-index domain'
+    formula: '=GROUPBY({"A";"B";"A"}, {10;20;30}, SUM, 0, 0, 0)'
+    expect: { kind: error, code: "#VALUE!" }
 
   # =========================================================================
   # Live scalar errors.

@@ -1,12 +1,12 @@
 {
   "suite": "pivotby",
-  "description": "PIVOTBY dynamic-array pivot (Excel 365). Six perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
+  "description": "PIVOTBY dynamic-array pivot (Excel 365). Perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name ->",
   "environment": {
     "excel_version": "16.112",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-14T19:34:32Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -15,15 +15,21 @@
   "cases": [
     {
       "id": "pivotby_bare_sum",
-      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0, 0)",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, , 0)",
       "setup": {},
-      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array PIVOTBY/SUM formula; Formulon returns the documented pivot spill. Unit test PivotBy.BareSumName covers bare-name aggregator dispatch."
+      "skipped": "Excel spills 3x3 for this pivot -- a pivot always carries the column-field value row, so the layout is a blank corner cell, an X/Y header row, then the A/B rows with values on the diagonal. Formulon returns 2x3: it emits the row-label column but omits the column-field header row when col_total_depth is 0. The richer multi-axis PIVOTBY cases in this suite pass with their header rows intact, so the defect is specific to the zero-total-depth form. Previously skipped on a wrong diagnosis (\"compact inline-array\"), which hid this."
     },
     {
       "id": "pivotby_lambda_sum",
-      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0)",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, , 0)",
       "setup": {},
-      "skipped": "Mac Excel 16.109 returns #VALUE! for this compact inline-array PIVOTBY/LAMBDA formula; Formulon returns the documented pivot spill. Unit test PivotBy.BasicTwoByTwoLambdaAggregatorSum covers inline-LAMBDA dispatch."
+      "skipped": "Same 2x3-versus-3x3 shape defect as pivotby_bare_sum, reached through the inline-LAMBDA aggregator path rather than the bare name."
+    },
+    {
+      "id": "pivotby_row_sort_order_zero_rejected",
+      "formula": "=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 0)",
+      "setup": {},
+      "skipped": "As groupby_sort_order_zero_rejected, on PIVOTBY's row_sort_order slot: Excel returns #VALUE! for a literal 0, Formulon returns the pivot spill."
     },
     {
       "id": "pivotby_unknown_name_error",

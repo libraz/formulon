@@ -10,7 +10,11 @@ shapes actually seen in `tests/divergence.yaml`.
 
 from __future__ import annotations
 
+import contextlib
+import io
+import tempfile
 import unittest
+from pathlib import Path
 
 from tools.oracle import divergence_check
 
@@ -49,6 +53,102 @@ class IsPendingStampTest(unittest.TestCase):
         self.assertTrue(divergence_check.is_pending_stamp(None))
         self.assertTrue(divergence_check.is_pending_stamp(""))
         self.assertTrue(divergence_check.is_pending_stamp("   "))
+
+
+class SkipCauseTest(unittest.TestCase):
+    """`cause` is required on skip entries, and the tally counts cases.
+
+    Nothing in the tree computes the release gate's pass rate, so this
+    tally is the only place the skipped-case population is quantified.
+    That makes both halves load-bearing: a missing cause has to fail, and
+    the number has to be in cases rather than entries.
+    """
+
+    COMMON = 'reason: "r"\n    prefer: formulon\n    last_verified_excel_version: "16.112"\n'
+
+    def _run(self, body: str) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "divergence.yaml"
+            path.write_text(body, encoding="utf-8")
+            out = io.StringIO()
+            err = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                status = divergence_check.validate(path, strict=False)
+            return status, out.getvalue() + err.getvalue()
+
+    def test_skip_without_cause_fails(self) -> None:
+        status, output = self._run(f"entries:\n  - id: volatile_now_clock\n    mode: skip-oracle\n    {self.COMMON}")
+        self.assertEqual(status, 1)
+        self.assertIn("needs `cause`", output)
+
+    def test_skip_with_unknown_cause_fails(self) -> None:
+        status, output = self._run(
+            f"entries:\n  - id: volatile_now_clock\n    mode: skip-oracle\n    cause: because\n    {self.COMMON}"
+        )
+        self.assertEqual(status, 1)
+        self.assertIn("needs `cause`", output)
+
+    def test_tolerance_entry_needs_no_cause(self) -> None:
+        status, _ = self._run(
+            f"entries:\n  - id: volatile_now_clock\n    tolerance: {{ abs: 1.0, rel: 0 }}\n    {self.COMMON}"
+        )
+        self.assertEqual(status, 0)
+
+    def test_tally_counts_cases_not_entries(self) -> None:
+        # One `suite:` entry removes every case in that suite; one `ids:`
+        # entry removes as many cases as it lists.
+        status, output = self._run(
+            "entries:\n"
+            f"  - suite: filterxml\n    mode: skip-oracle\n    cause: harness-cannot-capture\n    {self.COMMON}"
+            "  - ids:\n      - volatile_now_clock\n      - volatile_today_clock\n"
+            f"    mode: skip-oracle\n    cause: excel-no-value\n    {self.COMMON}"
+        )
+        self.assertEqual(status, 0)
+        filterxml_cases = divergence_check.load_case_catalog()[1]["filterxml"]
+        self.assertIn(f"harness-cannot-capture: {filterxml_cases}", output)
+        self.assertIn("excel-no-value: 2", output)
+        self.assertIn(f"skipped cases by cause: {filterxml_cases + 2} total", output)
+
+    def test_cross_registry_prefer_conflict_is_detected(self) -> None:
+        # The same case recorded with opposite verdicts in two registries:
+        # found by hand once, checked mechanically now.
+        common = 'reason: "r"\n    mode: skip-oracle\n    cause: accepted-divergence\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            primary = Path(tmp) / "divergence.yaml"
+            variant = Path(tmp) / "variant.yaml"
+            primary.write_text(
+                f"entries:\n  - id: volatile_now_clock\n    {common}    prefer: mac-excel-365\n", encoding="utf-8"
+            )
+            variant.write_text(
+                f"entries:\n  - id: volatile_now_clock\n    {common}    prefer: formulon\n", encoding="utf-8"
+            )
+            conflicts = divergence_check.cross_file_prefer_conflicts([primary, variant])
+            self.assertEqual(len(conflicts), 1, conflicts)
+            self.assertIn("volatile_now_clock", conflicts[0])
+            self.assertIn("mac-excel-365", conflicts[0])
+            self.assertIn("formulon", conflicts[0])
+
+            # Agreeing registries are not a conflict.
+            variant.write_text(
+                f"entries:\n  - id: volatile_now_clock\n    {common}    prefer: mac-excel-365\n", encoding="utf-8"
+            )
+            self.assertEqual(divergence_check.cross_file_prefer_conflicts([primary, variant]), [])
+
+    def test_committed_registries_have_no_prefer_conflicts(self) -> None:
+        self.assertEqual(divergence_check.cross_file_prefer_conflicts(), [])
+
+    def test_non_oracle_scope_entry_does_not_inflate_the_tally(self) -> None:
+        status, output = self._run(
+            "entries:\n"
+            "  - id: not_an_oracle_case\n"
+            "    mode: skip-oracle\n"
+            "    cause: accepted-divergence\n"
+            "    scope: unit-test\n"
+            "    evidence: [tools/oracle/divergence_check.py]\n"
+            f"    {self.COMMON}"
+        )
+        self.assertEqual(status, 0)
+        self.assertIn("skipped cases by cause: 0 total", output)
 
 
 if __name__ == "__main__":

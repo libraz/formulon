@@ -1,21 +1,33 @@
 suite: pivotby
-description: PIVOTBY dynamic-array pivot (Excel 365). Six perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name -> #NAME?, field_headers out-of-range -> #VALUE!, filter_array length mismatch -> #VALUE!, and filter_array empty selection -> error.
+description: PIVOTBY dynamic-array pivot (Excel 365). Perspectives parallel GROUPBY's structure — bare-name aggregator dispatch (spill), LAMBDA aggregator dispatch (spill), unknown-name -> #NAME?, field_headers out-of-range -> #VALUE!, filter_array length mismatch -> #VALUE!, filter_array empty selection -> error, and row_sort_order 0 -> #VALUE! (both sort_order slots take a signed column index with no zero member).
 tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
 locale: ja-JP
 cases:
   # =========================================================================
-  # Mac Excel 16.109 returns #VALUE! for these compact inline-array
-  # aggregator formulas. Unit tests validate Formulon's documented spill
-  # behavior.
+  # Aggregator dispatch, bare name and inline LAMBDA. Arguments are
+  # field_headers=0, row_total_depth=0, row_sort_order omitted,
+  # col_total_depth=0: Excel's sort_order domain is a signed column index
+  # with no zero member, so a literal 0 in either sort slot is rejected
+  # with #VALUE! before the aggregation runs. That rejection has its own
+  # case below.
+  #
+  # The result is 3x3, not 2x2: a pivot always carries the column-field
+  # value row and the row-field label column, so the top-left corner cell
+  # is blank and the aggregated values sit on the diagonal.
   # =========================================================================
 
   - id: pivotby_bare_sum
-    description: 'PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0) -> 2x2 spill (anchor=1)'
-    formula: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0, 0)'
+    description: 'PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, , 0) -> 3x3 spill, blank corner, values on the diagonal'
+    formula: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, , 0)'
 
   - id: pivotby_lambda_sum
-    description: 'PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0) -> 2x2 spill (anchor=1)'
-    formula: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, 0, 0, 0)'
+    description: 'PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, , 0) -> 3x3 spill, blank corner'
+    formula: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, LAMBDA(v, SUM(v)), 0, 0, , 0)'
+
+  - id: pivotby_row_sort_order_zero_rejected
+    description: 'PIVOTBY(..., SUM, 0, 0, 0, 0) -> #VALUE!: row_sort_order 0 is outside Excel''s signed-column-index domain'
+    formula: '=PIVOTBY({"A";"B"}, {"X";"Y"}, {1;2}, SUM, 0, 0, 0, 0)'
+    expect: { kind: error, code: "#VALUE!" }
 
   # =========================================================================
   # Live scalar errors.

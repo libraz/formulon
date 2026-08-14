@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -87,6 +88,97 @@ class OracleGeneratorMetadataTest(unittest.TestCase):
         golden = json.loads((REPO_ROOT / "tests/oracle/golden/spill_collision.golden.json").read_text(encoding="utf-8"))
         generated = next(record for record in golden["cases"] if record["id"] == source_case.id)
         self.assertEqual(generated.get("merges"), source_case.merges)
+
+
+class FormulaCellSchemaTest(unittest.TestCase):
+    """`formula_cell` validation and its path into the driver / golden."""
+
+    def _load(self, body: str) -> case_schema.Suite:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "placement.yaml"
+            path.write_text(body, encoding="utf-8")
+            return case_schema.load_suite(path)
+
+    def _suite_yaml(self, formula_cell: str) -> str:
+        return f'suite: placement\ncases:\n  - id: c\n    formula: "=A:A"\n    formula_cell: {formula_cell}\n'
+
+    def test_accepted_addresses_are_upper_cased(self) -> None:
+        for raw, expected in (("aa5", "AA5"), ("Z1", "Z1"), ("XFD1048576", "XFD1048576")):
+            with self.subTest(raw=raw):
+                suite = self._load(self._suite_yaml(raw))
+                self.assertEqual(suite.cases[0].formula_cell, expected)
+
+    def test_rejected_addresses_name_the_case(self) -> None:
+        for raw in ("'$Z$1'", "'Sheet2!Z1'", "'Z1:AA5'", "'Z'", "'1'", "XFE1", "Z1048577", '""'):
+            with self.subTest(raw=raw), self.assertRaisesRegex(ValueError, "case 'c'"):
+                self._load(self._suite_yaml(raw))
+
+    def test_default_placement_is_absent_from_case_input_and_golden(self) -> None:
+        case = case_schema.Case(id="c", formula="=1")
+        self.assertNotIn("formula_cell", oracle_gen._case_input(case))
+
+    def test_declared_placement_reaches_the_driver_input(self) -> None:
+        case = case_schema.Case(id="c", formula="=A:A", formula_cell="AA5")
+        self.assertEqual(oracle_gen._case_input(case)["formula_cell"], "AA5")
+
+    def test_placement_round_trips_to_the_golden(self) -> None:
+        suite = next(
+            suite
+            for _, suite in case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")
+            if suite.name == "whole_axis_spill"
+        )
+        declared = {case.id: case.formula_cell for case in suite.cases}
+        self.assertTrue(declared)
+        self.assertTrue(all(cell for cell in declared.values()))
+
+        golden = json.loads(
+            (REPO_ROOT / "tests/oracle/golden/whole_axis_spill.golden.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual({record["id"]: record.get("formula_cell") for record in golden["cases"]}, declared)
+
+    def test_shape_capture_requires_samples_and_rejects_stray_ones(self) -> None:
+        with self.assertRaisesRegex(ValueError, "requires a non-empty samples list"):
+            self._load('suite: p\ncases:\n  - id: c\n    formula: "=A:A"\n    capture: shape\n')
+        with self.assertRaisesRegex(ValueError, "samples requires capture: shape"):
+            self._load('suite: p\ncases:\n  - id: c\n    formula: "=A:A"\n    samples: [Z1]\n')
+        with self.assertRaisesRegex(ValueError, "unknown capture mode"):
+            self._load('suite: p\ncases:\n  - id: c\n    formula: "=A:A"\n    capture: everything\n')
+        with self.assertRaisesRegex(ValueError, "duplicate sample address"):
+            self._load('suite: p\ncases:\n  - id: c\n    formula: "=A:A"\n    capture: shape\n    samples: [Z1, z1]\n')
+        with self.assertRaisesRegex(ValueError, "at most"):
+            addresses = ", ".join(f"Z{index + 1}" for index in range(case_schema.MAX_SHAPE_SAMPLES + 1))
+            self._load(
+                f'suite: p\ncases:\n  - id: c\n    formula: "=A:A"\n    capture: shape\n    samples: [{addresses}]\n'
+            )
+
+    def test_shape_capture_reaches_the_driver_input(self) -> None:
+        suite = self._load(
+            'suite: p\ncases:\n  - id: c\n    formula: "=A:A"\n    capture: shape\n    samples: [z1, aa5]\n'
+        )
+        case = suite.cases[0]
+        self.assertEqual((case.capture, case.samples), ("shape", ["Z1", "AA5"]))
+        driver_input = oracle_gen._case_input(case)
+        self.assertEqual(driver_input["capture"], "shape")
+        self.assertEqual(driver_input["samples"], ["Z1", "AA5"])
+
+    def test_shape_captured_goldens_carry_shape_and_samples(self) -> None:
+        golden = json.loads(
+            (REPO_ROOT / "tests/oracle/golden/whole_axis_spill.golden.json").read_text(encoding="utf-8")
+        )
+        shaped = [record for record in golden["cases"] if record.get("capture") == "shape"]
+        self.assertTrue(shaped)
+        for record in shaped:
+            expect = record.get("expect")
+            self.assertIsNotNone(expect, record["id"])
+            self.assertEqual(expect["kind"], "array_shape", record["id"])
+            self.assertEqual(len(expect["shape"]), 2, record["id"])
+            self.assertTrue(expect["samples"], record["id"])
+
+    def test_suites_without_a_placement_keep_the_field_out_of_the_golden(self) -> None:
+        golden = json.loads(
+            (REPO_ROOT / "tests/oracle/golden/implicit_intersection.golden.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(all("formula_cell" not in record for record in golden["cases"]))
 
 
 if __name__ == "__main__":

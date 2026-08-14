@@ -50,31 +50,16 @@ entries:
     last_verified_excel_version: "16.0"
   - id: regexextract_mode_3_all_capture_groups
     mode: skip-oracle
+    cause: accepted-divergence
     reason: "Win Excel 365 returns #VALUE! for REGEXEXTRACT return_mode=3; Formulon implements the documented all-capture-groups spill mode and validates it via unit tests."
     prefer: formulon
     first_noted: 2026-05-15
     last_verified_excel_version: "16.0"
-  - id: groupby_bare_sum
-    mode: skip-oracle
-    reason: "Win Excel 365 returns #VALUE! for this compact inline-array GROUPBY/SUM probe; Formulon keeps the documented grouped spill implementation covered by unit tests."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.0"
-  - id: groupby_lambda_sum
-    mode: skip-oracle
-    reason: "Win Excel 365 returns #VALUE! for this compact inline-array GROUPBY/LAMBDA probe; Formulon keeps the documented grouped spill implementation covered by unit tests."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.0"
-  - id: pivotby_bare_sum
-    mode: skip-oracle
-    reason: "Win Excel 365 returns #VALUE! for this compact inline-array PIVOTBY/SUM probe; Formulon keeps the documented pivot spill implementation covered by unit tests."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.0"
-  - id: pivotby_lambda_sum
-    mode: skip-oracle
-    reason: "Win Excel 365 returns #VALUE! for this compact inline-array PIVOTBY/LAMBDA probe; Formulon keeps the documented pivot spill implementation covered by unit tests."
-    prefer: formulon
-    first_noted: 2026-05-15
-    last_verified_excel_version: "16.0"
+  # The four aggregator cases carried `prefer: formulon` here and
+  # `prefer: mac-excel-365` in tests/divergence.yaml -- the same
+  # divergence recorded with opposite verdicts. Both files also blamed the
+  # "compact inline-array" form, which is not what Excel rejects: inline
+  # arrays evaluate fine and the rejection came from a literal 0 in the
+  # sort_order slot, outside Excel's signed-column-index domain. The cases
+  # now pass an in-contract argument list, so nothing needs skipping on
+  # that account; the rejection is pinned by its own live cases.

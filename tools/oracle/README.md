@@ -216,11 +216,21 @@ Per-entry options:
 entries:
   - id: my_case_id
     mode: skip-oracle               # excludes from generation entirely
+    cause: harness-cannot-capture   # REQUIRED for skip-oracle
     reason: "..."
     prefer: formulon                # which side we trust if they differ
     first_noted: 2026-04-23
     applies_to: [mac-365-ja_JP]     # OPTIONAL; default = applies to all targets
 ```
+
+`cause` is one of `excel-no-value`, `harness-cannot-capture`,
+`accepted-divergence`, `engine-gap`; `divergence_check.py` rejects a skip
+without one and prints a per-cause tally of skipped **cases**. Only
+`excel-no-value` is a case that can never pass, which is the release
+gate's stated grounds for leaving skips out of the pass-rate denominator
+— the other three are work owed, and the tally is what keeps them
+visible. The full definitions live in the header of
+`tests/divergence.yaml`.
 
 Per-variant overrides live in `tests/oracle/variants/<target>/divergence.yaml`
 and get merged on top of the primary file (variant entries win on key
@@ -267,9 +277,63 @@ Single-quoted sheet names are required when the name has spaces or
 other characters Excel forbids in bare references; Excel's `''` escape
 for an embedded apostrophe is honoured.
 
-The formula under test is always placed at `Sheet1!Z1`; cross-sheet
-references in the formula resolve through whatever sheets the setup
-created.
+The formula under test is placed at `Sheet1!Z1`; cross-sheet references
+in the formula resolve through whatever sheets the setup created.
+
+## Formula placement (`formula_cell`)
+
+A case may override where its formula is written:
+
+```yaml
+- id: bare_full_col_below_row_one
+  formula: "=A:A"
+  formula_cell: AA5        # OPTIONAL; default = Z1
+  setup:
+    A1: 1
+```
+
+The address is a bare, relative A1 cell on the default sheet — no sheet
+qualifier, no `$`, no range. Both Excel drivers write the formula there
+and read the result (or the spill) back from there, and the native
+verifier evaluates with the same formula cell, so `ROW()` / `COLUMN()`,
+implicit intersection and spill-footprint geometry all agree between the
+two sides.
+
+Use it when the answer depends on where the formula sits: whether a
+whole-axis spill still fits below the formula row, or whether the
+formula's own cell falls inside the range it references. Omit it
+everywhere else — an absent field is not emitted into the golden, so
+existing cases are byte-identical.
+
+## Capturing a spill too large to materialise (`capture: shape`)
+
+The default capture walks every cell of a spill and refuses a result
+above `MAX_CAPTURE_CELLS` (4,096, `drivers/base.py`) rather than emitting
+a partial golden. A bare whole-axis reference alone spills at least
+16,384 cells, so such a case would have to be skipped for a limitation
+that is ours rather than Excel's. Shape capture avoids that:
+
+```yaml
+- id: whole_col_spills_full_declared_rectangle
+  formula: "=A:A"
+  formula_cell: Z1
+  capture: shape
+  samples: [Z1, Z2, Z3, Z4, Z1048576]
+```
+
+The driver reads the dynamic-array shape from the same non-invasive
+`ROWS()/COLUMNS()` probe and then reads only the listed cells, so the
+capture cost is fixed no matter how large the spill is. The golden
+records
+
+```json
+"expect": {"kind": "array_shape", "shape": [1048576, 1],
+           "samples": {"Z1": 1.0, "Z2": 2.0, "...": "..."}}
+```
+
+and the native verifier checks the shape first, then resolves each sample
+address to its offset from the formula cell. Samples must lie inside the
+spill and are capped at `case_schema.MAX_SHAPE_SAMPLES`.
 
 ## Open follow-ups
 

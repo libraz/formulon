@@ -143,6 +143,14 @@ def _result_to_json(result: CaseResult) -> Dict[str, object]:
             "value": result.value,
             "shape": result.array_shape,
         }
+    if result.kind == "array_shape":
+        # A spill too large to materialise: the shape plus the cells the
+        # case asked to sample, keyed by absolute A1 address.
+        return {
+            "kind": "array_shape",
+            "shape": result.array_shape,
+            "samples": result.value,
+        }
     return {"kind": result.kind}
 
 
@@ -162,6 +170,13 @@ def _case_input(case: case_schema.Case) -> Dict[str, object]:
         "formula": case.formula,
         "setup": case.setup,
     }
+    # Emitted only when the case overrides the default placement, so cases
+    # that keep the historical `Z1` anchor reach the driver unchanged.
+    if case.formula_cell:
+        result["formula_cell"] = case.formula_cell
+    if case.capture:
+        result["capture"] = case.capture
+        result["samples"] = list(case.samples)
     if case.merges:
         result["merges"] = list(case.merges)
     return result
@@ -183,6 +198,10 @@ def _write_golden(
             "formula": c.formula,
             "setup": c.setup,
         }
+        if c.formula_cell:
+            record["formula_cell"] = c.formula_cell
+        if c.capture:
+            record["capture"] = c.capture
         if c.merges:
             record["merges"] = list(c.merges)
         if c.id in skipped:

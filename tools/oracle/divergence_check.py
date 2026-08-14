@@ -27,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FORMULA_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 WORKBOOK_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_wb"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
+VARIANTS_DIR = REPO_ROOT / "tests" / "oracle" / "variants"
 NON_ORACLE_SCOPES = {
     "api-contract",
     "environment",
@@ -35,19 +36,64 @@ NON_ORACLE_SCOPES = {
     "unit-test",
 }
 
+# Why a `mode: skip-oracle` entry is not verified against Excel. Required,
+# because the release gate excludes skipped cases from the pass-rate
+# denominator on the grounds that the case "can never pass" -- and that is
+# true of exactly one of these four. The others are debts of different
+# lifetimes, and the tally below is what keeps them from ageing into
+# permanent exemptions on a reason string nobody re-reads.
+#
+#   excel-no-value          Excel produces no comparable value at all: a
+#                           volatile / non-reproducible result, or a formula
+#                           it rejects at entry. Nothing we build will make
+#                           this case comparable. This is the only cause the
+#                           gate's justification actually covers.
+#   harness-cannot-capture  Excel answers; our bridge cannot record the
+#                           answer (xlwings writes "" as blank, an error
+#                           reads back as blank, a spill is larger than the
+#                           capture ceiling). Fixable on our side; treat the
+#                           count as a bug queue.
+#   accepted-divergence     Both engines answer and we deliberately differ,
+#                           preferring ours (an Excel quirk we don't
+#                           reproduce, a stubbed external, a documented API
+#                           shape). Long-lived by design.
+#   engine-gap              Excel answers and Formulon is wrong or not there
+#                           yet. Must come back: the entry is deleted when
+#                           the engine work lands.
+#   unclassified            The entry's own text does not determine which of
+#                           the four applies -- typically because it states
+#                           two different blockers, or states none in these
+#                           terms. Deliberately not a judgement call: a
+#                           guessed cause is worse than an admitted gap,
+#                           because nothing re-examines a confident label.
+#                           The tally reports this count separately so it
+#                           can be worked down against the entries' sources.
+SKIP_CAUSES = {
+    "excel-no-value",
+    "harness-cannot-capture",
+    "accepted-divergence",
+    "engine-gap",
+    "unclassified",
+}
 
-def load_case_catalog() -> tuple[set[str], set[str]]:
-    """Load the raw case IDs and formula-suite names used by both tracks."""
+
+def load_case_catalog() -> tuple[set[str], dict[str, int]]:
+    """Load the raw case IDs and the per-suite case counts used by both tracks.
+
+    The suite counts exist so a `suite:`-selected skip can be tallied in
+    cases rather than entries: one such entry removes a whole suite from
+    the pass-rate denominator.
+    """
 
     ids: set[str] = set()
-    suites: set[str] = set()
+    suites: dict[str, int] = {}
     for path in sorted(FORMULA_CASES_DIR.glob("*.yaml")):
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        cases = [case for case in doc.get("cases") or [] if isinstance(case, dict) and isinstance(case.get("id"), str)]
         if isinstance(doc.get("suite"), str):
-            suites.add(doc["suite"])
-        for case in doc.get("cases") or []:
-            if isinstance(case, dict) and isinstance(case.get("id"), str):
-                ids.add(case["id"])
+            suites[doc["suite"]] = len(cases)
+        for case in cases:
+            ids.add(case["id"])
     for path in sorted(WORKBOOK_CASES_DIR.glob("*.case.json")):
         doc = json.loads(path.read_text(encoding="utf-8"))
         for case in doc.get("cases") or []:
@@ -60,6 +106,74 @@ def load_case_ids() -> set[str]:
     """Compatibility helper for callers that only need individual IDs."""
 
     return load_case_catalog()[0]
+
+
+def divergence_files() -> list[Path]:
+    """Every divergence registry in the tree: the primary plus each variant."""
+
+    return [DEFAULT_DIVERGENCE, *sorted(VARIANTS_DIR.glob("*/divergence.yaml"))]
+
+
+def _display_path(path: Path) -> str:
+    """Repo-relative path when possible, absolute otherwise (temp files)."""
+
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def _prefer_by_case(path: Path) -> dict[str, str]:
+    """Maps case ID -> `prefer` for the entries that name individual cases.
+
+    Suite selectors are skipped: resolving one to its members would need
+    the case catalog, and the defect this feeds is case-level.
+    """
+
+    out: dict[str, str] = {}
+    try:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return out
+    for entry in doc.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        prefer = entry.get("prefer")
+        if not isinstance(prefer, str) or not prefer.strip():
+            continue
+        if isinstance(entry.get("id"), str):
+            values = [entry["id"]]
+        elif isinstance(entry.get("ids"), list):
+            values = [value for value in entry["ids"] if isinstance(value, str)]
+        else:
+            continue
+        for case_id in values:
+            out[case_id] = prefer.strip()
+    return out
+
+
+def cross_file_prefer_conflicts(paths: list[Path] | None = None) -> list[str]:
+    """Reports cases whose `prefer` verdict differs between registries.
+
+    The primary file and a variant file can each carry an entry for the
+    same case -- that is normal, because a divergence can be real on both
+    targets. What is not tenable is the two disagreeing about which
+    implementation we trust: the same divergence recorded with opposite
+    verdicts means at least one is wrong. This was found by hand once (four
+    GROUPBY / PIVOTBY cases, `prefer: mac-excel-365` against
+    `prefer: formulon`, both citing the same rejected formula), so it is
+    checked mechanically now.
+    """
+
+    by_file = {path: _prefer_by_case(path) for path in (paths or divergence_files()) if path.is_file()}
+    conflicts: list[str] = []
+    case_ids = {case_id for mapping in by_file.values() for case_id in mapping}
+    for case_id in sorted(case_ids):
+        verdicts = {_display_path(path): mapping[case_id] for path, mapping in by_file.items() if case_id in mapping}
+        if len(set(verdicts.values())) > 1:
+            rendered = ", ".join(f"{where} says {verdict!r}" for where, verdict in sorted(verdicts.items()))
+            conflicts.append(f"{case_id}: contradictory `prefer` across registries -- {rendered}")
+    return conflicts
 
 
 _PLACEHOLDER_VERSION_RE = re.compile(r"16\.xx\.x", re.IGNORECASE)
@@ -113,7 +227,7 @@ def validate(path: Path, *, strict: bool) -> int:
         return 1
 
     try:
-        case_ids, suite_names = load_case_catalog()
+        case_ids, suite_case_counts = load_case_catalog()
     except (OSError, json.JSONDecodeError, yaml.YAMLError) as exc:
         print(f"FAIL case discovery: {exc}", file=sys.stderr)
         return 1
@@ -123,6 +237,10 @@ def validate(path: Path, *, strict: bool) -> int:
     documented = 0
     aliases = 0
     seen: set[str] = set()
+    # Skipped *cases*, not entries: an entry selecting `ids: [a, b, c]`
+    # removes three cases from the denominator, and the tally is only
+    # meaningful in the same unit the pass rate is counted in.
+    cause_counts: dict[str, int] = {cause: 0 for cause in sorted(SKIP_CAUSES)}
     for index, entry in enumerate(entries):
         where = f"entries[{index}]"
         if not isinstance(entry, dict):
@@ -154,21 +272,29 @@ def validate(path: Path, *, strict: bool) -> int:
 
         alias = entry.get("case_alias")
         scope = entry.get("scope")
+        # How many real oracle cases this entry removes from the run. An
+        # alias / non-oracle-scope entry documents something that is not an
+        # oracle case at all, so it removes none and must not inflate the
+        # skip tally below.
+        selected_cases = 0
         if selector in {"suite", "suites"}:
-            unknown = [value for value in values if value not in suite_names]
+            unknown = [value for value in values if value not in suite_case_counts]
             if unknown:
                 errors.append(f"{case_id}: unknown oracle suite(s): {', '.join(unknown)}")
             if alias is not None or scope is not None:
                 errors.append(f"{case_id}: suite selector must not also set case_alias or scope")
+            selected_cases = sum(suite_case_counts.get(value, 0) for value in values)
         elif selector == "ids":
             unknown = [value for value in values if value not in case_ids]
             if unknown:
                 errors.append(f"{case_id}: unknown oracle case ID(s): {', '.join(unknown)}")
             if alias is not None or scope is not None:
                 errors.append(f"{case_id}: ids selector must not also set case_alias or scope")
+            selected_cases = sum(1 for value in values if value in case_ids)
         elif case_id in case_ids:
             if alias is not None or scope is not None:
                 errors.append(f"{case_id}: direct oracle case must not also set case_alias or scope")
+            selected_cases = 1
         elif alias is not None:
             if not isinstance(alias, str) or alias not in case_ids:
                 errors.append(f"{case_id}: case_alias must name an existing oracle case")
@@ -193,8 +319,22 @@ def validate(path: Path, *, strict: bool) -> int:
                 f"{case_id}: orphan id; add case_alias or a scope from {sorted(NON_ORACLE_SCOPES)} with evidence"
             )
 
+        if entry.get("mode") == "skip-oracle":
+            cause = entry.get("cause")
+            if cause not in SKIP_CAUSES:
+                errors.append(
+                    f"{case_id}: skip-oracle needs `cause` from {sorted(SKIP_CAUSES)}; got {cause!r}. "
+                    "Only excel-no-value may leave the release-gate denominator."
+                )
+            else:
+                cause_counts[cause] += selected_cases
+
         if is_pending_stamp(entry.get("last_verified_excel_version")):
             pending.append(case_id)
+
+    # Cross-registry consistency is a property of the tree rather than of
+    # one file, so it is reported on whichever registry is being checked.
+    errors.extend(cross_file_prefer_conflicts())
 
     for message in errors:
         print(f"FAIL {message}", file=sys.stderr)
@@ -205,6 +345,17 @@ def validate(path: Path, *, strict: bool) -> int:
         f"divergence records: {len(entries)} entries, {len(case_ids)} oracle case IDs, "
         f"{aliases} aliases, {documented} documented non-oracle entries, {len(pending)} pending reprobes"
     )
+    # The pass-rate denominator is decided here and nowhere else in the
+    # tree: no tool computes the release gate's 99.5%, so this tally is the
+    # only artefact that says what the skipped cases actually are.
+    skipped_cases = sum(cause_counts.values())
+    print(f"skipped cases by cause: {skipped_cases} total")
+    notes = {
+        "excel-no-value": " (outside the release-gate denominator)",
+        "unclassified": " (entry text does not determine the cause; needs a source review)",
+    }
+    for cause in sorted(cause_counts):
+        print(f"  {cause}: {cause_counts[cause]}{notes.get(cause, '')}")
     if errors or (strict and pending):
         return 1
     return 0
