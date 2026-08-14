@@ -1,10 +1,11 @@
 //
 // Implementation of the StructuredLog emitter. The output format is a single
-// line of JSON written to stderr; we hand-roll the escaping to avoid pulling
-// any external dependency into this low-level TU (see CLAUDE.md "Dependencies
-// (strict). Configuration is protected while a record snapshots it; output is
-// then delivered synchronously without holding that lock, so an embedding sink
-// can itself log or reconfigure logging safely.
+// line of JSON delivered to the configured sink, or to stderr when no sink is
+// installed; we hand-roll the escaping to avoid pulling any external
+// dependency into this low-level TU (see CLAUDE.md "Dependencies (strict).
+// Configuration is protected while a record snapshots it; output is then
+// delivered synchronously without holding that lock, so an embedding sink can
+// itself log or reconfigure logging safely.
 
 #include "utils/structured_log.h"
 
@@ -73,7 +74,7 @@ void AppendKey(std::string& out, std::string_view key) {
 struct LogConfig {
   StructuredLogSink sink = nullptr;
   void* sink_user_data = nullptr;
-  StructuredLogLevel min_level = StructuredLogLevel::kDebug;
+  StructuredLogLevel min_level = StructuredLogLevel::kOff;
 };
 
 std::mutex& log_config_mutex() {

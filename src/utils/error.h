@@ -154,7 +154,18 @@ enum class FormulonErrorCode : int32_t {
   kIoZipBomb = 5005,
   kIoZipSlip = 5006,
   kIoXmlParse = 5007,
+  /// Allocated but not currently produced. The XML readers never expand a
+  /// `<!DOCTYPE>` internal subset or a custom entity: pugixml is configured
+  /// without `parse_doctype`, and the SAX reader decodes only the five
+  /// predefined entity references and numeric character references. A
+  /// document carrying either construct is therefore parsed without an
+  /// entity-expansion step rather than rejected with a dedicated code, so
+  /// nothing reaches a site that would build these. The slots stay allocated
+  /// (not removed, not renumbered) because the C API promises numeric
+  /// identity with this enum; a reader that later refuses these constructs
+  /// outright should claim them and drop these notes.
   kIoXmlDoctype = 5008,
+  /// Allocated but not currently produced. See `kIoXmlDoctype`.
   kIoXmlEntityExplosion = 5009,
   kIoRelationshipBroken = 5010,
   kIoContentTypeInvalid = 5011,
@@ -176,10 +187,22 @@ enum class FormulonErrorCode : int32_t {
   kIoXlsbCorrupt = 5021,
 
   // ===== 6000-6999: Crypto / Security =====
+  /// Allocated but not currently produced: Formulon does not decrypt
+  /// password-protected packages, so there is no key-derivation or
+  /// verifier step that could fail. An encrypted package is refused at the
+  /// archive boundary with `kIoZipEncrypted` instead, which is the code a
+  /// binding must branch on to offer a password prompt. These five slots
+  /// stay allocated (not removed, not renumbered) because the C API
+  /// promises numeric identity with this enum; a decryption path added
+  /// later should claim them and drop these notes.
   kCryptoAgileNotSupported = 6000,
+  /// Allocated but not currently produced. See `kCryptoAgileNotSupported`.
   kCryptoStandardNotSupported = 6001,
+  /// Allocated but not currently produced. See `kCryptoAgileNotSupported`.
   kCryptoBadPassword = 6002,
+  /// Allocated but not currently produced. See `kCryptoAgileNotSupported`.
   kCryptoHashMismatch = 6003,
+  /// Allocated but not currently produced. See `kCryptoAgileNotSupported`.
   kCryptoKeyDerivationFailed = 6004,
   kSecResourceLimit = 6005,
   kSecExternalNotAllowed = 6006,
@@ -225,9 +248,10 @@ enum class FormulonErrorCode : int32_t {
   /// Sheet index passed to a structural mutation (`rename_sheet`,
   /// `remove_sheet`, `move_sheet`) is `>= sheet_count()`.
   kSheetIndexOutOfRange = 5050,
-  /// Sheet name fails Excel's structural validation: empty, longer than
-  /// 31 characters, contains a forbidden character (`: \ / ? * [ ]`),
-  /// or collides case-insensitively with an existing sheet's name.
+  /// Sheet name fails structural validation: malformed UTF-8, empty, longer
+  /// than 31 UTF-16 units, contains a forbidden character (`: \ / ? * [ ]`),
+  /// or collides under locale-independent Unicode simple case folding with
+  /// an existing sheet's name. This is not a claim of full Excel-equivalence.
   kInvalidSheetName = 5051,
   /// `remove_sheet` was invoked on a workbook that has only one sheet
   /// remaining. Excel's UI rejects the same operation; we mirror it so

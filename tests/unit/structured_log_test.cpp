@@ -92,12 +92,26 @@ bool Contains(std::string_view haystack, std::string_view needle) {
   return haystack.find(needle) != std::string_view::npos;
 }
 
+// Restores the shipped configuration: no sink, and the `kOff` threshold that
+// keeps an embedded library off the host's stderr. Tests that want output
+// opt in explicitly, exactly as an embedder does.
 class StructuredLogConfigReset {
  public:
+  StructuredLogConfigReset() = default;
   ~StructuredLogConfigReset() {
     set_structured_log_sink(nullptr);
-    set_structured_log_min_level(StructuredLogLevel::kDebug);
+    set_structured_log_min_level(StructuredLogLevel::kOff);
   }
+
+  StructuredLogConfigReset(const StructuredLogConfigReset&) = delete;
+  StructuredLogConfigReset& operator=(const StructuredLogConfigReset&) = delete;
+};
+
+// Opts into every severity for the duration of the test and restores the
+// shipped default afterwards.
+class StructuredLogEnabled : public StructuredLogConfigReset {
+ public:
+  StructuredLogEnabled() { set_structured_log_min_level(StructuredLogLevel::kDebug); }
 };
 
 void AppendToString(std::string_view record, void* user_data) {
@@ -105,6 +119,7 @@ void AppendToString(std::string_view record, void* user_data) {
 }
 
 TEST(StructuredLogTest, InfoEmitsEventAndLevel) {
+  StructuredLogEnabled enabled;
   StderrCapture cap;
   StructuredLog("cell.evaluated").info();
   std::string out = cap.Read();
@@ -113,6 +128,7 @@ TEST(StructuredLogTest, InfoEmitsEventAndLevel) {
 }
 
 TEST(StructuredLogTest, FieldsSerialized) {
+  StructuredLogEnabled enabled;
   StderrCapture cap;
   StructuredLog("op.done")
       .field("sheet", std::string_view("Sheet1"))
@@ -128,6 +144,7 @@ TEST(StructuredLogTest, FieldsSerialized) {
 }
 
 TEST(StructuredLogTest, ErrorCodeFieldIncluded) {
+  StructuredLogEnabled enabled;
   StderrCapture cap;
   StructuredLog("parser.error").error_code(FormulonErrorCode::kParserUnexpectedToken).error();
   std::string out = cap.Read();
@@ -137,6 +154,7 @@ TEST(StructuredLogTest, ErrorCodeFieldIncluded) {
 }
 
 TEST(StructuredLogTest, StringFieldEscaped) {
+  StructuredLogEnabled enabled;
   StderrCapture cap;
   StructuredLog("test.escape").field("msg", std::string_view("has \"quotes\" and a \\ backslash")).info();
   std::string out = cap.Read();
@@ -144,6 +162,7 @@ TEST(StructuredLogTest, StringFieldEscaped) {
 }
 
 TEST(StructuredLogTest, DebugWarnAndMultipleLevels) {
+  StructuredLogEnabled enabled;
   StderrCapture cap;
   StructuredLog("a.b").debug();
   StructuredLog("c.d").warn();
@@ -155,13 +174,27 @@ TEST(StructuredLogTest, DebugWarnAndMultipleLevels) {
 }
 
 TEST(StructuredLogTest, SinkReceivesCompleteRecord) {
-  StructuredLogConfigReset reset;
+  StructuredLogEnabled enabled;
   std::string records;
   set_structured_log_sink(AppendToString, &records);
 
   StructuredLog("embedded.event").field("id", static_cast<int64_t>(7)).info();
 
   EXPECT_EQ(records, "{\"level\":\"info\",\"event\":\"embedded.event\",\"id\":7}\n");
+}
+
+TEST(StructuredLogTest, ShippedDefaultWritesNothingToStderr) {
+  // The bytes an embedded library puts on the host's stderr have to be the
+  // host's choice, so nothing is emitted until the threshold is lowered.
+  StructuredLogConfigReset reset;
+  set_structured_log_min_level(StructuredLogLevel::kOff);
+
+  StderrCapture cap;
+  StructuredLog("silent.debug").debug();
+  StructuredLog("silent.info").info();
+  StructuredLog("silent.warn").warn();
+  StructuredLog("silent.error").error();
+  EXPECT_EQ(cap.Read(), "");
 }
 
 TEST(StructuredLogTest, MinimumLevelSuppressesLowerSeverities) {

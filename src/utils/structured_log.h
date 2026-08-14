@@ -1,8 +1,15 @@
 //
-// Structured logging for Formulon. Every log record is a single line of JSON
-// emitted on stderr by default, which keeps the dependency footprint zero (no
-// spdlog, no fmt) while staying machine-parseable. Embedders can route records
-// to their own sink or suppress levels they do not need.
+// Structured logging for Formulon. Every log record is a single line of JSON,
+// which keeps the dependency footprint zero (no spdlog, no fmt) while staying
+// machine-parseable.
+//
+// Logging is off by default: Formulon ships as an embedded library, and a
+// library that writes to the host's stderr without being asked corrupts a
+// host that treats stderr as its own structured stream. An embedder opts in
+// by raising the threshold with `set_structured_log_min_level`, and routes
+// records away from stderr with `set_structured_log_sink`. Both are reachable
+// from the C ABI (`fm_set_log_min_level` / `fm_set_log_sink`) so every
+// binding can make the same choice.
 //
 // Typical usage:
 //   StructuredLog("cell.evaluated")
@@ -36,11 +43,14 @@ enum class StructuredLogLevel : uint8_t {
 /// The `record` view is valid only for the duration of this callback.
 using StructuredLogSink = void (*)(std::string_view record, void* user_data);
 
-/// Routes subsequent records to `sink`. Passing nullptr restores stderr.
-/// The caller owns `user_data` and must keep it valid while the sink is set.
+/// Routes subsequent records to `sink`. Passing nullptr restores the stderr
+/// fallback, which only ever runs once the threshold has been lowered from
+/// its `kOff` default. The caller owns `user_data` and must keep it valid
+/// while the sink is set.
 void set_structured_log_sink(StructuredLogSink sink, void* user_data = nullptr);
 
-/// Sets the lowest severity emitted process-wide. The default is `kDebug`.
+/// Sets the lowest severity emitted process-wide. The default is `kOff`, so
+/// an embedder that never calls this observes no output at all.
 void set_structured_log_min_level(StructuredLogLevel level);
 
 /// Fluent builder that emits a single structured log record.
