@@ -18,6 +18,8 @@
 #ifndef FORMULON_EVAL_REGEX_LAZY_H_
 #define FORMULON_EVAL_REGEX_LAZY_H_
 
+#include <cstdint>
+
 #include "utils/arena.h"
 #include "value.h"
 
@@ -63,6 +65,17 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
 /// exhaustion yields `#CALC!`.
 Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx);
+
+/// Running count of `pcre2_compile` calls issued by the REGEX* family in
+/// this process.
+///
+/// One REGEX* call compiles its (pattern, case-sensitivity) pair exactly
+/// once and reuses the compiled program for every subject cell, so a
+/// broadcast over an N-cell range must not move this counter by N. The
+/// counter exists so that contract is observable — pattern compilation costs
+/// an order of magnitude more than a match against a short cell string, and
+/// a regression there is invisible in the results.
+std::uint64_t regex_compile_count() noexcept;
 
 }  // namespace eval
 }  // namespace formulon

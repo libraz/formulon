@@ -15,18 +15,23 @@
 //   * Pattern-length cap (32 767 bytes)
 //   * Error propagation across all three functions
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
 #include "eval/eval_context.h"
+#include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/regex_lazy.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "sheet.h"
 #include "test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -576,11 +581,31 @@ TEST(RegexArity, RegexreplaceTwoArgsIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-// A substitution whose result exceeds Excel's 32,767-character text cell
-// limit surfaces #VALUE! instead of growing an unbounded output buffer.
+// A substitution that requires a retry after the initial output buffer is
+// exhausted still succeeds when the result fits Excel's text-cell limit.
+TEST(RegexReplace, OutputGrowthBeyondInitialBufferSucceeds) {
+  const Value v = EvalSource("=REGEXREPLACE(REPT(\"a\", 10000), \"a\", \"bb\")");
+  ASSERT_TRUE(v.is_text()) << "expected a successfully grown substitution";
+  EXPECT_EQ(v.as_text(), std::string(20000, 'b'));
+}
+
+// The exact 32,767 UTF-16-unit boundary is valid, even when the result is
+// reached through the retry path.
+TEST(RegexReplace, OutputAtTextCapSucceedsAfterRetry) {
+  const Value v = EvalSource("=REGEXREPLACE(\"x\" & REPT(\"a\", 16381) & \"😀\" & \"a\", \"a\", \"bb\")");
+  ASSERT_TRUE(v.is_text()) << "expected the exact text-cap result to succeed";
+  std::string expected = "x";
+  expected.append(32762, 'b');
+  expected += "😀bb";
+  EXPECT_EQ(v.as_text(), expected);
+}
+
+// A substitution whose result is one UTF-16 unit past Excel's 32,767-unit
+// text-cell limit surfaces #VALUE! instead of growing an unbounded buffer.
 TEST(RegexReplace, OutputPastTextCapIsValueError) {
-  // 17,000 'a's, each replaced by "bb" -> 34,000 chars, past the 32,767 cap.
-  const Value v = EvalSource("=REGEXREPLACE(REPT(\"a\", 17000), \"a\", \"bb\")");
+  // 16,383 'a's, each replaced by "bb", plus one emoji, gives exactly
+  // 32,768 UTF-16 units (the emoji contributes two units).
+  const Value v = EvalSource("=REGEXREPLACE(REPT(\"a\", 16382) & \"😀\" & \"a\", \"a\", \"bb\")");
   ASSERT_TRUE(v.is_error()) << "expected #VALUE! for over-cap output";
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
@@ -640,6 +665,59 @@ TEST(RegexExtract, MatchAccumulationWithinBudgetSucceeds) {
   ASSERT_TRUE(v.is_array()) << "expected the 2x2 capture matrix";
   EXPECT_EQ(v.as_array_rows(), 2U);
   EXPECT_EQ(v.as_array_cols(), 2U);
+}
+
+// ---------------------------------------------------------------------------
+// Compile reuse across a broadcast
+// ---------------------------------------------------------------------------
+//
+// Pattern compilation is loop-invariant and costs far more than matching a
+// short cell string, so one REGEX* call must compile its pattern once no
+// matter how many subjects it broadcasts over.
+
+TEST(RegexTest, ArrayBroadcastCompilesThePatternOncePerCall) {
+  const std::uint64_t before_small = regex_compile_count();
+  const Value small = EvalSource("=REGEXTEST({\"a1\",\"b2\";\"c3\",\"d\"}, \"\\d\")");
+  ASSERT_TRUE(small.is_array());
+  ASSERT_EQ(small.as_array_rows(), 2U);
+  ASSERT_EQ(small.as_array_cols(), 2U);
+  EXPECT_TRUE(small.as_array_cells()[0].as_boolean());
+  EXPECT_FALSE(small.as_array_cells()[3].as_boolean());
+  EXPECT_EQ(regex_compile_count() - before_small, 1U) << "one compile per call, not one per cell";
+
+  // Same assertion over a 1,000-cell range: the compile total must not scale
+  // with the number of subjects.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 1000U; ++r) {
+    sheet.set_cell_value(r, 0, Value::number(static_cast<double>(r)));
+  }
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p("=REGEXTEST(A1:A1000, \"\\d\")", parse_arena);
+  parser::AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+
+  const std::uint64_t before_large = regex_compile_count();
+  const Value large = evaluate(*root, eval_arena, default_registry(), ctx);
+  ASSERT_TRUE(large.is_array());
+  ASSERT_EQ(large.as_array_rows(), 1000U);
+  EXPECT_TRUE(large.as_array_cells()[999].as_boolean());
+  EXPECT_EQ(regex_compile_count() - before_large, 1U) << "compilation must not scale with the subject count";
+}
+
+TEST(RegexReplace, NthOccurrenceBroadcastCompilesThePatternOncePerCall) {
+  // The occurrence-N path scans for the match position and then substitutes
+  // at it; both steps share the one compiled program.
+  const std::uint64_t before = regex_compile_count();
+  const Value v = EvalSource("=REGEXREPLACE({\"aaaa\";\"aaa\"}, \"a\", \"b\", 2)");
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cells()[0].as_text(), "abaa");
+  EXPECT_EQ(v.as_array_cells()[1].as_text(), "aba");
+  EXPECT_EQ(regex_compile_count() - before, 1U);
 }
 
 }  // namespace

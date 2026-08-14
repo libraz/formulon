@@ -105,11 +105,14 @@ Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // returns the textual content of the matched node(s).
 //
 // Error surface:
-//   * XML parse failure   -> #VALUE!
-//   * XPath parse failure -> #VALUE!
-//   * Empty node set      -> #N/A  (Excel's documented no-match code)
-//   * Single-node match   -> scalar text (the node's inner text).
-//   * Multi-node match    -> N x 1 vertical `Value::Array` of node texts.
+//   * XML parse failure       -> #VALUE!
+//   * XPath parse failure     -> #VALUE!
+//   * Non-node-set XPath type -> #VALUE!
+//   * Empty node set          -> #VALUE!  (Excel 365 ja-JP reports a
+//                                no-match with the same code as a rejected
+//                                argument; see the `filterxml` oracle suite)
+//   * Single-node match       -> scalar text (the node's inner text).
+//   * Multi-node match        -> N x 1 vertical `Value::Array` of node texts.
 //
 // Spill model: in a sheet context, `EvalContext::dispatch_array_result`
 // commits the N x 1 region to adjacent cells (Excel 365's documented
@@ -126,12 +129,14 @@ Value EncodeUrl(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //     `let`, regex functions, sequence types) will fail to parse. This is
 //     the same subset Mac Excel 365 ja-JP supports, so no divergence is
 //     expected for real workbooks.
-//   * `select_nodes(expr)` with a malformed expression populates a non-ok
-//     xpath_parse_result in the returned xpath_node_set's status. With
-//     PUGIXML_NO_EXCEPTIONS set, the malformed expression returns an empty
-//     node set rather than throwing -- we detect this via `xpath_query`'s
-//     result status so the distinction between "bad xpath" (#VALUE!) and
-//     "valid xpath, no match" (#N/A) is preserved.
+//   * `select_nodes(expr)` collapses several distinct outcomes into an empty
+//     node set: a malformed expression (its xpath_parse_result is non-ok,
+//     and with PUGIXML_NO_EXCEPTIONS set it returns rather than throwing),
+//     and an expression whose result type is not a node set at all. Both are
+//     #VALUE!, as is a valid node-set expression that matches nothing, so
+//     the explicit `xpath_query` is not there to separate error codes -- it
+//     is the only way to read `return_type()` and reject a number / string /
+//     boolean XPath before it is evaluated as a node set.
 
 // Extracts the text content of a pugixml node. For element nodes we
 // concatenate the children's text (pugixml's xml_text::as_string handles
@@ -235,11 +240,12 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     return Value::error(ErrorCode::Value);
   }
 
-  // Compile the XPath query explicitly so we can distinguish a malformed
-  // expression (parse error -> #VALUE!) from a valid expression that
-  // produces an empty node set (-> #N/A). With PUGIXML_NO_EXCEPTIONS in
-  // effect the constructor records the compile error on `query.result()`
-  // rather than throwing.
+  // Compile the XPath query explicitly: `select_nodes` cannot report the
+  // expression's result type, so a number / string / boolean XPath would
+  // otherwise reach `evaluate_node_set`. With PUGIXML_NO_EXCEPTIONS in
+  // effect the constructor records a compile error on `query.result()`
+  // rather than throwing. Both rejections and a valid expression that
+  // matches nothing surface the same #VALUE!.
   const std::string& xpath = xpath_text.value();
   pugi::xpath_query query(xpath.c_str(), nullptr);
   if (!query.result()) {
@@ -251,6 +257,8 @@ Value FilterXml(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 
   pugi::xpath_node_set nodes = query.evaluate_node_set(doc);
   if (nodes.empty()) {
+    // A valid node-set expression that matches nothing is #VALUE!, the same
+    // code as a rejected XML / XPath argument.
     return Value::error(ErrorCode::Value);
   }
 

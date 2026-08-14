@@ -4,6 +4,12 @@
 // guarantee a single compile + match pipeline; this is a hard
 // architectural requirement (one `pcre2_compile` call site, not three).
 //
+// Compilation is also hoisted out of the per-subject loop: each impl builds
+// one `CompiledPattern` for its (pattern, case-sensitivity) pair and hands
+// it to every subject cell, so a range-shaped `text` argument compiles once
+// rather than once per cell. `regex_compile_count()` publishes the running
+// compile total so that contract stays observable.
+//
 // Spec / oracle references:
 //   * Excel REGEX function family signatures and shape semantics:
 //     Mac Excel oracle observations.
@@ -22,6 +28,7 @@
 
 #include "eval/regex_lazy.h"
 
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -69,6 +76,11 @@ constexpr std::size_t kMaxSubstituteOutputBytes = static_cast<std::size_t>(kExce
 // overflow it returns PCRE2_ERROR_MATCHLIMIT or PCRE2_ERROR_DEPTHLIMIT.
 constexpr std::uint32_t kMatchLimit = 1000000U;
 constexpr std::uint32_t kDepthLimit = 10000U;
+
+// Published through `regex_compile_count()`. Atomic because two worker
+// threads of a parallel recalc may evaluate REGEX* cells concurrently;
+// relaxed ordering is enough for a pure counter.
+std::atomic<std::uint64_t> g_compile_count{0U};
 
 // --- Argument coercion helpers -------------------------------------------
 //
@@ -137,76 +149,111 @@ struct KernelResult {
   Value err = Value::error(ErrorCode::Value);
 };
 
-// Single shared compile + match pipeline.
+// One compiled pattern plus the match data and match context that go with
+// it, owned for the lifetime of a single REGEX* call.
 //
-// `subject` and `pattern` are passed as string_view; both must remain
-// valid for the duration of the call. `case_insensitive` controls the
-// PCRE2_CASELESS compile flag. `find_all` decides whether the kernel
-// iterates after the first match (REGEXTEST and the occurrence-N
-// variant of REGEXREPLACE only need the first hit; everything else
-// wants every hit).
+// Compilation is loop-invariant work: it costs an order of magnitude more
+// than matching a short cell string, so a REGEX* call whose `text` argument
+// is an N-cell range builds exactly one of these and reuses it for every
+// subject. The constructor applies the same pattern guards the kernel used
+// to apply inline; a rejected or uncompilable pattern leaves `ok()` false
+// and every subject then surfaces the same `#VALUE!` it did before, which
+// keeps a broadcast's result shape unchanged.
+class CompiledPattern {
+ public:
+  CompiledPattern(std::string_view pattern, bool case_insensitive) {
+    // Pattern guards before pcre2_compile so pathological inputs cannot
+    // burn time inside the regex compiler.
+    if (pattern.empty() || pattern.size() > kMaxPatternBytes) {
+      return;
+    }
+
+    std::uint32_t compile_flags = PCRE2_UTF | PCRE2_UCP;
+    if (case_insensitive) {
+      compile_flags |= PCRE2_CASELESS;
+    }
+
+    int err_code = 0;
+    PCRE2_SIZE err_offset = 0;
+    code_ = pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.data()), static_cast<PCRE2_SIZE>(pattern.size()),
+                          compile_flags, &err_code, &err_offset, nullptr);
+    g_compile_count.fetch_add(1U, std::memory_order_relaxed);
+    if (code_ == nullptr) {
+      return;
+    }
+
+    // Inspect capture group count. PCRE2_INFO_CAPTURECOUNT excludes the
+    // whole-match group, which is exactly what the kernel reports.
+    pcre2_pattern_info(code_, PCRE2_INFO_CAPTURECOUNT, &capture_count_);
+
+    match_data_ = pcre2_match_data_create_from_pattern(code_, nullptr);
+    if (match_data_ == nullptr) {
+      return;
+    }
+    context_ = pcre2_match_context_create(nullptr);
+    if (context_ == nullptr) {
+      return;
+    }
+    pcre2_set_match_limit(context_, kMatchLimit);
+    pcre2_set_depth_limit(context_, kDepthLimit);
+    ok_ = true;
+  }
+
+  ~CompiledPattern() {
+    if (context_ != nullptr) {
+      pcre2_match_context_free(context_);
+    }
+    if (match_data_ != nullptr) {
+      pcre2_match_data_free(match_data_);
+    }
+    if (code_ != nullptr) {
+      pcre2_code_free(code_);
+    }
+  }
+
+  CompiledPattern(const CompiledPattern&) = delete;
+  CompiledPattern& operator=(const CompiledPattern&) = delete;
+
+  /// True once the pattern compiled and both PCRE2 side structures were
+  /// obtained. A false value is always the caller's `#VALUE!`.
+  bool ok() const noexcept { return ok_; }
+
+  pcre2_code* code() const noexcept { return code_; }
+  pcre2_match_data* match_data() const noexcept { return match_data_; }
+  pcre2_match_context* context() const noexcept { return context_; }
+  std::uint32_t capture_count() const noexcept { return capture_count_; }
+
+ private:
+  pcre2_code* code_ = nullptr;
+  pcre2_match_data* match_data_ = nullptr;
+  pcre2_match_context* context_ = nullptr;
+  std::uint32_t capture_count_ = 0;
+  bool ok_ = false;
+};
+
+// Single shared match pipeline.
+//
+// `subject` must remain valid for the duration of the call. `find_all`
+// decides whether the kernel iterates after the first match (REGEXTEST and
+// the occurrence-N variant of REGEXREPLACE only need the first hit;
+// everything else wants every hit).
 //
 // `on_match_limit_returns_no_match`: when true (REGEXTEST), a hit on
 // match_limit / depth_limit is converted to "no match" (kernel still
 // returns ok=true with matches empty). When false (the extract /
 // replace pair), it surfaces as #CALC!.
-KernelResult regex_kernel(std::string_view subject, std::string_view pattern, bool case_insensitive, bool find_all,
+KernelResult regex_kernel(const CompiledPattern& program, std::string_view subject, bool find_all,
                           bool on_match_limit_returns_no_match) {
   KernelResult result;
 
-  // Pattern guards before pcre2_compile so pathological inputs cannot
-  // burn time inside the regex compiler.
-  if (pattern.empty()) {
-    result.ok = false;
-    result.err = Value::error(ErrorCode::Value);
-    return result;
-  }
-  if (pattern.size() > kMaxPatternBytes) {
+  if (!program.ok()) {
     result.ok = false;
     result.err = Value::error(ErrorCode::Value);
     return result;
   }
 
-  std::uint32_t compile_flags = PCRE2_UTF | PCRE2_UCP;
-  if (case_insensitive) {
-    compile_flags |= PCRE2_CASELESS;
-  }
-
-  int err_code = 0;
-  PCRE2_SIZE err_offset = 0;
-  pcre2_code* code =
-      pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.data()), static_cast<PCRE2_SIZE>(pattern.size()),
-                    compile_flags, &err_code, &err_offset, nullptr);
-  if (code == nullptr) {
-    result.ok = false;
-    result.err = Value::error(ErrorCode::Value);
-    return result;
-  }
-
-  // Inspect capture group count. PCRE2_INFO_CAPTURECOUNT excludes the
-  // whole-match group, which is exactly what we want to return.
-  std::uint32_t capture_count = 0;
-  pcre2_pattern_info(code, PCRE2_INFO_CAPTURECOUNT, &capture_count);
+  const std::uint32_t capture_count = program.capture_count();
   result.capture_count = capture_count;
-
-  pcre2_match_data* match_data = pcre2_match_data_create_from_pattern(code, nullptr);
-  if (match_data == nullptr) {
-    pcre2_code_free(code);
-    result.ok = false;
-    result.err = Value::error(ErrorCode::Value);
-    return result;
-  }
-
-  pcre2_match_context* mctx = pcre2_match_context_create(nullptr);
-  if (mctx == nullptr) {
-    pcre2_match_data_free(match_data);
-    pcre2_code_free(code);
-    result.ok = false;
-    result.err = Value::error(ErrorCode::Value);
-    return result;
-  }
-  pcre2_set_match_limit(mctx, kMatchLimit);
-  pcre2_set_depth_limit(mctx, kDepthLimit);
 
   // PCRE2's limits bound one match attempt, not how much a find-all scan
   // retains across attempts. Charge each retained match its whole-match slot
@@ -216,8 +263,9 @@ KernelResult regex_kernel(std::string_view subject, std::string_view pattern, bo
 
   PCRE2_SIZE start_offset = 0;
   while (start_offset <= static_cast<PCRE2_SIZE>(subject.size())) {
-    const int rc = pcre2_match(code, reinterpret_cast<PCRE2_SPTR>(subject.data()),
-                               static_cast<PCRE2_SIZE>(subject.size()), start_offset, 0, match_data, mctx);
+    const int rc =
+        pcre2_match(program.code(), reinterpret_cast<PCRE2_SPTR>(subject.data()),
+                    static_cast<PCRE2_SIZE>(subject.size()), start_offset, 0, program.match_data(), program.context());
     if (rc == PCRE2_ERROR_NOMATCH) {
       break;
     }
@@ -230,9 +278,6 @@ KernelResult regex_kernel(std::string_view subject, std::string_view pattern, bo
       }
       result.ok = false;
       result.err = Value::error(ErrorCode::Calc);
-      pcre2_match_context_free(mctx);
-      pcre2_match_data_free(match_data);
-      pcre2_code_free(code);
       return result;
     }
     if (rc < 0) {
@@ -245,16 +290,13 @@ KernelResult regex_kernel(std::string_view subject, std::string_view pattern, bo
       }
       result.ok = false;
       result.err = Value::error(ErrorCode::Calc);
-      pcre2_match_context_free(mctx);
-      pcre2_match_data_free(match_data);
-      pcre2_code_free(code);
       return result;
     }
 
     // rc > 0: rc-1 capture groups participated in addition to the whole
     // match. PCRE2's ovector layout: pairs of (start, end) for groups
     // 0..capture_count.
-    const PCRE2_SIZE* ovec = pcre2_get_ovector_pointer(match_data);
+    const PCRE2_SIZE* ovec = pcre2_get_ovector_pointer(program.match_data());
     MatchSpan ms;
     ms.whole_start = static_cast<std::size_t>(ovec[0]);
     ms.whole_end = static_cast<std::size_t>(ovec[1]);
@@ -292,9 +334,6 @@ KernelResult regex_kernel(std::string_view subject, std::string_view pattern, bo
     }
   }
 
-  pcre2_match_context_free(mctx);
-  pcre2_match_data_free(match_data);
-  pcre2_code_free(code);
   return result;
 }
 
@@ -523,34 +562,15 @@ Value extract_dispatch(const KernelResult& kr, std::string_view subject, long lo
 // PCRE2_SUBSTITUTE_EXTENDED so Excel's `$1`, `${name}`, `$$`, and `\n`
 // escapes work; we add PCRE2_SUBSTITUTE_GLOBAL only when occurrence == 0.
 
-// Runs one pcre2_substitute call with caller-selected global/single flags.
-Value substitute_with_flags(std::string_view subject, std::string_view pattern, std::string_view replacement,
-                            bool case_insensitive, std::size_t start_offset, std::uint32_t sub_flags, Arena& arena) {
-  // Pattern guards mirror regex_kernel.
-  if (pattern.empty() || pattern.size() > kMaxPatternBytes) {
+// Runs one pcre2_substitute call with caller-selected global/single flags,
+// reusing the caller's already-compiled program.
+Value substitute_with_flags(const CompiledPattern& program, std::string_view subject, std::string_view replacement,
+                            std::size_t start_offset, std::uint32_t sub_flags, Arena& arena) {
+  if (!program.ok()) {
     return Value::error(ErrorCode::Value);
   }
-
-  std::uint32_t compile_flags = PCRE2_UTF | PCRE2_UCP;
-  if (case_insensitive) {
-    compile_flags |= PCRE2_CASELESS;
-  }
-  int err_code = 0;
-  PCRE2_SIZE err_offset = 0;
-  pcre2_code* code =
-      pcre2_compile(reinterpret_cast<PCRE2_SPTR>(pattern.data()), static_cast<PCRE2_SIZE>(pattern.size()),
-                    compile_flags, &err_code, &err_offset, nullptr);
-  if (code == nullptr) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  pcre2_match_context* mctx = pcre2_match_context_create(nullptr);
-  if (mctx == nullptr) {
-    pcre2_code_free(code);
-    return Value::error(ErrorCode::Value);
-  }
-  pcre2_set_match_limit(mctx, kMatchLimit);
-  pcre2_set_depth_limit(mctx, kDepthLimit);
+  pcre2_code* const code = program.code();
+  pcre2_match_context* const mctx = program.context();
 
   // Sizing: start with subject + replacement * 2 as a guess. PCRE2 will
   // tell us the required size via PCRE2_ERROR_NOMEMORY if the buffer
@@ -558,9 +578,10 @@ Value substitute_with_flags(std::string_view subject, std::string_view pattern, 
   std::size_t bufsize = subject.size() + replacement.size() * 2 + 16;
   std::vector<unsigned char> buffer(bufsize);
   PCRE2_SIZE outlen = bufsize;
+  const std::uint32_t effective_sub_flags = sub_flags | PCRE2_SUBSTITUTE_OVERFLOW_LENGTH;
 
   int rc = pcre2_substitute(code, reinterpret_cast<PCRE2_SPTR>(subject.data()), static_cast<PCRE2_SIZE>(subject.size()),
-                            static_cast<PCRE2_SIZE>(start_offset), sub_flags, nullptr, mctx,
+                            static_cast<PCRE2_SIZE>(start_offset), effective_sub_flags, nullptr, mctx,
                             reinterpret_cast<PCRE2_SPTR>(replacement.data()),
                             static_cast<PCRE2_SIZE>(replacement.size()), buffer.data(), &outlen);
   if (rc == PCRE2_ERROR_NOMEMORY) {
@@ -568,8 +589,6 @@ Value substitute_with_flags(std::string_view subject, std::string_view pattern, 
     // text cap can never yield a legal cell value, so reject it before
     // growing the buffer instead of allocating an unbounded amount.
     if (outlen > kMaxSubstituteOutputBytes) {
-      pcre2_match_context_free(mctx);
-      pcre2_code_free(code);
       return Value::error(ErrorCode::Value);
     }
     // Reallocate to the required size and retry.
@@ -577,13 +596,10 @@ Value substitute_with_flags(std::string_view subject, std::string_view pattern, 
     bufsize = outlen;
     outlen = bufsize;
     rc = pcre2_substitute(code, reinterpret_cast<PCRE2_SPTR>(subject.data()), static_cast<PCRE2_SIZE>(subject.size()),
-                          static_cast<PCRE2_SIZE>(start_offset), sub_flags, nullptr, mctx,
+                          static_cast<PCRE2_SIZE>(start_offset), effective_sub_flags, nullptr, mctx,
                           reinterpret_cast<PCRE2_SPTR>(replacement.data()), static_cast<PCRE2_SIZE>(replacement.size()),
                           buffer.data(), &outlen);
   }
-
-  pcre2_match_context_free(mctx);
-  pcre2_code_free(code);
 
   if (rc < 0) {
     // Match-limit / depth-limit / malformed replacement.
@@ -602,19 +618,21 @@ Value substitute_with_flags(std::string_view subject, std::string_view pattern, 
   return Value::text(arena.intern(out_view));
 }
 
-Value substitute_global(std::string_view subject, std::string_view pattern, std::string_view replacement,
-                        bool case_insensitive, Arena& arena) {
-  return substitute_with_flags(subject, pattern, replacement, case_insensitive, /*start_offset=*/0U,
+Value substitute_global(const CompiledPattern& program, std::string_view subject, std::string_view replacement,
+                        Arena& arena) {
+  return substitute_with_flags(program, subject, replacement, /*start_offset=*/0U,
                                PCRE2_SUBSTITUTE_EXTENDED | PCRE2_SUBSTITUTE_GLOBAL, arena);
 }
 
 // Replaces only the N-th match (occurrence == N > 0). Strategy: run the
 // kernel with find_all = true (subject to N matches), then substitute
 // at exactly the chosen match by passing `start_offset = match_start`
-// and NOT setting GLOBAL.
-Value substitute_nth(std::string_view subject, std::string_view pattern, std::string_view replacement,
-                     bool case_insensitive, long long occurrence, Arena& arena) {
-  KernelResult kr = regex_kernel(subject, pattern, case_insensitive, /*find_all=*/true,
+// and NOT setting GLOBAL. Both steps run against the same compiled
+// program, so an occurrence-N replace costs no more compilation than a
+// global one.
+Value substitute_nth(const CompiledPattern& program, std::string_view subject, std::string_view replacement,
+                     long long occurrence, Arena& arena) {
+  KernelResult kr = regex_kernel(program, subject, /*find_all=*/true,
                                  /*on_match_limit_returns_no_match=*/false);
   if (!kr.ok) {
     return kr.err;
@@ -625,11 +643,14 @@ Value substitute_nth(std::string_view subject, std::string_view pattern, std::st
   }
 
   const std::size_t target_start = kr.matches[static_cast<std::size_t>(occurrence - 1)].whole_start;
-  return substitute_with_flags(subject, pattern, replacement, case_insensitive, target_start, PCRE2_SUBSTITUTE_EXTENDED,
-                               arena);
+  return substitute_with_flags(program, subject, replacement, target_start, PCRE2_SUBSTITUTE_EXTENDED, arena);
 }
 
 }  // namespace
+
+std::uint64_t regex_compile_count() noexcept {
+  return g_compile_count.load(std::memory_order_relaxed);
+}
 
 // ---------------------------------------------------------------------------
 // REGEXTEST
@@ -670,8 +691,12 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return err;
   }
 
+  // Compile once for the whole call: the pattern and the case flag are
+  // loop-invariant, the subjects are not.
+  const CompiledPattern program(pattern, case_insensitive);
+
   if (!text_arg.is_array) {
-    KernelResult kr = regex_kernel(text_arg.scalar, pattern, case_insensitive, /*find_all=*/false,
+    KernelResult kr = regex_kernel(program, text_arg.scalar, /*find_all=*/false,
                                    /*on_match_limit_returns_no_match=*/true);
     if (!kr.ok) {
       return kr.err;
@@ -699,7 +724,7 @@ Value eval_regextest_lazy(const parser::AstNode& call, Arena& arena, const Funct
       cells[i] = Value::error(t.error());
       continue;
     }
-    KernelResult kr = regex_kernel(t.value(), pattern, case_insensitive, /*find_all=*/false,
+    KernelResult kr = regex_kernel(program, t.value(), /*find_all=*/false,
                                    /*on_match_limit_returns_no_match=*/true);
     if (!kr.ok) {
       cells[i] = kr.err;
@@ -765,12 +790,15 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // arrays for modes 1 / 3.
   const bool mode_yields_array = (mode == 1 || mode == 3);
 
+  // Compile once for the whole call; every subject reuses the program.
+  const CompiledPattern program(pattern, case_insensitive);
+
   if (!text_arg.is_array) {
     // find_all is needed for modes 1 and 3; modes 0 and 2 want only the
     // first match. Cheap to over-collect, so we always find_all. The
     // kernel iterates internally — bounded by subject length.
     const bool find_all = (mode == 1 || mode == 3);
-    KernelResult kr = regex_kernel(text_arg.scalar, pattern, case_insensitive, find_all,
+    KernelResult kr = regex_kernel(program, text_arg.scalar, find_all,
                                    /*on_match_limit_returns_no_match=*/false);
     if (!kr.ok) {
       return kr.err;
@@ -808,7 +836,7 @@ Value eval_regexextract_lazy(const parser::AstNode& call, Arena& arena, const Fu
       continue;
     }
     subjects.push_back(std::move(t.value()));
-    KernelResult kr = regex_kernel(subjects.back(), pattern, case_insensitive, /*find_all=*/(mode == 1 || mode == 3),
+    KernelResult kr = regex_kernel(program, subjects.back(), /*find_all=*/(mode == 1 || mode == 3),
                                    /*on_match_limit_returns_no_match=*/false);
     if (!kr.ok) {
       cells[i] = kr.err;
@@ -872,11 +900,15 @@ Value eval_regexreplace_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return err;
   }
 
+  // Compile once for the whole call; every subject reuses the program,
+  // including the kernel scan an occurrence-N replace runs first.
+  const CompiledPattern program(pattern, case_insensitive);
+
   auto run_one = [&](std::string_view subject) -> Value {
     if (occurrence == 0) {
-      return substitute_global(subject, pattern, replacement, case_insensitive, arena);
+      return substitute_global(program, subject, replacement, arena);
     }
-    return substitute_nth(subject, pattern, replacement, case_insensitive, occurrence, arena);
+    return substitute_nth(program, subject, replacement, occurrence, arena);
   };
 
   if (!text_arg.is_array) {

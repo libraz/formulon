@@ -170,7 +170,9 @@ TEST(BuiltinsWebFilterXml, AttributeAxisSpillsAcrossMatches) {
   EXPECT_EQ(v.as_array_cells()[1].as_text(), "y");
 }
 
-TEST(BuiltinsWebFilterXml, EmptyNodeSetReturnsNotAvailable) {
+TEST(BuiltinsWebFilterXml, EmptyNodeSetReturnsValue) {
+  // A valid XPath that matches nothing is #VALUE!, the same code Excel 365
+  // ja-JP reports for a malformed expression.
   const Value v = EvalSource("=FILTERXML(\"<r><a>1</a></r>\",\"//b\")");
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);

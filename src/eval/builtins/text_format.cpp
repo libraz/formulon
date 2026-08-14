@@ -18,6 +18,7 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/coerce.h"
 #include "eval/date_text_parse.h"
+#include "eval/date_time.h"
 #include "eval/function_registry.h"
 #include "eval/number_parse.h"
 #include "eval/shape_ops_lazy.h"
@@ -66,17 +67,25 @@ Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena
     return Value::text({});
   }
 
-  // Non-coercible text values are rejected: Mac Excel ja-JP returns
-  // #VALUE! for `TEXT("abc", ...)` regardless of the format. Numeric
-  // strings ("42", " $1,234 ") still succeed via `parse_numeric` below.
+  // Text goes through the shared numeric-coercion ladder, the same one
+  // arithmetic and FLOOR use, so anything `=A1+0` accepts TEXT formats as
+  // well: numeric strings ("42", " $1,234 "), percent, currency, and
+  // date / time text. Only a value the ladder itself rejects ("abc") is
+  // #VALUE!.
   double number = 0.0;
   if (v.is_text()) {
-    const std::string_view raw = v.as_text();
-    double parsed = 0.0;
-    if (!parse_numeric(raw, '.', ',', &parsed)) {
-      return Value::error(ErrorCode::Value);
+    bool from_date_text = false;
+    auto coerced = coerce_text_to_number(v.as_text(), &from_date_text);
+    if (!coerced) {
+      return Value::error(coerced.error());
     }
-    number = parsed;
+    number = coerced.value();
+    // The ladder's date fallback always yields a 1900-system serial. The
+    // format codes below read the workbook epoch, so shift the serial into
+    // it or a 1904 workbook would render the wrong calendar day.
+    if (from_date_text && date1904) {
+      number -= date_time::kDate1904EpochGap;
+    }
   } else if (v.is_number()) {
     number = v.as_number();
   } else {

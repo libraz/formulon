@@ -3,7 +3,7 @@ description: >
   FILTERXML(xml, xpath) parses `xml` and runs `xpath` against it. Excel's
   documented contract:
 
-    * Empty node set            → #N/A
+    * Empty node set            → #VALUE!
     * Malformed XML             → #VALUE!
     * Malformed XPath           → #VALUE!
     * Single-node match         → scalar text (the node's inner text)
@@ -194,7 +194,7 @@ cases:
   # Default namespace — Excel's documented workaround pattern
   # --------------------------------------------------------------------
   - id: filterxml_default_namespace_naive_path
-    description: "Naive `//a` on default-namespace doc — typically EMPTY (#N/A)"
+    description: "Naive `//a` on default-namespace doc — typically EMPTY (#VALUE!)"
     formula: "=FILTERXML(\"<r xmlns=\"\"http://example.com\"\"><a>v</a></r>\",\"//a\")"
 
   - id: filterxml_default_namespace_local_name_workaround
@@ -210,10 +210,10 @@ cases:
     formula: "=FILTERXML(\"<r xmlns:ns=\"\"http://example.com\"\"><ns:a>v</ns:a></r>\",\"//*[local-name()='a']\")"
 
   # --------------------------------------------------------------------
-  # Empty / no-match results — #N/A
+  # Empty / no-match results — #VALUE!
   # --------------------------------------------------------------------
   - id: filterxml_no_match_returns_na
-    description: "XPath that matches nothing — #N/A"
+    description: "XPath that matches nothing — #VALUE!"
     formula: "=FILTERXML(\"<r><a>1</a></r>\",\"//b\")"
 
   - id: filterxml_empty_root_no_match
@@ -221,7 +221,7 @@ cases:
     formula: "=FILTERXML(\"<r/>\",\"//x\")"
 
   - id: filterxml_predicate_no_match_na
-    description: "Predicate filters everything out — #N/A"
+    description: "Predicate filters everything out — #VALUE!"
     formula: "=FILTERXML(\"<r><a id=\"\"1\"\"/></r>\",\"//a[@id='999']\")"
 
   # --------------------------------------------------------------------

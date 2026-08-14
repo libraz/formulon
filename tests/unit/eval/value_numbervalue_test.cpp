@@ -119,6 +119,25 @@ TEST(TextFunctionText, NumericTextStillCoerces) {
   EXPECT_EQ(v.as_text(), "42.00");
 }
 
+TEST(TextFunctionText, DateTextCoercesThroughTheSharedLadder) {
+  // The first argument goes through `coerce_to_number`, so every text shape
+  // arithmetic accepts is formattable here too. A date string reaches the
+  // date fallback and renders through the format codes.
+  const Value iso = EvalSource("=TEXT(\"2024-03-15\", \"yyyy\")");
+  ASSERT_TRUE(iso.is_text()) << "date text must not be rejected as non-coercible";
+  EXPECT_EQ(iso.as_text(), "2024");
+
+  const Value slash = EvalSource("=TEXT(\"2024/3/15\", \"yyyy/m/d\")");
+  ASSERT_TRUE(slash.is_text());
+  EXPECT_EQ(slash.as_text(), "2024/3/15");
+}
+
+TEST(TextFunctionText, TimeTextCoercesThroughTheSharedLadder) {
+  const Value v = EvalSource("=TEXT(\"13:30\", \"h:mm\")");
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "13:30");
+}
+
 TEST(TextFunctionText, EmptyStringIsValueError) {
   // "" is not coercible to a number; TEXT rejects it.
   const Value v = EvalSource("=TEXT(\"\", \"0\")");

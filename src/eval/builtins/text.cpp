@@ -652,6 +652,12 @@ Value Char_(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 //     95 (ASCII underscore), the empirically confirmed Mac fallback.
 //
 // Mac probe golden: tests/oracle/golden/code_char_jp_probes.golden.json.
+//
+// This is the Mac-profile behavior. Under the runtime-default win-365-ja_JP
+// profile, `eval_code_lazy` (src/eval/info_lazy.cpp) overrides the fallback
+// case before it ever reaches this eager impl: a supplementary-plane
+// codepoint (> U+FFFF) returns 63, and U+9AD9 specifically returns 38526,
+// instead of the 95 fallback above.
 Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto text = coerce_to_text(args[0]);
   if (!text) {
