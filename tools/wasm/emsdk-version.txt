@@ -1,0 +1,17 @@
+# Pinned Emscripten SDK version.
+#
+# This file is the only place in the repository that states the version.
+# Every consumer reads it through tools/wasm/emsdk_pin.sh:
+#
+#   * the GitHub Actions jobs that run mymindstorm/setup-emsdk
+#     (.github/workflows/{ci,release,prebuild}.yml)
+#   * tools/bench/wasm_size_report.sh, which compares the value against the
+#     emcc recorded in the artifact's .toolchain stamp
+#
+# The pin exists because the .wasm size ceilings are gated per commit: a
+# different compiler produces a different code section, so the toolchain has
+# to be fixed for the gate to mean anything. Bump it deliberately, re-measure
+# both artifacts, and have wasm-size-guardian review the size delta.
+#
+# Format: a single bare version line. Comment lines start with '#'.
+5.0.2

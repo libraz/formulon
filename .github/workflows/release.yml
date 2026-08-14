@@ -45,7 +45,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Order matters: setup-emsdk@v14 prepends its bundled (non-executable)
+      - name: Read pinned Emscripten version
+        id: emsdk-pin
+        # Single source of truth: tools/wasm/emsdk-version.txt.
+        run: echo "version=$(tools/wasm/emsdk_pin.sh)" >> "$GITHUB_OUTPUT"
+
+      # Order matters: setup-emsdk prepends its bundled (non-executable)
       # node / cmake to PATH. Running setup-node AFTER it re-prepends the
       # real node, so `node ...` in subsequent steps hits the actions-managed
       # binary, not emsdk's broken shim. cmake still needs an explicit
@@ -53,7 +58,7 @@ jobs:
       # actions/setup-node cannot displace).
       - uses: mymindstorm/setup-emsdk@v16
         with:
-          version: 3.1.74
+          version: ${{ steps.emsdk-pin.outputs.version }}
           actions-cache-folder: emsdk-cache
 
       - uses: actions/setup-node@v6
@@ -178,10 +183,14 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Read pinned Emscripten version
+        id: emsdk-pin
+        # Single source of truth: tools/wasm/emsdk-version.txt.
+        run: echo "version=$(tools/wasm/emsdk_pin.sh)" >> "$GITHUB_OUTPUT"
+
       - uses: mymindstorm/setup-emsdk@v16
         with:
-          # Pin to keep WASM size deterministic (matches publish-npm).
-          version: 3.1.74
+          version: ${{ steps.emsdk-pin.outputs.version }}
           actions-cache-folder: emsdk-cache
 
       - name: Install host tools

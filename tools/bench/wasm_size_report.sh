@@ -28,6 +28,15 @@
 # `brotli` is absent from PATH the Brotli check is skipped, not failed --
 # a missing tool must not turn into a phantom size regression.
 #
+# The report also names the Emscripten toolchain that produced the artifact,
+# read from the `<artifact>.toolchain` stamp the WASM build writes, and
+# compares it against the pin in tools/wasm/emsdk-version.txt. A different
+# compiler emits a different code section, so a size measured with an
+# unpinned emcc is not the size CI will judge. The mismatch is reported as a
+# warning and never changes the exit code: a homebrew build of the pinned
+# series calls itself e.g. `5.0.2-git` and can never string-match a release
+# tag exactly, and a developer's local build must not fail over that.
+#
 # Exit codes:
 #   0 -- both sizes at or under their hard ceilings (warns on stderr if either
 #        exceeds its soft ceiling)
@@ -201,6 +210,63 @@ if command -v brotli >/dev/null 2>&1; then
   fi
 fi
 
+# Which Emscripten produced this artifact, and does it match the pin?
+#
+# The build writes `<artifact>.toolchain` next to the .wasm (see
+# tools/wasm/toolchain_stamp.cmake). Preferring the stamp over `emcc` on PATH
+# matters: PATH answers what would build the artifact now, the stamp answers
+# what did build the one being measured.
+TOOLCHAIN_STAMP="${WASM_PATH}.toolchain"
+EMCC_SOURCE="unknown"
+EMCC_LINE=""
+if [ -f "$TOOLCHAIN_STAMP" ]; then
+  EMCC_SOURCE="stamp"
+  EMCC_LINE="$(head -n 1 "$TOOLCHAIN_STAMP")"
+elif command -v emcc >/dev/null 2>&1; then
+  EMCC_SOURCE="path"
+  EMCC_LINE="$(emcc --version 2>/dev/null | head -n 1)"
+fi
+
+# Pull the first version-shaped token out of an emcc banner line and drop any
+# build suffix, so `5.0.2-git` and `5.0.2` compare equal on the numeric part.
+version_number() {
+  printf '%s\n' "$1" | awk '{
+    for (i = 1; i <= NF; i++) {
+      if ($i ~ /^[0-9]+\.[0-9]+/) { v = $i; sub(/[^0-9.].*$/, "", v); print v; exit }
+    }
+  }'
+}
+
+# Same token, suffix intact, for reporting what the compiler calls itself.
+version_token() {
+  printf '%s\n' "$1" | awk '{
+    for (i = 1; i <= NF; i++) {
+      if ($i ~ /^[0-9]+\.[0-9]+/) { print $i; exit }
+    }
+  }'
+}
+
+EMSDK_PIN="$(sh "$(dirname "$0")/../wasm/emsdk_pin.sh" 2>/dev/null || true)"
+
+EMCC_VERSION="$(version_token "$EMCC_LINE")"
+EMCC_NUMBER="$(version_number "$EMCC_LINE")"
+[ -n "$EMCC_VERSION" ] || EMCC_VERSION="unknown"
+
+# ok           -- exact match with the pin
+# series-match -- same X.Y.Z, different build suffix (a git build of the pin)
+# drift        -- a different toolchain than the one the ceilings assume
+# unknown      -- no stamp, no emcc on PATH, or no readable pin
+TOOLCHAIN_STATUS="unknown"
+if [ -n "$EMSDK_PIN" ] && [ -n "$EMCC_NUMBER" ]; then
+  if [ "$EMCC_VERSION" = "$EMSDK_PIN" ]; then
+    TOOLCHAIN_STATUS="ok"
+  elif [ "$EMCC_NUMBER" = "$EMSDK_PIN" ]; then
+    TOOLCHAIN_STATUS="series-match"
+  else
+    TOOLCHAIN_STATUS="drift"
+  fi
+fi
+
 # Determine per-measure status: ok / soft-warn / over-hard-ceiling.
 UNCOMPRESSED_STATUS="ok"
 if [ "$UNCOMPRESSED_BYTES" -gt "$HARD_CEILING" ]; then
@@ -276,6 +342,14 @@ if [ "$EMIT_JSON" -eq 1 ]; then
     printf '"brotli_headroom_bytes":null,'
     printf '"brotli_headroom_pct":null,'
   fi
+  printf '"emcc_version":"%s",' "$EMCC_VERSION"
+  printf '"emcc_source":"%s",' "$EMCC_SOURCE"
+  if [ -n "$EMSDK_PIN" ]; then
+    printf '"emsdk_pin":"%s",' "$EMSDK_PIN"
+  else
+    printf '"emsdk_pin":null,'
+  fi
+  printf '"toolchain_status":"%s",' "$TOOLCHAIN_STATUS"
   printf '"uncompressed_status":"%s",' "$UNCOMPRESSED_STATUS"
   printf '"brotli_status":"%s",' "$BROTLI_STATUS"
   printf '"status":"%s"' "$STATUS"
@@ -303,8 +377,23 @@ else
   else
     printf '  br-headroom:  (skipped)\n'
   fi
+  printf '  toolchain:    emcc %s (%s)\n' "$EMCC_VERSION" "$EMCC_SOURCE"
+  if [ -n "$EMSDK_PIN" ]; then
+    printf '  emsdk-pin:    %s (%s)\n' "$EMSDK_PIN" "$TOOLCHAIN_STATUS"
+  else
+    printf '  emsdk-pin:    (unreadable)\n'
+  fi
   printf '  status:       %s (uncompressed: %s, brotli: %s)\n' \
     "$STATUS" "$UNCOMPRESSED_STATUS" "$BROTLI_STATUS"
+fi
+
+if [ "$TOOLCHAIN_STATUS" = "drift" ]; then
+  printf '%s: warning: built with emcc %s but the pin is emsdk %s; the size above is not the one CI measures\n' \
+    "$PROG" "$EMCC_VERSION" "$EMSDK_PIN" >&2
+fi
+if [ "$TOOLCHAIN_STATUS" = "unknown" ]; then
+  printf '%s: warning: cannot tell which emcc produced %s; run the build so it writes %s\n' \
+    "$PROG" "$WASM_NAME" "$(basename "$TOOLCHAIN_STAMP")" >&2
 fi
 
 if [ "$UNCOMPRESSED_STATUS" = "over-soft-ceiling" ]; then

@@ -131,11 +131,14 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Read pinned Emscripten version
+        id: emsdk-pin
+        # Single source of truth: tools/wasm/emsdk-version.txt.
+        run: echo "version=$(tools/wasm/emsdk_pin.sh)" >> "$GITHUB_OUTPUT"
+
       - uses: mymindstorm/setup-emsdk@v16
         with:
-          # Pin matches ci.yml's wasm job and release.yml's npm/python
-          # jobs -- keeps the capi WASM build deterministic.
-          version: 3.1.74
+          version: ${{ steps.emsdk-pin.outputs.version }}
           actions-cache-folder: emsdk-cache
 
       - name: Install build deps

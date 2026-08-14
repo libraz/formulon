@@ -324,6 +324,18 @@ if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
   endif()
 endif()
 
+# Post-build: stamp the artifact with the emcc that produced it. The size
+# ceilings are judged per compiler, so tools/bench/wasm_size_report.sh reads
+# this sidecar rather than asking PATH -- that is what lets it flag a build
+# made with a toolchain other than the pin in tools/wasm/emsdk-version.txt.
+add_custom_command(TARGET formulon_wasm POST_BUILD
+  COMMAND ${CMAKE_COMMAND}
+    -DEMCC=${CMAKE_C_COMPILER}
+    -DSTAMP_FILE=$<TARGET_FILE_DIR:formulon_wasm>/${_FM_WASM_BASE}.wasm.toolchain
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/wasm/toolchain_stamp.cmake
+  VERBATIM
+)
+
 # Post-build: print the artifact size (uncompressed + Brotli when
 # available). This is informational only -- no enforcement here; the
 # size gate lives in a separate bundle. Surface it on every successful
