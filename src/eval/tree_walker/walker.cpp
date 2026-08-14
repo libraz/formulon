@@ -43,6 +43,7 @@
 #include "eval/tree_walker_lazy_table.h"
 #include "parser/ast.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "value.h"
 #include "workbook.h"
@@ -155,6 +156,168 @@ bool has_lazy_only_call(const parser::AstNode& node, const FunctionRegistry& reg
 }
 #endif  // FORMULON_VM_PARITY_CHECK
 
+// Materialises the inclusive rectangle [`top_left`, `bottom_right`] as a
+// `Value::Array`. Both endpoints must be bounded (no `is_full_col` /
+// `is_full_row`) and already normalised so that `top_left` is the smaller
+// corner on both axes. Cells the expansion did not produce are padded with
+// Blank, which the top-level surface contract later projects to 0.
+Value materialize_rectangle(const parser::Reference& top_left, const parser::Reference& bottom_right, Arena& arena,
+                            const FunctionRegistry& registry, const EvalContext& ctx) {
+  auto expanded = ctx.expand_range(top_left, bottom_right, arena, registry);
+  if (!expanded) {
+    return Value::error(expanded.error());
+  }
+  const std::uint32_t rows = bottom_right.row - top_left.row + 1U;
+  const std::uint32_t cols = bottom_right.col - top_left.col + 1U;
+  Value* buffer = nullptr;
+  ArrayValue* arr = allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  if (arr == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t total = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
+  const std::vector<Value>& ev = expanded.value();
+  for (std::size_t k = 0; k < total; ++k) {
+    buffer[k] = k < ev.size() ? ev[k] : Value::blank();
+  }
+  return Value::array(arr);
+}
+
+// Recovers the rectangle a bare whole-axis reference declares, so it can be
+// evaluated through the same path as any other bare range.
+//
+// Excel 365 gives `A:A` / `A:C` / `1:2` the array of the *declared*
+// rectangle — rows 1..1048576 for a column span, columns A..XFD for a row
+// span — not the populated extent. Nothing is trimmed, which is why an
+// occupied cell far below the data still blocks the spill.
+//
+// `A:A` and `1:1` parse as a single `Ref` carrying `is_full_col` /
+// `is_full_row`; the multi-span forms parse as a `RangeOp` over two
+// same-axis whole `Ref`s. Both shapes are recognised here. A mixed-axis
+// pair (`A:1`) has no rectangle and is rejected, as is an endpoint outside
+// the grid; the caller then keeps its existing scalar degradation.
+//
+// Returns false when `node` is not a bare whole-axis reference, leaving the
+// out-params untouched.
+bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* top_left,
+                              parser::Reference* bottom_right) {
+  const parser::Reference* lhs = nullptr;
+  const parser::Reference* rhs = nullptr;
+  if (node.kind() == parser::NodeKind::Ref) {
+    lhs = &node.as_ref();
+    rhs = lhs;
+  } else if (node.kind() == parser::NodeKind::RangeOp) {
+    const parser::AstNode& lhs_ast = node.as_range_lhs();
+    const parser::AstNode& rhs_ast = node.as_range_rhs();
+    if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+      return false;
+    }
+    lhs = &lhs_ast.as_ref();
+    rhs = &rhs_ast.as_ref();
+  } else {
+    return false;
+  }
+
+  const bool full_col = lhs->is_full_col && rhs->is_full_col;
+  const bool full_row = lhs->is_full_row && rhs->is_full_row;
+  // Same-axis pairs only. A reference flagged on both axes is malformed and
+  // an axis mismatch has no rectangle; either way this is not our shape.
+  if (full_col == full_row) {
+    return false;
+  }
+
+  parser::Reference first{};
+  parser::Reference last{};
+  // The parser keeps the sheet qualifier on the left endpoint, matching how
+  // `Sheet1!A1:B2` parses; `expand_range` inherits it for the rectangle.
+  first.sheet = lhs->sheet;
+  first.sheet_quoted = lhs->sheet_quoted;
+  if (full_col) {
+    if (lhs->col >= Sheet::kMaxCols || rhs->col >= Sheet::kMaxCols) {
+      return false;
+    }
+    first.row = 0U;
+    first.col = std::min(lhs->col, rhs->col);
+    last.row = Sheet::kMaxRows - 1U;
+    last.col = std::max(lhs->col, rhs->col);
+  } else {
+    if (lhs->row >= Sheet::kMaxRows || rhs->row >= Sheet::kMaxRows) {
+      return false;
+    }
+    first.row = std::min(lhs->row, rhs->row);
+    first.col = 0U;
+    last.row = std::max(lhs->row, rhs->row);
+    last.col = Sheet::kMaxCols - 1U;
+  }
+  *top_left = first;
+  *bottom_right = last;
+  return true;
+}
+
+// Evaluates a bare whole-axis reference standing as the entire formula.
+//
+// The three outcomes are tried in the order Excel decides them, which is
+// also the only order that is affordable:
+//
+//   1. The rectangle covers the formula's own cell. The formula then reads
+//      its own result, which is a circular reference and never spills —
+//      whatever else occupies the rectangle. This is settled first, so a
+//      self-referential formula does not get answered by the footprint.
+//   2. The footprint cannot be placed, either because the rectangle leaves
+//      the grid measured from the anchor or because something occupies it.
+//      `Sheet::probe_spill_footprint` decides that without building any
+//      values, which is what keeps `=A:C` at Z2 from allocating three
+//      million cells to return `#SPILL!`.
+//   3. Otherwise the rectangle is materialised and spills.
+//
+// Without a formula cell to anchor against there is no footprint to
+// measure and nothing that could spill, so the rectangle is materialised
+// directly; that is the shape ad-hoc parser-level evaluation sees.
+Value evaluate_whole_axis_reference(const parser::Reference& top_left, const parser::Reference& bottom_right,
+                                    Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  const Sheet* sheet = ctx.current_sheet();
+  if (sheet == nullptr || !ctx.has_formula_cell()) {
+    return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
+  }
+  const std::uint32_t anchor_row = ctx.formula_row();
+  const std::uint32_t anchor_col = ctx.formula_col();
+
+  // The rectangle is on the formula's own sheet when it carries no
+  // qualifier, or when the qualifier names that sheet.
+  const bool same_sheet = top_left.sheet.empty() || sheet_names::equal(top_left.sheet, sheet->name());
+  if (same_sheet && anchor_row >= top_left.row && anchor_row <= bottom_right.row && anchor_col >= top_left.col &&
+      anchor_col <= bottom_right.col) {
+    // Circular, and reported as the engine reports every other cycle
+    // rather than as anything specific to this shape: `#REF!` with
+    // iterative calculation off, the cell's last computed value when it is
+    // on. That mirrors `EvalContext::resolve_ref`'s back-edge branch and
+    // the sentinel `RecalcEngine` writes for each member of a cyclic
+    // component. It cannot be delegated to `resolve_ref` here, because the
+    // dependency-ordered recalc path evaluates with no `EvalState` and
+    // short-circuits formula references to their cached values — asking it
+    // would yield the anchor's stale value instead of a cycle. Excel
+    // leaves 0 in the cell, which Formulon deliberately does not match.
+    const Workbook* workbook = ctx.workbook();
+    if (workbook != nullptr && workbook->iterative_options().enabled) {
+      return sheet->resolve_cell_value(anchor_row, anchor_col);
+    }
+    return Value::error(ErrorCode::Ref);
+  }
+
+  const std::uint32_t rows = bottom_right.row - top_left.row + 1U;
+  const std::uint32_t cols = bottom_right.col - top_left.col + 1U;
+  if (sheet->probe_spill_footprint(anchor_row, anchor_col, rows, cols) != Sheet::SpillAdmission::kAdmissible) {
+    // A refusal has to be recorded, not just returned: the remembered
+    // rectangle is what lets the release machinery retry this anchor once
+    // the blocker goes away. A read-only context cannot record anything,
+    // and commits nothing either, so it simply reports the error.
+    if (Sheet* target = ctx.mutable_sheet(); target == sheet) {
+      target->reject_spill_footprint(anchor_row, anchor_col, rows, cols);
+    }
+    return Value::error(ErrorCode::Spill);
+  }
+  return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
+}
+
 }  // namespace
 
 // Public entry point declared in `eval/tree_walker.h`. Routes through
@@ -201,9 +364,14 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       // intersection is reached only through the explicit `@` / SINGLE
       // wrapper (the ImplicitIntersection case below), never here.
       //
-      // Two shapes keep the historical top-left anchor projection:
-      //   * A whole-column / whole-row endpoint (`A:A`, `1:1`): spilling the
-      //     entire used column is unbounded, so we collapse to the top-left.
+      // Two shapes keep the top-left anchor projection here:
+      //   * A whole-column / whole-row endpoint (`A:C`, `1:3`): its declared
+      //     rectangle spans a whole grid axis, which is only materialised
+      //     when the reference is the entire formula and can therefore
+      //     spill. `evaluate()` intercepts that position; every other value
+      //     context (an operand, a scalar function argument) keeps the
+      //     anchor projection so an unbounded rectangle is not conjured
+      //     behind an operator. See `whole_axis_declared_rect`.
       //   * A single-cell (`A1:A1`) range: degrades to the scalar so the
       //     degenerate surface is unchanged.
       //
@@ -236,23 +404,7 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       bottom_right.sheet = lhs_ref.sheet;
       bottom_right.row = r2;
       bottom_right.col = c2;
-      auto expanded = ctx.expand_range(top_left, bottom_right, arena, registry);
-      if (!expanded) {
-        return Value::error(expanded.error());
-      }
-      const std::uint32_t rrows = r2 - r1 + 1u;
-      const std::uint32_t rcols = c2 - c1 + 1u;
-      Value* buffer = nullptr;
-      ArrayValue* arr = allocate_array_value(rrows, rcols, arena, buffer, kMaxDerivedArrayCells);
-      if (arr == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-      const std::size_t total = static_cast<std::size_t>(rrows) * static_cast<std::size_t>(rcols);
-      const std::vector<Value>& ev = expanded.value();
-      for (std::size_t k = 0; k < total; ++k) {
-        buffer[k] = k < ev.size() ? ev[k] : Value::blank();
-      }
-      return Value::array(arr);
+      return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
     }
 
     case parser::NodeKind::ImplicitIntersection: {
@@ -740,6 +892,34 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
     ctx_with_counters = ctx_with_counters.with_depth_counters(&eval_depth, &lambda_depth);
   }
 
+  // The value of the whole formula is produced by exactly one of three
+  // branches: the whole-axis spilling position, the iterative-calculation
+  // driver, or the ordinary single-pass walk.
+  //
+  // A bare whole-axis reference (`=A:A`, `=A:C`, `=1:2`) standing as the
+  // entire formula is a spilling expression like any other bare range: its
+  // value is the array of the declared rectangle, anchored at the formula
+  // cell. Materialising it is only sound in this position, where the result
+  // can actually spill, so the interception is here rather than in
+  // `eval_node` — an operand or a scalar function argument keeps the
+  // top-left anchor projection.
+  //
+  // Excel's observed consequences — the rectangle must fit measured from
+  // the anchor, an occupied cell anywhere inside the declared rectangle
+  // blocks it, and unpopulated cells spill as 0 — are pinned by
+  // tests/oracle/cases/whole_axis_spill.yaml. The rectangle is bounded by
+  // the same range-expansion ceiling as the equivalent `=A1:A1048576`
+  // spelling, so the two spellings of one rectangle cannot answer
+  // differently.
+  //
+  // One consequence in that suite is deliberately NOT matched. A formula
+  // sitting inside the axis it references is circular; Excel resolves the
+  // cycle to 0 with iterative calculation off, while Formulon's engine-wide
+  // policy reports `#REF!` for every cycle member. That difference is a
+  // registered divergence, not an observation this code reproduces.
+  // `evaluate_whole_axis_reference` settles circularity before the
+  // footprint so the cycle cannot be pre-empted by a blocker.
+  //
   // Iterative-calculation driver. When the bound workbook has Excel's
   // "Enable iterative calculation" option on, a formula anchored at a known
   // cell is evaluated as a fixed-point iteration rather than once: each pass
@@ -753,8 +933,13 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   // drives the loop; nested re-entry (`resolve_ref`) keeps the ordinary
   // single-pass behaviour.
   Value v = Value::blank();
-  if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() && ctx.current_sheet() != nullptr &&
-      ctx.workbook() != nullptr && ctx.workbook()->iterative_options().enabled) {
+  parser::Reference whole_axis_top{};
+  parser::Reference whole_axis_bottom{};
+  if (is_top_level && whole_axis_declared_rect(node, &whole_axis_top, &whole_axis_bottom)) {
+    v = evaluate_whole_axis_reference(whole_axis_top, whole_axis_bottom, arena, registry, ctx_with_counters);
+  } else if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() &&
+             ctx.current_sheet() != nullptr && ctx.workbook() != nullptr &&
+             ctx.workbook()->iterative_options().enabled) {
     const IterativeOptions& iopts = ctx.workbook()->iterative_options();
     const std::uint32_t max_iter = iopts.max_iterations == 0U ? 1U : iopts.max_iterations;
     const Sheet* anchor_sheet = ctx.current_sheet();
@@ -817,7 +1002,12 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   if (v.is_array() && ctx.mutable_sheet() == nullptr && ctx.has_formula_cell() && ctx.current_sheet() != nullptr) {
     const std::uint32_t rows = v.as_array_rows();
     const std::uint32_t cols = v.as_array_cols();
-    if (ctx.current_sheet()->spill_would_collide(ctx.formula_row(), ctx.formula_col(), rows, cols)) {
+    // `probe_spill_footprint` gives the same verdict as the committing path
+    // at a cost proportional to what the sheet stores rather than to the
+    // rectangle's area, which matters now that a grid-axis result can reach
+    // here with 1,048,576 cells.
+    if (ctx.current_sheet()->probe_spill_footprint(ctx.formula_row(), ctx.formula_col(), rows, cols) !=
+        Sheet::SpillAdmission::kAdmissible) {
       return Value::error(ErrorCode::Spill);
     }
   }

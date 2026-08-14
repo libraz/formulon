@@ -85,8 +85,13 @@ SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry*
     case NodeKind::Literal:
     case NodeKind::ErrorLiteral:
     case NodeKind::ErrorPlaceholder:
-    case NodeKind::Ref:
       return SpillPotential::kNever;
+    case NodeKind::Ref:
+      // `A:A` / `1:1` parse as a single `Ref` carrying a whole-axis flag,
+      // and standing alone they spill the declared grid-axis rectangle. Only
+      // a genuinely bounded single-cell reference is a non-producer.
+      return (root.as_ref().is_full_col || root.as_ref().is_full_row) ? SpillPotential::kMaySpill
+                                                                      : SpillPotential::kNever;
     case NodeKind::Ref3D:
       // A 3-D single-cell tail still expands to one value per sheet when
       // the endpoint span contains multiple sheets; without workbook order

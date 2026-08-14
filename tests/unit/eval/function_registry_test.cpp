@@ -155,6 +155,17 @@ TEST(FunctionRegistry, SpillPotentialHonoursScalarizationAndBroadcast) {
   EXPECT_TRUE(FormulaMaySpill("=CUSTOMSPILL(1)"));
 }
 
+TEST(FunctionRegistry, SpillPotentialCoversBareWholeAxisReferences) {
+  // A bare whole-axis reference spills the declared grid-axis rectangle, so
+  // the partial-recalc index has to keep it as a potential producer. `A:A`
+  // and `1:1` parse as a single `Ref`, which is otherwise a non-producer.
+  EXPECT_TRUE(FormulaMaySpill("=A:A"));
+  EXPECT_TRUE(FormulaMaySpill("=1:1"));
+  EXPECT_TRUE(FormulaMaySpill("=A:C"));
+  EXPECT_TRUE(FormulaMaySpill("=1:2"));
+  EXPECT_FALSE(FormulaMaySpill("=A1"));
+}
+
 TEST(FunctionRegistry, SpillPotentialCoversLazyReturnShapes) {
   EXPECT_FALSE(FormulaMaySpill("=DATE(2020,1,1)"));
   EXPECT_TRUE(FormulaMaySpill("=DATE(SEQUENCE(1,2),1,1)"));

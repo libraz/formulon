@@ -691,5 +691,131 @@ TEST(SheetReadRange, ReversedOrOutOfRangeRectangleAppendsNothing) {
   EXPECT_TRUE(formula_indices.empty());
 }
 
+// ---------------------------------------------------------------------------
+// Admission probing without materialising the footprint
+// ---------------------------------------------------------------------------
+//
+// A producer whose result would be refused should learn that before building
+// it. For a footprint the size of a grid axis the difference is 1,048,576
+// cells against a handful, so these tests pin both the verdict and the work
+// it took to reach it.
+
+TEST(SheetSpillTest, ProbeAcceptsAClearFootprint) {
+  Sheet s("Sheet1");
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, 4U, 2U), Sheet::SpillAdmission::kAdmissible);
+}
+
+TEST(SheetSpillTest, ProbeReportsAFootprintThatLeavesTheGrid) {
+  Sheet s("Sheet1");
+  // A whole-column rectangle only fits when it starts at row 1; one row down
+  // its far edge is past the last row of the grid.
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U), Sheet::SpillAdmission::kAdmissible);
+  EXPECT_EQ(s.probe_spill_footprint(1U, 25U, Sheet::kMaxRows, 1U), Sheet::SpillAdmission::kOutsideGrid);
+  // Same rule on the other axis for a whole-row rectangle.
+  EXPECT_EQ(s.probe_spill_footprint(4U, 0U, 2U, Sheet::kMaxCols), Sheet::SpillAdmission::kAdmissible);
+  EXPECT_EQ(s.probe_spill_footprint(4U, 1U, 2U, Sheet::kMaxCols), Sheet::SpillAdmission::kOutsideGrid);
+  // Degenerate shapes never commit either.
+  EXPECT_EQ(s.probe_spill_footprint(0U, 0U, 0U, 1U), Sheet::SpillAdmission::kOutsideGrid);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 0U, 1U, 0U), Sheet::SpillAdmission::kOutsideGrid);
+}
+
+TEST(SheetSpillTest, ProbeFindsABlockerFarOutsideThePopulatedData) {
+  Sheet s("Sheet1");
+  // Three cells of data at the top of column A, and one unrelated cell 500
+  // rows down in the column the rectangle would occupy. The blocker sits far
+  // below everything else, which is what distinguishes the declared
+  // rectangle from the sheet's used range.
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  s.set_cell_value(1U, 0U, Value::number(2.0));
+  s.set_cell_value(2U, 0U, Value::number(3.0));
+  s.set_cell_value(499U, 25U, Value::number(7.0));
+
+  std::uint64_t steps = 0;
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U, &steps), Sheet::SpillAdmission::kBlocked);
+
+  // The verdict alone cannot tell a sparse scan from an area-proportional
+  // one — both refuse, one merely takes a million probes to do it. Bound the
+  // work by what the sheet stores, well under the 1,048,576-cell rectangle.
+  EXPECT_LE(steps, 8U) << "admission scan must follow the stored cells, not the rectangle's area";
+}
+
+TEST(SheetSpillTest, ProbeRefusesAFullWidthRectangleOnABlockedRow) {
+  Sheet s("Sheet1");
+  s.set_cell_value(2U, 0U, Value::number(3.0));
+  s.set_cell_value(2U, 1U, Value::number(30.0));
+  s.set_cell_value(4U, 25U, Value::number(9.0));  // blocker inside the full-width span
+
+  EXPECT_EQ(s.probe_spill_footprint(4U, 0U, 1U, Sheet::kMaxCols), Sheet::SpillAdmission::kBlocked);
+  EXPECT_EQ(s.probe_spill_footprint(5U, 0U, 1U, Sheet::kMaxCols), Sheet::SpillAdmission::kAdmissible);
+
+  // No step bound here on purpose. The proportionality claim lives on the row
+  // axis: a row's cells are one dense run, so a blocker inside the span is
+  // reached in as many steps as the run is wide either way, and an occupied
+  // cell short-circuits the sweep at the first hit. Asserting a bound here
+  // would hold whatever the scan does, which is worth less than no assertion
+  // because it reads like coverage. The bound that does discriminate is in
+  // `ProbeFindsABlockerFarOutsideThePopulatedData`.
+}
+
+TEST(SheetSpillTest, ProbeLeavesTheSheetUnchanged) {
+  Sheet s("Sheet1");
+  s.set_cell_value(499U, 25U, Value::number(7.0));
+  const std::uint64_t revision_before = s.cell_enumeration_revision();
+  const std::size_t cells_before = s.cell_count();
+
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U), Sheet::SpillAdmission::kBlocked);
+  EXPECT_EQ(s.probe_spill_footprint(0U, 25U, 2U, 1U), Sheet::SpillAdmission::kAdmissible);
+
+  // No blocked record, no #SPILL! written, no row materialised by probing.
+  EXPECT_TRUE(s.blocked_spill_footprints().empty());
+  EXPECT_EQ(s.cell_count(), cells_before);
+  EXPECT_EQ(s.cell_enumeration_revision(), revision_before);
+  EXPECT_EQ(s.spill_region_at_anchor(0U, 25U), nullptr);
+}
+
+TEST(SheetSpillTest, RejectRecordsTheFootprintTheReleasePathRetries) {
+  Sheet s("Sheet1");
+  s.set_cell_value(499U, 25U, Value::number(7.0));
+  ASSERT_EQ(s.probe_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U), Sheet::SpillAdmission::kBlocked);
+
+  s.reject_spill_footprint(0U, 25U, Sheet::kMaxRows, 1U);
+
+  // The anchor reads #SPILL! and the rectangle is remembered, which is what
+  // the blocked-spill release machinery retries once the blocker is gone.
+  const Value anchor = s.resolve_cell_value(0U, 25U);
+  ASSERT_TRUE(anchor.is_error());
+  EXPECT_EQ(anchor.as_error(), ErrorCode::Spill);
+  const std::vector<BlockedSpillFootprint> blocked = s.blocked_spill_footprints();
+  ASSERT_EQ(blocked.size(), 1U);
+  EXPECT_EQ(blocked[0].anchor_row, 0U);
+  EXPECT_EQ(blocked[0].anchor_col, 25U);
+  EXPECT_EQ(blocked[0].rows, Sheet::kMaxRows);
+  EXPECT_EQ(blocked[0].cols, 1U);
+}
+
+TEST(SheetSpillTest, CommitRefusalRecordsTheSameFootprintAsAnExplicitReject) {
+  // `commit_spill` and a caller that probes first and refuses on its own must
+  // leave the sheet in the same state, or the two paths drift.
+  Sheet s("Sheet1");
+  s.set_cell_value(1U, 0U, Value::number(9.0));
+  ASSERT_FALSE(s.commit_spill(0U, 0U, 3U, 1U, {Value::number(1.0), Value::number(2.0), Value::number(3.0)}));
+  const std::vector<BlockedSpillFootprint> from_commit = s.blocked_spill_footprints();
+
+  Sheet other("Sheet1");
+  other.set_cell_value(1U, 0U, Value::number(9.0));
+  ASSERT_EQ(other.probe_spill_footprint(0U, 0U, 3U, 1U), Sheet::SpillAdmission::kBlocked);
+  other.reject_spill_footprint(0U, 0U, 3U, 1U);
+  const std::vector<BlockedSpillFootprint> from_reject = other.blocked_spill_footprints();
+
+  ASSERT_EQ(from_commit.size(), 1U);
+  ASSERT_EQ(from_reject.size(), 1U);
+  EXPECT_EQ(from_commit[0].anchor_row, from_reject[0].anchor_row);
+  EXPECT_EQ(from_commit[0].anchor_col, from_reject[0].anchor_col);
+  EXPECT_EQ(from_commit[0].rows, from_reject[0].rows);
+  EXPECT_EQ(from_commit[0].cols, from_reject[0].cols);
+  EXPECT_EQ(s.resolve_cell_value(0U, 0U), other.resolve_cell_value(0U, 0U));
+}
+
 }  // namespace
 }  // namespace formulon

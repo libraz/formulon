@@ -521,11 +521,31 @@ TEST(TreeWalkerRefs, CrossSheetReturnsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(TreeWalkerRefs, WholeColumnReturnsValue) {
+TEST(TreeWalkerRefs, WholeRowStandingAloneSpillsDeclaredRectangle) {
+  // A bare whole-axis reference is a spilling expression: its value is the
+  // array of the declared rectangle (the full grid width for a row span),
+  // not the populated extent and not an implicit intersection. The
+  // footprint and `#SPILL!` consequences are covered in
+  // `whole_axis_spill_test.cpp`, which drives the committing recalc path.
   Sheet sheet("Sheet1");
-  const Value v = EvalInSheet(sheet, "=A:A");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  sheet.set_cell_value(0, 0, Value::number(7.0));
+  const Value v = EvalInSheet(sheet, "=1:1");
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), Sheet::kMaxCols);
+  EXPECT_EQ(v.as_array_cells()[0].as_number(), 7.0);
+  EXPECT_EQ(v.as_array_cells()[1].as_number(), 0.0);
+}
+
+TEST(TreeWalkerRefs, WholeColumnBehindAnOperatorKeepsAnchorProjection) {
+  // Only the spilling position materialises the grid-axis rectangle; an
+  // operand keeps the top-left anchor projection so an operator cannot
+  // conjure a million cells per side.
+  Sheet sheet("Sheet1");
+  sheet.set_cell_value(0, 0, Value::number(7.0));
+  const Value v = EvalInSheet(sheet, "=A:C+1");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 8.0);
 }
 
 TEST(TreeWalkerRefs, RefInIfBranch) {

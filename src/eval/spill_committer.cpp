@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -34,8 +35,29 @@ Value SpillCommitter::commit(Value v) const {
   // to mask real cells in the former footprint.
   if (!v.is_array()) {
     if (sheet_ != nullptr) {
+      // One scalar is not a producer giving up its array shape: a `#SPILL!`
+      // means a producer measured its own footprint, refused it, and
+      // recorded the rectangle so the anchor can be retried once whatever
+      // occupies it goes away (`Sheet::reject_spill_footprint`). That record
+      // lives in the same table `clear_spill` empties, so it is captured
+      // here and re-applied below — the stale region still goes away and
+      // the release notification still fires, but the anchor keeps the
+      // rectangle it must be retried from. Only a `#SPILL!` pays for the
+      // lookup; every other scalar takes the original path untouched.
+      std::optional<BlockedSpillFootprint> refused;
+      if (v.is_error() && v.as_error() == ErrorCode::Spill) {
+        for (const BlockedSpillFootprint& blocked : sheet_->blocked_spill_footprints()) {
+          if (blocked.anchor_row == row_ && blocked.anchor_col == col_) {
+            refused = blocked;
+            break;
+          }
+        }
+      }
       notify_release();
       sheet_->clear_spill(row_, col_);
+      if (refused.has_value()) {
+        sheet_->reject_spill_footprint(row_, col_, refused->rows, refused->cols);
+      }
     }
     return v;
   }

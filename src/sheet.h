@@ -836,6 +836,62 @@ class Sheet {
   bool spill_would_collide(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
                            std::uint32_t cols) const noexcept;
 
+  /// Why a spill footprint would be refused, or that it would be accepted.
+  /// Both refusals surface as `#SPILL!` in a cell; they are reported apart
+  /// so a caller can tell "the rectangle leaves the grid" from "something
+  /// occupies it" without re-deriving either.
+  enum class SpillAdmission : std::uint8_t {
+    kAdmissible,
+    kOutsideGrid,
+    kBlocked,
+  };
+
+  /// Decides whether a `rows` x `cols` footprint anchored at `(anchor_row,
+  /// anchor_col)` could commit, **without building or committing any
+  /// values**.
+  ///
+  /// This is the admission half of `commit_spill` on its own, so a producer
+  /// whose result would be refused can learn that before materialising it.
+  /// That matters for a footprint the size of a grid axis: a whole-column
+  /// rectangle is 1,048,576 cells, and a caller that had to materialise one
+  /// to discover it is blocked would pay ~25 MB and a million writes for an
+  /// answer that is `#SPILL!`.
+  ///
+  /// The scan is proportional to what the sheet actually stores inside the
+  /// rectangle, not to the rectangle's area: it walks the stored rows or
+  /// probes the rectangle's rows, whichever set is smaller, and within a row
+  /// only the materialised run intersected with the column span. A blocker
+  /// far outside the populated data — the case that shows the footprint is
+  /// the full declared rectangle rather than the used range — is found at
+  /// the cost of the cells that exist, not the cells the rectangle spans.
+  ///
+  /// `scan_steps` (when non-null) receives the work the admission scan did:
+  /// one step per row visited or probed, plus one per cell inspected. It
+  /// exists so that proportionality is testable — an area-proportional
+  /// implementation returns the same verdict, only slower, so nothing but a
+  /// count distinguishes them. Counting inspected cells alone would not: a
+  /// scan that probes a million empty rows inspects almost nothing while
+  /// doing a million lookups, so the row visits have to be counted too.
+  ///
+  /// Pure: no cached state is built or updated, and the sheet is unchanged.
+  /// The only shared state touched is `spill_mutex_`, held for the read.
+  SpillAdmission probe_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                       std::uint32_t cols, std::uint64_t* scan_steps = nullptr) const noexcept;
+
+  /// Records a refused footprint: writes `#SPILL!` to the anchor cell and
+  /// remembers the rectangle so the anchor is retried once whatever occupies
+  /// it goes away.
+  ///
+  /// Callers that refuse a spill on their own — because `probe_spill_footprint`
+  /// told them to, and they skipped materialising the values — must route the
+  /// refusal through here rather than returning `#SPILL!` directly. Skipping
+  /// the registration leaves the anchor with no remembered rectangle, and the
+  /// blocked-spill release machinery then has nothing to retry when the
+  /// blocker is cleared. `commit_spill` refuses through this same body, so
+  /// the two paths cannot drift.
+  void reject_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                              std::uint32_t cols);
+
   /// Returns the spill region anchored at `(row, col)`, or `nullptr` when
   /// no region is anchored there. The returned pointer is valid until the
   /// next mutating call to the spill API (`commit_spill`, `clear_spill`)
@@ -1312,6 +1368,24 @@ class Sheet {
   /// `spill_would_collide` body; assumes `spill_mutex_` is held.
   bool spill_would_collide_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
                                   std::uint32_t cols) const noexcept;
+
+  /// `probe_spill_footprint` body; assumes `spill_mutex_` is held.
+  SpillAdmission probe_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                              std::uint32_t cols, std::uint64_t* scan_steps) const noexcept;
+
+  /// `reject_spill_footprint` body; assumes `spill_mutex_` is held.
+  void reject_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                     std::uint32_t cols);
+
+  /// True when a stored cell other than the anchor is occupied anywhere in
+  /// the half-open rectangle `[anchor_row, row_end) x [anchor_col, col_end)`.
+  /// Walks the stored rows or probes the rectangle's rows, whichever set is
+  /// smaller, so the cost follows the sheet's contents rather than the
+  /// rectangle's area. Adds one unit of work per row visited or probed and
+  /// per cell inspected to `*scan_steps` when it is non-null. Caller must
+  /// hold `spill_mutex_`.
+  bool footprint_holds_occupied_cell_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint64_t row_end,
+                                            std::uint64_t col_end, std::uint64_t* scan_steps) const noexcept;
 
   /// Clears committed spill regions but preserves blocked-footprint records.
   /// Structural row/column edits use this before remapping pending anchors;

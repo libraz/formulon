@@ -727,17 +727,157 @@ bool Sheet::spill_would_collide_locked(std::uint32_t anchor_row, std::uint32_t a
   // Scan stored cells last so a blank/default slot created by row growth does
   // not become a blocker. Formula cells and non-blank cached values remain
   // blockers, preserving the existing commit_spill semantics and metadata.
-  for (std::uint64_t row = anchor_row; row < row_end; ++row) {
-    for (std::uint64_t col = anchor_col; col < col_end; ++col) {
+  return footprint_holds_occupied_cell_locked(anchor_row, anchor_col, row_end, col_end, /*scan_steps=*/nullptr);
+}
+
+bool Sheet::footprint_holds_occupied_cell_locked(std::uint32_t anchor_row, std::uint32_t anchor_col,
+                                                 std::uint64_t row_end, std::uint64_t col_end,
+                                                 std::uint64_t* scan_steps) const noexcept {
+  const auto count_step = [&]() noexcept {
+    if (scan_steps != nullptr) {
+      ++*scan_steps;
+    }
+  };
+
+  // Inspect one stored row's materialised run where it overlaps the column
+  // span. `RowCells` holds a dense run starting at `first_col()`, so the
+  // overlap is a contiguous slice and the leading gap costs nothing.
+  const auto row_holds_blocker = [&](std::uint32_t row, const RowCells& cells) noexcept {
+    if (cells.empty()) {
+      return false;
+    }
+    const std::size_t first = std::max<std::size_t>(anchor_col, cells.first_col());
+    const std::size_t last = std::min<std::size_t>(static_cast<std::size_t>(col_end), cells.size());
+    for (std::size_t col = first; col < last; ++col) {
       if (row == anchor_row && col == anchor_col) {
         continue;
       }
-      if (IsCellOccupied(cell_at_locked(static_cast<std::uint32_t>(row), static_cast<std::uint32_t>(col)))) {
+      count_step();
+      if (IsCellOccupied(cells.find(static_cast<std::uint32_t>(col)))) {
         return true;
       }
     }
+    return false;
+  };
+
+  // Whichever of "walk the stored rows" and "probe each row of the rectangle"
+  // is smaller wins: the first is proportional to the sheet, the second to
+  // the rectangle. A whole-column footprint spans every row of the grid, so
+  // only the first strategy keeps it affordable. Mirrors the same choice in
+  // `RecalcEngine`'s ordering-edge walk.
+  const std::uint64_t rect_rows = row_end - anchor_row;
+  if (static_cast<std::uint64_t>(rows_.size()) <= rect_rows) {
+    for (const auto& [row, cells] : rows_) {
+      count_step();
+      if (static_cast<std::uint64_t>(row) < anchor_row || static_cast<std::uint64_t>(row) >= row_end) {
+        continue;
+      }
+      if (row_holds_blocker(row, cells)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  for (std::uint64_t row = anchor_row; row < row_end; ++row) {
+    count_step();
+    const auto it = rows_.find(static_cast<std::uint32_t>(row));
+    if (it == rows_.end()) {
+      continue;
+    }
+    if (row_holds_blocker(static_cast<std::uint32_t>(row), it->second)) {
+      return true;
+    }
   }
   return false;
+}
+
+Sheet::SpillAdmission Sheet::probe_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col,
+                                                   std::uint32_t rows, std::uint32_t cols,
+                                                   std::uint64_t* scan_steps) const noexcept {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  return probe_spill_footprint_locked(anchor_row, anchor_col, rows, cols, scan_steps);
+}
+
+Sheet::SpillAdmission Sheet::probe_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col,
+                                                          std::uint32_t rows, std::uint32_t cols,
+                                                          std::uint64_t* scan_steps) const noexcept {
+  if (scan_steps != nullptr) {
+    *scan_steps = 0;
+  }
+  // Same geometry rule the collision predicate applies, reported as its own
+  // verdict: a degenerate shape, an anchor off the grid, or a rectangle whose
+  // far edge leaves the grid can never commit.
+  if (rows == 0U || cols == 0U || !coord_in_grid(anchor_row, anchor_col)) {
+    return SpillAdmission::kOutsideGrid;
+  }
+  const std::uint64_t row_end = static_cast<std::uint64_t>(anchor_row) + rows;
+  const std::uint64_t col_end = static_cast<std::uint64_t>(anchor_col) + cols;
+  if (row_end > kMaxRows || col_end > kMaxCols) {
+    return SpillAdmission::kOutsideGrid;
+  }
+
+  // Spill rectangles and merged ranges are rectangle-intersection tests over
+  // their own tables, so they already cost their table size rather than the
+  // footprint's area; only the stored-cell sweep needed the sparse walk.
+  if (spill_table_ != nullptr) {
+    for (const auto& entry : spill_table_->by_anchor) {
+      const SpillRegion& region = entry.second;
+      if (region.anchor_row == anchor_row && region.anchor_col == anchor_col) {
+        continue;
+      }
+      const std::uint64_t region_row_end = static_cast<std::uint64_t>(region.anchor_row) + region.rows;
+      const std::uint64_t region_col_end = static_cast<std::uint64_t>(region.anchor_col) + region.cols;
+      if (static_cast<std::uint64_t>(anchor_row) < region_row_end &&
+          static_cast<std::uint64_t>(region.anchor_row) < row_end &&
+          static_cast<std::uint64_t>(anchor_col) < region_col_end &&
+          static_cast<std::uint64_t>(region.anchor_col) < col_end) {
+        return SpillAdmission::kBlocked;
+      }
+    }
+  }
+  for (const MergeRange& merge : merges_) {
+    if (merge.first_row > merge.last_row || merge.first_col > merge.last_col) {
+      continue;
+    }
+    const std::uint64_t merge_row_end = static_cast<std::uint64_t>(merge.last_row) + 1U;
+    const std::uint64_t merge_col_end = static_cast<std::uint64_t>(merge.last_col) + 1U;
+    if (static_cast<std::uint64_t>(anchor_row) < merge_row_end &&
+        static_cast<std::uint64_t>(merge.first_row) < row_end &&
+        static_cast<std::uint64_t>(anchor_col) < merge_col_end &&
+        static_cast<std::uint64_t>(merge.first_col) < col_end) {
+      return SpillAdmission::kBlocked;
+    }
+  }
+  if (footprint_holds_occupied_cell_locked(anchor_row, anchor_col, row_end, col_end, scan_steps)) {
+    return SpillAdmission::kBlocked;
+  }
+  return SpillAdmission::kAdmissible;
+}
+
+void Sheet::reject_spill_footprint(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                   std::uint32_t cols) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  reject_spill_footprint_locked(anchor_row, anchor_col, rows, cols);
+}
+
+void Sheet::reject_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_t anchor_col, std::uint32_t rows,
+                                          std::uint32_t cols) {
+  if (!coord_in_grid(anchor_row, anchor_col)) {
+    return;
+  }
+  // Surface #SPILL! at the anchor; preserve the existing literal and all
+  // other metadata at the colliding cell.
+  RowCells& row_cells = rows_[anchor_row];
+  Cell& anchor_slot = row_cells.ensure(anchor_col);
+  anchor_slot.cached_value = Value::error(ErrorCode::Spill);
+  if (spill_table_ == nullptr) {
+    spill_table_ = std::make_unique<SpillTable>();
+  }
+  // Remembering the rectangle is what lets the release machinery retry this
+  // anchor once the blocker goes away; dropping it strands the #SPILL!.
+  spill_table_->blocked_by_anchor[CellAddress{anchor_row, anchor_col}] =
+      BlockedSpillFootprint{anchor_row, anchor_col, rows, cols};
+  ++cell_enumeration_revision_;
 }
 
 Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noexcept {
@@ -820,19 +960,11 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   // existing region" case is intentionally idempotent.
   clear_spill_locked(anchor_row, anchor_col);
 
-  // Collision check is shared with the read-only/ad-hoc evaluation path.
+  // Admission is shared with the read-only/ad-hoc evaluation path and with
+  // producers that probe before materialising, so a refusal here and a
+  // refusal there record the same thing.
   if (spill_would_collide_locked(anchor_row, anchor_col, rows, cols)) {
-    // Surface #SPILL! at the anchor; preserve the existing literal and all
-    // other metadata at the colliding cell.
-    RowCells& row_cells = rows_[anchor_row];
-    Cell& anchor_slot = row_cells.ensure(anchor_col);
-    anchor_slot.cached_value = Value::error(ErrorCode::Spill);
-    if (spill_table_ == nullptr) {
-      spill_table_ = std::make_unique<SpillTable>();
-    }
-    spill_table_->blocked_by_anchor[CellAddress{anchor_row, anchor_col}] =
-        BlockedSpillFootprint{anchor_row, anchor_col, rows, cols};
-    ++cell_enumeration_revision_;
+    reject_spill_footprint_locked(anchor_row, anchor_col, rows, cols);
     return false;
   }
 
