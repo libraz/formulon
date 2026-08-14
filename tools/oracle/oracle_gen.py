@@ -24,11 +24,12 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # Local imports — accept both `python3 tools/oracle/oracle_gen.py` (no
 # package) and `python3 -m tools.oracle.oracle_gen` (package-style).
@@ -404,14 +405,67 @@ def _apply_divergence_metadata(
     return out
 
 
-def _write_environment_md(path: Path, env: EnvironmentInfo, iso_now: str) -> None:
+def _version_tuple(s: str) -> Tuple[int, ...]:
+    """Returns a comparable integer tuple from an Excel version string.
+
+    Mirrors ``cli.py``'s ``_version_tuple`` (duplicated rather than
+    imported: ``cli.py`` imports this module, so the reverse import
+    would be circular). Returns ``(0,)`` for strings with no leading
+    digit run, e.g. a hand-seeded placeholder version.
+    """
+
+    parts: List[int] = []
+    for chunk in re.split(r"[.\s(]+", s.strip()):
+        m = re.match(r"\d+", chunk)
+        if not m:
+            break
+        parts.append(int(m.group()))
+    return tuple(parts) or (0,)
+
+
+def _tree_wide_excel_version(golden_dir: Path, fallback: str) -> str:
+    """Returns the oldest ``environment.excel_version`` among every
+    committed golden in ``golden_dir``.
+
+    `ENVIRONMENT.md` documents itself as covering *all* of
+    `tests/oracle/golden/`, not just the suite(s) a given `oracle-gen`
+    invocation happened to touch. A per-suite `--suite` regeneration
+    only advances that one suite's stamp; the tree-level file must
+    keep following whichever committed suite is oldest, or
+    `make oracle-contribute` will tell a contributor whose Excel
+    matches that oldest suite that nothing needs regenerating.
+    """
+
+    versions: List[Tuple[Tuple[int, ...], str]] = []
+    for path in sorted(golden_dir.glob("*.golden.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        version = data.get("environment", {}).get("excel_version")
+        if not isinstance(version, str) or not version:
+            continue
+        parsed = _version_tuple(version)
+        if parsed == (0,):
+            # Not a parseable Microsoft 365 build (e.g. a hand-seeded
+            # placeholder) -- exclude it rather than let it collapse
+            # the tree-wide stamp down to "0".
+            continue
+        versions.append((parsed, version))
+    if not versions:
+        return fallback
+    return min(versions, key=lambda pair: pair[0])[1]
+
+
+def _write_environment_md(path: Path, env: EnvironmentInfo, iso_now: str, *, excel_version: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     body = (
         "# Oracle Environment\n\n"
-        "This file records the Excel version and locale last used to\n"
-        "regenerate `tests/oracle/golden/`. Reviewers should watch this\n"
-        "file on oracle-gen PRs to catch version-driven divergences early.\n\n"
-        f"- **Excel version**: `{env.excel_version}`\n"
+        "This file records the oldest Excel version any committed suite\n"
+        "in `tests/oracle/golden/` was generated against. Reviewers\n"
+        "should watch this file on oracle-gen PRs to catch\n"
+        "version-driven divergences early.\n\n"
+        f"- **Excel version**: `{excel_version}`\n"
         f"- **Excel locale**: `{env.excel_locale}`\n"
         f"- **date1904**: `{env.date1904}`\n"
         f"- **iterative**: `{env.iterative}`\n"
@@ -715,7 +769,15 @@ def main(argv: Optional[List[str]] = None) -> int:
                 if args.strict:
                     return exit_code
 
-        _write_environment_md(env_md_path, env, iso_now)
+        # Only advance the tree-level stamp on a genuine full-corpus,
+        # fully-successful run against the target's own committed golden
+        # directory. A `--suite`/`--case` filtered run, or one redirected
+        # to a scratch `--golden-dir`, only tells us about a slice of the
+        # tree and must not overwrite the file that documents the whole
+        # thing.
+        if not args.suite and not args.case and args.golden_dir is None and exit_code == 0:
+            excel_version = _tree_wide_excel_version(golden_dir, env.excel_version)
+            _write_environment_md(env_md_path, env, iso_now, excel_version=excel_version)
     return exit_code
 
 

@@ -20,6 +20,7 @@ CUBESETCOUNT	unavailable_stub	Requires a live OLAP cube connection; Formulon ret
 CUBEVALUE	unavailable_stub	Requires a live OLAP cube connection; Formulon returns a fixed #NAME? surface.
 DETECTLANGUAGE	unavailable_stub	Requires a cloud language-detection service; Formulon returns a fixed #NAME? surface.
 IMAGE	unavailable_stub	Requires image fetch/render host support; Formulon returns a fixed #VALUE! surface.
+INDIRECT	implemented	R1C1 style (a1=FALSE) is not decoded; INDIRECT(ref_text, FALSE) always returns #REF! instead of resolving the reference. See tests/divergence.yaml: indirect_r1c1_style_deferred.
 INFO	environment_bound	Returns host application, OS, open-workbook, and recalc-mode state.
 PY	unavailable_stub	Requires the Microsoft 365 hosted Python runtime; Formulon returns a fixed #NAME? surface.
 RTD	unavailable_stub	Requires an external Real-Time-Data provider; Formulon returns a fixed #N/A surface.

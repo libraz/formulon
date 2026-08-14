@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Unit tests for Mac Excel formula-assignment verification."""
+"""Unit tests for Mac Excel formula and workbook-option verification."""
 
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from tools.oracle.drivers import base, macos_excel, windows_excel
 
@@ -102,6 +103,157 @@ class _FakeWinApi:
 class _FakeApp:
     def __init__(self, api):
         self.api = api
+
+
+class _FakeDate1904Reference:
+    def __init__(self, value, *, readback=None, set_error=None, get_error=None):
+        self.value = value
+        self._readback_follows_set = readback is None
+        self.readback = value if self._readback_follows_set else readback
+        self.set_error = set_error
+        self.get_error = get_error
+        self.set_calls = []
+        self.get_calls = 0
+
+    def set(self, value):
+        self.set_calls.append(value)
+        if self.set_error is not None:
+            raise self.set_error
+        self.value = value
+        if self._readback_follows_set:
+            self.readback = value
+
+    def get(self):
+        self.get_calls += 1
+        if self.get_error is not None:
+            raise self.get_error
+        return self.readback
+
+
+class _FakeWorkbook:
+    def __init__(self, date_1904, sheets=None):
+        self.api = type("WorkbookApi", (), {"date_1904": date_1904})()
+        self.sheets = [] if sheets is None else sheets
+        self.close_calls = 0
+
+    def close(self):
+        self.close_calls += 1
+
+
+class _FakeIterationReference:
+    def __init__(self, value=False):
+        self.value = value
+        self.set_calls = []
+
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        self.set_calls.append(value)
+        self.value = value
+
+
+class _FakeSuiteApi(_FakeMacApi):
+    def __init__(self, value):
+        super().__init__(value)
+        self.iteration = _FakeIterationReference()
+
+
+class _FakeBooks:
+    def __init__(self, workbook):
+        self.workbook = workbook
+        self.add_calls = 0
+
+    def add(self):
+        self.add_calls += 1
+        return self.workbook
+
+
+class _FakeSuiteApp:
+    def __init__(self, workbook):
+        self.api = _FakeSuiteApi(16_385)
+        self.books = _FakeBooks(workbook)
+        self.calculate_calls = 0
+
+    def calculate(self):
+        self.calculate_calls += 1
+
+
+class MacExcelDate1904Test(unittest.TestCase):
+    def test_set_date1904_sets_and_reads_back_the_apple_script_reference(self) -> None:
+        date_1904 = _FakeDate1904Reference(False)
+
+        macos_excel._set_date1904(_FakeWorkbook(date_1904), True)
+
+        self.assertEqual(date_1904.set_calls, [True])
+        self.assertEqual(date_1904.get_calls, 1)
+
+    def test_set_date1904_rejects_a_mismatched_readback(self) -> None:
+        date_1904 = _FakeDate1904Reference(False, readback=False)
+
+        with self.assertRaisesRegex(RuntimeError, r"date_1904=True.*False"):
+            macos_excel._set_date1904(_FakeWorkbook(date_1904), True)
+
+        self.assertEqual(date_1904.set_calls, [True])
+        self.assertEqual(date_1904.get_calls, 1)
+
+    def test_set_date1904_propagates_setter_errors(self) -> None:
+        date_1904 = _FakeDate1904Reference(False, set_error=ValueError("setter failed"))
+
+        with self.assertRaisesRegex(ValueError, "setter failed"):
+            macos_excel._set_date1904(_FakeWorkbook(date_1904), True)
+
+        self.assertEqual(date_1904.get_calls, 0)
+
+    def test_set_date1904_propagates_readback_errors(self) -> None:
+        date_1904 = _FakeDate1904Reference(False, get_error=RuntimeError("readback failed"))
+
+        with self.assertRaisesRegex(RuntimeError, "readback failed"):
+            macos_excel._set_date1904(_FakeWorkbook(date_1904), True)
+
+        self.assertEqual(date_1904.set_calls, [True])
+        self.assertEqual(date_1904.get_calls, 1)
+
+
+class MacExcelDate1904RouteTest(unittest.TestCase):
+    def _oracle(self):
+        workbook = _FakeWorkbook(_FakeDate1904Reference(False), sheets=[_FakeSheet(_FakeAnchor(1))])
+        app = _FakeSuiteApp(workbook)
+        oracle = object.__new__(macos_excel.ExcelOracle)
+        oracle._app = app
+        return oracle, app, workbook
+
+    def test_batch_route_uses_shared_date1904_helper(self) -> None:
+        oracle, app, workbook = self._oracle()
+
+        with patch.object(macos_excel, "_set_date1904") as set_date1904:
+            self.assertEqual(oracle.run_suite("batch", [], date1904=True), [])
+
+        set_date1904.assert_called_once_with(workbook, True)
+        self.assertEqual(app.books.add_calls, 1)
+        self.assertEqual(workbook.close_calls, 1)
+
+    def test_per_case_workbook_route_uses_shared_date1904_helper(self) -> None:
+        oracle, app, workbook = self._oracle()
+        cases = [{"id": "cross-sheet", "formula": "=1", "setup": {}}]
+
+        with patch.object(macos_excel, "_set_date1904") as set_date1904:
+            results = oracle._run_suite_per_case_workbook("suite", cases, date1904=True, iterative=False)
+
+        self.assertEqual(results[0].kind, "number")
+        set_date1904.assert_called_once_with(workbook, True)
+        self.assertEqual(app.books.add_calls, 1)
+        self.assertEqual(workbook.close_calls, 1)
+
+    def test_per_case_date1904_failure_propagates_and_closes_workbook(self) -> None:
+        oracle, _app, workbook = self._oracle()
+        cases = [{"id": "cross-sheet", "formula": "=1", "setup": {}}]
+
+        with patch.object(macos_excel, "_set_date1904", side_effect=RuntimeError("date flag failed")):
+            with self.assertRaisesRegex(RuntimeError, "date flag failed"):
+                oracle._run_suite_per_case_workbook("suite", cases, date1904=True, iterative=False)
+
+        self.assertEqual(workbook.close_calls, 1)
 
 
 class MacExcelFormulaAssignmentTest(unittest.TestCase):

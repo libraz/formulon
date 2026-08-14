@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Formulon Oracle Compliance Status — 2026-05-17</title>
+<title>Formulon Oracle Compliance Status</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -154,9 +154,12 @@
     <span class="badge warn">EXTERNAL M365 PROBE PENDING</span>
   </h1>
   <div class="meta">
-    Snapshot: 2026-05-17 (test capture) &middot;
-    Branch: <code>develop</code> &middot;
-    HEAD: <code>8651b69</code>
+    The figures below are read directly off <code>tools/oracle/coverage_gap.py</code>,
+    <code>tools/oracle/divergence_check.py</code>,
+    <code>tools/oracle/golden_coverage_check.py</code>, and
+    <code>tools/oracle/closure_check.py --report --json</code>; re-run those
+    commands for the current numbers rather than trusting this page's
+    last manual update.
   </div>
 </header>
 
@@ -176,17 +179,19 @@
     <div class="stat">
       <div class="label">関数実装率</div>
       <div class="value ok">522 / 522</div>
-      <div class="note">100% (Excel 365 関数カタログ全網羅)</div>
+      <div class="note">100% (<code>coverage_gap.py</code>: Catalog 522, implemented 522)</div>
     </div>
     <div class="stat">
       <div class="label">Oracle カバレッジ</div>
       <div class="value ok">522 / 522</div>
-      <div class="note">100% (全関数に少なくとも 1 oracle source)</div>
+      <div class="note">100% (<code>coverage_gap.py</code>: with-oracle 522, pilot-candidates 0)</div>
     </div>
     <div class="stat">
       <div class="label">Closure 達成</div>
-      <div class="value ok">515 / 522</div>
-      <div class="note">98.7% (残 7件は metadata gap)</div>
+      <div class="value ok">517 / 522</div>
+      <div class="note">98.9%; <code>closure_check.py --report</code> の素の出力そのもの
+      (<code>closure_check: 517/522 closed, behavior-drift=ok</code>)。5 件の実質 OPEN は
+      下表参照</div>
     </div>
     <div class="stat">
       <div class="label">Pilot candidates</div>
@@ -194,9 +199,9 @@
       <div class="note">実装あり・oracle なし関数: ゼロ</div>
     </div>
     <div class="stat">
-      <div class="label">Formula track test</div>
-      <div class="value ok">4026 / 4026</div>
-      <div class="note">100% pass (166 skip = 全て documented divergence)</div>
+      <div class="label">Formula track oracle case ID</div>
+      <div class="value ok">4490 / 4490</div>
+      <div class="note"><code>golden_coverage_check.py</code>: 定義済み case ID が全て golden に存在</div>
     </div>
     <div class="stat">
       <div class="label">Workbook track test</div>
@@ -241,9 +246,9 @@
 </section>
 
 <section>
-  <h2>残る 7件の OPEN closure — 全て metadata 側の課題</h2>
-  <p>これらは <code>tools/oracle/closure_check.py</code> の 6条件のうち <code>behaviors_declared</code> または <code>golden_present</code>
-  が <code>FAIL</code> の関数。実装と Excel の出力が一致しないわけではない。</p>
+  <h2>残る 5件の OPEN closure</h2>
+  <p>これらは <code>tools/oracle/closure_check.py --report</code> の素の出力そのもの
+  (behavior-drift は全関数 <code>ok</code>)。実装と Excel の出力が一致しないわけではない。</p>
   <table>
     <thead>
       <tr>
@@ -257,26 +262,14 @@
       <tr>
         <td><code>ARRAYTOTEXT</code></td>
         <td>arraytotext</td>
-        <td>behaviors_declared, golden_present (65/66)</td>
-        <td>scalar 系 case の Excel 採取 + behavior 5件以上の宣言が未完</td>
-      </tr>
-      <tr>
-        <td><code>CHAR</code></td>
-        <td>char</td>
-        <td>golden_present (3/23)</td>
-        <td>filterxml 名のクロスファミリ命名漏れ (3 cases)</td>
-      </tr>
-      <tr>
-        <td><code>CONCAT</code></td>
-        <td>concat</td>
-        <td>golden_present (1/12)</td>
-        <td><code>filterxml_concat_function_return</code> の golden 未採取</td>
+        <td>behaviors_declared</td>
+        <td>behavior 1件のみ宣言 (5件必要)</td>
       </tr>
       <tr>
         <td><code>FILTERXML</code></td>
         <td>filterxml</td>
-        <td>behaviors_declared, golden_present (67/67)</td>
-        <td>spill 系のため Excel 採取側に未対応。実装側は PCRE2 ベースで完了済</td>
+        <td>behaviors_declared</td>
+        <td>behavior 1件のみ宣言 (5件必要)。実装側は PCRE2 ベースで完了済み</td>
       </tr>
       <tr>
         <td><code>GETPIVOTDATA</code></td>
@@ -285,69 +278,64 @@
         <td>behavior 1件のみ宣言 (5件必要)。case と golden は揃っている</td>
       </tr>
       <tr>
+        <td><code>JIS</code></td>
+        <td>width</td>
+        <td>behaviors_declared, cases_present, golden_present</td>
+        <td>Mac Excel ja-JP の JIS 関数バグにより oracle case 一式が撤去済み
+        (<code>tests/divergence.yaml</code> に対応する skip 登録なし)。
+        <code>tools/catalog/behaviors.yaml</code> 側の JIS behavior 宣言は、
+        DBCS 側に等価な宣言が既にあるものは削除、無いもの
+        (<code>ASC(JIS(...))</code> round-trip) は <code>DBCS</code> グループへ移し替え
+        済み — これで全関数一律の behavior-drift 誤報は解消したが、JIS 自身の
+        oracle カバレッジが無い事実は残る</td>
+      </tr>
+      <tr>
         <td><code>PHONETIC</code></td>
         <td>phonetic</td>
         <td>behaviors_declared</td>
         <td>behavior 1件のみ宣言。divergence 登録は 1件ある</td>
       </tr>
-      <tr>
-        <td><code>TRUE</code></td>
-        <td>true</td>
-        <td>golden_present (1/6)</td>
-        <td><code>filterxml_true_function_return</code> の golden 未採取</td>
-      </tr>
     </tbody>
   </table>
   <p style="margin-top:14px; font-size:13px; color:var(--muted);">
-    要するに <strong>FILTERXML の oracle 採取をやれば 4関数の OPEN が同時に閉じる</strong>
-    (CHAR / CONCAT / TRUE はクロスファミリ leakage が解消されるため)。
-    残り 3 (ARRAYTOTEXT, GETPIVOTDATA, PHONETIC) は behavior 宣言を 5件以上に整備するだけ。
+    ARRAYTOTEXT / FILTERXML / GETPIVOTDATA / PHONETIC は behavior 宣言を 5件以上に
+    整備するだけで閉じる。JIS は oracle 撤去に伴う恒久対応
+    (再カバー、または <code>tests/divergence.yaml</code> への正式な divergence-skip
+    登録) の決定が別途必要。
   </p>
 </section>
 
 <section>
-  <h2>Divergence 登録 (102 entries)</h2>
+  <h2>Divergence 登録</h2>
+  <p>数値は <code>tools/oracle/divergence_check.py</code> の出力そのもの:</p>
   <div class="grid">
     <div class="stat">
-      <div class="label">skip-oracle 総数</div>
-      <div class="value">92</div>
-      <div class="note">うち全 target 対象 86、target scoped 6</div>
+      <div class="label">entries</div>
+      <div class="value">82</div>
+      <div class="note">tests/divergence.yaml のトップレベル entries 件数</div>
     </div>
     <div class="stat">
-      <div class="label">tolerance widening</div>
-      <div class="value">6</div>
-      <div class="note">主に transcendental の ±1 ulp ドリフト</div>
+      <div class="label">oracle case ID (skip 展開後)</div>
+      <div class="value">4563</div>
+      <div class="note">suite/ids 選択子を個々の case ID に展開した延べ件数</div>
     </div>
     <div class="stat">
-      <div class="label">win-365-ja_JP scoped</div>
-      <div class="value">6</div>
-      <div class="note">PageBreakPreview COM quirk 専用 (今回追加)</div>
+      <div class="label">documented non-oracle entries</div>
+      <div class="value">13</div>
+      <div class="note">scope: unit-test / fixture / deferred-feature 等</div>
+    </div>
+    <div class="stat">
+      <div class="label">pending reprobes</div>
+      <div class="value warn">11</div>
+      <div class="note"><code>--strict</code> はこの 11 件で非 0 終了。すべて理由付きで
+      <code>unverified (...)</code> スタンプを持ち、"検証済み" を偽装していない</div>
     </div>
   </div>
-
-  <h3>skip カテゴリ別 (formula track oracle 4026 中 166 skip)</h3>
-  <table>
-    <thead>
-      <tr><th>カテゴリ</th><th>件数</th><th>理由</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>external_stubs (WEBSERVICE, IMAGE 等)</td><td class="num">30</td><td>外部 HTTP / 画像 fetch — sandbox では検証不能</td></tr>
-      <tr><td>width (JIS / DBCS)</td><td class="num">28</td><td>Mac Excel ja-JP の JIS 関数バグ (#NAME?返却)</td></tr>
-      <tr><td>encodeurl</td><td class="num">14</td><td>URL encoder の Mac/Win 微差 (パーセント表記)</td></tr>
-      <tr><td>filterxml</td><td class="num">12</td><td>spill 出力で Excel 採取 pipeline 未対応</td></tr>
-      <tr><td>volatile (NOW/TODAY/RAND)</td><td class="num">10</td><td>本質的に非再現</td></tr>
-      <tr><td>info_function</td><td class="num">10</td><td>INFO("system") 等の host-bound 値</td></tr>
-      <tr><td>regression_advanced</td><td class="num">6</td><td>LINEST/LOGEST stats=TRUE の Excel 出力配置差</td></tr>
-      <tr><td>lambda</td><td class="num">6</td><td>BYCOL/MAP/SCAN の error propagation 順序</td></tr>
-      <tr><td>info</td><td class="num">6</td><td>xlwings 空文字 / ISFORMULA #VALUE 経由 artefact</td></tr>
-      <tr><td>pivotby / groupby</td><td class="num">8</td><td>Excel 365 の最新 lambda 形式採取未対応</td></tr>
-      <tr><td>forecast_ets</td><td class="num">4</td><td>季節性 lambda 系の Excel 配置差</td></tr>
-      <tr><td>engineering_special</td><td class="num">4</td><td>BESSELI/J の Excel A&S 多項式 ±1e-7 drift</td></tr>
-      <tr><td>dynamic_array / shape / lazy_forms / text_format / text_regex / countif_edges</td><td class="num">12</td><td>各 spill / format / 正規表現の細かな採取差</td></tr>
-      <tr><td>example_smoke</td><td class="num">2</td><td>smoke test (feature 無し)</td></tr>
-      <tr><th>合計</th><th class="num">166</th><th></th></tr>
-    </tbody>
-  </table>
+  <p style="font-size:13px; color:var(--muted);">
+    カテゴリ別の内訳が必要な場合は <code>tests/divergence.yaml</code> を直接参照する
+    こと。手書きの集計テーブルは entries の追加・削除ごとに追従できず drift の
+    温床になるため、このページでは維持しない。
+  </p>
 
   <h3>Historical workbook reference (not active coverage)</h3>
   <table>
@@ -361,40 +349,6 @@
       <tr><td><code>scale_50_flat_rows</code></td><td>print_matrix</td></tr>
     </tbody>
   </table>
-</section>
-
-<section>
-  <h2>最近の主要マイルストーン</h2>
-  <details open>
-    <summary>2026-05-17 &mdash; Print oracle 完全閉鎖 (commit <code>4e4a9ce</code>, <code>8651b69</code>)</summary>
-    <div>
-      <ul>
-        <li><strong>print_titles fix</strong>: <code>src/print/pagination.cpp</code> に <code>max(actual_title_h, 5×default_row_h)</code> の floor を追加。4 cases pass。</li>
-        <li><strong>scale&le;50 quirk</strong>: 6 cases を <code>applies_to: [win-365-ja_JP]</code> で divergence-skip 登録。</li>
-        <li><strong>Skip plumbing</strong>: workbook oracle runner / test に formula track 同様の <code>skipped_reason</code> 経路を実装。</li>
-        <li><strong>Pre-existing stale tests</strong>: 5 unit tests の expectation を新 model に合わせて更新。</li>
-        <li><strong>Schema validator</strong>: <code>workbook_case_schema.py</code> が <code>"skipped"</code> を受理するよう拡張。</li>
-      </ul>
-    </div>
-  </details>
-  <details>
-    <summary>2026-05-17 早朝 &mdash; Round-3 Windows COM driver stabilization (commit <code>84d6130</code>)</summary>
-    <div>
-      <ul>
-        <li><code>ResetAllPageBreaks</code> + <code>DisplayPageBreaks=False</code> でアプリ scope の状態リセット</li>
-        <li>PBP 切替後に <code>ActiveWindow.Zoom=60</code> を pin (PBP factory default)</li>
-        <li><code>Calculate</code> + <code>ScreenUpdating</code> トグルで layout 確定</li>
-        <li>H/V break collection の dummy touch でキャッシュ pre-warm</li>
-        <li>Round-2 で再現した同 spec 別 golden 問題が解消、identical specs &rArr; identical goldens</li>
-      </ul>
-    </div>
-  </details>
-  <details>
-    <summary>2026-05-16 &mdash; Pivot oracle 完全閉鎖 (28/28)</summary>
-    <div>
-      Pivot locale layer (ja-JP ラベル / "合計 / Amount" 形式)、tabular/outline layout、grand-totals 整備で pivot 系 case 全て pass。
-    </div>
-  </details>
 </section>
 
 <section>
@@ -421,10 +375,13 @@
   <h2>今後の作業 (実装外)</h2>
   <p>oracle の基盤と記録は整備済みだが、workbook track の外部観測と closure 100% は未完了。通常 CTest は pending-aware 検査のみを実行し、strict な <code>--require-active</code> gate は <code>FORMULON_ORACLE_RELEASE_GATES=ON</code> の release 用設定で明示的に有効化する。以下が残:</p>
   <ol>
-    <li><strong>FILTERXML golden 採取</strong> (PCRE2 spill 出力の Excel 比較 pipeline 整備)
-      &rArr; FILTERXML / CHAR / CONCAT / TRUE 4関数の OPEN が同時に閉じる</li>
-    <li><strong>Behavior taxonomy 整備</strong> (ARRAYTOTEXT / GETPIVOTDATA / PHONETIC を 5件以上に拡充)
-      &rArr; 残り 3関数の OPEN が閉じる &rArr; 522/522 closure</li>
+    <li><strong>Behavior taxonomy 整備</strong> (ARRAYTOTEXT / FILTERXML / GETPIVOTDATA / PHONETIC を
+      5件以上に拡充) &rArr; この 4関数の OPEN が閉じる。FILTERXML 自体の PCRE2 実装は
+      完了済みで、不足しているのは behavior 宣言のみ</li>
+    <li><strong>JIS oracle 戦略の決定</strong>: Mac Excel ja-JP の JIS 関数バグにより撤去済みの
+      oracle case 一式をどう扱うか（再採取するか、恒久的な divergence-skip として
+      <code>tests/divergence.yaml</code> に登録し <code>tools/catalog/behaviors.yaml</code> の
+      JIS behavior 宣言を追従整理するか）を決め、closure を通す</li>
     <li><strong>Windows M365 workbook probe</strong>: 製品確認済み host で
       <code>tools/oracle/provenance.py check</code> 後、
       <code>tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden</code>
@@ -435,9 +392,12 @@
 </section>
 
 <footer>
-  Generated 2026-05-17 &middot; Formulon develop &middot;
-  Metadata refreshed 2026-08-05: <code>tests/divergence.yaml</code> currently has 102 entries.
-  Source: <code>tools/oracle/closure_check.py</code>, <code>tests/divergence.yaml</code>, ctest run
+  This page is hand-maintained. Regenerate the numbers above with
+  <code>tools/oracle/coverage_gap.py</code>,
+  <code>tools/oracle/divergence_check.py</code>,
+  <code>tools/oracle/golden_coverage_check.py</code>, and
+  <code>tools/oracle/closure_check.py --report --json</code> before trusting
+  this page for a release decision.
 </footer>
 
 </div>

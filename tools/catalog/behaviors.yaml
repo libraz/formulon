@@ -10011,6 +10011,17 @@ groups:
         probe: "=ASC(\"漢字\")"
         expected: impl
 
+  # `JIS` has no behaviors group below: it is a UI-only ja-JP formula-bar
+  # spelling that Excel rewrites to `DBCS` before storing or evaluating
+  # (see tests/oracle/cases/width.yaml:32-33), and both names resolve to
+  # the same Jis() backend in src/eval/builtins/text_width.cpp. The
+  # oracle case suite that used to probe `JIS(...)` directly was retired
+  # (Mac Excel ja-JP returns #NAME? for it), so the four behaviors that
+  # duplicated a `DBCS`-spelled equivalent below were removed rather than
+  # left pointing at cases that no longer exist, and the one behavior
+  # without a `DBCS` equivalent ("ASC(JIS(...)) round-trip") was moved
+  # into the `DBCS` group below as "ASC(DBCS(...)) round-trip", which has
+  # live oracle coverage (`dbcs_round_trip`).
   - function: "DBCS"
     aspect: "halfwidth -> fullwidth conversion (alias of JIS)"
     behaviors:
@@ -10029,31 +10040,9 @@ groups:
       - name: "kanji passthrough (unchanged)"
         probe: "=DBCS(\"漢字\")"
         expected: impl
-
-  - function: "JIS"
-    aspect: "halfwidth -> fullwidth conversion (Japanese)"
-    behaviors:
-      # Mac Excel 16.108.1 ja-JP returns #NAME? for every JIS call (verified
-      # 2026-04-26). All JIS-named cases live behind skip-oracle entries in
-      # tests/divergence.yaml; the impl is verified through the parallel DBCS
-      # cases (DBCS and JIS resolve to the same Jis() backend in
-      # src/eval/builtins/text_width.cpp). Hence expected=diverged for every
-      # behavior here.
-      - name: "halfwidth ASCII -> fullwidth"
-        probe: "=JIS(\"ABC 123\")"
-        expected: diverged
-      - name: "voiced halfwidth katakana recomposes"
-        probe: "=JIS(\"ｶﾞ\")"
-        expected: diverged
-      - name: "fullwidth passthrough (idempotent)"
-        probe: "=JIS(\"ＡＢＣ\")"
-        expected: diverged
-      - name: "halfwidth katakana row -> fullwidth katakana"
-        probe: "=JIS(\"ｱｲｳｴｵ\")"
-        expected: diverged
-      - name: "ASC(JIS(...)) round-trip"
-        probe: "=ASC(JIS(\"ABC123\"))"
-        expected: diverged
+      - name: "ASC(DBCS(...)) round-trip"
+        probe: "=ASC(DBCS(\"ABC123\"))"
+        expected: impl
 
   # -------------------------------------------------------------------------
   # Accrued-interest and depreciation family

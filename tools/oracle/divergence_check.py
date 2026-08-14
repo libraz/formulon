@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -61,13 +62,43 @@ def load_case_ids() -> set[str]:
     return load_case_catalog()[0]
 
 
+_PLACEHOLDER_VERSION_RE = re.compile(r"16\.xx\.x", re.IGNORECASE)
+_M365_BUILD_RE = re.compile(r"16\.\d+(\.\d+)?")
+
+
 def is_pending_stamp(value: Any) -> bool:
-    """Return whether the supplied stamp says it still needs live Excel."""
+    """Return whether the supplied stamp says it still needs live Excel.
+
+    A verified stamp must be a bare Microsoft 365 build string, e.g.
+    ``"16.111.2"`` or ``"16.112"``. Everything else counts as pending,
+    including three specific non-evidence shapes CONTRIBUTING.md and
+    tests/oracle/variants/win-365-ja_JP/ENVIRONMENT.md call out by name:
+
+    - The literal ``"16.0"``. ``Application.Version`` reports this same
+      bare major.0 string for every Office SKU from 2016 through 365 --
+      it is not a build number and does not distinguish an Office 2019
+      capture (which CONTRIBUTING.md forbids merging) from a genuine
+      Microsoft 365 one.
+    - The doc-template placeholder shape ``"16.xx.x (Build ...)"``.
+    - Anything that isn't a bare ``16.<build>[.<patch>]`` string, e.g. a
+      prose wrapper (``"Excel 365 (Mac, ja-JP, 16.111.2)"``) or a stamp
+      that recorded a capture date instead of a build number
+      (``"Excel 365 (Mac, ja-JP, 2026-07)"``). Both are semantically
+      empty for stale-detection purposes even though they parse as
+      non-empty strings.
+    """
 
     if not isinstance(value, str) or not value.strip():
         return True
-    normalized = value.strip().lower()
-    return "unverified" in normalized or "needs live" in normalized or normalized == "unknown"
+    normalized = value.strip()
+    lowered = normalized.lower()
+    if "unverified" in lowered or "needs live" in lowered or lowered == "unknown":
+        return True
+    if _PLACEHOLDER_VERSION_RE.search(normalized):
+        return True
+    if normalized == "16.0":
+        return True
+    return _M365_BUILD_RE.fullmatch(normalized) is None
 
 
 def validate(path: Path, *, strict: bool) -> int:

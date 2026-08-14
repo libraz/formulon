@@ -2,7 +2,7 @@
 """Mac Excel 365 oracle driver.
 
 Drives Excel.app through xlwings to evaluate Formulon oracle cases under
-controlled options (manual calc / iterative off / 1904 off). The driver is
+controlled options (manual calc / iterative off / per-workbook date system). The driver is
 intentionally small — the caller (`oracle_gen.py`) handles case loading,
 divergence filtering, and golden JSON emission.
 
@@ -17,17 +17,16 @@ have Automation permission for "System Events" + "Microsoft Excel".
 - `screen_updating = False` — large batches are 10-20x faster without it.
 - `display_alerts = False` — suppresses dialogs that would otherwise block
   the AppleEvent thread.
-- `date_1904 = False` per workbook (set after `books.add()`).
+- `date_1904` is set and read back per workbook through the Mac
+  AppleScript reference immediately after `books.add()`.
 - `iteration = False` on the app. Iterative cases flip this locally and
   restore it.
 
 ## Batch layout
 
-Each suite is written to a single worksheet. Setup cells are written at
-their absolute A1 address (as given in the YAML). Formulas under test are
-written at column Z, one per row (Z1 = case[0].formula, Z2 = case[1]...).
-If any case's `setup` already writes to column Z the driver detects the
-collision and picks the next unused column (AA, AB, ...).
+Each suite is written to one workbook with one worksheet per case. Setup
+cells are written at their absolute A1 address (as given in the YAML), and
+the formula under test is written to Z1 on that case's worksheet.
 
 After writing, a single `app.calculate()` resolves the whole sheet; results
 are then read in a second pass and packaged into `CaseResult` records.
@@ -75,6 +74,24 @@ def _set_iteration(app, enabled: bool) -> None:
     """Set Mac Excel's application-level iterative-calculation setting."""
 
     app.api.iteration.set(enabled)
+
+
+def _set_date1904(wb, enabled: bool) -> None:
+    """Set and verify a workbook's Mac Excel 1904 date-system flag.
+
+    On macOS, ``wb.api.date_1904`` is an AppleScript reference rather than a
+    normal Python attribute.  Assigning to it directly can leave the
+    workbook's date system unchanged without raising, so use the reference's
+    explicit ``set`` / ``get`` operations and reject a mismatched readback.
+    Exceptions from either AppleScript operation deliberately propagate.
+    """
+
+    expected = bool(enabled)
+    date_1904 = wb.api.date_1904
+    date_1904.set(expected)
+    actual = date_1904.get()
+    if actual != expected:
+        raise RuntimeError(f"Excel rejected workbook date_1904={expected!r}: read back {actual!r}")
 
 
 class _FormulaRetentionError(RuntimeError):
@@ -236,8 +253,10 @@ def _classify_value(cell) -> CaseResult:
     v = cell.value
     # Datetime must come before bool/int because `datetime` is distinct
     # from `int` in Python, but xlwings may return a `date` (no time) for
-    # pure DATE() results — both are coerced to the Excel serial so the
-    # golden carries a number kind (matching Formulon's Value::Number).
+    # pure DATE() results. Both use the shared 1900-system conversion so the
+    # golden carries a number kind (matching Formulon's Value::Number). The
+    # classifier has no workbook epoch metadata; 1904 cases should therefore
+    # expose date values through a numeric/boolean formula such as N(DATE()).
     if isinstance(v, _dt.datetime):
         return CaseResult(id="", kind="number", value=_datetime_to_serial(v))
     if isinstance(v, _dt.date):  # pragma: no cover - xlwings mostly returns datetime
@@ -434,10 +453,7 @@ class ExcelOracle(OracleDriver):
         try:
             # Pin per-workbook options before any formula touches volatile
             # state (NOW/TODAY, date arithmetic).
-            try:
-                wb.api.date1904 = date1904
-            except Exception:
-                pass
+            _set_date1904(wb, date1904)
             prior_iter = None
             try:
                 prior_iter = _get_iteration(self._app)
@@ -542,11 +558,11 @@ class ExcelOracle(OracleDriver):
             for case in cases:
                 wb = self._app.books.add()
                 try:
+                    # Pin the workbook date system before writing any setup or
+                    # formula. _set_date1904 intentionally propagates
+                    # AppleScript failures instead of marking them skipped.
+                    _set_date1904(wb, date1904)
                     try:
-                        try:
-                            wb.api.date1904 = date1904
-                        except Exception:
-                            pass
                         sht = wb.sheets[0]
                         setup = case.get("setup") or {}
                         _apply_merges(sht, case.get("merges") or [])
