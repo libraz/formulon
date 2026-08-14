@@ -3,8 +3,9 @@
 # Develop-branch checks layered on top of ci.yml so a red `develop` is
 # caught before it is fast-forwarded onto `main`:
 #
-#   - format : `make format-check` — clang-format (C++), ruff (Python),
-#     and biome (.mjs / .d.ts) dry-runs. Hard gate (binary check).
+#   - format : `make format-check` (clang-format, ruff format --check,
+#     biome) followed by `make lint` (ruff check; clang-tidy self-skips
+#     without a build directory). Hard gate (binary check).
 #   - native-fast : Debug build + the fast ctest suite, gated by the
 #     same allowlist ci.yml uses (tools/ci/expected_flakes.txt). ci.yml's
 #     native job runs only on `main`, so without this a develop push gets
@@ -22,7 +23,9 @@
 # policy. It carries a large pre-existing warnings backlog that would
 # never realistically pass `-Werror`, and per CLAUDE.md "CI vs. local
 # development" tunable-threshold signals belong as `tools/dev/` scripts,
-# not as CI pass/fail gates. Local invocation: `make lint`.
+# not as CI pass/fail gates. `make lint` reports it as advisory and never
+# fails on it, so running that target here gates on ruff alone; the C++
+# half additionally self-skips because this job has no build directory.
 #
 # Sanitizers (TSan, future ASan/UBSan) live in their own workflow
 # (.github/workflows/sanitizers.yml) and are triggered manually from
@@ -67,6 +70,12 @@ jobs:
 
       - name: format check
         run: make format-check
+
+      # Static-analysis half. clang-tidy is advisory inside `make lint` and
+      # additionally self-skips here because this job never builds, so this
+      # step gates on ruff alone. clang-tidy therefore needs no install.
+      - name: lint
+        run: make lint
 
   native-fast:
     name: Build and fast test (native, Linux)

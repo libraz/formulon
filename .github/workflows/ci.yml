@@ -1,8 +1,15 @@
 # Formulon main-branch CI workflow.
 #
-# Two jobs — the bare-minimum signal that a push to `main` did not
-# break the build, the user-facing fast suite, or the WASM artifact:
+# Three jobs — the bare-minimum signal that a push to `main` did not
+# break formatting, the build, the user-facing fast suite, or the WASM
+# artifact:
 #
+#   - format : `make format-check` + `make lint`, mirroring the develop
+#              workflow's job. It is duplicated here rather than left to
+#              develop because `main` accepts pull requests directly (see
+#              the `on:` block) and has no branch protection requiring a
+#              fast-forward from `develop`, so a change can reach `main`
+#              without ever passing the develop gate.
 #   - native : Debug + gcov build, run ctest (fast labels) gated by an
 #              allowlist of pre-existing flakes (tools/ci/expected_flakes.txt),
 #              capture an lcov tracefile, and upload coverage to Codecov.
@@ -10,12 +17,11 @@
 #              coverage share a single instrumented run so coverage tracks
 #              the same code paths the CI gate validates.
 #   - wasm   : build the WASM artifact, run the size report against
-#              the 1.9 MiB hard ceiling, smoke-test under Node 22,
+#              the 3.0 MiB hard ceiling, smoke-test under Node 22,
 #              and upload formulon.wasm as a downloadable artifact.
 #
-# Heavier signals (clang-format) live on the `develop` branch
-# (.github/workflows/develop-ci.yml). Sanitizers (TSan, ASan, UBSan)
-# live in .github/workflows/sanitizers.yml and are fired manually via
+# Sanitizers (TSan, ASan, UBSan) live in
+# .github/workflows/sanitizers.yml and are fired manually via
 # `workflow_dispatch` from the Actions UI.
 #
 # The +10 KiB WASM growth review rule (CLAUDE.md "WASM Size Policy") is
@@ -37,6 +43,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  format:
+    name: format check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-format
+
+      # `make format-check` fans out to ruff (Python) via `uvx` and biome
+      # (.mjs / .d.ts) via `npx`, so uv and Node must be on PATH alongside
+      # clang-format.
+      - name: Set up uv (ruff)
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Node.js (biome)
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: format check
+        run: make format-check
+
+      # Static-analysis half. clang-tidy is advisory inside `make lint` and
+      # additionally self-skips here because this job never builds, so this
+      # step gates on ruff alone. clang-tidy therefore needs no install.
+      - name: lint
+        run: make lint
+
   native:
     name: Build, test, and coverage (native, Linux)
     runs-on: ubuntu-latest
@@ -130,13 +168,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends brotli cmake
 
+      - name: Read pinned Emscripten version
+        id: emsdk-pin
+        # tools/wasm/emsdk-version.txt is the single source of truth; no
+        # workflow restates the version, so a bump cannot leave a job behind.
+        run: echo "version=$(tools/wasm/emsdk_pin.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Set up Emscripten
         uses: mymindstorm/setup-emsdk@v16
         with:
-          # Pin to keep WASM size deterministic. Update in lockstep with the
-          # local toolchain when bumping; size deltas in the report after
-          # bumping should be inspected by wasm-size-guardian.
-          version: 3.1.74
+          # Pinned so the size gate always judges the same compiler: a
+          # different emcc emits a different code section. Size deltas after a
+          # bump should be inspected by wasm-size-guardian.
+          version: ${{ steps.emsdk-pin.outputs.version }}
           actions-cache-folder: emsdk-cache
 
       - name: Set up Node.js

@@ -96,35 +96,132 @@ test-all:
 #                             repo-tooling Python (oracle, catalog, ci,
 #                             codegen, dev, bench, jis0208, parity runner)
 #                             (config: ruff.toml at the repo root)
+# `format`, `format-check` and `lint` all fan out over every language and run
+# every step even after one fails, then report a per-language summary and exit
+# non-zero if any step failed. Stopping at the first failure would let one
+# clang-format violation hide Python or JS drift for as long as it took to fix
+# the C++, which is the opposite of what a check target is for.
+#
+# The check half is split on the formatting / static-analysis axis:
+#   format-check -> clang-format, ruff format --check, biome check
+#   lint         -> clang-tidy, ruff check
+# so each check has exactly one home and two targets never fail for the same
+# reason. Biome is the one deliberate exception: `biome check` covers
+# formatting, linting AND assist actions (import organization), and
+# `biome lint` + `biome format` together drop the assists, so splitting it
+# would quietly reduce what is enforced. It stays whole in `format-check`.
+#
+# `$$fail` / `$$summary` are shell variables of the single recipe shell; the
+# `step` helper deliberately runs its command outside a subshell so those
+# assignments survive.
+FORMAT_STEP = fail=0; summary=''; \
+	step() { \
+	  label="$$1"; shift; \
+	  printf '\n== %s ==\n' "$$label"; \
+	  if "$$@"; then summary="$$summary  ok        $$label\n"; \
+	  else fail=1; summary="$$summary  FAIL      $$label\n"; fi; \
+	}
+FORMAT_REPORT = printf '\n== %s summary ==\n%b' "$@" "$$summary"; exit $$fail
+
 format:
-	@find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
-	  | xargs -0 -r $(CLANG_FORMAT) -i
-	$(RUFF) format packages/python
-	$(RUFF) check --fix packages/python
-	$(RUFF) format $(RUFF_TOOL_PATHS)
-	$(RUFF) check --fix $(RUFF_TOOL_PATHS)
-	$(BIOME) check --write $(BIOME_PATHS)
+	@$(FORMAT_STEP); \
+	step 'clang-format ($(SRC_DIRS))' sh -c "find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 -r $(CLANG_FORMAT) -i"; \
+	step 'ruff format (packages/python)' $(RUFF) format packages/python; \
+	step 'ruff check --fix (packages/python)' $(RUFF) check --fix packages/python; \
+	step 'ruff format ($(RUFF_TOOL_PATHS))' $(RUFF) format $(RUFF_TOOL_PATHS); \
+	step 'ruff check --fix ($(RUFF_TOOL_PATHS))' $(RUFF) check --fix $(RUFF_TOOL_PATHS); \
+	step 'biome check --write' $(BIOME) check --write $(BIOME_PATHS); \
+	$(FORMAT_REPORT)
 
 format-check:
-	@find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 \
-	  | xargs -0 -r $(CLANG_FORMAT) --dry-run --Werror
-	$(RUFF) format --check packages/python
-	$(RUFF) check packages/python
-	$(RUFF) format --check $(RUFF_TOOL_PATHS)
-	$(RUFF) check $(RUFF_TOOL_PATHS)
-	$(BIOME) check $(BIOME_PATHS)
+	@$(FORMAT_STEP); \
+	step 'clang-format ($(SRC_DIRS))' sh -c "find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 -r $(CLANG_FORMAT) --dry-run --Werror"; \
+	step 'ruff format --check (packages/python)' $(RUFF) format --check packages/python; \
+	step 'ruff format --check ($(RUFF_TOOL_PATHS))' $(RUFF) format --check $(RUFF_TOOL_PATHS); \
+	step 'biome check' $(BIOME) check $(BIOME_PATHS); \
+	$(FORMAT_REPORT)
 
+# `lint` is static analysis only -- it never rewrites a file. Coverage:
+#   src/                   -> clang-tidy (advisory, see below)
+#   packages/python        -> ruff check (config: packages/python/pyproject.toml)
+#   tools/, tests/**/*.py  -> ruff check (config: ruff.toml at the repo root)
+# JS/TS static analysis rides along in `format-check`'s `biome check` for the
+# assist-actions reason recorded above.
+#
+# clang-tidy is reported but NEVER fails this target. It carries a large
+# pre-existing warnings backlog that no realistic change will clear, and the
+# project's standing policy is that a tunable-threshold signal is not a
+# pass/fail gate. A target that always fails is not a signal -- it teaches
+# everyone to stop running it. The finding count goes in the summary so a
+# backlog that doubles is visible rather than silent.
+#
+# That advisory status is a property of the target, deliberately, rather than
+# something CI gets for free by not having a build directory. If it were the
+# latter, the first CI job to cache `build/` and call `make lint` would turn
+# the backlog into a hard gate and nobody would see it coming. As written,
+# `make lint` is safe to gate on anywhere.
+#
+# The advisory step pipes through `tee` so a long clang-tidy run stays visible
+# while it works. That loses the command's exit status to the pipe, which is
+# only acceptable because this step's status is discarded by design -- do not
+# copy the pattern into `step`, where the exit code is the whole point.
+#
+# clang-tidy runs in bounded batches (`xargs -n 25`) rather than one
+# invocation over all ~560 files. Handed the whole set at once it crashes in
+# the lexer part-way through, loses every diagnostic it had collected, and
+# still prints "All checks passed!" -- so the step reported nothing at all
+# while the same checks over 50 files report thousands of findings. Do not
+# "simplify" this back to `find -exec ... {} +`.
+#
+# Batching recovers most but not all of it: clang-tidy 18 still segfaults
+# parsing src/sheet.h's namespace on a minority of batches, and a batch that
+# crashes contributes nothing. The count is therefore a floor, and the summary
+# says so whenever a crash was seen rather than presenting a clean number that
+# quietly omits part of the tree.
 lint:
-	@if [ ! -f $(BUILD_DIR)/compile_commands.json ]; then \
-	  echo "compile_commands.json missing; run 'make build' first."; exit 1; \
-	fi
-	@find src -type f \( -name '*.cpp' -o -name '*.h' \) \
-	  -exec $(CLANG_TIDY) -p $(BUILD_DIR) {} +
+	@$(FORMAT_STEP); \
+	advisory() { \
+	  label="$$1"; shift; \
+	  printf '\n== %s (advisory) ==\n' "$$label"; \
+	  log=$$(mktemp); \
+	  "$$@" 2>&1 | tee "$$log"; \
+	  found=$$(grep -c 'warning:' "$$log" 2>/dev/null || true); \
+	  crashed=$$(grep -c 'Stack dump' "$$log" 2>/dev/null || true); \
+	  rm -f "$$log"; \
+	  if [ "$$crashed" -gt 0 ]; then \
+	    summary="$$summary  advisory  $$label ($$found findings, FLOOR ONLY: $$crashed batch(es) crashed and reported nothing)\n"; \
+	  else \
+	    summary="$$summary  advisory  $$label ($$found findings, not a gate)\n"; \
+	  fi; \
+	}; \
+	if [ -f $(BUILD_DIR)/compile_commands.json ]; then \
+	  advisory 'clang-tidy (src)' sh -c "find src -type f \( -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 -n 25 $(CLANG_TIDY) -p $(BUILD_DIR)"; \
+	else \
+	  printf '\n== clang-tidy (src) ==\n'; \
+	  echo "skipped: $(BUILD_DIR)/compile_commands.json not found (run 'make build' first)"; \
+	  summary="$$summary  skip      clang-tidy (src) (no $(BUILD_DIR)/compile_commands.json)\n"; \
+	fi; \
+	step 'ruff check (packages/python)' $(RUFF) check packages/python; \
+	step 'ruff check ($(RUFF_TOOL_PATHS))' $(RUFF) check $(RUFF_TOOL_PATHS); \
+	$(FORMAT_REPORT)
 
+# Removes every build tree, not a hand-maintained list of them: the set that
+# accumulates in practice is open-ended (per-configuration, per-sanitizer and
+# ad-hoc trees), and a fixed list silently leaves the rest on disk. The rule
+# is `.gitignore`'s own -- `build/` and `build-*/` are declared build output
+# there, so anything matching is disposable by the repo's own contract.
+#
+# Scoped to top-level directories so a source tree whose name merely starts
+# with "build" is out of reach, and `-type d` skips symlinks rather than
+# deleting through one. `$(BUILD_DIR)` is removed explicitly as well, since it
+# is overridable and need not match the pattern.
 clean:
-	rm -rf $(BUILD_DIR) build-release build-relwithdebinfo \
-	       build-asan build-ubsan build-tsan build-coverage \
-	       $(WASM_BUILD_DIR) $(WASM_DEBUG_BUILD_DIR) $(WASM_CAPI_BUILD_DIR)
+	@removed=$$(find . -maxdepth 1 -type d \( -name build -o -name 'build-*' \) | wc -l | tr -d ' '); \
+	if [ "$$removed" -gt 0 ]; then \
+	  echo "removing $$removed build director$$([ "$$removed" = 1 ] && echo y || echo ies)"; \
+	fi
+	@find . -maxdepth 1 -type d \( -name build -o -name 'build-*' \) -exec rm -rf {} +
+	@rm -rf $(BUILD_DIR) $(WASM_BUILD_DIR) $(WASM_DEBUG_BUILD_DIR) $(WASM_CAPI_BUILD_DIR)
 
 # -- WASM build / smoke-test targets --------------------------------------
 # `make wasm`        -> Release-mode formulon.{js,wasm} under build-wasm/.
