@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -220,7 +221,7 @@ DateBucket bucket_date(double serial, const PivotDateGroup& dg) {
 }  // namespace
 
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
-                      std::size_t record_index, HierNode& root) {
+                      std::size_t record_index, HierNode& root, std::string_view blank_item_label) {
   HierNode* cursor = &root;
   for (const HierLevel& level : levels) {
     const Value raw = cell_value(cache, record, level.field_index);
@@ -230,6 +231,13 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
       DateBucket bucket = bucket_date(raw.as_number(), *level.date_group);
       key = bucket.sort_key;
       label_override = std::move(bucket.label);
+    } else if (raw.is_blank()) {
+      // A source cell with no value still occupies a group on the axis, so
+      // the group needs a name: the label is what the grid draws, and it is
+      // the only literal GETPIVOTDATA can address the group by, since that
+      // lookup matches labels exactly. The placeholder text itself belongs
+      // to the locale and arrives from the caller.
+      label_override.assign(blank_item_label);
     }
     auto [it, inserted] = cursor->children.emplace(key, HierNode{});
     if (inserted && !label_override.empty()) {

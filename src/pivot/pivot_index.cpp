@@ -22,7 +22,7 @@ namespace pivot {
 
 const PivotTable* find_pivot_at_anchor(const Workbook& wb, std::string_view sheet_name, std::uint32_t row,
                                        std::uint32_t col) noexcept {
-  // Resolve the sheet via the workbook's case-insensitive lookup so this
+  // Resolve the sheet via the workbook's Unicode-simple-fold lookup so this
   // helper agrees with `EvalContext::resolve_ref` on sheet identity.
   const Sheet* sheet = wb.sheet_by_name(sheet_name);
   if (sheet == nullptr) {

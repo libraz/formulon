@@ -99,8 +99,8 @@ class PivotTable {
   // pivot's `ref` range. They are captured verbatim from the source so a
   // read -> write round trip re-emits a schema-valid `<location>` (dropping
   // the required attributes makes Excel flag the file for repair). Stored as
-  // `optional` so the writer can emit only what was present and the reader
-  // can default the required ones when a non-conforming producer omits them.
+  // `optional` so the writer can preserve authored values, including zero,
+  // and independently default an absent required value to 1.
 
   std::optional<std::uint32_t> location_first_header_row() const { return location_first_header_row_; }
   std::optional<std::uint32_t> location_first_data_row() const { return location_first_data_row_; }
@@ -129,6 +129,23 @@ class PivotTable {
   // Kept separate from `PivotField::items` (which is the XML-defined manual
   // filter state). Folding slicer state into `items` would make the
   // `evaluator -> XML round-trip` path overwrite the authored definition.
+  //
+  // This list is session state, deliberately, in both directions:
+  //
+  //   * it is never serialised — `write_pivot_table_definition` emits no
+  //     `<filters>` block, so entries added here shape every evaluation for
+  //     as long as this object lives and are gone after a save + reload;
+  //   * it is never populated by the reader — an authored `<filters>` block
+  //     is retained verbatim in `raw_passthrough_xml()` and round-trips
+  //     byte-for-byte, but it does not appear here and does not take part
+  //     in evaluation, so a workbook carrying one evaluates against its
+  //     unfiltered records.
+  //
+  // Modelling `<filters>` structurally would mean owning a block whose
+  // schema position sits inside the verbatim tail bin, and authoring filter
+  // XML this version has no reference file to check against. The persisted
+  // filter surface Excel does round-trip here is `PivotField::items`
+  // visibility, which the reader and writer both model.
   const std::vector<PivotFilter>& active_filters() const { return active_filters_; }
   std::vector<PivotFilter>& mutable_active_filters() { return active_filters_; }
 

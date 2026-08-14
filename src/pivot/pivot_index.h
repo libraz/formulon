@@ -25,8 +25,9 @@ class PivotTable;
 class PivotCache;
 
 /// Returns the pivot table whose layout bounds contain `(row, col)` on
-/// the sheet identified by `sheet_name`. Sheet name comparison is
-/// case-insensitive (matches `EvalContext::resolve_ref` semantics).
+/// the sheet identified by `sheet_name`. Sheet name comparison uses
+/// locale-independent Unicode simple case folding (matching
+/// `EvalContext::resolve_ref`; this is not full Excel-equivalence).
 /// Returns `nullptr` when no pivot covers that cell, the sheet is
 /// unknown, or `wb` has no sheets.
 const PivotTable* find_pivot_at_anchor(const Workbook& wb, std::string_view sheet_name, std::uint32_t row,

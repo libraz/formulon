@@ -2,11 +2,7 @@
 #include "pivot/filter_engine.h"
 
 #include <algorithm>
-#include <array>
-#include <charconv>
 #include <cstddef>
-#include <cstdio>
-#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -52,44 +48,23 @@ double filter_number_value(const PivotFilter& f) {
   return 0.0;
 }
 
-// Invokes `consume` with the display label for `v`, avoiding the temporary
-// std::string that the per-record filter path previously allocated. Numeric
-// formatting intentionally follows `display_string`: integral values omit
-// `.0`, while other values use the `%f` spelling used by std::to_string.
+// Invokes `consume` with the display label for `v`.
+//
+// Rendering goes through the shared `display_string`, which is the single
+// place a cache `Value` is turned into a pivot label. A private renderer
+// here would let a record's label drift from the `PivotItem::name` /
+// hierarchy label produced elsewhere, and a filter can only ever match a
+// label that is spelled the same way on both sides.
+//
+// Text is the one kind whose label is the payload itself, so it is handed
+// to `consume` directly instead of through a copy.
 template <typename Consume>
 bool with_display_string(const Value& v, Consume&& consume) {
-  switch (v.kind()) {
-    case ValueKind::Blank:
-      return consume({});
-    case ValueKind::Text:
-      return consume(v.as_text());
-    case ValueKind::Bool:
-      return consume(v.as_boolean() ? std::string_view{"TRUE"} : std::string_view{"FALSE"});
-    case ValueKind::Error:
-      return consume(display_name(v.as_error()));
-    case ValueKind::Number: {
-      const double d = v.as_number();
-      std::array<char, 512> buffer{};
-      if (d >= static_cast<double>(std::numeric_limits<long long>::min()) &&
-          d <= static_cast<double>(std::numeric_limits<long long>::max())) {
-        const auto i = static_cast<long long>(d);
-        if (static_cast<double>(i) == d) {
-          const auto [end, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), i);
-          if (ec != std::errc{}) {
-            return false;
-          }
-          return consume(std::string_view(buffer.data(), static_cast<std::size_t>(end - buffer.data())));
-        }
-      }
-      const int written = std::snprintf(buffer.data(), buffer.size(), "%f", d);
-      if (written < 0 || static_cast<std::size_t>(written) >= buffer.size()) {
-        return false;
-      }
-      return consume(std::string_view(buffer.data(), static_cast<std::size_t>(written)));
-    }
-    default:
-      return consume({});
+  if (v.is_text()) {
+    return consume(v.as_text());
   }
+  const std::string rendered = display_string(v);
+  return consume(std::string_view{rendered});
 }
 
 // Pulls the numeric upper-bound payload of a range filter. Returns

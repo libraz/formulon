@@ -111,7 +111,8 @@ Aggregation aggregation_from_subtotal_fn(SubtotalFn fn) {
 
 }  // namespace
 
-Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache& cache) {
+Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache& cache,
+                                      const PivotLayoutOptions& options) {
   // 1. Validate.
   if (table.pivot_cache_id() != cache.cache_id()) {
     return make_error(FormulonErrorCode::kEvalPivotMissing, "pivot table cache_id does not match supplied PivotCache",
@@ -176,10 +177,10 @@ Expected<PivotResult, Error> evaluate(const PivotTable& table, const PivotCache&
   for (std::size_t i = 0; i < surviving.size(); ++i) {
     const PivotCacheRecord& rec = cache.records()[surviving[i]];
     if (!row_levels.empty()) {
-      row_leaves_for_record[i] = insert_path(cache, row_levels, rec, surviving[i], row_tree);
+      row_leaves_for_record[i] = insert_path(cache, row_levels, rec, surviving[i], row_tree, options.blank_item_label);
     }
     if (!col_levels.empty()) {
-      col_leaves_for_record[i] = insert_path(cache, col_levels, rec, surviving[i], col_tree);
+      col_leaves_for_record[i] = insert_path(cache, col_levels, rec, surviving[i], col_tree, options.blank_item_label);
     }
   }
 

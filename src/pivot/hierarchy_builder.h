@@ -22,6 +22,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -95,9 +96,10 @@ inline std::vector<OrderedHierarchyChild> ordered_children(HierNode& tree, const
 /// `HierNode*`. The caller assigns leaf indices in a second pass. When
 /// a level carries a `date_group`, the cache value is bucketed first;
 /// the label is stashed on the inserted child for the renderer to
-/// surface.
+/// surface. A blank cache value takes `blank_item_label` (the locale's
+/// placeholder) the same way, so no axis node is left unnamed.
 HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& levels, const PivotCacheRecord& record,
-                      std::size_t record_index, HierNode& root);
+                      std::size_t record_index, HierNode& root, std::string_view blank_item_label);
 
 /// Returns the display label for `(key, child)`: the override if set,
 /// otherwise the standard `display_string(key)`. Used by all hierarchy

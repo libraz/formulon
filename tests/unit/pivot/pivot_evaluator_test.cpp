@@ -112,6 +112,39 @@ PivotCache build_basic_cache() {
   return cache;
 }
 
+// Same three-column shape as `build_basic_cache()`, but the amounts are
+// deliberately non-integral / past the 64-bit integer range so a record's
+// label goes through the general numeric rendering path rather than the
+// integral one.
+//
+//   Region  Product  Amount
+//   ------  -------  ------
+//   North   Widget      1.5
+//   North   Gadget      2
+//   South   Widget     1e20
+//   South   Gadget      4
+PivotCache build_non_integral_amount_cache() {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+
+  auto add = [&](const char* region, const char* product, double amount) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, region));
+    rec.cells.push_back(owned_text(cache, product));
+    rec.cells.push_back(Value::number(amount));
+    cache.mutable_records().push_back(std::move(rec));
+  };
+
+  add("North", "Widget", 1.5);
+  add("North", "Gadget", 2.0);
+  add("South", "Widget", 1e20);
+  add("South", "Gadget", 4.0);
+  return cache;
+}
+
 // Builds a `PivotTable` matching `build_basic_cache()` with the supplied
 // row/col field indices and a single SUM(Amount) data field.
 PivotTable build_sum_amount_table(std::vector<std::uint32_t> row_fields, std::vector<std::uint32_t> col_fields) {
@@ -435,14 +468,87 @@ TEST(PivotEvaluator, UnresolvedHiddenItemDoesNotFilterBlankRecords) {
   auto result_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
   const PivotResult& result = result_or.value();
-  bool saw_blank_row = false;
-  for (std::size_t i = 0; i < result.rows.size(); ++i) {
-    if (result.rows[i].label.empty()) {
-      saw_blank_row = true;
-      EXPECT_DOUBLE_EQ(result.values[i][0][0].as_number(), 75.0);
-    }
+  const std::size_t blank_leaf = row_index(result, PivotLayoutOptions{}.blank_item_label);
+  ASSERT_NE(blank_leaf, static_cast<std::size_t>(-1));
+  EXPECT_DOUBLE_EQ(result.values[blank_leaf][0][0].as_number(), 75.0);
+}
+
+// ---------------------------------------------------------------------------
+// 3c. Blank source values still name their axis group
+// ---------------------------------------------------------------------------
+
+// A source row whose row-field cell is empty groups under a placeholder, not
+// under a nameless node: the label is what the grid draws, and GETPIVOTDATA
+// walks labels by exact match, so an unnamed group could not be addressed at
+// all. What the placeholder spells is the vocabulary's business — these tests
+// pin the mechanism, never a particular text.
+TEST(PivotEvaluator, BlankAxisItemTakesThePlaceholderLabel) {
+  PivotCache cache = build_basic_cache();
+  PivotCacheRecord blank_region;
+  blank_region.cells = {Value::blank(), owned_text(cache, "Widget"), Value::number(75.0)};
+  cache.mutable_records().push_back(std::move(blank_region));
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  auto result_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const PivotResult& result = result_or.value();
+
+  for (const RowHierarchyNode& row : result.rows) {
+    EXPECT_FALSE(row.label.empty());
   }
-  EXPECT_TRUE(saw_blank_row);
+  const std::size_t blank_leaf = row_index(result, PivotLayoutOptions{}.blank_item_label);
+  ASSERT_NE(blank_leaf, static_cast<std::size_t>(-1));
+  EXPECT_DOUBLE_EQ(result.values[blank_leaf][0][0].as_number(), 75.0);
+  // The named groups are untouched.
+  EXPECT_NE(row_index(result, "North"), static_cast<std::size_t>(-1));
+  EXPECT_NE(row_index(result, "South"), static_cast<std::size_t>(-1));
+}
+
+// The placeholder is part of the locale's label vocabulary, so it travels
+// with the rest of it rather than being fixed in the evaluator.
+TEST(PivotEvaluator, BlankAxisItemPlaceholderComesFromTheSuppliedVocabulary) {
+  PivotCache cache = build_basic_cache();
+  PivotCacheRecord blank_region;
+  blank_region.cells = {Value::blank(), owned_text(cache, "Widget"), Value::number(75.0)};
+  cache.mutable_records().push_back(std::move(blank_region));
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+
+  PivotLayoutOptions options;
+  options.blank_item_label = "<none>";
+  auto result_or = evaluate(table, cache, options);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  EXPECT_NE(row_index(result_or.value(), "<none>"), static_cast<std::size_t>(-1));
+}
+
+// Subtotal rows address their group by the same label path, so an interior
+// blank group has to carry the placeholder there too.
+TEST(PivotEvaluator, BlankGroupSubtotalCarriesThePlaceholderLabel) {
+  PivotCache cache = build_basic_cache();
+  PivotCacheRecord blank_widget;
+  blank_widget.cells = {Value::blank(), owned_text(cache, "Widget"), Value::number(75.0)};
+  cache.mutable_records().push_back(std::move(blank_widget));
+  PivotCacheRecord blank_gadget;
+  blank_gadget.cells = {Value::blank(), owned_text(cache, "Gadget"), Value::number(25.0)};
+  cache.mutable_records().push_back(std::move(blank_gadget));
+  PivotTable table = build_sum_amount_table(/*row=*/{0, 1}, /*col=*/{});
+
+  PivotLayoutOptions options;
+  options.blank_item_label = "<no-value>";
+  auto result_or = evaluate(table, cache, options);
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const PivotResult& result = result_or.value();
+
+  bool saw_blank_subtotal = false;
+  for (const RowSubtotal& subtotal : result.row_subtotals) {
+    ASSERT_FALSE(subtotal.labels.empty());
+    if (subtotal.labels[0] == options.blank_item_label) {
+      saw_blank_subtotal = true;
+      EXPECT_DOUBLE_EQ(subtotal.values[0].as_number(), 100.0);  // 75 + 25.
+    }
+    EXPECT_FALSE(subtotal.labels[0].empty());
+  }
+  EXPECT_TRUE(saw_blank_subtotal);
 }
 
 // ---------------------------------------------------------------------------
@@ -1793,6 +1899,61 @@ TEST(PivotEvaluator, ManualFilterMatchesNumericDisplayLabel) {
   ASSERT_NE(south, static_cast<std::size_t>(-1));
   EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), 175.0);
   EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), 200.0);
+}
+
+// A hidden item is matched against the record's label, so the two sides must
+// spell a non-integral number the same way. A record-side renderer of its own
+// would spell 1.5 as "1.500000" and 1e20 as its 27-character fixed-point form,
+// neither of which any authored item can name — the records would stay in
+// every aggregate no matter what the filter says.
+TEST(PivotEvaluator, ManualFilterHidesNonIntegralNumericItem) {
+  PivotCache cache = build_non_integral_amount_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_fields()[2].items = {PivotItem{display_string(Value::number(1.5)), /*visible=*/false}};
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  const std::size_t north = row_index(r, "North");
+  ASSERT_NE(north, static_cast<std::size_t>(-1));
+  // North keeps only the 2.0 record; the 1.5 one is gone from the aggregate.
+  EXPECT_DOUBLE_EQ(r.values[north][0][0].as_number(), 2.0);
+}
+
+TEST(PivotEvaluator, ManualFilterHidesNumericItemBeyondIntegerRange) {
+  PivotCache cache = build_non_integral_amount_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  table.mutable_fields()[2].items = {PivotItem{display_string(Value::number(1e20)), /*visible=*/false}};
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  const std::size_t south = row_index(r, "South");
+  ASSERT_NE(south, static_cast<std::size_t>(-1));
+  EXPECT_DOUBLE_EQ(r.values[south][0][0].as_number(), 4.0);
+}
+
+// A label filter reads the same rendering, so a needle taken from the axis
+// label of a numeric item selects the record that produced it.
+TEST(PivotEvaluator, LabelContainsFilterMatchesNumericItemLabel) {
+  PivotCache cache = build_non_integral_amount_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Amount";
+  f.type = FilterType::LabelContains;
+  f.value = display_string(Value::number(1e20));  // "1E+20"
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 1e20);
 }
 
 // ---------------------------------------------------------------------------
@@ -3166,6 +3327,121 @@ TEST(PivotEvaluator, ColValueFilterCompactsEveryLeafIndexedStructure) {
   EXPECT_DOUBLE_EQ(north.col_values[0][0].as_number(), 30.0);
   EXPECT_DOUBLE_EQ(north.col_values[1][0].as_number(), 60.0);
   EXPECT_DOUBLE_EQ(north.col_subtotal_values[0][0].as_number(), 90.0);
+}
+
+// ---------------------------------------------------------------------------
+// Three-level row axis, built from a cache rather than hand-assembled
+// ---------------------------------------------------------------------------
+
+// Two nesting levels only ever exercise one interior depth, so a subtotal
+// owner's label path is never longer than one entry and the leaf enumeration
+// never descends twice. A third level puts both under load: leaves are still
+// numbered in DFS pre-order, and each owner emits its subtotal at its own
+// depth with the full path to it.
+TEST(PivotEvaluator, ThreeLevelRowAxisNumbersLeavesAndSubtotalsPerDepth) {
+  PivotCache cache = build_subtotal_grid_cache();
+  PivotTable table = build_subtotal_grid_table();
+  table.mutable_row_field_order() = {0, 1, 2};  // Region / Product / Year.
+  table.mutable_col_field_order() = {3};        // Quarter.
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // 2 regions x 2 products x 2 years = 8 leaves, 2 quarter columns.
+  ASSERT_EQ(r.rows.size(), 2U);
+  ASSERT_EQ(r.rows[0].label, "North");
+  ASSERT_EQ(r.rows[0].children.size(), 2U);
+  ASSERT_EQ(r.rows[0].children[0].label, "A");
+  ASSERT_EQ(r.rows[0].children[0].children.size(), 2U);
+  EXPECT_EQ(r.rows[0].children[0].children[0].label, "2024");
+  EXPECT_EQ(r.rows[0].children[0].children[1].label, "2025");
+  ASSERT_EQ(r.values.size(), 8U);
+  ASSERT_EQ(r.values[0].size(), 2U);
+
+  // Leaf order is DFS pre-order over the three levels; the record buckets
+  // have to follow the same numbering or the values land on the wrong rows.
+  // Cell value is `row base * quarter multiplier` (North/A base 1,
+  // North/B 2, South/A 10, South/B 20; 2024 Q1/Q2 = 1/2, 2025 = 10/20).
+  const std::vector<std::vector<double>> expected = {
+      {1.0, 2.0}, {10.0, 20.0}, {2.0, 4.0}, {20.0, 40.0}, {10.0, 20.0}, {100.0, 200.0}, {20.0, 40.0}, {200.0, 400.0},
+  };
+  for (std::size_t leaf = 0; leaf < expected.size(); ++leaf) {
+    for (std::size_t col = 0; col < 2U; ++col) {
+      EXPECT_DOUBLE_EQ(r.values[leaf][col][0].as_number(), expected[leaf][col]) << "leaf=" << leaf << " col=" << col;
+    }
+  }
+
+  // One subtotal per interior owner: four at Region/Product, two at Region,
+  // emitted in the post-order the row walk produces.
+  ASSERT_EQ(r.row_subtotals.size(), 6U);
+  const std::vector<std::vector<std::string>> expected_labels = {
+      {"North", "A"}, {"North", "B"}, {"North"}, {"South", "A"}, {"South", "B"}, {"South"},
+  };
+  const std::vector<double> expected_totals = {33.0, 66.0, 99.0, 330.0, 660.0, 990.0};
+  for (std::size_t i = 0; i < r.row_subtotals.size(); ++i) {
+    EXPECT_EQ(r.row_subtotals[i].labels, expected_labels[i]) << "subtotal=" << i;
+    EXPECT_EQ(r.row_subtotals[i].depth, expected_labels[i].size() - 1U) << "subtotal=" << i;
+    ASSERT_EQ(r.row_subtotals[i].values.size(), 1U);
+    EXPECT_DOUBLE_EQ(r.row_subtotals[i].values[0].as_number(), expected_totals[i]) << "subtotal=" << i;
+  }
+}
+
+// Pruning a three-level axis has to collapse whole branches: a group whose
+// every descendant leaf is filtered away leaves no interior node and no
+// subtotal behind, while the survivors are re-expressed in the compacted
+// leaf-index space.
+TEST(PivotEvaluator, RowValueFilterCollapsesEmptiedBranchesOfAThreeLevelAxis) {
+  PivotCache cache = build_subtotal_grid_cache();
+  PivotTable table = build_subtotal_grid_table();
+  table.mutable_row_field_order() = {0, 1, 2};
+  table.mutable_col_field_order() = {3};
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+
+  // Leaf scores across the two quarter columns are 3, 30, 6, 60, 30, 300,
+  // 60, 600. Top-2 keeps South/A/2025 and South/B/2025 only, so all of
+  // North and both 2024 leaves under South disappear.
+  PivotFilter f;
+  f.axis = PivotAxis::Row;
+  f.field_name = "Region";
+  f.type = FilterType::ValueTop10;
+  f.value = 2;
+  table.mutable_active_filters().push_back(std::move(f));
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  // The North branch is gone at every depth; South keeps both products but
+  // only their 2025 child.
+  ASSERT_EQ(r.rows.size(), 1U);
+  EXPECT_EQ(r.rows[0].label, "South");
+  ASSERT_EQ(r.rows[0].children.size(), 2U);
+  for (const RowHierarchyNode& product : r.rows[0].children) {
+    ASSERT_EQ(product.children.size(), 1U);
+    EXPECT_EQ(product.children[0].label, "2025");
+  }
+
+  ASSERT_EQ(r.values.size(), 2U);
+  EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 100.0);  // South/A/2025 Q1.
+  EXPECT_DOUBLE_EQ(r.values[0][1][0].as_number(), 200.0);  // South/A/2025 Q2.
+  EXPECT_DOUBLE_EQ(r.values[1][0][0].as_number(), 200.0);  // South/B/2025 Q1.
+  EXPECT_DOUBLE_EQ(r.values[1][1][0].as_number(), 400.0);  // South/B/2025 Q2.
+  EXPECT_EQ(r.row_leaf_totals.size(), 2U);
+
+  // Only the owners that still cover a surviving leaf keep a subtotal, and
+  // both the metadata-rich list and the compact surface agree.
+  ASSERT_EQ(r.row_subtotals.size(), 3U);
+  const std::vector<std::vector<std::string>> expected_labels = {{"South", "A"}, {"South", "B"}, {"South"}};
+  for (std::size_t i = 0; i < r.row_subtotals.size(); ++i) {
+    EXPECT_EQ(r.row_subtotals[i].labels, expected_labels[i]) << "subtotal=" << i;
+  }
+  EXPECT_EQ(r.subtotals.size(), 3U);
+  // A surviving subtotal keeps its pre-filter aggregate, which is what lets
+  // a Top-N report still frame a leaf against its whole group.
+  EXPECT_DOUBLE_EQ(r.row_subtotals[0].values[0].as_number(), 330.0);
+  EXPECT_DOUBLE_EQ(r.row_subtotals[2].values[0].as_number(), 990.0);
 }
 
 // ---------------------------------------------------------------------------

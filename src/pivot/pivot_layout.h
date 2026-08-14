@@ -30,9 +30,16 @@ enum class PivotCellKind : std::uint8_t {
   Blank = 7,
 };
 
-/// Per-locale label overrides for the pivot grid projection.
+/// Per-locale label overrides for the pivot grid.
 ///
-/// All fields except `grand_total_label` / `values_label` default to empty.
+/// Most of these are consumed by the projection in `layout`, but
+/// `blank_item_label` names an axis item and so has to be resolved while
+/// the hierarchy is built: `pivot::evaluate` bakes it into
+/// `PivotResult`'s node labels, which is what both the projection and
+/// GETPIVOTDATA's exact-match walk read.
+///
+/// All fields except `grand_total_label` / `values_label` /
+/// `blank_item_label` default to empty.
 /// When `row_labels_label` (or `column_labels_label`) is empty the
 /// projection keeps the historical English layout: the row-field (resp.
 /// column-field) display name occupies the corresponding header cell.
@@ -44,12 +51,19 @@ enum class PivotCellKind : std::uint8_t {
 /// `subtotal_suffix` to the parent group label. When the suffix is empty
 /// the projection falls back to `" " + grand_total_label` so existing
 /// English consumers see "North Grand Total" unchanged.
+///
+/// `blank_item_label` carries a provisional spelling: an axis group with
+/// no source value must be named — an empty label can be neither drawn
+/// nor addressed by GETPIVOTDATA — but the text itself is not yet pinned
+/// by an Excel observation, so treat it as subject to change and do not
+/// hard-code it at a use site.
 struct PivotLayoutOptions {
   std::string grand_total_label = "Grand Total";
   std::string values_label = "Values";
-  std::string row_labels_label;     ///< e.g. "行ラベル"; empty disables.
-  std::string column_labels_label;  ///< e.g. "列ラベル"; empty disables.
-  std::string subtotal_suffix;      ///< e.g. " 集計"; empty falls back to grand_total_label.
+  std::string blank_item_label = "(blank)";  ///< Provisional; label of an axis item with no value.
+  std::string row_labels_label;              ///< e.g. "行ラベル"; empty disables.
+  std::string column_labels_label;           ///< e.g. "列ラベル"; empty disables.
+  std::string subtotal_suffix;               ///< e.g. " 集計"; empty falls back to grand_total_label.
 };
 
 struct PivotCell {
