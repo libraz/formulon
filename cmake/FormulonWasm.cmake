@@ -17,9 +17,9 @@
 #   capi: the formulon (PyPI) artifact, consumed by wasmtime-py. No
 #     embind, no JS glue, no pthread. Compiles src/c_api/formulon_c.cpp
 #     + formulon_static, link line is --no-entry + -sSTANDALONE_WASM=1,
-#     exports the fm_* C ABI plus _malloc / _free. The scheduler's
-#     std::thread calls compile but run synchronously under emcc's
-#     no-pthread mode, so a Python caller silently gets serial recalc.
+#     exports the Python-required fm_* C ABI plus _malloc / _free. It
+#     deliberately does not export `fm_workbook_recalc_parallel`: this
+#     no-pthread artifact exposes only serial recalc to the Python wheel.
 #     Output: `<build>/formulon_capi.wasm` (no companion .js).
 #
 # Activated only when FM_BUILD_WASM=ON, which itself is meaningful only
@@ -141,9 +141,10 @@ if(FM_WASM_VARIANT STREQUAL "embind")
   # runtime preallocates worker Web Workers up front. The 8-thread cap
   # matches kMaxAutoThreads in src/eval/scheduler.cpp.
   #
-  # @size-budget-event: +~14 KB one-time pthread runtime (approved by
-  # wasm-size-guardian). Future scheduler additions will not re-add this
-  # cost.
+  # @size-budget-event: +~14 KB one-time pthread runtime. It is retained
+  # because Workbook.recalcParallel is now reachable from the embind/npm
+  # surface; size is recorded by the H-29 verification rather than treated
+  # as a gate for this feature-first change.
   set(_FM_WASM_COMMON_LINK_FLAGS
     "-lembind"
     "-sWASM=1"
