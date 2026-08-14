@@ -168,8 +168,8 @@ class Workbook {
   Expected<Sheet*, Error> add_sheet_checked(std::string name);
 
   /// Appends a new sheet after validating `name` the same way
-  /// `rename_sheet` does: non-empty, at most 31 UTF-16 code units, no
-  /// forbidden character (`: \ / ? * [ ]`), and no case-insensitive
+  /// `rename_sheet` does: strict UTF-8, non-empty, at most 31 UTF-16 code units, no
+  /// forbidden character (`: \ / ? * [ ]`), and no Unicode-simple-fold
   /// collision with an existing sheet. Returns a pointer to the new sheet
   /// on success (owned by the Workbook, invalidated by later structural
   /// mutations) or `kInvalidSheetName` on any violation.
@@ -195,11 +195,11 @@ class Workbook {
   ///
   /// Errors:
   ///   * `kSheetIndexOutOfRange` when `index >= sheet_count()`.
-  ///   * `kInvalidSheetName` when `new_name` is empty, exceeds 31
-  ///     characters, contains a forbidden character (`: \ / ? * [ ]`),
-  ///     or collides case-insensitively with another sheet's name. A
-  ///     no-op rename to the sheet's existing name (case-insensitively
-  ///     equal) is accepted: the sheet's stored name is updated to the
+  ///   * `kInvalidSheetName` when `new_name` is malformed UTF-8, empty, exceeds 31
+  ///     UTF-16 units, contains a forbidden character (`: \ / ? * [ ]`),
+  ///     or collides under Unicode simple case folding with another sheet's
+  ///     name. A no-op rename to the sheet's existing name under the same
+  ///     fold is accepted: the sheet's stored name is updated to the
   ///     new casing, no other state changes.
   Expected<void, Error> rename_sheet(std::uint32_t index, std::string new_name);
 
@@ -235,17 +235,19 @@ class Workbook {
   ///     sheet_count()` or `to_index >= sheet_count()`.
   Expected<void, Error> move_sheet(std::uint32_t from_index, std::uint32_t to_index);
 
-  /// Case-insensitive lookup by display name. Matches using
-  /// `strings::case_insensitive_eq` (ASCII-fold), so `"SHEET2"` and
-  /// `"Sheet2"` locate the same sheet — consistent with Excel's
-  /// case-insensitive sheet-name semantics. Returns `nullptr` when no sheet
-  /// matches. A linear scan is used; workbooks typically carry O(1)–O(10)
-  /// sheets, so a hash index is premature.
+  /// Unicode-simple-fold lookup by display name. `"SHEET2"` and
+  /// `"Sheet2"` locate the same sheet, as do Unicode simple-fold pairs such
+  /// as `Ä` and `ä`. This is locale-independent simple folding only; it does
+  /// not claim full Excel-equivalence, normalization, or locale tailoring.
+  /// Returns `nullptr` when no sheet matches. A linear scan is used;
+  /// workbooks typically carry O(1)–O(10) sheets, so a hash index is
+  /// premature.
   const Sheet* sheet_by_name(std::string_view name) const noexcept;
 
   /// Returns the 0-based index of the sheet whose display name matches
-  /// `name` (case-insensitive, ASCII-fold). Returns `static_cast<size_t>(-1)`
-  /// when no sheet matches. Linear scan, like `sheet_by_name`.
+  /// `name` under Unicode simple case folding. Returns
+  /// `static_cast<size_t>(-1)` when no sheet matches. Linear scan, like
+  /// `sheet_by_name`.
   std::size_t sheet_index_by_name(std::string_view name) const noexcept;
 
   /// Serialises the workbook to an in-memory `.xlsx` byte stream. Delegates

@@ -40,6 +40,7 @@
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -113,7 +114,7 @@ Expected<Sheet*, Error> Workbook::add_sheet_validated(std::string name) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   RETURN_IF_ERROR(validate_sheet_name(name));
   for (const Sheet& existing : sheets_) {
-    if (strings::case_insensitive_eq(existing.name(), name)) {
+    if (sheet_names::equal(existing.name(), name)) {
       return make_error(FormulonErrorCode::kInvalidSheetName, "add_sheet: name collides with an existing sheet",
                         "name=\"" + name + "\"");
     }
@@ -180,10 +181,10 @@ void reindex_all_formulas(std::vector<Sheet>& sheets, const eval::RecalcEngine::
   }
 }
 
-// Excel's structural validation for sheet names: non-empty, ≤ 31
-// characters, no `: \ / ? * [ ]`. The forbidden-character scan is a
-// byte-level check (the forbidden set is ASCII), so it works correctly on
-// UTF-8 sheet names because none of the disallowed code units appear as
+// Excel's structural validation for sheet names: strict UTF-8, non-empty,
+// ≤ 31 UTF-16 units, and no `: \ / ? * [ ]`. The forbidden-character scan is
+// a byte-level check (the forbidden set is ASCII), so it works correctly on
+// valid UTF-8 sheet names because none of the disallowed code units appear as
 // continuation bytes (all are < 0x80).
 bool is_valid_sheet_name_chars(std::string_view name) noexcept {
   for (char byte : name) {
@@ -211,13 +212,16 @@ bool is_valid_sheet_name_chars(std::string_view name) noexcept {
 constexpr std::uint32_t kMaxSheetNameUnits = 31U;
 
 // Shared structural validator for a sheet name across every mutation
-// surface (add / rename / any future import-side check). Verifies the
-// name is non-empty, within the code-unit length limit, and free of
-// forbidden characters. Duplicate/case-folding collision is caller-scoped
-// (it needs the target index) and handled at each call site.
+// surface (add / rename / any future import-side check). Verifies strict
+// UTF-8, a non-empty name within the code-unit length limit, and no forbidden
+// characters. Duplicate/case-folding collision is caller-scoped (it needs
+// the target index) and handled at each call site.
 Expected<void, Error> validate_sheet_name(std::string_view name) {
   if (name.empty()) {
     return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name must not be empty", "name=\"\"");
+  }
+  if (!sheet_names::valid_utf8(name)) {
+    return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name is not valid UTF-8", "name=invalid-utf8");
   }
   if (eval::utf16_units_in(name) > kMaxSheetNameUnits) {
     return make_error(FormulonErrorCode::kInvalidSheetName, "sheet name exceeds 31 characters",
@@ -282,14 +286,14 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // Validate the new name (non-empty, ≤ 31 code units, no forbidden
   // characters) via the shared validator so add / rename agree.
   RETURN_IF_ERROR(validate_sheet_name(new_name));
-  // Collision check (case-insensitive). A no-op rename — same case-fold
+  // Collision check (Unicode simple-fold). A no-op rename — same case-fold
   // as the current name — bypasses the collision check so callers can
   // change only the casing.
   for (std::size_t idx = 0; idx < sheets_.size(); ++idx) {
     if (idx == static_cast<std::size_t>(index)) {
       continue;
     }
-    if (strings::case_insensitive_eq(sheets_[idx].name(), new_name)) {
+    if (sheet_names::equal(sheets_[idx].name(), new_name)) {
       return make_error(FormulonErrorCode::kInvalidSheetName, "rename_sheet: name collides with another sheet",
                         "name=\"" + new_name + "\" colliding_index=" + std::to_string(idx));
     }
@@ -542,7 +546,7 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
 
 const Sheet* Workbook::sheet_by_name(std::string_view name) const noexcept {
   for (const Sheet& s : sheets_) {
-    if (strings::case_insensitive_eq(s.name(), name)) {
+    if (sheet_names::equal(s.name(), name)) {
       return &s;
     }
   }
@@ -551,7 +555,7 @@ const Sheet* Workbook::sheet_by_name(std::string_view name) const noexcept {
 
 std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept {
   for (std::size_t i = 0; i < sheets_.size(); ++i) {
-    if (strings::case_insensitive_eq(sheets_[i].name(), name)) {
+    if (sheet_names::equal(sheets_[i].name(), name)) {
       return i;
     }
   }
@@ -1189,12 +1193,12 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
       continue;
     }
     pivot::WorksheetSource& source = cache->mutable_worksheet_source();
-    if (!direct_sheet_old.empty() && strings::case_insensitive_eq(source.sheet, direct_sheet_old)) {
+    if (!direct_sheet_old.empty() && sheet_names::equal(source.sheet, direct_sheet_old)) {
       source.sheet.assign(direct_sheet_new);
     }
     std::size_t owner_sheet = 0;
     for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
-      if (strings::case_insensitive_eq(sheets[sheet_idx].name(), source.sheet)) {
+      if (sheet_names::equal(sheets[sheet_idx].name(), source.sheet)) {
         owner_sheet = sheet_idx;
         break;
       }
@@ -1204,7 +1208,7 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
       source.ref = ref_result.text;
     }
     if (!removed_sheet_name.empty() && source.present &&
-        (strings::case_insensitive_eq(source.sheet, removed_sheet_name) || ref_result.changed)) {
+        (sheet_names::equal(source.sheet, removed_sheet_name) || ref_result.changed)) {
       dropped_cache_ids.push_back(cache->cache_id());
     }
   }
@@ -1327,7 +1331,7 @@ void rewrite_formulas_for_row_col_edit(std::vector<Sheet>& sheets, const eval::R
   Arena parser_arena;
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
     Sheet& sheet = sheets[sheet_idx];
-    const bool local_means_target = strings::case_insensitive_eq(sheet.name(), target_sheet);
+    const bool local_means_target = sheet_names::equal(sheet.name(), target_sheet);
     const parser::RowColShiftTransform transform(target_sheet, axis, edit, index, count, local_means_target);
 
     std::vector<std::uint32_t> row_keys;

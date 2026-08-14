@@ -17,6 +17,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/status_macros_test.cpp
   unit/structured_log_test.cpp
   unit/strings_test.cpp
+  unit/sheet_name_test.cpp
   unit/arena_test.cpp
   unit/value_test.cpp
   unit/value_array_test.cpp

@@ -45,6 +45,15 @@ Workbook BuildCollidingWorkbook() {
   return wb;
 }
 
+Workbook BuildUnicodeCollidingWorkbook() {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("\xC3\x84");  // Ä
+  wb.add_sheet("\xC3\xA4");  // ä
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(2.0))));
+  return wb;
+}
+
 TEST(SheetNameValidation, OoxmlReaderRejectsCaseFoldedDuplicate) {
   const Workbook wb = BuildCollidingWorkbook();
   auto bytes_or = wb.save();
@@ -63,6 +72,46 @@ TEST(SheetNameValidation, XlsbReaderRejectsCaseFoldedDuplicate) {
   auto read_or = xlsb::read_xlsb(SpanOf(bytes_or.value()));
   ASSERT_FALSE(static_cast<bool>(read_or)) << "a duplicate sheet name must not load silently";
   EXPECT_EQ(read_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
+TEST(SheetNameValidation, OoxmlReaderRejectsUnicodeSimpleFoldedDuplicate) {
+  const Workbook wb = BuildUnicodeCollidingWorkbook();
+  auto bytes_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+
+  auto read_or = read_ooxml(SpanOf(bytes_or.value()));
+  ASSERT_FALSE(static_cast<bool>(read_or)) << "Ä and ä must not load as duplicate sheets";
+  EXPECT_EQ(read_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
+TEST(SheetNameValidation, XlsbReaderRejectsUnicodeSimpleFoldedDuplicate) {
+  const Workbook wb = BuildUnicodeCollidingWorkbook();
+  auto bytes_or = wb.save_ex(WorkbookFormat::Xlsb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
+
+  auto read_or = xlsb::read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_FALSE(static_cast<bool>(read_or)) << "Ä and ä must not load as duplicate sheets";
+  EXPECT_EQ(read_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
+TEST(SheetNameValidation, DistinctUnicodeNamesLoadOnBothReaders) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("\xC3\x84");  // Ä
+  wb.add_sheet("\xC3\x96");  // Ö
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(2.0))));
+
+  auto xlsx_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(xlsx_or)) << xlsx_or.error().message;
+  auto read_xlsx_or = read_ooxml(SpanOf(xlsx_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_xlsx_or)) << read_xlsx_or.error().message;
+  EXPECT_EQ(read_xlsx_or.value().workbook.sheet_count(), 2U);
+
+  auto xlsb_or = wb.save_ex(WorkbookFormat::Xlsb);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
+  auto read_xlsb_or = xlsb::read_xlsb(SpanOf(xlsb_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_xlsb_or)) << read_xlsb_or.error().message;
+  EXPECT_EQ(read_xlsb_or.value().workbook.sheet_count(), 2U);
 }
 
 TEST(SheetNameValidation, DistinctNamesStillLoadOnBothReaders) {

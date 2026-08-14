@@ -39,7 +39,6 @@ option(FM_BUILD_NODE_ADDON    "Build Node.js N-API addon (.node)" OFF)
 option(FM_BUILD_FUZZ          "Build libFuzzer harnesses (clang only)" OFF)
 option(FM_ENABLE_COVERAGE     "Enable gcov/lcov" OFF)
 option(FM_USE_SYSTEM_DEPS     "Prefer system-installed third-party deps" OFF)
-option(FM_ENABLE_PTHREAD      "Enable multithreaded recalc" ON)
 option(FORMULON_BUILD_VM "Build the experimental bytecode VM (tests default to ON)" ${FM_BUILD_TESTING})
 # Tree-walker / VM parity harness: when ON, every `evaluate(...)` call also
 # compiles the AST through the bytecode pipeline and asserts the VM result
@@ -121,6 +120,8 @@ set(FORMULON_CORE_SOURCES
   src/utils/thread_launch.cpp
   src/value.cpp
   src/sheet.cpp
+  src/sheet_name.cpp
+  src/sheet_name_casefold_data.cpp
   src/workbook.cpp
   src/io/a1_ref.cpp
   src/io/cell_parser.cpp
