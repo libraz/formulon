@@ -51,8 +51,10 @@ bool HasPassthroughPart(const EmissionPlan& plan, std::string_view path) {
 
 namespace {
 
-/// Returns the set of paths the writer always generates, regardless of
-/// metadata. Used to detect passthrough collisions.
+/// Returns writer-owned paths reserved before passthrough collision handling.
+/// Some reserved paths (notably empty sheet `.rels` parts) are ultimately not
+/// emitted, but reserving them keeps a source passthrough copy from winning
+/// the collision before its relationships can be planned.
 std::unordered_set<std::string> BuildGeneratedPathSet(
     const Workbook& wb, const std::vector<EmissionPlan::PerSheetTable>& flat_tables,
     const std::vector<EmissionPlan::PivotCachePlan>& pivot_caches,
@@ -106,8 +108,15 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   for (const ExternalLinkRecord& rec : wb.external_links()) {
     paths.insert(ooxml::rels_path_for_part(rec.part_path));
   }
-  // Sheet rels: any sheet that owns at least one table or pivot table.
-  // Computed by callers; we enumerate them here for completeness.
+  // Sheet rels are model-owned paths even when the eventual rels document
+  // turns out to have no relationships. Reserve every canonical path before
+  // resolving passthrough collisions so a source copy can never win over the
+  // writer's own sheet rels output.
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    if (!wb.sheet(i).is_opaque_ooxml_sheet()) {
+      paths.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
+    }
+  }
   return paths;
 }
 
@@ -282,35 +291,10 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     }
   }
 
-  // Build each sheet's rels file once, here, so every downstream
-  // consumer — the collision-detection pass immediately below, and the
-  // writer's `AddPart` call — reads the exact same result instead of
-  // separately re-deriving whether a sheet has relationships worth
-  // writing. `relationship_count` is the single source of truth for
-  // that decision; opaque sheets keep a default-constructed (unused)
-  // entry.
-  plan.sheet_rels.assign(wb.sheet_count(), SheetRelsResult{});
-  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
-      continue;
-    }
-    plan.sheet_rels[i] =
-        BuildSheetRels(wb.sheet(i), plan.tables_by_sheet[i], plan.pivot_tables_by_sheet[i], plan.comments_by_sheet[i]);
-  }
-
   // Collision detection between generated paths and passthrough paths.
   // Generated paths win; passthrough copy is dropped with a warning.
   std::unordered_set<std::string> generated = BuildGeneratedPathSet(
       wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet, generated_shared_strings);
-  // A sheet's rels file is generated exactly when its built result
-  // declares at least one relationship — an empty rels file is invalid
-  // OOXML, so the writer never emits one (see `write_ooxml`'s use of
-  // this same `plan.sheet_rels` entry).
-  for (std::size_t i = 0; i < plan.sheet_rels.size(); ++i) {
-    if (plan.sheet_rels[i].relationship_count > 0) {
-      generated.insert("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
-    }
-  }
 
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (generated.count(part.path) != 0U) {
@@ -321,6 +305,20 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
       continue;
     }
     plan.passthrough_kept.push_back(&part);
+  }
+
+  // Build each sheet's rels file once, after passthrough collision handling,
+  // so unknown internal relationships can be retained only when their
+  // payload is present in the finalized plan. `relationship_count` remains
+  // the single source of truth for whether the writer emits the rels part;
+  // opaque sheets keep a default-constructed (unused) entry.
+  plan.sheet_rels.assign(wb.sheet_count(), SheetRelsResult{});
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
+      continue;
+    }
+    plan.sheet_rels[i] = BuildSheetRels(wb.sheet(i), plan.tables_by_sheet[i], plan.pivot_tables_by_sheet[i],
+                                        plan.comments_by_sheet[i], plan);
   }
 
   return plan;

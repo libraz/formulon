@@ -647,19 +647,23 @@ std::string DecodeFormulaText(ByteSpan ptg_bytes, ByteSpan rgcb, const std::vect
 }
 
 /// Registers every non-hidden `BrtName` entry as a workbook defined
-/// name (`Workbook::set_defined_name_scoped`). Hidden entries (the
+/// name via a single bulk `Workbook::set_defined_names` call (mirroring
+/// the OOXML reader's `ooxml_reader.cpp` pattern -- a load-time
+/// population pass, not the incremental single-name edit API
+/// `set_defined_name_scoped` guards with dedup/dep-graph-rebuild logic
+/// that only matters for post-load mutation). Hidden entries (the
 /// `_xlfn.*` / `_xlpm.*` future-function and LET/LAMBDA-parameter
 /// placeholders `PtgName` resolves during Ptg decode — see
-/// `name_table`) are skipped; they are not user-visible names. Walks
-/// `xl/workbook.bin`'s `BrtName` records a second time (after
-/// `DecodeWorkbookNames` has already built the complete `name_table`),
-/// decoding each entry's own formula body so a qualified or
-/// name-referencing formula (e.g. `Rate` defined as a cell reference)
-/// resolves against the full table rather than a partially-built one.
-/// A name whose formula uses a Ptg token outside the supported set logs
-/// a structured warning and is skipped rather than failing the whole
-/// read — the OOXML reader's `DecodeFormulaText` contract mirrored at
-/// the workbook-name level.
+/// `name_table`) are skipped; they are not user-visible names and never
+/// carry a Name Manager comment. Walks `xl/workbook.bin`'s `BrtName`
+/// records a second time (after `DecodeWorkbookNames` has already built
+/// the complete `name_table`), decoding each entry's own formula body so
+/// a qualified or name-referencing formula (e.g. `Rate` defined as a
+/// cell reference) resolves against the full table rather than a
+/// partially-built one. A name whose formula uses a Ptg token outside
+/// the supported set logs a structured warning and is skipped rather
+/// than failing the whole read — the OOXML reader's `DecodeFormulaText`
+/// contract mirrored at the workbook-name level.
 Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body,
                                            const std::vector<XlsbName>& name_table,
                                            const std::vector<std::string>& sheet_names,
@@ -667,6 +671,7 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
                                            std::uint32_t* undecoded_defined_name_count) {
   ByteSpan cursor{body.data(), body.size()};
   std::size_t name_index = 0;
+  std::vector<io::DefinedName> out;
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
@@ -715,8 +720,26 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
       continue;
     }
     ByteSpan rgce{p.data, cce};
+    p.data += cce;
+    p.size -= cce;
+    // `cb` + `rgcb` ([MS-XLSB] §2.4.649's `CellParsedFormula`): the
+    // array-constant / mem-area extra data for this formula's own Ptg
+    // tokens. Must be skipped correctly (not just assumed absent) to
+    // land on the trailing comment string below.
+    auto cb_or = read_u32(p);
+    if (!cb_or) {
+      return cb_or.error();
+    }
+    const std::uint32_t cb = cb_or.value();
+    if (cb > p.size) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordTruncated,
+                        "workbook.bin: BrtName formula rgcb length exceeds payload", "context=xlsb_reader");
+    }
+    ByteSpan rgcb{p.data, cb};
+    p.data += cb;
+    p.size -= cb;
     Arena arena(/*initial_chunk_bytes=*/4096, kMaxLoadArenaBytes);
-    auto ast_or = decode_ptgs(rgce, ByteSpan{}, arena, sheet_names, name_table, sheet_ranges);
+    auto ast_or = decode_ptgs(rgce, rgcb, arena, sheet_names, name_table, sheet_ranges);
     if (!ast_or) {
       StructuredLog("xlsb.defined_name.not_decoded")
           .field("name", entry.name)
@@ -727,14 +750,25 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
       }
       continue;
     }
+    // Trailing BrtName strings: a plain name carries exactly one, the
+    // optional Name Manager comment, as a null `XLNullableWideString`
+    // when unset (`read_xlnullablewidestring` maps that to an empty
+    // string). This mirrors the writer's `EmitName`.
+    auto comment_or = read_xlnullablewidestring(p);
+    if (!comment_or) {
+      return comment_or.error();
+    }
     // Defined-name formulas store the bare expression text (no leading
     // `=`), matching the OOXML `<definedName>` element's text content.
-    const std::string formula_text = parser::format_formula(*ast_or.value());
-    auto reg = wb.set_defined_name_scoped(entry.name, formula_text, entry.itab);
-    if (!reg) {
-      return reg.error();
-    }
+    io::DefinedName dn;
+    dn.name = entry.name;
+    dn.formula = parser::format_formula(*ast_or.value());
+    dn.local_sheet_id = entry.itab;
+    dn.hidden = false;
+    dn.comment = std::move(comment_or.value());
+    out.push_back(std::move(dn));
   }
+  wb.set_defined_names(std::move(out));
   return Expected<void, Error>::Ok();
 }
 
@@ -795,6 +829,100 @@ Expected<std::string, Error> ReadHyperlinkWideString(ByteSpan& cursor, const cha
                       "context=xlsb_reader cch=" + std::to_string(cch));
   }
   return read_xlwidestring(cursor);
+}
+
+/// Decodes the fixed-width worksheet default-format record. The model only
+/// carries the default column/row metrics and base column width; the thick
+/// border and outline-level metadata has no corresponding model state, so it
+/// is surfaced as a structured warning while the representable fields still
+/// round-trip.
+Expected<void, Error> DecodeWorksheetFormatInfo(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index) {
+  constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
+  constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
+  if (rec.payload.size < 12U) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsFmtInfo payload truncated",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
+  }
+
+  ByteSpan p = rec.payload;
+  auto dx_g_col_or = read_u32(p);
+  auto cch_def_col_width_or = read_u16(p);
+  auto miy_def_rw_height_or = read_u16(p);
+  auto flags_or = read_u32(p);
+  if (!dx_g_col_or || !cch_def_col_width_or || !miy_def_rw_height_or || !flags_or) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsFmtInfo fields truncated",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
+  }
+  if (p.size != 0U) {
+    return make_error(
+        FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo has trailing bytes",
+        "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " trailing=" + std::to_string(p.size));
+  }
+
+  const std::uint32_t dx_g_col = dx_g_col_or.value();
+  const std::uint16_t cch_def_col_width = cch_def_col_width_or.value();
+  const std::uint16_t miy_def_rw_height = miy_def_rw_height_or.value();
+  const std::uint32_t flags = flags_or.value();
+  if (dx_g_col != kAbsentDefaultColumnWidth && dx_g_col > 65535U) {
+    return make_error(
+        FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo default column width out of range",
+        "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " dxGCol=" + std::to_string(dx_g_col));
+  }
+  if (cch_def_col_width > 255U) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo base column width out of range",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) +
+                          " cchDefColWidth=" + std::to_string(cch_def_col_width));
+  }
+
+  const bool thick_top = (flags & 0x00000004U) != 0U;
+  const bool thick_bottom = (flags & 0x00000008U) != 0U;
+  const std::uint8_t row_outline_max = static_cast<std::uint8_t>((flags >> 16U) & 0xFFU);
+  const std::uint8_t col_outline_max = static_cast<std::uint8_t>((flags >> 24U) & 0xFFU);
+  if (row_outline_max > 7U || col_outline_max > 7U) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtWsFmtInfo outline level out of range",
+                      "context=xlsb_reader sheet_index=" + std::to_string(sheet_index) + " row_outline_max=" +
+                          std::to_string(row_outline_max) + " col_outline_max=" + std::to_string(col_outline_max));
+  }
+
+  SheetFormatDefaults& defaults = sheet.mutable_format_defaults();
+  defaults.base_col_width = static_cast<double>(cch_def_col_width);
+  if (dx_g_col == kAbsentDefaultColumnWidth) {
+    defaults.has_default_col_width = false;
+    defaults.default_col_width = 0.0;
+  } else {
+    defaults.has_default_col_width = true;
+    defaults.default_col_width = static_cast<double>(dx_g_col) / 256.0;
+  }
+
+  const bool f_unsynced = (flags & 0x00000001U) != 0U;
+  const bool f_dy_zero = (flags & 0x00000002U) != 0U;
+  if (f_dy_zero) {
+    defaults.has_default_row_height = true;
+    defaults.default_row_height = 0.0;
+  } else if (f_unsynced) {
+    defaults.has_default_row_height = true;
+    defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
+  } else if (miy_def_rw_height == kCanonicalDefaultRowHeightTwips) {
+    defaults.has_default_row_height = false;
+    defaults.default_row_height = 0.0;
+  } else {
+    // Excel commonly writes FFFFFFFF/10/400/0 for an OOXML sheet whose
+    // visible default row height is 20pt. Preserve that effective value for
+    // compatibility even without fUnsynced.
+    defaults.has_default_row_height = true;
+    defaults.default_row_height = static_cast<double>(miy_def_rw_height) / 20.0;
+  }
+
+  if (thick_top || thick_bottom || row_outline_max != 0U || col_outline_max != 0U) {
+    StructuredLog("xlsb.reader.unsupported_ws_format_metadata")
+        .field("sheet_index", static_cast<std::int64_t>(sheet_index))
+        .field("thick_top", thick_top)
+        .field("thick_bottom", thick_bottom)
+        .field("row_outline_max", static_cast<std::int64_t>(row_outline_max))
+        .field("col_outline_max", static_cast<std::int64_t>(col_outline_max))
+        .warn();
+  }
+  return Expected<void, Error>::Ok();
 }
 
 /// Tail records in this slot occur after the model-owned merge block and
@@ -1167,6 +1295,13 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         }
         break;
       }
+      case XlsbRecordType::BrtWsFmtInfo: {
+        auto format_status = DecodeWorksheetFormatInfo(rec, wb.sheet(sheet_index), sheet_index);
+        if (!format_status) {
+          return format_status.error();
+        }
+        break;
+      }
       case XlsbRecordType::BrtPane: {
         // BrtPane ([MS-XLSB] §2.4.723): two Xnum split positions, then
         // the lower-right pane's top-left cell and the frozen-state flags.
@@ -1206,8 +1341,10 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
       }
       case XlsbRecordType::BrtRowHdr: {
         // BrtRowHdr ([MS-XLSB] §2.4.770): rw, ixfe, miyRw, two flag
-        // bytes, fPhShow, then ccolspan. Older minimal producers may provide only
-        // rw, which remains enough for cell decoding.
+        // bytes, fPhShow, then ccolspan. flags2 bit 0x40 (fGhostDirty) is
+        // the sole row-style presence signal; ixfe is ignored without it.
+        // Older minimal producers may provide only rw, which remains enough
+        // for cell decoding.
         ByteSpan p = rec.payload;
         auto row_or = read_u32(p);
         if (!row_or) {
@@ -1220,23 +1357,26 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         state.current_row = row_or.value();
         state.row_seen = true;
         if (p.size >= 9U) {
-          auto skip_xf = read_u32(p);
+          auto row_style_xf_or = read_u32(p);
           auto height_or = read_u16(p);
           auto flags1_or = read_u8(p);
           auto flags2_or = read_u8(p);
           auto skip_phonetic_show = read_u8(p);
-          if (!skip_xf || !height_or || !flags1_or || !flags2_or || !skip_phonetic_show) {
+          if (!row_style_xf_or || !height_or || !flags1_or || !flags2_or || !skip_phonetic_show) {
             return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtRowHdr layout truncated",
                               "context=xlsb_reader");
           }
           const std::uint8_t flags = flags2_or.value();
-          if (height_or.value() != 0U || (flags & 0x10U) != 0U || (flags & 0x07U) != 0U) {
+          const bool has_style = (flags & 0x40U) != 0U;
+          if (height_or.value() != 0U || (flags & 0x10U) != 0U || (flags & 0x07U) != 0U || has_style) {
             RowLayout layout;
             layout.row = state.current_row;
             layout.height = static_cast<double>(height_or.value()) / 20.0;
             layout.has_height = height_or.value() != 0U || (flags & 0x20U) != 0U;
             layout.hidden = (flags & 0x10U) != 0U;
             layout.outline_level = static_cast<std::uint8_t>(flags & 0x07U);
+            layout.has_style = has_style;
+            layout.style_xf = has_style ? row_style_xf_or.value() : 0U;
             wb.sheet(sheet_index).mutable_layout().row_overrides.push_back(std::move(layout));
           }
         }
@@ -1249,9 +1389,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         auto first_or = read_u32(p);
         auto last_or = read_u32(p);
         auto width_or = read_u32(p);
-        auto skip_xf = read_u32(p);
+        auto style_xf_or = read_u32(p);
         auto flags_or = read_u16(p);
-        if (!first_or || !last_or || !width_or || !skip_xf || !flags_or) {
+        if (!first_or || !last_or || !width_or || !style_xf_or || !flags_or) {
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtColInfo truncated",
                             "context=xlsb_reader");
         }
@@ -1264,6 +1404,14 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(const std::vector<std::uint8_t>
         layout.first = first_or.value();
         layout.last = last_or.value();
         layout.width = static_cast<double>(width_or.value()) / 256.0;
+        layout.has_width = width_or.value() != 0U || (flags_or.value() & 0x0002U) != 0U;
+        // BrtColInfo always carries ixfe; unlike OOXML there is no separate
+        // style-presence bit. Treat the mandatory value as an effective style
+        // (including ixfe=0), so an XLSB round-trip may canonicalize a
+        // width/hidden-only span to explicit style 0 without changing its
+        // rendering semantics.
+        layout.has_style = true;
+        layout.style_xf = style_xf_or.value();
         layout.hidden = (flags_or.value() & 0x0001U) != 0U;
         layout.outline_level = static_cast<std::uint8_t>((flags_or.value() >> 8U) & 0x07U);
         wb.sheet(sheet_index).mutable_layout().columns.push_back(std::move(layout));

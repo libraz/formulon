@@ -29,13 +29,14 @@ namespace formulon {
 namespace io {
 namespace {
 
-/// Parses an OOXML `<color>` element attached to a style record.
+/// Extracts an explicit OOXML `rgb` value from a style colour element.
 ///
 /// Recognises `rgb="AARRGGBB"` (8-hex) and `rgb="RRGGBB"` (6-hex; alpha
-/// defaults to opaque `0xFF`). Falls back to `fallback` when the element
-/// is absent or the attribute is missing / malformed; the caller (which
-/// already has a default fallback in mind for "no colour set") does not
-/// need to distinguish the cases.
+/// defaults to opaque `0xFF`). Falls back to `fallback` when the element is
+/// absent or has no valid `rgb` attribute. Theme, indexed, and auto selectors
+/// are deliberately not resolved here; `ColorSpec` carries their
+/// authoritative selector and this value is only a literal/compatibility
+/// fallback for callers that cannot resolve selectors.
 ///
 /// The hex-decoding loop is shared with `cf_reader.cpp` via
 /// `parse_rgb_hex()` in `xml_utils.h`.
@@ -46,10 +47,11 @@ std::uint32_t ParseColorArgb(const pugi::xml_node& color, std::uint32_t fallback
   return parse_rgb_hex(color.attribute("rgb").value(), fallback);
 }
 
-/// Parses the original specification of a `<color>` element (rgb / theme
-/// / indexed / auto). Returns `kNone` when the element is absent or
-/// carries none of the recognised attributes; the caller keeps the
-/// resolved AARRGGBB value separately via `ParseColorArgb`.
+/// Parses the original specification of a `<color>` element (rgb / theme /
+/// indexed / auto). Returns `kNone` when the element is absent or carries
+/// none of the recognised attributes. The caller keeps the literal RGB or
+/// compatibility fallback separately via `ParseColorArgb`; no theme/palette
+/// rendering is performed.
 ColorSpec ParseColorSpec(const pugi::xml_node& color) {
   ColorSpec spec;
   if (!color) {
@@ -721,8 +723,9 @@ void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
       rec.num_fmt_id = static_cast<std::uint16_t>(num_fmt.attribute("numFmtId").as_uint(0U));
       rec.num_fmt_code = num_fmt.attribute("formatCode").value();
     }
-    // `<alignment>` / `<protection>` are not modelled structurally on a
-    // dxf; capture them verbatim so they round-trip.
+    // `<alignment>` / `<protection>` are not modelled structurally on a dxf;
+    // retain their serialized XML so they round-trip semantically. Parsing
+    // may normalize lexical formatting.
     if (pugi::xml_node alignment = dxf.child("alignment")) {
       rec.alignment_xml = raw_xml(alignment);
     }
@@ -734,6 +737,41 @@ void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
 }
 
 }  // namespace
+
+/// Rewrites every out-of-range index in `table` to the default record 0.
+///
+/// A third-party writer can emit `<xf fontId="7"/>` against a three-font
+/// table; Excel opens such a file and falls back to the default record
+/// rather than refusing it, and so do we. The alternative — rejecting
+/// the load — would trade a cosmetic loss for an unreadable workbook,
+/// which is the same trade `cell_parser.cpp` already declines for a
+/// malformed `<c s="...">`. Normalising here (rather than clamping in
+/// each getter) is what keeps the header's promise that a stored index
+/// resolves, so `fm_styles_get_*` cannot fail on a workbook that loaded,
+/// and the writer cannot re-emit a dangling reference.
+void NormalizeStyleIndices(StylesTable& table) {
+  const auto clamp = [](std::uint32_t& index, std::size_t size) {
+    if (index >= size) {
+      index = 0U;
+    }
+  };
+  const auto clamp_xf_table = [&](std::vector<CellXf>& xfs, std::size_t style_xf_count) {
+    for (CellXf& xf : xfs) {
+      clamp(xf.font_index, table.fonts.size());
+      clamp(xf.fill_index, table.fills.size());
+      clamp(xf.border_index, table.borders.size());
+      clamp(xf.xf_id, style_xf_count);
+    }
+  };
+  // `<cellStyleXfs>` entries carry an `xfId` too, but it is meaningless
+  // there (the table is its own root), so it is normalised against
+  // itself rather than dropped.
+  clamp_xf_table(table.cell_style_xfs, table.cell_style_xfs.size());
+  clamp_xf_table(table.cell_xfs, table.cell_style_xfs.size());
+  for (CellStyleRecord& style : table.cell_styles) {
+    clamp(style.xf_id, table.cell_style_xfs.size());
+  }
+}
 
 Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles_bytes) {
   pugi::xml_document doc;
@@ -753,6 +791,7 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
   RETURN_IF_ERROR(ReadCellXfs(root, table));
   ReadCellStyles(root, table);
   ReadDxfs(root, table);
+  NormalizeStyleIndices(table);
   table.root_extra_attrs = CaptureRootExtraAttrs(root);
   if (pugi::xml_node colors = root.child("colors")) {
     table.colors_xml = raw_xml(colors);

@@ -70,8 +70,12 @@ struct SheetReadContext {
 ///   * Literal cells (no `<f>`): routed through `Workbook::set_cell_value`.
 ///   * Formula cells: routed through `Workbook::set_cell_formula` with the
 ///     formula text (the leading `=` is added if not present, matching the
-///     `Sheet::set_cell_formula` convention). The cached `<v>` is *not*
-///     written back; the next `recalc()` populates it.
+///     `Sheet::set_cell_formula` convention). A non-blank cached `<v>` is
+///     retained as the cell's value until a caller explicitly calls
+///     `recalc()` — a workbook using functions this engine does not
+///     implement would otherwise lose Excel's answer to a read-only
+///     inspection or a save/load round-trip. Callers must therefore not
+///     read a freshly loaded formula cell as an engine-computed result.
 ///   * Shared formulas (`<f t="shared" si="N" ref="A1:B5">...</f>`):
 ///       - the master occurrence (with formula body text) is recorded;
 ///       - later occurrences (`<f t="shared" si="N"/>`, no body) reuse the
@@ -133,14 +137,21 @@ constexpr std::size_t kSaxThresholdBytes = 256U * 1024U;
 /// the same bytes decode differently for reasons the file's author cannot
 /// see. So for any sheet XML byte sequence — well-formed or not — the two
 /// entry points produce the same workbook mutations and the same
-/// success / failure. Every attribute both consume goes through one
-/// lexer: `parse_a1_ref` for `r=` on `<c>`, `parse_xsd_nonneg_int`
+/// success / failure. Both paths first observe pugixml's `parse_default`
+/// XML conversion contract (predefined entities, decimal/lowercase-`x`
+/// character references, PCDATA CR/CRLF normalization, and attribute
+/// TAB/LF/CR-to-space normalization) before applying the shared lexical
+/// helpers: `parse_a1_ref` for `r=` on `<c>`, `parse_xsd_nonneg_int`
 /// (`io/xsd_int.h`) for `s=` / `si=` / `r=` on `<row>`,
 /// `parse_xsd_bool` for `hidden=`, and `decode_cell_payload` for the
-/// whole `<v>` / `<is>` body. The disposition of a rejected value is
-/// per-attribute but shared across the paths: a bad `si=` fails the
-/// sheet, a bad `s=` degrades to the schema default 0, a bad `<row r=>`
-/// drops that row's layout override.
+/// whole `<v>` / `<is>` body. The DOM path performs the XML conversion
+/// while pugixml builds the tree; the SAX path preserves zero-copy views
+/// when no conversion is needed and uses distinct scratch backing for
+/// simultaneously exposed semantic attributes. The disposition of a
+/// rejected value is per-attribute but shared across the paths: a bad
+/// `si=` fails the sheet, a bad `s=` degrades to the schema default 0, a
+/// bad `<row r=>` drops that row's layout override, and `customHeight=` is
+/// surfaced but does not itself create a row-layout override.
 ///
 /// Used by the OOXML reader when the sheet's raw XML is at least
 /// `kSaxThresholdBytes`. The DOM path remains the default below the
@@ -160,19 +171,22 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
 ///   * `<sheetView zoomScale="...">` — clamped to `[10, 400]`, defaulting
 ///     to `SheetView::kDefaultZoomScale` when absent or out of range.
 ///   * `<sheetView><pane state="frozen" xSplit ySplit/></sheetView>` —
-///     populates `freeze_rows` / `freeze_cols`. Non-frozen panes leave
-///     both at `0`.
+///     populates `freeze_rows` / `freeze_cols`. `state="frozenSplit"`
+///     is equally frozen and is read the same way; the model does not
+///     carry the split position, so the writer re-emits both spellings
+///     as `state="frozen"`. A `state="split"` pane leaves both at `0`.
 ///   * `<sheetPr><tabHidden val="1"/></sheetPr>` — sets
 ///     `view().tab_hidden`. The workbook-side `<sheet state="hidden">`
 ///     path (handled in `read_ooxml`) merges OR-style: either signal
 ///     marks the sheet as hidden.
-///   * `<cols>/<col min max width hidden outlineLevel/>` — appended to
-///     `layout().columns`. Entries that omit `width` are skipped (a
-///     `customWidth=1` / `bestFit=1` marker without a stored width is a
-///     no-op for the layout model).
-///   * `<row r ht hidden outlineLevel ...>` — appended to
-///     `layout().row_overrides` only when at least one of `ht`,
-///     `hidden`, or `outlineLevel` is present.
+///   * `<cols>/<col min max width style hidden outlineLevel/>` — appended to
+///     `layout().columns`. Width/style attribute presence is preserved,
+///     including explicit zero values; valid hidden/outline-only spans are
+///     retained. A `customWidth=1` / `bestFit=1` marker without any stored
+///     layout state remains a no-op for the model.
+///   * `<row r ht hidden outlineLevel s customFormat ...>` — appended to
+///     `layout().row_overrides` when a metric/visibility/outline override is
+///     present or when `customFormat=1`; row `s` is ignored otherwise.
 ///
 /// Returns `kIoSheetCorrupt` when the worksheet root is malformed.
 /// Missing optional sub-elements are not errors.
@@ -181,7 +195,16 @@ Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet
 
 /// Walks `<mergeCells>` inside `worksheet` and returns the parsed
 /// `MergeRange` list in document order. Returns an empty vector when
-/// the sheet has no merges. `kIoSheetCorrupt` on a malformed `ref=`.
+/// the sheet has no merges.
+///
+/// Invalid-reference policy — shared by every presentation-overlay
+/// reader on this sheet (merges, hyperlinks, data validations, and
+/// `read_conditional_formats`): an entry whose reference is missing,
+/// empty or unparseable is dropped with a WARN diagnostic
+/// (`io.sheet.overlay.skip`) and the walk continues. None of this
+/// metadata carries a cell value, so one malformed entry must not cost
+/// the caller the whole workbook. Corruption inside `<sheetData>` still
+/// fails the sheet with `kIoSheetCorrupt`.
 Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& worksheet);
 
 /// Walks `<hyperlinks>` inside `worksheet` and returns the parsed
@@ -189,7 +212,8 @@ Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& works
 /// `Hyperlink::rid` from the `r:id` attribute as observed; the caller
 /// is responsible for joining each rid against the sheet's rels file
 /// to fill in `target` (external URL) — see `apply_hyperlink_rels`.
-/// `kIoSheetCorrupt` on a malformed `ref=`.
+/// A malformed `ref=` drops that hyperlink under the invalid-reference
+/// policy documented on `read_merges`.
 Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& worksheet);
 
 /// Joins `hyperlinks` against the parsed sheet rels file (`rid -> target`
@@ -202,8 +226,9 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
 
 /// Walks `<dataValidations>` inside `worksheet` and returns the parsed
 /// `DataValidation` list in document order. Returns an empty vector
-/// when the sheet has no validations. `kIoSheetCorrupt` on a malformed
-/// `sqref=`.
+/// when the sheet has no validations. A malformed `sqref=` drops that
+/// validation under the invalid-reference policy documented on
+/// `read_merges`.
 Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet);
 
 /// Reads `<sheetProtection>` from the sheet and returns the parsed

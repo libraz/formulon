@@ -141,12 +141,16 @@ std::string WorkbookRelsXml() {
 }
 
 /// Builds one `BrtName` record body carrying `name` at workbook scope
-/// with `rgce` as its formula. Only the prefix the reader consumes is
-/// emitted (flags + 3 reserved + itab + cch + UTF-16LE name + cce +
-/// rgce); the trailing fields a real Excel record carries after the
-/// formula body are never read, so omitting them keeps the builder
-/// honest about what the decoder depends on.
-std::vector<std::uint8_t> NameRecord(std::string_view name, const std::vector<std::uint8_t>& rgce) {
+/// with `rgce` as its formula and `comment` as the trailing Name
+/// Manager comment string (empty encodes the real-Excel null
+/// `XLNullableWideString` sentinel). Emits exactly the byte shape a real
+/// Excel-365-produced `BrtName` for a plain (non-placeholder) defined
+/// name carries: flags + 3 reserved + itab + cch + UTF-16LE name + cce +
+/// rgce + cb (always 0 here -- no array-constant `rgcb`) + the one
+/// trailing comment string. Verified against `xlsb_fidelity_base.xlsb`'s
+/// own "Rate" `BrtName` record byte-for-byte.
+std::vector<std::uint8_t> NameRecord(std::string_view name, const std::vector<std::uint8_t>& rgce,
+                                     std::string_view comment = {}) {
   std::vector<std::uint8_t> p;
   p.push_back(0);  // flags[0] — fHidden clear.
   p.push_back(0);  // flags[1]
@@ -161,6 +165,8 @@ std::vector<std::uint8_t> NameRecord(std::string_view name, const std::vector<st
   }
   AppendU32(p, static_cast<std::uint32_t>(rgce.size()));
   p.insert(p.end(), rgce.begin(), rgce.end());
+  AppendU32(p, 0U);  // cb: no rgcb.
+  AppendXLNullableWideString(p, comment);
   return p;
 }
 
@@ -236,6 +242,56 @@ std::vector<std::uint8_t> SheetBinReal(double cell_value, std::uint32_t row = 0,
     AppendRecord(body, 5, p);
   }
 
+  AppendRecord(body, 146, {});  // BrtEndSheetData
+  AppendRecord(body, 130, {});  // BrtEndSheet
+  return body;
+}
+
+std::vector<std::uint8_t> WorksheetFormatPayload(std::uint32_t dx_g_col, std::uint16_t cch_def_col_width,
+                                                 std::uint16_t miy_def_rw_height, std::uint32_t flags) {
+  std::vector<std::uint8_t> payload;
+  AppendU32(payload, dx_g_col);
+  payload.push_back(static_cast<std::uint8_t>(cch_def_col_width & 0xFFU));
+  payload.push_back(static_cast<std::uint8_t>((cch_def_col_width >> 8U) & 0xFFU));
+  payload.push_back(static_cast<std::uint8_t>(miy_def_rw_height & 0xFFU));
+  payload.push_back(static_cast<std::uint8_t>((miy_def_rw_height >> 8U) & 0xFFU));
+  AppendU32(payload, flags);
+  return payload;
+}
+
+std::vector<std::uint8_t> SheetBinWorksheetFormat(const std::vector<std::uint8_t>& format_payload) {
+  std::vector<std::uint8_t> body;
+  AppendRecord(body, 129, {});              // BrtBeginSheet
+  AppendRecord(body, 485, format_payload);  // BrtWsFmtInfo
+  AppendRecord(body, 145, {});              // BrtBeginSheetData
+  AppendRecord(body, 146, {});              // BrtEndSheetData
+  AppendRecord(body, 130, {});              // BrtEndSheet
+  return body;
+}
+
+/// Builds a layout-only sheet carrying three BrtRowHdr records: explicit
+/// style 0, explicit style 1, and ixfe 1 without fGhostDirty. The last one
+/// is the negative control proving that ixfe is ignored unless the flag says
+/// the row style is effective.
+std::vector<std::uint8_t> SheetBinRowStyles() {
+  std::vector<std::uint8_t> body;
+  AppendRecord(body, 129, {});  // BrtBeginSheet
+  AppendRecord(body, 145, {});  // BrtBeginSheetData
+  const auto append_row = [&body](std::uint32_t row, std::uint32_t style_xf, std::uint8_t flags2) {
+    std::vector<std::uint8_t> p;
+    AppendU32(p, row);
+    AppendU32(p, style_xf);
+    p.push_back(0);
+    p.push_back(0);  // miyRw
+    AppendU8(p, 0);  // flags1
+    AppendU8(p, flags2);
+    AppendU8(p, 0);            // fPhShow
+    AppendU32(p, 0);           // ccolspan
+    AppendRecord(body, 0, p);  // BrtRowHdr
+  };
+  append_row(0U, 0U, 0x40U);
+  append_row(1U, 1U, 0x40U);
+  append_row(2U, 1U, 0U);
   AppendRecord(body, 146, {});  // BrtEndSheetData
   AppendRecord(body, 130, {});  // BrtEndSheet
   return body;
@@ -462,6 +518,135 @@ TEST(XlsbReader, ReadsTwoSheetsWithRealAndIsstCells) {
   EXPECT_EQ(result.value().cells_read, 2U);
 }
 
+TEST(XlsbReader, DecodesWorksheetFormatDefaults) {
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinWorksheetFormat(WorksheetFormatPayload(3200U, 10U, 375U, 1U))});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  auto result = read_xlsb(SpanOf(BuildZip(parts)));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+  const SheetFormatDefaults& defaults = result.value().workbook.sheet(0).format_defaults();
+  EXPECT_DOUBLE_EQ(defaults.base_col_width, 10.0);
+  EXPECT_TRUE(defaults.has_default_col_width);
+  EXPECT_DOUBLE_EQ(defaults.default_col_width, 12.5);
+  EXPECT_TRUE(defaults.has_default_row_height);
+  EXPECT_DOUBLE_EQ(defaults.default_row_height, 18.75);
+}
+
+TEST(XlsbReader, DecodesAbsentAndExcelCompatibleWorksheetFormatDefaults) {
+  const auto read_defaults = [](const std::vector<std::uint8_t>& payload) {
+    std::vector<PartFile> parts;
+    parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+    parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+    parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+    parts.push_back({"xl/workbook.bin", WorkbookBin()});
+    parts.push_back({"xl/worksheets/sheet1.bin", SheetBinWorksheetFormat(payload)});
+    parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+    return read_xlsb(SpanOf(BuildZip(parts)));
+  };
+
+  auto absent = read_defaults(WorksheetFormatPayload(0xFFFFFFFFU, 8U, 300U, 0U));
+  ASSERT_TRUE(static_cast<bool>(absent)) << absent.error().message << " | " << absent.error().context;
+  const SheetFormatDefaults& absent_defaults = absent.value().workbook.sheet(0).format_defaults();
+  EXPECT_DOUBLE_EQ(absent_defaults.base_col_width, 8.0);
+  EXPECT_FALSE(absent_defaults.has_default_col_width);
+  EXPECT_DOUBLE_EQ(absent_defaults.default_col_width, 0.0);
+  EXPECT_FALSE(absent_defaults.has_default_row_height);
+  EXPECT_DOUBLE_EQ(absent_defaults.default_row_height, 0.0);
+
+  auto excel = read_defaults(WorksheetFormatPayload(0xFFFFFFFFU, 10U, 400U, 0U));
+  ASSERT_TRUE(static_cast<bool>(excel)) << excel.error().message << " | " << excel.error().context;
+  const SheetFormatDefaults& excel_defaults = excel.value().workbook.sheet(0).format_defaults();
+  EXPECT_DOUBLE_EQ(excel_defaults.base_col_width, 10.0);
+  EXPECT_FALSE(excel_defaults.has_default_col_width);
+  EXPECT_TRUE(excel_defaults.has_default_row_height);
+  EXPECT_DOUBLE_EQ(excel_defaults.default_row_height, 20.0);
+
+  auto zero = read_defaults(WorksheetFormatPayload(0U, 8U, 0U, 2U));
+  ASSERT_TRUE(static_cast<bool>(zero)) << zero.error().message << " | " << zero.error().context;
+  const SheetFormatDefaults& zero_defaults = zero.value().workbook.sheet(0).format_defaults();
+  EXPECT_TRUE(zero_defaults.has_default_col_width);
+  EXPECT_DOUBLE_EQ(zero_defaults.default_col_width, 0.0);
+  EXPECT_TRUE(zero_defaults.has_default_row_height);
+  EXPECT_DOUBLE_EQ(zero_defaults.default_row_height, 0.0);
+}
+
+TEST(XlsbReader, RejectsMalformedWorksheetFormatInfoPayloads) {
+  const auto read_payload = [](const std::vector<std::uint8_t>& payload) {
+    std::vector<PartFile> parts;
+    parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+    parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+    parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+    parts.push_back({"xl/workbook.bin", WorkbookBin()});
+    parts.push_back({"xl/worksheets/sheet1.bin", SheetBinWorksheetFormat(payload)});
+    parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+    return read_xlsb(SpanOf(BuildZip(parts)));
+  };
+
+  const std::vector<std::uint8_t> valid = WorksheetFormatPayload(0xFFFFFFFFU, 8U, 300U, 0U);
+  for (const std::size_t length : {3U, 5U, 7U, 11U}) {
+    std::vector<std::uint8_t> truncated(valid.data(), valid.data() + length);
+    auto result = read_payload(truncated);
+    ASSERT_FALSE(static_cast<bool>(result)) << "payload length " << length << " unexpectedly succeeded";
+    EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
+  }
+
+  auto invalid_dx = read_payload(WorksheetFormatPayload(65536U, 8U, 300U, 0U));
+  ASSERT_FALSE(static_cast<bool>(invalid_dx));
+  EXPECT_EQ(invalid_dx.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+
+  auto invalid_cch = read_payload(WorksheetFormatPayload(0xFFFFFFFFU, 256U, 300U, 0U));
+  ASSERT_FALSE(static_cast<bool>(invalid_cch));
+  EXPECT_EQ(invalid_cch.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+
+  auto invalid_outline = read_payload(WorksheetFormatPayload(0xFFFFFFFFU, 8U, 300U, 8U << 16U));
+  ASSERT_FALSE(static_cast<bool>(invalid_outline));
+  EXPECT_EQ(invalid_outline.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+
+  std::vector<std::uint8_t> trailing = valid;
+  trailing.push_back(0U);
+  auto trailing_result = read_payload(trailing);
+  ASSERT_FALSE(static_cast<bool>(trailing_result));
+  EXPECT_EQ(trailing_result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
+TEST(XlsbReader, RowStylePresenceUsesFGhostDirtyFlag) {
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin()});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinRowStyles()});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+  const auto& rows = result.value().workbook.sheet(0).layout().row_overrides;
+  ASSERT_EQ(rows.size(), 2U);
+  const auto find_row = [&rows](std::uint32_t row) -> const RowLayout* {
+    for (const RowLayout& candidate : rows) {
+      if (candidate.row == row) {
+        return &candidate;
+      }
+    }
+    return nullptr;
+  };
+  const RowLayout* style_zero = find_row(0U);
+  const RowLayout* style_one = find_row(1U);
+  ASSERT_NE(style_zero, nullptr);
+  ASSERT_NE(style_one, nullptr);
+  EXPECT_TRUE(style_zero->has_style);
+  EXPECT_EQ(style_zero->style_xf, 0U);
+  EXPECT_TRUE(style_one->has_style);
+  EXPECT_EQ(style_one->style_xf, 1U);
+  EXPECT_EQ(find_row(2U), nullptr);
+}
+
 TEST(XlsbReader, DecodesFormulaAndPreservesCachedValue) {
   // rgce = `PtgInt 5` (`=5`): 0x1E 0x05 0x00.
   const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};
@@ -570,6 +755,28 @@ TEST(XlsbReader, DecodableDefinedNameRegistersAndCountsNothing) {
   EXPECT_EQ(names[0].formula, "5");
   EXPECT_EQ(names[0].local_sheet_id, -1);
   EXPECT_EQ(result.value().undecoded_defined_name_count, 0U);
+}
+
+TEST(XlsbReader, DefinedNameCommentSurvivesDecode) {
+  // The Name Manager comment is the trailing `BrtName` string after
+  // `rgce`/`rgcb`; a reader that stops at the formula body (or
+  // misreads `cb`) never reaches it.
+  const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};
+  std::vector<PartFile> parts;
+  parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
+  parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
+  parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
+  parts.push_back({"xl/workbook.bin", WorkbookBin({NameRecord("Rate", rgce, "The annual interest rate")})});
+  parts.push_back({"xl/worksheets/sheet1.bin", SheetBinReal(1.0)});
+  parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
+
+  const std::vector<std::uint8_t> archive = BuildZip(parts);
+  auto result = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message << " | " << result.error().context;
+
+  const std::vector<io::DefinedName>& names = result.value().workbook.defined_names();
+  ASSERT_EQ(names.size(), 1U);
+  EXPECT_EQ(names[0].comment, "The annual interest rate");
 }
 
 TEST(XlsbReader, ExternalBookNameInDefinedNameIsSkippedAndCounted) {

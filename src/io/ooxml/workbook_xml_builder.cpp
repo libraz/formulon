@@ -74,7 +74,7 @@ constexpr std::string_view kRelCustomProperties =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties";
 
 /// Escapes `text` and appends it as the body of an XML element. Callers
-/// that need attribute escaping should use `AppendXmlEscaped` directly.
+/// that need attribute escaping should use `AppendXmlAttrEscaped` directly.
 inline void AppendEscaped(std::string& out, std::string_view text) {
   AppendXmlEscaped(out, text);
 }
@@ -86,7 +86,7 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
   out.append("  <definedNames>\n");
   for (const DefinedName& n : names) {
     out.append("    <definedName name=\"");
-    AppendXmlEscaped(out, n.name);
+    AppendXmlAttrEscaped(out, n.name);
     out.push_back('"');
     if (n.local_sheet_id >= 0) {
       out.append(" localSheetId=\"");
@@ -98,7 +98,7 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     }
     if (!n.comment.empty()) {
       out.append(" comment=\"");
-      AppendXmlEscaped(out, n.comment);
+      AppendXmlAttrEscaped(out, n.comment);
       out.push_back('"');
     }
     out.push_back('>');
@@ -156,9 +156,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       continue;
     }
     out.append("  <Default Extension=\"");
-    AppendXmlEscaped(out, def.extension);
+    AppendXmlAttrEscaped(out, def.extension);
     out.append("\" ContentType=\"");
-    AppendXmlEscaped(out, def.content_type);
+    AppendXmlAttrEscaped(out, def.content_type);
     out.append("\"/>\n");
   }
   AppendOverride(out, "xl/workbook.xml", workbook_kind_content_type(wb.kind()));
@@ -210,9 +210,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     // Passthrough payloads may carry XML-critical bytes in either path
     // or content type (rare but legal); escape both.
     out.append("  <Override PartName=\"/");
-    AppendXmlEscaped(out, part->path);
+    AppendXmlAttrEscaped(out, part->path);
     out.append("\" ContentType=\"");
-    AppendXmlEscaped(out, part->content_type);
+    AppendXmlAttrEscaped(out, part->content_type);
     out.append("\"/>\n");
   }
   out.append("</Types>\n");
@@ -300,7 +300,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   out.append("  <sheets>\n");
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     out.append("    <sheet name=\"");
-    AppendXmlEscaped(out, wb.sheet(i).name());
+    AppendXmlAttrEscaped(out, wb.sheet(i).name());
     out.append("\" sheetId=\"");
     out.append(std::to_string(i + 1));
     out.append("\" r:id=\"rId");

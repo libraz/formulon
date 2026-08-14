@@ -148,9 +148,9 @@ struct EmissionPlan {
   // emission can blindly write everything in the list.
   std::vector<const PassthroughPart*> passthrough_kept;
   // Per-sheet rels build, indexed by sheet index (opaque sheets carry a
-  // default-constructed, unused entry). Built once here so the writer
-  // and the collision-detection pass below both consult the exact same
-  // result instead of separately re-deriving whether a sheet has rels.
+  // default-constructed, unused entry). Built once after passthrough
+  // collision filtering so internal unknown relationships only survive when
+  // their payload remains available in `passthrough_kept`.
   std::vector<SheetRelsResult> sheet_rels;
 };
 

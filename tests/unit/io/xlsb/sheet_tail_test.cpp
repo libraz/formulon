@@ -530,6 +530,40 @@ TEST(XlsbSheetTail, NoMergeTailKeepsRecordsAfterHyperlinkAfterModelBlock) {
   EXPECT_LT(IndexOfType(types, kBrtPrintOptions), IndexOfType(types, kBrtEndSheet));
 }
 
+TEST(XlsbSheetTail, AddingMergeToNoMergeSourceUsesGrammarMergeSlot) {
+  const std::vector<std::uint8_t> archive = BuildZip(SourceParts(
+      /*with_merges=*/false, /*with_sheet_rels=*/true, /*with_drawing_part=*/false));
+  auto read_or = read_xlsb(SpanOf(archive));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const XlsbSheetTail original_tail = read_or.value().workbook.sheet(0).xlsb_tail();
+  Workbook wb = std::move(read_or.value().workbook);
+
+  auto unchanged_write_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(unchanged_write_or)) << unchanged_write_or.error().message;
+  auto unchanged_read_or = read_xlsb(SpanOf(unchanged_write_or.value()));
+  ASSERT_TRUE(static_cast<bool>(unchanged_read_or)) << unchanged_read_or.error().message;
+  const XlsbSheetTail& unchanged_tail = unchanged_read_or.value().workbook.sheet(0).xlsb_tail();
+  EXPECT_EQ(unchanged_tail.before_merges, original_tail.before_merges);
+  EXPECT_EQ(unchanged_tail.after_merges_before_hyperlinks, original_tail.after_merges_before_hyperlinks);
+  EXPECT_EQ(unchanged_tail.after_hyperlinks, original_tail.after_hyperlinks);
+
+  wb.sheet(0).mutable_merges().push_back(MergeRange{1U, 1U, 2U, 2U});
+
+  auto write_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message;
+  const std::vector<std::uint16_t> types = RecordTypes(PartOf(write_or.value(), "xl/worksheets/sheet1.bin"));
+
+  EXPECT_EQ(CountOfType(types, kBrtBeginMergeCells), 1U);
+  EXPECT_EQ(CountOfType(types, kBrtMergeCell), 1U);
+  EXPECT_EQ(CountOfType(types, kBrtEndMergeCells), 1U);
+  EXPECT_LT(IndexOfType(types, kBrtBeginAFilter), IndexOfType(types, kBrtBeginMergeCells));
+  EXPECT_LT(IndexOfType(types, kBrtEndMergeCells), IndexOfType(types, kBrtBeginCondFmt));
+  EXPECT_LT(IndexOfType(types, kBrtBeginCondFmt), IndexOfType(types, kBrtBeginDVals));
+  EXPECT_LT(IndexOfType(types, kBrtBeginDVals), IndexOfType(types, kBrtHLink));
+  EXPECT_LT(IndexOfType(types, kBrtHLink), IndexOfType(types, kBrtPrintOptions));
+  EXPECT_LT(IndexOfType(types, kBrtPrintOptions), IndexOfType(types, kBrtEndSheet));
+}
+
 TEST(XlsbSheetTail, NoSourceHyperlinkKeepsPostHyperlinkTailAfterNewModelLink) {
   const std::vector<std::uint8_t> archive = BuildZip(SourceParts(
       /*with_merges=*/false, /*with_sheet_rels=*/false, /*with_drawing_part=*/false,

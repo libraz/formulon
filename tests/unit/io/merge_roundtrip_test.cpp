@@ -69,12 +69,26 @@ TEST(MergeRoundTrip, MultipleRanges) {
   EXPECT_EQ(out.value()[2].last_col, 4U);
 }
 
-TEST(MergeRoundTrip, EmptyRefRejected) {
+// Merges are a presentation overlay: a malformed entry is dropped and the
+// walk continues, the same disposition `read_conditional_formats` applies
+// to a malformed CF block. One bad `ref=` must not cost the caller the
+// sheet's cell values.
+TEST(MergeRoundTrip, MalformedRefSkipsOnlyThatEntry) {
   pugi::xml_document doc;
-  auto ws = ParseWorksheet(doc, "<mergeCells><mergeCell ref=\"\"/></mergeCells>");
+  auto ws = ParseWorksheet(doc,
+                           "<mergeCells>"
+                           "<mergeCell ref=\"A1:A3\"/>"
+                           "<mergeCell ref=\"\"/>"
+                           "<mergeCell ref=\"ZZZZ1:!!\"/>"
+                           "<mergeCell ref=\"B1:D1\"/>"
+                           "</mergeCells>");
   auto out = read_merges(ws);
-  EXPECT_FALSE(static_cast<bool>(out));
-  EXPECT_EQ(out.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  ASSERT_TRUE(static_cast<bool>(out));
+  ASSERT_EQ(out.value().size(), 2U);
+  EXPECT_EQ(out.value()[0].first_row, 0U);
+  EXPECT_EQ(out.value()[0].last_row, 2U);
+  EXPECT_EQ(out.value()[1].first_col, 1U);
+  EXPECT_EQ(out.value()[1].last_col, 3U);
 }
 
 TEST(MergeRoundTrip, NormalisesReversedCorners) {

@@ -242,6 +242,83 @@ TEST(SheetFeaturesRoundTrip, DataValidationShowDropDown) {
   EXPECT_TRUE(reloaded.validations()[1].show_dropdown);
 }
 
+TEST(SheetFeaturesRoundTrip, AttributeControlCharacters) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+
+  DataValidation validation;
+  validation.ranges.push_back(MergeRange{0, 0, 0, 0});
+  validation.type = 3;  // list
+  validation.error_title = "tab\tvalue";
+  validation.error_message = "line\nvalue";
+  validation.prompt_title = "carriage\rvalue";
+  validation.prompt_message = "both\r\nvalue";
+  s.mutable_validations().push_back(validation);
+
+  // Internal hyperlinks keep all three modelled text attributes in the
+  // worksheet part, without involving a relationship target attribute.
+  Hyperlink hyperlink;
+  hyperlink.row = 1;
+  hyperlink.col = 1;
+  hyperlink.last_row = 1;
+  hyperlink.last_col = 1;
+  hyperlink.location = "location\tvalue";
+  hyperlink.tooltip = "tooltip\nvalue";
+  hyperlink.display = "display\r\nvalue";
+  s.mutable_hyperlinks().push_back(hyperlink);
+
+  auto save_or = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(save_or));
+
+  io::ZipReader first_zip;
+  ASSERT_TRUE(static_cast<bool>(first_zip.open(SpanOf(save_or.value()))));
+  auto first_sheet_or = first_zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(first_sheet_or));
+  const std::string first_sheet_xml(first_sheet_or.value().begin(), first_sheet_or.value().end());
+  EXPECT_NE(first_sheet_xml.find("errorTitle=\"tab&#9;value\""), std::string::npos);
+  EXPECT_NE(first_sheet_xml.find("error=\"line&#10;value\""), std::string::npos);
+  EXPECT_NE(first_sheet_xml.find("promptTitle=\"carriage&#13;value\""), std::string::npos);
+  EXPECT_NE(first_sheet_xml.find("prompt=\"both&#13;&#10;value\""), std::string::npos);
+  EXPECT_NE(first_sheet_xml.find("location=\"location&#9;value\""), std::string::npos);
+  EXPECT_NE(first_sheet_xml.find("tooltip=\"tooltip&#10;value\""), std::string::npos);
+  EXPECT_NE(first_sheet_xml.find("display=\"display&#13;&#10;value\""), std::string::npos);
+
+  auto first_load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(first_load_or));
+  const Sheet& first_loaded = first_load_or.value().workbook.sheet(0);
+  ASSERT_EQ(first_loaded.validations().size(), 1U);
+  EXPECT_EQ(first_loaded.validations()[0].error_title, "tab\tvalue");
+  EXPECT_EQ(first_loaded.validations()[0].error_message, "line\nvalue");
+  EXPECT_EQ(first_loaded.validations()[0].prompt_title, "carriage\rvalue");
+  EXPECT_EQ(first_loaded.validations()[0].prompt_message, "both\r\nvalue");
+  ASSERT_EQ(first_loaded.hyperlinks().size(), 1U);
+  EXPECT_EQ(first_loaded.hyperlinks()[0].location, "location\tvalue");
+  EXPECT_EQ(first_loaded.hyperlinks()[0].tooltip, "tooltip\nvalue");
+  EXPECT_EQ(first_loaded.hyperlinks()[0].display, "display\r\nvalue");
+
+  auto save2_or = io::write_ooxml(first_load_or.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(save2_or));
+  io::ZipReader second_zip;
+  ASSERT_TRUE(static_cast<bool>(second_zip.open(SpanOf(save2_or.value()))));
+  auto second_sheet_or = second_zip.read_entry("xl/worksheets/sheet1.xml");
+  ASSERT_TRUE(static_cast<bool>(second_sheet_or));
+  const std::string second_sheet_xml(second_sheet_or.value().begin(), second_sheet_or.value().end());
+  EXPECT_EQ(second_sheet_xml, first_sheet_xml);
+
+  auto second_load_or = io::read_ooxml(SpanOf(save2_or.value()));
+  ASSERT_TRUE(static_cast<bool>(second_load_or));
+  const Sheet& second_loaded = second_load_or.value().workbook.sheet(0);
+  ASSERT_EQ(second_loaded.validations().size(), 1U);
+  EXPECT_EQ(second_loaded.validations()[0].error_title, "tab\tvalue");
+  EXPECT_EQ(second_loaded.validations()[0].error_message, "line\nvalue");
+  EXPECT_EQ(second_loaded.validations()[0].prompt_title, "carriage\rvalue");
+  EXPECT_EQ(second_loaded.validations()[0].prompt_message, "both\r\nvalue");
+  ASSERT_EQ(second_loaded.hyperlinks().size(), 1U);
+  EXPECT_EQ(second_loaded.hyperlinks()[0].location, "location\tvalue");
+  EXPECT_EQ(second_loaded.hyperlinks()[0].tooltip, "tooltip\nvalue");
+  EXPECT_EQ(second_loaded.hyperlinks()[0].display, "display\r\nvalue");
+}
+
 TEST(SheetFeaturesRoundTrip, AllFeaturesCombined) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);

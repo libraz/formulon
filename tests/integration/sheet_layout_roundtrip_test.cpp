@@ -13,6 +13,8 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
 #include "value.h"
@@ -143,6 +145,36 @@ TEST(SheetLayoutRoundTrip, ColumnWidthsHiddenAndOutline) {
   EXPECT_EQ(cols[2].outline_level, 2U);
 }
 
+TEST(SheetLayoutRoundTrip, LegacyNonZeroWidthIsLogicallyExplicitAcrossFormats) {
+  Workbook src = Workbook::create();
+  ColumnLayout legacy;
+  legacy.first = 0U;
+  legacy.last = 0U;
+  legacy.width = 12.5;
+  // Five-field aggregate/model construction historically left this raw bit
+  // clear; the logical contract still treats a non-zero width as explicit.
+  EXPECT_FALSE(legacy.has_width);
+  src.sheet(0).mutable_layout().columns.push_back(legacy);
+
+  const std::vector<std::uint8_t> xlsx = SaveOrDie(src);
+  auto xlsx_or = io::read_ooxml(SpanOf(xlsx));
+  ASSERT_TRUE(static_cast<bool>(xlsx_or)) << xlsx_or.error().message;
+  const auto& xlsx_col = xlsx_or.value().workbook.sheet(0).layout().columns[0];
+  EXPECT_TRUE(xlsx_col.has_width);
+  EXPECT_DOUBLE_EQ(xlsx_col.width, 12.5);
+
+  auto xlsb_or = io::xlsb::write_xlsb(src);
+  ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
+  auto xlsb_read_or = io::xlsb::read_xlsb(SpanOf(xlsb_or.value()));
+  ASSERT_TRUE(static_cast<bool>(xlsb_read_or)) << xlsb_read_or.error().message;
+  const auto& xlsb_col = xlsb_read_or.value().workbook.sheet(0).layout().columns[0];
+  EXPECT_TRUE(xlsb_col.has_width);
+  EXPECT_DOUBLE_EQ(xlsb_col.width, 12.5);
+  // BrtColInfo's ixfe is mandatory; style 0 is the XLSB canonical default.
+  EXPECT_TRUE(xlsb_col.has_style);
+  EXPECT_EQ(xlsb_col.style_xf, 0U);
+}
+
 TEST(SheetLayoutRoundTrip, RowHeightsHiddenAndOutline) {
   Workbook src = Workbook::create();
   // Populate one cell so the row is in the dense store as well —
@@ -201,6 +233,94 @@ TEST(SheetLayoutRoundTrip, OutlineOnlyEmptyRowIsEmittedAndReloaded) {
   EXPECT_DOUBLE_EQ(rows[0].height, 0.0);
   EXPECT_FALSE(rows[0].hidden);
   EXPECT_EQ(rows[0].outline_level, 3U);
+}
+
+TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) {
+  Workbook src = Workbook::create();
+  Sheet& sheet = src.sheet(0);
+  SheetLayout& layout = sheet.mutable_layout();
+
+  ColumnLayout style_zero;
+  style_zero.first = 0U;
+  style_zero.last = 0U;
+  style_zero.has_style = true;
+  style_zero.style_xf = 0U;
+  layout.columns.push_back(style_zero);
+
+  ColumnLayout width_zero;
+  width_zero.first = 1U;
+  width_zero.last = 1U;
+  width_zero.has_width = true;
+  width_zero.width = 0.0;
+  layout.columns.push_back(width_zero);
+
+  ColumnLayout hidden_only;
+  hidden_only.first = 2U;
+  hidden_only.last = 2U;
+  hidden_only.hidden = true;
+  layout.columns.push_back(hidden_only);
+
+  ColumnLayout outline_only;
+  outline_only.first = 3U;
+  outline_only.last = 3U;
+  outline_only.outline_level = 2U;
+  layout.columns.push_back(outline_only);
+
+  ColumnLayout style_nonzero;
+  style_nonzero.first = 4U;
+  style_nonzero.last = 4U;
+  style_nonzero.has_style = true;
+  style_nonzero.style_xf = 3U;
+  layout.columns.push_back(style_nonzero);
+
+  RowLayout row_style_zero;
+  row_style_zero.row = 12U;
+  row_style_zero.has_style = true;
+  row_style_zero.style_xf = 0U;
+  layout.row_overrides.push_back(row_style_zero);
+
+  RowLayout row_style_nonzero;
+  row_style_nonzero.row = 13U;
+  row_style_nonzero.has_style = true;
+  row_style_nonzero.style_xf = 3U;
+  layout.row_overrides.push_back(row_style_nonzero);
+
+  const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+  const std::string xml = ReadSheet1Xml(bytes);
+  EXPECT_NE(xml.find("<col min=\"1\" max=\"1\" style=\"0\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<col min=\"2\" max=\"2\" width=\"0\" customWidth=\"1\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<col min=\"3\" max=\"3\" hidden=\"1\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<col min=\"4\" max=\"4\" outlineLevel=\"2\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<col min=\"5\" max=\"5\" style=\"3\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<row r=\"13\" s=\"0\" customFormat=\"1\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<row r=\"14\" s=\"3\" customFormat=\"1\"/>"), std::string::npos) << xml;
+
+  auto result_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+  const Sheet& loaded = result_or.value().workbook.sheet(0);
+  ASSERT_EQ(loaded.layout().columns.size(), 5U);
+  EXPECT_TRUE(loaded.layout().columns[0].has_style);
+  EXPECT_EQ(loaded.layout().columns[0].style_xf, 0U);
+  EXPECT_TRUE(loaded.layout().columns[1].has_width);
+  EXPECT_DOUBLE_EQ(loaded.layout().columns[1].width, 0.0);
+  EXPECT_TRUE(loaded.layout().columns[2].hidden);
+  EXPECT_FALSE(loaded.layout().columns[2].has_width);
+  EXPECT_EQ(loaded.layout().columns[3].outline_level, 2U);
+  EXPECT_FALSE(loaded.layout().columns[3].has_width);
+  EXPECT_TRUE(loaded.layout().columns[4].has_style);
+  EXPECT_EQ(loaded.layout().columns[4].style_xf, 3U);
+
+  ASSERT_EQ(loaded.layout().row_overrides.size(), 2U);
+  std::vector<RowLayout> rows = loaded.layout().row_overrides;
+  std::sort(rows.begin(), rows.end(), [](const RowLayout& a, const RowLayout& b) { return a.row < b.row; });
+  EXPECT_EQ(rows[0].row, 12U);
+  EXPECT_TRUE(rows[0].has_style);
+  EXPECT_EQ(rows[0].style_xf, 0U);
+  EXPECT_EQ(rows[1].row, 13U);
+  EXPECT_TRUE(rows[1].has_style);
+  EXPECT_EQ(rows[1].style_xf, 3U);
+  EXPECT_EQ(loaded.cell_at(12U, 0U), nullptr);
+  EXPECT_EQ(loaded.cell_at(13U, 0U), nullptr);
 }
 
 TEST(SheetLayoutRoundTrip, ColumnWidthAndRowHeightPreserveFullPrecision) {

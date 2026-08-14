@@ -3,13 +3,14 @@
 // `[Content_Types].xml` declares an Override for `/xl/workbook.xml`
 // with a content type the reader does not recognise, the read still
 // succeeds, the workbook kind defaults to `kXlsx`, and a structured-log
-// warning (`ooxml.reader.unknown_workbook_content_type`) surfaces on
-// stderr.
+// warning (`ooxml.reader.unknown_workbook_content_type`) is emitted.
 //
-// We rely on `testing::internal::CaptureStderr` to verify the warning
-// was emitted; if upstream gtest stops exposing that hook the
-// assertion can be relaxed without losing the primary "fallback to
-// kXlsx" guarantee.
+// The warning is observed through a log sink rather than by capturing
+// stderr. Logging ships off (`StructuredLogLevel::kOff`) so an embedded
+// library never writes to the host's stderr unasked, so a test that
+// wants records has to opt in the way an embedder does; reading them
+// back from the sink also keeps the assertion independent of both that
+// default and gtest's internal capture hook.
 
 #include <cstddef>
 #include <cstdint>
@@ -22,6 +23,7 @@
 #include "io/workbook_kind.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "utils/structured_log.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -31,6 +33,31 @@ namespace {
 ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
   return ByteSpan{bytes.data(), bytes.size()};
 }
+
+/// Collects structured-log records for the duration of one test and
+/// restores the shipped configuration (no sink, `kOff`) afterwards, so
+/// enabling logging here cannot leak into a sibling test.
+class StructuredLogCapture {
+ public:
+  StructuredLogCapture() {
+    set_structured_log_sink(&Append, &records_);
+    set_structured_log_min_level(StructuredLogLevel::kDebug);
+  }
+  ~StructuredLogCapture() {
+    set_structured_log_sink(nullptr);
+    set_structured_log_min_level(StructuredLogLevel::kOff);
+  }
+
+  StructuredLogCapture(const StructuredLogCapture&) = delete;
+  StructuredLogCapture& operator=(const StructuredLogCapture&) = delete;
+
+  const std::string& records() const { return records_; }
+
+ private:
+  static void Append(std::string_view record, void* user_data) { static_cast<std::string*>(user_data)->append(record); }
+
+  std::string records_;
+};
 
 struct PartFile {
   const char* path;
@@ -111,22 +138,22 @@ TEST(OoxmlUnknownKind, FallsBackToXlsxAndDoesNotFailRead) {
       {"xl/worksheets/sheet1.xml", kSheetXml},
   });
 
-  testing::internal::CaptureStderr();
+  // Structured logging ships off so the library stays silent inside an
+  // embedding host; this test is the embedder that opts in.
+  StructuredLogCapture log;
   auto result_or = read_ooxml(SpanOf(bytes));
-  const std::string captured = testing::internal::GetCapturedStderr();
 
   ASSERT_TRUE(static_cast<bool>(result_or))
       << "read_ooxml unexpectedly failed for unknown workbook content type: " << result_or.error().message;
   EXPECT_EQ(result_or.value().workbook.kind(), WorkbookKind::kXlsx);
 
-  // The structured-log warning is the secondary signal. We do not
-  // assert the full JSON shape here because the emitter may add fields
-  // over time; instead we just confirm the event name was emitted. If
-  // gtest's stderr capture stops working under a future toolchain the
-  // assertion can be loosened, but the kind-fallback assertion above is
-  // the load-bearing one.
-  EXPECT_NE(captured.find("ooxml.reader.unknown_workbook_content_type"), std::string::npos)
-      << "expected structured-log warning was not emitted; stderr was: " << captured;
+  // The structured-log warning is the secondary signal: guessing `kXlsx`
+  // silently would leave the caller no way to learn the package declared
+  // something else. The full JSON shape is not asserted here because the
+  // emitter may gain fields over time, only that the event reached the
+  // sink.
+  EXPECT_NE(log.records().find("ooxml.reader.unknown_workbook_content_type"), std::string::npos)
+      << "expected structured-log warning was not emitted; records were: " << log.records();
 }
 
 TEST(OoxmlUnknownKind, MissingWorkbookOverrideStillFails) {

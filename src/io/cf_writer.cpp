@@ -4,6 +4,7 @@
 
 #include "io/cf_writer.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -291,7 +292,7 @@ void AppendIconSet(std::string& out, const cf::IconSetSpec& i) {
   out.append("</iconSet>");
 }
 
-void AppendCfRule(std::string& out, const cf::CFRule& r) {
+void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count) {
   out.append("<cfRule type=\"");
   out.append(RuleTypeToString(r.type));
   out.append("\" priority=\"");
@@ -300,7 +301,10 @@ void AppendCfRule(std::string& out, const cf::CFRule& r) {
   if (r.stop_if_true) {
     out.append(" stopIfTrue=\"1\"");
   }
-  if (r.dxf_id.has_value()) {
+  // A `dxfId` the package's `<dxfs>` table cannot resolve is dropped
+  // rather than emitted dangling — see `cf_writer.h` for why Excel's
+  // reaction makes that the cheaper loss.
+  if (r.dxf_id.has_value() && r.dxf_id.value() < dxf_count) {
     out.append(" dxfId=\"");
     out.append(std::to_string(r.dxf_id.value()));
     out.push_back('"');
@@ -414,7 +418,7 @@ void AppendCfRule(std::string& out, const cf::CFRule& r) {
 
 }  // namespace
 
-std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats) {
+std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count) {
   if (formats.empty()) {
     return std::string{};
   }
@@ -429,7 +433,7 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
     }
     out.push_back('>');
     for (const auto& rule : cf.rules) {
-      AppendCfRule(out, rule);
+      AppendCfRule(out, rule, dxf_count);
     }
     // `CT_ConditionalFormatting`'s schema-trailing `extLst?`, round-tripped
     // byte-for-byte (see `ConditionalFormat::ext_lst_raw`).

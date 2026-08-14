@@ -10,11 +10,13 @@
 #include <deque>
 #include <string>
 #include <tuple>
+#include <utility>
 
 #include "cell.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/styles_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "value.h"
@@ -325,6 +327,66 @@ TEST(SheetReader, MalformedCellPropagates) {
   auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage);
   ASSERT_FALSE(static_cast<bool>(rs));
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
+// `ST_PaneState` has three values and two of them freeze. A sheet saved
+// with a movable split position spells its frozen pane `frozenSplit`;
+// reading it as unfrozen would scroll the header rows away in a host UI.
+TEST(SheetReader, FrozenSplitPaneIsFrozen) {
+  const char* xml =
+      "<worksheet><sheetViews><sheetView workbookViewId=\"0\">"
+      "<pane xSplit=\"2\" ySplit=\"1\" topLeftCell=\"C2\" activePane=\"bottomRight\" state=\"frozenSplit\"/>"
+      "</sheetView></sheetViews><sheetData/></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(read_sheet_view_and_layout(doc, 0U, wb)));
+  EXPECT_EQ(wb.sheet(0).view().freeze_rows, 1U);
+  EXPECT_EQ(wb.sheet(0).view().freeze_cols, 2U);
+}
+
+// The third `ST_PaneState` value is a plain split, which freezes nothing.
+TEST(SheetReader, SplitPaneIsNotFrozen) {
+  const char* xml =
+      "<worksheet><sheetViews><sheetView workbookViewId=\"0\">"
+      "<pane xSplit=\"2000\" ySplit=\"1000\" state=\"split\"/>"
+      "</sheetView></sheetViews><sheetData/></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(read_sheet_view_and_layout(doc, 0U, wb)));
+  EXPECT_EQ(wb.sheet(0).view().freeze_rows, 0U);
+  EXPECT_EQ(wb.sheet(0).view().freeze_cols, 0U);
+}
+
+// A `<c s="...">` naming an xf the styles part does not define resolves
+// to the default record, so every cell of a workbook that loaded can be
+// looked up in `cell_xfs` and a save re-emits nothing dangling.
+TEST(SheetReader, CellStyleIndexPastCellXfsFallsBackToDefault) {
+  const char* xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" s=\"1\"><v>1</v></c><c r=\"B1\" s=\"900\"><v>2</v></c></row>"
+      "</sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+
+  Workbook wb = Workbook::create();
+  StylesTable styles;
+  styles.cell_xfs.resize(2);  // valid indices are 0 and 1
+  wb.set_styles(std::move(styles));
+
+  SheetReadContext ctx;
+  std::deque<std::string> text_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
+
+  const Sheet& sheet = wb.sheet(0);
+  ASSERT_NE(sheet.cell_at(0U, 0U), nullptr);
+  ASSERT_NE(sheet.cell_at(0U, 1U), nullptr);
+  EXPECT_EQ(sheet.cell_at(0U, 0U)->xf_index, 1U);
+  EXPECT_LT(sheet.cell_at(0U, 1U)->xf_index, wb.styles().cell_xfs.size());
+  EXPECT_EQ(sheet.cell_at(0U, 1U)->xf_index, 0U);
 }
 
 }  // namespace

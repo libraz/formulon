@@ -20,6 +20,7 @@
 
 #include "cell.h"
 #include "gtest/gtest.h"
+#include "io/defined_names.h"
 #include "io/ooxml_reader.h"
 #include "io/styles_reader.h"
 #include "io/xlsb/reader.h"
@@ -129,7 +130,20 @@ TEST(XlsbCrossFormatSymmetry, DefinedNamesMatch) {
   Workbook xlsb = Workbook::create_empty();
   Workbook xlsx = Workbook::create_empty();
   ASSERT_TRUE(LoadBothFormats(&xlsb, &xlsx));
-  EXPECT_EQ(xlsb.defined_names().size(), xlsx.defined_names().size());
+  const std::vector<io::DefinedName>& sb = xlsb.defined_names();
+  const std::vector<io::DefinedName>& sx = xlsx.defined_names();
+  ASSERT_EQ(sb.size(), sx.size());
+  // Field-level, not just count: the XLSB reader must fill the same
+  // `io::DefinedName` field set the OOXML reader does (name, formula,
+  // scope, hidden, comment) for the same source workbook, not merely
+  // produce the same number of entries.
+  for (std::size_t i = 0; i < sb.size(); ++i) {
+    EXPECT_EQ(sb[i].name, sx[i].name) << "index " << i;
+    EXPECT_EQ(sb[i].formula, sx[i].formula) << "index " << i;
+    EXPECT_EQ(sb[i].local_sheet_id, sx[i].local_sheet_id) << "index " << i;
+    EXPECT_EQ(sb[i].hidden, sx[i].hidden) << "index " << i;
+    EXPECT_EQ(sb[i].comment, sx[i].comment) << "index " << i;
+  }
 }
 
 // Resolves the numFmtId for cell (row, col) through `wb`'s style table, or

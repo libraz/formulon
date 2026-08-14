@@ -185,6 +185,57 @@ TEST(WorkbookSheetOps, AddSheetValidatedAccepts31JapaneseCharacters) {
   EXPECT_EQ(wb.sheet_count(), 4U);
 }
 
+TEST(WorkbookSheetOps, UnicodeSimpleFoldRejectsDuplicateAndResolvesLookup) {
+  Workbook wb = Workbook::create_empty();
+  auto added = wb.add_sheet_validated("\xC3\x84");  // Ä
+  ASSERT_TRUE(static_cast<bool>(added));
+  EXPECT_EQ(wb.sheet_index_by_name("\xC3\xA4"), 0U);  // ä
+  EXPECT_EQ(wb.sheet_by_name("\xC3\xA4"), added.value());
+
+  auto duplicate = wb.add_sheet_validated("\xC3\xA4");
+  ASSERT_FALSE(static_cast<bool>(duplicate));
+  EXPECT_EQ(duplicate.error().code, FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(wb.sheet_count(), 1U);
+
+  auto distinct = wb.add_sheet_validated("\xC3\x96");  // Ö
+  ASSERT_TRUE(static_cast<bool>(distinct));
+  auto rename_collision = wb.rename_sheet(1U, "\xC3\xA4");  // ä
+  ASSERT_FALSE(static_cast<bool>(rename_collision));
+  EXPECT_EQ(rename_collision.error().code, FormulonErrorCode::kInvalidSheetName);
+  EXPECT_EQ(wb.sheet(0).name(), "\xC3\x84");  // Ä
+  EXPECT_EQ(wb.sheet(1).name(), "\xC3\x96");  // Ö
+}
+
+TEST(WorkbookSheetOps, UnicodeSimpleFoldSupportsCasingRenameAndDependencies) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Source");
+  auto added = wb.add_sheet_validated("\xC3\x84");  // Ä
+  ASSERT_TRUE(static_cast<bool>(added));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "='\xC3\xA4'!A1")));  // alternate case: ä
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0).cell_at(0U, 0U)->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0).cell_at(0U, 0U)->cached_value.as_number(), 10.0);
+
+  // A casing-only rename preserves the identity used by the dependency edge.
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1U, "\xC3\xA4")));  // ä
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(25.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(wb.sheet(0).cell_at(0U, 0U)->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(wb.sheet(0).cell_at(0U, 0U)->cached_value.as_number(), 25.0);
+}
+
+TEST(WorkbookSheetOps, UnicodeMalformedUtf8IsInvalidSheetName) {
+  Workbook wb = Workbook::create();
+  const std::string malformed("\xC3", 1U);
+  auto added = wb.add_sheet_validated(malformed);
+  ASSERT_FALSE(static_cast<bool>(added));
+  EXPECT_EQ(added.error().code, FormulonErrorCode::kInvalidSheetName);
+  auto renamed = wb.rename_sheet(0U, malformed);
+  ASSERT_FALSE(static_cast<bool>(renamed));
+  EXPECT_EQ(renamed.error().code, FormulonErrorCode::kInvalidSheetName);
+}
+
 TEST(WorkbookSheetOps, SheetMovePreservesRawWorksheetMetadata) {
   Workbook wb = ThreeSheetWorkbook();
   SetMoveSensitiveMetadata(wb.sheet(0), "alpha");

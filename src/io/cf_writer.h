@@ -30,6 +30,7 @@
 #ifndef FORMULON_IO_CF_WRITER_H_
 #define FORMULON_IO_CF_WRITER_H_
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -46,7 +47,15 @@ namespace formulon::io {
 ///
 /// Returns an empty string when `formats` is empty so the caller can
 /// concatenate unconditionally without a wrapper element.
-std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats);
+///
+/// `dxf_count` is the number of `<dxf>` records the same package's
+/// `xl/styles.xml` will contain. A rule whose `dxf_id` is not below it
+/// names no differential format, so the `dxfId` attribute is omitted
+/// rather than written dangling: Excel treats an unresolvable `dxfId`
+/// as package corruption and repairs the sheet by discarding *all* of
+/// its conditional formatting, which costs far more than the one rule's
+/// formatting. The rule itself is still emitted.
+std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count);
 
 }  // namespace formulon::io
 

@@ -211,14 +211,20 @@ constexpr std::string_view kParitySheet =
     "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
     "<sheetViews><sheetView showGridLines=\"0\" tabSelected=\"1\" workbookViewId=\"0\">"
     "<pane xSplit=\"1\" ySplit=\"2\" state=\"frozen\"/></sheetView></sheetViews>\n"
-    "<cols><col min=\"1\" max=\"1\" width=\"20\" customWidth=\"1\"/></cols>\n"
+    "<cols><col min=\"1\" max=\"1\" width=\"20\" customWidth=\"1\" style=\"0\"/>"
+    "<col min=\"3\" max=\"3\" hidden=\"1\"/>"
+    "<col min=\"4\" max=\"4\" outlineLevel=\"2\"/>"
+    "<col min=\"5\" max=\"5\" style=\"3\"/>"
+    "<col min=\"6\" max=\"6\" width=\"0\" customWidth=\"1\"/></cols>\n"
     "<sheetData>\n"
-    "<row r=\"1\" ht=\"30\" customHeight=\"1\"><c r=\"A1\"><v>10</v></c>"
+    "<row r=\"1\" ht=\"30\" customHeight=\"1\" s=\"0\" customFormat=\"1\"><c r=\"A1\"><v>10</v></c>"
     "<c r=\"B1\"><f t=\"shared\" ref=\"B1:B3\" si=\"0\">A1*2</f><v>20</v></c>"
     "<c r=\"C1\"><f t=\"array\" ref=\"C1\">SUM(A1:A3)</f><v>33</v></c></row>\n"
-    "<row r=\"2\" hidden=\"1\"><c r=\"A2\"><v>11</v></c><c r=\"B2\"><f t=\"shared\" si=\"0\"/><v>22</v></c></row>\n"
-    "<row r=\"3\" outlineLevel=\"1\"><c r=\"A3\"><v>12</v></c><c r=\"B3\"><f t=\"shared\" "
+    "<row r=\"2\" hidden=\"1\" s=\"7\" customFormat=\"0\"><c r=\"A2\"><v>11</v></c><c r=\"B2\"><f t=\"shared\" "
+    "si=\"0\"/><v>22</v></c></row>\n"
+    "<row r=\"3\" outlineLevel=\"1\" s=\"3\" customFormat=\"1\"><c r=\"A3\"><v>12</v></c><c r=\"B3\"><f t=\"shared\" "
     "si=\"0\"/><v>24</v></c></row>\n"
+    "<row r=\"4\" customFormat=\"1\"/>\n"
     "</sheetData>\n"
     "<sheetProtection sheet=\"1\" formatCells=\"0\"/>\n"
     "<autoFilter ref=\"A1:C1\"/>\n"
@@ -250,7 +256,13 @@ void ExpectSheetsEquivalent(const Sheet& dom, const Sheet& sax) {
   ASSERT_EQ(dom.layout().columns.size(), sax.layout().columns.size());
   for (std::size_t i = 0; i < dom.layout().columns.size(); ++i) {
     EXPECT_EQ(dom.layout().columns[i].first, sax.layout().columns[i].first);
+    EXPECT_EQ(dom.layout().columns[i].last, sax.layout().columns[i].last);
     EXPECT_DOUBLE_EQ(dom.layout().columns[i].width, sax.layout().columns[i].width);
+    EXPECT_EQ(dom.layout().columns[i].has_width, sax.layout().columns[i].has_width);
+    EXPECT_EQ(dom.layout().columns[i].has_style, sax.layout().columns[i].has_style);
+    EXPECT_EQ(dom.layout().columns[i].style_xf, sax.layout().columns[i].style_xf);
+    EXPECT_EQ(dom.layout().columns[i].hidden, sax.layout().columns[i].hidden);
+    EXPECT_EQ(dom.layout().columns[i].outline_level, sax.layout().columns[i].outline_level);
   }
   // Per-row overrides (height / hidden / outline) — the IO-F SAX residual
   // now recovered via the row-start callback.
@@ -260,6 +272,8 @@ void ExpectSheetsEquivalent(const Sheet& dom, const Sheet& sax) {
     EXPECT_DOUBLE_EQ(dom.layout().row_overrides[i].height, sax.layout().row_overrides[i].height);
     EXPECT_EQ(dom.layout().row_overrides[i].hidden, sax.layout().row_overrides[i].hidden);
     EXPECT_EQ(dom.layout().row_overrides[i].outline_level, sax.layout().row_overrides[i].outline_level);
+    EXPECT_EQ(dom.layout().row_overrides[i].has_style, sax.layout().row_overrides[i].has_style);
+    EXPECT_EQ(dom.layout().row_overrides[i].style_xf, sax.layout().row_overrides[i].style_xf);
   }
   // Worksheet-level extLst (x14 conditional-formatting data).
   EXPECT_EQ(dom.ext_lst_xml(), sax.ext_lst_xml());
@@ -313,6 +327,37 @@ TEST(OoxmlSaxMetadata, DomAndSaxPathsAgree) {
   ASSERT_EQ(dom_or.value().workbook.sheet_count(), 1U);
   ASSERT_EQ(sax_or.value().workbook.sheet_count(), 1U);
   ExpectSheetsEquivalent(dom_or.value().workbook.sheet(0), sax_or.value().workbook.sheet(0));
+
+  const Sheet& dom = dom_or.value().workbook.sheet(0);
+  const Sheet& sax = sax_or.value().workbook.sheet(0);
+  ASSERT_EQ(dom.layout().columns.size(), 5U);
+  ASSERT_EQ(dom.layout().row_overrides.size(), 4U);
+  // Explicit width and style presence are independent of their values.
+  EXPECT_TRUE(dom.layout().columns[0].has_width);
+  EXPECT_TRUE(dom.layout().columns[0].has_style);
+  EXPECT_EQ(dom.layout().columns[0].style_xf, 0U);
+  EXPECT_TRUE(dom.layout().columns[1].hidden);
+  EXPECT_FALSE(dom.layout().columns[1].has_width);
+  EXPECT_TRUE(dom.layout().columns[2].outline_level == 2U);
+  EXPECT_FALSE(dom.layout().columns[2].has_width);
+  EXPECT_TRUE(dom.layout().columns[3].has_style);
+  EXPECT_EQ(dom.layout().columns[3].style_xf, 3U);
+  EXPECT_TRUE(dom.layout().columns[4].has_width);
+  EXPECT_DOUBLE_EQ(dom.layout().columns[4].width, 0.0);
+  EXPECT_FALSE(dom.layout().columns[4].hidden);
+
+  // Row s is effective only with customFormat=1. Missing s under
+  // customFormat=1 is the explicit default xf (0), and the metadata-only
+  // row must not create a sparse cell.
+  EXPECT_TRUE(dom.layout().row_overrides[0].has_style);
+  EXPECT_EQ(dom.layout().row_overrides[0].style_xf, 0U);
+  EXPECT_FALSE(dom.layout().row_overrides[1].has_style);
+  EXPECT_TRUE(dom.layout().row_overrides[2].has_style);
+  EXPECT_EQ(dom.layout().row_overrides[2].style_xf, 3U);
+  EXPECT_TRUE(dom.layout().row_overrides[3].has_style);
+  EXPECT_EQ(dom.layout().row_overrides[3].style_xf, 0U);
+  EXPECT_EQ(dom.cell_at(3U, 0U), nullptr);
+  EXPECT_EQ(sax.cell_at(3U, 0U), nullptr);
 
   // Sanity: the shared follower actually resolved (not left blank) on both.
   EXPECT_EQ(dom_or.value().workbook.sheet(0).cell_at(1U, 1U)->formula_text, "=A2*2");

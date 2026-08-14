@@ -8,9 +8,10 @@
 // `read_sheet_data` call (per sheet) — `si` indices are sheet-local in
 // OOXML, so leaking entries across sheets would be a correctness bug.
 //
-// Known limitation (called out in the public header):
-//   * Cached values from `<v>` on formula cells are dropped: we let the
-//     recalc engine populate them via `Workbook::recalc()`.
+// Cached-value handling (called out in the public header):
+//   * A non-blank `<v>` on a formula cell is kept as the cell's value.
+//     `Workbook::recalc()` replaces it with the engine's own result;
+//     until then the loaded workbook reports what Excel last computed.
 
 #include "io/sheet_reader.h"
 
@@ -41,6 +42,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
+#include "utils/structured_log.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -262,6 +264,18 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
 Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view formula_text, std::uint32_t xf_index,
                                       std::string_view phonetic_text, std::size_t sheet_index, Workbook& workbook,
                                       SheetReadContext& ctx) {
+  // A `<c s="900">` against a five-entry `<cellXfs>` names no style. Fall
+  // back to the default xf so the loaded workbook stays self-consistent:
+  // `fm_cell_get_xf` resolves for every cell that loaded, and a save does
+  // not re-emit the dangling index for Excel to repair. This is the same
+  // "a style index is cosmetic" disposition `cell_parser.cpp` applies to a
+  // lexically malformed `s=`. When the package carried no styles part at
+  // all there is no table to dangle against and the raw index is kept —
+  // the writer's own bound check covers what it synthesises.
+  const std::size_t cell_xf_count = workbook.styles().cell_xfs.size();
+  if (cell_xf_count != 0U && xf_index >= cell_xf_count) {
+    xf_index = 0U;
+  }
   if (!formula_text.empty()) {
     // `Workbook::set_cell_formula` accepts both spellings, but to
     // match the parser/evaluator's expected input form (the existing
@@ -413,8 +427,8 @@ std::uint8_t ParseOutlineLevel(const char* text) noexcept {
 /// Parses `<sheetView zoomScale="...">` and `<pane state="frozen"
 /// xSplit="N" ySplit="M">` into `view`. Missing or out-of-range
 /// `zoomScale` falls back to `SheetView::kDefaultZoomScale`. A `<pane>`
-/// element with `state != "frozen"` (or absent) leaves
-/// `freeze_rows` / `freeze_cols` at zero.
+/// element whose `state` is neither `frozen` nor `frozenSplit` (or that
+/// is absent) leaves `freeze_rows` / `freeze_cols` at zero.
 void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
   pugi::xml_node sheet_views = worksheet.child("sheetViews");
   if (!sheet_views) {
@@ -448,7 +462,11 @@ void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
   }
   pugi::xml_node pane = sheet_view.child("pane");
   if (pane) {
-    if (attr_str(pane, "state") == "frozen") {
+    // `ST_PaneState` has three values; two of them freeze. `frozenSplit`
+    // is a frozen pane that also remembers a movable split position, so
+    // its xSplit/ySplit bind the frozen extent exactly like `frozen`.
+    const std::string_view state = attr_str(pane, "state");
+    if (state == "frozen" || state == "frozenSplit") {
       const std::int32_t y = attr_i32(pane, "ySplit", 0);
       const std::int32_t x = attr_i32(pane, "xSplit", 0);
       if (y > 0) {
@@ -515,11 +533,11 @@ void ApplySheetFormatDefaults(const pugi::xml_node& worksheet, SheetFormatDefaul
   }
 }
 
-/// Parses `<cols><col min max width hidden outlineLevel/></cols>` into
-/// `layout.columns`. Entries that omit `width` are skipped: the layout
-/// model only carries explicit width overrides, and pure
-/// `customWidth=1` / `bestFit=1` markers without a stored width have no
-/// observable round-trip effect.
+/// Parses `<cols><col min max width style hidden outlineLevel/></cols>` into
+/// `layout.columns`. Width and style retain attribute presence, so explicit
+/// zero values remain distinct from an omitted attribute. A valid span that
+/// carries only hidden / outline metadata is retained even when it has no
+/// width; pure `customWidth=1` / `bestFit=1` markers remain a no-op.
 void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
   pugi::xml_node cols = worksheet.child("cols");
   if (!cols) {
@@ -539,10 +557,11 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
     entry.last = static_cast<std::uint32_t>(max_v - 1);
     if (pugi::xml_attribute width_attr = col.attribute("width"); width_attr) {
       entry.width = attr_f64(col, "width");
-    } else {
-      // No explicit width override — skip. `customWidth` / `bestFit`
-      // alone are not enough to round-trip through the layout model.
-      continue;
+      entry.has_width = true;
+    }
+    if (pugi::xml_attribute style_attr = col.attribute("style"); style_attr) {
+      entry.style_xf = attr_u32(col, "style", 0U);
+      entry.has_style = true;
     }
     if (pugi::xml_attribute hidden_attr = col.attribute("hidden"); hidden_attr) {
       entry.hidden = attr_bool(col, "hidden");
@@ -550,12 +569,20 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
     if (pugi::xml_attribute outline_attr = col.attribute("outlineLevel"); outline_attr) {
       entry.outline_level = ParseOutlineLevel(outline_attr.value());
     }
+    if (!entry.has_width && !entry.has_style && !col.attribute("hidden") && !col.attribute("outlineLevel")) {
+      // A span with only a marker such as `bestFit` has no observable
+      // layout state in this model.
+      continue;
+    }
     layout.columns.push_back(entry);
   }
 }
 
 /// Walks `<sheetData><row .../></sheetData>` collecting per-row
-/// overrides (height / hidden / outline) into `layout.row_overrides`.
+/// overrides (height / hidden / outline / custom row style) into
+/// `layout.row_overrides`. A row `s=` attribute is effective only when
+/// `customFormat="1"`; when customFormat is true but `s` is absent, the
+/// effective style is the explicit default xf 0.
 /// Rows that carry only `r` (the row number) are skipped — they are
 /// just position markers and have no override payload.
 void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
@@ -568,7 +595,10 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     pugi::xml_attribute ht_attr = row.attribute("ht");
     pugi::xml_attribute hidden_attr = row.attribute("hidden");
     pugi::xml_attribute outline_attr = row.attribute("outlineLevel");
-    if (!ht_attr && !hidden_attr && !outline_attr) {
+    pugi::xml_attribute custom_format_attr = row.attribute("customFormat");
+    pugi::xml_attribute style_attr = row.attribute("s");
+    const bool custom_format = custom_format_attr && read_xsd_bool(row, "customFormat", false);
+    if (!ht_attr && !hidden_attr && !outline_attr && !custom_format) {
       continue;
     }
     if (!r_attr) {
@@ -593,6 +623,10 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     }
     if (outline_attr) {
       entry.outline_level = ParseOutlineLevel(outline_attr.value());
+    }
+    if (custom_format) {
+      entry.has_style = true;
+      entry.style_xf = style_attr ? attr_u32(row, "s", 0U) : 0U;
     }
     layout.row_overrides.push_back(entry);
   }
@@ -753,12 +787,13 @@ Expected<void, Error> SaxOnCellTrampoline(void* user_data, const CellRecord& rec
 }
 
 // Captures per-row overrides on the SAX path, mirroring the DOM
-// `ApplyRowOverrides`: a row contributes a `RowLayout` only when it
-// carries `ht`, `hidden`, or `outlineLevel` (a bare `r=` row is a
-// position marker). `customHeight` alone does not, matching the DOM path.
+// `ApplyRowOverrides`: a row contributes a `RowLayout` when it carries
+// `ht`, `hidden`, `outlineLevel`, or effective `customFormat=1` style
+// metadata. `customHeight` alone does not, matching the DOM path.
 Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& rec) {
   auto* st = static_cast<SaxApplyState*>(user_data);
-  if (rec.ht.empty() && rec.hidden.empty() && rec.outline_level.empty()) {
+  const bool custom_format = !rec.custom_format.empty() && parse_xsd_bool(rec.custom_format, false);
+  if (rec.ht.empty() && rec.hidden.empty() && rec.outline_level.empty() && !custom_format) {
     return Expected<void, Error>::Ok();
   }
   if (rec.row_1based < 1U) {
@@ -775,6 +810,14 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   }
   if (!rec.outline_level.empty()) {
     entry.outline_level = ParseOutlineLevel(std::string(rec.outline_level).c_str());
+  }
+  if (custom_format) {
+    entry.has_style = true;
+    std::uint32_t style_xf = 0;
+    if (!rec.style.empty()) {
+      (void)parse_xsd_nonneg_int(rec.style, &style_xf);
+    }
+    entry.style_xf = style_xf;
   }
   st->workbook->sheet(st->sheet_index).mutable_layout().row_overrides.push_back(entry);
   return Expected<void, Error>::Ok();
@@ -848,6 +891,21 @@ Expected<MergeRange, Error> ParseA1RangeMerge(std::string_view ref) {
   return out;
 }
 
+/// Emits the WARN diagnostic for one skipped presentation-overlay entry.
+/// Merges, hyperlinks and data validations are optional worksheet
+/// metadata carrying no cell value, so a single malformed reference
+/// drops that entry and load continues — the same disposition
+/// `read_conditional_formats` applies to a malformed `<conditionalFormatting>`
+/// block. Genuine cell-data corruption still fails the sheet.
+void SkipOverlayEntry(std::string_view part, std::string_view reason, std::string_view ref) {
+  StructuredLog("io.sheet.overlay.skip")
+      .field("part", part)
+      .field("reason", reason)
+      .field("ref", ref)
+      .error_code(FormulonErrorCode::kIoSheetCorrupt)
+      .warn();
+}
+
 /// Splits a whitespace-separated `sqref="A1 B2:C3 D4"` attribute and
 /// decodes each token. Returns `kIoSheetCorrupt` on the first
 /// unparseable token.
@@ -888,12 +946,13 @@ Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& works
   for (pugi::xml_node m = mc.child("mergeCell"); m; m = m.next_sibling("mergeCell")) {
     const std::string_view ref = attr_str(m, "ref");
     if (ref.empty()) {
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "mergeCell: missing/empty ref",
-                        "context=sheet_reader part=mergeCells");
+      SkipOverlayEntry("mergeCells", "ref attribute missing or empty", ref);
+      continue;
     }
     auto r = ParseA1RangeMerge(ref);
     if (!r) {
-      return r.error();
+      SkipOverlayEntry("mergeCells", "ref unparseable", ref);
+      continue;
     }
     out.push_back(r.value());
   }
@@ -912,8 +971,8 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
   for (pugi::xml_node h = node.child("hyperlink"); h; h = h.next_sibling("hyperlink")) {
     const std::string_view ref = attr_str(h, "ref");
     if (ref.empty()) {
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "hyperlink: missing/empty ref",
-                        "context=sheet_reader part=hyperlinks");
+      SkipOverlayEntry("hyperlinks", "ref attribute missing or empty", ref);
+      continue;
     }
     // Hyperlinks may span a range (`ref="A1:B2"`); Excel applies the link
     // to every cell. Keep both corners in the model so structural edits can
@@ -921,9 +980,8 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
     // A1 reference from numeric coordinates.
     auto range_or = ParseA1RangeMerge(ref);
     if (!range_or) {
-      std::string ctx("context=sheet_reader part=hyperlinks ref=");
-      ctx.append(ref);
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "hyperlink: ref range unparseable", std::move(ctx));
+      SkipOverlayEntry("hyperlinks", "ref unparseable", ref);
+      continue;
     }
     Hyperlink hl;
     hl.row = range_or.value().first_row;
@@ -972,12 +1030,13 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     DataValidation v;
     const std::string_view sqref = attr_str(dv, "sqref");
     if (sqref.empty()) {
-      return make_error(FormulonErrorCode::kIoSheetCorrupt, "dataValidation: missing/empty sqref",
-                        "context=sheet_reader part=dataValidations");
+      SkipOverlayEntry("dataValidations", "sqref attribute missing or empty", sqref);
+      continue;
     }
     auto ranges_or = ParseSqrefRanges(sqref);
     if (!ranges_or) {
-      return ranges_or.error();
+      SkipOverlayEntry("dataValidations", "sqref unparseable", sqref);
+      continue;
     }
     v.ranges = std::move(ranges_or.value());
 

@@ -64,6 +64,23 @@ TEST(SaxSharedFormula, FollowersRecoverShiftedMasterBody) {
   EXPECT_EQ(b3->formula_text, "=A3*2");
 }
 
+TEST(SaxSharedFormula, EntityEncodedAttributesResolveMasterAndFollower) {
+  constexpr std::string_view kXml =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<sheetData>"
+      "<row r=\"1\"><c r=\"B1\"><f t=\"shar&#101;d\" ref=\"B1&#58;B2\" si=\"&#49;\">A1*2</f></c></row>"
+      "<row r=\"2\"><c r=\"A2\"><v>11</v></c><c r=\"B2\"><f t=\"shar&#101;d\" si=\"&#49;\"/></c></row>"
+      "</sheetData></worksheet>";
+  const Workbook wb = LoadSax(kXml);
+  const Sheet& sheet = wb.sheet(0);
+  const Cell* b1 = sheet.cell_at(0U, 1U);
+  ASSERT_NE(b1, nullptr);
+  EXPECT_EQ(b1->formula_text, "=A1*2");
+  const Cell* b2 = sheet.cell_at(1U, 1U);
+  ASSERT_NE(b2, nullptr);
+  EXPECT_EQ(b2->formula_text, "=A2*2");
+}
+
 TEST(SaxSharedFormula, PlainFormulaUnaffected) {
   constexpr std::string_view kXml =
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"

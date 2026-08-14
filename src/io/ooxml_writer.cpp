@@ -300,11 +300,12 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
     std::string part_path("xl/worksheets/sheet");
     part_path.append(std::to_string(i + 1));
     part_path.append(".xml");
-    auto wresult = AddPart(writer.get(), part_path,
-                           BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids,
-                                             rels_result.hyperlink_rids, rels_result.printer_settings_rid,
-                                             rels_result.drawing_rid, rels_result.legacy_drawing_rid, &shared_strings),
-                           &written_paths);
+    auto wresult =
+        AddPart(writer.get(), part_path,
+                BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
+                                  rels_result.printer_settings_rid, rels_result.drawing_rid,
+                                  rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs.size()),
+                &written_paths);
     if (!wresult) {
       return wresult.error();
     }

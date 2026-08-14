@@ -19,11 +19,15 @@
 // dataValidations, dimension, sheetViews, cols, ...) is skipped in
 // O(content) time without decoding children.
 //
-// XML entity references are decoded inside `<v>` and `<t>` text content
-// (`&amp; &lt; &gt; &quot; &apos;`); unknown / numeric character
-// references pass through verbatim. Attribute-value entity decoding is
-// not performed in this slice (Excel never emits entities into `r=` /
-// `t=` / `s=`).
+// XML entity references are decoded in semantic PCDATA and attribute values
+// (`&amp; &lt; &gt; &quot; &apos;`, decimal character references, and
+// lowercase-`x` hexadecimal character references). Unknown / malformed
+// references pass through verbatim for compatibility with the historical
+// scanner. Literal CR/CRLF in PCDATA becomes LF; literal TAB/LF/CR in
+// attributes becomes one space (CRLF is one space), matching pugixml's
+// `parse_default` conversion rules. Character-reference whitespace is not
+// normalized. Values that need no decoding or normalization remain
+// zero-copy views into the input buffer.
 //
 // On a malformed stream the scanner returns `kIoXmlParse` with an
 // indicative offset / message; it never throws and never reads past the
@@ -44,32 +48,32 @@
 namespace formulon {
 namespace io {
 
-/// Decoded record for a single `<c>` element. Text fields are
-/// `string_view`s into either the input buffer (when no entity decoding
-/// was needed) or the per-call decode arena (the `SheetSaxCallbacks`
-/// implementation owns the lifetime contract: the views remain valid
-/// only for the duration of the `on_cell` call).
+/// Decoded record for a single `<c>` element. Text and semantic attribute
+/// fields are `string_view`s into either the input buffer (when no entity
+/// decoding or XML normalization was needed) or per-scan scratch storage.
+/// The views remain valid only for the duration of the `on_cell` callback.
 struct CellRecord {
   /// 0-based row index, decoded from the enclosing `<row r="N">`.
   std::uint32_t row = 0;
   /// 0-based column index, decoded from the cell's `r="A1"` attribute.
   std::uint32_t col = 0;
-  /// `t=` attribute value, e.g. `"n"`, `"s"`, `"b"`, `"e"`, `"str"`,
-  /// `"inlineStr"`. Empty when the cell omits `t=` (default = number).
+  /// Decoded `t=` attribute value, e.g. `"n"`, `"s"`, `"b"`, `"e"`,
+  /// `"str"`, `"inlineStr"`. Empty when the cell omits `t=` (default =
+  /// number).
   std::string_view t;
-  /// `s=` attribute value (style index). Empty when absent.
+  /// Decoded `s=` attribute value (style index). Empty when absent.
   std::string_view s;
   /// `<f>` body, with leading `=` stripped if present. Empty when no
   /// `<f>` child existed, and also empty for a shared-formula follower
   /// (`<f t="shared" si="N"/>`), whose body lives on the group master.
   std::string_view formula;
-  /// `<f>` element's `t=` attribute (`"shared"`, `"array"`,
-  /// `"dataTable"`), or empty when the `<f>` has no `t=` (a plain
-  /// formula) or no `<f>` child exists. Aliases the source buffer.
+  /// Decoded `<f>` element's `t=` attribute (`"shared"`, `"array"`,
+  /// `"dataTable"`), or empty when the `<f>` has no `t=` (a plain formula)
+  /// or no `<f>` child exists.
   std::string_view f_t;
-  /// `<f>` element's `si=` (shared-formula group index), or empty.
+  /// Decoded `<f>` element's `si=` (shared-formula group index), or empty.
   std::string_view f_si;
-  /// `<f>` element's `ref=` (shared-formula master range), or empty.
+  /// Decoded `<f>` element's `ref=` (shared-formula master range), or empty.
   std::string_view f_ref;
   /// Decoded text content of the cell:
   ///   * For `t="inlineStr"`: concatenation of all `<is><t>` and
@@ -77,7 +81,8 @@ struct CellRecord {
   ///     `<is><rPh><t>` payloads are excluded — they are surfaced
   ///     separately via `phonetic`. The `is_inline_string` flag is
   ///     set in this branch.
-  ///   * Otherwise: text content of `<v>` (entity-decoded). Empty when
+  ///   * Otherwise: text content of `<v>` (entity-decoded and PCDATA-
+  ///     normalized). Empty when
   ///     no `<v>` was present.
   std::string_view value;
   /// True iff the value came from `<is>...</is>` (i.e. `t="inlineStr"`).
@@ -91,18 +96,21 @@ struct CellRecord {
 
 /// One `<row>` element's opening attributes, surfaced to `on_row_start`
 /// so the streaming path can recover per-row overrides (height / hidden /
-/// outline) the DOM path reads off `<row>`. All views alias the source
-/// buffer and are valid only for the callback's duration; each is empty
-/// when the attribute is absent. `row_1based` is the `r="N"` value, and 0
-/// when the attribute is absent or outside the non-negative-integer
-/// lexical space — the same "no usable row number" signal the DOM path
-/// produces for those inputs.
+/// custom-height / outline) the DOM path reads off `<row>`. Attribute views
+/// are decoded and XML-normalized; they alias either the input buffer or
+/// distinct per-row scratch storage and are valid only for the callback's
+/// duration. Each is empty when the attribute is absent. `row_1based` is the
+/// decoded `r="N"` value, and 0 when the attribute is absent or outside the
+/// non-negative-integer lexical space — the same "no usable row number"
+/// signal the DOM path produces for those inputs.
 struct RowRecord {
   std::uint32_t row_1based = 0;
-  std::string_view ht;             ///< `ht=` (row height in points).
-  std::string_view hidden;         ///< `hidden=` (XSD boolean).
-  std::string_view custom_height;  ///< `customHeight=` (XSD boolean).
-  std::string_view outline_level;  ///< `outlineLevel=` (0..7).
+  std::string_view ht;             ///< Decoded `ht=` (row height in points).
+  std::string_view hidden;         ///< Decoded `hidden=` (XSD boolean).
+  std::string_view custom_height;  ///< Decoded `customHeight=` (XSD boolean).
+  std::string_view outline_level;  ///< Decoded `outlineLevel=` (0..7).
+  std::string_view custom_format;  ///< Decoded `customFormat=` (XSD boolean).
+  std::string_view style;          ///< Decoded `s=` (row style xf index).
 };
 
 /// Callback bundle handed to `scan_sheet_data`. Each callback returns
@@ -120,8 +128,8 @@ struct SheetSaxCallbacks {
   /// callback. The scanner does not interpret this pointer.
   void* user_data = nullptr;
   /// Invoked when a `<row>` opens, carrying the row's opening attributes
-  /// (index plus any height / hidden / outline overrides) so the consumer
-  /// can reproduce the per-row layout the DOM path reads.
+  /// (index plus any height / hidden / custom-height / outline overrides) so
+  /// the consumer can reproduce the per-row layout the DOM path reads.
   Expected<void, Error> (*on_row_start)(void* user_data, const RowRecord& row) = nullptr;
   /// Invoked when the matching `</row>` closes (or when the row was
   /// self-closed).

@@ -73,7 +73,10 @@ Expected<std::vector<DefaultContentType>, Error> list_default_content_types(cons
 /// always uses `/xl/workbook.xml`), so we follow the relationship
 /// rather than hard-coding the path. The path is normalised to drop
 /// any leading slash so the result is directly consumable as a ZIP
-/// entry name.
+/// entry name, and rejected with `kIoZipSlip` when it does not satisfy
+/// `is_safe_part_name` — the workbook path is both an archive key and
+/// the base directory for every downstream rels target, so it may not
+/// carry traversal segments.
 Expected<std::string, Error> resolve_office_document_path(const std::vector<std::uint8_t>& rels_bytes);
 
 /// Builds a path relative to `base_dir`. OOXML rels Target attributes

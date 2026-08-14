@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -20,6 +21,7 @@
 #include "io/zip_reader.h"
 #include "miniz.h"
 #include "utils/error.h"
+#include "utils/structured_log.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -30,6 +32,31 @@ namespace {
 ByteSpan SpanOf(const std::vector<std::uint8_t>& bytes) {
   return ByteSpan{bytes.data(), bytes.size()};
 }
+
+/// Collects structured-log records for the duration of one test and
+/// restores the shipped configuration (no sink, `kOff`) afterwards, so
+/// enabling logging here cannot leak into a sibling test.
+class StructuredLogCapture {
+ public:
+  StructuredLogCapture() {
+    set_structured_log_sink(&Append, &records_);
+    set_structured_log_min_level(StructuredLogLevel::kDebug);
+  }
+  ~StructuredLogCapture() {
+    set_structured_log_sink(nullptr);
+    set_structured_log_min_level(StructuredLogLevel::kOff);
+  }
+
+  StructuredLogCapture(const StructuredLogCapture&) = delete;
+  StructuredLogCapture& operator=(const StructuredLogCapture&) = delete;
+
+  const std::string& records() const { return records_; }
+
+ private:
+  static void Append(std::string_view record, void* user_data) { static_cast<std::string*>(user_data)->append(record); }
+
+  std::string records_;
+};
 
 std::vector<std::uint8_t> SaveOrDie(const Workbook& wb) {
   auto save_or = wb.save();
@@ -339,6 +366,169 @@ TEST(OoxmlReader, RejectsArchiveWithEscapingRelsTarget) {
   auto result_or = read_ooxml(SpanOf(mutated));
   ASSERT_FALSE(static_cast<bool>(result_or));
   EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoZipSlip);
+}
+
+// The OfficeDocument target is both an archive key and the base directory
+// every downstream rels target resolves against, so it goes through the
+// same `is_safe_part_name` gate as the rest of the package rels rather
+// than being merely leading-slash-stripped.
+TEST(OoxmlReader, ResolveOfficeDocumentPathRejectsTraversalTarget) {
+  const auto rels_bytes = [](std::string_view target) {
+    std::string xml(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+        "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+        "<Relationship Id=\"rId1\" "
+        "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
+        "Target=\"");
+    xml.append(target);
+    xml.append("\"/></Relationships>");
+    return std::vector<std::uint8_t>(xml.begin(), xml.end());
+  };
+
+  for (const char* hostile :
+       {"../../etc/passwd", "/../evil/workbook.xml", "xl/../../out.xml", "xl\\workbook.xml", "C:/Windows/system32"}) {
+    auto result_or = ooxml::resolve_office_document_path(rels_bytes(hostile));
+    ASSERT_FALSE(static_cast<bool>(result_or)) << hostile;
+    EXPECT_EQ(result_or.error().code, FormulonErrorCode::kIoZipSlip) << hostile;
+  }
+
+  // Both canonical spellings still resolve to the same archive key.
+  for (const char* ok : {"xl/workbook.xml", "/xl/workbook.xml"}) {
+    auto result_or = ooxml::resolve_office_document_path(rels_bytes(ok));
+    ASSERT_TRUE(static_cast<bool>(result_or)) << ok;
+    EXPECT_EQ(result_or.value(), "xl/workbook.xml") << ok;
+  }
+}
+
+/// Rebuilds a valid archive with one entry's payload replaced. Used to
+/// feed the reader worksheet markup the writer would never emit.
+std::vector<std::uint8_t> RebuildArchiveReplacing(const std::vector<std::uint8_t>& src, std::string_view entry,
+                                                  std::string_view contents) {
+  mz_zip_archive reader{};
+  EXPECT_NE(mz_zip_reader_init_mem(&reader, src.data(), src.size(), 0), MZ_FALSE);
+  const mz_uint count = mz_zip_reader_get_num_files(&reader);
+
+  mz_zip_archive writer{};
+  EXPECT_NE(mz_zip_writer_init_heap(&writer, 0, 4096), MZ_FALSE);
+
+  bool replaced = false;
+  for (mz_uint i = 0; i < count; ++i) {
+    char name_buf[256] = {};
+    const mz_uint name_len = mz_zip_reader_get_filename(&reader, i, name_buf, sizeof(name_buf));
+    EXPECT_GT(name_len, 0u);
+    if (std::string_view(name_buf) == entry) {
+      EXPECT_NE(mz_zip_writer_add_mem(&writer, name_buf, contents.data(), contents.size(),
+                                      static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+                MZ_FALSE);
+      replaced = true;
+      continue;
+    }
+    std::size_t extracted_size = 0;
+    void* extracted = mz_zip_reader_extract_to_heap(&reader, i, &extracted_size, 0);
+    EXPECT_NE(extracted, nullptr);
+    EXPECT_NE(mz_zip_writer_add_mem(&writer, name_buf, extracted, extracted_size,
+                                    static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+              MZ_FALSE);
+    mz_free(extracted);
+  }
+  mz_zip_reader_end(&reader);
+  EXPECT_TRUE(replaced) << entry;
+
+  void* archive_ptr = nullptr;
+  std::size_t archive_size = 0;
+  EXPECT_NE(mz_zip_writer_finalize_heap_archive(&writer, &archive_ptr, &archive_size), MZ_FALSE);
+  EXPECT_NE(mz_zip_writer_end(&writer), MZ_FALSE);
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive_ptr),
+                                static_cast<const std::uint8_t*>(archive_ptr) + archive_size);
+  mz_free(archive_ptr);
+  return out;
+}
+
+// A `frozenSplit` pane must open frozen, and the freeze must survive a
+// save: the model does not carry the split position, so the writer
+// re-emits the equivalent `state="frozen"` form.
+TEST(OoxmlReader, FrozenSplitPaneSurvivesLoadAndSave) {
+  constexpr std::string_view kSheetXml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<sheetViews><sheetView workbookViewId=\"0\">"
+      "<pane xSplit=\"1\" ySplit=\"1\" topLeftCell=\"B2\" activePane=\"bottomRight\" state=\"frozenSplit\"/>"
+      "</sheetView></sheetViews>"
+      "<sheetData><row r=\"1\"><c r=\"A1\"><v>42</v></c></row></sheetData>"
+      "</worksheet>";
+  const std::vector<std::uint8_t> mutated =
+      RebuildArchiveReplacing(SaveOrDie(Workbook::create()), "xl/worksheets/sheet1.xml", kSheetXml);
+
+  auto loaded_or = read_ooxml(SpanOf(mutated));
+  ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
+  EXPECT_EQ(loaded_or.value().workbook.sheet(0).view().freeze_rows, 1U);
+  EXPECT_EQ(loaded_or.value().workbook.sheet(0).view().freeze_cols, 1U);
+
+  const std::vector<std::uint8_t> resaved = SaveOrDie(loaded_or.value().workbook);
+  auto reloaded_or = read_ooxml(SpanOf(resaved));
+  ASSERT_TRUE(static_cast<bool>(reloaded_or)) << reloaded_or.error().message;
+  EXPECT_EQ(reloaded_or.value().workbook.sheet(0).view().freeze_rows, 1U);
+  EXPECT_EQ(reloaded_or.value().workbook.sheet(0).view().freeze_cols, 1U);
+}
+
+/// One sheet carrying a malformed reference in each of the four
+/// presentation-overlay kinds, plus one well-formed merge and one live
+/// cell so the two tests below can tell "dropped the bad entry" apart
+/// from "dropped everything".
+constexpr std::string_view kMalformedOverlaysSheetXml =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+    "<sheetData><row r=\"1\"><c r=\"A1\"><v>42</v></c></row></sheetData>"
+    "<conditionalFormatting sqref=\"\"><cfRule type=\"expression\" priority=\"1\"/></conditionalFormatting>"
+    "<mergeCells count=\"2\"><mergeCell ref=\"\"/><mergeCell ref=\"B1:C1\"/></mergeCells>"
+    "<dataValidations count=\"1\"><dataValidation type=\"list\" sqref=\"\"/></dataValidations>"
+    "<hyperlinks><hyperlink ref=\"\" location=\"Sheet1!A1\"/></hyperlinks>"
+    "</worksheet>";
+
+// Presentation overlays degrade per entry rather than rejecting the
+// package: a malformed merge / hyperlink / data-validation reference must
+// not cost the caller every cell value in the workbook. This is the same
+// disposition the CF reader has always applied to a malformed block.
+TEST(OoxmlReader, MalformedPresentationOverlaysDoNotFailTheLoad) {
+  const std::vector<std::uint8_t> mutated =
+      RebuildArchiveReplacing(SaveOrDie(Workbook::create()), "xl/worksheets/sheet1.xml", kMalformedOverlaysSheetXml);
+
+  auto loaded_or = read_ooxml(SpanOf(mutated));
+  ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
+  const Sheet& sheet = loaded_or.value().workbook.sheet(0);
+  // The cell data — the part that is not a presentation overlay — is intact.
+  ASSERT_NE(sheet.cell_at(0U, 0U), nullptr);
+  EXPECT_DOUBLE_EQ(sheet.cell_at(0U, 0U)->cached_value.as_number(), 42.0);
+  // Only the malformed entries were dropped; the well-formed merge survived.
+  EXPECT_TRUE(sheet.conditional_formats().empty());
+  ASSERT_EQ(sheet.merges().size(), 1U);
+  EXPECT_EQ(sheet.merges()[0].first_col, 1U);
+  EXPECT_TRUE(sheet.validations().empty());
+  EXPECT_TRUE(sheet.hyperlinks().empty());
+}
+
+// Degrading has to be observable. Dropping an overlay entry is a silent
+// data loss unless the reader says so, so the diagnostic is half of the
+// contract, not decoration — and because logging ships off, "emitted"
+// means "reaches an embedder's sink", which is what this asserts.
+TEST(OoxmlReader, MalformedPresentationOverlaysAreDiagnosed) {
+  const std::vector<std::uint8_t> mutated =
+      RebuildArchiveReplacing(SaveOrDie(Workbook::create()), "xl/worksheets/sheet1.xml", kMalformedOverlaysSheetXml);
+
+  StructuredLogCapture log;
+  auto loaded_or = read_ooxml(SpanOf(mutated));
+  ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
+
+  // One record per skipped entry, each naming the part it came from, so a
+  // host can tell which overlay it lost.
+  const std::string& records = log.records();
+  EXPECT_NE(records.find("io.cf.skip"), std::string::npos) << records;
+  EXPECT_NE(records.find("\"part\":\"mergeCells\""), std::string::npos) << records;
+  EXPECT_NE(records.find("\"part\":\"hyperlinks\""), std::string::npos) << records;
+  EXPECT_NE(records.find("\"part\":\"dataValidations\""), std::string::npos) << records;
+  // The three sibling readers share one event name; CF keeps its own
+  // because it skips a whole block rather than a single entry.
+  EXPECT_NE(records.find("io.sheet.overlay.skip"), std::string::npos) << records;
 }
 
 TEST(OoxmlReader, IsSafePartNameAcceptsCanonicalNames) {

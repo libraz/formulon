@@ -166,8 +166,11 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // should never appear in cell storage in practice.
 //
 // On entry, `out` already contains '<c r="ADDR"' (without the closing
-// quote or '>'). This function emits the closing quote, any type
-// attribute, the body, and the closing '</c>'.
+// quote or '>'). This function emits the closing quote, the `s=` style
+// attribute for a non-zero `xf_index`, any type attribute, the body, and
+// the closing '</c>'. Routing the style attribute through here rather
+// than through the caller is what keeps the type attribute and the
+// `<v>`/`<is>` encoding identical for styled and unstyled cells.
 //
 // `phonetic` is the kana annotation associated with a Text-valued cell
 // (empty when none). When non-empty AND `value` is Text, the `<is>`
@@ -179,7 +182,9 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // PHONETIC()'s observable behaviour (the concatenated kana) is
 // preserved without per-span boundaries.
 void AppendLiteralCellBody(std::string& out, const Value& value, std::string_view phonetic,
-                           const SharedStrings* shared_strings) {
+                           const SharedStrings* shared_strings, std::uint32_t xf_index) {
+  out.push_back('"');
+  AppendStyleAttr(out, xf_index);
   if (value.is_number()) {
     // Defensive: NaN / +/-Inf must never reach AppendNumberValue, which
     // would emit `nan`/`inf` text inside `<v>` (Excel rejects this on
@@ -187,31 +192,30 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
     // path may not — downgrade to #NUM! here as a last line of defence.
     const double v = value.as_number();
     if (!std::isfinite(v)) {
-      out.append("\" t=\"e\"><v>");
+      out.append(" t=\"e\"><v>");
       out.append(display_name(ErrorCode::Num));
       out.append("</v></c>");
       return;
     }
-    out.append("\">");
-    out.append("<v>");
+    out.append("><v>");
     AppendNumberValue(out, v);
     out.append("</v></c>");
     return;
   }
   if (value.is_boolean()) {
-    out.append("\" t=\"b\"><v>");
+    out.append(" t=\"b\"><v>");
     out.push_back(value.as_boolean() ? '1' : '0');
     out.append("</v></c>");
     return;
   }
   if (value.is_text()) {
     if (shared_strings != nullptr) {
-      out.append("\" t=\"s\"><v>");
+      out.append(" t=\"s\"><v>");
       out.append(std::to_string(shared_strings->index_of(value.as_text(), phonetic)));
       out.append("</v></c>");
       return;
     }
-    out.append("\" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
+    out.append(" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
     AppendXmlEscaped(out, value.as_text());
     out.append("</t>");
     if (!phonetic.empty()) {
@@ -227,11 +231,12 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
   }
   if (value.is_error()) {
     if (!IsLegacyErrorCode(value.as_error())) {
-      // Rich error literal: not writable as a legacy <v>; emit a blank cell.
-      out.append("\"/>");
+      // Rich error literal: not writable as a legacy <v>; emit a blank
+      // cell, keeping any style already appended above.
+      out.append("/>");
       return;
     }
-    out.append("\" t=\"e\"><v>");
+    out.append(" t=\"e\"><v>");
     out.append(display_name(value.as_error()));
     out.append("</v></c>");
     return;
@@ -240,7 +245,7 @@ void AppendLiteralCellBody(std::string& out, const Value& value, std::string_vie
   // these in the post-evaluation path (arrays land in the spill table;
   // Ref/Lambda are not yet first-class cell payloads). Surface #VALUE!
   // rather than crashing the writer.
-  out.append("\" t=\"e\"><v>");
+  out.append(" t=\"e\"><v>");
   out.append(display_name(ErrorCode::Value));
   out.append("</v></c>");
 }
@@ -418,77 +423,13 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   }
 
   // Literal-value cell. AppendLiteralCellBody completes the opening tag
-  // (closing quote + optional type attribute), writes the body, and
-  // closes the </c>. The cell's `phonetic_text` is forwarded so any
-  // <rPh> annotation captured at read time round-trips back through
+  // (closing quote + optional `s=` + optional type attribute), writes the
+  // body, and closes the </c>. The cell's `phonetic_text` is forwarded so
+  // any <rPh> annotation captured at read time round-trips back through
   // the inline-string block.
   out.append("<c r=\"");
   out.append(addr);
-  // Close the `r=` attribute, optionally inject `s=`, then re-open the
-  // body without a closing quote so `AppendLiteralCellBody` can append
-  // its own type attribute prefix (`\" t="..."`). Reopening a partial
-  // attribute with a sentinel space rather than `"` lets the helper
-  // continue using its existing prefix conventions unchanged.
-  if (cell.xf_index != 0U) {
-    out.append("\"");
-    AppendStyleAttr(out, cell.xf_index);
-    // Re-prime the helper: it expects the buffer to end immediately
-    // after the address with no trailing quote (the helper writes the
-    // `\"` itself). Add a placeholder `r2=""` would be wrong; instead,
-    // emit a degenerate `r2=""`-free shape by undoing the helper's
-    // expectation. The cleanest fix is to inline the helper's prefix
-    // here.
-    if (cell.cached_value.is_number()) {
-      const double nv = cell.cached_value.as_number();
-      if (!std::isfinite(nv)) {
-        out.append(" t=\"e\"><v>");
-        out.append(display_name(ErrorCode::Num));
-        out.append("</v></c>");
-      } else {
-        out.append(" ><v>");
-        AppendNumberValue(out, nv);
-        out.append("</v></c>");
-      }
-    } else if (cell.cached_value.is_boolean()) {
-      out.append(" t=\"b\"><v>");
-      out.push_back(cell.cached_value.as_boolean() ? '1' : '0');
-      out.append("</v></c>");
-    } else if (cell.cached_value.is_text()) {
-      if (shared_strings != nullptr) {
-        out.append(" t=\"s\"><v>");
-        out.append(std::to_string(shared_strings->index_of(cell.cached_value.as_text(), cell.phonetic_text)));
-        out.append("</v></c>");
-      } else {
-        out.append(" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
-        AppendXmlEscaped(out, cell.cached_value.as_text());
-        out.append("</t>");
-        if (!cell.phonetic_text.empty()) {
-          const std::uint32_t eb = formulon::eval::utf16_units_in(cell.cached_value.as_text());
-          out.append("<rPh sb=\"0\" eb=\"");
-          out.append(std::to_string(eb));
-          out.append("\"><t xml:space=\"preserve\">");
-          AppendXmlEscaped(out, cell.phonetic_text);
-          out.append("</t></rPh>");
-        }
-        out.append("</is></c>");
-      }
-    } else if (cell.cached_value.is_error()) {
-      if (IsLegacyErrorCode(cell.cached_value.as_error())) {
-        out.append(" t=\"e\"><v>");
-        out.append(display_name(cell.cached_value.as_error()));
-        out.append("</v></c>");
-      } else {
-        // Rich error literal with a style: blank cell keeping the style.
-        out.append("/>");
-      }
-    } else {
-      out.append(" t=\"e\"><v>");
-      out.append(display_name(ErrorCode::Value));
-      out.append("</v></c>");
-    }
-    return true;
-  }
-  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_text, shared_strings);
+  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_text, shared_strings, cell.xf_index);
   return true;
 }
 
@@ -515,6 +456,13 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
     out.append(" outlineLevel=\"");
     out.append(std::to_string(static_cast<unsigned int>(layout.outline_level)));
     out.push_back('"');
+  }
+  if (layout.has_style) {
+    // OOXML row style is effective only with customFormat=1. Emit s even
+    // when the explicit style xf is zero so style="0" survives a save.
+    out.append(" s=\"");
+    out.append(std::to_string(layout.style_xf));
+    out.append("\" customFormat=\"1\"");
   }
 }
 

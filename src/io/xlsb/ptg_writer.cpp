@@ -19,6 +19,7 @@
 #include "io/xlsb/ptg.h"
 #include "parser/ast_format.h"
 #include "parser/reference.h"
+#include "sheet_name.h"
 #include "utils/status_macros.h"
 #include "value.h"
 
@@ -188,7 +189,7 @@ Error unsupported_node(const char* kind) {
 /// Resolves a sheet name to its 0-based ixti. Returns -1 when absent.
 int resolve_ixti(const std::vector<std::string>& sheet_names, std::string_view sheet) {
   for (std::size_t i = 0; i < sheet_names.size(); ++i) {
-    if (sheet_names[i] == sheet) {
+    if (formulon::sheet_names::equal(sheet_names[i], sheet)) {
       return static_cast<int>(i);
     }
   }
@@ -668,7 +669,9 @@ class Encoder {
     // by the decoder in encounter order. Verified against a real
     // Excel-365-produced `xl/worksheets/sheetN.bin` (see
     // `ptg_reader.cpp`'s `PtgKind::Array` case, the decoder
-    // counterpart).
+    // counterpart). Field order (rows before cols) and row-major
+    // element order follow [MS-XLSB] 2.5.98.26 -- see the longer note on
+    // the decoder side for why the fixture corpus cannot pin them.
     const std::uint32_t rows = node.as_array_rows();
     const std::uint32_t cols = node.as_array_cols();
     emit_u8(out_, 0x60);  // PtgArray (array-class base, matches the decoder)

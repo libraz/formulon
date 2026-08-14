@@ -93,6 +93,14 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
       if (!target.empty() && target.front() == '/') {
         target.erase(0, 1);
       }
+      // The workbook part name becomes an archive key and the base
+      // directory every downstream rels target resolves against, so it
+      // goes through the same gate as every other package-rels target.
+      if (!is_safe_part_name(target)) {
+        return make_error(FormulonErrorCode::kIoZipSlip,
+                          "package-level rels: OfficeDocument target escapes package root",
+                          "context=ooxml_reader part=_rels/.rels target=" + target);
+      }
       return target;
     }
   }

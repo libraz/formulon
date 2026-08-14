@@ -7,6 +7,7 @@
 #include "io/pivot_table_writer.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -45,6 +46,24 @@ TEST(PivotTableWriter, EmptyTableRoundTrips) {
   // reader interprets as a 1x1 anchor at (0,0).
   EXPECT_EQ(parsed.anchor_row(), 0U);
   EXPECT_EQ(parsed.anchor_col(), 0U);
+}
+
+TEST(PivotTableWriter, LocationRequiredAttrsDefaultIndependentlyAndPreserveZero) {
+  pivot::PivotTable defaults;
+  const std::string default_xml = write_pivot_table_definition(defaults);
+  EXPECT_NE(default_xml.find("<location ref=\"A1:A1\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>"),
+            std::string::npos)
+      << "xml=" << default_xml;
+  EXPECT_EQ(default_xml.find("rowPageCount"), std::string::npos) << "xml=" << default_xml;
+  EXPECT_EQ(default_xml.find("colPageCount"), std::string::npos) << "xml=" << default_xml;
+
+  pivot::PivotTable partial;
+  partial.set_location_attributes(std::optional<std::uint32_t>(0U), std::nullopt, std::nullopt, std::nullopt,
+                                  std::nullopt);
+  const std::string partial_xml = write_pivot_table_definition(partial);
+  EXPECT_NE(partial_xml.find("<location ref=\"A1:A1\" firstHeaderRow=\"0\" firstDataRow=\"1\" firstDataCol=\"1\"/>"),
+            std::string::npos)
+      << "xml=" << partial_xml;
 }
 
 // ---------------------------------------------------------------------------
@@ -296,6 +315,42 @@ TEST(PivotTableWriter, PassthroughRoundTrips) {
   auto second_or = read_pivot_table_definition(Bytes(written));
   ASSERT_TRUE(static_cast<bool>(second_or)) << second_or.error().message;
   EXPECT_EQ(write_pivot_table_definition(second_or.value()), written);
+}
+
+// `active_filters()` is session state: it drives evaluation for as long as the
+// workbook object lives and is never written to the package. Pinning that here
+// keeps the omission a decision rather than an oversight — a writer that
+// started emitting `<filters>` would both contradict the documented contract
+// and duplicate any authored block the reader is holding in passthrough.
+TEST(PivotTableWriter, ActiveFiltersAreSessionStateAndAreNotSerialized) {
+  pivot::PivotTable table;
+  table.set_name("P");
+  table.set_pivot_cache_id(1U);
+  table.set_anchor(0U, 0U, 4U, 2U);
+  pivot::PivotField region;
+  region.source_name = "Region";
+  region.axis = pivot::PivotAxis::Row;
+  table.mutable_fields().push_back(std::move(region));
+  table.mutable_row_field_order().push_back(0U);
+
+  pivot::PivotFilter filter;
+  filter.axis = pivot::PivotAxis::Row;
+  filter.field_name = "Region";
+  filter.type = pivot::FilterType::LabelBeginsWith;
+  filter.value = std::string("Nor");
+  table.mutable_active_filters().push_back(std::move(filter));
+  ASSERT_EQ(table.active_filters().size(), 1U);
+
+  const std::string written = write_pivot_table_definition(table);
+  EXPECT_EQ(written.find("<filters"), std::string::npos) << written;
+  EXPECT_EQ(written.find("Nor"), std::string::npos) << written;
+
+  auto reparsed_or = read_pivot_table_definition(Bytes(written));
+  ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
+  EXPECT_TRUE(reparsed_or.value().active_filters().empty());
+  // The rest of the definition is unaffected by the dropped filter.
+  ASSERT_EQ(reparsed_or.value().fields().size(), 1U);
+  EXPECT_EQ(reparsed_or.value().row_field_order().size(), 1U);
 }
 
 // ---------------------------------------------------------------------------

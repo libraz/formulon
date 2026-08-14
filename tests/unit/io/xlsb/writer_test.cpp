@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -23,6 +25,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/styles_writer.h"
 #include "io/zip_reader.h"
+#include "print/pagination.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "value.h"
@@ -35,6 +38,21 @@ namespace {
 
 ByteSpan SpanOf(const std::vector<std::uint8_t>& v) {
   return ByteSpan{v.data(), v.size()};
+}
+
+std::vector<std::uint8_t> WorksheetFormatPayloadFromSheet(const std::vector<std::uint8_t>& sheet_bytes) {
+  ByteSpan cursor = SpanOf(sheet_bytes);
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    if (!record_or) {
+      return {};
+    }
+    if (record_or.value().type == static_cast<std::uint16_t>(XlsbRecordType::BrtWsFmtInfo)) {
+      const ByteSpan payload = record_or.value().payload;
+      return std::vector<std::uint8_t>(payload.data, payload.data + payload.size);
+    }
+  }
+  return {};
 }
 
 TEST(XlsbWriter, RejectsZeroSheetWorkbook) {
@@ -205,8 +223,10 @@ TEST(XlsbWriter, RowHeadersDescribeTheirEmittedCellColumns) {
     ASSERT_TRUE(static_cast<bool>(read_u32(payload)));  // ixfe
     ASSERT_TRUE(static_cast<bool>(read_u16(payload)));  // miyRw
     ASSERT_TRUE(static_cast<bool>(read_u8(payload)));   // flags1
-    ASSERT_TRUE(static_cast<bool>(read_u8(payload)));   // flags2
-    ASSERT_TRUE(static_cast<bool>(read_u8(payload)));   // fPhShow
+    auto flags2_or = read_u8(payload);
+    ASSERT_TRUE(flags2_or);  // flags2
+    EXPECT_EQ(flags2_or.value() & 0x40U, 0U);
+    ASSERT_TRUE(static_cast<bool>(read_u8(payload)));  // fPhShow
     auto count_or = read_u32(payload);
     ASSERT_TRUE(static_cast<bool>(count_or));
     ASSERT_EQ(count_or.value(), 2U);
@@ -249,6 +269,207 @@ TEST(XlsbWriter, EmitsRequiredWorksheetPrefixInSpecificationOrder) {
     ASSERT_TRUE(static_cast<bool>(record_or));
     EXPECT_EQ(record_or.value().type, static_cast<std::uint16_t>(type));
   }
+}
+
+TEST(XlsbWriter, EmitsCanonicalAbsentWorksheetFormatDefaults) {
+  Workbook wb = Workbook::create();
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const std::vector<std::uint8_t> payload = WorksheetFormatPayloadFromSheet(sheet_or.value());
+  ASSERT_EQ(payload.size(), 12U);
+  ByteSpan cursor = SpanOf(payload);
+  auto dx_or = read_u32(cursor);
+  auto cch_or = read_u16(cursor);
+  auto miy_or = read_u16(cursor);
+  auto flags_or = read_u32(cursor);
+  ASSERT_TRUE(dx_or && cch_or && miy_or && flags_or);
+  EXPECT_EQ(dx_or.value(), 0xFFFFFFFFU);
+  EXPECT_EQ(cch_or.value(), 8U);
+  EXPECT_EQ(miy_or.value(), 300U);
+  EXPECT_EQ(flags_or.value(), 0U);
+  EXPECT_EQ(cursor.size, 0U);
+}
+
+TEST(XlsbWriter, EncodesWorksheetFormatDefaultsAndPresenceFlags) {
+  Workbook wb = Workbook::create();
+  SheetFormatDefaults& defaults = wb.sheet(0).mutable_format_defaults();
+  defaults.base_col_width = 10.0;
+  defaults.default_col_width = 12.5;
+  defaults.has_default_col_width = true;
+  defaults.default_row_height = 18.75;
+  defaults.has_default_row_height = true;
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const std::vector<std::uint8_t> payload = WorksheetFormatPayloadFromSheet(sheet_or.value());
+  ASSERT_EQ(payload.size(), 12U);
+  ByteSpan cursor = SpanOf(payload);
+  auto dx_or = read_u32(cursor);
+  auto cch_or = read_u16(cursor);
+  auto miy_or = read_u16(cursor);
+  auto flags_or = read_u32(cursor);
+  ASSERT_TRUE(dx_or && cch_or && miy_or && flags_or);
+  EXPECT_EQ(dx_or.value(), 3200U);
+  EXPECT_EQ(cch_or.value(), 10U);
+  EXPECT_EQ(miy_or.value(), 375U);
+  EXPECT_EQ(flags_or.value(), 1U);
+
+  defaults.default_col_width = 0.0;
+  defaults.default_row_height = 0.0;
+  auto zero_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(zero_or)) << zero_or.error().message << " | " << zero_or.error().context;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(zero_or.value()))));
+  auto zero_sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(zero_sheet_or));
+  const std::vector<std::uint8_t> zero_payload = WorksheetFormatPayloadFromSheet(zero_sheet_or.value());
+  ASSERT_EQ(zero_payload.size(), 12U);
+  ByteSpan zero_cursor = SpanOf(zero_payload);
+  ASSERT_TRUE(read_u32(zero_cursor));
+  ASSERT_TRUE(read_u16(zero_cursor));
+  ASSERT_TRUE(read_u16(zero_cursor));
+  auto zero_flags_or = read_u32(zero_cursor);
+  ASSERT_TRUE(zero_flags_or);
+  EXPECT_EQ(zero_flags_or.value(), 2U);
+
+  defaults.default_col_width = 1.5 + 1.0 / 512.0;
+  defaults.default_row_height = 0.001;
+  auto quantized_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(quantized_or)) << quantized_or.error().message << " | " << quantized_or.error().context;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(quantized_or.value()))));
+  auto quantized_sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(quantized_sheet_or));
+  const std::vector<std::uint8_t> quantized_payload = WorksheetFormatPayloadFromSheet(quantized_sheet_or.value());
+  ASSERT_EQ(quantized_payload.size(), 12U);
+  ByteSpan quantized_cursor = SpanOf(quantized_payload);
+  auto quantized_dx_or = read_u32(quantized_cursor);
+  ASSERT_TRUE(quantized_dx_or);
+  EXPECT_EQ(quantized_dx_or.value(), 384U);  // floor(1.5 * 256)
+  ASSERT_TRUE(read_u16(quantized_cursor));
+  auto quantized_miy_or = read_u16(quantized_cursor);
+  ASSERT_TRUE(quantized_miy_or);
+  EXPECT_EQ(quantized_miy_or.value(), 0U);  // nearest(0.02 twip)
+  auto quantized_flags_or = read_u32(quantized_cursor);
+  ASSERT_TRUE(quantized_flags_or);
+  EXPECT_EQ(quantized_flags_or.value(), 2U);
+}
+
+TEST(XlsbWriter, InvalidWorksheetFormatDefaultsUseSafeFallbacksAndAreDeferred) {
+  Workbook wb = Workbook::create();
+  SheetFormatDefaults& defaults = wb.sheet(0).mutable_format_defaults();
+  defaults.base_col_width = 8.5;
+  defaults.default_col_width = -1.0;
+  defaults.has_default_col_width = true;
+  defaults.default_row_height = std::numeric_limits<double>::infinity();
+  defaults.has_default_row_height = true;
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().deferred_feature_count, 3U);
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const std::vector<std::uint8_t> payload = WorksheetFormatPayloadFromSheet(sheet_or.value());
+  ASSERT_EQ(payload.size(), 12U);
+  ByteSpan cursor = SpanOf(payload);
+  auto dx_or = read_u32(cursor);
+  auto cch_or = read_u16(cursor);
+  auto miy_or = read_u16(cursor);
+  auto flags_or = read_u32(cursor);
+  ASSERT_TRUE(dx_or && cch_or && miy_or && flags_or);
+  EXPECT_EQ(dx_or.value(), 0xFFFFFFFFU);
+  EXPECT_EQ(cch_or.value(), 8U);
+  EXPECT_EQ(miy_or.value(), 300U);
+  EXPECT_EQ(flags_or.value(), 0U);
+}
+
+TEST(XlsbWriter, DefinedNameCommentSurvivesWriteReadRoundTrip) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("S1");
+  io::DefinedName dn;
+  dn.name = "Rate";
+  dn.formula = "0.1";
+  dn.local_sheet_id = -1;
+  dn.comment = "The annual interest rate";
+  wb.set_defined_names({dn});
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+
+  const std::vector<io::DefinedName>& names = read_or.value().workbook.defined_names();
+  ASSERT_EQ(names.size(), 1U);
+  EXPECT_EQ(names[0].name, "Rate");
+  EXPECT_EQ(names[0].formula, "0.1");
+  EXPECT_EQ(names[0].local_sheet_id, -1);
+  EXPECT_EQ(names[0].comment, "The annual interest rate");
+}
+
+TEST(XlsbWriter, DefinedNameAbsentCommentRoundTripsToEmptyString) {
+  // A name with no Name Manager comment must decode back to an empty
+  // string, not the string "null" or a dropped entry -- matching the
+  // null `XLNullableWideString` sentinel a real Excel-authored name
+  // without a comment carries (see `xlsb_fidelity_base.xlsb`'s own
+  // "Rate" `BrtName` record).
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("S1");
+  io::DefinedName dn;
+  dn.name = "Rate";
+  dn.formula = "0.1";
+  dn.local_sheet_id = -1;
+  wb.set_defined_names({dn});
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+
+  const std::vector<io::DefinedName>& names = read_or.value().workbook.defined_names();
+  ASSERT_EQ(names.size(), 1U);
+  EXPECT_TRUE(names[0].comment.empty());
+}
+
+TEST(XlsbWriter, AbsentFormatDefaultsPreservePaginationAcrossRoundTrip) {
+  // A sheet with no `<sheetFormatPr>` defaults must fall back to the same
+  // engine defaults (15pt / 8.43ch) whether the source is the in-memory
+  // model or a workbook that just came back through the XLSB writer/reader
+  // pair -- neither path may bake in XLSB's own on-wire fallback (20pt row
+  // height) as an *observable* default height. `paginate()`'s page count
+  // is the sharpest end-to-end signal of that: two rows apart tall enough
+  // to force a page break at the default row height.
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("S1");
+  sheet.set_cell_value(0U, 0U, Value::number(1.0));
+  sheet.set_cell_value(48U, 0U, Value::number(2.0));
+  ASSERT_FALSE(sheet.format_defaults().has_default_row_height);
+  ASSERT_FALSE(sheet.format_defaults().has_default_col_width);
+
+  auto before_or = print::paginate(wb, 0U);
+  ASSERT_TRUE(static_cast<bool>(before_or)) << before_or.error().message;
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const Sheet& round_tripped = read_or.value().workbook.sheet(0);
+  EXPECT_FALSE(round_tripped.format_defaults().has_default_row_height);
+  EXPECT_FALSE(round_tripped.format_defaults().has_default_col_width);
+
+  auto after_or = print::paginate(read_or.value().workbook, 0U);
+  ASSERT_TRUE(static_cast<bool>(after_or)) << after_or.error().message;
+  EXPECT_EQ(after_or.value().page_count, before_or.value().page_count);
+  EXPECT_EQ(after_or.value().h_breaks, before_or.value().h_breaks);
 }
 
 TEST(XlsbWriter, PassthroughPartsRoundTripVerbatim) {
@@ -891,6 +1112,11 @@ TEST(XlsbWriter, RowAndColumnLayoutSurviveRoundTrip) {
   EXPECT_EQ(layout.columns[0].first, 1U);
   EXPECT_EQ(layout.columns[0].last, 3U);
   EXPECT_DOUBLE_EQ(layout.columns[0].width, 17.25);
+  EXPECT_TRUE(layout.columns[0].has_width);
+  // BrtColInfo always carries ixfe, so XLSB canonicalizes a width-only
+  // aggregate span to effective style 0 on read.
+  EXPECT_TRUE(layout.columns[0].has_style);
+  EXPECT_EQ(layout.columns[0].style_xf, 0U);
   EXPECT_TRUE(layout.columns[0].hidden);
   EXPECT_EQ(layout.columns[0].outline_level, 2U);
   ASSERT_EQ(layout.row_overrides.size(), 1U);
@@ -898,6 +1124,75 @@ TEST(XlsbWriter, RowAndColumnLayoutSurviveRoundTrip) {
   EXPECT_DOUBLE_EQ(layout.row_overrides[0].height, 28.5);
   EXPECT_TRUE(layout.row_overrides[0].hidden);
   EXPECT_EQ(layout.row_overrides[0].outline_level, 3U);
+}
+
+TEST(XlsbWriter, RowStyleFlagCarriesExplicitZeroAndNonZeroStyles) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& sheet = wb.add_sheet("RowStyles");
+  RowLayout style_zero;
+  style_zero.row = 2U;
+  style_zero.has_style = true;
+  style_zero.style_xf = 0U;
+  RowLayout style_one;
+  style_one.row = 3U;
+  style_one.has_style = true;
+  style_one.style_xf = 1U;
+  sheet.mutable_layout().row_overrides = {style_zero, style_one};
+
+  auto bytes_or = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes_or.value()))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+
+  std::map<std::uint32_t, std::pair<std::uint32_t, std::uint8_t>> raw;
+  ByteSpan cursor = SpanOf(sheet_or.value());
+  while (cursor.size > 0U) {
+    auto record_or = read_record(cursor);
+    ASSERT_TRUE(static_cast<bool>(record_or));
+    if (record_or.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtRowHdr)) {
+      continue;
+    }
+    ByteSpan payload = record_or.value().payload;
+    auto row_or = read_u32(payload);
+    auto style_or = read_u32(payload);
+    ASSERT_TRUE(row_or && style_or);
+    ASSERT_TRUE(read_u16(payload));
+    ASSERT_TRUE(read_u8(payload));
+    auto flags_or = read_u8(payload);
+    ASSERT_TRUE(read_u8(payload));
+    ASSERT_TRUE(flags_or);
+    raw[row_or.value()] = {style_or.value(), flags_or.value()};
+  }
+  ASSERT_EQ(raw.size(), 2U);
+  EXPECT_EQ(raw.at(2U).first, 0U);
+  EXPECT_NE(raw.at(2U).second & 0x40U, 0U);
+  EXPECT_EQ(raw.at(3U).first, 1U);
+  EXPECT_NE(raw.at(3U).second & 0x40U, 0U);
+
+  auto read_or = read_xlsb(SpanOf(bytes_or.value()));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
+  const auto& rows = read_or.value().workbook.sheet(0).layout().row_overrides;
+  ASSERT_EQ(rows.size(), 2U);
+  EXPECT_TRUE(rows[0].has_style);
+  EXPECT_TRUE(rows[1].has_style);
+  const auto find_row = [&rows](std::uint32_t row) -> const RowLayout* {
+    for (const RowLayout& candidate : rows) {
+      if (candidate.row == row) {
+        return &candidate;
+      }
+    }
+    return nullptr;
+  };
+  const RowLayout* loaded_zero = find_row(2U);
+  const RowLayout* loaded_one = find_row(3U);
+  ASSERT_NE(loaded_zero, nullptr);
+  ASSERT_NE(loaded_one, nullptr);
+  EXPECT_TRUE(loaded_zero->has_style);
+  EXPECT_EQ(loaded_zero->style_xf, 0U);
+  EXPECT_TRUE(loaded_one->has_style);
+  EXPECT_EQ(loaded_one->style_xf, 1U);
 }
 
 TEST(XlsbWriter, MergedRangesSurviveRoundTrip) {

@@ -768,5 +768,36 @@ TEST(CFReader, OutOfRangePriorityFallsBackToDefault) {
   EXPECT_EQ(cfs.value()[0].rules[0].priority, 1);
 }
 
+// One sqref grammar, one case rule. The whole-column decoder used to
+// upper-case its input while the cell decoder did not, so `a:a` parsed
+// and `a1:a10` dropped the block — the same file shape deciding two ways
+// depending on which half of the token parser saw it.
+TEST(CFReader, LowerCaseColumnLettersAreRejectedInEveryTokenShape) {
+  for (const char* sqref : {"a:a", "a1:a10", "a1", "A1:a10"}) {
+    std::string xml("<worksheet><conditionalFormatting sqref=\"");
+    xml.append(sqref);
+    xml.append("\"><cfRule type=\"expression\" priority=\"1\"/></conditionalFormatting></worksheet>");
+    pugi::xml_document doc = Load(xml.c_str());
+    auto cfs = read_conditional_formats(doc.child("worksheet"));
+    // The block is skipped with a diagnostic, never accepted and never
+    // fatal; the disposition does not depend on the token shape.
+    ASSERT_TRUE(cfs) << sqref;
+    EXPECT_TRUE(cfs.value().empty()) << sqref;
+  }
+}
+
+TEST(CFReader, UpperCaseColumnLettersAreAcceptedInEveryTokenShape) {
+  for (const char* sqref : {"A:A", "A1:A10", "A1"}) {
+    std::string xml("<worksheet><conditionalFormatting sqref=\"");
+    xml.append(sqref);
+    xml.append("\"><cfRule type=\"expression\" priority=\"1\"/></conditionalFormatting></worksheet>");
+    pugi::xml_document doc = Load(xml.c_str());
+    auto cfs = read_conditional_formats(doc.child("worksheet"));
+    ASSERT_TRUE(cfs) << sqref;
+    ASSERT_EQ(cfs.value().size(), 1u) << sqref;
+    EXPECT_EQ(cfs.value()[0].sqref[0].first.col, 0u) << sqref;
+  }
+}
+
 }  // namespace
 }  // namespace formulon::io

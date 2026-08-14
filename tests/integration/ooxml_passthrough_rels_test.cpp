@@ -479,6 +479,138 @@ TEST(OoxmlSheetRelsIntegrity, TablePartRidMatchesItsOwnTableRelationship) {
   EXPECT_TRUE(found) << "tablePart r:id \"" << table_rid << "\" has no matching Relationship";
 }
 
+TEST(OoxmlSheetRelsIntegrity, MissingInternalTargetIsDroppedButValidPassthroughSurvives) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+
+  io::UnknownRelationship missing;
+  missing.id = "rId7";
+  missing.type = "urn:example:relationships/missing-control";
+  missing.target = "xl/controls/missing.xml";
+  io::UnknownRelationship valid;
+  valid.id = "rId8";
+  valid.type = "urn:example:relationships/control";
+  valid.target = "xl/controls/control1.xml";
+  s.set_unknown_relationships({missing, valid});
+
+  io::PassthroughPart control;
+  control.path = "xl/controls/control1.xml";
+  control.content_type = "application/vnd.example.control+xml";
+  control.bytes = {'<', 'c', 'o', 'n', 't', 'r', 'o', 'l', '/', '>'};
+  wb.set_passthrough_parts({std::move(control)});
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  ASSERT_TRUE(zip.has_entry("xl/controls/control1.xml"));
+  auto rels_or = zip.read_entry("xl/worksheets/_rels/sheet1.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  pugi::xml_document rels_doc;
+  ASSERT_TRUE(rels_doc.load_buffer(rels_or.value().data(), rels_or.value().size()));
+  pugi::xml_node relationships = rels_doc.child("Relationships");
+  ASSERT_TRUE(relationships);
+  ASSERT_EQ(CollectRelationshipIds(relationships).size(), 1U);
+  pugi::xml_node rel = relationships.child("Relationship");
+  ASSERT_TRUE(rel);
+  EXPECT_EQ(rel.attribute("Id").value(), std::string("rId8"));
+  EXPECT_EQ(rel.attribute("Target").value(), std::string("../controls/control1.xml"));
+  EXPECT_EQ(rel.next_sibling("Relationship"), pugi::xml_node());
+  EXPECT_EQ(std::string(rels_or.value().begin(), rels_or.value().end()).find("missing.xml"), std::string::npos);
+}
+
+TEST(OoxmlSheetRelsIntegrity, OnlyMissingInternalTargetProducesNoRelsPart) {
+  Workbook wb = Workbook::create();
+  io::UnknownRelationship missing;
+  missing.id = "rId7";
+  missing.type = "urn:example:relationships/missing-control";
+  missing.target = "xl/controls/missing.xml";
+  wb.sheet(0).set_unknown_relationships({missing});
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  EXPECT_FALSE(zip.has_entry("xl/worksheets/_rels/sheet1.xml.rels"));
+}
+
+TEST(OoxmlSheetRelsIntegrity, ExternalUnknownRelationshipSurvivesWithoutPayload) {
+  Workbook wb = Workbook::create();
+  io::UnknownRelationship external;
+  external.id = "rId9";
+  external.type = "urn:example:relationships/external-control";
+  external.target = "https://example.test/controls/control1.xml";
+  external.target_external = true;
+  wb.sheet(0).set_unknown_relationships({external});
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  auto rels_or = zip.read_entry("xl/worksheets/_rels/sheet1.xml.rels");
+  ASSERT_TRUE(static_cast<bool>(rels_or));
+  pugi::xml_document rels_doc;
+  ASSERT_TRUE(rels_doc.load_buffer(rels_or.value().data(), rels_or.value().size()));
+  const pugi::xml_node rel = rels_doc.child("Relationships").child("Relationship");
+  ASSERT_TRUE(rel);
+  EXPECT_EQ(std::string_view(rel.attribute("Id").value()), "rId9");
+  EXPECT_EQ(std::string_view(rel.attribute("Type").value()), "urn:example:relationships/external-control");
+  EXPECT_EQ(std::string_view(rel.attribute("Target").value()), "https://example.test/controls/control1.xml");
+  EXPECT_EQ(std::string_view(rel.attribute("TargetMode").value()), "External");
+  EXPECT_EQ(rel.next_sibling("Relationship"), pugi::xml_node());
+}
+
+TEST(OoxmlSheetRelsIntegrity, MissingInternalTargetDropsStrayReservedRelsPassthrough) {
+  Workbook wb = Workbook::create();
+  io::UnknownRelationship missing;
+  missing.id = "rId7";
+  missing.type = "urn:example:relationships/missing-control";
+  missing.target = "xl/controls/missing.xml";
+  wb.sheet(0).set_unknown_relationships({missing});
+
+  io::PassthroughPart stray_rels;
+  stray_rels.path = "xl/worksheets/_rels/sheet1.xml.rels";
+  stray_rels.bytes = {'b', 'o', 'g', 'u', 's'};
+  wb.set_passthrough_parts({std::move(stray_rels)});
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  const std::vector<std::string> entries = zip.list_entries();
+  EXPECT_EQ(std::count(entries.begin(), entries.end(), std::string("xl/worksheets/_rels/sheet1.xml.rels")), 0);
+}
+
+TEST(OoxmlSheetRelsIntegrity, GeneratedStylesCollisionDropsUnknownRelationship) {
+  Workbook wb = Workbook::create();
+  io::UnknownRelationship unknown;
+  unknown.id = "rId11";
+  unknown.type = "urn:example:relationships/alternate-styles";
+  unknown.target = "xl/styles.xml";
+  wb.sheet(0).set_unknown_relationships({unknown});
+
+  io::PassthroughPart colliding_styles;
+  colliding_styles.path = "xl/styles.xml";
+  colliding_styles.content_type = "application/vnd.example.styles+xml";
+  colliding_styles.bytes = {'b', 'o', 'g', 'u', 's'};
+  wb.set_passthrough_parts({std::move(colliding_styles)});
+
+  auto save_or = wb.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+
+  io::ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(save_or.value()))));
+  ASSERT_TRUE(zip.has_entry("xl/styles.xml"));
+  auto styles_or = zip.read_entry("xl/styles.xml");
+  ASSERT_TRUE(static_cast<bool>(styles_or));
+  EXPECT_NE(std::string(styles_or.value().begin(), styles_or.value().end()), "bogus");
+  EXPECT_FALSE(zip.has_entry("xl/worksheets/_rels/sheet1.xml.rels"));
+}
+
 /// Builds a package with a worksheet carrying two `kRelVmlDrawing`
 /// relationships: one bound to `<legacyDrawing>` (comment geometry) and
 /// one bound to `<legacyDrawingHF>` (header/footer image), plus a
@@ -681,6 +813,11 @@ TEST(OoxmlSheetRelsIntegrity, UnknownRelationshipsOnlySheetDoesNotDuplicateRelsE
   // A stray passthrough part deliberately placed at the exact path the
   // writer generates for this sheet's own rels file.
   std::vector<io::PassthroughPart> parts = wb.passthrough_parts();
+  io::PassthroughPart control;
+  control.path = "xl/controls/control1.xml";
+  control.content_type = "application/vnd.example.control+xml";
+  control.bytes = {'<', 'c', 'o', 'n', 't', 'r', 'o', 'l', '/', '>'};
+  parts.push_back(std::move(control));
   io::PassthroughPart bogus;
   bogus.path = "xl/worksheets/_rels/sheet1.xml.rels";
   bogus.bytes = {'b', 'o', 'g', 'u', 's'};

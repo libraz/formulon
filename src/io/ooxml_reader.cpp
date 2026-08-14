@@ -525,7 +525,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     const bool workbook_hides = (state == "hidden") || (state == "veryHidden");
     // Validate the name at the boundary instead of trusting it. Sheet
     // lookup resolves to the first match, so a workbook carrying two
-    // sheets whose names fold together would answer every reference from
+    // sheets whose names Unicode-simple-fold together would answer every reference from
     // one of them and produce a confident wrong number with no ambiguity
     // signal a caller could act on. Excel treats such a file as needing
     // repair rather than opening it; renaming a sheet the author wrote

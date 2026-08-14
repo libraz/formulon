@@ -7,6 +7,7 @@
 // encode <-> decode pair as a single round-trip without needing a full
 // xlsb package.
 
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -15,6 +16,7 @@
 #include "gtest/gtest.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/ptg_writer.h"
+#include "io/xlsb/record_writer.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
@@ -74,21 +76,47 @@ TEST(XlsbPtgCodec, ArithmeticWithPrecedence) {
   EXPECT_EQ(RoundTrip("A1+B2*3"), "A1+B2*3");
 }
 
-TEST(XlsbPtgCodec, AttrChooseSkipsU32JumpOffsets) {
-  // PtgInt(1), followed by PtgAttrChoose with count=1 and two 32-bit
-  // jump offsets. The control-flow table is irrelevant after XLSB has
-  // already selected its cached formula path, but its wire width must be
-  // consumed exactly or the following Ptg stream is misaligned.
+TEST(XlsbPtgCodec, AttrChooseSkipsU16JumpOffsets) {
+  // PtgInt(1), followed by PtgAttrChoose with count=1 and two 16-bit
+  // jump offsets. [MS-XLSB] 2.5.98.25 defines rgOffset as an array of
+  // 2-byte unsigned integers, which every independent decoder of this
+  // record agrees on, not 4-byte -- the control-flow table is irrelevant after
+  // XLSB has already selected its cached formula path, but its wire
+  // width must be consumed exactly or the following Ptg stream is
+  // misaligned.
   const std::vector<std::uint8_t> rgce = {
-      0x1E, 0x01, 0x00,        // PtgInt 1
-      0x19, 0x04, 0x01, 0x00,  // PtgAttrChoose, u16 count=1
-      0x00, 0x00, 0x00, 0x00,  // jump offset 0 (u32)
-      0x04, 0x00, 0x00, 0x00,  // jump offset 1 (u32)
+      0x1E, 0x01, 0x00,  // PtgInt 1
+      0x19, 0x04,        // PtgAttrChoose
+      0x01, 0x00,        // u16 count=1
+      0x00, 0x00,        // jump offset 0 (u16)
+      0x04, 0x00,        // jump offset 1 (u16)
   };
   Arena arena;
   auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "1");
+}
+
+TEST(XlsbPtgCodec, AttrChooseWithMultipleBranchesSkipsU16JumpOffsets) {
+  // Same as above but cOffset=2 (three CHOOSE branches), followed by a
+  // PtgFuncVar(id=100, CHOOSE) to prove the stream realigns correctly
+  // onto a real function token after a wider jump table.
+  const std::vector<std::uint8_t> rgce = {
+      0x1E, 0x02, 0x00,        // PtgInt 2 (index)
+      0x1E, 0x0A, 0x00,        // PtgInt 10 (branch 1)
+      0x1E, 0x14, 0x00,        // PtgInt 20 (branch 2)
+      0x1E, 0x1E, 0x00,        // PtgInt 30 (branch 3)
+      0x19, 0x04,              // PtgAttrChoose
+      0x02, 0x00,              // u16 count=2 -> 3 offsets
+      0x00, 0x00,              // jump offset 0 (u16)
+      0x02, 0x00,              // jump offset 1 (u16)
+      0x04, 0x00,              // jump offset 2 (u16)
+      0x22, 0x04, 0x64, 0x00,  // PtgFuncVar, argc=4, iftab=100 (CHOOSE)
+  };
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+  EXPECT_EQ(parser::format_formula(*decoded.value()), "CHOOSE(2,10,20,30)");
 }
 
 TEST(XlsbPtgCodec, SumOverArea) {
@@ -194,6 +222,22 @@ TEST(XlsbPtgCodec, ConstantArray) {
   EXPECT_EQ(RoundTrip("{1,2;3,4}"), "{1,2;3,4}");
 }
 
+TEST(XlsbPtgCodec, ConstantArrayNonSquareRowVector) {
+  // A 1-row, 3-column array: distinguishes which `PtgExtraArray` u32 is
+  // rows vs. cols (a square fixture can't). Encoder writes rows=1,
+  // cols=3; if the reader swapped the fields it would either reject the
+  // dimension (1x3 -> read as 3x1 needs 3 rows worth of elements, which
+  // *is* available here since count is symmetric at 3, but the element
+  // shape would transpose) or -- for this asymmetric row/col case --
+  // round-trip to `{1;2;3}` instead of `{1,2,3}`.
+  EXPECT_EQ(RoundTrip("{1,2,3}"), "{1,2,3}");
+}
+
+TEST(XlsbPtgCodec, ConstantArrayNonSquareColumnVector) {
+  // The transpose of the above: 3 rows, 1 column.
+  EXPECT_EQ(RoundTrip("{1;2;3}"), "{1;2;3}");
+}
+
 TEST(XlsbPtgCodec, ErrorLiteral) {
   EXPECT_EQ(RoundTrip("#DIV/0!"), "#DIV/0!");
 }
@@ -260,6 +304,86 @@ TEST(XlsbPtgCodec, DecoderRejectsUnknownPtg) {
   auto decoded = decode_ptgs(span, ByteSpan{}, arena, {}, {}, {});
   ASSERT_FALSE(static_cast<bool>(decoded));
   EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
+}
+
+TEST(XlsbPtgCodec, PtgArrayDecodesRowsBeforeColsFromRawWireBytes) {
+  // Raw-byte decode of a genuinely non-square (1 row x 3 cols) array
+  // constant, independent of the encoder. `PtgExtraArray`
+  // ([MS-XLSB] 2.5.97.41) is documented as `DRw` (row count) followed
+  // by `DCol` (col count), each a plain u32 -- not a class-marked or
+  // otherwise reordered pair, and the elements follow row-outer /
+  // col-inner. A square real-Excel fixture cannot settle either point on
+  // its own, so this test pins them from the wire bytes. If the reader
+  // swapped the two u32 fields, this byte layout (rows=1, cols=3) would
+  // either be rejected (3 rows needs 3x as many trailing elements) or,
+  // for a same-total-count swap, transpose to `{1;2;3}`.
+  const std::vector<std::uint8_t> rgce = {
+      0x60,                                                  // PtgArray (array-class)
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 14-byte placeholder
+      0x00, 0x00, 0x00, 0x00, 0x00,
+  };
+  std::vector<std::uint8_t> rgcb;
+  emit_u32(rgcb, 1U);  // DRw: rows = 1
+  emit_u32(rgcb, 3U);  // DCol: cols = 3
+  for (const double v : {1.0, 2.0, 3.0}) {
+    rgcb.push_back(0x00);  // SerAr numeric tag
+    std::uint8_t bytes[8];
+    std::memcpy(bytes, &v, sizeof(v));
+    rgcb.insert(rgcb.end(), bytes, bytes + 8);
+  }
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {});
+  ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+  EXPECT_EQ(parser::format_formula(*decoded.value()), "{1,2,3}");
+}
+
+TEST(XlsbPtgCodec, PtgRefRowAtGridBoundIsRecordCorrupt) {
+  // PtgRef (0x24) with row == Sheet::kMaxRows, one past the last valid
+  // row (1048575). A crafted/corrupt row must be rejected at the Ref
+  // node construction site rather than silently wrapping in a later
+  // A1-text re-parse (`format_a1` would otherwise print `A1048577`).
+  const std::vector<std::uint8_t> rgce = {
+      0x24,                    // PtgRef
+      0x00, 0x00, 0x10, 0x00,  // row = 1048576 (u32 LE) == Sheet::kMaxRows
+      0x00, 0x00,              // col = 0, absolute
+  };
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
+TEST(XlsbPtgCodec, PtgAreaReversedCornersIsRecordCorrupt) {
+  // PtgArea (0x25) with row1 > row2: both corners are individually
+  // in-domain, but the range is not normalized.
+  const std::vector<std::uint8_t> rgce = {
+      0x25,                    // PtgArea
+      0x05, 0x00, 0x00, 0x00,  // row1 = 5
+      0x01, 0x00, 0x00, 0x00,  // row2 = 1 (< row1)
+      0x00, 0x00,              // col1 = 0, absolute
+      0x00, 0x00,              // col2 = 0, absolute
+  };
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
+
+TEST(XlsbPtgCodec, PtgRefErrWithSentinelCoordinatesStillDecodesAsRef) {
+  // PtgRefErr (0x2A) carries a `#REF!`-form single-cell reference; real
+  // Excel files encode the dead payload with the maximum sentinel
+  // row/col. Because this Ptg kind never materializes a `Reference`
+  // (only `ErrorCode::Ref`), the domain check at Ref/Area construction
+  // sites must not reject it.
+  const std::vector<std::uint8_t> rgce = {
+      0x2A,                    // PtgRefErr
+      0xFF, 0xFF, 0xFF, 0xFF,  // sentinel row payload (discarded)
+      0xFF, 0xFF,              // sentinel col payload (discarded)
+  };
+  Arena arena;
+  auto decoded = decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, {}, arena, {}, {}, {});
+  ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
+  EXPECT_EQ(parser::format_formula(*decoded.value()), "#REF!");
 }
 
 TEST(XlsbPtgCodec, DecoderAcceptsTransparentParenToken) {

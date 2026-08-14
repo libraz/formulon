@@ -267,7 +267,24 @@ struct ColumnLayout {
   double width = 0.0;       // in OOXML character-width units
   bool hidden = false;
   std::uint8_t outline_level = 0;
+  // Presence is distinct from the value: `<col width="0">` is an
+  // explicit zero-width override, while an absent width uses the sheet
+  // default. The style selector follows the same rule, including an
+  // explicit `style="0"`.
+  bool has_width = false;
+  bool has_style = false;
+  std::uint32_t style_xf = 0;
 };
+
+/// Returns whether a column has a logically explicit width.
+///
+/// `has_width` is the lossless source-presence bit, but callers may construct
+/// the aggregate model directly using the legacy convention that a non-zero
+/// width is explicit. Keep that convention observable at every output/API
+/// boundary while retaining an explicit zero through `has_width`.
+inline bool HasExplicitColumnWidth(const ColumnLayout& column) {
+  return column.has_width || column.width != 0.0;
+}
 
 /// Layout override for a single row.
 ///
@@ -280,6 +297,11 @@ struct RowLayout {
   bool hidden = false;
   std::uint8_t outline_level = 0;
   bool has_height = false;
+  // A row style is effective only when OOXML `customFormat="1"` is
+  // present. `style_xf == 0` remains meaningful when `s` is absent or
+  // explicitly set to zero.
+  bool has_style = false;
+  std::uint32_t style_xf = 0;
 };
 
 /// Aggregate of per-sheet layout overrides (column spans + row overrides).
@@ -1314,11 +1336,13 @@ class Sheet {
   // Guards every access to `spill_table_` and `rows_` so that parallel
   // recalc workers committing dynamic-array spills on the same sheet (each
   // running outside the scheduler's write lock) cannot tear the underlying
-  // maps. Lock ordering is always outer-to-inner: the scheduler's
-  // `write_mutex` (when held) is acquired before `spill_mutex_`, never the
-  // reverse. The spill-commit path runs without `write_mutex`; the only
-  // path that effectively nests the two is `set_cell_cached_value`, which
-  // the scheduler calls under its `write_mutex` and which then takes
+  // maps. This is the innermost link of the one workbook-wide lock order,
+  // stated in full in `eval/recalc_engine.h`: workbook compound mutation ->
+  // `RecalcEngine::mutex_` -> the scheduler's per-pass `write_mutex` ->
+  // `spill_mutex_`. It is never acquired ahead of any of them. The
+  // spill-commit path runs without `write_mutex`; the only path that
+  // effectively nests the two is `set_cell_cached_value`, which the
+  // scheduler calls under its `write_mutex` and which then takes
   // `spill_mutex_` internally. `mutable` because const observers
   // (`resolve_cell_value`, `cell_at`, `spill_region_*`) must lock it too.
   // Heap ownership makes the lock movable with its sheet, so Sheet's

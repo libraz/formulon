@@ -199,6 +199,9 @@ TEST(StylesWriter, EmitsFillsAndBorders) {
 
 TEST(StylesWriter, EmitsCellXfAlignment) {
   StylesTable table;
+  // Two fonts so `fontId="1"` names a record the same part emits; the
+  // writer replaces any id it cannot resolve with the default.
+  table.fonts.resize(2);
   CellXf xf;
   xf.num_fmt_id = 164;
   xf.font_index = 1;

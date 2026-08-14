@@ -46,9 +46,10 @@ std::uint16_t FontHeightTwips(double points) {
 }
 
 void EmitColor(std::vector<std::uint8_t>& payload, std::uint32_t argb, const ColorSpec& spec) {
-  // BrtColor is [flags/type, index, tint:i16, r, g, b, a].  Preserve a
-  // theme/indexed/auto selector when it exists; the resolved ARGB bytes still
-  // accompany it so applications which do not resolve themes have a fallback.
+  // BrtColor is [flags/type, index, tint:i16, r, g, b, a]. Preserve a
+  // theme/indexed/auto selector when it exists. The sibling ARGB bytes are
+  // literal RGB for an RGB selector or a compatibility fallback; this writer
+  // does not resolve theme, indexed, or auto colours.
   std::uint8_t kind = 0x02U;
   std::uint8_t index = 0U;
   std::int16_t tint = 0;

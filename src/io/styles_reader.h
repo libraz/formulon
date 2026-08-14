@@ -24,11 +24,12 @@ namespace formulon {
 namespace io {
 
 /// Original specification of an OOXML `<color>` element, preserved so a
-/// theme / indexed / auto colour survives a read-modify-write cycle
-/// instead of collapsing to a resolved RGB. The parallel `*_argb` field
-/// on the owning record still carries the resolved AARRGGBB value that
-/// the evaluator and bindings consume; this struct exists purely for
-/// verbatim OOXML round-tripping.
+/// theme / indexed / auto colour survives a read-modify-write cycle instead
+/// of collapsing to RGB. When `kind != kNone`, this selector is authoritative
+/// for writing; the parallel `*_argb` field on the owning record is not an
+/// Excel-rendered colour for theme, indexed, or auto selectors. It is a
+/// literal RGB value for `kRgb`, or a compatibility fallback for the other
+/// selectors. With `kNone`, the writer emits the sibling `*_argb` as `rgb`.
 struct ColorSpec {
   /// How the source `<color>` element expressed its value.
   enum class Kind : std::uint8_t {
@@ -51,9 +52,10 @@ struct ColorSpec {
 /// is open-set (system fonts, custom fonts, locale-specific variants);
 /// the per-record overhead is acceptable. `color_argb` carries the raw
 /// AARRGGBB packed colour. The sentinel `0xFF000000U` is preserved
-/// verbatim and treated as "automatic" by the consumer. `color`
-/// preserves the original `<color>` specification (theme / indexed /
-/// auto) for round-tripping; `color_argb` remains the resolved value.
+/// verbatim and treated as "automatic" by the consumer. `color` preserves
+/// the original `<color>` specification for round-tripping. `color_argb` is
+/// literal RGB when `color.kind == kRgb`, and otherwise only a compatibility
+/// fallback; it is not a resolved theme/indexed/auto render colour.
 struct FontRecord {
   std::string name;
   double size = 11.0;
@@ -86,15 +88,15 @@ struct FontRecord {
 /// One `<fill>` entry inside `<fills>`.
 ///
 /// `pattern` is the OOXML pattern index. `0=none`, `1=solid`,
-/// `2..18` = the standard pattern set. `fg_argb` / `bg_argb` are the
-/// AARRGGBB foreground / background colours.
+/// `2..18` = the standard pattern set. `fg_argb` / `bg_argb` are literal
+/// RGB values for RGB selectors or compatibility fallbacks otherwise.
 struct FillRecord {
   std::uint8_t pattern = 0;
   std::uint32_t fg_argb = 0;
   std::uint32_t bg_argb = 0;
-  /// Original `<fgColor>` / `<bgColor>` specifications (theme / indexed /
-  /// auto), preserved for round-tripping. The `*_argb` fields remain the
-  /// resolved values.
+  /// Original `<fgColor>` / `<bgColor>` specifications, preserved for
+  /// round-tripping. The `*_argb` fields are literal RGB for `kind == kRgb`
+  /// and compatibility fallbacks otherwise, not resolved render colours.
   ColorSpec fg;
   ColorSpec bg;
 };
@@ -105,8 +107,9 @@ struct BorderSide {
   /// (OOXML border style ordinal).
   std::uint8_t style = 0;
   std::uint32_t color_argb = 0;
-  /// Original `<color>` specification (theme / indexed / auto), preserved
-  /// for round-tripping. `color_argb` remains the resolved value.
+  /// Original `<color>` specification, preserved for round-tripping.
+  /// `color_argb` is literal RGB for `kind == kRgb` and a compatibility
+  /// fallback otherwise, not a resolved theme/indexed/auto colour.
   ColorSpec color;
 };
 
@@ -234,11 +237,11 @@ struct DifferentialFormat {
   bool has_num_fmt = false;
   std::uint16_t num_fmt_id = 0;
   std::string num_fmt_code;
-  /// Raw `<alignment>` / `<protection>` child elements, captured verbatim
-  /// so a dxf that carries them (rare in conditional formats, but valid)
-  /// survives a read -> write round trip. Empty when the child is absent.
-  /// The writer re-emits them at their CT_Dxf positions (alignment after
-  /// fill, protection after border).
+  /// Serialized `<alignment>` / `<protection>` child elements. Their semantic
+  /// content survives a read -> write round trip, though parsing may normalize
+  /// lexical formatting. Empty when the child is absent. The writer re-emits
+  /// them at their CT_Dxf positions (alignment after fill, protection after
+  /// border).
   std::string alignment_xml;
   std::string protection_xml;
 };
@@ -319,6 +322,11 @@ struct StylesTable {
 ///   * `<colors>`, `<tableStyles>`, and `<extLst>` are retained as raw XML;
 ///     other unrecognised children are accepted but ignored.
 ///   * Unknown attributes inside a recognised element are ignored.
+///   * Every stored index resolves. A `fontId` / `fillId` / `borderId` /
+///     `xfId` naming a record the part does not define is rewritten to
+///     the default record `0`, matching Excel's own fallback: such a
+///     workbook loads, its getters succeed, and the writer never
+///     re-emits the dangling reference.
 ///
 /// Errors:
 ///   * `kIoXmlParse` — pugixml could not parse the document.

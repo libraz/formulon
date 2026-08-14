@@ -98,6 +98,24 @@ TEST(HyperlinkRoundTrip, RangeRefAccepted) {
   EXPECT_EQ(h.location, "Sheet2!A1");
 }
 
+// Same invalid-reference policy the sibling overlay readers apply: drop
+// the entry, keep the sheet.
+TEST(HyperlinkRoundTrip, MalformedRefSkipsOnlyThatEntry) {
+  pugi::xml_document doc;
+  auto ws = ParseWorksheet(doc,
+                           "<hyperlinks>"
+                           "<hyperlink ref=\"\" location=\"Sheet2!A1\"/>"
+                           "<hyperlink ref=\"!!\" location=\"Sheet2!A2\"/>"
+                           "<hyperlink ref=\"C3\" location=\"Sheet2!A3\"/>"
+                           "</hyperlinks>");
+  auto out = read_hyperlinks(ws);
+  ASSERT_TRUE(static_cast<bool>(out)) << out.error().message;
+  ASSERT_EQ(out.value().size(), 1U);
+  EXPECT_EQ(out.value()[0].row, 2U);
+  EXPECT_EQ(out.value()[0].col, 2U);
+  EXPECT_EQ(out.value()[0].location, "Sheet2!A3");
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon

@@ -7,6 +7,7 @@
 
 #include "io/cf_writer.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -18,9 +19,14 @@
 namespace formulon::io {
 namespace {
 
+/// Stands in for the package's `<dxfs>` record count. Large enough that
+/// every `dxf_id` these tests set resolves, so only the test that targets
+/// the bound sees it engage.
+constexpr std::size_t kDxfCount = 8;
+
 std::vector<cf::ConditionalFormat> RoundTrip(const std::vector<cf::ConditionalFormat>& input) {
   std::string xml = "<worksheet>";
-  xml.append(write_conditional_formattings(input));
+  xml.append(write_conditional_formattings(input, kDxfCount));
   xml.append("</worksheet>");
   pugi::xml_document doc;
   pugi::xml_parse_result rc = doc.load_string(xml.c_str());
@@ -32,7 +38,7 @@ std::vector<cf::ConditionalFormat> RoundTrip(const std::vector<cf::ConditionalFo
 
 TEST(CFWriter, EmptyListProducesEmptyString) {
   std::vector<cf::ConditionalFormat> input;
-  EXPECT_TRUE(write_conditional_formattings(input).empty());
+  EXPECT_TRUE(write_conditional_formattings(input, kDxfCount).empty());
 }
 
 TEST(CFWriter, CellIsRuleRoundTrips) {
@@ -100,7 +106,7 @@ TEST(CFWriter, SqrefSingleCellEmitsShortForm) {
   r.dxf_id = 0u;
   cf.rules.push_back(std::move(r));
 
-  std::string xml = write_conditional_formattings({cf});
+  std::string xml = write_conditional_formattings({cf}, kDxfCount);
   // Single-cell range emits as plain "A1", not "A1:A1".
   EXPECT_NE(xml.find("sqref=\"A1 D5:D15\""), std::string::npos) << xml;
 
@@ -121,7 +127,7 @@ TEST(CFWriter, FullColumnSqrefEmitsCompactFormAndRoundTrips) {
   r.dxf_id = 0u;
   cf.rules.push_back(std::move(r));
 
-  std::string xml = write_conditional_formattings({cf});
+  std::string xml = write_conditional_formattings({cf}, kDxfCount);
   EXPECT_NE(xml.find("sqref=\"A:A B:C\""), std::string::npos) << xml;
 
   auto out = RoundTrip({cf});
@@ -141,7 +147,7 @@ TEST(CFWriter, FullRowSqrefEmitsCompactFormAndRoundTrips) {
   r.dxf_id = 0u;
   cf.rules.push_back(std::move(r));
 
-  std::string xml = write_conditional_formattings({cf});
+  std::string xml = write_conditional_formattings({cf}, kDxfCount);
   EXPECT_NE(xml.find("sqref=\"3:3\""), std::string::npos) << xml;
 
   auto out = RoundTrip({cf});
@@ -216,7 +222,7 @@ TEST(CFWriter, IconSetReverseAndPercentRoundTrip) {
   r.icon_set = std::move(i);
   cf.rules.push_back(std::move(r));
 
-  std::string xml = write_conditional_formattings({cf});
+  std::string xml = write_conditional_formattings({cf}, kDxfCount);
   // Floor cfvo (re-synthesized) plus the 2 real thresholds: 3 `<cfvo>`
   // elements for the 3-icon set. `gte` is omitted when true (the default)
   // and emitted as `gte="0"` only when false.
@@ -299,7 +305,7 @@ TEST(CFWriter, ContainsTextWithNewlineIsAttributeEscaped) {
   r.dxf_id = 0u;
   cf.rules.push_back(std::move(r));
 
-  const std::string xml = write_conditional_formattings({cf});
+  const std::string xml = write_conditional_formattings({cf}, kDxfCount);
   EXPECT_NE(xml.find("text=\"line one&#10;line two\""), std::string::npos) << xml;
 
   auto out = RoundTrip({cf});
@@ -352,7 +358,7 @@ TEST(CFWriter, RuleExtLstRoundTrips) {
       "<x14:id>{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}</x14:id></ext></extLst>";
   cf.rules.push_back(std::move(r));
 
-  std::string xml = write_conditional_formattings({cf});
+  std::string xml = write_conditional_formattings({cf}, kDxfCount);
   EXPECT_NE(xml.find("<x14:id>{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}</x14:id>"), std::string::npos) << xml;
 
   auto out = RoundTrip({cf});
@@ -373,7 +379,7 @@ TEST(CFWriter, ConditionalFormattingBlockExtLstRoundTrips) {
   cf.rules.push_back(std::move(r));
   cf.ext_lst_raw = "<extLst><ext uri=\"{some-future-extension}\"><futureThing/></ext></extLst>";
 
-  std::string xml = write_conditional_formattings({cf});
+  std::string xml = write_conditional_formattings({cf}, kDxfCount);
   EXPECT_NE(xml.find("<futureThing/>"), std::string::npos) << xml;
 
   auto out = RoundTrip({cf});
@@ -470,6 +476,51 @@ TEST(CFWriter, AllRuleTypesRoundTrip) {
     ASSERT_EQ(out[0].rules.size(), 1u) << "type=" << static_cast<int>(type);
     EXPECT_EQ(out[0].rules[0].type, type) << "type=" << static_cast<int>(type);
   }
+}
+
+// Excel treats a `dxfId` its `<dxfs>` table cannot resolve as package
+// corruption and repairs the sheet by discarding *all* of its conditional
+// formatting. Emitting the attribute is therefore strictly worse than
+// dropping it: the rule survives, only its differential format is lost.
+TEST(CFWriter, DxfIdBeyondTheDxfsTableIsNotEmitted) {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {9, 0}});
+  cf::CFRule in_range{};
+  in_range.type = cf::RuleType::CellIs;
+  in_range.priority = 1;
+  in_range.op = cf::CellIsOperator::GreaterThan;
+  in_range.formula1 = "5";
+  in_range.dxf_id = 1u;
+  cf::CFRule dangling{};
+  dangling.type = cf::RuleType::CellIs;
+  dangling.priority = 2;
+  dangling.op = cf::CellIsOperator::LessThan;
+  dangling.formula1 = "0";
+  dangling.dxf_id = 2u;
+  cf.rules.push_back(in_range);
+  cf.rules.push_back(dangling);
+
+  const std::string xml = write_conditional_formattings({cf}, /*dxf_count=*/2u);
+  EXPECT_NE(xml.find("dxfId=\"1\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("dxfId=\"2\""), std::string::npos) << xml;
+  // The rule itself is still written; only its unresolvable format
+  // reference is dropped.
+  EXPECT_NE(xml.find("operator=\"lessThan\""), std::string::npos) << xml;
+}
+
+TEST(CFWriter, EveryEmittedDxfIdResolvesAgainstAnEmptyDxfsTable) {
+  cf::ConditionalFormat cf{};
+  cf.sqref.push_back({{0, 0}, {0, 0}});
+  cf::CFRule r{};
+  r.type = cf::RuleType::CellIs;
+  r.priority = 1;
+  r.op = cf::CellIsOperator::Equal;
+  r.formula1 = "1";
+  r.dxf_id = 0u;
+  cf.rules.push_back(r);
+
+  EXPECT_EQ(write_conditional_formattings({cf}, /*dxf_count=*/0u).find("dxfId="), std::string::npos);
+  EXPECT_NE(write_conditional_formattings({cf}, /*dxf_count=*/1u).find("dxfId=\"0\""), std::string::npos);
 }
 
 }  // namespace

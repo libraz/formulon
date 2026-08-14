@@ -6,6 +6,7 @@
 
 #include "io/pivot_table_reader.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -22,6 +23,14 @@ namespace {
 
 std::vector<std::uint8_t> Bytes(std::string_view xml) {
   return std::vector<std::uint8_t>(xml.begin(), xml.end());
+}
+
+std::size_t CountOccurrences(std::string_view haystack, std::string_view needle) {
+  std::size_t count = 0;
+  for (std::size_t at = haystack.find(needle); at != std::string_view::npos; at = haystack.find(needle, at + 1)) {
+    ++count;
+  }
+  return count;
 }
 
 constexpr std::string_view kXmlDecl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
@@ -336,6 +345,43 @@ TEST(PivotTableReader, UnmodelledChildrenCapturedAsPassthrough) {
   EXPECT_NE(passthrough.find("PivotStyleLight16"), std::string::npos);
   // Recognised elements (location) are NOT in the passthrough.
   EXPECT_EQ(passthrough.find("<location"), std::string::npos);
+}
+
+// `<filters>` is an authored element this version does not model. It has to
+// survive a read -> write round trip byte-for-byte and exactly once, and it
+// must not silently appear in `active_filters()`, which is a session-only
+// list the writer never emits (see `PivotTable::active_filters`).
+TEST(PivotTableReader, AuthoredFiltersRoundTripAsPassthroughAndStayOutOfTheModel) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"1\">");
+  xml.append("<location ref=\"A1:B2\"/>");
+  xml.append("<pivotFields count=\"0\"/>");
+  xml.append("<pivotTableStyleInfo name=\"PivotStyleLight16\"/>");
+  xml.append(
+      "<filters count=\"1\"><filter fld=\"0\" type=\"captionEqual\" evalOrder=\"-1\" id=\"1\">"
+      "<autoFilter ref=\"A3:A9\"><filterColumn colId=\"0\">"
+      "<customFilters><customFilter operator=\"equal\" val=\"North\"/></customFilters>"
+      "</filterColumn></autoFilter></filter></filters>");
+  xml.append("</pivotTableDefinition>");
+
+  auto table_or = read_pivot_table_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  const pivot::PivotTable& table = table_or.value();
+  EXPECT_TRUE(table.active_filters().empty());
+  EXPECT_NE(table.raw_passthrough_xml().find("<filters"), std::string::npos);
+  EXPECT_NE(table.raw_passthrough_xml().find("val=\"North\""), std::string::npos);
+
+  const std::string round = write_pivot_table_definition(table);
+  EXPECT_EQ(CountOccurrences(round, "<filters"), 1U) << round;
+  EXPECT_NE(round.find("val=\"North\""), std::string::npos) << round;
+  // The style block is authored before `<filters>`; re-emission keeps that
+  // order, which the schema requires.
+  EXPECT_LT(round.find("<pivotTableStyleInfo"), round.find("<filters"));
+
+  auto reparsed_or = read_pivot_table_definition(Bytes(round));
+  ASSERT_TRUE(static_cast<bool>(reparsed_or)) << reparsed_or.error().message;
+  EXPECT_TRUE(reparsed_or.value().active_filters().empty());
+  EXPECT_EQ(write_pivot_table_definition(reparsed_or.value()), round);
 }
 
 TEST(PivotTableReader, ShowDataAsAttributesAreParsed) {

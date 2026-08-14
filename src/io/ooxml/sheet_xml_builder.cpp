@@ -188,22 +188,22 @@ std::string BuildDataValidationsBlock(const Sheet& sheet) {
     }
     if (!v.error_title.empty()) {
       out.append(" errorTitle=\"");
-      AppendXmlEscaped(out, v.error_title);
+      AppendXmlAttrEscaped(out, v.error_title);
       out.append("\"");
     }
     if (!v.error_message.empty()) {
       out.append(" error=\"");
-      AppendXmlEscaped(out, v.error_message);
+      AppendXmlAttrEscaped(out, v.error_message);
       out.append("\"");
     }
     if (!v.prompt_title.empty()) {
       out.append(" promptTitle=\"");
-      AppendXmlEscaped(out, v.prompt_title);
+      AppendXmlAttrEscaped(out, v.prompt_title);
       out.append("\"");
     }
     if (!v.prompt_message.empty()) {
       out.append(" prompt=\"");
-      AppendXmlEscaped(out, v.prompt_message);
+      AppendXmlAttrEscaped(out, v.prompt_message);
       out.append("\"");
     }
     out.append(" sqref=\"");
@@ -251,22 +251,22 @@ std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::stri
     out.append("\"");
     if (i < rid_per_hyperlink.size() && !rid_per_hyperlink[i].empty()) {
       out.append(" r:id=\"");
-      AppendXmlEscaped(out, rid_per_hyperlink[i]);
+      AppendXmlAttrEscaped(out, rid_per_hyperlink[i]);
       out.append("\"");
     }
     if (!h.location.empty()) {
       out.append(" location=\"");
-      AppendXmlEscaped(out, h.location);
+      AppendXmlAttrEscaped(out, h.location);
       out.append("\"");
     }
     if (!h.tooltip.empty()) {
       out.append(" tooltip=\"");
-      AppendXmlEscaped(out, h.tooltip);
+      AppendXmlAttrEscaped(out, h.tooltip);
       out.append("\"");
     }
     if (!h.display.empty()) {
       out.append(" display=\"");
-      AppendXmlEscaped(out, h.display);
+      AppendXmlAttrEscaped(out, h.display);
       out.append("\"");
     }
     out.append("/>");
@@ -399,7 +399,7 @@ std::string BuildSheetViewXml(const SheetView& view) {
   }
   if (!view.view_mode.empty()) {
     out.append(" view=\"");
-    AppendXmlEscaped(out, view.view_mode);
+    AppendXmlAttrEscaped(out, view.view_mode);
     out.push_back('"');
   }
   out.append(" workbookViewId=\"0\"");
@@ -482,17 +482,17 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
   out.append("<sheetProtection");
   if (!p.algorithm_name.empty()) {
     out.append(" algorithmName=\"");
-    AppendXmlEscaped(out, p.algorithm_name);
+    AppendXmlAttrEscaped(out, p.algorithm_name);
     out.push_back('"');
   }
   if (!p.hash_value.empty()) {
     out.append(" hashValue=\"");
-    AppendXmlEscaped(out, p.hash_value);
+    AppendXmlAttrEscaped(out, p.hash_value);
     out.push_back('"');
   }
   if (!p.salt_value.empty()) {
     out.append(" saltValue=\"");
-    AppendXmlEscaped(out, p.salt_value);
+    AppendXmlAttrEscaped(out, p.salt_value);
     out.push_back('"');
   }
   if (p.spin_count != 0U) {
@@ -502,7 +502,7 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
   }
   if (!p.legacy_password.empty()) {
     out.append(" password=\"");
-    AppendXmlEscaped(out, p.legacy_password);
+    AppendXmlAttrEscaped(out, p.legacy_password);
     out.push_back('"');
   }
   // Boolean attributes — emit only when the value differs from the
@@ -556,7 +556,11 @@ std::string BuildColsXml(const SheetLayout& layout) {
     out.append("\" max=\"");
     out.append(std::to_string(col.last + 1U));
     out.push_back('"');
-    if (col.width > 0.0) {
+    // Keep the legacy convenience of treating a non-zero programmatic
+    // width as logically explicit, while preserving an explicit width="0"
+    // and distinguishing it from an absent width.
+    const bool has_width = HasExplicitColumnWidth(col);
+    if (has_width) {
       out.append(" width=\"");
       char buf[32];
       // %.17g is round-trip safe under IEEE 754, so a recalc-save does
@@ -566,6 +570,11 @@ std::string BuildColsXml(const SheetLayout& layout) {
       // Excel emits `customWidth="1"` whenever an explicit `width` is
       // present so a reload preserves the column metric.
       out.append("\" customWidth=\"1\"");
+    }
+    if (col.has_style) {
+      out.append(" style=\"");
+      out.append(std::to_string(col.style_xf));
+      out.push_back('\"');
     }
     if (col.hidden) {
       out.append(" hidden=\"1\"");
@@ -636,7 +645,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
-                              const SharedStrings* shared_strings) {
+                              const SharedStrings* shared_strings, std::size_t dxf_count) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml = BuildSheetFormatPrXml(sheet.format_defaults());
   const std::string cols_xml = BuildColsXml(sheet.layout());
@@ -644,7 +653,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no
   // wrapper.
-  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats());
+  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxf_count);
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string dv_xml = BuildDataValidationsBlock(sheet);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
@@ -864,7 +873,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
 
 SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                                const std::vector<EmissionPlan::PivotTablePlan>& sheet_pivot_tables,
-                               const EmissionPlan::CommentsPlan& comments_plan) {
+                               const EmissionPlan::CommentsPlan& comments_plan, const EmissionPlan& plan) {
   SheetRelsResult res;
   std::string& out = res.xml;
   out.reserve(256 + (sheet_tables.size() + sheet_pivot_tables.size() + sheet.hyperlinks().size()) * 192);
@@ -974,7 +983,12 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     add_rel(res.legacy_drawing_rid, kRelVmlDrawing, vml_target);
   }
   for (const UnknownRelationship& relationship : sheet.unknown_relationships()) {
-    if (relationship.id.empty() || (!relationship.target_external && relationship.target.empty())) {
+    // Internal unknown relationships are meaningful only when the
+    // corresponding passthrough payload survived collision handling. A
+    // generated part at the same path is not a substitute: it may have a
+    // different type or schema from the source edge's target.
+    if (relationship.id.empty() || (!relationship.target_external &&
+                                    (relationship.target.empty() || !HasPassthroughPart(plan, relationship.target)))) {
       continue;
     }
     const std::string target =

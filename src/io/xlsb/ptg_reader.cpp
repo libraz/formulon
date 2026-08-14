@@ -21,6 +21,7 @@
 #include "io/xlsb/ptg.h"
 #include "io/xlsb/record.h"
 #include "parser/reference.h"
+#include "sheet.h"
 #include "utils/strings.h"
 #include "value.h"
 
@@ -191,6 +192,44 @@ Expected<std::pair<parser::Reference, parser::Reference>, Error> read_area(ByteS
   last.col_abs = (col2_or.value() & kColRelBit) == 0;
   last.row_abs = (col2_or.value() & kRowRelBit) == 0;
   return std::make_pair(first, last);
+}
+
+// Validates a decoded single-cell `Reference` against the Excel grid
+// bound (`Sheet::kMaxRows` / `Sheet::kMaxCols`) before it is materialized
+// into an AST node. `PtgRef`/`PtgRef3d` col fields are already masked to
+// 14 bits by `read_loc` (always < `kMaxCols`); `row` is a raw u32 and has
+// no such guarantee, so a crafted `row=0xFFFFFFFF` must be rejected here
+// rather than silently wrapping in `format_a1`. RefErr/AreaErr payload
+// coordinates are never routed through this check -- their sentinel
+// max-row/col encoding is a legitimate `#REF!` payload, not a corrupt
+// live reference.
+Expected<void, Error> check_ref_domain(const parser::Reference& r, const char* ptg_name) {
+  if (r.row >= Sheet::kMaxRows || r.col >= Sheet::kMaxCols) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
+                      std::string("xlsb ") + ptg_name + " coordinate out of range", "context=xlsb_ptg_reader");
+  }
+  return {};
+}
+
+// Validates a decoded two-corner `Reference` pair: both corners must be
+// in-domain and the range must be normalized (`row_first <= row_last`,
+// `col_first <= col_last`), matching `parser::Reference`'s documented
+// contract for range endpoints.
+Expected<void, Error> check_area_domain(const parser::Reference& first, const parser::Reference& last,
+                                        const char* ptg_name) {
+  auto first_or = check_ref_domain(first, ptg_name);
+  if (!first_or) {
+    return first_or;
+  }
+  auto last_or = check_ref_domain(last, ptg_name);
+  if (!last_or) {
+    return last_or;
+  }
+  if (first.row > last.row || first.col > last.col) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt,
+                      std::string("xlsb ") + ptg_name + " corners out of order", "context=xlsb_ptg_reader");
+  }
+  return {};
 }
 
 /// Case-insensitive `s` starts-with `prefix` check (ASCII-fold).
@@ -544,12 +583,22 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         break;
       }
       case PtgKind::Array: {
-        // The main token stream carries only a 15-byte placeholder
-        // (verified against a real Excel-produced `xl/worksheets/
-        // sheetN.bin`: the class-marked opcode + 14 reserved bytes that
-        // do not need to be interpreted). The real dimensions and
-        // elements live in `extra` (the `CellParsedFormula`'s `rgcb`),
-        // consumed here in encounter order.
+        // The main token stream carries only a 15-byte placeholder (the
+        // class-marked opcode, already consumed by the caller, + 14
+        // reserved bytes here -- verified against a real Excel-produced
+        // `xl/worksheets/sheetN.bin`). The real dimensions and elements
+        // live in `extra` (the `CellParsedFormula`'s `rgcb`), consumed
+        // here in encounter order.
+        //
+        // Field order (first u32 = rows, second u32 = cols) and element
+        // consumption order (row-major: row 0 left-to-right, then row 1,
+        // ...) cannot be distinguished from the square 2x2 real-Excel
+        // fixture alone (`xlsb_fidelity_base.xlsb`'s `=SUM({1,2;3,4})`
+        // pins element *order* but not which dimension word is which for
+        // a square array). The layout below is what [MS-XLSB] 2.5.98.26
+        // specifies and what independent third-party decoders of the same
+        // record agree on; a non-square array constant produced by Excel
+        // would pin it directly, and the fixture corpus has none.
         if (cursor.size < 14) {
           return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgArray placeholder truncated",
                             "context=xlsb_ptg_reader");
@@ -660,6 +709,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (!ref_or) {
           return ref_or.error();
         }
+        auto domain_or = check_ref_domain(ref_or.value(), "PtgRef");
+        if (!domain_or) {
+          return domain_or.error();
+        }
         parser::AstNode* n = parser::make_ref(arena, ref_or.value());
         if (n == nullptr) {
           return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgRef)", "context=xlsb_ptg_reader");
@@ -671,6 +724,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         auto area_or = read_area(cursor, {}, {});
         if (!area_or) {
           return area_or.error();
+        }
+        auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, "PtgArea");
+        if (!domain_or) {
+          return domain_or.error();
         }
         parser::AstNode* lhs = parser::make_ref(arena, area_or.value().first);
         parser::AstNode* rhs = parser::make_ref(arena, area_or.value().second);
@@ -703,6 +760,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           if (!loc_or) {
             return loc_or.error();
           }
+          auto domain_or = check_ref_domain(loc_or.value(), "PtgRef3d");
+          if (!domain_or) {
+            return domain_or.error();
+          }
           parser::AstNode* n =
               parser::make_ref3d(arena, arena.intern(begin_sheet), arena.intern(end_sheet), loc_or.value());
           if (n == nullptr) {
@@ -715,6 +776,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         auto ref_or = read_loc(cursor, sheet_for_ixti(ixti_or.value()));
         if (!ref_or) {
           return ref_or.error();
+        }
+        auto domain_or = check_ref_domain(ref_or.value(), "PtgRef3d");
+        if (!domain_or) {
+          return domain_or.error();
         }
         parser::Reference ref = ref_or.value();
         ref.sheet = arena.intern(ref.sheet);
@@ -742,6 +807,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           if (!area_or) {
             return area_or.error();
           }
+          auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, "PtgArea3d");
+          if (!domain_or) {
+            return domain_or.error();
+          }
           parser::AstNode* n = parser::make_ref3d_range(arena, arena.intern(begin_sheet), arena.intern(end_sheet),
                                                         area_or.value().first, area_or.value().second);
           if (n == nullptr) {
@@ -755,6 +824,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         auto area_or = read_area(cursor, sheet, {});
         if (!area_or) {
           return area_or.error();
+        }
+        auto domain_or = check_area_domain(area_or.value().first, area_or.value().second, "PtgArea3d");
+        if (!domain_or) {
+          return domain_or.error();
         }
         parser::Reference first = area_or.value().first;
         first.sheet = arena.intern(first.sheet);
@@ -1085,7 +1158,10 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
           case PtgAttrKind::Baxcel:
           default: {
             // Control / volatile attrs carry a u16 (If/Goto/Semi) or a
-            // jump table (Choose: u16 count + (count+1) u32 offsets).
+            // jump table (Choose: u16 count + (count+1) u16 offsets).
+            // [MS-XLSB] 2.5.98.25 defines rgOffset as an array of 2-byte
+            // unsigned integers, not 4-byte -- reading them as u32 desyncs
+            // the rest of the Ptg stream for any Excel-authored CHOOSE().
             if (sub == PtgAttrKind::Choose) {
               auto count_or = read_u16(cursor);
               if (!count_or) {
@@ -1093,7 +1169,7 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
               }
               const std::uint32_t entries = static_cast<std::uint32_t>(count_or.value()) + 1U;
               for (std::uint32_t i = 0; i < entries; ++i) {
-                auto off_or = read_u32(cursor);
+                auto off_or = read_u16(cursor);
                 if (!off_or) {
                   return off_or.error();
                 }

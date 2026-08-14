@@ -192,21 +192,21 @@ std::string_view StripAbsoluteMarkers(std::string_view ref, std::string& buf) {
 /// them. Returns `kIoSheetCorrupt` for unparseable input — the caller
 /// either folds it into the surrounding sqref error or skips the block.
 // Decodes a run of column letters (`A`, `AB`, `XFD`) to a 1-based column
-// index, or 0 when the run is empty / non-alpha / out of range.
+// index, or 0 when the run is empty / non-alpha / out of range. Only
+// upper-case letters are accepted, matching `parse_a1` (which decodes the
+// cell-shaped tokens of the same sqref) and Excel, which never emits a
+// lower-case column letter. Both halves of `ParseA1Range` therefore apply
+// one case rule.
 std::uint32_t DecodeColumnRun(std::string_view s) {
   if (s.empty() || s.size() > 3) {
     return 0;
   }
   std::uint32_t col = 0;
   for (char ch : s) {
-    char up = ch;
-    if (up >= 'a' && up <= 'z') {
-      up = static_cast<char>(up - ('a' - 'A'));
-    }
-    if (up < 'A' || up > 'Z') {
+    if (ch < 'A' || ch > 'Z') {
       return 0;
     }
-    col = col * 26U + static_cast<std::uint32_t>(up - 'A' + 1);
+    col = col * 26U + static_cast<std::uint32_t>(ch - 'A' + 1);
     if (col > Sheet::kMaxCols) {
       return 0;
     }

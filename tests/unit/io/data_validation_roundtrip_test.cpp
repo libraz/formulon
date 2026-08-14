@@ -136,15 +136,20 @@ TEST(DataValidationRoundTrip, ShowDropDownAttributeSuppressesArrow) {
   EXPECT_FALSE(out.value()[0].show_dropdown);
 }
 
-TEST(DataValidationRoundTrip, EmptySqrefRejected) {
+// Same invalid-reference policy the sibling overlay readers apply: drop
+// the entry, keep the sheet.
+TEST(DataValidationRoundTrip, MalformedSqrefSkipsOnlyThatEntry) {
   pugi::xml_document doc;
   auto ws = ParseWorksheet(doc,
                            "<dataValidations>"
                            "<dataValidation type=\"list\" sqref=\"\"><formula1>1</formula1></dataValidation>"
+                           "<dataValidation type=\"list\" sqref=\"!!\"><formula1>2</formula1></dataValidation>"
+                           "<dataValidation type=\"list\" sqref=\"A1\"><formula1>3</formula1></dataValidation>"
                            "</dataValidations>");
   auto out = read_data_validations(ws);
-  EXPECT_FALSE(static_cast<bool>(out));
-  EXPECT_EQ(out.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  ASSERT_TRUE(static_cast<bool>(out));
+  ASSERT_EQ(out.value().size(), 1U);
+  EXPECT_EQ(out.value()[0].formula1, "3");
 }
 
 }  // namespace

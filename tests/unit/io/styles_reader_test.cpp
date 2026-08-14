@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/styles_writer.h"
 #include "utils/error.h"
 
 namespace formulon {
@@ -62,6 +63,13 @@ TEST(StylesReader, EmptyStyleSheetWithChildren) {
 TEST(StylesReader, ReadsCellXfFields) {
   std::string xml(kXmlDecl);
   xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  // The record tables an `<xf>` may reference; without them `fontId="1"`
+  // and `fillId="2"` name nothing and the reader falls back to record 0.
+  xml.append("  <fonts count=\"2\"><font><sz val=\"11\"/></font><font><b/></font></fonts>\n");
+  xml.append(
+      "  <fills count=\"3\"><fill><patternFill patternType=\"none\"/></fill>"
+      "<fill><patternFill patternType=\"gray125\"/></fill>"
+      "<fill><patternFill patternType=\"solid\"/></fill></fills>\n");
   xml.append("  <cellXfs count=\"3\">\n");
   xml.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/>\n");
   xml.append("    <xf numFmtId=\"14\" fontId=\"1\" fillId=\"2\" borderId=\"0\"/>\n");
@@ -88,6 +96,8 @@ TEST(StylesReader, ReadsCellXfFields) {
 TEST(StylesReader, CollapsesXmlWhitespaceAndAcceptsSignedLexicalForms) {
   std::string xml(kXmlDecl);
   xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  // Two fonts so the lexically-parsed `fontId=" +1 "` names a real record.
+  xml.append("<fonts count=\"2\"><font><sz val=\"11\"/></font><font><b/></font></fonts>");
   xml.append("<cellXfs count=\"1\"><xf fontId=\" +1 \" fillId=\"0\" borderId=\"0\" numFmtId=\" +14 \" ");
   xml.append("applyFont=\" true \" quotePrefix=\" 0 \">");
   xml.append("<alignment horizontal=\"center\" vertical=\"bottom\" wrapText=\" 0 \" ");
@@ -225,7 +235,7 @@ TEST(StylesReader, RejectsMalformedAlignmentAttributesWithContext) {
   }
 }
 
-TEST(StylesReader, ReadsThemeIndexedAndAutoColors) {
+TEST(StylesReader, ReadsColorSelectorsWithoutResolvingArgb) {
   std::string xml(kXmlDecl);
   xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
   xml.append("  <fonts count=\"1\"><font><sz val=\"11\"/><color theme=\"3\" tint=\"0.5\"/>");
@@ -236,7 +246,7 @@ TEST(StylesReader, ReadsThemeIndexedAndAutoColors) {
 
   auto result_or = read_styles(Bytes(xml));
   ASSERT_TRUE(static_cast<bool>(result_or)) << "read failed: " << result_or.error().message;
-  const StylesTable& table = result_or.value();
+  StylesTable& table = result_or.value();
   ASSERT_EQ(table.fonts.size(), 1U);
   EXPECT_EQ(table.fonts[0].color.kind, ColorSpec::Kind::kTheme);
   EXPECT_EQ(table.fonts[0].color.theme, 3U);
@@ -245,6 +255,21 @@ TEST(StylesReader, ReadsThemeIndexedAndAutoColors) {
   EXPECT_EQ(table.fills[0].fg.kind, ColorSpec::Kind::kIndexed);
   EXPECT_EQ(table.fills[0].fg.indexed, 9U);
   EXPECT_EQ(table.fills[0].bg.kind, ColorSpec::Kind::kAuto);
+
+  // The selector is authoritative. Deliberately change the compatibility
+  // ARGB fallbacks to unrelated values and verify that serialization still
+  // emits theme/indexed/auto selectors rather than treating those values as
+  // Excel-rendered colours. No theme or indexed fallback RGB is assumed.
+  table.fonts[0].color_argb = 0xFFFFFFFFU;
+  table.fills[0].fg_argb = 0xFF00FF00U;
+  table.fills[0].bg_argb = 0xFF0000FFU;
+  const std::string serialized = write_styles(table);
+  EXPECT_NE(serialized.find("<color theme=\"3\" tint=\"0.5\"/>"), std::string::npos);
+  EXPECT_NE(serialized.find("<fgColor indexed=\"9\"/>"), std::string::npos);
+  EXPECT_NE(serialized.find("<bgColor auto=\"1\"/>"), std::string::npos);
+  EXPECT_EQ(serialized.find("<color rgb=\"FFFFFFFF\"/>"), std::string::npos);
+  EXPECT_EQ(serialized.find("<fgColor rgb=\"FF00FF00\"/>"), std::string::npos);
+  EXPECT_EQ(serialized.find("<bgColor rgb=\"FF0000FF\"/>"), std::string::npos);
 }
 
 TEST(StylesReader, ReadsFontVertAlignFamilyCharset) {
@@ -407,6 +432,68 @@ TEST(StylesReader, PreservesExplicitFalseFontTogglesInDifferentialFormat) {
   EXPECT_FALSE(font.italic);
   EXPECT_TRUE(font.has_strike);
   EXPECT_FALSE(font.strike);
+}
+
+// A third-party writer can emit an `<xf>` naming records the part does
+// not define. Such a workbook loads (Excel opens it too, falling back to
+// the default format), so every index it stores must resolve: otherwise
+// `fm_styles_get_*` fails on a workbook that loaded, and a save writes
+// the dangling reference back for Excel to repair.
+TEST(StylesReader, DanglingXfRecordIndicesFallBackToDefault) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+      "<fonts count=\"2\"><font><sz val=\"11\"/></font><font><b/></font></fonts>"
+      "<fills count=\"1\"><fill><patternFill patternType=\"none\"/></fill></fills>"
+      "<borders count=\"1\"><border/></borders>"
+      "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>"
+      "<cellXfs count=\"2\">"
+      "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
+      "<xf numFmtId=\"0\" fontId=\"7\" fillId=\"9\" borderId=\"4\" xfId=\"3\"/>"
+      "</cellXfs>"
+      "</styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read failed: " << result_or.error().message;
+  const StylesTable& table = result_or.value();
+  ASSERT_EQ(table.cell_xfs.size(), 2U);
+  // The in-range xf is untouched.
+  EXPECT_EQ(table.cell_xfs[0].font_index, 1U);
+  // Every out-of-range id falls back to record 0 and now resolves.
+  EXPECT_EQ(table.cell_xfs[1].font_index, 0U);
+  EXPECT_EQ(table.cell_xfs[1].fill_index, 0U);
+  EXPECT_EQ(table.cell_xfs[1].border_index, 0U);
+  EXPECT_EQ(table.cell_xfs[1].xf_id, 0U);
+  for (const CellXf& xf : table.cell_xfs) {
+    EXPECT_LT(xf.font_index, table.fonts.size());
+    EXPECT_LT(xf.fill_index, table.fills.size());
+    EXPECT_LT(xf.border_index, table.borders.size());
+    EXPECT_LT(xf.xf_id, table.cell_style_xfs.size());
+  }
+}
+
+// Serialization-level counterpart: an id that only became dangling in
+// memory must not reach the emitted `<cellXfs>` either.
+TEST(StylesWriter, DanglingXfRecordIndicesAreNotEmitted) {
+  StylesTable table;
+  table.fonts.resize(1);
+  table.fills.resize(1);
+  table.borders.resize(1);
+  table.cell_style_xfs.resize(1);
+  CellXf xf;
+  xf.font_index = 7;
+  xf.fill_index = 9;
+  xf.border_index = 4;
+  xf.xf_id = 3;
+  table.cell_xfs.push_back(xf);
+
+  const std::string out = write_styles(table);
+  EXPECT_EQ(out.find("fontId=\"7\""), std::string::npos) << out;
+  EXPECT_EQ(out.find("fillId=\"9\""), std::string::npos) << out;
+  EXPECT_EQ(out.find("borderId=\"4\""), std::string::npos) << out;
+  EXPECT_EQ(out.find("xfId=\"3\""), std::string::npos) << out;
+  EXPECT_NE(out.find("<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\""), std::string::npos)
+      << out;
 }
 
 TEST(BuiltinNumFmt, ResolvesKnownIds) {

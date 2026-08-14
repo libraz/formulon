@@ -8,6 +8,7 @@
 #include "io/xlsb/writer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -140,6 +141,23 @@ void ReportDeferred(std::uint32_t* count, std::string_view kind, std::size_t ite
       .warn();
 }
 
+bool IsRepresentableBaseColumnWidth(double value) {
+  return std::isfinite(value) && value >= 0.0 && value <= 255.0 && std::floor(value) == value;
+}
+
+bool IsRepresentableDefaultColumnWidth(double value) {
+  constexpr double kMaxDefaultColumnWidth = 65535.0 / 256.0;
+  return std::isfinite(value) && value >= 0.0 && value <= kMaxDefaultColumnWidth;
+}
+
+bool IsRepresentableDefaultRowHeight(double value) {
+  constexpr double kMaxDefaultRowHeight = 65535.0 / 20.0;
+  if (!std::isfinite(value) || value < 0.0 || value > kMaxDefaultRowHeight) {
+    return false;
+  }
+  return std::isfinite(std::round(value * 20.0));
+}
+
 std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   std::uint32_t count = 0U;
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
@@ -153,6 +171,18 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
                            !print.header_footer_xml.empty() || !print.manual_row_breaks.empty() ||
                            !print.manual_col_breaks.empty();
     ReportDeferred(&count, "print_settings", has_print ? 1U : 0U, i);
+    const SheetFormatDefaults& defaults = sheet.format_defaults();
+    std::size_t invalid_defaults = 0U;
+    if (!IsRepresentableBaseColumnWidth(defaults.base_col_width)) {
+      ++invalid_defaults;
+    }
+    if (defaults.has_default_col_width && !IsRepresentableDefaultColumnWidth(defaults.default_col_width)) {
+      ++invalid_defaults;
+    }
+    if (defaults.has_default_row_height && !IsRepresentableDefaultRowHeight(defaults.default_row_height)) {
+      ++invalid_defaults;
+    }
+    ReportDeferred(&count, "sheet_format_defaults", invalid_defaults, i);
   }
   if (!workbook.tables().empty()) {
     ReportDeferred(&count, "tables", workbook.tables().size(), 0U);
@@ -812,8 +842,9 @@ void EmitExternSheet(std::vector<std::uint8_t>& body, const SheetRangeTable& ran
 /// Excel stores a `#NAME?` placeholder there, which is not required for
 /// this writer's own reader to round-trip the name table).
 Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::string& name, std::string_view formula,
-                               std::int32_t itab, bool hidden, const std::vector<std::string>& sheet_names,
-                               const SheetRangeTable& sheet_ranges, const NameTable& name_table) {
+                               std::int32_t itab, bool hidden, std::string_view comment,
+                               const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
+                               const NameTable& name_table) {
   // Names carrying Excel's hidden storage prefixes are not ordinary
   // defined names: `_xlfn.<FN>` registers a post-2007 "future function"
   // and `_xlpm.<param>` a LET / LAMBDA parameter. Real Excel stores each
@@ -866,15 +897,21 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
     emit_u32(p, static_cast<std::uint32_t>(encoded.rgcb.size()));
     p.insert(p.end(), encoded.rgcb.begin(), encoded.rgcb.end());
   }
-  // Trailing BrtName strings ([MS-XLSB] §2.4.649), each a null
-  // XLNullableWideString (cchCharacters = 0xFFFFFFFF, no character data).
-  // Excel rejects a BrtName that stops after the formula. A plain defined
-  // name carries just the comment; a future-function / proc-parameter
-  // placeholder carries five strings (comment plus four further unused
-  // strings), matching real Excel output.
-  const int trailing_strings = is_placeholder ? 5 : 1;
-  for (int i = 0; i < trailing_strings; ++i) {
-    emit_u32(p, 0xFFFFFFFFU);  // null XLNullableWideString
+  // Trailing BrtName strings ([MS-XLSB] §2.4.649). Excel rejects a
+  // BrtName that stops after the formula. A plain defined name carries
+  // just the comment (a null `XLNullableWideString` when absent, matching
+  // Excel's own encoding for a name whose Name Manager "Comment" field
+  // was never set -- not a zero-length string); a future-function /
+  // proc-parameter placeholder carries five strings (comment plus four
+  // further unused strings, always null -- these are internal storage
+  // artifacts with no Name Manager entry a comment could attach to),
+  // matching real Excel output.
+  if (is_placeholder) {
+    for (int i = 0; i < 5; ++i) {
+      emit_u32(p, 0xFFFFFFFFU);  // null XLNullableWideString
+    }
+  } else {
+    emit_xlnullablewidestring(p, comment.empty() ? std::nullopt : std::make_optional(comment));
   }
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtName), p);
   return Expected<void, Error>::Ok();
@@ -973,14 +1010,14 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   for (std::size_t i = 0; i < ordered_names.size(); ++i) {
     if (i < defined_count) {
       const io::DefinedName& dn = wb.defined_names()[i];
-      if (auto r =
-              EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, sheet_names, sheet_ranges, name_table);
+      if (auto r = EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, dn.comment, sheet_names,
+                            sheet_ranges, name_table);
           !r) {
         return r.error();
       }
     } else {
-      if (auto r = EmitName(body, ordered_names[i], /*formula=*/{}, /*itab=*/-1, /*hidden=*/true, sheet_names,
-                            sheet_ranges, name_table);
+      if (auto r = EmitName(body, ordered_names[i], /*formula=*/{}, /*itab=*/-1, /*hidden=*/true,
+                            /*comment=*/{}, sheet_names, sheet_ranges, name_table);
           !r) {
         return r.error();
       }

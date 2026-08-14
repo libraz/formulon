@@ -11,9 +11,16 @@
 // that is not wired into an edit fails here rather than in a user's file.
 //
 // Row/column axis (insert / delete): cells, formula text, defined names,
-// conditional-format sqref, spill regions, table refs, column and row layout,
-// manual page breaks, pivot anchors, and the dependency graph (observed
-// through a recalc rather than by inspecting the graph directly).
+// hyperlinks (single-cell and range), merges, comments, data-validation
+// ranges, conditional-format sqref, spill regions, table refs, column and row
+// layout, manual page breaks, pivot anchors, and the dependency graph
+// (observed through a recalc rather than by inspecting the graph directly).
+//
+// Eight of those — hyperlinks, comments, merges, validation ranges,
+// conditional-format sqref, row/column layout, manual breaks, and pivot
+// anchors — are exactly what `Sheet::shift_sheet_metadata` enumerates, and
+// each is asserted under all four operations. Adding a structure there
+// without adding it here puts the header's coverage claim back out of date.
 //
 // Sheet axis (rename / move / remove): the structures keyed by sheet name or
 // sheet index rather than by coordinate.
@@ -86,6 +93,26 @@ Workbook MakeWorkbook() {
   hyperlink_range.location = "Sheet1!A1";
   sheet.mutable_hyperlinks().push_back(hyperlink_range);
 
+  // Merges are rectangle metadata like hyperlinks; a two-by-two block
+  // exercises both corners under one edit.
+  sheet.mutable_merges().push_back(MergeRange{kAnchorRow, kAnchorCol, kAnchorRow + 1U, kAnchorCol + 1U});
+
+  // Comments are single-cell anchors and shift on both axes.
+  CellComment comment;
+  comment.row = kAnchorRow;
+  comment.col = kAnchorCol;
+  comment.author = "Reviewer";
+  comment.text = "anchored note";
+  sheet.mutable_comments().push_back(comment);
+
+  // A validation carries its own range list, shifted by the same
+  // rectangle helper the merges use.
+  DataValidation validation;
+  validation.ranges.push_back(MergeRange{kAnchorRow, kAnchorCol, kAnchorRow + 1U, kAnchorCol + 1U});
+  validation.type = 3;  // list
+  validation.formula1 = "$D$6:$D$7";
+  sheet.mutable_validations().push_back(validation);
+
   cf::ConditionalFormat format;
   cf::CFCellRange range;
   range.first = CellAddress{kAnchorRow, kAnchorCol};
@@ -140,8 +167,52 @@ const cf::CFCellRange& OnlyCfRange(const Workbook& wb) {
   return wb.sheet(0).conditional_formats().at(0).sqref.at(0);
 }
 
-/// Adds a second sheet whose metadata formulas all point at the edited sheet,
-/// plus a validation on the edited sheet itself.
+/// Post-edit coordinates of the three rectangle/anchor structures after a
+/// *row* edit: `moved_row` is where `kAnchorRow` ended up, and every column
+/// coordinate must be untouched. Kept as one helper so the four operations
+/// cannot drift into checking different structures.
+void ExpectRowEditMovedRectangles(const Sheet& sheet, std::uint32_t moved_row) {
+  ASSERT_EQ(sheet.merges().size(), 1U);
+  EXPECT_EQ(sheet.merges().at(0).first_row, moved_row);
+  EXPECT_EQ(sheet.merges().at(0).last_row, moved_row + 1U);
+  EXPECT_EQ(sheet.merges().at(0).first_col, kAnchorCol);
+  EXPECT_EQ(sheet.merges().at(0).last_col, kAnchorCol + 1U);
+
+  ASSERT_EQ(sheet.comments().size(), 1U);
+  EXPECT_EQ(sheet.comments().at(0).row, moved_row);
+  EXPECT_EQ(sheet.comments().at(0).col, kAnchorCol);
+
+  ASSERT_EQ(sheet.validations().size(), 1U);
+  ASSERT_EQ(sheet.validations().at(0).ranges.size(), 1U);
+  EXPECT_EQ(sheet.validations().at(0).ranges.at(0).first_row, moved_row);
+  EXPECT_EQ(sheet.validations().at(0).ranges.at(0).last_row, moved_row + 1U);
+  EXPECT_EQ(sheet.validations().at(0).ranges.at(0).first_col, kAnchorCol);
+  EXPECT_EQ(sheet.validations().at(0).ranges.at(0).last_col, kAnchorCol + 1U);
+}
+
+/// Column-axis counterpart: `moved_col` is where `kAnchorCol` ended up and
+/// every row coordinate must be untouched.
+void ExpectColEditMovedRectangles(const Sheet& sheet, std::uint32_t moved_col) {
+  ASSERT_EQ(sheet.merges().size(), 1U);
+  EXPECT_EQ(sheet.merges().at(0).first_col, moved_col);
+  EXPECT_EQ(sheet.merges().at(0).last_col, moved_col + 1U);
+  EXPECT_EQ(sheet.merges().at(0).first_row, kAnchorRow);
+  EXPECT_EQ(sheet.merges().at(0).last_row, kAnchorRow + 1U);
+
+  ASSERT_EQ(sheet.comments().size(), 1U);
+  EXPECT_EQ(sheet.comments().at(0).col, moved_col);
+  EXPECT_EQ(sheet.comments().at(0).row, kAnchorRow);
+
+  ASSERT_EQ(sheet.validations().size(), 1U);
+  ASSERT_EQ(sheet.validations().at(0).ranges.size(), 1U);
+  EXPECT_EQ(sheet.validations().at(0).ranges.at(0).first_col, moved_col);
+  EXPECT_EQ(sheet.validations().at(0).ranges.at(0).last_col, moved_col + 1U);
+  EXPECT_EQ(sheet.validations().at(0).ranges.at(0).first_row, kAnchorRow);
+  EXPECT_EQ(sheet.validations().at(0).ranges.at(0).last_row, kAnchorRow + 1U);
+}
+
+/// Adds a second sheet whose metadata formulas all point at the edited sheet.
+/// The edited sheet's own validation comes from `MakeWorkbook`.
 ///
 /// A row/column edit on Sheet1 is not a Sheet1-only event: every qualified
 /// reference to Sheet1 shifts wherever it lives, while an unqualified one on
@@ -150,11 +221,6 @@ const cf::CFCellRange& OnlyCfRange(const Workbook& wb) {
 /// coordinate shift leaking across sheets shows up here too.
 Workbook MakeCrossSheetWorkbook() {
   Workbook wb = MakeWorkbook();
-
-  DataValidation target_validation;
-  target_validation.ranges.push_back(MergeRange{kAnchorRow, kAnchorCol, kAnchorRow, kAnchorCol});
-  target_validation.formula1 = "$D$6:$D$7";
-  wb.sheet(0).mutable_validations().push_back(target_validation);
 
   Sheet& other = wb.add_sheet("Sheet2");
 
@@ -260,6 +326,8 @@ TEST(StructuralEditMatrix, InsertRowsMovesEveryRowAnchoredStructure) {
   EXPECT_EQ(sheet.hyperlinks()[1].last_row, moved + 1U);
   EXPECT_EQ(sheet.hyperlinks()[1].last_col, kAnchorCol + 1U);
 
+  ExpectRowEditMovedRectangles(sheet, moved);
+
   // 5. Row layout.
   ASSERT_EQ(sheet.layout().row_overrides.size(), 1U);
   EXPECT_EQ(sheet.layout().row_overrides.at(0).row, moved);
@@ -308,6 +376,8 @@ TEST(StructuralEditMatrix, DeleteRowsMovesEveryRowAnchoredStructure) {
   EXPECT_EQ(sheet.hyperlinks()[1].col, kAnchorCol);
   EXPECT_EQ(sheet.hyperlinks()[1].last_row, moved + 1U);
   EXPECT_EQ(sheet.hyperlinks()[1].last_col, kAnchorCol + 1U);
+
+  ExpectRowEditMovedRectangles(sheet, moved);
 
   ASSERT_EQ(sheet.layout().row_overrides.size(), 1U);
   EXPECT_EQ(sheet.layout().row_overrides.at(0).row, moved);
@@ -363,6 +433,8 @@ TEST(StructuralEditMatrix, InsertColsMovesEveryColumnAnchoredStructure) {
   EXPECT_EQ(sheet.hyperlinks()[1].last_row, kAnchorRow + 1U);
   EXPECT_EQ(sheet.hyperlinks()[1].last_col, moved + 1U);
 
+  ExpectColEditMovedRectangles(sheet, moved);
+
   ASSERT_EQ(sheet.layout().columns.size(), 1U);
   EXPECT_EQ(sheet.layout().columns.at(0).first, moved);
   EXPECT_EQ(sheet.layout().columns.at(0).last, moved);
@@ -406,6 +478,8 @@ TEST(StructuralEditMatrix, DeleteColsMovesEveryColumnAnchoredStructure) {
   EXPECT_EQ(sheet.hyperlinks()[1].col, moved);
   EXPECT_EQ(sheet.hyperlinks()[1].last_row, kAnchorRow + 1U);
   EXPECT_EQ(sheet.hyperlinks()[1].last_col, moved + 1U);
+
+  ExpectColEditMovedRectangles(sheet, moved);
 
   ASSERT_EQ(sheet.layout().columns.size(), 1U);
   EXPECT_EQ(sheet.layout().columns.at(0).first, moved);

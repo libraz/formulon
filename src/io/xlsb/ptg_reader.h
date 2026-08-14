@@ -91,8 +91,9 @@ struct XlsbSheetRange {
 ///
 /// `rgcb` is the `CellParsedFormula`'s extra-data area (the bytes after
 /// `rgce`, i.e. `cb` + its payload in the caller's framing). `PtgArray`
-/// stores only an 8-byte placeholder in `rgce`; the real dimensions and
-/// element values live in `rgcb`, consumed in encounter order (each
+/// stores a 15-byte placeholder in `rgce` (the 1-byte class-marked opcode
+/// plus 14 reserved bytes, per [MS-XLSB] 2.5.97.23); the real dimensions
+/// and element values live in `rgcb`, consumed in encounter order (each
 /// `PtgArray` token advances an internal cursor into `rgcb` by exactly
 /// its own array's worth of bytes). Pass an empty span when the caller
 /// knows the formula carries no array constants.

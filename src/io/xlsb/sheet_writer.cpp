@@ -40,10 +40,10 @@ bool IsEmptySlot(const Cell& cell) {
 
 /// Emits a `BrtRowHdr` for `row`. [MS-XLSB] §2.4.770 layout:
 ///   * rw         : u32 (0-based row index)
-///   * iStyleRef  : u32 (0)
+///   * iStyleRef  : u32 (row style xf index, or 0)
 ///   * miyRw      : u16 (custom row height in twips; 0 = use default)
 ///   * flags1     : u8
-///   * flags2     : u8  (outline / hidden / customHeight bits)
+///   * flags2     : u8  (outline / hidden / customHeight / fGhostDirty bits)
 ///   * fPhShow    : u8  (phonetic-guide default)
 ///   * ccolspan   : u32 (number of following BrtColSpan records)
 ///   * rgBrtColspan: repeated (colMic, colLast) u32 pairs
@@ -56,7 +56,7 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
                    const std::map<std::uint32_t, std::pair<std::uint32_t, std::uint32_t>>& spans) {
   std::vector<std::uint8_t> p;
   emit_u32(p, row);
-  emit_u32(p, 0);  // iStyleRef
+  emit_u32(p, layout != nullptr && layout->has_style ? layout->style_xf : 0U);  // iStyleRef
   const bool has_height = layout != nullptr && (layout->has_height || layout->height > 0.0);
   const double twips = has_height ? std::round(layout->height * 20.0) : 0.0;
   emit_u16(p, static_cast<std::uint16_t>(std::clamp(twips, 0.0, 65535.0)));  // miyRw
@@ -67,6 +67,9 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   }
   if (has_height) {
     flags2 |= 0x20U;  // fUnsynced
+  }
+  if (layout != nullptr && layout->has_style) {
+    flags2 |= 0x40U;  // fGhostDirty: iStyleRef is an effective row style
   }
   emit_u8(p, flags2);
   // fPhShow is a distinct byte, not part of flags2.  It is required even
@@ -93,10 +96,13 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) 
     std::vector<std::uint8_t> p;
     emit_u32(p, column.first);
     emit_u32(p, column.last);
-    const double width256 = std::floor(std::max(0.0, column.width) * 256.0);
+    const bool has_width = HasExplicitColumnWidth(column);
+    const double width256 = has_width ? std::floor(std::max(0.0, column.width) * 256.0) : 0.0;
     emit_u32(p, static_cast<std::uint32_t>(std::clamp(width256, 0.0, 65535.0)));
-    emit_u32(p, 0);                 // ixfe
-    std::uint16_t flags = 0x0002U;  // fUserSet
+    // BrtColInfo has no style-presence bit; ixfe is mandatory. OOXML spans
+    // without a style therefore canonicalize to style 0 on an XLSB reload.
+    emit_u32(p, column.has_style ? column.style_xf : 0U);  // ixfe
+    std::uint16_t flags = has_width ? 0x0002U : 0U;        // fUserSet
     if (column.hidden) {
       flags |= 0x0001U;
     }
@@ -130,9 +136,10 @@ void EmitWorksheetProperties(std::vector<std::uint8_t>& dst) {
 /// Emits the mandatory worksheet-view and default-formatting suffix. Omitting
 /// these records leaves a technically decodable stream that desktop Excel
 /// repairs before opening. The defaults match an Excel-created normal
-/// worksheet: visible grid/headings, 100% zoom, 10-character default column
-/// width, and 20-point default row height.
-void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const SheetView& sheet_view) {
+/// worksheet: visible grid/headings and 100% zoom. The default metrics come
+/// from the sheet's modelled `<sheetFormatPr>` values.
+void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const SheetView& sheet_view,
+                                     const SheetFormatDefaults& defaults) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsViews), ByteSpan{});
   std::vector<std::uint8_t> view;
   std::uint16_t flags = 0x0380U;  // ruler, outline symbols, default gridline color
@@ -181,11 +188,51 @@ void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const Sheet
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsView), ByteSpan{});
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsViews), ByteSpan{});
 
+  // BrtWsFmtInfo stores the default column width as 1/256 character units,
+  // while the OOXML model stores it in character units. The sentinel is the
+  // only absent marker; zero is a valid explicit width.
+  constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
+  constexpr std::uint16_t kCanonicalDefaultColumnWidth = 8U;
+  constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
+  constexpr double kMaxDefaultColumnWidth = 65535.0 / 256.0;
+  constexpr double kMaxDefaultRowHeight = 65535.0 / 20.0;
+
+  const bool valid_base_col_width = std::isfinite(defaults.base_col_width) && defaults.base_col_width >= 0.0 &&
+                                    defaults.base_col_width <= 255.0 &&
+                                    std::floor(defaults.base_col_width) == defaults.base_col_width;
+  const bool valid_default_col_width =
+      !defaults.has_default_col_width ||
+      (std::isfinite(defaults.default_col_width) && defaults.default_col_width >= 0.0 &&
+       defaults.default_col_width <= kMaxDefaultColumnWidth);
+  const bool valid_default_row_height =
+      !defaults.has_default_row_height ||
+      (std::isfinite(defaults.default_row_height) && defaults.default_row_height >= 0.0 &&
+       defaults.default_row_height <= kMaxDefaultRowHeight &&
+       std::isfinite(std::round(defaults.default_row_height * 20.0)));
+
+  const std::uint16_t base_col_width =
+      valid_base_col_width ? static_cast<std::uint16_t>(defaults.base_col_width) : kCanonicalDefaultColumnWidth;
+  const bool emit_default_col_width = defaults.has_default_col_width && valid_default_col_width;
+  const std::uint32_t dx_g_col = emit_default_col_width
+                                     ? static_cast<std::uint32_t>(std::floor(defaults.default_col_width * 256.0))
+                                     : kAbsentDefaultColumnWidth;
+
+  std::uint16_t miy_default_row_height = kCanonicalDefaultRowHeightTwips;
+  std::uint32_t format_flags = 0U;
+  if (defaults.has_default_row_height && valid_default_row_height) {
+    miy_default_row_height = static_cast<std::uint16_t>(std::round(defaults.default_row_height * 20.0));
+    if (miy_default_row_height == 0U) {
+      format_flags |= 0x00000002U;  // fDyZero: explicit zero (including quantized-zero).
+    } else {
+      format_flags |= 0x00000001U;  // fUnsynced: explicit positive default row height.
+    }
+  }
+
   std::vector<std::uint8_t> formatting;
-  emit_u32(formatting, 0xFFFFFFFFU);  // default column width is character-count based
-  emit_u16(formatting, 10U);          // default column width
-  emit_u16(formatting, 400U);         // default row height (twips)
-  emit_u32(formatting, 0U);           // default visibility/borders/outline levels
+  emit_u32(formatting, dx_g_col);
+  emit_u16(formatting, base_col_width);
+  emit_u16(formatting, miy_default_row_height);
+  emit_u32(formatting, format_flags);  // thick/outline metadata is not authored by this model
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsFmtInfo), formatting);
 }
 
@@ -385,7 +432,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(const Sheet& sheet, SstBui
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheet), ByteSpan{});
   EmitWorksheetProperties(body);
   EmitWorksheetDimensions(body, sheet);
-  EmitWorksheetViewsAndFormatting(body, sheet.view());
+  EmitWorksheetViewsAndFormatting(body, sheet.view(), sheet.format_defaults());
   EmitColumnInfos(body, sheet.layout());
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 

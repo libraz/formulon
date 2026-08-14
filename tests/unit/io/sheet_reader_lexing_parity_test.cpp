@@ -14,6 +14,7 @@
 // degrades to 0, `<row r=>` drops the override) is pinned rather than
 // merely shared.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -185,6 +186,72 @@ TEST(SheetReaderLexingParity, WellFormedStyleAndRowOverrideAgree) {
   ASSERT_EQ(dom.rows.size(), 1U);
   EXPECT_EQ(dom.rows[0].row, 4U);
   EXPECT_DOUBLE_EQ(dom.rows[0].height, 20.0);
+}
+
+TEST(SheetReaderLexingParity, EntityDecodedFormulaAndRowAttributesAgree) {
+  const std::string xml = WrapSheet(
+      "<row r=\"&#53;\" ht=\"&#50;&#48;\" hidden=\"&#116;&#114;&#117;&#101;\" "
+      "customHeight=\"&#116;&#114;&#117;&#101;\" outlineLevel=\"&#50;\">"
+      "<c r=\"A5\" s=\"&#53;\"><f t=\"shar&#101;d\" si=\"&#49;\" ref=\"A5&#58;A6\">&#61;A4+1</f></c>"
+      "</row>"
+      "<row r=\"6\"><c r=\"A6\"><f t=\"shar&#101;d\" si=\"&#49;\"/></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  ASSERT_TRUE(sax.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 2U);
+  const auto master = std::find_if(dom.cells.begin(), dom.cells.end(),
+                                   [](const CellSnapshot& cell) { return cell.row == 4U && cell.col == 0U; });
+  const auto follower = std::find_if(dom.cells.begin(), dom.cells.end(),
+                                     [](const CellSnapshot& cell) { return cell.row == 5U && cell.col == 0U; });
+  ASSERT_NE(master, dom.cells.end());
+  ASSERT_NE(follower, dom.cells.end());
+  EXPECT_EQ(master->formula, "=A4+1");
+  EXPECT_EQ(follower->formula, "=A5+1");
+  ASSERT_EQ(master->xf_index, 5U);
+  ASSERT_EQ(dom.rows.size(), 1U);
+  EXPECT_EQ(dom.rows[0].row, 4U);
+  EXPECT_DOUBLE_EQ(dom.rows[0].height, 20.0);
+  EXPECT_TRUE(dom.rows[0].hidden);
+  EXPECT_EQ(dom.rows[0].outline_level, 2U);
+}
+
+TEST(SheetReaderLexingParity, EntityDecodedMalformedValuesKeepDispositions) {
+  const std::string xml = WrapSheet("<row r=\"&#53;x\" ht=\"20\"><c r=\"A5\" s=\"&#53;x\"><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_EQ(dom.cells[0].xf_index, 0U);
+  EXPECT_TRUE(dom.rows.empty());
+}
+
+TEST(SheetReaderLexingParity, EntityDecodedOutlinePrefixAgrees) {
+  const std::string xml = WrapSheet("<row r=\"1\" outlineLevel=\"&#53;x\"><c r=\"A1\"><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  ASSERT_TRUE(sax.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.rows.size(), 1U);
+  EXPECT_EQ(dom.rows[0].row, 0U);
+  EXPECT_EQ(dom.rows[0].outline_level, 5U);
+}
+
+TEST(SheetReaderLexingParity, LiteralAttributeWhitespaceAgrees) {
+  const std::string xml =
+      WrapSheet("<row r=\"5\" ht=\"20\t\" hidden=\"true\r\n\"><c r=\"A5\" s=\"5\r\n\"><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.cells.size(), 1U);
+  EXPECT_EQ(dom.cells[0].xf_index, 0U);
+  ASSERT_EQ(dom.rows.size(), 1U);
+  EXPECT_DOUBLE_EQ(dom.rows[0].height, 20.0);
+  EXPECT_FALSE(dom.rows[0].hidden);
 }
 
 TEST(SheetReaderLexingParity, LeadingSpaceInStyleIndexDegradesToDefault) {

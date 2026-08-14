@@ -5,7 +5,8 @@
 // Implementation strategy:
 //   * Single forward pass over the byte buffer, never random-access.
 //   * Scratch buffers are reused across rows/cells: the scanner only
-//     allocates when a text node needs entity decoding (`&amp;` etc.) or
+//     allocates when a text node needs entity decoding / XML normalization
+//     (`&amp;`, CRLF, etc.) or
 //     when the inline-string body contains nested `<r>` runs whose
 //     concatenation cannot be expressed as a single byte slice. Plain
 //     `<v>123</v>` and `<t>hello</t>` payloads are returned as
@@ -29,7 +30,6 @@
 // implementation.
 #if !defined(FORMULON_WASM) || defined(FORMULON_WASM_ENABLE_SAX)
 
-#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -203,11 +203,17 @@ bool ParseTagHeader(const char* begin, const char* end, const char** p, TagHeade
   return false;
 }
 
-/// Forward declaration: decodes the five predefined XML entity references
-/// (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`) plus numeric character
-/// references (`&#N;` / `&#xN;`) into `out`. The full implementation lives
-/// further down with the `<v>` / `<t>` text-node helpers.
-void DecodeEntitiesInto(std::string_view src, std::string* out);
+/// Decodes entities and applies pugixml's `parse_default` end-of-line
+/// conversion to PCDATA: literal CR and CRLF become one LF. Character
+/// references are decoded after this distinction, so `&#13;` remains a
+/// character-reference newline rather than being treated as literal XML
+/// whitespace.
+void DecodePcdataInto(std::string_view src, std::string* out);
+
+/// Decodes entities and applies pugixml's `parse_wconv_attribute` conversion:
+/// literal TAB/LF/CR become spaces, with CRLF counted as one space. Character
+/// references are not whitespace-normalized.
+void DecodeAttributeInto(std::string_view src, std::string* out);
 
 /// True when `src` contains at least one `&` character — i.e. the byte
 /// span needs entity decoding before it can be exposed to callers as
@@ -215,6 +221,10 @@ void DecodeEntitiesInto(std::string_view src, std::string* out);
 /// (relatively expensive) full decoder kicks in.
 bool ContainsEntities(std::string_view src) noexcept {
   return src.find('&') != std::string_view::npos;
+}
+
+bool ContainsAttributeWhitespace(std::string_view src) noexcept {
+  return src.find_first_of("\t\n\r") != std::string_view::npos;
 }
 
 /// Reads attribute "key=\"value\"" pairs out of `raw_attrs`. Quotes may
@@ -293,12 +303,13 @@ std::string_view AttrOfRaw(const TagHeader& header, std::string_view name) noexc
 }
 
 /// Same as `AttrOfRaw` but transparently decodes XML entity references
-/// (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, `&#N;`, `&#xN;`) into
-/// canonical UTF-8 text. When decoding is required the result is
-/// materialised into `*scratch` and the returned view aliases into that
-/// buffer; the caller must keep `*scratch` alive for the lifetime of the
-/// returned view. When the value contains no `&`, the function returns a
-/// zero-copy view into the input buffer (and `*scratch` is not touched).
+/// (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, `&#N;`, `&#xN;`) and applies
+/// literal attribute-whitespace normalization into canonical UTF-8 text.
+/// When decoding or normalization is required the result is materialised
+/// into `*scratch` and the returned view aliases that buffer; the caller must
+/// keep `*scratch` alive for the lifetime of the returned view. When neither
+/// operation is needed, the function returns a zero-copy view into the input
+/// buffer and does not touch `*scratch`.
 ///
 /// Excel-emitted worksheet output rarely needs decoding here — `r="A1"`,
 /// `t="n"` and friends are pure ASCII — but third-party producers and
@@ -307,13 +318,13 @@ std::string_view AttrOfRaw(const TagHeader& header, std::string_view name) noexc
 /// well-formed XML). Skipping decoding produces a `kIoSheetCorrupt` parse
 /// failure that masquerades as a bad reference; decoding here keeps the
 /// SAX path symmetric with the text-node path (`<v>` / `<t>`) which has
-/// always run through `DecodeEntitiesInto`.
+/// always run through the same XML conversion helpers as text nodes.
 std::string_view AttrOfDecoded(const TagHeader& header, std::string_view name, std::string* scratch) {
   const std::string_view raw = AttrOfRaw(header, name);
-  if (!ContainsEntities(raw)) {
+  if (!ContainsEntities(raw) && !ContainsAttributeWhitespace(raw)) {
     return raw;
   }
-  DecodeEntitiesInto(raw, scratch);
+  DecodeAttributeInto(raw, scratch);
   return std::string_view(*scratch);
 }
 
@@ -324,16 +335,17 @@ std::string_view AttrOfDecoded(const TagHeader& header, std::string_view name, s
 /// Extracts the text content of an element whose opening tag has just
 /// been parsed (`*p` points at the first byte after `>`). Returns the
 /// raw byte slice of the content (possibly with entities), advances
-/// `*p` to the byte after `</name>`, and sets `had_entities` when the
-/// slice contains at least one `&...;` reference.
+/// `*p` to the byte after `</name>`, and sets `needs_processing` when the
+/// slice contains at least one entity reference or literal CR that requires
+/// pugixml-compatible PCDATA normalization.
 ///
-/// Caller decides whether to decode the entities (cheap path: if
-/// `had_entities` is false, the slice can be returned verbatim as a
+/// Caller decides whether to decode / normalize the text (cheap path: if
+/// `needs_processing` is false, the slice can be returned verbatim as a
 /// `string_view` into the input).
 bool ScanTextContent(const char* begin, const char* end, const char** p, std::string_view tag_name,
-                     std::string_view* raw_content, bool* had_entities, Error* err) {
+                     std::string_view* raw_content, bool* needs_processing, Error* err) {
   const char* content_begin = *p;
-  *had_entities = false;
+  *needs_processing = false;
   while (*p < end) {
     if (**p == '<') {
       *raw_content = std::string_view(content_begin, static_cast<std::size_t>(*p - content_begin));
@@ -363,8 +375,8 @@ bool ScanTextContent(const char* begin, const char* end, const char** p, std::st
       *err = MakeXmlParseError(static_cast<std::size_t>(*p - begin), "unexpected child element inside text content");
       return false;
     }
-    if (**p == '&') {
-      *had_entities = true;
+    if (**p == '&' || **p == '\r') {
+      *needs_processing = true;
     }
     ++(*p);
   }
@@ -415,23 +427,51 @@ bool AppendUtf8(std::uint32_t cp, std::string* out) {
 /// numeric refs, and some hand-rolled fixtures use entity-encoded
 /// attribute values that the attribute iterator now plumbs through this
 /// helper.
-void DecodeEntitiesInto(std::string_view src, std::string* out) {
+enum class XmlNormalization : std::uint8_t { kPcdata, kAttribute };
+
+void DecodeXmlInto(std::string_view src, std::string* out, XmlNormalization normalization) {
   out->clear();
   out->reserve(src.size());
   for (std::size_t i = 0; i < src.size();) {
     const char c = src[i];
+    if (normalization == XmlNormalization::kPcdata && c == '\r') {
+      out->push_back('\n');
+      ++i;
+      if (i < src.size() && src[i] == '\n') {
+        ++i;
+      }
+      continue;
+    }
+    if (normalization == XmlNormalization::kAttribute) {
+      if (c == '\r') {
+        out->push_back(' ');
+        ++i;
+        if (i < src.size() && src[i] == '\n') {
+          ++i;
+        }
+        continue;
+      }
+      if (c == '\t' || c == '\n') {
+        out->push_back(' ');
+        ++i;
+        continue;
+      }
+    }
     if (c != '&') {
       out->push_back(c);
       ++i;
       continue;
     }
-    // Numeric character references can be longer than the longest named
-    // entity; bound the search so a stray `&` followed by hostile junk
-    // does not scan to end-of-buffer. 12 chars covers `&#x10FFFF;`.
-    constexpr std::size_t kMaxEntityScan = 12U;
-    const std::size_t scan_end = std::min(src.size(), i + 1U + kMaxEntityScan);
     std::size_t semi = std::string_view::npos;
-    for (std::size_t j = i + 1; j < scan_end; ++j) {
+    for (std::size_t j = i + 1; j < src.size(); ++j) {
+      // A second ampersand before a semicolon means this ampersand is not
+      // the start of a reference. Leave it raw and let the next iteration
+      // inspect the later candidate independently, matching pugixml's
+      // permissive malformed-reference handling without an arbitrary length
+      // cap on legal references with leading zeroes.
+      if (src[j] == '&') {
+        break;
+      }
       if (src[j] == ';') {
         semi = j;
         break;
@@ -463,7 +503,7 @@ void DecodeEntitiesInto(std::string_view src, std::string* out) {
     if (!ent.empty() && ent.front() == '#') {
       std::uint32_t cp = 0;
       bool ok = false;
-      if (ent.size() >= 2 && (ent[1] == 'x' || ent[1] == 'X')) {
+      if (ent.size() >= 2 && ent[1] == 'x') {
         // Hex numeric reference: &#xNN;.
         ok = ent.size() > 2;
         for (std::size_t j = 2; j < ent.size() && ok; ++j) {
@@ -479,11 +519,11 @@ void DecodeEntitiesInto(std::string_view src, std::string* out) {
             ok = false;
             break;
           }
-          cp = (cp << 4U) | v;
-          if (cp > 0x10FFFFU) {
+          if (cp > (0x10FFFFU >> 4U) || (cp == (0x10FFFFU >> 4U) && v > (0x10FFFFU & 0xFU))) {
             ok = false;
             break;
           }
+          cp = (cp << 4U) | v;
         }
       } else {
         // Decimal numeric reference: &#N;.
@@ -494,11 +534,12 @@ void DecodeEntitiesInto(std::string_view src, std::string* out) {
             ok = false;
             break;
           }
-          cp = cp * 10U + static_cast<std::uint32_t>(d - '0');
-          if (cp > 0x10FFFFU) {
+          const std::uint32_t v = static_cast<std::uint32_t>(d - '0');
+          if (cp > (0x10FFFFU / 10U) || (cp == (0x10FFFFU / 10U) && v > (0x10FFFFU % 10U))) {
             ok = false;
             break;
           }
+          cp = cp * 10U + v;
         }
       }
       if (ok && AppendUtf8(cp, out)) {
@@ -510,6 +551,14 @@ void DecodeEntitiesInto(std::string_view src, std::string* out) {
     out->append(src.data() + i, semi - i + 1);
     i = semi + 1;
   }
+}
+
+void DecodePcdataInto(std::string_view src, std::string* out) {
+  DecodeXmlInto(src, out, XmlNormalization::kPcdata);
+}
+
+void DecodeAttributeInto(std::string_view src, std::string* out) {
+  DecodeXmlInto(src, out, XmlNormalization::kAttribute);
 }
 
 // ---------------------------------------------------------------------------
@@ -600,11 +649,11 @@ bool ReadChildHeader(const char* begin, const char* end, const char** p, Error* 
 }
 
 /// State carried across the per-cell scan so allocations amortise:
-///   * `decoded_value`  - holds entity-decoded `<v>` body.
+///   * `decoded_value`  - holds entity-decoded / normalized `<v>` body.
 ///   * `inline_string`  - holds the concatenation of `<is><t>` /
 ///                        `<is><r><t>` payloads.
-///   * `decoded_formula` - holds the entity-decoded `<f>` body when
-///                         decoding is required. Kept distinct from
+///   * `decoded_formula` - holds the entity-decoded / normalized `<f>` body
+///                         when processing is required. Kept distinct from
 ///                         the others so `record->formula` and
 ///                         `record->value` can coexist for the rare
 ///                         well-formed input that has both (e.g. a
@@ -618,16 +667,24 @@ struct CellScratch {
   /// scanning an `<is>` body. Cleared at the start of each
   /// `ScanInlineString` call.
   std::string inline_string_phonetic;
-  /// Scratch buffers for entity-decoded `<c>` / `<row>` attribute values.
-  /// Each buffer is owned by the surrounding cell / row scan, so the
-  /// `string_view`s returned by `AttrOfDecoded` remain valid for the
-  /// duration of the dispatching callback. Three slots cover every
-  /// attribute the SAX vocabulary inspects (`r=`, `t=`, `s=` on `<c>`,
-  /// plus `r=` on `<row>`); the row attribute reuses the cell's `r`
-  /// slot because the two never overlap in time.
-  std::string decoded_attr_r;
-  std::string decoded_attr_t;
-  std::string decoded_attr_s;
+  /// Scratch buffers for entity-decoded / normalized semantic attributes.
+  /// Every simultaneously exposed view has a distinct backing string: the
+  /// three `<c>` attributes, the three `<f>` attributes, and the four row
+  /// override attributes. The row number has its own slot as well because
+  /// it is decoded before the row callback dispatches.
+  std::string c_attr_r;
+  std::string c_attr_t;
+  std::string c_attr_s;
+  std::string f_attr_t;
+  std::string f_attr_si;
+  std::string f_attr_ref;
+  std::string row_attr_r;
+  std::string row_attr_ht;
+  std::string row_attr_hidden;
+  std::string row_attr_custom_height;
+  std::string row_attr_outline_level;
+  std::string row_attr_custom_format;
+  std::string row_attr_style;
 };
 
 /// Reads `<is> ... </is>` content, concatenating every `<t>` body
@@ -696,14 +753,14 @@ bool ScanInlineString(const char* begin, const char* end, const char** p, CellSc
     }
     if (header.name == "t") {
       std::string_view raw;
-      bool had_entities = false;
-      if (!ScanTextContent(begin, end, p, "t", &raw, &had_entities, err)) {
+      bool needs_processing = false;
+      if (!ScanTextContent(begin, end, p, "t", &raw, &needs_processing, err)) {
         return false;
       }
       std::string* dest = in_rph ? &scratch->inline_string_phonetic : &scratch->inline_string;
-      if (had_entities) {
+      if (needs_processing) {
         std::string tmp;
-        DecodeEntitiesInto(raw, &tmp);
+        DecodePcdataInto(raw, &tmp);
         dest->append(tmp);
       } else {
         dest->append(raw.data(), raw.size());
@@ -727,7 +784,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   // Decode r=, t=, s=. Attributes are routed through `AttrOfDecoded` so
   // entity-encoded values (e.g. `r="A&amp;1"`) decode to canonical text
   // before the A1 / type-token validation runs.
-  const std::string_view r_attr = AttrOfDecoded(cell_header, "r", &scratch->decoded_attr_r);
+  const std::string_view r_attr = AttrOfDecoded(cell_header, "r", &scratch->c_attr_r);
   if (r_attr.empty()) {
     *err = MakeXmlParseError(cell_header.end_offset, "<c> missing r= attribute");
     return false;
@@ -742,8 +799,8 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
   }
   record->row = row;
   record->col = col;
-  record->t = AttrOfDecoded(cell_header, "t", &scratch->decoded_attr_t);
-  record->s = AttrOfDecoded(cell_header, "s", &scratch->decoded_attr_s);
+  record->t = AttrOfDecoded(cell_header, "t", &scratch->c_attr_t);
+  record->s = AttrOfDecoded(cell_header, "s", &scratch->c_attr_s);
   record->formula = std::string_view{};
   record->f_t = std::string_view{};
   record->f_si = std::string_view{};
@@ -771,30 +828,35 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
     }
     if (child.name == "f") {
       // Capture the shared/array-formula attributes before handling the
-      // body. `t`/`si`/`ref` never carry XML entities in practice, so the
-      // raw views (aliasing the source buffer) are safe to surface. A
-      // shared-formula follower is self-closing with no body, but its
-      // `si` still has to reach the consumer so the group master can be
-      // shifted into place.
-      record->f_t = AttrOfRaw(child, "t");
-      record->f_si = AttrOfRaw(child, "si");
-      record->f_ref = AttrOfRaw(child, "ref");
+      // body. They are semantic values, so decode and normalize them before
+      // exposing the record. A shared-formula follower is self-closing with
+      // no body, but its `si` still has to reach the consumer so the group
+      // master can be shifted into place.
+      record->f_t = AttrOfDecoded(child, "t", &scratch->f_attr_t);
+      record->f_si = AttrOfDecoded(child, "si", &scratch->f_attr_si);
+      record->f_ref = AttrOfDecoded(child, "ref", &scratch->f_attr_ref);
       if (child.self_closing) {
         continue;
       }
       std::string_view raw;
-      bool had_entities = false;
-      if (!ScanTextContent(begin, end, p, "f", &raw, &had_entities, err)) {
+      bool needs_processing = false;
+      if (!ScanTextContent(begin, end, p, "f", &raw, &needs_processing, err)) {
         return false;
       }
-      // Strip leading '=' if present.
-      if (!raw.empty() && raw.front() == '=') {
-        raw.remove_prefix(1);
-      }
-      if (had_entities) {
-        DecodeEntitiesInto(raw, &scratch->decoded_formula);
-        record->formula = std::string_view(scratch->decoded_formula);
+      if (needs_processing) {
+        // Decode / normalize first, then strip the leading '='. This order
+        // matters for formula bodies such as `&#61;1+1`.
+        DecodePcdataInto(raw, &scratch->decoded_formula);
+        std::string_view decoded(scratch->decoded_formula);
+        if (!decoded.empty() && decoded.front() == '=') {
+          decoded.remove_prefix(1);
+        }
+        record->formula = decoded;
       } else {
+        // Strip leading '=' from the zero-copy path as well.
+        if (!raw.empty() && raw.front() == '=') {
+          raw.remove_prefix(1);
+        }
         record->formula = raw;
       }
     } else if (child.name == "v") {
@@ -802,12 +864,12 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
         continue;
       }
       std::string_view raw;
-      bool had_entities = false;
-      if (!ScanTextContent(begin, end, p, "v", &raw, &had_entities, err)) {
+      bool needs_processing = false;
+      if (!ScanTextContent(begin, end, p, "v", &raw, &needs_processing, err)) {
         return false;
       }
-      if (had_entities) {
-        DecodeEntitiesInto(raw, &scratch->decoded_value);
+      if (needs_processing) {
+        DecodePcdataInto(raw, &scratch->decoded_value);
         record->value = std::string_view(scratch->decoded_value);
       } else {
         record->value = raw;
@@ -843,25 +905,26 @@ bool ScanRow(const char* begin, const char* end, const char** p, const TagHeader
              const SheetSaxCallbacks& cb, CellScratch* scratch, Error* err) {
   // Decode r= (1-based) through the shared strict lexer, so a malformed
   // row number reads here exactly as it does on the DOM path: 0, meaning
-  // "no usable row number", which the consumer skips. The row's `r`
-  // attribute reuses the cell-level `decoded_attr_r` scratch because the
-  // row scan is single-shot before any cell scan begins.
+  // "no usable row number", which the consumer skips.
   std::uint32_t row_1based = 0;
-  const std::string_view r_attr = AttrOfDecoded(row_header, "r", &scratch->decoded_attr_r);
+  const std::string_view r_attr = AttrOfDecoded(row_header, "r", &scratch->row_attr_r);
   if (!parse_xsd_nonneg_int(r_attr, &row_1based)) {
     row_1based = 0;
   }
 
   if (cb.on_row_start != nullptr) {
-    // Surface the row's override attributes. These are numeric / boolean
-    // and never entity-encoded, so raw views (aliasing the buffer) are
-    // safe for the callback's duration.
+    // Surface the row's override attributes through the same decoded and
+    // normalized accessor used for every other semantic attribute. Each
+    // value has distinct scratch backing so all four views remain valid at
+    // once during the callback.
     RowRecord rec;
     rec.row_1based = row_1based;
-    rec.ht = AttrOfRaw(row_header, "ht");
-    rec.hidden = AttrOfRaw(row_header, "hidden");
-    rec.custom_height = AttrOfRaw(row_header, "customHeight");
-    rec.outline_level = AttrOfRaw(row_header, "outlineLevel");
+    rec.ht = AttrOfDecoded(row_header, "ht", &scratch->row_attr_ht);
+    rec.hidden = AttrOfDecoded(row_header, "hidden", &scratch->row_attr_hidden);
+    rec.custom_height = AttrOfDecoded(row_header, "customHeight", &scratch->row_attr_custom_height);
+    rec.outline_level = AttrOfDecoded(row_header, "outlineLevel", &scratch->row_attr_outline_level);
+    rec.custom_format = AttrOfDecoded(row_header, "customFormat", &scratch->row_attr_custom_format);
+    rec.style = AttrOfDecoded(row_header, "s", &scratch->row_attr_style);
     auto rs = cb.on_row_start(cb.user_data, rec);
     if (!rs) {
       *err = rs.error();

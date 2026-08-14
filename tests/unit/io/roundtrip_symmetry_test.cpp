@@ -11,6 +11,7 @@
 
 #include "support/roundtrip_symmetry.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -28,6 +29,10 @@
 
 namespace formulon {
 namespace {
+
+/// Stands in for the package's `<dxfs>` record count. The CF fixtures
+/// below carry no `dxfId`, so any value large enough to be a no-op works.
+constexpr std::size_t kDxfCount = 8;
 
 std::string FixturePath(const char* name) {
   return std::string(FORMULON_FIXTURES_DIR) + "/excel/" + name;
@@ -121,7 +126,8 @@ TEST(RoundtripSymmetry, IconSetCfvoSurvivesReadWrite) {
   auto model = io::read_conditional_formats(before.child("worksheet"));
   ASSERT_TRUE(static_cast<bool>(model)) << "cf read failed: " << model.error().message;
 
-  const std::string written = "<worksheet>" + io::write_conditional_formattings(model.value()) + "</worksheet>";
+  const std::string written =
+      "<worksheet>" + io::write_conditional_formattings(model.value(), kDxfCount) + "</worksheet>";
   pugi::xml_document after;
   ASSERT_TRUE(test::parse_xml(written, &after));
 
@@ -148,7 +154,8 @@ TEST(RoundtripSymmetry, DataBarCfvoSurvivesReadWrite) {
   auto model = io::read_conditional_formats(before.child("worksheet"));
   ASSERT_TRUE(static_cast<bool>(model)) << "cf read failed: " << model.error().message;
 
-  const std::string written = "<worksheet>" + io::write_conditional_formattings(model.value()) + "</worksheet>";
+  const std::string written =
+      "<worksheet>" + io::write_conditional_formattings(model.value(), kDxfCount) + "</worksheet>";
   pugi::xml_document after;
   ASSERT_TRUE(test::parse_xml(written, &after));
 

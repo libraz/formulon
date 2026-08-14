@@ -226,9 +226,10 @@ void AppendArgb(std::string& out, std::uint32_t argb) {
 /// `<bgColor>`) from a colour spec, using `tag` as the element name.
 ///
 /// When the spec carries no explicit kind (`kNone`) — e.g. a record built
-/// programmatically through the bindings that set only the resolved
-/// `*_argb` field — falls back to emitting `rgb="<fallback>"`, preserving
-/// the legacy writer behaviour for callers that never populate a spec.
+/// programmatically through the bindings that sets only its sibling
+/// `*_argb` field — emits `rgb="<fallback>"`. For every non-`kNone` kind,
+/// the selector is authoritative and the sibling is not used to resolve a
+/// theme, indexed, or auto colour.
 void AppendColor(std::string& out, const char* tag, const ColorSpec& spec, std::uint32_t fallback_argb) {
   out.push_back('<');
   out.append(tag);
@@ -266,10 +267,10 @@ void AppendColor(std::string& out, const char* tag, const ColorSpec& spec, std::
   out.append("/>");
 }
 
-/// True when a colour location should emit a `<color>` element: either
-/// the source carried an explicit spec, or a non-zero resolved value was
-/// set programmatically. Used by fills and borders, where an all-zero
-/// colour means "no colour set" and no element is emitted.
+/// True when a colour location should emit a `<color>` element: either the
+/// source carried an explicit spec, or a non-zero sibling value was set
+/// programmatically. Used by fills and borders, where an all-zero colour
+/// means "no colour set" and no element is emitted.
 bool HasColor(const ColorSpec& spec, std::uint32_t argb) {
   return spec.kind != ColorSpec::Kind::kNone || argb != 0U;
 }
@@ -504,6 +505,22 @@ void AppendNumFmts(std::string& out, const StylesTable& table) {
   out.append("  </numFmts>\n");
 }
 
+// The record counts a styles part actually emits. Every section falls
+// back to a single synthesised default when its vector is empty, so the
+// emitted count is `max(1, size())` and index 0 always resolves.
+struct StyleTableCounts {
+  std::size_t fonts;
+  std::size_t fills;
+  std::size_t borders;
+  std::size_t cell_style_xfs;
+};
+
+StyleTableCounts EmittedCounts(const StylesTable& table) {
+  const auto at_least_one = [](std::size_t n) { return n == 0U ? std::size_t{1} : n; };
+  return StyleTableCounts{at_least_one(table.fonts.size()), at_least_one(table.fills.size()),
+                          at_least_one(table.borders.size()), at_least_one(table.cell_style_xfs.size())};
+}
+
 void AppendFonts(std::string& out, const StylesTable& table) {
   // Fonts vector always carries at least one entry (the default).
   // Reader guarantees this; writer preserves it.
@@ -588,22 +605,26 @@ void AppendBorders(std::string& out, const StylesTable& table) {
   out.append("  </borders>\n");
 }
 
-void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, std::size_t style_xf_count) {
+// Emits one `<xf>`. `bounds` carries the record counts this same styles
+// part is emitting for `<fonts>` / `<fills>` / `<borders>` /
+// `<cellStyleXfs>`; every id is checked against them because a malformed
+// in-memory reference must not produce a dangling OOXML relationship.
+// Keeping this normalization local to serialization leaves the caller's
+// model byte-for-byte unchanged.
+void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const StyleTableCounts& bounds) {
+  const auto in_bounds = [](std::uint32_t index, std::size_t count) { return index < count ? index : 0U; };
   out.append("    <xf numFmtId=\"");
   AppendUint(out, xf.num_fmt_id);
   out.append("\" fontId=\"");
-  AppendUint(out, xf.font_index);
+  AppendUint(out, in_bounds(xf.font_index, bounds.fonts));
   out.append("\" fillId=\"");
-  AppendUint(out, xf.fill_index);
+  AppendUint(out, in_bounds(xf.fill_index, bounds.fills));
   out.append("\" borderId=\"");
-  AppendUint(out, xf.border_index);
+  AppendUint(out, in_bounds(xf.border_index, bounds.borders));
   out.append("\"");
   if (emit_xf_id) {
     out.append(" xfId=\"");
-    // A malformed in-memory reference must not produce a dangling OOXML
-    // relationship. Keep this normalization local to serialization so the
-    // caller's model remains byte-for-byte unchanged.
-    AppendUint(out, xf.xf_id < style_xf_count ? xf.xf_id : 0U);
+    AppendUint(out, in_bounds(xf.xf_id, bounds.cell_style_xfs));
     out.append("\"");
   }
   auto append_apply = [&out](const char* name, bool value) {
@@ -700,8 +721,9 @@ void AppendCellStyleXfs(std::string& out, const StylesTable& table) {
   out.append("  <cellStyleXfs count=\"");
   AppendUint(out, table.cell_style_xfs.size());
   out.append("\">\n");
+  const StyleTableCounts bounds = EmittedCounts(table);
   for (const CellXf& xf : table.cell_style_xfs) {
-    AppendXfBody(out, xf, /*emit_xf_id=*/false, table.cell_style_xfs.size());
+    AppendXfBody(out, xf, /*emit_xf_id=*/false, bounds);
   }
   out.append("  </cellStyleXfs>\n");
 }
@@ -714,9 +736,9 @@ void AppendCellXfs(std::string& out, const StylesTable& table) {
   if (table.cell_xfs.empty()) {
     out.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>\n");
   } else {
+    const StyleTableCounts bounds = EmittedCounts(table);
     for (const CellXf& xf : table.cell_xfs) {
-      const std::size_t style_xf_count = table.cell_style_xfs.empty() ? 1U : table.cell_style_xfs.size();
-      AppendXfBody(out, xf, /*emit_xf_id=*/true, style_xf_count);
+      AppendXfBody(out, xf, /*emit_xf_id=*/true, bounds);
     }
   }
   out.append("  </cellXfs>\n");

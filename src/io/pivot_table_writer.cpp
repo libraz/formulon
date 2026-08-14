@@ -367,14 +367,13 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table) {
   // form via EncodeA1Range's zero-span guard.
   AppendXmlEscaped(out, EncodeA1Range(table.anchor_row(), table.anchor_col(), table.span_rows(), table.span_cols()));
   out.append("\"");
-  // Re-emit the `<location>` offset attributes captured at read time.
-  // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol;
-  // rowPageCount / colPageCount are optional. Each is emitted only when it
-  // was present in the source so a schema-valid `<location>` round-trips
-  // without inventing values for absent optionals.
-  AppendOptionalLocationAttr(out, "firstHeaderRow", table.location_first_header_row());
-  AppendOptionalLocationAttr(out, "firstDataRow", table.location_first_data_row());
-  AppendOptionalLocationAttr(out, "firstDataCol", table.location_first_data_col());
+  // ECMA-376 requires firstHeaderRow / firstDataRow / firstDataCol. Preserve
+  // authored values, including explicit zero, while supplying the schema's
+  // independent fallback for a model built without those attributes.
+  AppendOptionalLocationAttr(out, "firstHeaderRow", table.location_first_header_row().value_or(1U));
+  AppendOptionalLocationAttr(out, "firstDataRow", table.location_first_data_row().value_or(1U));
+  AppendOptionalLocationAttr(out, "firstDataCol", table.location_first_data_col().value_or(1U));
+  // rowPageCount / colPageCount are optional and stay presence-based.
   AppendOptionalLocationAttr(out, "rowPageCount", table.location_row_page_count());
   AppendOptionalLocationAttr(out, "colPageCount", table.location_col_page_count());
   out.append("/>");

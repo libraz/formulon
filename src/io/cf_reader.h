@@ -33,7 +33,9 @@ namespace formulon::io {
 ///   * `<conditionalFormatting sqref="A1:A10 D5:D15" pivot="0">` —
 ///     `sqref` is split on whitespace and each token decoded into a
 ///     `CFCellRange`. Absolute markers (`$A$1:$A$10`) are accepted.
-///     `pivot="1"` sets `pivot_scope`.
+///     Column letters must be upper case in every token shape — cell
+///     (`A1:A10`), whole-column (`A:A`) and whole-row (`1:3`) alike —
+///     matching what Excel emits. `pivot="1"` sets `pivot_scope`.
 ///   * A block with a missing / empty / unparseable `sqref` is skipped
 ///     with a WARN diagnostic and load continues — CF is a presentation
 ///     overlay and one bad block must not reject the workbook.

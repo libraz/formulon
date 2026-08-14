@@ -33,17 +33,23 @@ class SharedStrings;
 /// file actually declared; `hyperlink_rids` carries the per-hyperlink
 /// rId strings the same way; `printer_settings_rid` is the rId of the
 /// printer-settings rel (empty when the sheet has no printer settings).
+/// `dxf_count` is the `<dxf>` record count of the package's styles part,
+/// which bounds the `dxfId` values the conditional-format block may name
+/// (see `write_conditional_formattings`).
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
-                              const SharedStrings* shared_strings);
+                              const SharedStrings* shared_strings, std::size_t dxf_count);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
-/// pivot tables, hyperlinks, printer settings, and comments / VML.
+/// pivot tables, hyperlinks, printer settings, comments / VML, and
+/// surviving unknown relationships. Internal unknown relationships are
+/// emitted only when their target is present in `plan.passthrough_kept`;
+/// external relationships remain eligible without a local payload.
 SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                                const std::vector<EmissionPlan::PivotTablePlan>& sheet_pivot_tables,
-                               const EmissionPlan::CommentsPlan& comments_plan);
+                               const EmissionPlan::CommentsPlan& comments_plan, const EmissionPlan& plan);
 
 }  // namespace io
 }  // namespace formulon

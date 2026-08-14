@@ -32,6 +32,9 @@ struct CapturedCell {
   std::string t;
   std::string s;
   std::string formula;
+  std::string f_t;
+  std::string f_si;
+  std::string f_ref;
   std::string value;
   bool is_inline_string = false;
   std::string phonetic;
@@ -40,11 +43,22 @@ struct CapturedCell {
 struct Capture {
   std::vector<std::uint32_t> row_starts;
   std::vector<std::uint32_t> row_ends;
+  struct RowAttributes {
+    std::uint32_t row_1based = 0;
+    std::string ht;
+    std::string hidden;
+    std::string custom_height;
+    std::string outline_level;
+  };
+  std::vector<RowAttributes> rows;
   std::vector<CapturedCell> cells;
 };
 
 Expected<void, Error> CaptureRowStart(void* ud, const RowRecord& row) {
-  static_cast<Capture*>(ud)->row_starts.push_back(row.row_1based);
+  Capture* capture = static_cast<Capture*>(ud);
+  capture->row_starts.push_back(row.row_1based);
+  capture->rows.push_back(Capture::RowAttributes{row.row_1based, std::string(row.ht), std::string(row.hidden),
+                                                 std::string(row.custom_height), std::string(row.outline_level)});
   return Expected<void, Error>::Ok();
 }
 Expected<void, Error> CaptureRowEnd(void* ud, std::uint32_t r) {
@@ -52,9 +66,10 @@ Expected<void, Error> CaptureRowEnd(void* ud, std::uint32_t r) {
   return Expected<void, Error>::Ok();
 }
 Expected<void, Error> CaptureCell(void* ud, const CellRecord& rec) {
-  static_cast<Capture*>(ud)->cells.push_back(CapturedCell{rec.row, rec.col, std::string(rec.t), std::string(rec.s),
-                                                          std::string(rec.formula), std::string(rec.value),
-                                                          rec.is_inline_string, std::string(rec.phonetic)});
+  static_cast<Capture*>(ud)->cells.push_back(
+      CapturedCell{rec.row, rec.col, std::string(rec.t), std::string(rec.s), std::string(rec.formula),
+                   std::string(rec.f_t), std::string(rec.f_si), std::string(rec.f_ref), std::string(rec.value),
+                   rec.is_inline_string, std::string(rec.phonetic)});
   return Expected<void, Error>::Ok();
 }
 
@@ -297,6 +312,31 @@ TEST(SaxXmlReader, FormulaLeadingEqualsStripped) {
   EXPECT_EQ(cap.cells[0].formula, "SUM(B1:B3)");
 }
 
+TEST(SaxXmlReader, FormulaEntityDecodesBeforeLeadingEqualsStrip) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\"><f>&#61;1+1</f></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].formula, "1+1");
+}
+
+TEST(SaxXmlReader, FormulaAttributesDecodeIndependently) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\"><f t=\"shar&#101;d\" si=\"&#49;\" ref=\"A1&#58;A2\">1+1</f></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].f_t, "shared");
+  EXPECT_EQ(cap.cells[0].f_si, "1");
+  EXPECT_EQ(cap.cells[0].f_ref, "A1:A2");
+  EXPECT_EQ(cap.cells[0].formula, "1+1");
+}
+
 // ---------------------------------------------------------------------------
 // 5. Self-closing variants.
 // ---------------------------------------------------------------------------
@@ -447,6 +487,28 @@ TEST(SaxXmlReader, EntityDecodingInInlineString) {
   EXPECT_EQ(cap.cells[0].value, "x & y");
 }
 
+TEST(SaxXmlReader, PCDATALiteralCrAndCrLfNormalizeToLf) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>a\rb\r\nc</t></is></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].value, "a\nb\nc");
+}
+
+TEST(SaxXmlReader, CharacterReferenceWhitespaceInPCDATAIsNotNormalized) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>a&#13;&#10;&#9;b</t></is></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].value, "a\r\n\tb");
+}
+
 TEST(SaxXmlReader, NumericEntityDecodes) {
   // Numeric character references decode through the same UTF-8 encoder
   // that the attribute path uses (added alongside attribute entity
@@ -462,6 +524,17 @@ TEST(SaxXmlReader, NumericEntityDecodes) {
   ASSERT_EQ(cap.cells.size(), 1U);
   // Hiragana A (U+3042) encodes to UTF-8 0xE3 0x81 0x82.
   EXPECT_EQ(cap.cells[0].value, std::string("A-A-") + "\xE3\x81\x82");
+}
+
+TEST(SaxXmlReader, NumericEntityLeadingZeroesDecodeAndUppercaseXPassesThrough) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>&#00065;-&#X41;</t></is></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].value, "A-&#X41;");
 }
 
 TEST(SaxXmlReader, MalformedEntityPassesThroughVerbatim) {
@@ -712,6 +785,56 @@ TEST(SaxXmlReader, AttributeWithoutEntitiesIsZeroCopy) {
   ASSERT_EQ(cap.cells.size(), 1U);
   EXPECT_EQ(cap.cells[0].t, "n");
   EXPECT_EQ(cap.cells[0].s, "3");
+
+  struct Pointers {
+    const char* t = nullptr;
+    const char* s = nullptr;
+  } pointers;
+  SheetSaxCallbacks callbacks;
+  callbacks.user_data = &pointers;
+  callbacks.on_cell = +[](void* ud, const CellRecord& rec) -> Expected<void, Error> {
+    auto* out = static_cast<Pointers*>(ud);
+    out->t = rec.t.data();
+    out->s = rec.s.data();
+    return Expected<void, Error>::Ok();
+  };
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), callbacks)));
+  const std::size_t t_attr_offset = xml.find("t=\"n\"");
+  const std::size_t s_attr_offset = xml.find("s=\"3\"");
+  ASSERT_NE(t_attr_offset, std::string::npos);
+  ASSERT_NE(s_attr_offset, std::string::npos);
+  const std::size_t t_value_offset = t_attr_offset + 3U;
+  const std::size_t s_value_offset = s_attr_offset + 3U;
+  EXPECT_EQ(pointers.t, xml.data() + t_value_offset);
+  EXPECT_EQ(pointers.s, xml.data() + s_value_offset);
+}
+
+TEST(SaxXmlReader, LiteralAttributeWhitespaceUsesPugixmlWconv) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" t=\"n\t\n\r\" s=\"3\r\n4\"><v>9</v></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.cells.size(), 1U);
+  EXPECT_EQ(cap.cells[0].t, "n   ");
+  EXPECT_EQ(cap.cells[0].s, "3 4");
+}
+
+TEST(SaxXmlReader, RowSemanticAttributesDecodeIndependently) {
+  const std::string xml =
+      "<worksheet><sheetData>"
+      "<row r=\"&#53;\" ht=\"&#50;&#48;\" hidden=\"&#116;&#114;&#117;&#101;\" "
+      "customHeight=\"&#116;&#114;&#117;&#101;\" outlineLevel=\"&#50;\"><c r=\"A5\"><v>1</v></c></row>"
+      "</sheetData></worksheet>";
+  Capture cap;
+  ASSERT_TRUE(static_cast<bool>(scan_sheet_data(SpanOf(xml), MakeCallbacks(&cap))));
+  ASSERT_EQ(cap.rows.size(), 1U);
+  EXPECT_EQ(cap.rows[0].row_1based, 5U);
+  EXPECT_EQ(cap.rows[0].ht, "20");
+  EXPECT_EQ(cap.rows[0].hidden, "true");
+  EXPECT_EQ(cap.rows[0].custom_height, "true");
+  EXPECT_EQ(cap.rows[0].outline_level, "2");
 }
 
 TEST(SaxXmlReader, MixedFormulaAndLiteralCellsInOneRow) {

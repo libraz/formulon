@@ -383,6 +383,46 @@ TEST(BuildSheetDataXml, RichErrorLiteralEmitsBlankCell) {
   EXPECT_EQ(xml.find("t=\"e\""), std::string::npos) << xml;
 }
 
+// Literal cell bodies used to be written twice — once by the helper and
+// once inline for the `s=` case — so a new value type could get its type
+// attribute or `<v>` encoding right in only one of the two. The two now
+// share a single code path; this pins that by asserting the styled form
+// is the unstyled form with `s="N"` spliced in, for every value type.
+TEST(BuildSheetDataXml, StyledLiteralCellDiffersFromUnstyledOnlyByTheStyleAttribute) {
+  struct Case {
+    const char* label;
+    Value value;
+    const char* phonetic;
+  };
+  const std::vector<Case> cases = {
+      {"number", Value::number(1.5), ""},
+      {"boolean", Value::boolean(true), ""},
+      {"text", Value::text("hi"), ""},
+      {"phonetic text", Value::text("漢字"), "カンジ"},
+      {"legacy error", Value::error(ErrorCode::Div0), ""},
+      {"rich error", Value::error(ErrorCode::Calc), ""},
+  };
+  for (const Case& c : cases) {
+    Sheet plain("Sheet1");
+    plain.set_cell_value(0U, 0U, c.value);
+    Sheet styled("Sheet1");
+    styled.set_cell_value(0U, 0U, c.value);
+    styled.set_cell_xf_index(0U, 0U, 3U);
+    if (c.phonetic[0] != '\0') {
+      plain.set_cell_phonetic(0U, 0U, c.phonetic);
+      styled.set_cell_phonetic(0U, 0U, c.phonetic);
+    }
+
+    const std::string plain_xml = BuildSheetDataXml(plain);
+    const std::string styled_xml = BuildSheetDataXml(styled);
+    const std::size_t at = plain_xml.find("<c r=\"A1\"");
+    ASSERT_NE(at, std::string::npos) << c.label << ": " << plain_xml;
+    std::string expected = plain_xml;
+    expected.insert(at + std::string("<c r=\"A1\"").size(), " s=\"3\"");
+    EXPECT_EQ(styled_xml, expected) << c.label;
+  }
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon
