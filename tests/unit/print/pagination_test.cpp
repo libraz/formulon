@@ -149,6 +149,63 @@ TEST(PaginationTest, HiddenRowsAreExcludedFromPaginationExtent) {
   EXPECT_EQ(result.value().page_count, 1U);
 }
 
+TEST(PaginationTest, HiddenWidthlessColumnDoesNotConsumeFitToPageWidth) {
+  // The column widths only affect the scale factor here: automatic vertical
+  // breaks are intentionally disabled at explicit print scale. Forty-nine
+  // default-height rows sit just across the one-page boundary for the
+  // visible-width variants, making an accidental hidden-column width easy to
+  // observe without relying on an internal geometry helper.
+  const auto make_workbook = [](bool hidden, bool explicit_width) {
+    Workbook wb = Workbook::create();
+    Sheet& sheet = wb.sheet(0);
+    sheet.set_cell_value(0U, 0U, Value::number(1.0));
+    sheet.set_cell_value(48U, 1U, Value::number(2.0));
+
+    ColumnLayout first;
+    first.first = 0U;
+    first.last = 0U;
+    first.has_width = true;
+    first.width = 100.0;
+    sheet.mutable_layout().columns.push_back(first);
+
+    ColumnLayout second;
+    second.first = 1U;
+    second.last = 1U;
+    second.hidden = hidden;
+    if (explicit_width) {
+      second.has_width = true;
+      second.width = hidden ? 100.0 : 0.0;
+    }
+    sheet.mutable_layout().columns.push_back(second);
+
+    wb.set_defined_names({PrintArea("Sheet1!$A$1:$B$49", 0)});
+    sheet.mutable_print_settings().page_setup.fit_to_page = true;
+    sheet.mutable_print_settings().page_setup.fit_to_width = 1;
+    sheet.mutable_print_settings().page_setup.fit_to_height = 0;
+    return wb;
+  };
+
+  Workbook hidden_widthless = make_workbook(true, false);
+  Workbook hidden_explicit = make_workbook(true, true);
+  Workbook visible_absent = make_workbook(false, false);
+  Workbook visible_zero = make_workbook(false, true);
+
+  auto hidden_widthless_result = paginate(hidden_widthless, 0);
+  auto hidden_explicit_result = paginate(hidden_explicit, 0);
+  auto visible_absent_result = paginate(visible_absent, 0);
+  auto visible_zero_result = paginate(visible_zero, 0);
+  ASSERT_TRUE(static_cast<bool>(hidden_widthless_result)) << hidden_widthless_result.error().message;
+  ASSERT_TRUE(static_cast<bool>(hidden_explicit_result)) << hidden_explicit_result.error().message;
+  ASSERT_TRUE(static_cast<bool>(visible_absent_result)) << visible_absent_result.error().message;
+  ASSERT_TRUE(static_cast<bool>(visible_zero_result)) << visible_zero_result.error().message;
+
+  // Hidden always wins over width, and an explicit width of zero is not the
+  // same as an absent width (which falls back to the standard default).
+  EXPECT_EQ(hidden_widthless_result.value().page_count, hidden_explicit_result.value().page_count);
+  EXPECT_EQ(hidden_widthless_result.value().page_count, visible_zero_result.value().page_count);
+  EXPECT_GT(hidden_widthless_result.value().page_count, visible_absent_result.value().page_count);
+}
+
 TEST(PaginationTest, OutlineOnlyRowUsesDefaultHeight) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);

@@ -74,7 +74,13 @@ double ColumnWidthChars(const Sheet& sheet, std::uint32_t col) {
     if (col >= span.first && col <= span.last) {
       // Hidden columns occupy no printed width, so they never advance the
       // page grid (Excel excludes them from pagination extent).
-      return span.hidden ? 0.0 : span.width;
+      if (span.hidden) {
+        return 0.0;
+      }
+      return HasExplicitColumnWidth(span)
+                 ? span.width
+                 : (sheet.format_defaults().has_default_col_width ? sheet.format_defaults().default_col_width
+                                                                  : kStandardColWidthChars);
     }
   }
   const SheetFormatDefaults& defaults = sheet.format_defaults();
@@ -94,7 +100,13 @@ double RowHeightPoints(const Sheet& sheet, std::uint32_t row) {
     if (override_row.row == row) {
       // Hidden rows occupy no printed height, so they never advance the
       // page grid (Excel excludes them from pagination extent).
-      return override_row.hidden ? 0.0 : override_row.height;
+      if (override_row.hidden) {
+        return 0.0;
+      }
+      return (override_row.has_height || override_row.height != 0.0)
+                 ? override_row.height
+                 : (sheet.format_defaults().has_default_row_height ? sheet.format_defaults().default_row_height
+                                                                   : kStandardRowHeightPt);
     }
   }
   const SheetFormatDefaults& defaults = sheet.format_defaults();
@@ -315,7 +327,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
       continue;
     }
     row_overridden[index] = true;
-    row_heights[index] = layout.hidden ? 0.0 : (layout.height > 0.0 ? layout.height : default_row_h);
+    row_heights[index] =
+        layout.hidden ? 0.0 : (layout.has_height || layout.height != 0.0 ? layout.height : default_row_h);
   }
   std::vector<double> col_widths(static_cast<std::size_t>(union_box.last_col - union_box.first_col) + 1U,
                                  default_col_w);
@@ -332,7 +345,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
         continue;
       }
       col_overridden[index] = true;
-      col_widths[index] = layout.hidden ? 0.0 : layout.width;
+      col_widths[index] = layout.hidden ? 0.0 : (HasExplicitColumnWidth(layout) ? layout.width : default_col_w);
     }
   }
   const auto row_height = [&](std::uint32_t row) {

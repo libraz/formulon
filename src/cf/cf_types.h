@@ -204,9 +204,15 @@ struct IconSetSpec {
   std::vector<CfValueObject> thresholds;
   bool reverse = false;
   bool show_value = true;
-  /// `percent` attribute on `<iconSet>`: when `true`, the thresholds are
-  /// interpreted as percent of (max - min); when `false`, as plain
-  /// numbers. Defaulted to `true` to match Excel-emitted XML.
+  /// `percent` attribute on `<iconSet>`, carried **round-trip only**: it
+  /// is read, exposed, and re-emitted verbatim, and never consulted by
+  /// evaluation. Each `<cfvo>` names its own `CfvoType`, and that type is
+  /// the authoritative interpretation of the threshold — a `Number` cfvo
+  /// stays a plain number under `percent=1` and a `Percent` cfvo stays a
+  /// percentage under `percent=0`. Setting this field therefore changes
+  /// the saved XML but not `resolve_icon_set()`'s bucketing; to change
+  /// the interpretation, change the cfvo types. Same contract as
+  /// `PivotField::passthrough_attrs`.
   bool percent = true;
 };
 

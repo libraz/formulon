@@ -1593,6 +1593,45 @@ TEST(CFEvaluator, ColorScaleFormulaCfvoEvaluatesAtAnchor) {
   EXPECT_EQ(*match.resolved_fill_color, RGB(128, 128, 128));
 }
 
+// A scale threshold belongs to the rule, not to the cell being rendered.
+// Excel resolves a Formula CFVO once, at the authoring cell, so the whole
+// sqref block shares one gradient; resolving it per target turned a
+// relative-reference CFVO into a gradient that slid row by row. The
+// population is already block-shared, so only the thresholds could drift.
+TEST(CFEvaluator, ColorScaleFormulaCfvoResolvesAtAnchorForEveryTargetInTheBlock) {
+  CFEvalHarness harness;
+  // Threshold sources: only A1 / C1 are the rule's real endpoints. The
+  // rows below them hold decoys that a per-target shift would pick up.
+  harness.sheet.set_cell_value(0, 0, Value::number(0.0));
+  harness.sheet.set_cell_value(1, 0, Value::number(1000.0));
+  harness.sheet.set_cell_value(2, 0, Value::number(2000.0));
+  harness.sheet.set_cell_value(0, 2, Value::number(100.0));
+  harness.sheet.set_cell_value(1, 2, Value::number(3000.0));
+  harness.sheet.set_cell_value(2, 2, Value::number(4000.0));
+  // The scaled block itself: B1:B3, all holding the same value so any
+  // difference in the rendered colour comes from the thresholds alone.
+  harness.sheet.set_cell_value(0, 1, Value::number(50.0));
+  harness.sheet.set_cell_value(1, 1, Value::number(50.0));
+  harness.sheet.set_cell_value(2, 1, Value::number(50.0));
+
+  const std::vector<CFCellRange> sqref{MakeRange(0, 1, 2, 1)};
+  CFRule r = MakeRule(RuleType::ColorScale);
+  ColorScaleSpec spec;
+  spec.thresholds = {Cfvo(CfvoType::Formula, "A1"), Cfvo(CfvoType::Formula, "C1")};
+  spec.colors = {RGB(0, 0, 0), RGB(255, 255, 255)};
+  r.color_scale = std::move(spec);
+
+  // Thresholds resolve to [A1, C1] = [0, 100] for every row, so a value
+  // of 50 renders mid grey throughout.
+  for (std::uint32_t row = 0; row <= 2U; ++row) {
+    CFEvalContext ctx = harness.context(At(0, 1), At(row, 1));
+    ctx.sqref = &sqref;
+    CFMatch match = make_match(r, Value::number(50.0), ctx);
+    ASSERT_TRUE(match.resolved_fill_color.has_value()) << "row=" << row;
+    EXPECT_EQ(*match.resolved_fill_color, RGB(128, 128, 128)) << "row=" << row;
+  }
+}
+
 TEST(CFEvaluator, ColorScaleValueOnlyOverloadStillReturnsFalse) {
   // Pin the staging contract: ColorScale returns false on the
   // value-only overload (no sqref / population access). The value-only

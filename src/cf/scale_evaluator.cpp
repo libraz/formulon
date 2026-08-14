@@ -59,7 +59,14 @@ std::optional<double> resolve_cfvo(const CfValueObject& cfvo, const ColorScalePo
     case CfvoType::AutoMax:
       return pop.sorted.empty() ? std::optional<double>() : std::optional<double>(pop.max);
     case CfvoType::Formula: {
-      const Value evaluated = helpers::parse_shift_evaluate(cfvo.value, ctx);
+      // A scale threshold belongs to the rule, not to the cell being
+      // rendered: Excel resolves it once at the authoring cell so the
+      // whole sqref block shares one gradient. Evaluate with the target
+      // pinned to the anchor so `parse_shift_evaluate`'s relative-ref
+      // shift is the identity, whichever cell of the block we are on.
+      CFEvalContext anchored_ctx = ctx;
+      anchored_ctx.target = ctx.anchor;
+      const Value evaluated = helpers::parse_shift_evaluate(cfvo.value, anchored_ctx);
       if (evaluated.is_number()) {
         return evaluated.as_number();
       }

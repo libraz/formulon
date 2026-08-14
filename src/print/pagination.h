@@ -32,9 +32,12 @@ namespace print {
 
 /// The result of paginating one worksheet.
 struct PaginationResult {
-  /// The resolved print area (one or more rectangles). When the sheet has
-  /// no `_xlnm.Print_Area` this is the sheet's used range; when the sheet
-  /// is empty it is left empty.
+  /// The sheet's declared `_xlnm.Print_Area`, as one or more rectangles.
+  /// Empty when the sheet declares no print area — this field mirrors
+  /// Excel's own `PageSetup.PrintArea`, which is likewise empty for a
+  /// sheet that has never had one set, and is *not* backfilled with the
+  /// used range. Pagination itself still falls back to the used range in
+  /// that case, so `page_count` can be non-zero while this is empty.
   std::vector<CellRange> print_area;
   /// 0-based row index each horizontal (page-down) break precedes, in
   /// ascending order. Computed for the bounding box of `print_area`.
