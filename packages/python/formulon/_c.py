@@ -53,6 +53,229 @@ __all__ = [
 fm_value_t_size = 16
 
 
+# Generated from the current working-tree C header and WASM export manifest:
+# {src/c_api/formulon_c.h declarations returning fm_status_t} intersection
+# {tools/wasm/capi_exports.txt}. Keep this literal so the drift checker can
+# validate the binding without importing this module (or wasmtime).
+_STATUS_RETURNING_EXPORT_NAMES = (
+    "fm_cell_get_xf_index",
+    "fm_cell_nodes_at",
+    "fm_cell_set_xf_index",
+    "fm_cf_results_cell_at",
+    "fm_cf_results_match_at",
+    "fm_function_canonicalize",
+    "fm_function_localize",
+    "fm_function_metadata",
+    "fm_function_name_at",
+    "fm_pagination_horizontal_break_at",
+    "fm_pagination_print_area_at",
+    "fm_pagination_vertical_break_at",
+    "fm_pivot_cells_at",
+    "fm_pivot_cells_bounds",
+    "fm_set_log_min_level",
+    "fm_set_log_sink",
+    "fm_sheet_add_hyperlink",
+    "fm_sheet_add_merge",
+    "fm_sheet_add_validation",
+    "fm_sheet_cf_add_rule",
+    "fm_sheet_cf_clear",
+    "fm_sheet_cf_count",
+    "fm_sheet_cf_get_at",
+    "fm_sheet_cf_remove_at",
+    "fm_sheet_clear_hyperlinks",
+    "fm_sheet_clear_merges",
+    "fm_sheet_clear_validations",
+    "fm_sheet_get_auto_filter_xml",
+    "fm_sheet_get_column",
+    "fm_sheet_get_column_count",
+    "fm_sheet_get_comment_at",
+    "fm_sheet_get_comment_at_index",
+    "fm_sheet_get_comment_count",
+    "fm_sheet_get_hyperlink_at",
+    "fm_sheet_get_hyperlink_count",
+    "fm_sheet_get_merge_at",
+    "fm_sheet_get_merge_count",
+    "fm_sheet_get_protection",
+    "fm_sheet_get_row_override",
+    "fm_sheet_get_row_override_count",
+    "fm_sheet_get_validation_at",
+    "fm_sheet_get_validation_count",
+    "fm_sheet_get_view",
+    "fm_sheet_get_view_ex",
+    "fm_sheet_remove_hyperlink",
+    "fm_sheet_remove_hyperlink_at",
+    "fm_sheet_remove_merge",
+    "fm_sheet_remove_merge_at",
+    "fm_sheet_remove_validation_at",
+    "fm_sheet_set_auto_filter_xml",
+    "fm_sheet_set_column_hidden",
+    "fm_sheet_set_column_outline",
+    "fm_sheet_set_column_width",
+    "fm_sheet_set_comment",
+    "fm_sheet_set_freeze",
+    "fm_sheet_set_protection",
+    "fm_sheet_set_right_to_left",
+    "fm_sheet_set_row_height",
+    "fm_sheet_set_row_hidden",
+    "fm_sheet_set_row_outline",
+    "fm_sheet_set_show_grid_lines",
+    "fm_sheet_set_show_row_col_headers",
+    "fm_sheet_set_show_zeros",
+    "fm_sheet_set_tab_hidden",
+    "fm_sheet_set_tab_selected",
+    "fm_sheet_set_view_mode",
+    "fm_sheet_set_zoom",
+    "fm_styles_add_batch",
+    "fm_styles_add_border",
+    "fm_styles_add_cell_style_xf_ex2",
+    "fm_styles_add_cell_xf",
+    "fm_styles_add_cell_xf_ex2",
+    "fm_styles_add_dxf",
+    "fm_styles_add_fill",
+    "fm_styles_add_font",
+    "fm_styles_add_num_fmt",
+    "fm_styles_get_border",
+    "fm_styles_get_border_count",
+    "fm_styles_get_cell_style",
+    "fm_styles_get_cell_style_count",
+    "fm_styles_get_cell_style_xf",
+    "fm_styles_get_cell_style_xf_count",
+    "fm_styles_get_cell_style_xf_ex2",
+    "fm_styles_get_cell_xf",
+    "fm_styles_get_cell_xf_count",
+    "fm_styles_get_cell_xf_ex2",
+    "fm_styles_get_dxf",
+    "fm_styles_get_dxf_count",
+    "fm_styles_get_fill",
+    "fm_styles_get_fill_count",
+    "fm_styles_get_font",
+    "fm_styles_get_font_count",
+    "fm_styles_get_num_fmt_string",
+    "fm_styles_set_cell_style",
+    "fm_workbook_add_sheet",
+    "fm_workbook_calc_mode",
+    "fm_workbook_cell_at",
+    "fm_workbook_cell_count",
+    "fm_workbook_cf_evaluate_range",
+    "fm_workbook_create",
+    "fm_workbook_create_empty",
+    "fm_workbook_defined_name_at",
+    "fm_workbook_defined_name_at_ex",
+    "fm_workbook_delete_cols",
+    "fm_workbook_delete_rows",
+    "fm_workbook_dependents",
+    "fm_workbook_evaluate_cf_formula",
+    "fm_workbook_evaluate_formula_array",
+    "fm_workbook_evaluate_formula_array_cell",
+    "fm_workbook_excel_profile_id",
+    "fm_workbook_external_link_at",
+    "fm_workbook_external_link_count",
+    "fm_workbook_get_cell_phonetic",
+    "fm_workbook_get_iterative",
+    "fm_workbook_get_value",
+    "fm_workbook_insert_cols",
+    "fm_workbook_insert_rows",
+    "fm_workbook_lambda_text_at",
+    "fm_workbook_load",
+    "fm_workbook_memory_usage",
+    "fm_workbook_move_sheet",
+    "fm_workbook_paginate",
+    "fm_workbook_partial_recalc",
+    "fm_workbook_passthrough_at",
+    "fm_workbook_pivot_cache_count",
+    "fm_workbook_pivot_cache_create",
+    "fm_workbook_pivot_cache_field_add",
+    "fm_workbook_pivot_cache_field_add_shared_item_blank",
+    "fm_workbook_pivot_cache_field_add_shared_item_bool",
+    "fm_workbook_pivot_cache_field_add_shared_item_error",
+    "fm_workbook_pivot_cache_field_add_shared_item_number",
+    "fm_workbook_pivot_cache_field_add_shared_item_text",
+    "fm_workbook_pivot_cache_field_clear",
+    "fm_workbook_pivot_cache_field_clear_shared_items",
+    "fm_workbook_pivot_cache_field_count",
+    "fm_workbook_pivot_cache_field_name",
+    "fm_workbook_pivot_cache_field_shared_item_count",
+    "fm_workbook_pivot_cache_get_worksheet_source",
+    "fm_workbook_pivot_cache_id_at",
+    "fm_workbook_pivot_cache_record_add",
+    "fm_workbook_pivot_cache_record_clear",
+    "fm_workbook_pivot_cache_record_count",
+    "fm_workbook_pivot_cache_record_set_blank",
+    "fm_workbook_pivot_cache_record_set_bool",
+    "fm_workbook_pivot_cache_record_set_error",
+    "fm_workbook_pivot_cache_record_set_number",
+    "fm_workbook_pivot_cache_record_set_text",
+    "fm_workbook_pivot_cache_remove",
+    "fm_workbook_pivot_cache_set_worksheet_source",
+    "fm_workbook_pivot_count",
+    "fm_workbook_pivot_create",
+    "fm_workbook_pivot_data_field_add",
+    "fm_workbook_pivot_data_field_clear",
+    "fm_workbook_pivot_data_field_count",
+    "fm_workbook_pivot_data_field_set",
+    "fm_workbook_pivot_field_add",
+    "fm_workbook_pivot_field_add_aggregation",
+    "fm_workbook_pivot_field_add_item",
+    "fm_workbook_pivot_field_add_subtotal_fn",
+    "fm_workbook_pivot_field_clear",
+    "fm_workbook_pivot_field_clear_aggregations",
+    "fm_workbook_pivot_field_clear_date_group",
+    "fm_workbook_pivot_field_clear_items",
+    "fm_workbook_pivot_field_clear_subtotal_fns",
+    "fm_workbook_pivot_field_count",
+    "fm_workbook_pivot_field_set_axis",
+    "fm_workbook_pivot_field_set_date_group",
+    "fm_workbook_pivot_field_set_item_visible",
+    "fm_workbook_pivot_field_set_number_format",
+    "fm_workbook_pivot_field_set_sort",
+    "fm_workbook_pivot_field_set_subtotal_top",
+    "fm_workbook_pivot_filter_add",
+    "fm_workbook_pivot_filter_at",
+    "fm_workbook_pivot_filter_clear",
+    "fm_workbook_pivot_filter_count",
+    "fm_workbook_pivot_filter_remove_at",
+    "fm_workbook_pivot_get_layout",
+    "fm_workbook_pivot_layout",
+    "fm_workbook_pivot_remove",
+    "fm_workbook_pivot_set_anchor",
+    "fm_workbook_pivot_set_col_field_order",
+    "fm_workbook_pivot_set_grand_totals",
+    "fm_workbook_pivot_set_layout",
+    "fm_workbook_pivot_set_name",
+    "fm_workbook_pivot_set_row_field_order",
+    "fm_workbook_precedents",
+    "fm_workbook_recalc",
+    "fm_workbook_remove_sheet",
+    "fm_workbook_rename_sheet",
+    "fm_workbook_save",
+    "fm_workbook_save_ex",
+    "fm_workbook_save_ex_with_diagnostics",
+    "fm_workbook_set_blank",
+    "fm_workbook_set_bool",
+    "fm_workbook_set_calc_mode",
+    "fm_workbook_set_cell_phonetic",
+    "fm_workbook_set_defined_name",
+    "fm_workbook_set_defined_name_scoped",
+    "fm_workbook_set_error",
+    "fm_workbook_set_excel_profile_id",
+    "fm_workbook_set_formula",
+    "fm_workbook_set_iterative",
+    "fm_workbook_set_iterative_enabled",
+    "fm_workbook_set_iterative_progress",
+    "fm_workbook_set_number",
+    "fm_workbook_set_text",
+    "fm_workbook_sheet_name",
+    "fm_workbook_spill_info",
+    "fm_workbook_table_at",
+    "fm_workbook_table_create",
+    "fm_workbook_table_remove",
+    "fm_workbook_table_update",
+    "fm_workbook_xlsb_read_diagnostics",
+    "fm_workbook_xlsb_read_diagnostics_ex",
+)
+_STATUS_RETURNING_EXPORTS = frozenset(_STATUS_RETURNING_EXPORT_NAMES)
+
+
 # ---------------------------------------------------------------------------
 # ValueKind enum (matches fm_value_kind_t)
 # ---------------------------------------------------------------------------
@@ -87,7 +310,9 @@ def _locate_wasm() -> Path:
 
     Raises:
       FileNotFoundError: when the WASM is not on disk in either
-        location. The error message names both candidates.
+        location. The error message lists every path actually probed --
+        always the bundled one, plus the ``FORMULON_WASM_PATH`` value
+        when that variable was set.
     """
     here = Path(__file__).resolve().parent
     bundled = here / "_wasm" / "formulon_capi.wasm"
@@ -102,11 +327,15 @@ def _locate_wasm() -> Path:
         if p.is_file():
             return p
 
+    tried = [str(bundled)]
+    if override:
+        tried.append(f"{override} (from FORMULON_WASM_PATH)")
     raise FileNotFoundError(
         "formulon: failed to locate formulon_capi.wasm. "
-        f"Tried: {bundled}. "
-        "Run `make python-package` to stage the artifact, or install a "
-        "wheel that ships it under formulon/_wasm/."
+        f"Tried: {', '.join(tried)}. "
+        "Run `make python-package` to stage the artifact, install a "
+        "wheel that ships it under formulon/_wasm/, or point "
+        "FORMULON_WASM_PATH at an existing build."
     )
 
 
@@ -196,15 +425,23 @@ class _WasmInstance:
             raise AttributeError(f"WASM export '{name}' not found")
         store = self._store
         lock = self._call_lock
+        captures_diagnostics = name in _STATUS_RETURNING_EXPORTS
 
         # Wrap so the caller can use a ctypes-like call syntax.
         def _wrapped(*args):
             with lock:
+                if captures_diagnostics:
+                    # The C ABI's diagnostic buffers are thread-local in the
+                    # engine, but this WASM instance has no pthreads. Keep a
+                    # Python-side snapshot per caller and clear it before
+                    # every status-returning call so success cannot leave a
+                    # previous failure pending.
+                    self._last_diagnostic.value = None
                 result = fn(store, *args)
-                # Capture diagnostics before another thread can enter the
-                # shared, no-pthread WASM instance. Some successful scalar
-                # APIs are also non-zero; an unused snapshot is harmless.
-                if isinstance(result, int) and result != 0:
+                # Only status-returning exports are allowed to populate the
+                # snapshot. Counts, indices, and pointers are all i32 in
+                # WASM and must never be mistaken for a failure status.
+                if captures_diagnostics and result != 0:
                     message_fn = self._exports.get("fm_last_error_message")
                     context_fn = self._exports.get("fm_last_error_context")
                     if message_fn is not None and context_fn is not None:
@@ -215,6 +452,11 @@ class _WasmInstance:
                         )
                 return result
 
+        # Callers that derive a FormulonError's ``op`` prefix from
+        # ``fn.__name__`` must see the C ABI entry point, not this
+        # binding-internal closure.
+        _wrapped.__name__ = name
+        _wrapped.__qualname__ = name
         return _wrapped
 
     # ----- memory primitives ----------------------------------------------
@@ -314,15 +556,17 @@ class _WasmInstance:
         return b"".join(chunks).decode("utf-8", errors="replace")
 
     def last_diagnostic(self, status: int) -> Tuple[str, str]:
-        """Return the diagnostic atomically captured for ``status`` if any."""
+        """Take the diagnostic captured for ``status`` once, if any.
+
+        A missing or mismatched snapshot is deliberately not filled by
+        reading the shared WASM diagnostic exports: doing so would race a
+        later call and would make non-status APIs look like failures.
+        """
         snapshot = getattr(self._last_diagnostic, "value", None)
+        self._last_diagnostic.value = None
         if snapshot is not None and snapshot[0] == status:
             return snapshot[1], snapshot[2]
-        with self._call_lock:
-            return (
-                self._read_cstr_unlocked(self._exports["fm_last_error_message"](self._store)),
-                self._read_cstr_unlocked(self._exports["fm_last_error_context"](self._store)),
-            )
+        return "", ""
 
     def alloc(self, size: int) -> int:
         """Allocate ``size`` bytes in WASM memory; return the pointer.

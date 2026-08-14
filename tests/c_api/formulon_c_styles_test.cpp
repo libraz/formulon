@@ -17,6 +17,7 @@
 #include "gtest/gtest.h"
 #include "io/styles_reader.h"
 #include "io/styles_writer.h"
+#include "io/zip_reader.h"
 #include "workbook.h"
 
 namespace {
@@ -29,9 +30,6 @@ static_assert(offsetof(fm_cell_xf, num_fmt_id) == 12U, "fm_cell_xf.num_fmt_id of
 static_assert(offsetof(fm_cell_xf, horizontal_align) == 14U, "fm_cell_xf.horizontal_align offset changed");
 static_assert(offsetof(fm_cell_xf, vertical_align) == 15U, "fm_cell_xf.vertical_align offset changed");
 static_assert(offsetof(fm_cell_xf, wrap_text) == 16U, "fm_cell_xf.wrap_text offset changed");
-static_assert(sizeof(fm_cell_xf_ex) == 28U, "fm_cell_xf_ex ABI layout changed");
-static_assert(offsetof(fm_cell_xf_ex, justify_last_line) == 20U, "fm_cell_xf_ex.justify_last_line offset changed");
-static_assert(offsetof(fm_cell_xf_ex, xf_id) == 24U, "fm_cell_xf_ex.xf_id offset changed");
 static_assert(sizeof(fm_cell_xf_ex2) == 88U, "fm_cell_xf_ex2 ABI layout changed");
 static_assert(offsetof(fm_cell_xf_ex2, has_alignment) == 28U, "fm_cell_xf_ex2.has_alignment offset changed");
 static_assert(offsetof(fm_cell_xf_ex2, has_text_rotation) == 32U, "fm_cell_xf_ex2.has_text_rotation offset changed");
@@ -42,6 +40,12 @@ static_assert(offsetof(fm_cell_xf_ex2, has_vertical_align) == 76U, "fm_cell_xf_e
 static_assert(offsetof(fm_cell_xf_ex2, has_wrap_text) == 80U, "fm_cell_xf_ex2.has_wrap_text offset changed");
 static_assert(offsetof(fm_cell_xf_ex2, has_justify_last_line) == 84U,
               "fm_cell_xf_ex2.has_justify_last_line offset changed");
+static_assert(sizeof(fm_dxf_record) == (sizeof(void*) == 4U ? 360U : 368U), "fm_dxf_record ABI layout changed");
+static_assert(offsetof(fm_dxf_record, num_fmt_code) == 344U, "fm_dxf_record.num_fmt_code offset changed");
+static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 348U : 352U),
+              "fm_dxf_record.alignment_xml offset changed");
+static_assert(offsetof(fm_dxf_record, protection_xml) == (sizeof(void*) == 4U ? 352U : 360U),
+              "fm_dxf_record.protection_xml offset changed");
 
 struct WorkbookGuard {
   fm_workbook_t* handle = nullptr;
@@ -59,6 +63,59 @@ struct BufferGuard {
   BufferGuard(const BufferGuard&) = delete;
   BufferGuard& operator=(const BufferGuard&) = delete;
 };
+
+constexpr char kNumFmtOverrideStyles[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+    "<numFmts count=\"1\"><numFmt numFmtId=\"14\" formatCode=\"yyyy\"/></numFmts>"
+    "<fonts count=\"1\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>"
+    "<fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill>"
+    "<fill><patternFill patternType=\"gray125\"/></fill></fills>"
+    "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"
+    "<cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellXfs>"
+    "</styleSheet>";
+
+constexpr char kNumFmtDuplicateStyles[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+    "<numFmts count=\"2\"><numFmt numFmtId=\"14\" formatCode=\"yyyy\"/>"
+    "<numFmt numFmtId=\"14\" formatCode=\"dd/mm/yyyy\"/></numFmts>"
+    "<fonts count=\"1\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>"
+    "<fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill>"
+    "<fill><patternFill patternType=\"gray125\"/></fill></fills>"
+    "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"
+    "<cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellXfs>"
+    "</styleSheet>";
+
+void LoadParsedStyles(fm_workbook_t* handle, const char* xml) {
+  const std::vector<std::uint8_t> bytes(xml, xml + std::strlen(xml));
+  auto parsed = formulon::io::read_styles(bytes);
+  ASSERT_TRUE(parsed.has_value());
+  handle->workbook().mutable_styles() = std::move(parsed.value());
+}
+
+void LoadNumFmtOverrideStyles(fm_workbook_t* handle) {
+  LoadParsedStyles(handle, kNumFmtOverrideStyles);
+}
+
+void LoadNumFmtDuplicateStyles(fm_workbook_t* handle) {
+  LoadParsedStyles(handle, kNumFmtDuplicateStyles);
+}
+
+std::string ExtractStylesXml(const BufferGuard& saved) {
+  formulon::io::ZipReader zip;
+  const auto opened = zip.open(formulon::io::ByteSpan{saved.data, saved.len});
+  if (!opened) {
+    ADD_FAILURE() << opened.error().message;
+    return {};
+  }
+  auto styles_part = zip.read_entry("xl/styles.xml");
+  if (!styles_part) {
+    ADD_FAILURE() << styles_part.error().message;
+    return {};
+  }
+  return {styles_part.value().begin(), styles_part.value().end()};
+}
 
 }  // namespace
 
@@ -108,22 +165,157 @@ TEST(FormulonCApiStyles, BuiltinNumFmtResolves) {
 
 TEST(FormulonCApiStyles, CustomNumFmtOverridingBuiltinIdWins) {
   // A file may define a custom <numFmt> whose numFmtId collides with a
-  // built-in slot; Excel honours the file's definition. Inject such an
-  // override and confirm the getter returns the custom string, not the
-  // built-in.
+  // built-in slot; Excel honours the file's definition. Parse a production-
+  // shaped styles.xml and install the resulting table rather than manually
+  // constructing the record.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  formulon::io::StylesTable& styles = wb.handle->workbook().mutable_styles();
-  formulon::io::NumFmtRecord rec;
-  rec.id = 14;  // Built-in id whose default is "mm-dd-yy".
-  rec.format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
-  styles.num_fmt_strings.emplace_back("yyyy\"年\"m\"月\"d\"日\"");
-  styles.num_fmts.push_back(rec);
+  ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
 
   const char* s = nullptr;
   ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14, &s), 0);
   ASSERT_NE(s, nullptr);
-  EXPECT_STREQ(s, "yyyy\"年\"m\"月\"d\"日\"");
+  EXPECT_STREQ(s, "yyyy");
+}
+
+TEST(FormulonCApiStyles, AddNumFmtUsesEffectiveBuiltinMapping) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
+
+  const char* resolved = nullptr;
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_STREQ(resolved, "yyyy");
+
+  uint16_t override_id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "yyyy", &override_id), 0);
+  EXPECT_EQ(override_id, 14U);
+
+  uint16_t builtin_code_id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "mm-dd-yy", &builtin_code_id), 0);
+  EXPECT_GE(builtin_code_id, 164U);
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, builtin_code_id, &resolved), 0);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_STREQ(resolved, "mm-dd-yy");
+
+  uint16_t builtin_code_again = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "mm-dd-yy", &builtin_code_again), 0);
+  EXPECT_EQ(builtin_code_again, builtin_code_id);
+}
+
+TEST(FormulonCApiStyles, AddBatchNumFmtUsesEffectiveBuiltinMapping) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
+
+  const char* const codes[] = {"General", "yyyy", "mm-dd-yy", "mm-dd-yy"};
+  uint16_t ids[] = {0xFFFFU, 0xFFFFU, 0xFFFFU, 0xFFFFU};
+  fm_styles_batch batch{};
+  batch.num_fmt_codes = codes;
+  batch.num_fmt_count = 4U;
+  batch.num_fmt_ids = ids;
+
+  ASSERT_EQ(fm_styles_add_batch(wb.handle, &batch), 0);
+  EXPECT_EQ(ids[0], 0U);
+  EXPECT_EQ(ids[1], 14U);
+  EXPECT_GE(ids[2], 164U);
+  EXPECT_EQ(ids[3], ids[2]);
+  for (size_t i = 0; i < 4U; ++i) {
+    const char* resolved = nullptr;
+    ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, ids[i], &resolved), 0);
+    ASSERT_NE(resolved, nullptr);
+    EXPECT_STREQ(resolved, codes[i]);
+  }
+}
+
+TEST(FormulonCApiStyles, InvalidCustomNumFmtStringIndexDoesNotShadowBuiltin) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadNumFmtOverrideStyles(wb.handle));
+
+  auto& styles = wb.handle->workbook().mutable_styles();
+  ASSERT_EQ(styles.num_fmts.size(), 1U);
+  styles.num_fmts[0].format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
+
+  const char* resolved = nullptr;
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_STREQ(resolved, "mm-dd-yy");
+
+  uint16_t id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "mm-dd-yy", &id), 0);
+  EXPECT_EQ(id, 14U);
+}
+
+TEST(FormulonCApiStyles, DuplicateNumFmtFirstValidRecordWins) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadNumFmtDuplicateStyles(wb.handle));
+
+  const char* resolved = nullptr;
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_STREQ(resolved, "yyyy");
+
+  uint16_t first_id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "yyyy", &first_id), 0);
+  EXPECT_EQ(first_id, 14U);
+
+  uint16_t shadowed_id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "dd/mm/yyyy", &shadowed_id), 0);
+  EXPECT_GE(shadowed_id, 164U);
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, shadowed_id, &resolved), 0);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_STREQ(resolved, "dd/mm/yyyy");
+}
+
+TEST(FormulonCApiStyles, DuplicateNumFmtInvalidFirstThenValidRecordWins) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadNumFmtDuplicateStyles(wb.handle));
+
+  auto& styles = wb.handle->workbook().mutable_styles();
+  ASSERT_EQ(styles.num_fmts.size(), 2U);
+  styles.num_fmts[0].format_string_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
+
+  const char* resolved = nullptr;
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_STREQ(resolved, "dd/mm/yyyy");
+
+  uint16_t valid_id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "dd/mm/yyyy", &valid_id), 0);
+  EXPECT_EQ(valid_id, 14U);
+
+  uint16_t invalid_id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "yyyy", &invalid_id), 0);
+  EXPECT_GE(invalid_id, 164U);
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, invalid_id, &resolved), 0);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_STREQ(resolved, "yyyy");
+}
+
+TEST(FormulonCApiStyles, DuplicateNumFmtAllInvalidRecordsFallBackToBuiltin) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_NO_FATAL_FAILURE(LoadNumFmtDuplicateStyles(wb.handle));
+
+  auto& styles = wb.handle->workbook().mutable_styles();
+  ASSERT_EQ(styles.num_fmts.size(), 2U);
+  const std::uint32_t invalid_index = static_cast<std::uint32_t>(styles.num_fmt_strings.size());
+  for (auto& record : styles.num_fmts) {
+    record.format_string_index = invalid_index;
+  }
+
+  const char* resolved = nullptr;
+  ASSERT_EQ(fm_styles_get_num_fmt_string(wb.handle, 14U, &resolved), 0);
+  ASSERT_NE(resolved, nullptr);
+  EXPECT_STREQ(resolved, "mm-dd-yy");
+
+  uint16_t builtin_id = 0xFFFFU;
+  ASSERT_EQ(fm_styles_add_num_fmt(wb.handle, "mm-dd-yy", &builtin_id), 0);
+  EXPECT_EQ(builtin_id, 14U);
 }
 
 TEST(FormulonCApiStyles, UnknownNumFmtIdRejected) {
@@ -249,6 +441,76 @@ TEST(FormulonCApiStyles, DxfFontRoundTripsVerticalAlignmentThroughOoxml) {
   EXPECT_EQ(count_after, count_before);
 }
 
+TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  std::string alignment_input = "<alignment horizontal=\"center\" wrapText=\"1\"/>";
+  std::string protection_input = "<protection locked=\"0\" hidden=\"1\"/>";
+  fm_dxf_record alignment{};
+  alignment.alignment_xml = alignment_input.c_str();
+  fm_dxf_record protection{};
+  protection.protection_xml = protection_input.c_str();
+
+  uint32_t alignment_index = 0xFFFFFFFFU;
+  uint32_t protection_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, alignment, &alignment_index), 0);
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, protection, &protection_index), 0);
+  EXPECT_NE(alignment_index, protection_index);
+  alignment_input = "caller-owned alignment text replaced";
+  protection_input = "caller-owned protection text replaced";
+
+  fm_dxf_record got_alignment{};
+  fm_dxf_record got_protection{};
+  ASSERT_EQ(fm_styles_get_dxf(wb.handle, alignment_index, &got_alignment), 0);
+  ASSERT_EQ(fm_styles_get_dxf(wb.handle, protection_index, &got_protection), 0);
+  ASSERT_NE(got_alignment.alignment_xml, nullptr);
+  ASSERT_NE(got_alignment.protection_xml, nullptr);
+  ASSERT_NE(got_protection.alignment_xml, nullptr);
+  ASSERT_NE(got_protection.protection_xml, nullptr);
+  EXPECT_STREQ(got_alignment.alignment_xml, "<alignment horizontal=\"center\" wrapText=\"1\"/>");
+  EXPECT_STREQ(got_alignment.protection_xml, "");
+  EXPECT_STREQ(got_protection.alignment_xml, "");
+  EXPECT_STREQ(got_protection.protection_xml, "<protection locked=\"0\" hidden=\"1\"/>");
+
+  uint32_t alignment_again = 0xFFFFFFFFU;
+  uint32_t protection_again = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, got_alignment, &alignment_again), 0);
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, got_protection, &protection_again), 0);
+  EXPECT_EQ(alignment_again, alignment_index);
+  EXPECT_EQ(protection_again, protection_index);
+
+  const std::string before_save = formulon::io::write_styles(wb.handle->workbook().styles());
+  EXPECT_NE(before_save.find("<alignment horizontal=\"center\" wrapText=\"1\"/>"), std::string::npos);
+  EXPECT_NE(before_save.find("<protection locked=\"0\" hidden=\"1\"/>"), std::string::npos);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_GT(saved.len, 0U);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+
+  fm_dxf_record reloaded_alignment{};
+  fm_dxf_record reloaded_protection{};
+  ASSERT_EQ(fm_styles_get_dxf(reloaded.handle, alignment_index, &reloaded_alignment), 0);
+  ASSERT_EQ(fm_styles_get_dxf(reloaded.handle, protection_index, &reloaded_protection), 0);
+  EXPECT_STREQ(reloaded_alignment.alignment_xml, "<alignment horizontal=\"center\" wrapText=\"1\"/>");
+  EXPECT_STREQ(reloaded_alignment.protection_xml, "");
+  EXPECT_STREQ(reloaded_protection.alignment_xml, "");
+  EXPECT_STREQ(reloaded_protection.protection_xml, "<protection locked=\"0\" hidden=\"1\"/>");
+
+  uint32_t reloaded_alignment_again = 0xFFFFFFFFU;
+  uint32_t reloaded_protection_again = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(reloaded.handle, reloaded_alignment, &reloaded_alignment_again), 0);
+  ASSERT_EQ(fm_styles_add_dxf(reloaded.handle, reloaded_protection, &reloaded_protection_again), 0);
+  EXPECT_EQ(reloaded_alignment_again, alignment_index);
+  EXPECT_EQ(reloaded_protection_again, protection_index);
+
+  const std::string after_load = formulon::io::write_styles(reloaded.handle->workbook().styles());
+  EXPECT_NE(after_load.find("<alignment horizontal=\"center\" wrapText=\"1\"/>"), std::string::npos);
+  EXPECT_NE(after_load.find("<protection locked=\"0\" hidden=\"1\"/>"), std::string::npos);
+}
+
 TEST(FormulonCApiStyles, DxfFontDistinguishesAnExplicitBoldOffFromAnAbsentToggle) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -294,13 +556,10 @@ TEST(FormulonCApiStyles, CellXfGetterDiagnosticsUseInvokedApi) {
   };
 
   fm_cell_xf cell_xf{};
-  fm_cell_xf_ex cell_xf_ex{};
   fm_cell_xf_ex2 cell_xf_ex2{};
   expect_prefix(fm_styles_get_cell_xf(wb.handle, 0, &cell_xf), "fm_styles_get_cell_xf:");
-  expect_prefix(fm_styles_get_cell_xf_ex(wb.handle, 0, &cell_xf_ex), "fm_styles_get_cell_xf_ex:");
   expect_prefix(fm_styles_get_cell_xf_ex2(wb.handle, 0, &cell_xf_ex2), "fm_styles_get_cell_xf_ex2:");
   expect_prefix(fm_styles_get_cell_style_xf(wb.handle, 0, &cell_xf), "fm_styles_get_cell_style_xf:");
-  expect_prefix(fm_styles_get_cell_style_xf_ex(wb.handle, 0, &cell_xf_ex), "fm_styles_get_cell_style_xf_ex:");
   expect_prefix(fm_styles_get_cell_style_xf_ex2(wb.handle, 0, &cell_xf_ex2), "fm_styles_get_cell_style_xf_ex2:");
 }
 
@@ -314,24 +573,17 @@ TEST(FormulonCApiStyles, CellXfAdderDiagnosticsUseInvokedApi) {
 
   uint32_t index = 0;
   fm_cell_xf cell_xf{};
-  fm_cell_xf_ex cell_xf_ex{};
   fm_cell_xf_ex2 cell_xf_ex2{};
   expect_prefix(fm_styles_add_cell_xf(nullptr, cell_xf, &index), "fm_styles_add_cell_xf:");
-  expect_prefix(fm_styles_add_cell_xf_ex(nullptr, cell_xf_ex, &index), "fm_styles_add_cell_xf_ex:");
   expect_prefix(fm_styles_add_cell_xf_ex2(nullptr, cell_xf_ex2, &index), "fm_styles_add_cell_xf_ex2:");
 
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   cell_xf.font_index = 1U;
-  cell_xf_ex.base.font_index = 1U;
   cell_xf_ex2.base.font_index = 1U;
   expect_prefix(fm_styles_add_cell_xf(wb.handle, cell_xf, &index), "fm_styles_add_cell_xf:");
-  expect_prefix(fm_styles_add_cell_xf_ex(wb.handle, cell_xf_ex, &index), "fm_styles_add_cell_xf_ex:");
   expect_prefix(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf_ex2, &index), "fm_styles_add_cell_xf_ex2:");
 
-  cell_xf_ex = fm_cell_xf_ex{};
-  cell_xf_ex.xf_id = 1U;
-  expect_prefix(fm_styles_add_cell_xf_ex(wb.handle, cell_xf_ex, &index), "fm_styles_add_cell_xf_ex:");
   cell_xf_ex2 = fm_cell_xf_ex2{};
   cell_xf_ex2.xf_id = 1U;
   expect_prefix(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf_ex2, &index), "fm_styles_add_cell_xf_ex2:");
@@ -377,19 +629,9 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
   {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-    fm_cell_xf_ex record{};
-    record.base.vertical_align = 5;
-    uint32_t index = 0xAABBCCDDU;
-    const std::size_t before = wb.handle->workbook().styles().cell_xfs.size();
-    expect_invalid(fm_styles_add_cell_xf_ex(wb.handle, record, &index), "fm_styles_add_cell_xf_ex:");
-    EXPECT_EQ(index, 0xAABBCCDDU);
-    EXPECT_EQ(wb.handle->workbook().styles().cell_xfs.size(), before);
-  }
-  {
-    WorkbookGuard wb;
-    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
     fm_cell_xf_ex2 record{};
     record.base.horizontal_align = 8;
+    record.has_horizontal_align = 1;
     uint32_t index = 0xAABBCCDDU;
     const std::size_t before = wb.handle->workbook().styles().cell_xfs.size();
     expect_invalid(fm_styles_add_cell_xf_ex2(wb.handle, record, &index), "fm_styles_add_cell_xf_ex2:");
@@ -399,19 +641,9 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
   {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-    fm_cell_xf_ex record{};
-    record.base.horizontal_align = 8;
-    uint32_t index = 0xAABBCCDDU;
-    const std::size_t before = wb.handle->workbook().styles().cell_style_xfs.size();
-    expect_invalid(fm_styles_add_cell_style_xf_ex(wb.handle, record, &index), "fm_styles_add_cell_style_xf_ex:");
-    EXPECT_EQ(index, 0xAABBCCDDU);
-    EXPECT_EQ(wb.handle->workbook().styles().cell_style_xfs.size(), before);
-  }
-  {
-    WorkbookGuard wb;
-    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
     fm_cell_xf_ex2 record{};
     record.base.vertical_align = 5;
+    record.has_vertical_align = 1;
     uint32_t index = 0xAABBCCDDU;
     const std::size_t before = wb.handle->workbook().styles().cell_style_xfs.size();
     expect_invalid(fm_styles_add_cell_style_xf_ex2(wb.handle, record, &index), "fm_styles_add_cell_style_xf_ex2:");
@@ -436,6 +668,12 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
 TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  // Register the xf records the stamp below names. A `<c s="7">` against
+  // a shorter `<cellXfs>` resolves to no style, so the reader falls back
+  // to the default rather than handing back an index whose record
+  // `fm_styles_get_cell_xf` would then refuse to return.
+  wb.handle->workbook().mutable_styles().cell_xfs.resize(8);
 
   // Stamp xf_index = 7 on cell A1 and save.
   EXPECT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 3.14), 0);
@@ -685,22 +923,22 @@ TEST(FormulonCApiStyles, AddFillAndBorderAreIdentityAgainstAFileLoadedTable) {
   EXPECT_EQ(borders_after, borders);
 }
 
-TEST(FormulonCApiStyles, AddFontDoesNotAliasAThemeColourOntoAResolvedRgb) {
+TEST(FormulonCApiStyles, AddFontDoesNotAliasAThemeColourOntoLiteralRgb) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadExcelAuthoredStyles(wb.handle));
 
-  // Font 0 is `<color theme="1"/>`, which the reader resolves to the same
-  // AARRGGBB a caller would pass for plain black. Folding the two together
-  // is what turned a template's body text white.
+  // Font 0 is `<color theme="1"/>`. Its sibling ARGB is only a compatibility
+  // fallback, so folding it together with a caller's literal RGB record
+  // would lose the selector and change the template's body text semantics.
   fm_font_record themed{};
   ASSERT_EQ(fm_styles_get_font(wb.handle, 0U, &themed), 0);
   ASSERT_EQ(themed.color.kind, static_cast<uint8_t>(kFmColorTheme));
 
-  fm_font_record resolved = themed;
-  resolved.color = fm_color_spec{};
+  fm_font_record literal_rgb = themed;
+  literal_rgb.color = fm_color_spec{};
   uint32_t index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_font(wb.handle, resolved, &index), 0);
+  ASSERT_EQ(fm_styles_add_font(wb.handle, literal_rgb, &index), 0);
   EXPECT_NE(index, 0U);
 
   // The theme record is untouched and still serialises as a theme colour.
@@ -717,25 +955,129 @@ TEST(FormulonCApiStyles, AddFillAndBorderDistinguishColourSpecifications) {
   fm_fill_record themed_fill{};
   ASSERT_EQ(fm_styles_get_fill(wb.handle, 1U, &themed_fill), 0);
   ASSERT_EQ(themed_fill.fg.kind, static_cast<uint8_t>(kFmColorTheme));
-  fm_fill_record resolved_fill = themed_fill;
-  resolved_fill.fg = fm_color_spec{};
-  resolved_fill.fg_argb = themed_fill.fg_argb;
+  fm_fill_record literal_fill = themed_fill;
+  literal_fill.fg = fm_color_spec{};
+  literal_fill.fg_argb = themed_fill.fg_argb;
   uint32_t fill_index = 0;
-  ASSERT_EQ(fm_styles_add_fill(wb.handle, resolved_fill, &fill_index), 0);
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, literal_fill, &fill_index), 0);
   EXPECT_NE(fill_index, 1U);
 
   fm_border_record themed_border{};
   ASSERT_EQ(fm_styles_get_border(wb.handle, 1U, &themed_border), 0);
   ASSERT_EQ(themed_border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
-  fm_border_record resolved_border = themed_border;
-  resolved_border.left.color = fm_color_spec{};
+  fm_border_record literal_border = themed_border;
+  literal_border.left.color = fm_color_spec{};
   uint32_t border_index = 0;
-  ASSERT_EQ(fm_styles_add_border(wb.handle, resolved_border, &border_index), 0);
+  ASSERT_EQ(fm_styles_add_border(wb.handle, literal_border, &border_index), 0);
   EXPECT_NE(border_index, 1U);
 
   const std::string xml = formulon::io::write_styles(wb.handle->workbook().styles());
   EXPECT_NE(xml.find("<fgColor theme=\"4\" tint=\"0.5\"/>"), std::string::npos);
   EXPECT_NE(xml.find("<bgColor indexed=\"64\"/>"), std::string::npos);
+}
+
+TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLoad) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_color_spec theme{};
+  theme.kind = static_cast<uint8_t>(kFmColorTheme);
+  theme.theme = 3U;
+  theme.tint = 0.5;
+  fm_color_spec indexed{};
+  indexed.kind = static_cast<uint8_t>(kFmColorIndexed);
+  indexed.indexed = 9U;
+  fm_color_spec automatic{};
+  automatic.kind = static_cast<uint8_t>(kFmColorAuto);
+
+  fm_font_record font = MakeArial();
+  font.color_argb = 0x01020304U;  // compatibility fallback, not a render result
+  font.color = theme;
+  uint32_t font_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, font, &font_index), 0);
+  fm_font_record got_font{};
+  ASSERT_EQ(fm_styles_get_font(wb.handle, font_index, &got_font), 0);
+  EXPECT_EQ(got_font.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(got_font.color.theme, 3U);
+  EXPECT_DOUBLE_EQ(got_font.color.tint, 0.5);
+  EXPECT_EQ(got_font.color_argb, 0x01020304U);
+  uint32_t font_again = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_font(wb.handle, got_font, &font_again), 0);
+  EXPECT_EQ(font_again, font_index);
+
+  fm_fill_record fill = MakeRedFill();
+  fill.fg_argb = 0x05060708U;
+  fill.bg_argb = 0x090A0B0CU;
+  fill.fg = indexed;
+  fill.bg = automatic;
+  uint32_t fill_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, fill, &fill_index), 0);
+  fm_fill_record got_fill{};
+  ASSERT_EQ(fm_styles_get_fill(wb.handle, fill_index, &got_fill), 0);
+  EXPECT_EQ(got_fill.fg.kind, static_cast<uint8_t>(kFmColorIndexed));
+  EXPECT_EQ(got_fill.fg.indexed, 9U);
+  EXPECT_EQ(got_fill.bg.kind, static_cast<uint8_t>(kFmColorAuto));
+  uint32_t fill_again = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_fill(wb.handle, got_fill, &fill_again), 0);
+  EXPECT_EQ(fill_again, fill_index);
+
+  fm_border_record border = MakeThinBoxBorder();
+  border.left.color = theme;
+  border.right.color = indexed;
+  uint32_t border_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_border(wb.handle, border, &border_index), 0);
+  fm_border_record got_border{};
+  ASSERT_EQ(fm_styles_get_border(wb.handle, border_index, &got_border), 0);
+  EXPECT_EQ(got_border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(got_border.left.color.theme, 3U);
+  EXPECT_EQ(got_border.right.color.kind, static_cast<uint8_t>(kFmColorIndexed));
+  EXPECT_EQ(got_border.right.color.indexed, 9U);
+  uint32_t border_again = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_border(wb.handle, got_border, &border_again), 0);
+  EXPECT_EQ(border_again, border_index);
+
+  fm_dxf_record dxf{};
+  dxf.font_engaged = 1;
+  dxf.font = font;
+  dxf.font.color = automatic;
+  dxf.fill_engaged = 1;
+  dxf.fill = fill;
+  dxf.border_engaged = 1;
+  dxf.border = border;
+  uint32_t dxf_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, dxf, &dxf_index), 0);
+  fm_dxf_record got_dxf{};
+  ASSERT_EQ(fm_styles_get_dxf(wb.handle, dxf_index, &got_dxf), 0);
+  EXPECT_EQ(got_dxf.font.color.kind, static_cast<uint8_t>(kFmColorAuto));
+  EXPECT_EQ(got_dxf.fill.fg.kind, static_cast<uint8_t>(kFmColorIndexed));
+  EXPECT_EQ(got_dxf.border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  uint32_t dxf_again = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_dxf(wb.handle, got_dxf, &dxf_again), 0);
+  EXPECT_EQ(dxf_again, dxf_index);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  ASSERT_GT(saved.len, 0U);
+  WorkbookGuard reloaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+
+  fm_font_record reloaded_font{};
+  ASSERT_EQ(fm_styles_get_font(reloaded.handle, font_index, &reloaded_font), 0);
+  EXPECT_EQ(reloaded_font.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  EXPECT_EQ(reloaded_font.color.theme, 3U);
+  EXPECT_DOUBLE_EQ(reloaded_font.color.tint, 0.5);
+  fm_fill_record reloaded_fill{};
+  ASSERT_EQ(fm_styles_get_fill(reloaded.handle, fill_index, &reloaded_fill), 0);
+  EXPECT_EQ(reloaded_fill.fg.kind, static_cast<uint8_t>(kFmColorIndexed));
+  EXPECT_EQ(reloaded_fill.fg.indexed, 9U);
+  EXPECT_EQ(reloaded_fill.bg.kind, static_cast<uint8_t>(kFmColorAuto));
+  fm_border_record reloaded_border{};
+  ASSERT_EQ(fm_styles_get_border(reloaded.handle, border_index, &reloaded_border), 0);
+  EXPECT_EQ(reloaded_border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
+  fm_dxf_record reloaded_dxf{};
+  ASSERT_EQ(fm_styles_get_dxf(reloaded.handle, dxf_index, &reloaded_dxf), 0);
+  EXPECT_EQ(reloaded_dxf.font.color.kind, static_cast<uint8_t>(kFmColorAuto));
+  EXPECT_EQ(reloaded_dxf.border.left.color.kind, static_cast<uint8_t>(kFmColorTheme));
 }
 
 TEST(FormulonCApiStyles, AddFontDistinguishesAnExplicitOffToggleFromAnAbsentOne) {
@@ -1204,15 +1546,18 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf_ex xf{};
+  fm_cell_xf_ex2 xf{};
+  xf.has_alignment = 1;
   xf.base.horizontal_align = 7;  // distributed
-  xf.base.vertical_align = 2;    // bottom
+  xf.has_horizontal_align = 1;
+  xf.base.vertical_align = 2;  // bottom
   xf.justify_last_line = 1;
+  xf.has_justify_last_line = 1;
   uint32_t xf_idx = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex(wb.handle, xf, &xf_idx), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, xf, &xf_idx), 0);
 
   uint32_t duplicate_idx = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex(wb.handle, xf, &duplicate_idx), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, xf, &duplicate_idx), 0);
   EXPECT_EQ(duplicate_idx, xf_idx);
 
   ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "distributed"), 0);
@@ -1225,8 +1570,8 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   uint32_t reread_idx = 0;
   ASSERT_EQ(fm_cell_get_xf_index(reloaded.handle, 0, 0, 0, &reread_idx), 0);
-  fm_cell_xf_ex reread{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex(reloaded.handle, reread_idx, &reread), 0);
+  fm_cell_xf_ex2 reread{};
+  ASSERT_EQ(fm_styles_get_cell_xf_ex2(reloaded.handle, reread_idx, &reread), 0);
   EXPECT_EQ(reread.base.horizontal_align, 7U);
   EXPECT_EQ(reread.justify_last_line, 1);
 }
@@ -1234,17 +1579,21 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
 TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf_ex style_xf{};
+  fm_cell_xf_ex2 style_xf{};
+  style_xf.has_alignment = 1;
   style_xf.base.horizontal_align = 2;
+  style_xf.has_horizontal_align = 1;
   uint32_t xf_id = 0;
-  ASSERT_EQ(fm_styles_add_cell_style_xf_ex(wb.handle, style_xf, &xf_id), 0);
+  ASSERT_EQ(fm_styles_add_cell_style_xf_ex2(wb.handle, style_xf, &xf_id), 0);
   ASSERT_EQ(fm_styles_set_cell_style(wb.handle, "Highlight", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE), 0);
 
-  fm_cell_xf_ex cell_xf{};
+  fm_cell_xf_ex2 cell_xf{};
+  cell_xf.has_alignment = 1;
   cell_xf.base.horizontal_align = 2;
+  cell_xf.has_horizontal_align = 1;
   cell_xf.xf_id = xf_id;
   uint32_t cell_xf_id = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex(wb.handle, cell_xf, &cell_xf_id), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf, &cell_xf_id), 0);
   ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "styled"), 0);
   ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, cell_xf_id), 0);
 
@@ -1260,8 +1609,8 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   EXPECT_STREQ(style.name, "Highlight");
   uint32_t reread_cell_xf = 0;
   ASSERT_EQ(fm_cell_get_xf_index(loaded.handle, 0, 0, 0, &reread_cell_xf), 0);
-  fm_cell_xf_ex reread{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex(loaded.handle, reread_cell_xf, &reread), 0);
+  fm_cell_xf_ex2 reread{};
+  ASSERT_EQ(fm_styles_get_cell_xf_ex2(loaded.handle, reread_cell_xf, &reread), 0);
   EXPECT_EQ(reread.xf_id, style.xf_id);
 }
 
@@ -1270,23 +1619,25 @@ TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
   // A cell xf may only inherit from a named-style xf that already exists.
-  fm_cell_xf_ex cell_xf{};
+  fm_cell_xf_ex2 cell_xf{};
   cell_xf.xf_id = 3;
   uint32_t cell_xf_index = 0;
-  EXPECT_NE(fm_styles_add_cell_xf_ex(wb.handle, cell_xf, &cell_xf_index), 0);
+  EXPECT_NE(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf, &cell_xf_index), 0);
 
   // The named-style table validates its own font / fill / border / numFmt
   // references exactly like the cell-xf table does.
-  fm_cell_xf_ex style_xf{};
+  fm_cell_xf_ex2 style_xf{};
   style_xf.base.font_index = 9;
   uint32_t xf_id = 0;
-  EXPECT_NE(fm_styles_add_cell_style_xf_ex(wb.handle, style_xf, &xf_id), 0);
+  EXPECT_NE(fm_styles_add_cell_style_xf_ex2(wb.handle, style_xf, &xf_id), 0);
 
   style_xf.base.font_index = 0;
+  style_xf.has_alignment = 1;
   style_xf.justify_last_line = 1;
-  ASSERT_EQ(fm_styles_add_cell_style_xf_ex(wb.handle, style_xf, &xf_id), 0);
-  fm_cell_xf_ex reread{};
-  ASSERT_EQ(fm_styles_get_cell_style_xf_ex(wb.handle, xf_id, &reread), 0);
+  style_xf.has_justify_last_line = 1;
+  ASSERT_EQ(fm_styles_add_cell_style_xf_ex2(wb.handle, style_xf, &xf_id), 0);
+  fm_cell_xf_ex2 reread{};
+  ASSERT_EQ(fm_styles_get_cell_style_xf_ex2(wb.handle, xf_id, &reread), 0);
   EXPECT_EQ(reread.justify_last_line, 1);
 
   // 0..47 is the whole OOXML ordinal space; anything else needs the sentinel.
@@ -1380,6 +1731,172 @@ TEST(FormulonCApiStyles, AddBatchFailureLeavesTableAndOutputsUnchanged) {
   EXPECT_EQ(wb.handle->workbook().styles().num_fmts.size(), before_num_fmts);
   EXPECT_EQ(wb.handle->workbook().styles().cell_xfs.size(), before_cell_xfs);
   EXPECT_EQ(formulon::io::write_styles(wb.handle->workbook().styles()), before_xml);
+}
+
+TEST(FormulonCApiStyles, ZeroInitializedCellXfEx2UsesDefaultAlignment) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cell_xf_ex2 record{};
+  uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, record, &index), 0);
+  EXPECT_EQ(index, 0U);
+
+  fm_cell_xf_ex2 got{};
+  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, index, &got), 0);
+  EXPECT_EQ(got.base.horizontal_align, 0U);
+  EXPECT_EQ(got.base.vertical_align, 2U);
+  EXPECT_EQ(got.base.wrap_text, 0);
+  EXPECT_EQ(got.justify_last_line, 0);
+  EXPECT_EQ(got.has_alignment, 0);
+  EXPECT_EQ(got.has_horizontal_align, 0);
+  EXPECT_EQ(got.has_vertical_align, 0);
+  EXPECT_EQ(got.has_wrap_text, 0);
+  EXPECT_EQ(got.has_justify_last_line, 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
+  const std::size_t cell_xfs_end = styles_xml.find("</cellXfs>", cell_xfs_begin);
+  ASSERT_NE(cell_xfs_begin, std::string::npos);
+  ASSERT_NE(cell_xfs_end, std::string::npos);
+  EXPECT_EQ(styles_xml.substr(cell_xfs_begin, cell_xfs_end - cell_xfs_begin).find("<alignment"), std::string::npos);
+}
+
+TEST(FormulonCApiStyles, CellXfEx2IgnoresPoisonForOmittedAlignmentAttributes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cell_xf_ex2 poison{};
+  poison.base.horizontal_align = 0xFFU;
+  poison.base.vertical_align = 0xFFU;
+  poison.base.wrap_text = 7;
+  poison.justify_last_line = 9;
+
+  uint32_t omitted_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, poison, &omitted_index), 0);
+  EXPECT_EQ(omitted_index, 0U);
+
+  poison.has_alignment = 1;
+  uint32_t explicit_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, poison, &explicit_index), 0);
+
+  fm_cell_xf_ex2 empty{};
+  empty.has_alignment = 1;
+  uint32_t empty_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, empty, &empty_index), 0);
+  EXPECT_EQ(empty_index, explicit_index);
+
+  fm_cell_xf_ex2 got{};
+  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, explicit_index, &got), 0);
+  EXPECT_EQ(got.base.horizontal_align, 0U);
+  EXPECT_EQ(got.base.vertical_align, 2U);
+  EXPECT_EQ(got.base.wrap_text, 0);
+  EXPECT_EQ(got.justify_last_line, 0);
+  EXPECT_EQ(got.has_alignment, 1);
+  EXPECT_EQ(got.has_horizontal_align, 0);
+  EXPECT_EQ(got.has_vertical_align, 0);
+  EXPECT_EQ(got.has_wrap_text, 0);
+  EXPECT_EQ(got.has_justify_last_line, 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
+  const std::size_t cell_xfs_end = styles_xml.find("</cellXfs>", cell_xfs_begin);
+  ASSERT_NE(cell_xfs_begin, std::string::npos);
+  ASSERT_NE(cell_xfs_end, std::string::npos);
+  const std::string cell_xfs = styles_xml.substr(cell_xfs_begin, cell_xfs_end - cell_xfs_begin);
+  EXPECT_NE(cell_xfs.find("<alignment/>"), std::string::npos);
+}
+
+TEST(FormulonCApiStyles, CellXfEx2ExplicitTopAlignmentRemainsPresent) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cell_xf_ex2 record{};
+  record.base.vertical_align = 0;  // top
+  record.has_vertical_align = 1;
+  uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, record, &index), 0);
+
+  fm_cell_xf_ex2 got{};
+  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, index, &got), 0);
+  EXPECT_EQ(got.base.vertical_align, 0U);
+  EXPECT_EQ(got.has_vertical_align, 1);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
+  const std::size_t cell_xfs_end = styles_xml.find("</cellXfs>", cell_xfs_begin);
+  ASSERT_NE(cell_xfs_begin, std::string::npos);
+  ASSERT_NE(cell_xfs_end, std::string::npos);
+  EXPECT_NE(styles_xml.substr(cell_xfs_begin, cell_xfs_end - cell_xfs_begin).find("<alignment vertical=\"top\"/>"),
+            std::string::npos);
+}
+
+TEST(FormulonCApiStyles, ZeroInitializedCellStyleXfEx2UsesDefaultAlignment) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cell_xf_ex2 record{};
+  uint32_t index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_style_xf_ex2(wb.handle, record, &index), 0);
+
+  fm_cell_xf_ex2 got{};
+  ASSERT_EQ(fm_styles_get_cell_style_xf_ex2(wb.handle, index, &got), 0);
+  EXPECT_EQ(got.base.horizontal_align, 0U);
+  EXPECT_EQ(got.base.vertical_align, 2U);
+  EXPECT_EQ(got.base.wrap_text, 0);
+  EXPECT_EQ(got.justify_last_line, 0);
+  EXPECT_EQ(got.has_alignment, 0);
+  EXPECT_EQ(got.has_vertical_align, 0);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  const std::size_t style_xfs_begin = styles_xml.find("<cellStyleXfs");
+  const std::size_t style_xfs_end = styles_xml.find("</cellStyleXfs>", style_xfs_begin);
+  ASSERT_NE(style_xfs_begin, std::string::npos);
+  ASSERT_NE(style_xfs_end, std::string::npos);
+  EXPECT_EQ(styles_xml.substr(style_xfs_begin, style_xfs_end - style_xfs_begin).find("<alignment"), std::string::npos);
+}
+
+TEST(FormulonCApiStyles, LegacyCellXfAlignmentZeroStillMeansExplicitTop) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cell_xf legacy{};
+  legacy.vertical_align = 0;  // top
+  uint32_t legacy_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, legacy, &legacy_index), 0);
+
+  fm_cell_xf_ex2 legacy_ex{};
+  legacy_ex.has_alignment = 1;
+  legacy_ex.base.vertical_align = 0;  // top
+  legacy_ex.has_vertical_align = 1;
+  uint32_t legacy_ex_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, legacy_ex, &legacy_ex_index), 0);
+  EXPECT_EQ(legacy_ex_index, legacy_index);
+
+  fm_cell_xf got{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, legacy_index, &got), 0);
+  EXPECT_EQ(got.vertical_align, 0U);
+  fm_cell_xf_ex2 got_ex{};
+  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, legacy_ex_index, &got_ex), 0);
+  EXPECT_EQ(got_ex.base.vertical_align, 0U);
+
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
+  const std::string styles_xml = ExtractStylesXml(saved);
+  const std::size_t cell_xfs_begin = styles_xml.find("<cellXfs");
+  const std::size_t cell_xfs_end = styles_xml.find("</cellXfs>", cell_xfs_begin);
+  ASSERT_NE(cell_xfs_begin, std::string::npos);
+  ASSERT_NE(cell_xfs_end, std::string::npos);
+  EXPECT_NE(styles_xml.substr(cell_xfs_begin, cell_xfs_end - cell_xfs_begin).find("<alignment vertical=\"top\"/>"),
+            std::string::npos);
 }
 
 TEST(FormulonCApiStyles, CellXfEx2PreservesOptionalAlignmentAndPresence) {

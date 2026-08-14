@@ -8,6 +8,7 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -260,6 +261,47 @@ JsStatus JsWorkbook::recalc() {
   return status_from_rc(rc);
 }
 
+JsParallelRecalcResult JsWorkbook::recalcParallel(emscripten::val threadCount) {
+  JsParallelRecalcResult r;
+  if (handle_ == nullptr) {
+    r.status = error_status(7000);
+    return r;
+  }
+
+  // Do not bind this parameter as uint32_t: embind would otherwise coerce
+  // e.g. -0.5, 1.5, NaN, Infinity, null, and a missing argument before this
+  // method could apply the public 0..8 integer contract. Reuse the C ABI's
+  // invalid-argument path so its status message/context remain canonical.
+  const emscripten::val number = emscripten::val::global("Number");
+  const bool is_finite = number.call<bool>("isFinite", threadCount);
+  const bool is_integer = is_finite && number.call<bool>("isInteger", threadCount);
+  const double requested = is_integer ? threadCount.as<double>() : -1.0;
+  const bool is_valid = is_integer && requested >= 0.0 && requested <= 8.0;
+
+  fm_parallel_recalc_stats stats{};
+  const uint32_t native_thread_count = is_valid ? static_cast<uint32_t>(requested) : 9U;
+  const fm_status_t rc = fm_workbook_recalc_parallel(handle_, native_thread_count, &stats);
+  if (rc != 0) {
+    // The C ABI guarantees zeroed stats on every failure. Keep the result's
+    // default-zero payload as the binding-level equivalent of that contract.
+    r.status = error_status(rc);
+    return r;
+  }
+
+  // Keep these counters as JS numbers. Values through 2^53-1 are represented
+  // exactly by a double, and the public TypeScript contract documents that
+  // precision boundary rather than leaking a runtime-dependent BigInt.
+  r.stats.cellsEvaluated = static_cast<double>(stats.cells_evaluated);
+  r.stats.sccsProcessed = static_cast<double>(stats.sccs_processed);
+  r.stats.parallelSteps = static_cast<double>(stats.parallel_steps);
+  r.stats.serialFallbackSteps = static_cast<double>(stats.serial_fallback_steps);
+  r.stats.cycleRecoveries = static_cast<double>(stats.cycle_recoveries);
+  r.stats.workerThreadsStarted = stats.worker_threads_started;
+  r.stats.workerThreadsUsed = stats.worker_threads_used;
+  r.status = ok_status();
+  return r;
+}
+
 JsStatus JsWorkbook::setIterative(bool enabled, uint32_t max_iterations, double max_change) {
   if (handle_ == nullptr) {
     return error_status(7000);
@@ -345,17 +387,17 @@ emscripten::val& JsWorkbook::js_progress_callback() {
   return cb;
 }
 
-bool JsWorkbook::iterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
-                                             void* /*user_data*/) {
+int32_t JsWorkbook::iterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                                void* /*user_data*/) {
   emscripten::val& cb = js_progress_callback();
   if (cb.isNull() || cb.isUndefined()) {
-    return true;
+    return 1;
   }
   emscripten::val ret = cb(iteration, max_residual, max_iterations);
   if (ret.isUndefined() || ret.isNull()) {
-    return true;
+    return 1;
   }
-  return ret.as<bool>();
+  return ret.as<bool>() ? 1 : 0;
 }
 
 JsStatus JsWorkbook::setIterativeProgress(emscripten::val cb) {
@@ -424,6 +466,40 @@ std::string last_error_message() {
 std::string last_error_context() {
   const char* s = fm_last_error_context();
   return s != nullptr ? std::string(s) : std::string();
+}
+
+// ---- Structured logging (process-wide, not per handle) --------------------
+
+namespace {
+
+emscripten::val& js_log_sink() {
+  static emscripten::val sink = emscripten::val::null();
+  return sink;
+}
+
+void log_sink_trampoline(const char* record, std::size_t len, void* /*user_data*/) {
+  emscripten::val& sink = js_log_sink();
+  if (sink.isNull() || sink.isUndefined()) {
+    return;
+  }
+  // The record is a length-delimited byte range, never NUL-terminated;
+  // hand the JS side a view over exactly `len` bytes.
+  sink(emscripten::val(emscripten::typed_memory_view(len, reinterpret_cast<const std::uint8_t*>(record))));
+}
+
+}  // namespace
+
+JsStatus set_log_min_level(int32_t level) {
+  return status_from_rc(fm_set_log_min_level(level));
+}
+
+JsStatus set_log_sink(emscripten::val sink) {
+  if (sink.isNull() || sink.isUndefined()) {
+    js_log_sink() = emscripten::val::null();
+    return status_from_rc(fm_set_log_sink(nullptr, nullptr));
+  }
+  js_log_sink() = sink;
+  return status_from_rc(fm_set_log_sink(&log_sink_trampoline, nullptr));
 }
 
 }  // namespace parts

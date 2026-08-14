@@ -47,6 +47,8 @@ export const lastErrorMessage = native.lastErrorMessage;
 export const lastErrorContext = native.lastErrorContext;
 export const statusString = native.statusString;
 export const errorDisplayName = native.errorDisplayName;
+export const setLogMinLevel = native.setLogMinLevel;
+export const setLogSink = native.setLogSink;
 
 /**
  * Merge a host-supplied metadata entry over the engine's structural
@@ -195,6 +197,15 @@ export const WorkbookFormat = Object.freeze({
   Xlsb: 2,
 });
 
+/** `fm_calc_mode_t` ordinals (mirror of `formulon::io::CalcMode`). */
+export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
+
+/** External-link kinds (mirror of `formulon::io::ExternalLinkRecord::Kind`). */
+export const ExternalLinkKind = Object.freeze({ Unknown: 0, ExternalBook: 1, Ole: 2, Dde: 3 });
+
+/** `fm_log_level_t` ordinals for `setLogMinLevel`. `Off` is the default. */
+export const LogLevel = Object.freeze({ Debug: 0, Info: 1, Warn: 2, Error: 3, Off: 4 });
+
 /** `fm_error_code_t` ordinals (mirror of `formulon::ErrorCode`). */
 export const ErrorCode = Object.freeze({
   Null: 0,
@@ -224,6 +235,9 @@ export default {
   lastErrorMessage,
   lastErrorContext,
   statusString,
+  errorDisplayName,
+  setLogMinLevel,
+  setLogSink,
   mergeFunctionMetadata,
   ValueKind,
   CfMatchKind,
@@ -238,6 +252,9 @@ export default {
   PivotCalendar,
   PivotFilterValueKind,
   PivotReportLayout,
+  LogLevel,
+  CalcMode,
+  ExternalLinkKind,
   ErrorCode,
   WorkbookFormat,
 };

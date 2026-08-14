@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -69,6 +70,41 @@ fm_status_t reject_invalid_pivot_enum(const char* fn, const char* name, std::int
   return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
                            (std::string(fn) + ": invalid " + name).c_str(),
                            name + std::string("=") + std::to_string(value));
+}
+
+std::optional<fm_pivot_axis_t> pivot_axis_to_fm(formulon::pivot::PivotAxis axis) {
+  switch (axis) {
+    case formulon::pivot::PivotAxis::Row:
+      return FM_PIVOT_AXIS_ROW;
+    case formulon::pivot::PivotAxis::Col:
+      return FM_PIVOT_AXIS_COL;
+    case formulon::pivot::PivotAxis::Value:
+      return FM_PIVOT_AXIS_VALUE;
+    case formulon::pivot::PivotAxis::Page:
+      return FM_PIVOT_AXIS_PAGE;
+    case formulon::pivot::PivotAxis::None:
+    default:
+      return std::nullopt;
+  }
+}
+
+std::optional<fm_pivot_filter_type_t> pivot_filter_type_to_fm(formulon::pivot::FilterType type) {
+  switch (type) {
+    case formulon::pivot::FilterType::ValueTop10:
+      return FM_PIVOT_FILTER_VALUE_TOP_10;
+    case formulon::pivot::FilterType::ValueGreaterThan:
+      return FM_PIVOT_FILTER_VALUE_GREATER_THAN;
+    case formulon::pivot::FilterType::ValueBetween:
+      return FM_PIVOT_FILTER_VALUE_BETWEEN;
+    case formulon::pivot::FilterType::LabelContains:
+      return FM_PIVOT_FILTER_LABEL_CONTAINS;
+    case formulon::pivot::FilterType::LabelBeginsWith:
+      return FM_PIVOT_FILTER_LABEL_BEGINS_WITH;
+    case formulon::pivot::FilterType::LabelDate:
+      return FM_PIVOT_FILTER_LABEL_DATE;
+    default:
+      return std::nullopt;
+  }
 }
 
 }  // namespace
@@ -752,6 +788,14 @@ fm_status_t add_pivot_filter_impl(fm_workbook_t* wb, std::size_t sheet_index, st
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              (std::string(api) + ": spec->field_name is NULL").c_str());
   }
+  fm_status_t enum_status = reject_invalid_pivot_enum(api, "axis", static_cast<std::int32_t>(spec->axis), 3);
+  if (enum_status != 0) {
+    return enum_status;
+  }
+  enum_status = reject_invalid_pivot_enum(api, "type", static_cast<std::int32_t>(spec->type), 5);
+  if (enum_status != 0) {
+    return enum_status;
+  }
   auto* table = resolve_pivot_mut(wb->workbook(), sheet_index, pivot_index, api);
   if (table == nullptr) {
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
@@ -833,6 +877,67 @@ extern "C" fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, s
     return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
   }
   *out_count = table->active_filters().size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                   std::size_t pivot_index, std::size_t filter_idx,
+                                                   fm_pivot_filter_spec_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_pivot_filter_at: NULL argument");
+  }
+  const auto* table = resolve_pivot(wb->workbook(), sheet_index, pivot_index, "fm_workbook_pivot_filter_at");
+  if (table == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  const auto& filters = table->active_filters();
+  if (filter_idx >= filters.size()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_filter_at: filter_idx out of range",
+                             "filter_idx=" + std::to_string(filter_idx));
+  }
+
+  const auto& filter = filters[filter_idx];
+  const auto axis = pivot_axis_to_fm(filter.axis);
+  if (!axis.has_value()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_filter_at: model axis is not representable");
+  }
+  const auto type = pivot_filter_type_to_fm(filter.type);
+  if (!type.has_value()) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_pivot_filter_at: model filter type is not representable");
+  }
+
+  fm_pivot_filter_spec_t result{};
+  result.axis = *axis;
+  result.field_name = filter.field_name.c_str();
+  result.type = *type;
+  result.value_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  result.value_high_kind = FM_PIVOT_FILTER_VALUE_NONE;
+  result.data_field_index = filter.data_field_index;
+
+  if (const auto* int_value = std::get_if<int>(&filter.value); int_value != nullptr) {
+    result.value_kind = FM_PIVOT_FILTER_VALUE_INT;
+    result.value_int = static_cast<std::int32_t>(*int_value);
+  } else if (const auto* double_value = std::get_if<double>(&filter.value); double_value != nullptr) {
+    result.value_kind = FM_PIVOT_FILTER_VALUE_DOUBLE;
+    result.value_double = *double_value;
+  } else if (const auto* text_value = std::get_if<std::string>(&filter.value); text_value != nullptr) {
+    result.value_kind = FM_PIVOT_FILTER_VALUE_TEXT;
+    result.value_text = text_value->c_str();
+  }
+
+  if (const auto* int_value_high = std::get_if<int>(&filter.value_high); int_value_high != nullptr) {
+    result.value_high_kind = FM_PIVOT_FILTER_VALUE_INT;
+    result.value_high_int = static_cast<std::int32_t>(*int_value_high);
+  } else if (const auto* double_value_high = std::get_if<double>(&filter.value_high); double_value_high != nullptr) {
+    result.value_high_kind = FM_PIVOT_FILTER_VALUE_DOUBLE;
+    result.value_high_double = *double_value_high;
+  }
+  *out = result;
   return 0;
 }
 

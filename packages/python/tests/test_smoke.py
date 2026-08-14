@@ -15,7 +15,7 @@ import threading
 import unittest
 
 import formulon
-from formulon import FormulonError, Value, ValueKind, Workbook
+from formulon import LIB, FormulonError, Value, ValueKind, Workbook
 
 # Excel error code ordinals, mirrored from src/value.h ``ErrorCode``.
 ERROR_DIV0 = 1
@@ -99,6 +99,20 @@ class WorkbookLifecycleTests(unittest.TestCase):
             self.assertEqual(wb.sheet_count(), 1)
             self.assertEqual(wb.sheet_name(0), "S1")
 
+    def test_unicode_sheet_identity_rejects_duplicate_and_renames_casing(self) -> None:
+        with Workbook.create_empty() as wb:
+            wb.add_sheet("Ä")
+            wb.add_sheet("Ö")
+            with self.assertRaises(FormulonError):
+                wb.add_sheet("ä")
+            with self.assertRaises(FormulonError):
+                wb.rename_sheet(1, "ä")
+            self.assertEqual(wb.sheet_name(0), "Ä")
+            self.assertEqual(wb.sheet_name(1), "Ö")
+            wb.rename_sheet(0, "ä")
+            self.assertEqual(wb.sheet_name(0), "ä")
+            self.assertEqual(wb.sheet_name(1), "Ö")
+
     def test_close_is_idempotent(self) -> None:
         wb = Workbook.create_default()
         self.assertTrue(wb.is_valid)
@@ -110,29 +124,69 @@ class WorkbookLifecycleTests(unittest.TestCase):
 
     def test_method_after_close_raises(self) -> None:
         wb = Workbook.create_default()
+        # Leave a real C diagnostic pending without constructing a Python
+        # exception from it. Closing is a non-status call and must not clear
+        # or expose that stale snapshot on the later closed-handle error.
+        status = LIB.fm_workbook_remove_sheet(wb._handle, 99)
+        self.assertNotEqual(status, 0)
         wb.close()
-        with self.assertRaises(FormulonError):
+        with self.assertRaises(FormulonError) as ctx:
             wb.sheet_count()
+        error = ctx.exception
+        self.assertEqual(error.status, 7000)
+        self.assertEqual(error.message, "handle is NULL or already closed")
+        self.assertEqual(error.context, "")
+        self.assertNotIn("index=99", str(error))
+        self.assertNotIn("sheet_count=1", str(error))
 
     def test_concurrent_errors_keep_their_diagnostics(self) -> None:
-        with Workbook.create_default() as wb:
-            barrier = threading.Barrier(2)
-            messages = []
+        indices = (99, 100, 101, 102)
+        workers = {index: Workbook.create_default() for index in indices}
+        try:
+            main = Workbook.create_default()
+            barrier = threading.Barrier(len(indices) + 1)
+            contexts = {index: [] for index in indices}
+            unexpected = []
 
-            def fail(sheet: int) -> None:
-                barrier.wait()
+            def fail(index: int) -> None:
+                worker = workers[index]
                 try:
-                    wb.get_value(sheet, 0, 0)
-                except FormulonError as error:
-                    messages.append(error.message)
+                    for _ in range(200):
+                        barrier.wait()
+                        try:
+                            worker.remove_sheet(index)
+                        except FormulonError as error:
+                            contexts[index].append(error.context)
+                        barrier.wait()
+                except BaseException as error:  # pragma: no cover - keeps barrier failures observable
+                    unexpected.append((index, error))
+                    try:
+                        barrier.abort()
+                    except threading.BrokenBarrierError:
+                        pass
 
-            threads = [threading.Thread(target=fail, args=(99,)), threading.Thread(target=fail, args=(100,))]
+            threads = [threading.Thread(target=fail, args=(index,)) for index in indices]
             for thread in threads:
                 thread.start()
-            for thread in threads:
-                thread.join()
-            self.assertEqual(len(messages), 2)
-            self.assertTrue(all(messages))
+            try:
+                for _ in range(200):
+                    barrier.wait()
+                    main.get_value(0, 0, 0)
+                    barrier.wait()
+            finally:
+                for thread in threads:
+                    thread.join()
+            self.assertEqual(unexpected, [])
+            for index in indices:
+                self.assertEqual(len(contexts[index]), 200)
+                expected = f"index={index} sheet_count=1"
+                self.assertEqual(contexts[index], [expected] * 200)
+            self.assertEqual(sum(len(values) for values in contexts.values()), 800)
+        finally:
+            for worker in workers.values():
+                worker.close()
+            if "main" in locals():
+                main.close()
 
 
 class WorkbookRoundtripTests(unittest.TestCase):

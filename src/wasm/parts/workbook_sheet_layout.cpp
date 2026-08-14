@@ -269,6 +269,11 @@ emscripten::val JsWorkbook::getSheetColumns(uint32_t sheet) const {
     out.set("width", entry.width);
     out.set("hidden", entry.hidden);
     out.set("outlineLevel", static_cast<int32_t>(entry.outline_level));
+    // Normalize legacy non-zero widths at the binding boundary as well as in
+    // the C getter, so a mixed-version host still sees logical presence.
+    out.set("hasWidth", (entry.has_width || entry.width != 0.0) ? 1 : 0);
+    out.set("hasStyle", entry.has_style ? 1 : 0);
+    out.set("styleXf", entry.style_xf);
     columns.set(emitted, out);
     ++emitted;
   }
@@ -332,6 +337,8 @@ emscripten::val JsWorkbook::getSheetRowOverrides(uint32_t sheet) const {
     out.set("height", entry.height);
     out.set("hidden", entry.hidden);
     out.set("outlineLevel", static_cast<int32_t>(entry.outline_level));
+    out.set("hasStyle", entry.has_style ? 1 : 0);
+    out.set("styleXf", entry.style_xf);
     rows.set(emitted, out);
     ++emitted;
   }

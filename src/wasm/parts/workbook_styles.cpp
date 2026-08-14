@@ -346,6 +346,12 @@ emscripten::val JsWorkbook::getDxf(uint32_t dxf_index) const {
     num_fmt.set("formatCode", std::string(d.num_fmt_code != nullptr ? d.num_fmt_code : ""));
     o.set("numFmt", num_fmt);
   }
+  if (d.alignment_xml != nullptr && d.alignment_xml[0] != '\0') {
+    o.set("alignmentXml", std::string(d.alignment_xml));
+  }
+  if (d.protection_xml != nullptr && d.protection_xml[0] != '\0') {
+    o.set("protectionXml", std::string(d.protection_xml));
+  }
   return o;
 }
 
@@ -459,6 +465,8 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
 
   std::string font_name;
   std::string num_fmt_code;
+  std::string alignment_xml;
+  std::string protection_xml;
   fm_dxf_record dxf{};
 
   emscripten::val font = record["font"];
@@ -492,6 +500,11 @@ JsAddStyleResult JsWorkbook::addDxf(emscripten::val record) {
     num_fmt_code = js_pull_string(num_fmt, "formatCode");
     dxf.num_fmt_code = num_fmt_code.c_str();
   }
+
+  alignment_xml = js_pull_string(record, "alignmentXml");
+  protection_xml = js_pull_string(record, "protectionXml");
+  dxf.alignment_xml = alignment_xml.c_str();
+  dxf.protection_xml = protection_xml.c_str();
 
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);

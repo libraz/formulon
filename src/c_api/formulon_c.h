@@ -25,9 +25,14 @@
  * the diagnostic.
  *
  * Threading model:
- *   * Each `fm_workbook_t*` is owned by exactly one thread at a time.
- *     The library does not introduce internal locks; concurrent calls
- *     on the same handle from multiple threads are undefined behaviour.
+ *   * Each `fm_workbook_t*` is owned by exactly one caller thread at a time.
+ *     Ordinary API calls do not synchronize concurrent calls on the same
+ *     handle; callers must not race reads, mutations, or separate recalc
+ *     calls on one handle. `fm_workbook_recalc_parallel` is the exception
+ *     that may launch and join internal worker threads for the duration of
+ *     one call. Those implementation threads do not make cross-call handle
+ *     access safe, and the same-handle external-concurrency restriction
+ *     remains in force.
  *   * `fm_last_error_*` storage is thread-local, so two threads driving
  *     two distinct workbooks can read their own diagnostics
  *     independently.
@@ -71,9 +76,6 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#ifndef __cplusplus
-#include <stdbool.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -285,6 +287,24 @@ FM_API void fm_workbook_destroy(fm_workbook_t* wb);
 /* Save                                                                       */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Failure-path contract shared by the whole save family
+ * (`fm_workbook_save`, `fm_workbook_save_ex`,
+ * `fm_workbook_save_ex_with_diagnostics`, `fm_workbook_save_xlsb_with_result`):
+ *
+ *   * Every non-NULL out-parameter is written to its zero state
+ *     (`*out_bytes = NULL`, `*out_len = 0`, every counter `0`) *before*
+ *     argument and model validation, and that zero state survives every
+ *     non-`kOk` return. A caller may therefore reuse the same out variables
+ *     across calls without observing a previous call's pointer, and the
+ *     "initialise to NULL, call, free unconditionally" idiom stays safe
+ *     because `fm_buffer_free(NULL)` is a no-op.
+ *   * A NULL out-parameter is rejected with `kBindingNullPointer` and never
+ *     dereferenced.
+ *   * On `kOk`, `*out_bytes` owns exactly `*out_len` bytes allocated with
+ *     `new uint8_t[]` and must be released with `fm_buffer_free`.
+ */
+
 /**
  * @brief Serialises the workbook to an in-memory `.xlsx` byte stream.
  *
@@ -424,9 +444,17 @@ FM_API fm_status_t fm_workbook_sheet_name(const fm_workbook_t* wb, size_t index,
  * @brief Appends a new sheet with the given UTF-8 display name.
  *
  * @param wb         Workbook handle. Must be non-NULL.
- * @param utf8_name  Display name; must be non-NULL.
+ * @param utf8_name  Strict UTF-8 display name; must be non-NULL. Worksheet
+ *                   identity uses locale-independent Unicode simple case
+ *                   folding (C/S mappings only, without normalization).
  * @return `kOk` on success;
- *         `kBindingNullPointer` if any pointer argument is `NULL`.
+ *         `kBindingNullPointer` if any pointer argument is `NULL`;
+ *         `kInvalidSheetName` when `utf8_name` is empty, malformed UTF-8,
+ *         exceeds 31 UTF-16 units, contains a forbidden character
+ *         (`: \ / ? * [ ]`), or collides under locale-independent Unicode
+ *         simple case folding with an existing sheet;
+ *         `kSheetCountLimitExceeded` when the workbook already contains
+ *         the maximum supported sheet count.
  */
 FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8_name);
 
@@ -447,10 +475,18 @@ FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, uint32_t from_index
 /**
  * @brief Removes the sheet at `index`.
  *
- * Defined names that reference the removed sheet are dropped (matches
- * the simpler semantics chosen for this revision; a future bundle may
- * surface `#REF!` instead). The recalc engine's dep-graph entries for
- * cells on the removed sheet are unregistered.
+ * References to the removed sheet are rewritten to `#REF!` at the affected
+ * subexpression, so surrounding literals and unrelated operands of the same
+ * formula survive. This applies to cell formulas, defined-name definitions,
+ * conditional-format and data-validation formulas, and table formulas
+ * alike. Only names *scoped* to the removed sheet are dropped;
+ * workbook-scoped names are retained with their `#REF!` definitions, and
+ * names scoped to a later sheet follow their owner as the sheet list closes
+ * the gap. Tables owned by the removed sheet are dropped and surviving
+ * table sheet indices are remapped; pivot caches whose worksheet source was
+ * removed, and the pivot tables bound to them, are dropped. The recalc
+ * engine's dep-graph entries for cells on the removed sheet are
+ * unregistered.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb == NULL`;
@@ -463,17 +499,23 @@ FM_API fm_status_t fm_workbook_remove_sheet(fm_workbook_t* wb, uint32_t index);
 /**
  * @brief Renames the sheet at `index` to `new_name` (UTF-8).
  *
- * Updates the sheet's stored name and any workbook-scoped defined-name
- * targets that mention the renamed sheet. Cell formulas inside the
- * renamed sheet (and other sheets) are LEFT UNTOUCHED — the AST-level
- * reference shifter handles those in a follow-up bundle.
+ * Updates the sheet's stored name and rewrites affected references in cell
+ * formulas, defined names, conditional-format and data-validation formulas,
+ * hyperlinks, table formulas, and pivot sources. Unrelated literals,
+ * unresolved references, and external-workbook references remain
+ * byte-identical. Worksheet identity matching uses locale-independent
+ * Unicode simple case folding, so a casing-only rename updates references
+ * to the same sheet.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
  *         `kSheetIndexOutOfRange` when `index` is out of range;
- *         `kInvalidSheetName` when `new_name` is empty, longer than 31
- *         characters, contains a forbidden character (`: \ / ? * [ ]`),
- *         or collides case-insensitively with an existing sheet.
+ *         `kInvalidSheetName` when `new_name` is empty, malformed UTF-8,
+ *         exceeds 31 UTF-16 units, contains a forbidden character
+ *         (`: \ / ? * [ ]`), or collides under locale-independent Unicode
+ *         simple case folding with an existing sheet. Folding is not
+ *         normalization, full (expanding) case folding, locale tailoring, or
+ *         a claim of full Excel-equivalence.
  */
 FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, uint32_t index, const char* new_name);
 
@@ -1340,6 +1382,45 @@ FM_API fm_status_t fm_sheet_clear_validations(fm_workbook_t* wb, uint32_t sheet)
  */
 FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
 
+/** @brief Per-call telemetry returned by `fm_workbook_recalc_parallel`. */
+typedef struct {
+  uint64_t cells_evaluated;
+  uint64_t sccs_processed;
+  uint64_t parallel_steps;
+  uint64_t serial_fallback_steps;
+  uint64_t cycle_recoveries;
+  uint32_t worker_threads_started;
+  uint32_t worker_threads_used;
+} fm_parallel_recalc_stats;
+
+/**
+ * @brief Drives a full incremental recalc using the parallel SCC scheduler.
+ *
+ * `thread_count == 0` selects automatic detection (capped at 8); `1` keeps
+ * all evaluation on the caller thread and starts no worker OS threads; values
+ * `2..8` select the maximum worker count. The scheduler may start fewer
+ * workers when the operating system refuses a launch and then completes the
+ * pass through serial fallback. Workers are created once per complete call,
+ * including any internal dynamic-array spill retry waves, and are joined
+ * before this function returns.
+ *
+ * `out_stats` is optional. When non-NULL it is zeroed on entry and remains
+ * zero on every failure path. On success it reports the work performed by
+ * this call; `worker_threads_started` counts successfully launched OS
+ * workers and `worker_threads_used` counts distinct launched workers that
+ * claimed at least one SCC task. A configured iterative-progress callback
+ * is always invoked on the caller thread for cyclic layers.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb == NULL`;
+ *         `kInvalidArgument` when `thread_count > 8`;
+ *         `kGraphRecalcReentrant` when called recursively from a recalc
+ *         callback (including a scheduler worker);
+ *         a `kEval*` / `kGraph*` code on engine failure.
+ */
+FM_API fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
+                                               fm_parallel_recalc_stats* out_stats);
+
 /**
  * @brief Configures iterative-calculation knobs for the workbook's
  *        recalc engine.
@@ -1559,12 +1640,13 @@ typedef struct {
  * iteration cap. `user_data` is the opaque pointer the caller registered
  * via `fm_workbook_set_iterative_progress`.
  *
- * Return `1` (true) to continue iterating, `0` (false) to abort early.
- * An aborted solve leaves the workbook in its current
- * partially-converged state.
+ * Return non-zero to continue iterating, `0` to abort early. An aborted
+ * solve leaves the workbook in its current partially-converged state.
+ * The return type follows the header-wide wide-POD boolean convention
+ * (`int32_t`, `0` = false); it is not a C `bool`.
  */
-typedef bool (*fm_iterative_progress_cb)(uint32_t iteration, double max_residual, uint32_t max_iterations,
-                                         void* user_data);
+typedef int32_t (*fm_iterative_progress_cb)(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                            void* user_data);
 
 /**
  * @brief Recalculates the dependency closure required to produce
@@ -1694,7 +1776,13 @@ FM_API void fm_pagination_destroy(fm_pagination_t* pagination);
 /** @brief Returns the total physical page count, or zero for `NULL`. */
 FM_API uint32_t fm_pagination_page_count(const fm_pagination_t* pagination);
 
-/** @brief Number of resolved print-area rectangles, or zero for `NULL`. */
+/** @brief Number of rectangles in the sheet's declared `_xlnm.Print_Area`,
+ *         or zero for `NULL`.
+ *
+ * Zero also means the sheet declares no print area, mirroring Excel's own
+ * `PageSetup.PrintArea`; it is not backfilled with the used range. Pagination
+ * still falls back to the used range in that case, so
+ * `fm_pagination_page_count` can be non-zero while this is zero. */
 FM_API size_t fm_pagination_print_area_count(const fm_pagination_t* pagination);
 
 /** @brief Copies a resolved print-area rectangle by index. */
@@ -1839,7 +1927,9 @@ typedef struct {
  *   - `ColorScale` (2): `color_scale_thresholds` +
  *     `color_scale_colors` with matching counts of 2 or 3.
  *   - `DataBar` (3): `data_bar_min`, `data_bar_max`,
- *     `data_bar_fill`, and optional display flags.
+ *     `data_bar_fill`, optional display flags, and the `x14` extension
+ *     block at the end of this struct (axis, gradient, negative and
+ *     border colours), each governed by its own `*_engaged` flag.
  *   - `IconSet` (4): `icon_set_name` plus N-1
  *     `icon_set_thresholds`.
  *
@@ -1918,7 +2008,43 @@ typedef struct {
   uint32_t icon_set_threshold_count;
   int32_t icon_set_reverse;    /* 0/1 */
   int32_t icon_set_show_value; /* 0/1, default 1 */
-  int32_t icon_set_percent;    /* 0/1, default 1 */
+  /* `percent` attribute on `<iconSet>`, carried round-trip only: it is read,
+   * exposed and re-emitted verbatim, and is never consulted during
+   * evaluation. Each `fm_cfvo_t` names its own `type`, and that type is the
+   * authoritative interpretation of the threshold, so setting this field
+   * changes the saved XML but not the icon bucketing. To change the
+   * interpretation, change the `fm_cfvo_t::type` values instead. */
+  int32_t icon_set_percent; /* 0/1, default 1 */
+
+  /* DataBar extension payload.
+   *
+   * The legacy `<dataBar>` element carries only min/max/fill/lengths; the
+   * axis, gradient and negative colours live in the `x14` extension. They
+   * are appended here rather than beside the other `data_bar_*` fields so
+   * every field above keeps the offset it already had, and a consumer that
+   * reads only the older prefix stays correct.
+   *
+   * Each `*_engaged` flag distinguishes "caller did not specify" from an
+   * explicit value. A zero-initialized `fm_cf_rule_t` therefore reproduces
+   * the same rule these fields produced before they existed: gradient on,
+   * automatic axis, negative fill equal to the positive fill, no border,
+   * and a black axis colour. Set the flag to override any of those.
+   *
+   * `fm_sheet_cf_get_at` engages all six, so feeding its output straight
+   * back into `fm_sheet_cf_add_rule` reproduces the rule exactly. */
+  int32_t data_bar_gradient_engaged;      /* 0/1 */
+  int32_t data_bar_gradient;              /* 0/1; model default 1 (gradient fill) */
+  int32_t data_bar_axis_position_engaged; /* 0/1 */
+  uint8_t data_bar_axis_position;         /* 0=automatic (default), 1=middle, 2=none */
+  uint8_t _pad3[3];
+  int32_t data_bar_negative_fill_engaged; /* 0/1; when 0 the positive fill is reused */
+  fm_cf_color_t data_bar_negative_fill;
+  int32_t data_bar_border_engaged; /* 0/1; when 0 the bar has no border */
+  fm_cf_color_t data_bar_border;
+  int32_t data_bar_negative_border_engaged; /* 0/1; when 0 the bar has no negative border */
+  fm_cf_color_t data_bar_negative_border;
+  int32_t data_bar_axis_color_engaged; /* 0/1; when 0 the axis is black */
+  fm_cf_color_t data_bar_axis_color;
 } fm_cf_rule_t;
 
 /**
@@ -1970,12 +2096,24 @@ FM_API fm_status_t fm_sheet_cf_get_at(const fm_workbook_t* wb, size_t sheet_inde
  * `fm_sheet_cf_remove_at`, `fm_sheet_cf_clear`) on the same sheet
  * renumbers the sequence.
  *
+ * When `rule.dxf_id_engaged` is non-zero, `rule.dxf_id` must already name a
+ * registered differential format (`fm_styles_add_dxf`). A rule referencing a
+ * missing `<dxf>` is what makes Excel discard every conditional format in
+ * the workbook on open, so the reference is validated here rather than at
+ * save time.
+ *
+ * A `DataBar` payload is rejected when either length percentage exceeds
+ * 100, when `data_bar_min_length_pct > data_bar_max_length_pct` (an
+ * inverted bar Excel cannot render), or when an engaged
+ * `data_bar_axis_position` is outside `0..2`.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` when `wb` or `out_index` is `NULL`, or
  *           `rule.sqref` is `NULL` while `rule.sqref_count > 0`;
  *         `kInvalidArgument` when `sheet_index` is out of range, when
- *           `rule.sqref_count == 0`, or when a visual payload is
- *           missing / malformed.
+ *           `rule.sqref_count == 0`, when `rule.dxf_id` is engaged but
+ *           past the end of the workbook's `<dxfs>` table, or when a
+ *           visual payload is missing / malformed.
  */
 FM_API fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, size_t sheet_index, fm_cf_rule_t rule, size_t* out_index);
 
@@ -2691,9 +2829,51 @@ FM_API fm_status_t fm_workbook_pivot_data_field_clear(fm_workbook_t* wb, size_t 
 FM_API fm_status_t fm_workbook_pivot_data_field_set(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                     size_t data_field_idx, const fm_pivot_data_field_spec_t* spec);
 
-/** @brief Number of active (slicer-applied) filters on the pivot. */
+/*
+ * Session-state contract shared by the whole pivot-filter family
+ * (`fm_workbook_pivot_filter_count`, `_at`, `_add`, `_clear`,
+ * `_remove_at`):
+ *
+ * This filter list is session state. Entries added here shape evaluation for
+ * as long as the workbook handle lives and are not written to the package by
+ * `fm_workbook_save*`. Conversely a `<filters>` block authored by Excel is
+ * preserved verbatim on save but does not appear here, so
+ * `fm_workbook_pivot_filter_count` reports only what this session added. The
+ * persisted filter surface is pivot-field item visibility
+ * (`fm_workbook_pivot_field_set_item_visible`).
+ */
+
+/** @brief Number of active (slicer-applied) filters on the pivot.
+ *
+ * Counts only filters this session added; see the session-state contract
+ * above. */
 FM_API fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                   size_t* out_count);
+
+/**
+ * @brief Reads the active filter at `filter_idx` without mutating the pivot.
+ *
+ * Reaches only filters this session added; see the session-state contract
+ * above.
+ *
+ * `out` reuses the `fm_pivot_filter_spec_t` shape accepted by
+ * `fm_workbook_pivot_filter_add`. `field_name` and (for a text primary
+ * value) `value_text` are model-backed views; they remain valid until the
+ * next mutation of this pivot's filter list, a workbook model replacement,
+ * or handle destruction. Reads do not invalidate the views. Copy them when
+ * they must outlive those events. For non-text primary values,
+ * `value_text` is `NULL`; an unset upper bound has kind
+ * `FM_PIVOT_FILTER_VALUE_NONE` and zero numeric payloads.
+ *
+ * @return `kOk` on success;
+ *         `kBindingNullPointer` if `wb` or `out` is `NULL`;
+ *         `kInvalidArgument` if `sheet_index`, `pivot_index`, or
+ *         `filter_idx` is out of range, or the model contains an axis or
+ *         filter type that is not representable by this C ABI. On any error,
+ *         `*out` is left unchanged.
+ */
+FM_API fm_status_t fm_workbook_pivot_filter_at(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
+                                               size_t filter_idx, fm_pivot_filter_spec_t* out);
 
 /**
  * @brief Appends an active filter. `spec->field_name` must be non-NULL;
@@ -2702,21 +2882,33 @@ FM_API fm_status_t fm_workbook_pivot_filter_count(const fm_workbook_t* wb, size_
  *        upper-bound payload is honoured only for range filter types
  *        (`VALUE_BETWEEN`, `LABEL_DATE`).
  *
+ * The appended entry is session state and is not saved; see the
+ * session-state contract above. To persist a filtered view, drive
+ * pivot-field item visibility instead.
+ *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb`, `spec`, `spec->field_name` or a
  *         required `spec->value_text` is `NULL`;
- *         `kInvalidArgument` if the sheet/pivot indices do not resolve, the
- *         value payload discriminators are unusable, `data_field_index` is
- *         out of range for a value filter, or a label/date filter's
- *         `field_name` names no pivot field.
+ *         `kInvalidArgument` if `axis` or `type` is outside the C ABI enum
+ *         ranges, the sheet/pivot indices do not resolve, the value payload
+ *         discriminators are unusable, `data_field_index` is out of range
+ *         for a value filter, or a label/date filter's `field_name` names no
+ *         pivot field.
  */
 FM_API fm_status_t fm_workbook_pivot_filter_add(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                 const fm_pivot_filter_spec_t* spec);
 
-/** @brief Drops every active filter from the pivot. */
+/** @brief Drops every active filter from the pivot.
+ *
+ * Affects only filters this session added; a `<filters>` block authored by
+ * Excel is untouched and still round-trips. See the session-state contract
+ * above. */
 FM_API fm_status_t fm_workbook_pivot_filter_clear(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index);
 
-/** @brief Removes the active filter at `filter_idx`. */
+/** @brief Removes the active filter at `filter_idx`.
+ *
+ * Indexes only filters this session added; see the session-state contract
+ * above. */
 FM_API fm_status_t fm_workbook_pivot_filter_remove_at(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                       size_t filter_idx);
 
@@ -2953,7 +3145,10 @@ typedef struct {
  *
  * Mirrors `formulon::ColumnLayout`. Both endpoints are 0-based and
  * inclusive (matches the engine-side type; OOXML's `min`/`max`
- * 1-based conversion stays inside the writer).
+ * 1-based conversion stays inside the writer). `has_width` is logical
+ * presence: it is true for the raw presence bit or a legacy non-zero width,
+ * while an explicit zero is preserved by the raw bit. `has_style` preserves
+ * style attribute presence, including explicit style="0".
  */
 typedef struct {
   uint32_t first;
@@ -2962,13 +3157,20 @@ typedef struct {
   int32_t hidden; /* 0/1 */
   uint8_t outline_level;
   uint8_t _pad[3];
+  /* Attribute-presence flags. has_width distinguishes width="0" from an
+   * omitted width and is normalized true for legacy non-zero widths;
+   * has_style keeps an explicit style="0". */
+  int32_t has_width; /* 0/1 */
+  int32_t has_style; /* 0/1 */
+  uint32_t style_xf;
 } fm_column_layout_t;
 
 /**
  * @brief Per-row layout override surfaced over the C ABI.
  *
  * Mirrors `formulon::RowLayout`. The row index is 0-based; height is
- * in points (matches OOXML `<row ht=...>`).
+ * in points (matches OOXML `<row ht=...>`). `has_style` is set only when
+ * OOXML `customFormat="1"` makes the row `s` attribute effective.
  */
 typedef struct {
   uint32_t row;
@@ -2976,6 +3178,9 @@ typedef struct {
   int32_t hidden; /* 0/1 */
   uint8_t outline_level;
   uint8_t _pad[3];
+  /* Row s= is effective only when customFormat=1 in OOXML. */
+  int32_t has_style; /* 0/1 */
+  uint32_t style_xf;
 } fm_row_layout_t;
 
 /**
@@ -3269,6 +3474,63 @@ FM_API const char* fm_status_string(fm_status_t status);
  */
 FM_API const char* fm_error_display_name(fm_error_code_t error);
 
+/**
+ * @brief Minimum severity for the engine's structured log stream.
+ *
+ * Ordinals match `formulon::StructuredLogLevel`. `FM_LOG_LEVEL_OFF`
+ * discards every record and is the default: an embedded library must not
+ * write to the host's stderr unless the host asks for it.
+ */
+typedef enum {
+  FM_LOG_LEVEL_DEBUG = 0,
+  FM_LOG_LEVEL_INFO = 1,
+  FM_LOG_LEVEL_WARN = 2,
+  FM_LOG_LEVEL_ERROR = 3,
+  FM_LOG_LEVEL_OFF = 4,
+} fm_log_level_t;
+
+/**
+ * @brief Receives one complete structured-log record.
+ *
+ * `record` is a single line of JSON terminated by `\n`, `len` bytes long.
+ * The view is valid only for the duration of the call; copy it to retain
+ * it. `user_data` is the opaque pointer registered with `fm_set_log_sink`.
+ * The sink is invoked synchronously on whichever thread produced the
+ * record, including engine worker threads during a parallel recalc, so it
+ * must be thread-safe. It may reconfigure logging from inside the call.
+ */
+typedef void (*fm_log_sink_cb)(const char* record, size_t len, void* user_data);
+
+/**
+ * @brief Sets the lowest severity the engine emits, process-wide.
+ *
+ * The default is `FM_LOG_LEVEL_OFF`, so a caller that never invokes this
+ * observes no engine output on stderr or through a sink. `level` is a raw
+ * signed 32-bit ordinal so FFI callers can probe unknown values without
+ * constructing an out-of-domain C enum.
+ *
+ * This setting is process-wide, not per workbook handle.
+ *
+ * @return `kOk` on success;
+ *         `kInvalidArgument` when `level` is outside `fm_log_level_t`.
+ */
+FM_API fm_status_t fm_set_log_min_level(int32_t level);
+
+/**
+ * @brief Routes structured-log records to `sink` instead of stderr.
+ *
+ * Passing `sink == NULL` clears the sink and restores the stderr fallback,
+ * which stays silent while the threshold is `FM_LOG_LEVEL_OFF`. `user_data`
+ * is forwarded verbatim to every invocation; the engine does not take
+ * ownership of it and the caller must keep it valid until the sink is
+ * replaced or cleared.
+ *
+ * This setting is process-wide, not per workbook handle.
+ *
+ * @return `kOk` always.
+ */
+FM_API fm_status_t fm_set_log_sink(fm_log_sink_cb sink, void* user_data);
+
 /* -------------------------------------------------------------------------- */
 /* Styles                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -3276,9 +3538,14 @@ FM_API const char* fm_error_display_name(fm_error_code_t error);
 /**
  * @brief Plain-data projection of a `formulon::io::CellXf` record.
  *
- * Mirrors the underlying record field-for-field. Bindings copy the
- * struct out of the workbook's styles table; subsequent mutations to
- * the workbook do not invalidate the copy.
+ * This is a lossy projection: only the fields listed below are carried.
+ * The `<alignment>` presence flags, text rotation, indent, shrink-to-fit,
+ * reading order, `justifyLastLine` and the parent `xfId` are not part of
+ * this record — read and write the complete record through
+ * `fm_cell_xf_ex2` (`fm_styles_get_cell_xf_ex2` /
+ * `fm_styles_add_cell_xf_ex2`), which is a strict superset of this layout.
+ * Bindings copy the struct out of the workbook's styles table; subsequent
+ * mutations to the workbook do not invalidate the copy.
  */
 typedef struct {
   uint32_t font_index;
@@ -3286,33 +3553,28 @@ typedef struct {
   uint32_t border_index;
   uint16_t num_fmt_id;
   uint8_t horizontal_align;
-  uint8_t vertical_align;
-  int32_t wrap_text; /* 0=false, 1=true */
+  uint8_t vertical_align; /* 0=top, 1=center, 2=bottom (default), 3=justify, 4=distributed */
+  int32_t wrap_text;      /* 0=false, 1=true */
 } fm_cell_xf;
-
-/** Versioned cell-format record including OOXML `justifyLastLine`.
- * `base` preserves the stable `fm_cell_xf` layout for existing ABI consumers. */
-typedef struct {
-  fm_cell_xf base;
-  int32_t justify_last_line; /* 0=false, 1=true */
-  uint32_t xf_id;            /* parent `<cellStyleXfs>` index for named styles */
-} fm_cell_xf_ex;
 
 /**
  * @brief Versioned cell-format record including every optional alignment
  *        attribute represented by Formulon's style model.
  *
- * `fm_cell_xf_ex` is intentionally left unchanged for ABI compatibility.
- * This record is a fixed 88-byte C ABI layout; `fm_cell_xf` (20 bytes) and
- * `fm_cell_xf_ex` (28 bytes) retain their legacy sizes and offsets. The four
- * final presence flags are appended for this unshipped version; all earlier
- * fields retain their offsets.
+ * This record is a fixed 88-byte C ABI layout whose first 20 bytes are the
+ * `fm_cell_xf` projection, so `base` keeps that struct's offsets for a
+ * consumer that only reads the narrow record.
  * `has_alignment` is the presence of the `<alignment>` child itself, so an
  * explicit empty child is distinct from an omitted child.
  * Each `has_*` flag below distinguishes an omitted OOXML attribute from an
- * explicit zero / false value. The value fields are ignored when their
- * corresponding flag is zero. `relative_indent` is signed, matching the
- * OOXML `relativeIndent` attribute.
+ * explicit zero / false value. For the four base alignment attributes,
+ * values are ignored when their corresponding flag is zero; insertion
+ * canonicalizes them to the model defaults (`horizontal_align=0`,
+ * `vertical_align=2` (bottom), `wrap_text=0`, and
+ * `justify_last_line=0`). Thus a zero-initialized `_ex2` record means an
+ * omitted alignment child and is deduplicated with the default XF; getters
+ * return those canonical defaults. `relative_indent` is signed, matching
+ * the OOXML `relativeIndent` attribute.
  */
 typedef struct {
   fm_cell_xf base;
@@ -3338,7 +3600,7 @@ typedef struct {
 /** Discriminator for `fm_color_spec::kind`, mirroring
  *  `formulon::io::ColorSpec::Kind`. */
 typedef enum {
-  kFmColorNone = 0,    /**< No `<color>` element; the sibling `*_argb` value applies. */
+  kFmColorNone = 0,    /**< No selector; the writer emits sibling `*_argb` as `rgb`. */
   kFmColorRgb = 1,     /**< `rgb="AARRGGBB"`. */
   kFmColorTheme = 2,   /**< `theme="N"` with optional `tint`. */
   kFmColorIndexed = 3, /**< `indexed="N"` legacy palette index. */
@@ -3348,13 +3610,12 @@ typedef enum {
 /**
  * @brief Plain-data projection of a `formulon::io::ColorSpec`.
  *
- * How the OOXML `<color>` element expressed its value. A record read from
- * a file carries the original specification here while the sibling
- * `*_argb` field carries the resolved AARRGGBB value; the writer re-emits
- * the specification verbatim, so a caller that wants a record to serialise
- * exactly like an Excel-authored one must pass the spec back unchanged.
- * `kind == kFmColorNone` makes the writer fall back to the sibling
- * `*_argb` value, which is what a record built from scratch wants.
+ * How the OOXML `<color>` element expressed its value. When `kind` is not
+ * `kFmColorNone`, this selector is authoritative and the writer re-emits it;
+ * the sibling `*_argb` field is not an Excel-rendered colour for theme,
+ * indexed, or auto selectors. It is literal RGB for `kFmColorRgb`, or a
+ * compatibility fallback otherwise. `kind == kFmColorNone` makes the
+ * writer emit the sibling `*_argb` value as `rgb`.
  */
 typedef struct {
   double tint;      /* theme tint (-1..1); meaningful when kind == kFmColorTheme */
@@ -3380,6 +3641,8 @@ typedef struct {
 typedef struct {
   const char* name; /* NUL-terminated UTF-8, model-backed view */
   double size;
+  /* Literal RGB for color.kind == kFmColorRgb; compatibility fallback for
+   * theme/indexed/auto selectors (not an Excel-rendered colour). */
   uint32_t color_argb;
   int32_t bold;        /* 0=false, 1=true */
   int32_t italic;      /* 0=false, 1=true */
@@ -3401,13 +3664,15 @@ typedef struct {
  *
  * `pattern` is the OOXML pattern index: `0=none`, `1=solid`,
  * `2..18=standard pattern set`. `fg_argb` and `bg_argb` are AARRGGBB
- * packed colours; `fg` and `bg` carry the original `<fgColor>` /
- * `<bgColor>` specifications for round-tripping.
+ * packed literal RGB or compatibility fallback values; `fg` and `bg` carry
+ * the authoritative `<fgColor>` / `<bgColor>` specifications.
  */
 typedef struct {
-  uint8_t pattern;  /* 0=none, 1=solid, 2..18=standard pattern set */
-  uint32_t fg_argb; /* foreground colour, AARRGGBB */
-  uint32_t bg_argb; /* background colour, AARRGGBB */
+  uint8_t pattern; /* 0=none, 1=solid, 2..18=standard pattern set */
+  /* Literal RGB when the matching spec kind is kFmColorRgb; compatibility
+   * fallbacks otherwise (not Excel-rendered theme/indexed/auto colours). */
+  uint32_t fg_argb;
+  uint32_t bg_argb;
   fm_color_spec fg;
   fm_color_spec bg;
 } fm_fill_record;
@@ -3417,12 +3682,14 @@ typedef struct {
  *        `formulon::io::BorderRecord`.
  *
  * `style` is the OOXML border-style ordinal: `0=none`, `1=thin`,
- * `2=medium`, `3=dashed`, ..., `13=slantDashDot`. `color_argb` is
- * AARRGGBB; `color` carries the original `<color>` specification.
+ * `2=medium`, `3=dashed`, ..., `13=slantDashDot`. `color` carries the
+ * original `<color>` specification. `color_argb` is literal RGB for
+ * `color.kind == kFmColorRgb`, or a compatibility fallback otherwise; it is
+ * not a resolved theme/indexed/auto render colour.
  */
 typedef struct {
   uint8_t style;       /* 0=none, 1=thin, ..., 13=slantDashDot */
-  uint32_t color_argb; /* AARRGGBB */
+  uint32_t color_argb; /* literal RGB or compatibility fallback, AARRGGBB */
   fm_color_spec color;
 } fm_border_side;
 
@@ -3473,9 +3740,13 @@ typedef struct {
  * @brief Plain-data projection of one OOXML `<dxf>` differential format.
  *
  * Each `*_engaged` flag mirrors whether the corresponding child element
- * exists in the source `<dxf>`. `num_fmt_code` is a model-backed view into
- * storage owned by the workbook's styles table and is valid until the next
- * mutation that replaces the styles table or until the handle is destroyed.
+ * exists in the source `<dxf>`. `num_fmt_code`, `alignment_xml`, and
+ * `protection_xml` are model-backed views, valid until the next styles-table
+ * mutation (including `fm_styles_add_dxf`) or until the handle is destroyed;
+ * reads do not invalidate them. The XML fields are never `NULL` and are empty
+ * when their child is absent. Their semantic content is preserved without a
+ * typed projection, but XML parsing may normalize lexical formatting such as
+ * whitespace, quotes, and empty-element spelling.
  */
 typedef struct {
   int32_t font_engaged; /* 0=false, 1=true */
@@ -3486,7 +3757,9 @@ typedef struct {
   fm_border_record border;
   int32_t num_fmt_engaged; /* 0=false, 1=true */
   uint16_t num_fmt_id;
-  const char* num_fmt_code; /* UTF-8, NUL-terminated; never NULL */
+  const char* num_fmt_code;   /* UTF-8, NUL-terminated; never NULL */
+  const char* alignment_xml;  /* UTF-8 serialized `<alignment/>`; never NULL */
+  const char* protection_xml; /* UTF-8 serialized `<protection/>`; never NULL */
 } fm_dxf_record;
 
 /** Sentinel for `fm_cell_style_record_t::builtin_id` indicating the
@@ -3560,9 +3833,6 @@ FM_API fm_status_t fm_cell_set_xf_index(fm_workbook_t* wb, uint32_t sheet, uint3
  */
 FM_API fm_status_t fm_styles_get_cell_xf(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf* out);
 
-/** Reads an `<xf>` including the OOXML `justifyLastLine` alignment flag. */
-FM_API fm_status_t fm_styles_get_cell_xf_ex(fm_workbook_t* wb, uint32_t xf_index, fm_cell_xf_ex* out);
-
 /** Reads an `<xf>` including optional alignment attributes and their
  * presence flags. `has_alignment` reports whether the child existed;
  * explicit zero / false attributes remain present in their value fields. */
@@ -3579,15 +3849,18 @@ FM_API fm_status_t fm_styles_get_cell_xf_ex2(fm_workbook_t* wb, uint32_t xf_inde
 FM_API fm_status_t fm_styles_get_font(fm_workbook_t* wb, uint32_t font_index, fm_font_record* out);
 
 /**
- * @brief Looks up the format string for `num_fmt_id` (built-in 0..163
- *        or custom >= 164).
+ * @brief Looks up the effective format string for `num_fmt_id`.
  *
- * On success `*out` is either a static view or a model-backed view. Built-in
- * ids resolve to a static `.rodata` string with program lifetime; custom ids
- * resolve to storage owned by the workbook's styles table (valid until the
- * next styles-replacing mutation or until the handle is destroyed). Returns
- * `kInvalidArgument` when `num_fmt_id` is
- * neither a documented built-in nor a registered custom id.
+ * Resolution searches valid custom `<numFmt>` records in document order;
+ * this includes a custom record below 164 that overrides a built-in slot.
+ * When no valid custom record matches, a non-empty built-in code in the
+ * `0..163` range is used as the fallback. On success `*out` is either a
+ * model-backed view into the custom record's format string (valid until the
+ * next styles-replacing mutation or until handle destruction), or a static
+ * built-in view with program lifetime. The styles writer intentionally emits
+ * only custom records with ids >= 164, so a below-164 override is not
+ * promised to survive save/load. Returns `kInvalidArgument` when no effective
+ * mapping exists for `num_fmt_id`.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if any pointer argument is `NULL`;
@@ -3640,7 +3913,8 @@ FM_API fm_status_t fm_styles_get_dxf(fm_workbook_t* wb, uint32_t dxf_index, fm_d
  * Unlike `<xf>`, a dxf carries inline optional style fragments. Only
  * fields whose `*_engaged` flag is non-zero are copied. `num_fmt_code`
  * is copied when `num_fmt_engaged != 0`; passing `NULL` stores an empty
- * string.
+ * string. `alignment_xml` and `protection_xml` are always deep-copied when
+ * non-`NULL`; passing `NULL` stores an empty fragment.
  *
  * @return `kOk` on success;
  *         `kBindingNullPointer` if `wb` or `out_dxf_index` is `NULL`.
@@ -3725,11 +3999,6 @@ FM_API fm_status_t fm_styles_get_cell_style_xf_count(fm_workbook_t* wb, uint32_t
  */
 FM_API fm_status_t fm_styles_get_cell_style_xf(fm_workbook_t* wb, uint32_t index, fm_cell_xf* out);
 
-/** Reads a `<cellStyleXfs>` record including the OOXML `justifyLastLine`
- * alignment flag. `xf_id` is always 0: the named-style table is the target
- * of `xfId`, never a source of it. */
-FM_API fm_status_t fm_styles_get_cell_style_xf_ex(fm_workbook_t* wb, uint32_t index, fm_cell_xf_ex* out);
-
 /** Reads a `<cellStyleXfs>` record including optional alignment attributes
  * and their presence flags. `has_alignment` follows the same child-presence
  * contract as `fm_styles_get_cell_xf_ex2`. */
@@ -3796,12 +4065,16 @@ FM_API fm_status_t fm_styles_add_border(fm_workbook_t* wb, fm_border_record reco
  *        deduplicating against existing entries. Returns the resolved
  *        OOXML `numFmtId`.
  *
- * Resolution proceeds in three steps:
- *   1. If `format_code` matches a built-in id (`0..163`, compared
- *      verbatim against `formulon::io::builtin_num_fmt(id)`) the
- *      built-in id is returned and nothing is appended to the table.
- *   2. Otherwise the existing custom entries are searched; the first
- *      match returns its registered id.
+ * Resolution proceeds in three steps. An id's effective mapping is the
+ *      first valid custom `<numFmt>` record for that id in document order,
+ *      falling back to a non-empty built-in code when no custom record
+ *      resolves it.
+ *   1. If `format_code` matches an id in the built-in range (`0..163`) after
+ *      that effective-resolution step, the id is returned and nothing is
+ *      appended to the table. A built-in id is therefore returned only when
+ *      its current effective mapping matches `format_code`.
+ *   2. Otherwise existing custom entries whose ids effectively resolve to
+ *      their code are searched; the first match returns its registered id.
  *   3. Otherwise a new custom entry is appended with id
  *      `max(existing_custom_id, 163) + 1`, and the new id is returned.
  *      When the 16-bit OOXML id space is exhausted, the function returns
@@ -3842,17 +4115,11 @@ FM_API fm_status_t fm_styles_add_num_fmt(fm_workbook_t* wb, const char* format_c
  */
 FM_API fm_status_t fm_styles_add_cell_xf(fm_workbook_t* wb, fm_cell_xf record, uint32_t* out_xf_index);
 
-/** Adds and deduplicates an `<xf>` including OOXML `justifyLastLine`. */
-FM_API fm_status_t fm_styles_add_cell_xf_ex(fm_workbook_t* wb, fm_cell_xf_ex record, uint32_t* out_xf_index);
-
 /** Adds and deduplicates an `<xf>` including optional alignment attributes.
  * `has_alignment` preserves an explicit empty `<alignment/>`; the other
  * presence flags preserve explicit defaults. Invalid Excel ranges return
  * `kInvalidArgument`. */
 FM_API fm_status_t fm_styles_add_cell_xf_ex2(fm_workbook_t* wb, fm_cell_xf_ex2 record, uint32_t* out_xf_index);
-
-/** Adds a named-style xf and returns its `<cellStyleXfs>` index. */
-FM_API fm_status_t fm_styles_add_cell_style_xf_ex(fm_workbook_t* wb, fm_cell_xf_ex record, uint32_t* out_xf_id);
 
 /** Adds and deduplicates a named-style xf including optional alignment
  * attributes. `has_alignment` preserves an explicit empty child. Invalid

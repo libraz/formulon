@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -29,6 +30,15 @@
 #include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
+
+static_assert(offsetof(fm_parallel_recalc_stats, cells_evaluated) == 0U);
+static_assert(offsetof(fm_parallel_recalc_stats, sccs_processed) == 8U);
+static_assert(offsetof(fm_parallel_recalc_stats, parallel_steps) == 16U);
+static_assert(offsetof(fm_parallel_recalc_stats, serial_fallback_steps) == 24U);
+static_assert(offsetof(fm_parallel_recalc_stats, cycle_recoveries) == 32U);
+static_assert(offsetof(fm_parallel_recalc_stats, worker_threads_started) == 40U);
+static_assert(offsetof(fm_parallel_recalc_stats, worker_threads_used) == 44U);
+static_assert(sizeof(fm_parallel_recalc_stats) == 48U);
 
 namespace {
 
@@ -401,6 +411,79 @@ TEST(FormulonCApi, NumberLiteralRoundTrip) {
   ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 42.5);
+}
+
+TEST(FormulonCApi, ParallelRecalcMatchesSerialOnWideIndependentDag) {
+  WorkbookGuard serial;
+  WorkbookGuard parallel;
+  ASSERT_EQ(fm_workbook_create(&serial.handle), 0);
+  ASSERT_EQ(fm_workbook_create(&parallel.handle), 0);
+
+  constexpr std::uint32_t kRows = 48U;
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    const double input = static_cast<double>(row + 1U);
+    const std::string formula = "=A" + std::to_string(row + 1U) + "*2+1";
+    ASSERT_EQ(fm_workbook_set_number(serial.handle, 0U, row, 0U, input), 0);
+    ASSERT_EQ(fm_workbook_set_number(parallel.handle, 0U, row, 0U, input), 0);
+    ASSERT_EQ(fm_workbook_set_formula(serial.handle, 0U, row, 1U, formula.c_str()), 0);
+    ASSERT_EQ(fm_workbook_set_formula(parallel.handle, 0U, row, 1U, formula.c_str()), 0);
+  }
+
+  ASSERT_EQ(fm_workbook_recalc(serial.handle), 0);
+  fm_parallel_recalc_stats stats{};
+  ASSERT_EQ(fm_workbook_recalc_parallel(parallel.handle, 4U, &stats), 0);
+  EXPECT_EQ(stats.cells_evaluated, kRows);
+  EXPECT_GE(stats.sccs_processed, kRows);
+  EXPECT_GE(stats.parallel_steps, 1U);
+  EXPECT_GE(stats.worker_threads_started, 2U);
+  EXPECT_GE(stats.worker_threads_used, 1U);
+
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    fm_value_t serial_value{};
+    fm_value_t parallel_value{};
+    ASSERT_EQ(fm_workbook_get_value(serial.handle, 0U, row, 1U, &serial_value), 0);
+    ASSERT_EQ(fm_workbook_get_value(parallel.handle, 0U, row, 1U, &parallel_value), 0);
+    ASSERT_EQ(serial_value.kind, FM_VAL_NUMBER);
+    ASSERT_EQ(parallel_value.kind, FM_VAL_NUMBER);
+    EXPECT_DOUBLE_EQ(parallel_value.u.number, serial_value.u.number);
+    EXPECT_DOUBLE_EQ(parallel_value.u.number, static_cast<double>(row + 1U) * 2.0 + 1.0);
+  }
+}
+
+TEST(FormulonCApi, ParallelRecalcCountOneStartsNoWorkers) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0U, 0U, 0U, 7.0), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0U, 0U, 1U, "=A1+1"), 0);
+
+  fm_parallel_recalc_stats stats{};
+  ASSERT_EQ(fm_workbook_recalc_parallel(wb.handle, 1U, &stats), 0);
+  EXPECT_EQ(stats.cells_evaluated, 1U);
+  EXPECT_EQ(stats.worker_threads_started, 0U);
+  EXPECT_EQ(stats.worker_threads_used, 0U);
+
+  // The output is optional for callers that only need the status code.
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0U, 0U, 0U, 9.0), 0);
+  EXPECT_EQ(fm_workbook_recalc_parallel(wb.handle, 1U, nullptr), 0);
+}
+
+TEST(FormulonCApi, ParallelRecalcInvalidAndNullPathsResetStats) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  const fm_parallel_recalc_stats poison = {1U, 2U, 3U, 4U, 5U, 6U, 7U};
+  const fm_parallel_recalc_stats zero{};
+  fm_parallel_recalc_stats stats = poison;
+  EXPECT_EQ(fm_workbook_recalc_parallel(wb.handle, 9U, &stats),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(std::memcmp(&stats, &zero, sizeof(stats)), 0);
+
+  stats = poison;
+  EXPECT_EQ(fm_workbook_recalc_parallel(nullptr, 1U, &stats),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+  EXPECT_EQ(std::memcmp(&stats, &zero, sizeof(stats)), 0);
+
+  EXPECT_EQ(fm_workbook_recalc_parallel(wb.handle, 1U, nullptr), 0);
 }
 
 TEST(FormulonCApi, BoolAndBlankSetters) {
@@ -810,6 +893,106 @@ TEST(FormulonCApi, DiagnosticFailuresNameTheInvokedLegacyOrExtendedSymbol) {
   EXPECT_EQ(downgraded, 0U);
   EXPECT_EQ(deferred, 0U);
   EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_ex_with_diagnostics: NULL argument");
+}
+
+TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
+  // The whole save family shares one failure-path contract, so a caller may
+  // reuse the same out variables across calls and free unconditionally. A
+  // member that left a previous call's pointer in place would hand that
+  // stale pointer to `fm_buffer_free` a second time.
+  uint8_t* const poison = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
+
+  uint8_t* bytes = poison;
+  size_t len = 77U;
+  EXPECT_NE(fm_workbook_save(nullptr, &bytes, &len), 0);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(len, 0U);
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save: NULL argument");
+
+  bytes = poison;
+  len = 77U;
+  EXPECT_NE(fm_workbook_save_ex(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(len, 0U);
+
+  bytes = poison;
+  len = 77U;
+  size_t downgraded = 77U;
+  EXPECT_NE(fm_workbook_save_xlsb_with_result(nullptr, &bytes, &len, &downgraded), 0);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(len, 0U);
+  EXPECT_EQ(downgraded, 0U);
+
+  bytes = poison;
+  len = 77U;
+  downgraded = 77U;
+  size_t deferred = 77U;
+  EXPECT_NE(
+      fm_workbook_save_ex_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len, &downgraded, &deferred), 0);
+  EXPECT_EQ(bytes, nullptr);
+  EXPECT_EQ(len, 0U);
+  EXPECT_EQ(downgraded, 0U);
+  EXPECT_EQ(deferred, 0U);
+
+  // A NULL out-parameter is rejected without being dereferenced, on the base
+  // entry point as well as the extended ones.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  len = 77U;
+  EXPECT_NE(fm_workbook_save(wb.handle, nullptr, &len), 0);
+  EXPECT_EQ(len, 0U);
+  bytes = poison;
+  EXPECT_NE(fm_workbook_save(wb.handle, &bytes, nullptr), 0);
+  EXPECT_EQ(bytes, nullptr);
+}
+
+TEST(FormulonCApi, BaseSaveProducesTheSameBytesAsTheXlsxFormatSelector) {
+  // The header declares the two equivalent; delegating the base entry point
+  // to the shared implementation is what keeps that true.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=1+2"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  BufferGuard base;
+  ASSERT_EQ(fm_workbook_save(wb.handle, &base.data, &base.len), 0);
+  BufferGuard selected;
+  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &selected.data, &selected.len), 0);
+
+  ASSERT_EQ(base.len, selected.len);
+  ASSERT_GT(base.len, 0U);
+  EXPECT_EQ(std::memcmp(base.data, selected.data, base.len), 0);
+}
+
+TEST(FormulonCApi, ReservedStatusCodesKeepTheirSlotsAndSpelling) {
+  // Some documented codes are allocated but no shipping path builds them.
+  // The header promises numeric identity with `formulon::FormulonErrorCode`,
+  // so those slots must not be reused or renumbered, and `fm_status_string`
+  // must keep naming them exactly: only a value outside the enum may fall
+  // back to `"kUnknownError"`.
+  struct Reserved {
+    fm_status_t code;
+    const char* name;
+  };
+  const Reserved reserved[] = {
+      {5008, "kIoXmlDoctype"},
+      {5009, "kIoXmlEntityExplosion"},
+      {5015, "kIoCsvEncodingDetect"},
+      {6000, "kCryptoAgileNotSupported"},
+      {6001, "kCryptoStandardNotSupported"},
+      {6002, "kCryptoBadPassword"},
+      {6003, "kCryptoHashMismatch"},
+      {6004, "kCryptoKeyDerivationFailed"},
+  };
+  for (const Reserved& entry : reserved) {
+    EXPECT_STREQ(fm_status_string(entry.code), entry.name) << "code=" << entry.code;
+  }
+
+  // The reserved crypto band is not what an encrypted package reports; a
+  // binding offering a password prompt must branch on `kIoZipEncrypted`.
+  EXPECT_STREQ(fm_status_string(static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted)),
+               "kIoZipEncrypted");
+  EXPECT_STREQ(fm_status_string(123456), "kUnknownError");
 }
 
 TEST(FormulonCApi, MemoryUsageTracksTheWorkbookAndRejectsNulls) {

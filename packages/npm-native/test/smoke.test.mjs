@@ -128,6 +128,170 @@ test('all declared runtime constants resolve from the staged ESM entry point', a
   }
   assert.equal(mod.PivotAxis.Row, 0);
   assert.equal(mod.PIVOT_SHOW_AS_BASE_PREVIOUS, 1048828);
+  // Named constants a consumer needs in order to interpret shared record
+  // fields (`Value.errorCode`, `ExternalLinkRecord.kind`) or to drive the
+  // calc policy. The WASM package exports the same names and ordinals;
+  // `check_binding_drift dts-enums` holds the two in step.
+  assert.equal(mod.ErrorCode.Div0, 1);
+  assert.equal(mod.ErrorCode.Unknown, 16);
+  assert.equal(mod.CalcMode.Manual, 1);
+  assert.equal(mod.ExternalLinkKind.Dde, 3);
+  for (const name of ['ErrorCode', 'CalcMode', 'ExternalLinkKind']) {
+    assert.ok(Object.isFrozen(mod[name]), `${name} must be frozen`);
+  }
+});
+
+test('default export type and runtime default export declare the same keys', async () => {
+  const mod = await getModule();
+  const declarations = await readFile(path.join(pkgRoot, 'index.d.ts'), 'utf8');
+  const typeBlock = declarations.match(/declare const _default: \{([\s\S]*?)\n\};/);
+  assert.ok(typeBlock, 'expected a `declare const _default: {...}` block in index.d.ts');
+  const declared = new Set([...typeBlock[1].matchAll(/^\s{2}(\w+):/gm)].map((match) => match[1]));
+  const runtime = new Set(Object.keys(mod.default));
+  const missingFromType = [...runtime].filter((key) => !declared.has(key));
+  const missingFromRuntime = [...declared].filter((key) => !runtime.has(key));
+  assert.deepEqual(missingFromType, [], 'runtime default export keys absent from the _default type');
+  assert.deepEqual(missingFromRuntime, [], '_default type keys absent from the runtime default export');
+  assert.equal(mod.default.PivotAxis.Row, 0);
+  assert.equal(typeof mod.default.errorDisplayName, 'function');
+});
+
+test('every named export is reachable through the default export', async () => {
+  const mod = await getModule();
+  const named = Object.keys(mod).filter((key) => key !== 'default');
+  const missing = named.filter((key) => !(key in mod.default));
+  assert.deepEqual(missing, [], 'named exports absent from the default export object');
+});
+
+test('setLogMinLevel is a module-level control and validates its ordinal', async () => {
+  const mod = await getModule();
+  assert.equal(typeof mod.setLogMinLevel, 'function');
+  assert.equal(typeof mod.setLogSink, 'function');
+  // Process-wide state, so it must not be a Workbook method.
+  const wb = mod.Workbook.createDefault();
+  assert.equal(typeof wb.setLogMinLevel, 'undefined');
+  wb.dispose();
+
+  for (const level of Object.values(mod.LogLevel)) {
+    assert.ok(mod.setLogMinLevel(level).ok, `level=${level}`);
+  }
+  for (const bad of [-1, 5, 99]) {
+    const r = mod.setLogMinLevel(bad);
+    assert.equal(r.ok, false, `level=${bad} should be rejected`);
+    assert.equal(r.status, 2);
+  }
+  assert.ok(mod.setLogMinLevel(mod.LogLevel.Off).ok);
+});
+
+test('setLogSink accepts a function and null, and rejects a non-function', async () => {
+  const mod = await getModule();
+  assert.ok(mod.setLogSink(() => {}).ok);
+  assert.ok(mod.setLogSink(null).ok);
+  assert.ok(mod.setLogSink().ok);
+  const bad = mod.setLogSink(42);
+  assert.equal(bad.ok, false);
+  assert.equal(bad.status, 7001);
+  assert.ok(mod.setLogSink(null).ok);
+});
+
+// Sink delivery goes through a thread-safe function, so records land on a
+// later turn of the libuv loop rather than inside the native call. Poll
+// with a bounded budget instead of guessing a single turn.
+const SINK_SETTLE_MS = 500;
+
+async function waitForRecords(records, wanted) {
+  const deadline = Date.now() + SINK_SETTLE_MS;
+  while (records.length < wanted && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  return records;
+}
+
+test('a registered sink receives the record as raw bytes', async () => {
+  const mod = await getModule();
+  const records = [];
+  assert.ok(mod.setLogSink((record) => records.push(record)).ok);
+  assert.ok(mod.setLogMinLevel(mod.LogLevel.Warn).ok);
+  try {
+    const wb = mod.Workbook.createDefault();
+    // An implicit-intersection formula the XLSB encoder cannot lower,
+    // which makes the writer emit a per-cell warn record.
+    assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+    assert.ok(wb.recalc().ok);
+    assert.ok(wb.saveEx(mod.WorkbookFormat.Xlsb).status.ok);
+    wb.dispose();
+    await waitForRecords(records, 1);
+    assert.ok(records.length > 0, 'expected at least one record');
+    for (const record of records) {
+      assert.ok(ArrayBuffer.isView(record), 'record must be a byte view');
+    }
+    const text = records.map((r) => new TextDecoder().decode(r)).join('');
+    assert.match(text, /xlsb\.writer\.formula_downgraded/);
+    assert.match(text, /"level":"warn"/);
+  } finally {
+    assert.ok(mod.setLogMinLevel(mod.LogLevel.Off).ok);
+    assert.ok(mod.setLogSink(null).ok);
+  }
+});
+
+test('the default threshold delivers nothing to a registered sink', async () => {
+  const mod = await getModule();
+  const records = [];
+  assert.ok(mod.setLogSink((record) => records.push(record)).ok);
+  try {
+    const wb = mod.Workbook.createDefault();
+    assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
+    assert.ok(wb.recalc().ok);
+    assert.ok(wb.saveEx(mod.WorkbookFormat.Xlsb).status.ok);
+    wb.dispose();
+    // Wait the same budget the positive case needs, so silence here is a
+    // result rather than an artefact of not having waited long enough.
+    await new Promise((resolve) => setTimeout(resolve, SINK_SETTLE_MS));
+    assert.deepEqual(records, []);
+  } finally {
+    assert.ok(mod.setLogSink(null).ok);
+  }
+});
+
+test('memoryUsage and the Python wheel agree that the estimate grows', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const empty = wb.memoryUsage();
+  for (let row = 0; row < 2000; row += 1) {
+    wb.setNumber(0, row, 0, row);
+  }
+  assert.ok(wb.memoryUsage() > empty);
+  wb.dispose();
+});
+
+// Parses the staged `export const X: Readonly<{ A: 0; ... }>` declarations
+// into {name: {member: ordinal}}. Name presence alone is not enough: a
+// staged bundle carrying a stale ordinal ships a constant that silently
+// means something else, and nothing upstream of dist/ can see that.
+function declaredOrdinalTables(dts) {
+  const tables = {};
+  const blocks = dts.matchAll(/^export const (\w+): Readonly<\{([^}]*)\}>;/gm);
+  for (const [, name, body] of blocks) {
+    const members = {};
+    for (const [, member, value] of body.matchAll(/(\w+):\s*(-?\d+)/g)) {
+      members[member] = Number(value);
+    }
+    tables[name] = members;
+  }
+  return tables;
+}
+
+test('staged constant tables carry the ordinals the staged .d.ts declares', async () => {
+  const mod = await getModule();
+  const dts = await readFile(path.join(pkgRoot, 'dist', 'index.d.ts'), 'utf8');
+  const tables = declaredOrdinalTables(dts);
+  assert.ok(Object.keys(tables).length > 0, 'expected declared ordinal tables');
+  for (const [name, members] of Object.entries(tables)) {
+    const runtime = mod[name];
+    assert.ok(runtime, `missing runtime table ${name}`);
+    assert.deepEqual({ ...runtime }, members, `${name} ordinals differ from dist/index.d.ts`);
+    assert.ok(Object.isFrozen(runtime), `${name} must be frozen`);
+  }
 });
 
 test('version() returns a non-empty string', async () => {
@@ -141,6 +305,36 @@ test('errorDisplayName returns Excel literals', async () => {
   const mod = await getModule();
   assert.equal(mod.errorDisplayName(1), '#DIV/0!');
   assert.equal(mod.errorDisplayName(999), '#UNKNOWN!');
+});
+
+// One-shot evaluation is anchored at Sheet1!A1 and read-only on every
+// shipped surface, so these must agree value-for-value with the WASM
+// package and the Python wheel. The anchor-referencing cases are the ones
+// that diverge if a surface writes the formula into A1 and recalcs.
+const ONE_SHOT_CASES = [
+  { formula: '=1+2', kind: 1, number: 3 },
+  { formula: '=A1', kind: 1, number: 0 },
+  { formula: '=COUNTA(A1)', kind: 1, number: 0 },
+  { formula: '=ISBLANK(A1)', kind: 2, boolean: 1 },
+  { formula: '=SUM(A1:A3)', kind: 1, number: 0 },
+  { formula: '=SEQUENCE(3)', kind: 1, number: 1 },
+  { formula: '=ROWS(SEQUENCE(3))', kind: 1, number: 3 },
+];
+test('evalFormula evaluates read-only against a blank anchor', async () => {
+  const mod = await getModule();
+  for (const spec of ONE_SHOT_CASES) {
+    const r = mod.evalFormula(spec.formula);
+    assert.ok(r.status.ok, `${spec.formula}: ${JSON.stringify(r.status)}`);
+    assert.equal(r.value.kind, spec.kind, spec.formula);
+    if (spec.number !== undefined) {
+      assert.equal(r.value.number, spec.number, spec.formula);
+    }
+    if (spec.boolean !== undefined) {
+      assert.equal(r.value.boolean, spec.boolean, spec.formula);
+    }
+    // Writing into the anchor and recalcing would make these #REF!.
+    assert.equal(r.value.errorCode, 0, spec.formula);
+  }
 });
 
 test("evalFormula('=1+2') returns NUMBER 3", async () => {
@@ -209,6 +403,76 @@ test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {
   assert.equal(r.value.number, 3);
 });
 
+test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const width = 128;
+  for (let row = 0; row < width; row += 1) {
+    assert.ok(wb.setNumber(0, row, 0, row + 1).ok);
+    assert.ok(wb.setFormula(0, row, 1, `=A${row + 1}*2`).ok);
+  }
+
+  const serial = wb.recalcParallel(1);
+  assert.ok(serial.status.ok, `recalcParallel(1): ${JSON.stringify(serial.status)}`);
+  assert.equal(serial.stats.workerThreadsStarted, 0);
+  assert.equal(serial.stats.workerThreadsUsed, 0);
+  assert.equal(serial.stats.cellsEvaluated, width);
+  for (let row = 0; row < width; row += 1) {
+    const value = wb.getValue(0, row, 1);
+    assert.ok(value.status.ok, `serial value row ${row}: ${JSON.stringify(value.status)}`);
+    assert.equal(value.value.kind, mod.ValueKind.Number);
+    assert.equal(value.value.number, (row + 1) * 2);
+  }
+
+  for (let row = 0; row < width; row += 1) {
+    assert.ok(wb.setNumber(0, row, 0, row + 2).ok);
+  }
+  const parallel = wb.recalcParallel(8);
+  assert.ok(parallel.status.ok, `recalcParallel(8): ${JSON.stringify(parallel.status)}`);
+  if (parallel.stats.workerThreadsStarted <= 1) {
+    assert.equal(parallel.stats.workerThreadsUsed, 0);
+    assert.equal(parallel.stats.parallelSteps, 0);
+    assert.ok(parallel.stats.serialFallbackSteps > 0, `expected serial fallback: ${JSON.stringify(parallel)}`);
+  } else {
+    assert.ok(parallel.stats.parallelSteps > 0, `expected parallel steps: ${JSON.stringify(parallel)}`);
+    assert.ok(parallel.stats.workerThreadsUsed > 0, `expected an effective worker: ${JSON.stringify(parallel)}`);
+    assert.ok(parallel.stats.workerThreadsStarted <= 8);
+    assert.ok(parallel.stats.workerThreadsUsed <= parallel.stats.workerThreadsStarted);
+  }
+  assert.equal(parallel.stats.cellsEvaluated, width);
+  for (let row = 0; row < width; row += 1) {
+    const value = wb.getValue(0, row, 1);
+    assert.ok(value.status.ok, `parallel value row ${row}: ${JSON.stringify(value.status)}`);
+    assert.equal(value.value.kind, mod.ValueKind.Number);
+    assert.equal(value.value.number, (row + 2) * 2);
+  }
+
+  const assertInvalid = (input, label) => {
+    const invalid = input === undefined ? wb.recalcParallel() : wb.recalcParallel(input);
+    assert.equal(invalid.status.ok, false, label);
+    assert.notEqual(invalid.status.status, 0, label);
+    assert.equal(invalid.stats.cellsEvaluated, 0, label);
+    assert.equal(invalid.stats.sccsProcessed, 0, label);
+    assert.equal(invalid.stats.parallelSteps, 0, label);
+    assert.equal(invalid.stats.serialFallbackSteps, 0, label);
+    assert.equal(invalid.stats.cycleRecoveries, 0, label);
+    assert.equal(invalid.stats.workerThreadsStarted, 0, label);
+    assert.equal(invalid.stats.workerThreadsUsed, 0, label);
+    return invalid;
+  };
+  assertInvalid(undefined, 'missing threadCount');
+  assertInvalid(null, 'null threadCount');
+  assertInvalid(NaN, 'NaN threadCount');
+  assertInvalid(Infinity, 'Infinity threadCount');
+  assertInvalid(-Infinity, '-Infinity threadCount');
+  assertInvalid(1.5, 'fractional threadCount');
+  assertInvalid(-1, 'negative threadCount');
+  const invalid = assertInvalid(9, 'threadCount above cap');
+  assert.equal(invalid.status.message, 'fm_workbook_recalc_parallel: thread_count must be 0..8');
+  assert.equal(invalid.status.context, 'thread_count=9 max=8');
+  wb.dispose();
+});
+
 test("evaluateFormulaArray('=SEQUENCE(2,3)') returns a 2x3 grid", async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -243,6 +507,25 @@ test('Workbook.createEmpty + addSheet -> sheetCount/sheetName work', async () =>
   const sn = wb.sheetName(0);
   assert.ok(sn.status.ok);
   assert.equal(sn.value, 'Sheet1');
+});
+
+test('Unicode sheet identity rejects folded duplicate and permits casing rename', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createEmpty();
+  assert.ok(wb.addSheet('Ä').ok);
+  assert.ok(wb.addSheet('Ö').ok);
+  assert.equal(wb.addSheet('ä').ok, false);
+  const collision = wb.renameSheet(1, 'ä');
+  assert.equal(collision.ok, false);
+  assert.notEqual(collision.status, 0);
+  assert.equal(wb.sheetName(0).value, 'Ä');
+  assert.equal(wb.sheetName(1).value, 'Ö');
+  assert.ok(wb.renameSheet(0, 'ä').ok);
+  const sn = wb.sheetName(0);
+  assert.ok(sn.status.ok);
+  assert.equal(sn.value, 'ä');
+  assert.equal(wb.sheetName(1).value, 'Ö');
+  wb.dispose();
 });
 
 test('save() returns Uint8Array; loadBytes round-trips the value', async () => {
@@ -462,6 +745,34 @@ test('setSheetZoom + getSheetView surface the new zoom', async () => {
   assert.equal(v.view.tabHidden, 0);
 });
 
+test('sheet layout getters preserve explicit width presence flags', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.ok(wb.setColumnWidth(0, 0, 0, 0).ok);
+  assert.ok(wb.setColumnHidden(0, 1, 1, true).ok);
+  assert.ok(wb.setRowHeight(0, 3, 30).ok);
+
+  const columns = wb.getSheetColumns(0);
+  assert.ok(columns.status.ok, `getSheetColumns: ${JSON.stringify(columns.status)}`);
+  const widthZero = columns.columns.find((column) => column.first === 0 && column.last === 0);
+  assert.ok(widthZero);
+  assert.equal(widthZero.width, 0);
+  assert.equal(widthZero.hasWidth, 1);
+  assert.equal(widthZero.hasStyle, 0);
+  const hidden = columns.columns.find((column) => column.first === 1 && column.last === 1);
+  assert.ok(hidden);
+  assert.equal(hidden.hidden, 1);
+  assert.equal(hidden.hasWidth, 0);
+
+  const rows = wb.getSheetRowOverrides(0);
+  assert.ok(rows.status.ok, `getSheetRowOverrides: ${JSON.stringify(rows.status)}`);
+  const row = rows.rows.find((entry) => entry.row === 3);
+  assert.ok(row);
+  assert.equal(row.height, 30);
+  assert.equal(row.hasStyle, 0);
+  assert.equal(row.styleXf, 0);
+});
+
 test('getSheetView surfaces display / orientation defaults', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -669,6 +980,144 @@ test('style building blocks: addFont -> addXf -> setCellXfIndex -> getXf', async
   assert.equal(rfmt.formatCode, '"USD" #,##0');
 });
 
+test('selector colours survive get/add identity and save/load', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const theme = { kind: 2, rgb: 0, theme: 3, tint: 0.5, indexed: 0 };
+  const indexed = { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 9 };
+  const automatic = { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+
+  const font = wb.addFont({ name: 'SelectorFont', size: 11, colorArgb: 0x01020304, color: theme });
+  assert.ok(font.status.ok);
+  const gotFont = wb.getFont(font.index);
+  assert.ok(gotFont.status.ok);
+  assert.equal(gotFont.color.kind, 2);
+  assert.equal(gotFont.color.theme, 3);
+  assert.equal(gotFont.color.tint, 0.5);
+  assert.equal(gotFont.colorArgb, 0x01020304);
+  const fontAgain = wb.addFont(gotFont);
+  assert.ok(fontAgain.status.ok);
+  assert.equal(fontAgain.index, font.index);
+
+  const fill = wb.addFill({
+    pattern: 1,
+    fgArgb: 0x05060708,
+    bgArgb: 0x090a0b0c,
+    fg: indexed,
+    bg: automatic,
+  });
+  assert.ok(fill.status.ok);
+  const gotFill = wb.getFill(fill.index);
+  assert.ok(gotFill.status.ok);
+  assert.equal(gotFill.fg.kind, 3);
+  assert.equal(gotFill.fg.indexed, 9);
+  assert.equal(gotFill.bg.kind, 4);
+  const fillAgain = wb.addFill(gotFill);
+  assert.ok(fillAgain.status.ok);
+  assert.equal(fillAgain.index, fill.index);
+
+  const border = wb.addBorder({
+    left: { style: 1, colorArgb: 0x01020304, color: theme },
+    right: { style: 1, colorArgb: 0x05060708, color: indexed },
+    top: { style: 1, colorArgb: 0x090a0b0c, color: automatic },
+    bottom: { style: 0, colorArgb: 0 },
+    diagonal: { style: 0, colorArgb: 0 },
+  });
+  assert.ok(border.status.ok);
+  const gotBorder = wb.getBorder(border.index);
+  assert.ok(gotBorder.status.ok);
+  assert.equal(gotBorder.left.color.kind, 2);
+  assert.equal(gotBorder.left.color.theme, 3);
+  assert.equal(gotBorder.right.color.kind, 3);
+  assert.equal(gotBorder.right.color.indexed, 9);
+  assert.equal(gotBorder.top.color.kind, 4);
+  const borderAgain = wb.addBorder(gotBorder);
+  assert.ok(borderAgain.status.ok);
+  assert.equal(borderAgain.index, border.index);
+
+  const dxf = wb.addDxf({
+    font: { name: 'DxfSelector', size: 9, colorArgb: 0x11121314, color: automatic },
+    fill: { pattern: 1, fgArgb: 0x15161718, fg: indexed },
+    border: { left: { style: 1, colorArgb: 0x191a1b1c, color: theme } },
+  });
+  assert.ok(dxf.status.ok);
+  const gotDxf = wb.getDxf(dxf.index);
+  assert.ok(gotDxf.status.ok);
+  assert.equal(gotDxf.font.color.kind, 4);
+  assert.equal(gotDxf.fill.fg.kind, 3);
+  assert.equal(gotDxf.border.left.color.kind, 2);
+  const dxfAgain = wb.addDxf(gotDxf);
+  assert.ok(dxfAgain.status.ok);
+  assert.equal(dxfAgain.index, dxf.index);
+
+  const saved = wb.save();
+  assert.ok(saved.status.ok);
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  const loadedFont = loaded.getFont(font.index);
+  const loadedFill = loaded.getFill(fill.index);
+  const loadedBorder = loaded.getBorder(border.index);
+  const loadedDxf = loaded.getDxf(dxf.index);
+  assert.ok(loadedFont.status.ok);
+  assert.ok(loadedFill.status.ok);
+  assert.ok(loadedBorder.status.ok);
+  assert.ok(loadedDxf.status.ok);
+  assert.equal(loadedFont.color.kind, 2);
+  assert.equal(loadedFill.fg.kind, 3);
+  assert.equal(loadedBorder.left.color.kind, 2);
+  assert.equal(loadedDxf.font.color.kind, 4);
+  loaded.dispose();
+  wb.dispose();
+});
+
+test('dxf alignment and protection XML survive get/add identity and save/load', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  const alignmentXml = '<alignment horizontal="center" wrapText="1"/>';
+  const protectionXml = '<protection locked="0" hidden="1"/>';
+  const alignment = wb.addDxf({ alignmentXml });
+  assert.ok(alignment.status.ok);
+  const protection = wb.addDxf({ protectionXml });
+  assert.ok(protection.status.ok);
+  assert.notEqual(alignment.index, protection.index);
+
+  const gotAlignment = wb.getDxf(alignment.index);
+  assert.ok(gotAlignment.status.ok);
+  assert.equal(gotAlignment.alignmentXml, alignmentXml);
+  assert.equal(gotAlignment.protectionXml, undefined);
+  const gotProtection = wb.getDxf(protection.index);
+  assert.ok(gotProtection.status.ok);
+  assert.equal(gotProtection.alignmentXml, undefined);
+  assert.equal(gotProtection.protectionXml, protectionXml);
+
+  const alignmentAgain = wb.addDxf(gotAlignment);
+  assert.ok(alignmentAgain.status.ok);
+  assert.equal(alignmentAgain.index, alignment.index);
+  const protectionAgain = wb.addDxf(gotProtection);
+  assert.ok(protectionAgain.status.ok);
+  assert.equal(protectionAgain.index, protection.index);
+
+  const saved = wb.save();
+  assert.ok(saved.status.ok);
+  const loaded = mod.Workbook.loadBytes(saved.bytes);
+  assert.ok(loaded.isValid());
+  const loadedAlignment = loaded.getDxf(alignment.index);
+  assert.ok(loadedAlignment.status.ok);
+  assert.equal(loadedAlignment.alignmentXml, alignmentXml);
+  assert.equal(loadedAlignment.protectionXml, undefined);
+  const loadedProtection = loaded.getDxf(protection.index);
+  assert.ok(loadedProtection.status.ok);
+  assert.equal(loadedProtection.alignmentXml, undefined);
+  assert.equal(loadedProtection.protectionXml, protectionXml);
+  const loadedAlignmentAgain = loaded.addDxf(loadedAlignment);
+  assert.ok(loadedAlignmentAgain.status.ok);
+  assert.equal(loadedAlignmentAgain.index, alignment.index);
+  const loadedProtectionAgain = loaded.addDxf(loadedProtection);
+  assert.ok(loadedProtectionAgain.status.ok);
+  assert.equal(loadedProtectionAgain.index, protection.index);
+  loaded.dispose();
+  wb.dispose();
+});
+
 test('addFont / getFont preserve superscript and round-trip to the same index', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -795,6 +1244,143 @@ test('evaluateCfRange returns ok envelope with empty cells for a CF-less workboo
   assert.equal(r.cells.length, 0);
 });
 
+test('evaluateCfRange with todaySerial omitted disables timePeriod rules', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  // timePeriod rule (type 15) for "today" (period 0) over A1. The cell
+  // holds the serial for 1899-12-30, which a 0.0 basis would match.
+  assert.ok(wb.setNumber(0, 0, 0, 0).ok);
+  const dxf = wb.addDxf({ font: { bold: true } });
+  assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
+  const add = wb.addConditionalFormat(0, {
+    sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+    type: 15,
+    timePeriod: 0,
+    dxfId: dxf.index,
+  });
+  assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);
+  assert.ok(wb.recalc().ok);
+
+  // Omitting todaySerial must behave like passing NaN (the documented
+  // disabling value), not like passing 0 -- which is the valid serial for
+  // 1899-12-30 and would make the rule match.
+  const omitted = wb.evaluateCfRange(0, 0, 0, 0, 0);
+  assert.ok(omitted.status.ok, `evaluateCfRange: ${JSON.stringify(omitted.status)}`);
+  const explicitNaN = wb.evaluateCfRange(0, 0, 0, 0, 0, Number.NaN);
+  assert.ok(explicitNaN.status.ok, `evaluateCfRange: ${JSON.stringify(explicitNaN.status)}`);
+  assert.equal(omitted.cells.length, explicitNaN.cells.length);
+  assert.equal(omitted.cells.length, 0);
+
+  // A concrete basis of 0 does engage the rule, proving the default is
+  // not merely a no-op for this workbook.
+  const zeroBasis = wb.evaluateCfRange(0, 0, 0, 0, 0, 0);
+  assert.ok(zeroBasis.status.ok, `evaluateCfRange: ${JSON.stringify(zeroBasis.status)}`);
+  assert.equal(zeroBasis.cells.length, 1);
+});
+
+// Builds a workbook with one pivot, ready for the filter-contract cases.
+// `dispose` is the caller's job; the WASM package uses `delete` instead.
+function makePivotWorkbook(Workbook) {
+  const wb = Workbook.createDefault();
+  const cacheId = wb.pivotCacheCreate(0).index;
+  assert.ok(wb.pivotCacheFieldAdd(cacheId, 'Region').status.ok);
+  assert.ok(wb.pivotCacheFieldAdd(cacheId, 'Amount').status.ok);
+  for (const [region, amount] of [
+    ['East', 10],
+    ['West', 30],
+  ]) {
+    const rec = wb.pivotCacheRecordAdd(cacheId).index;
+    assert.ok(wb.pivotCacheRecordSetText(cacheId, rec, 0, region).ok);
+    assert.ok(wb.pivotCacheRecordSetNumber(cacheId, rec, 1, amount).ok);
+  }
+  const pivot = wb.pivotCreate(0, 'Pivot1', cacheId, 0, 4);
+  assert.ok(pivot.status.ok, JSON.stringify(pivot.status));
+  assert.ok(wb.pivotFieldAdd(0, pivot.index, { sourceName: 'Region', axis: 0 }).status.ok);
+  const amountField = wb.pivotFieldAdd(0, pivot.index, { sourceName: 'Amount', axis: 2 });
+  assert.ok(amountField.status.ok);
+  assert.ok(
+    wb.pivotDataFieldAdd(0, pivot.index, {
+      name: 'Sum of Amount',
+      fieldIndex: amountField.index,
+      aggregation: 0,
+    }).status.ok,
+  );
+  return { wb, pivot: pivot.index };
+}
+
+// greaterThan on a double payload: the shape pivotFilterAt must read back.
+const PIVOT_FILTER = Object.freeze({
+  axis: 0,
+  fieldName: 'Region',
+  type: 1,
+  valueKind: 1,
+  valueDouble: 15,
+});
+
+test('pivotFilterAt reads back an added filter field for field', async () => {
+  const mod = await getModule();
+  const { wb, pivot } = makePivotWorkbook(mod.Workbook);
+  try {
+    assert.ok(wb.pivotFilterAdd(0, pivot, PIVOT_FILTER).ok);
+    assert.equal(wb.pivotFilterCount(0, pivot), 1);
+    const got = wb.pivotFilterAt(0, pivot, 0);
+    assert.ok(got.status.ok, JSON.stringify(got.status));
+    assert.equal(got.axis, PIVOT_FILTER.axis);
+    assert.equal(got.fieldName, PIVOT_FILTER.fieldName);
+    assert.equal(got.type, PIVOT_FILTER.type);
+    assert.equal(got.valueKind, PIVOT_FILTER.valueKind);
+    assert.equal(got.valueDouble, PIVOT_FILTER.valueDouble);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('pivotFilterCount reports only what this session added', async () => {
+  const mod = await getModule();
+  const { wb, pivot } = makePivotWorkbook(mod.Workbook);
+  try {
+    assert.equal(wb.pivotFilterCount(0, pivot), 0);
+    assert.ok(wb.pivotFilterAdd(0, pivot, PIVOT_FILTER).ok);
+    assert.equal(wb.pivotFilterCount(0, pivot), 1);
+  } finally {
+    wb.dispose();
+  }
+});
+
+test('active filters are session state and do not survive save/load', async () => {
+  const mod = await getModule();
+  const { wb, pivot } = makePivotWorkbook(mod.Workbook);
+  let bytes;
+  try {
+    assert.ok(wb.pivotFilterAdd(0, pivot, PIVOT_FILTER).ok);
+    assert.equal(wb.pivotFilterCount(0, pivot), 1);
+    const saved = wb.save();
+    assert.ok(saved.status.ok, JSON.stringify(saved.status));
+    bytes = saved.bytes;
+  } finally {
+    wb.dispose();
+  }
+  const reloaded = mod.Workbook.loadBytes(bytes);
+  try {
+    assert.equal(reloaded.pivotCount(0), 1);
+    // The pivot round-trips; its active-filter list deliberately does not.
+    assert.equal(reloaded.pivotFilterCount(0, 0), 0);
+  } finally {
+    reloaded.dispose();
+  }
+});
+
+test('pivotFilterAt rejects an out-of-range index', async () => {
+  const mod = await getModule();
+  const { wb, pivot } = makePivotWorkbook(mod.Workbook);
+  try {
+    const got = wb.pivotFilterAt(0, pivot, 99);
+    assert.equal(got.status.ok, false);
+  } finally {
+    wb.dispose();
+  }
+});
+
 test('comments round-trip: setComment + getComment', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
@@ -903,13 +1489,16 @@ test('saveExWithDiagnostics() reports counters and xlsbReadDiagnostics keeps a s
       formula1: '"Yes,No"',
     }).ok,
   );
+  // A CF rule's dxfId must resolve against a registered dxf.
+  const dxf = wb.addDxf({ font: { bold: true } });
+  assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
   assert.ok(
     wb.addConditionalFormat(0, {
       sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
       type: 1,
       op: 5,
       formula1: '10',
-      dxfId: 0,
+      dxfId: dxf.index,
       stopIfTrue: false,
     }).status.ok,
   );
@@ -1036,13 +1625,16 @@ test('addConditionalFormat + getConditionalFormats + clearConditionalFormats rou
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.equal(wb.getConditionalFormats(0).length, 0);
+  // A CF rule's dxfId must resolve against a registered dxf.
+  const dxf = wb.addDxf({ font: { bold: true } });
+  assert.ok(dxf.status.ok, JSON.stringify(dxf.status));
   // cellIs rule (type 1) comparing the cell to a literal.
   const add = wb.addConditionalFormat(0, {
     sqref: [{ firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 0 }],
     type: 1,
     op: 5,
     formula1: '10',
-    dxfId: 0,
+    dxfId: dxf.index,
     stopIfTrue: false,
   });
   assert.ok(add.status.ok, `addConditionalFormat: ${JSON.stringify(add)}`);

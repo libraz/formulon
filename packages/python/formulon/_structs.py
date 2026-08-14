@@ -104,6 +104,16 @@ def alloc_struct(lib, layout: Struct) -> int:
     return ptr
 
 
+def zero_struct(lib, layout: Struct, ptr: int) -> None:
+    """Re-zero an already-allocated scratch block sized for ``layout``.
+
+    Lets a collection reader hoist one scratch block out of its loop and
+    still hand each ABI call a cleared block, without paying a WASM
+    ``malloc``/``free`` pair per item.
+    """
+    lib.write_bytes(ptr, b"\x00" * layout.size)
+
+
 # ---------------------------------------------------------------------------
 # Struct layouts (mirror src/c_api/formulon_c.h field-for-field)
 # ---------------------------------------------------------------------------
@@ -281,6 +291,20 @@ CF_RULE = Struct(
         ("icon_set_reverse", I32),
         ("icon_set_show_value", I32),
         ("icon_set_percent", I32),
+        # Data-bar attributes carried as engaged-flag / value pairs: an
+        # unengaged flag means "use the model default" rather than "zero".
+        ("data_bar_gradient_engaged", I32),
+        ("data_bar_gradient", I32),
+        ("data_bar_axis_position_engaged", I32),
+        ("data_bar_axis_position", U8),
+        ("data_bar_negative_fill_engaged", I32),
+        ("data_bar_negative_fill", CF_COLOR_BLOB),
+        ("data_bar_border_engaged", I32),
+        ("data_bar_border", CF_COLOR_BLOB),
+        ("data_bar_negative_border_engaged", I32),
+        ("data_bar_negative_border", CF_COLOR_BLOB),
+        ("data_bar_axis_color_engaged", I32),
+        ("data_bar_axis_color", CF_COLOR_BLOB),
     ],
 )
 
@@ -404,6 +428,9 @@ COLUMN_LAYOUT = Struct(
         ("width", F64),
         ("hidden", I32),
         ("outline_level", U8),
+        ("has_width", I32),
+        ("has_style", I32),
+        ("style_xf", U32),
     ],
 )
 
@@ -414,6 +441,8 @@ ROW_LAYOUT = Struct(
         ("height", F64),
         ("hidden", I32),
         ("outline_level", U8),
+        ("has_style", I32),
+        ("style_xf", U32),
     ],
 )
 
@@ -430,8 +459,8 @@ CELL_XF = Struct(
     ],
 )
 
-# ABI-safe superset of ``fm_cell_xf_ex``. Keep ``CELL_XF`` and the legacy
-# C struct unchanged; every optional alignment attribute has an explicit
+# ABI-safe superset of ``fm_cell_xf``. Keep ``CELL_XF`` and the legacy C
+# struct unchanged; every optional alignment attribute has an explicit
 # presence flag so zero / false values can be round-tripped.
 CELL_XF_EX2 = Struct(
     "fm_cell_xf_ex2",
@@ -543,6 +572,8 @@ DXF_RECORD = Struct(
         ("num_fmt_engaged", I32),
         ("num_fmt_id", U16),
         ("num_fmt_code", PTR),
+        ("alignment_xml", PTR),
+        ("protection_xml", PTR),
     ],
 )
 

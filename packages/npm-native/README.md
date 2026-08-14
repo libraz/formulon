@@ -10,9 +10,10 @@ Formula evaluation uses Formulon's default `win-365-ja_JP` profile. Call
 ## What this is
 
 `@libraz/formulon-native` is a Node.js addon (`.node`) built directly
-against the engine's static archive. It exposes the same Workbook
-surface as the WASM-backed `@libraz/formulon` package, but runs as a
-native binary rather than via the V8 WASM runtime.
+against the engine's static archive. It exposes the shared Workbook
+surface of the WASM-backed `@libraz/formulon` package — see
+[Surface parity](#surface-parity) for the methods that differ — but runs
+as a native binary rather than via the V8 WASM runtime.
 
 Why prefer the native build:
 
@@ -27,8 +28,8 @@ Why prefer the native build:
 This package exposes the shared `Workbook` surface of the WASM-backed
 `@libraz/formulon` package, all marshalling to the identical C-ABI
 functions. Its TypeScript declarations and its native class table
-register 182 instance methods plus the three static factories. Of those
-instance methods, 180 are shared with WASM; nine remain WASM-only, while
+register 184 instance methods plus the three static factories. Of those
+instance methods, 182 are shared with WASM; nine remain WASM-only, while
 `dispose()` and `memoryUsage()` are native-only lifecycle helpers.
 The shared `Workbook` methods use the same status-bearing result envelopes
 and field shapes; switching packages still requires updating the module
@@ -36,10 +37,24 @@ import and validating the target platform's native prebuild. The additional
 native-only methods are operational helpers; the nine
 WASM-only methods remain available through the WASM package.
 
+The WASM-only methods are, in full:
+
+```
+addCellStyleXf, setCellStyle
+createTable, updateTable, removeTable
+getCellPhonetic, setCellPhonetic
+getSheetAutoFilterXml, setSheetAutoFilterXml
+```
+
+Calling any of them on a native `Workbook` is a TypeScript error and a
+runtime `is not a function`.
+
 Two methods exist only here, both because a native workbook lives outside
 the JS heap in a way the WASM build's does not: `dispose()` releases the
 handle without waiting for finalization, and `memoryUsage()` reports the
-workbook's estimated native footprint. See
+workbook's estimated native footprint. `recalcParallel(threadCount)` is
+available on both the native and WASM packages and returns the parallel SCC
+telemetry described in the API declarations. See
 [Memory accounting](#memory-accounting).
 
 The TypeScript declarations in `dist/index.d.ts` are the authoritative
@@ -52,10 +67,10 @@ Static factories
   Workbook.createDefault(), createEmpty(), loadBytes(bytes)
 
 Cells & recalc
-  dispose
+  dispose, memoryUsage
   setNumber, setBool, setText, setBlank, setFormula
   getValue, getLambdaText
-  recalc, partialRecalc, setIterative, setIterativeProgress, save,
+  recalc, recalcParallel, partialRecalc, setIterative, setIterativeProgress, save,
   saveEx, saveExWithDiagnostics, xlsbReadDiagnostics
 
 Workbook policy / catalog
@@ -96,12 +111,18 @@ Conditional formatting
   removeConditionalFormatAt, clearConditionalFormats, evaluateCfRange
 
 PivotTables & pivot caches
-  pivotCount, pivotCreate, pivotRemove, pivotLayout, ... (full pivot
-  cache + table mutation surface; see dist/index.d.ts)
+  pivotCount, pivotCreate, pivotRemove, pivotLayout
+  pivotFilterCount, pivotFilterAdd, pivotFilterAt,
+  pivotFilterClear, pivotFilterRemoveAt        (session state, not saved)
+  ... (full pivot cache + table mutation surface; see dist/index.d.ts)
 
-Top-level: evalFormula, version, lastErrorMessage,
-           lastErrorContext, statusString, mergeFunctionMetadata
+Top-level: evalFormula, version, versionString, lastErrorMessage,
+           lastErrorContext, statusString, errorDisplayName,
+           mergeFunctionMetadata
 ```
+
+Every top-level function is available both as a named export and on the
+default export object.
 
 Prebuilt binaries are shipped per supported OS/arch slot under
 `dist/prebuilds/`; from a source checkout, build with the steps below.
@@ -140,6 +161,16 @@ if (r.status.ok && r.value.kind === ValueKind.Number) {
   console.log(r.value.number);  // 3
 }
 ```
+
+`wb.recalc()` remains serial. For synchronous parallel recalculation, call
+`wb.recalcParallel(threadCount)`: `threadCount` must be a finite integer;
+`0` auto-detects up to 8 workers, `1` starts no workers, and `2..8` set the
+worker upper bound. Missing, fractional, non-finite, negative, or above-8
+values return a failed status with zeroed stats. The result is `{ status,
+stats }`, where `stats` reports evaluated cells, processed SCCs, parallel and
+serial steps, cycle recoveries, and started/used worker counts. The five
+64-bit engine counters are exposed as JavaScript `number` values and are exact
+through `Number.MAX_SAFE_INTEGER`.
 
 The `{ status, value }` envelope mirrors the WASM package's contract for
 engine operations. Module loading can throw when the native prebuild is not

@@ -60,6 +60,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Recalc + save.
   Napi::Value Recalc(const Napi::CallbackInfo& info);
+  Napi::Value RecalcParallel(const Napi::CallbackInfo& info);
   Napi::Value PartialRecalc(const Napi::CallbackInfo& info);
   Napi::Value SetIterative(const Napi::CallbackInfo& info);
   Napi::Value SetIterativeProgress(const Napi::CallbackInfo& info);
@@ -174,6 +175,15 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotDataFieldSet(const Napi::CallbackInfo& info);
   Napi::Value PivotFilterCount(const Napi::CallbackInfo& info);
   Napi::Value PivotFilterAdd(const Napi::CallbackInfo& info);
+  /// Reads the active filter at `filterIdx`.
+  ///
+  /// The active-filter list is **session state**: an entry added through
+  /// `pivotFilterAdd` affects evaluation only while this workbook handle
+  /// lives and is not written by `save`. Conversely a `<filters>` block
+  /// Excel wrote is preserved verbatim on save but does not appear here,
+  /// so `pivotFilterCount` reports only what this session added. The
+  /// filter surface that does persist is pivot field item visibility.
+  Napi::Value PivotFilterAt(const Napi::CallbackInfo& info);
   Napi::Value PivotFilterClear(const Napi::CallbackInfo& info);
   Napi::Value PivotFilterRemoveAt(const Napi::CallbackInfo& info);
 
@@ -275,8 +285,10 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Object NullHandleError(Napi::Env env) const { return MakeErrorStatus(env, kBindingInvalidHandle); }
 
  private:
-  static bool IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
-                                          void* user_data);
+  /// Matches `fm_iterative_progress_cb`: the header-wide wide-POD boolean
+  /// convention (`int32_t`, `0` = abort), not a C `bool`.
+  static int32_t IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                             void* user_data);
   void DestroyHandle(Napi::Env env);
 
   /// Tells V8 how much memory this wrapper is really keeping alive.

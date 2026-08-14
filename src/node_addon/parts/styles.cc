@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -56,7 +57,9 @@ Napi::Object CfvoToJs(Napi::Env env, const fm_cfvo_t& cfvo) {
 
 /// Reads the `{kind, rgb, theme, tint, indexed}` colour specification out
 /// of `owner[key]`. An absent object leaves `kind` at `kFmColorNone`, so
-/// the writer falls back to the sibling resolved `*Argb` value.
+/// the writer emits the sibling `*Argb` as literal `rgb`. A supplied
+/// selector is authoritative; this binding does not resolve theme/indexed /
+/// auto colours.
 fm_color_spec PullColorSpec(const Napi::Object& owner, const char* key) {
   fm_color_spec spec{};
   if (!SpecHas(owner, key) || !owner.Get(key).IsObject()) {
@@ -383,6 +386,12 @@ Napi::Value Workbook::GetDxf(const Napi::CallbackInfo& info) {
     num_fmt.Set("formatCode", Napi::String::New(env, d.num_fmt_code != nullptr ? d.num_fmt_code : ""));
     out.Set("numFmt", num_fmt);
   }
+  if (d.alignment_xml != nullptr && d.alignment_xml[0] != '\0') {
+    out.Set("alignmentXml", Napi::String::New(env, d.alignment_xml));
+  }
+  if (d.protection_xml != nullptr && d.protection_xml[0] != '\0') {
+    out.Set("protectionXml", Napi::String::New(env, d.protection_xml));
+  }
   return out;
 }
 
@@ -525,6 +534,8 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
 
   std::string font_name;
   std::string num_fmt_code;
+  std::string alignment_xml;
+  std::string protection_xml;
   fm_dxf_record dxf{};
 
   if (record.Has("font") && record.Get("font").IsObject()) {
@@ -551,6 +562,16 @@ Napi::Value Workbook::AddDxf(const Napi::CallbackInfo& info) {
     }
     dxf.num_fmt_code = num_fmt_code.c_str();
   }
+
+  if (record.Has("alignmentXml") && !record.Get("alignmentXml").IsUndefined() && !record.Get("alignmentXml").IsNull()) {
+    alignment_xml = record.Get("alignmentXml").ToString().Utf8Value();
+  }
+  if (record.Has("protectionXml") && !record.Get("protectionXml").IsUndefined() &&
+      !record.Get("protectionXml").IsNull()) {
+    protection_xml = record.Get("protectionXml").ToString().Utf8Value();
+  }
+  dxf.alignment_xml = alignment_xml.c_str();
+  dxf.protection_xml = protection_xml.c_str();
 
   uint32_t idx = 0;
   fm_status_t rc = fm_styles_add_dxf(handle_, dxf, &idx);
@@ -592,7 +613,12 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   const uint32_t first_col = ArgU32(info, 2);
   const uint32_t last_row = ArgU32(info, 3);
   const uint32_t last_col = ArgU32(info, 4);
-  const double today_serial = ArgDouble(info, 5);
+  // A missing `todaySerial` must disable `timePeriod` rules, matching the
+  // Python binding and the C ABI contract. `ArgDouble`'s 0.0 fallback is a
+  // valid Excel serial (1899-12-30), so it would silently evaluate those
+  // rules against that date instead of skipping them.
+  const double today_serial =
+      info.Length() > 5 ? info[5].ToNumber().DoubleValue() : std::numeric_limits<double>::quiet_NaN();
   fm_cf_results_t* results = nullptr;
   fm_status_t rc =
       fm_workbook_cf_evaluate_range(handle_, sheet, first_row, first_col, last_row, last_col, today_serial, &results);

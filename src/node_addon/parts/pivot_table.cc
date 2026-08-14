@@ -460,6 +460,37 @@ Napi::Value Workbook::PivotFilterCount(const Napi::CallbackInfo& info) {
   return Napi::Number::New(env, static_cast<double>(count));
 }
 
+Napi::Value Workbook::PivotFilterAt(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  Napi::Object out = Napi::Object::New(env);
+  if (handle_ == nullptr) {
+    out.Set("status", NullHandleError(env));
+    return out;
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t pivot_idx = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::size_t filter_idx = static_cast<std::size_t>(ArgU32(info, 2));
+  fm_pivot_filter_spec_t spec{};
+  fm_status_t rc = fm_workbook_pivot_filter_at(handle_, sheet, pivot_idx, filter_idx, &spec);
+  if (rc != 0) {
+    out.Set("status", MakeErrorStatus(env, rc));
+    return out;
+  }
+  out.Set("status", MakeOkStatus(env));
+  out.Set("axis", Napi::Number::New(env, static_cast<int32_t>(spec.axis)));
+  out.Set("fieldName", Napi::String::New(env, spec.field_name != nullptr ? spec.field_name : ""));
+  out.Set("type", Napi::Number::New(env, static_cast<int32_t>(spec.type)));
+  out.Set("dataFieldIndex", Napi::Number::New(env, spec.data_field_index));
+  out.Set("valueKind", Napi::Number::New(env, static_cast<int32_t>(spec.value_kind)));
+  out.Set("valueInt", Napi::Number::New(env, spec.value_int));
+  out.Set("valueDouble", Napi::Number::New(env, spec.value_double));
+  out.Set("valueText", Napi::String::New(env, spec.value_text != nullptr ? spec.value_text : ""));
+  out.Set("valueHighKind", Napi::Number::New(env, static_cast<int32_t>(spec.value_high_kind)));
+  out.Set("valueHighInt", Napi::Number::New(env, spec.value_high_int));
+  out.Set("valueHighDouble", Napi::Number::New(env, spec.value_high_double));
+  return out;
+}
+
 Napi::Value Workbook::PivotFilterAdd(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

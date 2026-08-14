@@ -7,7 +7,9 @@
 // internally consistent (e.g. setting the width on a span that
 // overlaps an existing entry replaces only the overlapping portion).
 
+#include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -70,47 +72,102 @@ AutoFilterValidation validate_auto_filter_fragment(const std::string& fragment) 
   return {true, "pugixml=ok top_level_elements=1"};
 }
 
-// Splits any pre-existing column entries that intersect `[first, last]`
-// so the resulting `columns` vector contains at most one entry whose
-// span equals `[first, last]`. Pre-existing fields that fall outside
-// the requested range are preserved on the residual entry. Returns a
-// reference to the entry whose span is `[first, last]`; the caller
-// then writes the field it wants to update on that entry.
-formulon::ColumnLayout& upsert_column_span(formulon::SheetLayout& layout, std::uint32_t first, std::uint32_t last) {
-  // First pass: split any entry that overlaps the target span. We
-  // copy non-overlapping residuals into a fresh vector so the caller
-  // sees a consistent state regardless of how many splits happened.
+bool SameColumnLayoutState(const formulon::ColumnLayout& lhs, const formulon::ColumnLayout& rhs) {
+  return lhs.width == rhs.width && lhs.hidden == rhs.hidden && lhs.outline_level == rhs.outline_level &&
+         lhs.has_width == rhs.has_width && lhs.has_style == rhs.has_style && lhs.style_xf == rhs.style_xf;
+}
+
+// Applies one column setter to every intersection with `[first, last]`.
+// Existing entries are split into left residual / updated intersection / right
+// residual, so fields not owned by this setter remain local to the source
+// span. Any uncovered part of the target gets a default layout carrying only
+// the requested field. The final sort + coalesce keeps the vector canonical
+// without merging spans whose presence/style/visibility state differs.
+template <typename Apply>
+void overlay_column_span(formulon::SheetLayout& layout, std::uint32_t first, std::uint32_t last, Apply&& apply) {
   std::vector<formulon::ColumnLayout> next;
-  next.reserve(layout.columns.size() + 2);
+  next.reserve(layout.columns.size() + 1U);
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> covered;
+  covered.reserve(layout.columns.size());
+
   for (const formulon::ColumnLayout& entry : layout.columns) {
-    // No overlap -> retain verbatim.
     if (entry.last < first || entry.first > last) {
       next.push_back(entry);
       continue;
     }
-    // Left residual (entry.first .. first-1).
+
     if (entry.first < first) {
       formulon::ColumnLayout left = entry;
       left.last = first - 1U;
       next.push_back(left);
     }
-    // Right residual (last+1 .. entry.last).
+
+    const std::uint32_t intersection_first = std::max(entry.first, first);
+    const std::uint32_t intersection_last = std::min(entry.last, last);
+    formulon::ColumnLayout intersection = entry;
+    intersection.first = intersection_first;
+    intersection.last = intersection_last;
+    apply(intersection);
+    next.push_back(intersection);
+    covered.emplace_back(intersection_first, intersection_last);
+
     if (entry.last > last) {
       formulon::ColumnLayout right = entry;
       right.first = last + 1U;
       next.push_back(right);
     }
-    // The middle slice `[max(entry.first,first), min(entry.last,last)]`
-    // is dropped here; we re-create one canonical entry below so the
-    // caller can write its field of interest atomically.
   }
-  formulon::ColumnLayout target;
-  target.first = first;
-  target.last = last;
-  next.push_back(target);
-  layout.columns = std::move(next);
-  // The freshly inserted entry is the last element by construction.
-  return layout.columns.back();
+
+  // Merge covered intervals before synthesising gaps. Normal SheetLayout
+  // entries are disjoint, but this also avoids duplicating a default segment
+  // when a caller supplied overlapping aggregate entries directly.
+  std::sort(covered.begin(), covered.end());
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> covered_union;
+  for (const auto& interval : covered) {
+    if (covered_union.empty() ||
+        static_cast<std::uint64_t>(interval.first) > static_cast<std::uint64_t>(covered_union.back().second) + 1U) {
+      covered_union.push_back(interval);
+    } else if (interval.second > covered_union.back().second) {
+      covered_union.back().second = interval.second;
+    }
+  }
+
+  std::uint64_t cursor = first;
+  for (const auto& interval : covered_union) {
+    if (cursor < interval.first) {
+      formulon::ColumnLayout gap;
+      gap.first = static_cast<std::uint32_t>(cursor);
+      gap.last = interval.first - 1U;
+      apply(gap);
+      next.push_back(gap);
+    }
+    cursor = std::max(cursor, static_cast<std::uint64_t>(interval.second) + 1U);
+  }
+  if (cursor <= last) {
+    formulon::ColumnLayout gap;
+    gap.first = static_cast<std::uint32_t>(cursor);
+    gap.last = last;
+    apply(gap);
+    next.push_back(gap);
+  }
+
+  std::sort(next.begin(), next.end(), [](const formulon::ColumnLayout& lhs, const formulon::ColumnLayout& rhs) {
+    if (lhs.first != rhs.first) {
+      return lhs.first < rhs.first;
+    }
+    return lhs.last < rhs.last;
+  });
+  std::vector<formulon::ColumnLayout> merged;
+  merged.reserve(next.size());
+  for (const formulon::ColumnLayout& entry : next) {
+    if (!merged.empty() && merged.back().last != std::numeric_limits<std::uint32_t>::max() &&
+        merged.back().last + 1U == entry.first && SameColumnLayoutState(merged.back(), entry)) {
+      merged.back().last = entry.last;
+    } else {
+      merged.push_back(entry);
+    }
+  }
+  layout.columns = std::move(merged);
 }
 
 // Returns a pointer to the row override whose `row` equals `row`,
@@ -163,6 +220,9 @@ extern "C" fm_status_t fm_sheet_get_column(const fm_workbook_t* wb, size_t sheet
   out->width = cols[idx].width;
   out->hidden = cols[idx].hidden ? 1 : 0;
   out->outline_level = cols[idx].outline_level;
+  out->has_width = formulon::HasExplicitColumnWidth(cols[idx]) ? 1 : 0;
+  out->has_style = cols[idx].has_style ? 1 : 0;
+  out->style_xf = cols[idx].style_xf;
   return 0;
 }
 
@@ -200,6 +260,8 @@ extern "C" fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t
   out->height = rows[idx].height;
   out->hidden = rows[idx].hidden ? 1 : 0;
   out->outline_level = rows[idx].outline_level;
+  out->has_style = rows[idx].has_style ? 1 : 0;
+  out->style_xf = rows[idx].style_xf;
   return 0;
 }
 
@@ -229,8 +291,11 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_width: last < first",
                              "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
-  formulon::ColumnLayout& entry = upsert_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last);
-  entry.width = width;
+  overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
+                      [width](formulon::ColumnLayout& entry) {
+                        entry.width = width;
+                        entry.has_width = true;
+                      });
   return 0;
 }
 
@@ -244,8 +309,8 @@ extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t shee
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_hidden: last < first",
                              "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
-  formulon::ColumnLayout& entry = upsert_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last);
-  entry.hidden = (hidden != 0);
+  overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
+                      [hidden](formulon::ColumnLayout& entry) { entry.hidden = (hidden != 0); });
   return 0;
 }
 
@@ -259,8 +324,8 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument, "fm_sheet_set_column_outline: last < first",
                              "first=" + std::to_string(first) + " last=" + std::to_string(last));
   }
-  formulon::ColumnLayout& entry = upsert_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last);
-  entry.outline_level = level;
+  overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
+                      [level](formulon::ColumnLayout& entry) { entry.outline_level = level; });
   return 0;
 }
 

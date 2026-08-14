@@ -68,8 +68,8 @@ try {
 The package ships a single ES module factory plus the companion
 `formulon.wasm`. Two consumer-side concerns are worth knowing about:
 
-**1. Pthread workers require ES module workers.** Internally the engine
-runs the recalc scheduler on Web Workers spawned by Emscripten with
+**1. `recalcParallel` requires ES module workers.** The parallel recalc
+scheduler runs on Web Workers spawned by Emscripten with
 `new Worker(new URL("formulon.js", import.meta.url), {type: "module"})`.
 Bundlers default to classic (IIFE) workers and must be told otherwise:
 
@@ -119,6 +119,20 @@ hosting in a browser, serve the page with `Cross-Origin-Opener-Policy:
 same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers,
 or pthread workers will refuse to start.
 
+### Parallel recalculation
+
+`Workbook.recalc()` remains the serial, caller-thread recalculation API.
+`Workbook.recalcParallel(threadCount)` is synchronous and returns a
+`{ status, stats }` result after all workers have joined. A thread count of
+`0` selects automatic detection capped at 8, `1` keeps all evaluation on the
+caller thread and starts no workers, and `2..8` sets the maximum worker count.
+Values above 8 return a failed status with `kInvalidArgument`.
+
+The five 64-bit scheduler counters in `stats` are surfaced as JavaScript
+`number` values (not `bigint`) and are exact through `Number.MAX_SAFE_INTEGER`
+(`2^53 - 1`). `workerThreadsStarted` and `workerThreadsUsed` report actual
+worker telemetry; the scheduler may use fewer workers than requested.
+
 ## API reference
 
 The full TypeScript surface is shipped as `dist/formulon.d.ts` and is the
@@ -132,7 +146,10 @@ authoritative reference. Highlights:
   factory methods for building or loading a workbook.
 - `Workbook.setNumber / setBool / setText / setBlank / setFormula` --
   cell mutators.
-- `Workbook.recalc()` -- triggers a full dependency-ordered recalculation.
+- `Workbook.recalc()` -- triggers a serial, full dependency-ordered
+  recalculation.
+- `Workbook.recalcParallel(threadCount)` -- synchronously recalculates with
+  the parallel SCC scheduler and returns status plus telemetry.
 - `Workbook.getValue(sheet, row, col)` -- reads a cached cell value.
 - `Workbook.save()` -- serialises back to an in-memory `.xlsx` byte buffer.
 

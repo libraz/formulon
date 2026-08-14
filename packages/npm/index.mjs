@@ -79,5 +79,25 @@ export const PivotCalendar = Object.freeze({ Gregorian: 0, Japanese: 1 });
 export const PivotReportLayout = Object.freeze({ Compact: 0, Tabular: 1, Outline: 2 });
 export const PivotFilterValueKind = Object.freeze({ None: -1, Int: 0, Double: 1, Text: 2 });
 export const CfMatchKind = Object.freeze({ DifferentialFormat: 0, ColorScale: 1, DataBar: 2, IconSet: 3 });
+export const ErrorCode = Object.freeze({
+  Null: 0,
+  Div0: 1,
+  Value: 2,
+  Ref: 3,
+  Name: 4,
+  Num: 5,
+  NA: 6,
+  GettingData: 7,
+  Spill: 8,
+  Calc: 9,
+  Field: 10,
+  Blocked: 11,
+  Connect: 12,
+  External: 13,
+  Busy: 14,
+  Python: 15,
+  Unknown: 16,
+});
 export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
 export const ExternalLinkKind = Object.freeze({ Unknown: 0, ExternalBook: 1, Ole: 2, Dde: 3 });
+export const LogLevel = Object.freeze({ Debug: 0, Info: 1, Warn: 2, Error: 3, Off: 4 });

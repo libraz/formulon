@@ -148,6 +148,26 @@ void fill_rule(const formulon::cf::ConditionalFormat& block, const formulon::cf:
     out->data_bar_show_value = spec.show_value ? 1 : 0;
     out->data_bar_min_length_pct = spec.min_length_pct;
     out->data_bar_max_length_pct = spec.max_length_pct;
+    // Engage every extension field unconditionally so this record, handed
+    // straight back to `fm_sheet_cf_add_rule`, rebuilds the same spec. The
+    // model has no "unset" state for gradient / axis / negative fill, so
+    // reporting them as engaged is what makes the round trip exact.
+    out->data_bar_gradient_engaged = 1;
+    out->data_bar_gradient = spec.gradient ? 1 : 0;
+    out->data_bar_axis_position_engaged = 1;
+    out->data_bar_axis_position = static_cast<std::uint8_t>(spec.axis_position);
+    out->data_bar_negative_fill_engaged = 1;
+    out->data_bar_negative_fill = from_cf_color(spec.negative_fill);
+    out->data_bar_border_engaged = spec.border.has_value() ? 1 : 0;
+    if (spec.border.has_value()) {
+      out->data_bar_border = from_cf_color(*spec.border);
+    }
+    out->data_bar_negative_border_engaged = spec.negative_border.has_value() ? 1 : 0;
+    if (spec.negative_border.has_value()) {
+      out->data_bar_negative_border = from_cf_color(*spec.negative_border);
+    }
+    out->data_bar_axis_color_engaged = 1;
+    out->data_bar_axis_color = from_cf_color(spec.axis_color);
   }
   if (rule.icon_set.has_value()) {
     const auto& spec = *rule.icon_set;
@@ -204,14 +224,36 @@ bool copy_color_scale_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* ou
 bool copy_data_bar_payload(const fm_cf_rule_t& rule, formulon::cf::CFRule* out_rule) {
   if (rule.data_bar_engaged == 0 || !is_valid_cfvo_type(rule.data_bar_min.type) ||
       !is_valid_cfvo_type(rule.data_bar_max.type) || rule.data_bar_min_length_pct > 100 ||
-      rule.data_bar_max_length_pct > 100) {
+      rule.data_bar_max_length_pct > 100 || rule.data_bar_min_length_pct > rule.data_bar_max_length_pct) {
     return false;
   }
+  if (rule.data_bar_axis_position_engaged != 0 &&
+      rule.data_bar_axis_position > static_cast<std::uint8_t>(formulon::cf::DataBarAxisPosition::None)) {
+    return false;
+  }
+  // Start from the model defaults and override only what the caller
+  // engaged, so a zero-initialized record produces the same spec it did
+  // before the extension fields existed.
   formulon::cf::DataBarSpec spec;
   spec.min = to_cfvo(rule.data_bar_min);
   spec.max = to_cfvo(rule.data_bar_max);
   spec.fill = to_cf_color(rule.data_bar_fill);
-  spec.negative_fill = spec.fill;
+  spec.negative_fill = rule.data_bar_negative_fill_engaged != 0 ? to_cf_color(rule.data_bar_negative_fill) : spec.fill;
+  if (rule.data_bar_border_engaged != 0) {
+    spec.border = to_cf_color(rule.data_bar_border);
+  }
+  if (rule.data_bar_negative_border_engaged != 0) {
+    spec.negative_border = to_cf_color(rule.data_bar_negative_border);
+  }
+  if (rule.data_bar_axis_position_engaged != 0) {
+    spec.axis_position = static_cast<formulon::cf::DataBarAxisPosition>(rule.data_bar_axis_position);
+  }
+  if (rule.data_bar_axis_color_engaged != 0) {
+    spec.axis_color = to_cf_color(rule.data_bar_axis_color);
+  }
+  if (rule.data_bar_gradient_engaged != 0) {
+    spec.gradient = rule.data_bar_gradient != 0;
+  }
   spec.show_value = rule.data_bar_show_value != 0;
   spec.min_length_pct = rule.data_bar_min_length_pct;
   spec.max_length_pct = rule.data_bar_max_length_pct;
@@ -334,6 +376,17 @@ extern "C" fm_status_t fm_sheet_cf_add_rule(fm_workbook_t* wb, std::size_t sheet
   out_rule.priority = (rule.priority > 0) ? rule.priority : (max_priority + 1);
   out_rule.stop_if_true = rule.stop_if_true != 0;
   if (rule.dxf_id_engaged != 0) {
+    // A `dxfId` past the end of `<dxfs>` makes Excel treat the whole
+    // `xl/styles.xml` reference as broken and strip every conditional format
+    // from the workbook on open. The writer already refuses to emit an
+    // unresolvable `dxfId`, but rejecting it here tells the caller at set
+    // time which index was wrong instead of silently losing the format.
+    const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
+    if (static_cast<std::size_t>(rule.dxf_id) >= dxf_count) {
+      return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                               "fm_sheet_cf_add_rule: dxf_id out of range",
+                               "dxf_id=" + std::to_string(rule.dxf_id) + " dxfs_count=" + std::to_string(dxf_count));
+    }
     out_rule.dxf_id = rule.dxf_id;
   }
   if (rule.id != nullptr && rule.id[0] != '\0') {

@@ -178,6 +178,15 @@ struct fm_workbook {
   // arena is gone; superseded by the next array evaluation on this handle.
   formulon::c_api::parts::AdhocArrayStash adhoc_array;
 
+  // Iterative-solver progress callback as the C caller registered it. The
+  // engine's own callback type returns `bool`, which the C ABI does not use
+  // in any declaration, so the engine is handed a fixed adapter with this
+  // handle as its `user_data`; the adapter reads the pair below and narrows
+  // the caller's `int32_t` to the engine's `bool`. Cleared by passing a NULL
+  // callback to `fm_workbook_set_iterative_progress`.
+  fm_iterative_progress_cb iterative_progress_cb = nullptr;
+  void* iterative_progress_user_data = nullptr;
+
   formulon::Workbook& workbook() { return *wb; }
   const formulon::Workbook& workbook() const { return *wb; }
 };

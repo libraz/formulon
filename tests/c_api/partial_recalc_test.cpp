@@ -25,16 +25,30 @@ struct WorkbookGuard {
 
 std::atomic<int> g_callback_invocations{0};
 
-extern "C" bool always_continue(uint32_t /*iteration*/, double /*max_residual*/, uint32_t /*max_iterations*/,
-                                void* /*user_data*/) {
+// The progress callback returns the ABI's wide-POD boolean (`int32_t`,
+// non-zero = keep iterating), not a C `bool`.
+extern "C" int32_t always_continue(uint32_t /*iteration*/, double /*max_residual*/, uint32_t /*max_iterations*/,
+                                   void* /*user_data*/) {
   g_callback_invocations.fetch_add(1, std::memory_order_relaxed);
-  return true;
+  return 1;
 }
 
-extern "C" bool always_abort(uint32_t /*iteration*/, double /*max_residual*/, uint32_t /*max_iterations*/,
-                             void* /*user_data*/) {
+extern "C" int32_t always_abort(uint32_t /*iteration*/, double /*max_residual*/, uint32_t /*max_iterations*/,
+                                void* /*user_data*/) {
   g_callback_invocations.fetch_add(1, std::memory_order_relaxed);
-  return false;
+  return 0;
+}
+
+// Records the `user_data` pointer the ABI forwarded, so the adapter that
+// bridges the C callback to the engine is shown to pass the caller's own
+// pointer through rather than an engine-internal one.
+void* g_observed_user_data = nullptr;
+
+extern "C" int32_t record_user_data(uint32_t /*iteration*/, double /*max_residual*/, uint32_t /*max_iterations*/,
+                                    void* user_data) {
+  g_observed_user_data = user_data;
+  g_callback_invocations.fetch_add(1, std::memory_order_relaxed);
+  return 0;
 }
 
 }  // namespace
@@ -136,4 +150,38 @@ TEST(FormulonCApiPartialRecalc, IterativeProgressAbortStopsEarly) {
 TEST(FormulonCApiPartialRecalc, IterativeProgressNullArgumentRejected) {
   EXPECT_EQ(fm_workbook_set_iterative_progress(nullptr, nullptr, nullptr),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
+}
+
+TEST(FormulonCApiPartialRecalc, IterativeProgressForwardsCallerUserData) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
+
+  int marker = 0;
+  g_observed_user_data = nullptr;
+  g_callback_invocations.store(0);
+  ASSERT_EQ(fm_workbook_set_iterative_progress(wb.handle, &record_user_data, &marker), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_EQ(g_callback_invocations.load(), 1);
+  EXPECT_EQ(g_observed_user_data, &marker);
+}
+
+TEST(FormulonCApiPartialRecalc, IterativeProgressClearedByNullCallback) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_iterative(wb.handle, 1, 100, 0.001), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=(A1+10)/2"), 0);
+
+  ASSERT_EQ(fm_workbook_set_iterative_progress(wb.handle, &always_abort, nullptr), 0);
+  ASSERT_EQ(fm_workbook_set_iterative_progress(wb.handle, nullptr, nullptr), 0);
+  g_callback_invocations.store(0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  // With the callback cleared the abort never fires, so the solve runs to
+  // convergence instead of stopping after the first sweep.
+  EXPECT_EQ(g_callback_invocations.load(), 0);
+  fm_value_t v{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 0, &v), 0);
+  EXPECT_EQ(v.kind, FM_VAL_NUMBER);
+  EXPECT_NEAR(v.u.number, 10.0, 0.01);
 }

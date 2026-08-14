@@ -1,6 +1,7 @@
 // Workbook lifecycle bindings: cell mutation / read, recalc & save,
 // iterative-solver registration, and the trivial `isValid` predicate.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -9,6 +10,41 @@
 #include "node_addon/parts/workbook_class.h"
 
 namespace formulon_node {
+
+namespace {
+
+Napi::Object MakeParallelRecalcResult(Napi::Env env, Napi::Object status, const fm_parallel_recalc_stats& stats) {
+  Napi::Object stats_obj = Napi::Object::New(env);
+  // The C ABI counters are uint64_t. The engine's counters are bounded well
+  // below Number.MAX_SAFE_INTEGER for a single call, so this conversion is
+  // exact while preserving the package's existing JS-number surface.
+  stats_obj.Set("cellsEvaluated", Napi::Number::New(env, static_cast<double>(stats.cells_evaluated)));
+  stats_obj.Set("sccsProcessed", Napi::Number::New(env, static_cast<double>(stats.sccs_processed)));
+  stats_obj.Set("parallelSteps", Napi::Number::New(env, static_cast<double>(stats.parallel_steps)));
+  stats_obj.Set("serialFallbackSteps", Napi::Number::New(env, static_cast<double>(stats.serial_fallback_steps)));
+  stats_obj.Set("cycleRecoveries", Napi::Number::New(env, static_cast<double>(stats.cycle_recoveries)));
+  stats_obj.Set("workerThreadsStarted", Napi::Number::New(env, static_cast<double>(stats.worker_threads_started)));
+  stats_obj.Set("workerThreadsUsed", Napi::Number::New(env, static_cast<double>(stats.worker_threads_used)));
+
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("status", status);
+  result.Set("stats", stats_obj);
+  return result;
+}
+
+bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
+  if (info.Length() == 0 || !info[0].IsNumber()) {
+    return false;
+  }
+  const double value = info[0].As<Napi::Number>().DoubleValue();
+  if (!std::isfinite(value) || std::trunc(value) != value || value < 0.0 || value > 8.0) {
+    return false;
+  }
+  thread_count = static_cast<uint32_t>(value);
+  return true;
+}
+
+}  // namespace
 
 // ---- Cell mutation --------------------------------------------------
 
@@ -285,6 +321,33 @@ Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
+Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  fm_parallel_recalc_stats stats{};
+  if (handle_ == nullptr) {
+    return MakeParallelRecalcResult(env, NullHandleError(env), stats);
+  }
+
+  uint32_t thread_count = 0;
+  if (!ReadThreadCount(info, thread_count)) {
+    // Reuse the C ABI's canonical invalid-thread-count diagnostic. The C
+    // entry point validates before touching the workbook, and zeroes stats
+    // on this failure path just as it does for a direct caller.
+    const fm_status_t rc = fm_workbook_recalc_parallel(handle_, 9U, &stats);
+    Napi::Object status = MakeStatus(env, rc);
+    SyncExternalMemory(env);
+    return MakeParallelRecalcResult(env, status, stats);
+  }
+
+  const fm_status_t rc = fm_workbook_recalc_parallel(handle_, thread_count, &stats);
+  Napi::Object status = MakeStatus(env, rc);
+  // Parallel recalc can change cached values and spill geometry just like the
+  // serial entry point, so keep V8's external-memory estimate in sync before
+  // returning the result envelope.
+  SyncExternalMemory(env);
+  return MakeParallelRecalcResult(env, status, stats);
+}
+
 Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
@@ -344,11 +407,11 @@ Napi::Value Workbook::SetIterativeProgress(const Napi::CallbackInfo& info) {
   return MakeStatus(env, rc);
 }
 
-bool Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
-                                           void* user_data) {
+int32_t Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                              void* user_data) {
   auto* const workbook = static_cast<Workbook*>(user_data);
   if (workbook == nullptr || workbook->iterative_progress_callback_.IsEmpty()) {
-    return true;
+    return 1;
   }
   Napi::Env env = workbook->iterative_progress_callback_.Env();
   Napi::HandleScope scope(env);
@@ -361,9 +424,9 @@ bool Workbook::IterativeProgressTrampoline(uint32_t iteration, double max_residu
   workbook->in_iterative_progress_callback_ = false;
   if (env.IsExceptionPending()) {
     (void)env.GetAndClearPendingException();
-    return false;
+    return 0;
   }
-  return ret.IsUndefined() || ret.IsNull() || ret.ToBoolean().Value();
+  return (ret.IsUndefined() || ret.IsNull() || ret.ToBoolean().Value()) ? 1 : 0;
 }
 
 Napi::Value Workbook::Dispose(const Napi::CallbackInfo& info) {

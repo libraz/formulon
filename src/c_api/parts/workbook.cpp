@@ -20,6 +20,7 @@
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
+#include "eval/scheduler.h"
 #include "io/a1_ref.h"
 #include "io/format_detect.h"
 #include "io/ooxml_reader.h"
@@ -35,6 +36,21 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 
 namespace {
+
+// Engine-side shim for the C ABI iterative-solver progress callback. The
+// engine passes the registering handle as `user_data`; the caller's own
+// opaque pointer is stored beside the callback on that handle. A cleared
+// callback is never installed, so the null check here only guards a racing
+// clear from another thread and defaults to continuing the solve.
+bool iterative_progress_adapter(std::uint32_t iteration, double max_residual, std::uint32_t max_iterations,
+                                void* user_data) {
+  auto* handle = static_cast<fm_workbook_t*>(user_data);
+  if (handle == nullptr || handle->iterative_progress_cb == nullptr) {
+    return true;
+  }
+  return handle->iterative_progress_cb(iteration, max_residual, max_iterations, handle->iterative_progress_user_data) !=
+         0;
+}
 
 std::string ascii_lower(std::string value) {
   for (char& ch : value) {
@@ -386,24 +402,14 @@ extern "C" void fm_workbook_destroy(fm_workbook_t* wb) {
 // ---------------------------------------------------------------------------
 
 extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len) {
-  clear_last_error();
-  if (wb == nullptr || out_bytes == nullptr || out_len == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_workbook_save: NULL argument");
-  }
-  auto bytes = wb->workbook().save();
-  if (!bytes) {
-    return set_last_error(bytes.error());
-  }
-  const std::vector<std::uint8_t>& src = bytes.value();
-  // Allocate with `new[]` so `fm_buffer_free`'s matching `delete[]` is
-  // well-defined. The header documents the pairing.
-  auto* buffer = new uint8_t[src.size()];
-  if (!src.empty()) {
-    std::memcpy(buffer, src.data(), src.size());
-  }
-  *out_bytes = buffer;
-  *out_len = src.size();
-  return 0;
+  // Delegates so the whole save family shares one failure-path contract:
+  // every out-param is zeroed before validation and stays zeroed on every
+  // non-`kOk` return. `Workbook::save()` is itself `save_ex(Ooxml)`, so the
+  // produced bytes are unchanged.
+  size_t downgraded_formula_count = 0;
+  size_t deferred_feature_count = 0;
+  return save_ex_with_diagnostics_impl(wb, FM_WORKBOOK_FORMAT_XLSX, out_bytes, out_len, &downgraded_formula_count,
+                                       &deferred_feature_count, "fm_workbook_save");
 }
 
 extern "C" fm_status_t fm_workbook_save_ex_with_diagnostics(const fm_workbook_t* wb, std::int32_t format,
@@ -800,6 +806,44 @@ extern "C" fm_status_t fm_workbook_recalc(fm_workbook_t* wb) {
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
+                                                   fm_parallel_recalc_stats* out_stats) {
+  clear_last_error();
+  if (out_stats != nullptr) {
+    *out_stats = fm_parallel_recalc_stats{};
+  }
+  if (wb == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_recalc_parallel: wb is NULL");
+  }
+  if (thread_count > 8U) {
+    return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
+                             "fm_workbook_recalc_parallel: thread_count must be 0..8",
+                             "thread_count=" + std::to_string(thread_count) + " max=8");
+  }
+
+  formulon::eval::SchedulerConfig config;
+  config.num_threads = thread_count;
+  formulon::eval::SchedulerStats stats;
+  auto result = wb->workbook().recalc_parallel(formulon::eval::default_registry(), config, &stats);
+  if (!result) {
+    // `stats` is intentionally not copied on failure. The public contract
+    // promises an all-zero output for every failed entry, including an
+    // evaluator / spill-scheduler failure after partial internal work.
+    return set_last_error(result.error());
+  }
+  if (out_stats != nullptr) {
+    out_stats->cells_evaluated = stats.cells_evaluated;
+    out_stats->sccs_processed = stats.sccs_processed;
+    out_stats->parallel_steps = stats.parallel_steps;
+    out_stats->serial_fallback_steps = stats.serial_fallback_steps;
+    out_stats->cycle_recoveries = stats.cycle_recoveries;
+    out_stats->worker_threads_started = stats.worker_threads_started;
+    out_stats->worker_threads_used = stats.worker_threads_used;
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_set_iterative(fm_workbook_t* wb, int32_t enabled, int32_t max_iterations,
                                                  double max_change) {
   clear_last_error();
@@ -946,11 +990,12 @@ extern "C" fm_status_t fm_workbook_set_iterative_progress(fm_workbook_t* wb, fm_
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              "fm_workbook_set_iterative_progress: wb is NULL");
   }
-  // The C ABI callback signature
-  //   `bool(*)(uint32_t, double, uint32_t, void*)`
-  // is bit-identical to the engine's `IterativeProgressCb` typedef, so
-  // a direct assignment is well-defined under both C and C++ rules.
-  formulon::eval::IterativeProgressCb engine_cb = cb;
-  wb->workbook().set_iterative_progress(engine_cb, user_data);
+  wb->iterative_progress_cb = cb;
+  wb->iterative_progress_user_data = cb == nullptr ? nullptr : user_data;
+  // The engine's callback returns `bool`, which no C ABI declaration uses.
+  // Hand it the adapter above instead of the caller's pointer so both sides
+  // keep their own return type and neither assignment needs a cast.
+  const formulon::eval::IterativeProgressCb engine_cb = cb == nullptr ? nullptr : &iterative_progress_adapter;
+  wb->workbook().set_iterative_progress(engine_cb, cb == nullptr ? nullptr : wb);
   return 0;
 }

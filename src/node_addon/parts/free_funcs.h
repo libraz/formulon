@@ -1,7 +1,7 @@
 // Free (non-method) bindings exposed on the module exports object:
 // `evalFormula`, `version` (aliased as `versionString` to match the WASM
-// binding), `lastErrorMessage`, `lastErrorContext`, `statusString`, and
-// `errorDisplayName`.
+// binding), `lastErrorMessage`, `lastErrorContext`, `statusString`,
+// `errorDisplayName`, `setLogMinLevel` and `setLogSink`.
 // Declared here so `addon.cc::Init` can attach them without leaking the
 // per-area TU layout.
 
@@ -13,8 +13,11 @@
 namespace formulon_node {
 
 /// `evalFormula(formula)`: convenience that mirrors the embind variant.
-/// Spins up an empty workbook, places the formula at A1, recalcs, and
-/// returns `{ status, value }`.
+/// Evaluates `formula` read-only against a fresh single-sheet workbook,
+/// anchored at `Sheet1!A1`, and returns `{ status, value }`. Nothing is
+/// written and no recalc runs, so an anchor-referencing formula such as
+/// `=A1` reads the (blank) anchor rather than becoming a self-reference.
+/// An array result is reduced to its top-left element.
 Napi::Value EvalFormula(const Napi::CallbackInfo& info);
 
 /// Returns the engine version string (`fm_version_string`).
@@ -31,6 +34,16 @@ Napi::Value StatusString(const Napi::CallbackInfo& info);
 
 /// Returns an Excel literal such as `#DIV/0!` for a numeric cell error code.
 Napi::Value ErrorDisplayName(const Napi::CallbackInfo& info);
+
+/// `setLogMinLevel(level)`: sets the engine's minimum structured-log
+/// severity. Process-wide, not per workbook handle. The default is
+/// `FM_LOG_LEVEL_OFF` (4), under which the engine writes nothing.
+Napi::Value SetLogMinLevel(const Napi::CallbackInfo& info);
+
+/// `setLogSink(cb | null)`: routes structured-log records to `cb`, or
+/// restores the (silent at the default threshold) stderr fallback.
+/// Process-wide, not per workbook handle.
+Napi::Value SetLogSink(const Napi::CallbackInfo& info);
 
 }  // namespace formulon_node
 

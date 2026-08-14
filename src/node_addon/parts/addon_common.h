@@ -50,6 +50,9 @@ namespace formulon_node {
 /// code table). The C ABI itself uses 7001 for a NULL pointer; 7000
 /// identifies a wrapper whose handle was already destroyed.
 constexpr fm_status_t kBindingInvalidHandle = 7000;
+/// The C ABI's NULL-pointer / wrong-argument-shape code, reused when a
+/// binding entry point rejects a JS argument before any C call.
+constexpr fm_status_t kBindingNullPointer = 7001;
 
 // ---------------------------------------------------------------------
 // Status / Value envelope builders

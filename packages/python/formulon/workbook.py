@@ -52,12 +52,16 @@ __all__ = [
     "DataValidationInput",
     "DefinedName",
     "DifferentialFormat",
+    "ErrorCode",
     "ExternalLink",
+    "ExternalLinkKind",
     "FillRecord",
     "FontRecord",
     "FormulonError",
     "FunctionMetadata",
     "Hyperlink",
+    "IterativeSettings",
+    "LogLevel",
     "IconSet",
     "MergeRange",
     "PassthroughPart",
@@ -93,9 +97,17 @@ __all__ = [
 # Error type
 # ---------------------------------------------------------------------------
 
-# `formulon::FormulonErrorCode::kNotFound`. The C ABI intentionally exposes
-# status codes as integers, so bindings retain this matching stable ordinal.
+# `formulon::FormulonErrorCode` ordinals. The C ABI intentionally exposes
+# status codes as integers, so bindings retain these matching stable values.
+_STATUS_INVALID_ARGUMENT = 2
 _STATUS_NOT_FOUND = 6
+# 7000-band: bindings / C API (src/utils/error.h).
+_STATUS_BINDING_INVALID_HANDLE = 7000
+_STATUS_BINDING_NULL_POINTER = 7001
+
+# Inclusive bounds of `fm_locale_t` (0 = en-US, 1 = ja-JP).
+_LOCALE_MIN = 0
+_LOCALE_MAX = 1
 
 
 class FormulonError(Exception):
@@ -116,10 +128,24 @@ class FormulonError(Exception):
     calls overwrite those buffers.
     """
 
-    def __init__(self, status: int, *, op: str = "") -> None:
+    def __init__(
+        self,
+        status: int,
+        *,
+        op: str = "",
+        _diagnostic_override: Optional[tuple[str, str]] = None,
+    ) -> None:
         self.status = int(status)
+        # Take the Python-side snapshot before calling fm_status_string.
+        # The latter is a non-status pointer-returning export and must not
+        # become a diagnostic read or overwrite the pending snapshot. An
+        # override still drains a pending C diagnostic so it cannot leak into
+        # a later exception on this Python thread.
+        message, context = LIB.last_diagnostic(self.status)
+        if _diagnostic_override is not None:
+            message, context = _diagnostic_override
         self.status_name = LIB.read_cstr(LIB.fm_status_string(_sint(self.status, "status")))
-        self.message, self.context = LIB.last_diagnostic(self.status)
+        self.message, self.context = message, context
         prefix = f"{op}: " if op else ""
         text = f"{prefix}{self.status_name} ({self.status})"
         if self.message:
@@ -323,6 +349,55 @@ class CalcMode(IntEnum):
     AUTO = 0
     MANUAL = 1
     AUTO_NO_TABLE = 2
+
+
+class LogLevel(IntEnum):
+    """Minimum severity for the engine's structured log stream.
+
+    ``OFF`` discards every record and is the default: an embedded library
+    must not write to the host's stderr unless the host asks it to.
+    """
+
+    DEBUG = 0
+    INFO = 1
+    WARN = 2
+    ERROR = 3
+    OFF = 4
+
+
+class ErrorCode(IntEnum):
+    """Excel cell-error ordinals (mirror of ``formulon::ErrorCode``).
+
+    These are the values carried by :attr:`Value.error_code` and accepted
+    by :meth:`Workbook.set_error`.
+    """
+
+    NULL = 0
+    DIV0 = 1
+    VALUE = 2
+    REF = 3
+    NAME = 4
+    NUM = 5
+    NA = 6
+    GETTING_DATA = 7
+    SPILL = 8
+    CALC = 9
+    FIELD = 10
+    BLOCKED = 11
+    CONNECT = 12
+    EXTERNAL = 13
+    BUSY = 14
+    PYTHON = 15
+    UNKNOWN = 16
+
+
+class ExternalLinkKind(IntEnum):
+    """External-link kind carried by :attr:`ExternalLink.kind`."""
+
+    UNKNOWN = 0
+    EXTERNAL_BOOK = 1
+    OLE = 2
+    DDE = 3
 
 
 class PivotAxis(IntEnum):
@@ -588,13 +663,21 @@ class SheetView:
 
 @dataclass(frozen=True)
 class ColumnLayout:
-    """A per-column-range layout override (inclusive ``[first, last]``)."""
+    """A per-column-range layout override (inclusive ``[first, last]``).
+
+    ``has_width`` is logical presence: it is true for the raw source bit or
+    a legacy non-zero width. An explicit zero remains distinguishable from an
+    absent width.
+    """
 
     first: int
     last: int
     width: float
     hidden: bool
     outline_level: int
+    has_width: bool = False
+    has_style: bool = False
+    style_xf: int = 0
 
 
 @dataclass(frozen=True)
@@ -605,15 +688,29 @@ class RowLayout:
     height: float
     hidden: bool
     outline_level: int
+    has_style: bool = False
+    style_xf: int = 0
+
+
+class IterativeSettings(NamedTuple):
+    """Iterative-calculation settings read back by ``get_iterative``."""
+
+    enabled: bool
+    max_iterations: int
+    max_change: float
 
 
 @dataclass(frozen=True)
 class PaginationResult:
     """Resolved physical pagination for one worksheet.
 
-    ``print_area`` contains inclusive, zero-based ``(first_row, first_col,
-    last_row, last_col)`` rectangles.  Break lists contain the zero-based row
-    or column a new physical page begins before.
+    ``print_area`` is the sheet's declared ``_xlnm.Print_Area`` as
+    inclusive, zero-based ``(first_row, first_col, last_row, last_col)``
+    rectangles. It is empty when the sheet declares no print area and is
+    not backfilled with the used range; pagination itself still falls back
+    to the used range, so ``page_count`` can be non-zero while this is
+    empty. Break lists contain the zero-based row or column a new physical
+    page begins before.
     """
 
     page_count: int
@@ -692,6 +789,14 @@ class DataBar:
 
 @dataclass(frozen=True)
 class IconSet:
+    """``<iconSet>`` payload of a conditional-format rule.
+
+    ``percent`` is round-trip only: it is preserved across load and save
+    but never consulted during evaluation. Each threshold in
+    ``thresholds`` carries its own ``type``, and that type is what
+    interprets it.
+    """
+
     name: int
     thresholds: List[CfValueObject]
     reverse: bool = False
@@ -841,11 +946,12 @@ class CellXf:
 class ColorSpec:
     """How an OOXML ``<color>`` element expressed its value.
 
-    Records read from a file carry the original specification here while
-    the owning record's ``*_argb`` field carries the resolved AARRGGBB
-    value. ``kind`` is ``0=none``, ``1=rgb``, ``2=theme``, ``3=indexed``,
-    ``4=auto``; the default ``kind=0`` makes the writer fall back to the
-    resolved value, which is what a record built from scratch wants.
+    Records read from a file carry the original specification here. When
+    ``kind`` is non-zero, it is authoritative; the owning record's
+    ``*_argb`` field is not an Excel-rendered value for theme/indexed/auto.
+    It is literal RGB for ``kind=1`` or a compatibility fallback otherwise.
+    ``kind`` is ``0=none``, ``1=rgb``, ``2=theme``, ``3=indexed``, ``4=auto``;
+    the default ``kind=0`` makes the writer emit ``*_argb`` as ``rgb``.
     """
 
     kind: int = 0
@@ -862,7 +968,10 @@ class FontRecord:
     The ``has_*`` flags distinguish an absent OOXML element from an
     explicit ``val="0"``: on a differential font an absent ``<b>`` means
     "leave the source formatting unchanged" while ``<b val="0"/>`` means
-    "switch bold off".
+    "switch bold off". ``color`` is authoritative when its ``kind`` is
+    non-zero; ``color_argb`` is literal RGB for ``kind=1`` and a
+    compatibility fallback for theme/indexed/auto selectors, not a
+    rendered colour.
     """
 
     name: str = ""
@@ -886,7 +995,12 @@ class FontRecord:
 
 @dataclass
 class FillRecord:
-    """A fill record."""
+    """A fill record.
+
+    ``fg`` and ``bg`` carry the authoritative OOXML colour selectors. Their
+    sibling ``*_argb`` fields are literal RGB for ``kind=1`` or compatibility
+    fallbacks otherwise; ``kind=0`` writes the sibling as ``rgb``.
+    """
 
     pattern: int = 0
     fg_argb: int = 0
@@ -901,6 +1015,9 @@ class DifferentialFormat:
 
     ``border`` uses the same dictionary shape as :meth:`Workbook.add_border`.
     A number format is engaged when ``num_fmt_id`` is not ``None``.
+    ``alignment_xml`` and ``protection_xml`` carry serialized OOXML child
+    fragments; an empty string means absent. Their semantic content survives
+    round-tripping, while XML lexical formatting may normalize on load.
     """
 
     font: Optional[FontRecord] = None
@@ -908,6 +1025,8 @@ class DifferentialFormat:
     border: Optional[Dict[str, object]] = None
     num_fmt_id: Optional[int] = None
     num_fmt_code: str = ""
+    alignment_xml: str = ""
+    protection_xml: str = ""
 
 
 def _decode_color(ptr: int) -> ColorSpec:
@@ -1058,7 +1177,7 @@ class ExternalLink:
     part_path: str
     target: str
     target_external: bool
-    kind: int
+    kind: ExternalLinkKind
 
 
 @dataclass(frozen=True)
@@ -1068,7 +1187,7 @@ class PivotCell:
     row: int
     col: int
     value: Value
-    kind: int
+    kind: PivotCellKind
     depth: int
     field_name: str
     number_format: str
@@ -1100,7 +1219,7 @@ class PivotFieldSpec:
 
     source_name: str
     custom_name: str = ""
-    axis: int = PivotAxis.ROW
+    axis: "PivotAxis | int" = PivotAxis.ROW
     subtotal_top: bool = False
     number_format: str = ""
 
@@ -1114,9 +1233,9 @@ class PivotDataFieldSpec:
 
     name: str
     field_index: int
-    aggregation: int = PivotAggregation.SUM
+    aggregation: "PivotAggregation | int" = PivotAggregation.SUM
     number_format: str = ""
-    show_as: int = PivotShowValuesAs.NORMAL
+    show_as: "PivotShowValuesAs | int" = PivotShowValuesAs.NORMAL
     show_as_base_field: int = -1
     show_as_base_item: int = -1
 
@@ -1125,22 +1244,76 @@ class PivotDataFieldSpec:
 class PivotFilterSpec:
     """Argument shape for :meth:`Workbook.pivot_filter_add`."""
 
-    axis: int
+    axis: "PivotAxis | int"
     field_name: str
-    type: int
-    value_kind: int = PivotFilterValueKind.NONE
+    type: "PivotFilterType | int"
+    value_kind: "PivotFilterValueKind | int" = PivotFilterValueKind.NONE
     value_int: int = 0
     value_double: float = 0.0
     value_text: str = ""
-    value_high_kind: int = PivotFilterValueKind.NONE
+    value_high_kind: "PivotFilterValueKind | int" = PivotFilterValueKind.NONE
     value_high_int: int = 0
     value_high_double: float = 0.0
     data_field_index: int = 0
 
 
+def _cell_xf_ex2_fields(record: CellXf) -> Dict[str, object]:
+    """Project a :class:`CellXf` onto the ``fm_cell_xf_ex2`` field map.
+
+    Shared by the direct ``<xf>`` writer and the named-style ``<xf>``
+    writer, which pack the same struct, so the presence-flag defaulting
+    lives in one place.
+    """
+    return {
+        "font_index": int(record.font_index),
+        "fill_index": int(record.fill_index),
+        "border_index": int(record.border_index),
+        "num_fmt_id": int(record.num_fmt_id),
+        "horizontal_align": int(record.horizontal_align),
+        "vertical_align": int(record.vertical_align),
+        "wrap_text": 1 if record.wrap_text else 0,
+        "has_alignment": 1
+        if (record.has_alignment if record.has_alignment is not None else _cell_xf_has_alignment(record))
+        else 0,
+        "justify_last_line": 1 if record.justify_last_line else 0,
+        "xf_id": int(record.xf_id),
+        "has_text_rotation": 1 if record.text_rotation is not None else 0,
+        "text_rotation": int(record.text_rotation or 0),
+        "has_indent": 1 if record.indent is not None else 0,
+        "indent": int(record.indent or 0),
+        "has_relative_indent": 1 if record.relative_indent is not None else 0,
+        "relative_indent": int(record.relative_indent or 0),
+        "has_shrink_to_fit": 1 if record.shrink_to_fit is not None else 0,
+        "shrink_to_fit": 1 if record.shrink_to_fit else 0,
+        "has_reading_order": 1 if record.reading_order is not None else 0,
+        "reading_order": int(record.reading_order or 0),
+        "has_horizontal_align": 1
+        if (record.has_horizontal_align if record.has_horizontal_align is not None else record.horizontal_align != 0)
+        else 0,
+        "has_vertical_align": 1
+        if (record.has_vertical_align if record.has_vertical_align is not None else record.vertical_align != 2)
+        else 0,
+        "has_wrap_text": 1 if (record.has_wrap_text if record.has_wrap_text is not None else record.wrap_text) else 0,
+        "has_justify_last_line": 1
+        if (record.has_justify_last_line if record.has_justify_last_line is not None else record.justify_last_line)
+        else 0,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Workbook handle
 # ---------------------------------------------------------------------------
+
+
+def _tristate(flag: Optional[bool]) -> int:
+    """Map an optional flag to the ABI's preserve / clear / set encoding.
+
+    ``None`` becomes ``-1`` (leave the stored flag alone); ``False`` and
+    ``True`` become ``0`` and ``1``.
+    """
+    if flag is None:
+        return -1
+    return 1 if flag else 0
 
 
 def _alloc_out_ptr() -> int:
@@ -1218,8 +1391,8 @@ class Workbook:
       Each ``Workbook`` instance is single-threaded. The underlying
       wasmtime store is serialised process-wide by an internal lock in
       :mod:`formulon._c`, so cross-thread misuse cannot corrupt WASM
-      state -- it just blocks. The parallel recalc scheduler degrades
-      to serial under WASM (single-threaded build).
+      state -- it just blocks. This no-pthread wheel deliberately exports
+      only serial recalc; it has no public parallel-recalc entry point.
     """
 
     __slots__ = ("_handle",)
@@ -1312,13 +1485,34 @@ class Workbook:
         """``True`` while the handle is still alive."""
         return self._handle != 0
 
+    def memory_usage(self) -> int:
+        """Return an estimate of the workbook's heap footprint, in bytes.
+
+        Intended for a host that pools workbooks and needs a size to
+        evict on. The figure covers the cell store, the shared-string
+        storage, the passthrough part payloads and the workbook-level
+        metadata. It **excludes** allocator overhead, the dependency
+        graph and the style tables, so it is an estimate for relative
+        pressure rather than the process's retained heap; a
+        formula-heavy workbook undercounts by the size of its graph.
+
+        The walk visits every materialised cell, so call it at coarse
+        boundaries (after a load or a recalc) rather than per edit.
+        """
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(LIB.fm_workbook_memory_usage(h, out), "fm_workbook_memory_usage")
+            return LIB.read_u32(out)
+        finally:
+            LIB.free(out)
+
     def _require(self) -> int:
         if not self.is_valid:
             raise FormulonError(
-                # 7000-band: bindings / C API. 7000 is kBindingInvalidHandle
-                # in src/utils/error.h.
-                7000,
-                op="Workbook (handle is NULL or already closed)",
+                _STATUS_BINDING_INVALID_HANDLE,
+                op="Workbook",
+                _diagnostic_override=("handle is NULL or already closed", ""),
             )
         return self._handle
 
@@ -1351,6 +1545,10 @@ class Workbook:
 
     # -- Cell mutation -----------------------------------------------------
     def set_number(self, sheet: int, row: int, col: int, value: float) -> None:
+        """Store the number ``value`` at ``(sheet, row, col)``.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based.
+        """
         h = self._require()
         status = LIB.fm_workbook_set_number(
             h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), float(value)
@@ -1358,6 +1556,10 @@ class Workbook:
         _check(status, "fm_workbook_set_number")
 
     def set_bool(self, sheet: int, row: int, col: int, value: bool) -> None:
+        """Store the boolean ``value`` at ``(sheet, row, col)``.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based.
+        """
         h = self._require()
         status = LIB.fm_workbook_set_bool(
             h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), 1 if value else 0
@@ -1365,6 +1567,14 @@ class Workbook:
         _check(status, "fm_workbook_set_bool")
 
     def set_error(self, sheet: int, row: int, col: int, error_code: int) -> None:
+        """Store an Excel cell error at ``(sheet, row, col)``.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. ``error_code`` is
+        a ``formulon::ErrorCode`` ordinal, not a display literal: ``0`` is
+        ``#NULL!``, ``1`` ``#DIV/0!``, ``2`` ``#VALUE!``, ``3`` ``#REF!``,
+        ``4`` ``#NAME?``, ``5`` ``#NUM!``, ``6`` ``#N/A``. The same
+        ordinals come back out through :attr:`Value.error_code`.
+        """
         h = self._require()
         status = LIB.fm_workbook_set_error(
             h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), _sint(error_code, "error")
@@ -1372,6 +1582,12 @@ class Workbook:
         _check(status, "fm_workbook_set_error")
 
     def set_text(self, sheet: int, row: int, col: int, value: str) -> None:
+        """Store the string ``value`` at ``(sheet, row, col)``.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. The text is stored
+        verbatim; a leading ``=`` does not make it a formula (use
+        :meth:`set_formula`).
+        """
         h = self._require()
         text_ptr, _ = LIB.alloc_utf8(value)
         try:
@@ -1383,11 +1599,22 @@ class Workbook:
             LIB.free(text_ptr)
 
     def set_blank(self, sheet: int, row: int, col: int) -> None:
+        """Clear the cell at ``(sheet, row, col)``.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. Clearing drops the
+        stored value or formula; cell formatting is unaffected.
+        """
         h = self._require()
         status = LIB.fm_workbook_set_blank(h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"))
         _check(status, "fm_workbook_set_blank")
 
     def set_formula(self, sheet: int, row: int, col: int, formula: str) -> None:
+        """Store the formula ``formula`` at ``(sheet, row, col)``.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. The leading ``=``
+        is optional. The cell keeps its previous cached value until the
+        next :meth:`recalc`.
+        """
         h = self._require()
         formula_ptr, _ = LIB.alloc_utf8(formula)
         try:
@@ -1397,6 +1624,41 @@ class Workbook:
             _check(status, "fm_workbook_set_formula")
         finally:
             LIB.free(formula_ptr)
+
+    def set_phonetic(self, sheet: int, row: int, col: int, text: str) -> None:
+        """Set the cell's phonetic guide (OOXML ``<rPh>``, furigana).
+
+        ``sheet``, ``row`` and ``col`` are all 0-based. An empty ``text``
+        removes the guide. The guide is display metadata attached to the
+        cell's string; it does not affect evaluation.
+        """
+        h = self._require()
+        text_ptr, _ = LIB.alloc_utf8(text)
+        try:
+            status = LIB.fm_workbook_set_cell_phonetic(
+                h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), text_ptr
+            )
+            _check(status, "fm_workbook_set_cell_phonetic")
+        finally:
+            LIB.free(text_ptr)
+
+    def get_phonetic(self, sheet: int, row: int, col: int) -> str:
+        """Return the cell's phonetic guide, or ``""`` when it has none.
+
+        ``sheet``, ``row`` and ``col`` are all 0-based.
+        """
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_workbook_get_cell_phonetic(
+                    h, _uint(sheet, "sheet_index"), _uint(row, "row"), _uint(col, "col"), out
+                ),
+                "fm_workbook_get_cell_phonetic",
+            )
+            return LIB.read_cstr(LIB.read_u32(out))
+        finally:
+            LIB.free(out)
 
     # -- Cell read ---------------------------------------------------------
     def get_value(self, sheet: int, row: int, col: int) -> Value:
@@ -1507,9 +1769,9 @@ class Workbook:
     def recalc(self) -> None:
         """Drive a full incremental recalc.
 
-        Public bindings use the serial recalc contract. The internal C++
-        parallel scheduler is not exposed by the C ABI, so native CLI and
-        language bindings have the same recalculation semantics.
+        This no-pthread WASM wheel intentionally exposes only the serial
+        recalc contract. Thread-capable native surfaces may opt in to the
+        parallel scheduler, but this method always runs serially.
         """
         h = self._require()
         status = LIB.fm_workbook_recalc(h)
@@ -1522,6 +1784,32 @@ class Workbook:
             h, 1 if enabled else 0, _sint(max_iterations, "max_iterations"), float(max_change)
         )
         _check(status, "fm_workbook_set_iterative")
+
+    def get_iterative(self) -> IterativeSettings:
+        """Read back the iterative-calculation settings.
+
+        The counterpart of :meth:`set_iterative`; the cap and threshold are
+        the stored values even when ``enabled`` is ``False``.
+        """
+        h = self._require()
+        enabled_ptr = _alloc_out_ptr()
+        iterations_ptr = _alloc_out_ptr()
+        change_ptr = LIB.alloc(8)
+        try:
+            LIB.write_bytes(change_ptr, b"\x00" * 8)
+            _check(
+                LIB.fm_workbook_get_iterative(h, enabled_ptr, iterations_ptr, change_ptr),
+                "fm_workbook_get_iterative",
+            )
+            return IterativeSettings(
+                enabled=bool(LIB.read_i32(enabled_ptr)),
+                max_iterations=LIB.read_u32(iterations_ptr),
+                max_change=LIB.read_f64(change_ptr),
+            )
+        finally:
+            LIB.free(enabled_ptr)
+            LIB.free(iterations_ptr)
+            LIB.free(change_ptr)
 
     # -- Save --------------------------------------------------------------
     def save(self) -> bytes:
@@ -1686,64 +1974,159 @@ class Workbook:
         """Iterate over every defined name in declaration order."""
         h = self._require()
         n = int(LIB.fm_workbook_defined_name_count(h))
-        for i in range(n):
-            name_ptr = LIB.alloc(4)
-            formula_ptr = LIB.alloc(4)
-            local_sheet_ptr = LIB.alloc(4)
-            LIB.write_bytes(name_ptr, b"\x00\x00\x00\x00")
-            LIB.write_bytes(formula_ptr, b"\x00\x00\x00\x00")
-            LIB.write_bytes(local_sheet_ptr, b"\x00\x00\x00\x00")
-            try:
+        # Scratch is hoisted out of the loop (as in iter_cells): each
+        # LIB.alloc/free is a locked WASM call, so per-item slots would
+        # make the walk cost O(n) allocator round-trips on top of the
+        # unavoidable O(n) ABI reads.
+        name_ptr = _alloc_out_ptr()
+        formula_ptr = _alloc_out_ptr()
+        local_sheet_ptr = _alloc_out_ptr()
+        try:
+            for i in range(n):
                 status = LIB.fm_workbook_defined_name_at_ex(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
                 _check(status, "fm_workbook_defined_name_at_ex")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 formula = LIB.read_cstr(LIB.read_u32(formula_ptr))
                 local_sheet_id = LIB.read_i32(local_sheet_ptr)
-            finally:
-                LIB.free(name_ptr)
-                LIB.free(formula_ptr)
-                LIB.free(local_sheet_ptr)
-            yield DefinedName(name=name, formula=formula, local_sheet_id=local_sheet_id)
+                yield DefinedName(name=name, formula=formula, local_sheet_id=local_sheet_id)
+        finally:
+            LIB.free(name_ptr)
+            LIB.free(formula_ptr)
+            LIB.free(local_sheet_ptr)
 
     def iter_tables(self) -> Iterator[Table]:
         """Iterate over every table in declaration order."""
         h = self._require()
         n = int(LIB.fm_workbook_table_count(h))
-        for i in range(n):
-            name_ptr = LIB.alloc(4)
-            display_ptr = LIB.alloc(4)
-            ref_ptr = LIB.alloc(4)
-            sheet_ptr = LIB.alloc(4)
-            for p in (name_ptr, display_ptr, ref_ptr, sheet_ptr):
-                LIB.write_bytes(p, b"\x00\x00\x00\x00")
-            try:
+        # Scratch hoisted out of the loop; see iter_defined_names.
+        name_ptr = _alloc_out_ptr()
+        display_ptr = _alloc_out_ptr()
+        ref_ptr = _alloc_out_ptr()
+        sheet_ptr = _alloc_out_ptr()
+        try:
+            for i in range(n):
                 status = LIB.fm_workbook_table_at(h, _uint(i, "idx"), name_ptr, display_ptr, ref_ptr, sheet_ptr)
                 _check(status, "fm_workbook_table_at")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 display = LIB.read_cstr(LIB.read_u32(display_ptr))
                 ref = LIB.read_cstr(LIB.read_u32(ref_ptr))
                 sheet = LIB.read_u32(sheet_ptr)
-            finally:
-                LIB.free(name_ptr)
-                LIB.free(display_ptr)
-                LIB.free(ref_ptr)
-                LIB.free(sheet_ptr)
-            yield Table(name=name, display_name=display, ref=ref, sheet_index=sheet)
+                yield Table(name=name, display_name=display, ref=ref, sheet_index=sheet)
+        finally:
+            LIB.free(name_ptr)
+            LIB.free(display_ptr)
+            LIB.free(ref_ptr)
+            LIB.free(sheet_ptr)
+
+    def table_create(
+        self,
+        sheet: int,
+        ref: str,
+        name: str,
+        display_name: str,
+        column_names: Sequence[str],
+        style_name: str = "",
+        header_row: bool = True,
+        totals_row: bool = False,
+    ) -> int:
+        """Create a worksheet table and return its index.
+
+        ``column_names`` must hold one non-empty, table-unique header per
+        column in ``ref``, and its length must equal the width of ``ref``.
+        An empty ``style_name`` omits ``<tableStyleInfo>``. With
+        ``header_row`` set, the caller still owns the header cells: Excel
+        expects the first row of ``ref`` to hold exactly these names.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ref_ptr = _opt_str_ptr(ref, owned)
+            name_ptr = _opt_str_ptr(name, owned)
+            display_ptr = _opt_str_ptr(display_name, owned)
+            style_ptr = _opt_str_ptr(style_name, owned)
+            names = [str(column) for column in column_names]
+            name_ptrs = [_opt_str_ptr(column, owned) for column in names]
+            array_ptr = LIB.alloc(4 * len(name_ptrs)) if name_ptrs else 0
+            if array_ptr:
+                owned.append(array_ptr)
+                LIB.write_bytes(array_ptr, b"".join(struct.pack("<I", p) for p in name_ptrs))
+            out = _alloc_out_ptr()
+            owned.append(out)
+            _check(
+                LIB.fm_workbook_table_create(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    ref_ptr,
+                    name_ptr,
+                    display_ptr,
+                    array_ptr,
+                    _uint(len(name_ptrs), "column_count"),
+                    style_ptr,
+                    1 if header_row else 0,
+                    1 if totals_row else 0,
+                    out,
+                ),
+                "fm_workbook_table_create",
+            )
+            return LIB.read_u32(out)
+        finally:
+            for ptr in owned:
+                LIB.free(ptr)
+
+    def table_update(
+        self,
+        index: int,
+        ref: str,
+        style_name: Optional[str] = None,
+        header_row: Optional[bool] = None,
+        totals_row: Optional[bool] = None,
+    ) -> None:
+        """Replace a table's range and optional visual style.
+
+        ``ref`` is required and must keep the width the table's column
+        list already describes. ``style_name=None`` preserves the existing
+        style payload; an empty string removes ``<tableStyleInfo>``.
+        ``header_row=None`` / ``totals_row=None`` preserve those flags.
+        """
+        h = self._require()
+        owned: List[int] = []
+        try:
+            ref_ptr = _opt_str_ptr(ref, owned)
+            style_ptr = 0 if style_name is None else _opt_str_ptr(style_name, owned)
+            _check(
+                LIB.fm_workbook_table_update(
+                    h,
+                    _uint(index, "index"),
+                    ref_ptr,
+                    style_ptr,
+                    _sint(_tristate(header_row), "header_row"),
+                    _sint(_tristate(totals_row), "totals_row"),
+                ),
+                "fm_workbook_table_update",
+            )
+        finally:
+            for ptr in owned:
+                LIB.free(ptr)
+
+    def table_remove(self, index: int) -> None:
+        """Remove the table at ``index``."""
+        h = self._require()
+        _check(LIB.fm_workbook_table_remove(h, _uint(index, "index")), "fm_workbook_table_remove")
 
     def iter_passthrough(self) -> Iterator[PassthroughPart]:
         """Iterate over passthrough OOXML part paths."""
         h = self._require()
         n = int(LIB.fm_workbook_passthrough_count(h))
-        for i in range(n):
-            path_ptr = LIB.alloc(4)
-            LIB.write_bytes(path_ptr, b"\x00\x00\x00\x00")
-            try:
+        # Scratch hoisted out of the loop; see iter_defined_names.
+        path_ptr = _alloc_out_ptr()
+        try:
+            for i in range(n):
                 status = LIB.fm_workbook_passthrough_at(h, _uint(i, "idx"), path_ptr)
                 _check(status, "fm_workbook_passthrough_at")
                 path = LIB.read_cstr(LIB.read_u32(path_ptr))
-            finally:
-                LIB.free(path_ptr)
-            yield PassthroughPart(path=path)
+                yield PassthroughPart(path=path)
+        finally:
+            LIB.free(path_ptr)
 
     # -- Sheet structure ---------------------------------------------------
     def move_sheet(self, from_index: int, to_index: int) -> None:
@@ -1854,7 +2237,7 @@ class Workbook:
         finally:
             LIB.free(out)
 
-    def set_calc_mode(self, mode: int) -> None:
+    def set_calc_mode(self, mode: "CalcMode | int") -> None:
         """Set the workbook's calc mode."""
         h = self._require()
         _check(LIB.fm_workbook_set_calc_mode(h, _sint(mode, "mode")), "fm_workbook_set_calc_mode")
@@ -1987,9 +2370,11 @@ class Workbook:
         h = self._require()
         n = self.merge_count(sheet)
         out: List[MergeRange] = []
-        for i in range(n):
-            ptr = S.alloc_struct(LIB, S.MERGE_RANGE)
-            try:
+        # One scratch block for the whole walk; see iter_defined_names.
+        ptr = S.alloc_struct(LIB, S.MERGE_RANGE)
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.MERGE_RANGE, ptr)
                 _check(
                     LIB.fm_sheet_get_merge_at(h, _uint(sheet, "sheet"), _uint(i, "index"), ptr),
                     "fm_sheet_get_merge_at",
@@ -2003,8 +2388,8 @@ class Workbook:
                         last_col=d["last_col"],
                     )
                 )
-            finally:
-                LIB.free(ptr)
+        finally:
+            LIB.free(ptr)
         return out
 
     # -- Hyperlinks --------------------------------------------------------
@@ -2111,9 +2496,11 @@ class Workbook:
         h = self._require()
         n = self.hyperlink_count(sheet)
         out: List[Hyperlink] = []
-        for i in range(n):
-            ptr = S.alloc_struct(LIB, S.HYPERLINK)
-            try:
+        # One scratch block for the whole walk; see iter_defined_names.
+        ptr = S.alloc_struct(LIB, S.HYPERLINK)
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.HYPERLINK, ptr)
                 _check(
                     LIB.fm_sheet_get_hyperlink_at(h, _uint(sheet, "sheet"), _uint(i, "index"), ptr),
                     "fm_sheet_get_hyperlink_at",
@@ -2131,8 +2518,8 @@ class Workbook:
                         tooltip=LIB.read_cstr(d["tooltip"]),
                     )
                 )
-            finally:
-                LIB.free(ptr)
+        finally:
+            LIB.free(ptr)
         return out
 
     # -- Comments ----------------------------------------------------------
@@ -2183,17 +2570,19 @@ class Workbook:
         """
         h = self._require()
         out: List[CommentEntry] = []
-        for index in range(self.comment_count(sheet)):
-            ptr = S.alloc_struct(LIB, S.COMMENT)
-            try:
+        # One scratch block for the whole walk; see iter_defined_names.
+        ptr = S.alloc_struct(LIB, S.COMMENT)
+        try:
+            for index in range(self.comment_count(sheet)):
+                S.zero_struct(LIB, S.COMMENT, ptr)
                 _check(
                     LIB.fm_sheet_get_comment_at_index(h, _uint(sheet, "sheet"), _uint(index, "index"), ptr),
                     "fm_sheet_get_comment_at_index",
                 )
                 d = S.COMMENT.unpack(LIB, ptr)
                 out.append(CommentEntry(d["row"], d["col"], LIB.read_cstr(d["author"]), LIB.read_cstr(d["text"])))
-            finally:
-                LIB.free(ptr)
+        finally:
+            LIB.free(ptr)
         return out
 
     # -- Data validations --------------------------------------------------
@@ -2394,7 +2783,11 @@ class Workbook:
             _check(LIB.fm_workbook_paginate(h, _uint(sheet, "sheet_index"), out), "fm_workbook_paginate")
             pagination = LIB.read_u32(out)
             if pagination == 0:
-                raise FormulonError("fm_workbook_paginate returned a null result")
+                raise FormulonError(
+                    _STATUS_BINDING_NULL_POINTER,
+                    op="fm_workbook_paginate",
+                    _diagnostic_override=("returned kOk with a null pagination handle", ""),
+                )
             try:
                 page_count = int(LIB.fm_pagination_page_count(pagination))
                 range_count = int(LIB.fm_pagination_print_area_count(pagination))
@@ -2540,14 +2933,51 @@ class Workbook:
         finally:
             LIB.free(mode_ptr)
 
+    def get_auto_filter_xml(self, sheet: int) -> str:
+        """Return the sheet's ``<autoFilter>`` XML fragment, or ``""``.
+
+        The fragment carries the filter-column criteria, sort state and
+        extension payload verbatim, so a host can preserve definitions it
+        does not interpret.
+        """
+        h = self._require()
+        out = _alloc_out_ptr()
+        try:
+            _check(
+                LIB.fm_sheet_get_auto_filter_xml(h, _uint(sheet, "sheet_index"), out),
+                "fm_sheet_get_auto_filter_xml",
+            )
+            return LIB.read_cstr(LIB.read_u32(out))
+        finally:
+            LIB.free(out)
+
+    def set_auto_filter_xml(self, sheet: int, xml: str) -> None:
+        """Replace the sheet's ``<autoFilter>`` XML fragment.
+
+        An empty ``xml`` removes the AutoFilter. Non-empty input must be a
+        complete ``<autoFilter ...>`` fragment; the engine preserves filter
+        extensions verbatim rather than validating them in detail.
+        """
+        h = self._require()
+        xml_ptr, _ = LIB.alloc_utf8(xml)
+        try:
+            _check(
+                LIB.fm_sheet_set_auto_filter_xml(h, _uint(sheet, "sheet_index"), xml_ptr),
+                "fm_sheet_set_auto_filter_xml",
+            )
+        finally:
+            LIB.free(xml_ptr)
+
     def get_sheet_columns(self, sheet: int) -> List[ColumnLayout]:
         """Return the column-layout overrides on ``sheet``."""
         h = self._require()
         n = _read_count(LIB.fm_sheet_get_column_count, h, int(sheet))
         out: List[ColumnLayout] = []
-        for i in range(n):
-            ptr = S.alloc_struct(LIB, S.COLUMN_LAYOUT)
-            try:
+        # One scratch block for the whole walk; see iter_defined_names.
+        ptr = S.alloc_struct(LIB, S.COLUMN_LAYOUT)
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.COLUMN_LAYOUT, ptr)
                 _check(
                     LIB.fm_sheet_get_column(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
                     "fm_sheet_get_column",
@@ -2560,10 +2990,13 @@ class Workbook:
                         width=d["width"],
                         hidden=bool(d["hidden"]),
                         outline_level=d["outline_level"],
+                        has_width=bool(d["has_width"]),
+                        has_style=bool(d["has_style"]),
+                        style_xf=d["style_xf"],
                     )
                 )
-            finally:
-                LIB.free(ptr)
+        finally:
+            LIB.free(ptr)
         return out
 
     def set_column_width(self, sheet: int, first: int, last: int, width: float) -> None:
@@ -2601,9 +3034,11 @@ class Workbook:
         h = self._require()
         n = _read_count(LIB.fm_sheet_get_row_override_count, h, int(sheet))
         out: List[RowLayout] = []
-        for i in range(n):
-            ptr = S.alloc_struct(LIB, S.ROW_LAYOUT)
-            try:
+        # One scratch block for the whole walk; see iter_defined_names.
+        ptr = S.alloc_struct(LIB, S.ROW_LAYOUT)
+        try:
+            for i in range(n):
+                S.zero_struct(LIB, S.ROW_LAYOUT, ptr)
                 _check(
                     LIB.fm_sheet_get_row_override(h, _uint(sheet, "sheet_index"), _uint(i, "idx"), ptr),
                     "fm_sheet_get_row_override",
@@ -2615,10 +3050,12 @@ class Workbook:
                         height=d["height"],
                         hidden=bool(d["hidden"]),
                         outline_level=d["outline_level"],
+                        has_style=bool(d["has_style"]),
+                        style_xf=d["style_xf"],
                     )
                 )
-            finally:
-                LIB.free(ptr)
+        finally:
+            LIB.free(ptr)
         return out
 
     def set_row_height(self, sheet: int, row: int, height: float) -> None:
@@ -2664,7 +3101,21 @@ class Workbook:
         last_col: int,
         today_serial: float = float("nan"),
     ) -> List[CfCellResult]:
-        """Evaluate every CF block on ``sheet`` against an inclusive range."""
+        """Evaluate every CF block on ``sheet`` against an inclusive range.
+
+        Args:
+          sheet: 0-based sheet index.
+          first_row: 0-based inclusive first row.
+          first_col: 0-based inclusive first column.
+          last_row: 0-based inclusive last row.
+          last_col: 0-based inclusive last column.
+          today_serial: date basis pinned for ``timePeriod`` rules, as an
+            Excel serial date. The default ``float("nan")`` disables them:
+            no ``timePeriod`` rule can match, so pass a serial date to use
+            them. ``0.0`` is *not* a disabling value -- it is the valid
+            serial for 1899-12-30 and would evaluate those rules against
+            that date.
+        """
         h = self._require()
         out = _alloc_out_ptr()
         results = 0
@@ -2685,11 +3136,15 @@ class Workbook:
             results = LIB.read_u32(out)
             cells: List[CfCellResult] = []
             n = LIB.fm_cf_results_cell_count(results)
-            for ci in range(n):
-                rp = _alloc_out_ptr()
-                cp = _alloc_out_ptr()
-                mcp = _alloc_out_ptr()
-                try:
+            # One fixed set of out slots for the whole walk: allocating
+            # per cell would put a locked WASM malloc/free pair on every
+            # item, which dominates the cost of a viewport-sized range.
+            rp = _alloc_out_ptr()
+            cp = _alloc_out_ptr()
+            mcp = _alloc_out_ptr()
+            mptr = S.alloc_struct(LIB, S.CF_MATCH)
+            try:
+                for ci in range(n):
                     _check(
                         LIB.fm_cf_results_cell_at(results, _uint(ci, "cell_idx"), rp, cp, mcp),
                         "fm_cf_results_cell_at",
@@ -2697,14 +3152,9 @@ class Workbook:
                     row = LIB.read_u32(rp)
                     col = LIB.read_u32(cp)
                     mcount = LIB.read_u32(mcp)
-                finally:
-                    LIB.free(rp)
-                    LIB.free(cp)
-                    LIB.free(mcp)
-                matches: List[CfMatch] = []
-                for mi in range(mcount):
-                    mptr = S.alloc_struct(LIB, S.CF_MATCH)
-                    try:
+                    matches: List[CfMatch] = []
+                    for mi in range(mcount):
+                        S.zero_struct(LIB, S.CF_MATCH, mptr)
                         _check(
                             LIB.fm_cf_results_match_at(results, _uint(ci, "cell_idx"), _uint(mi, "match_idx"), mptr),
                             "fm_cf_results_match_at",
@@ -2728,9 +3178,12 @@ class Workbook:
                                 icon_index=d["icon_index"],
                             )
                         )
-                    finally:
-                        LIB.free(mptr)
-                cells.append(CfCellResult(row=row, col=col, matches=matches))
+                    cells.append(CfCellResult(row=row, col=col, matches=matches))
+            finally:
+                LIB.free(rp)
+                LIB.free(cp)
+                LIB.free(mcp)
+                LIB.free(mptr)
             return cells
         finally:
             if results:
@@ -3033,7 +3486,7 @@ class Workbook:
             LIB.free(ptr)
 
     def get_font(self, font_index: int) -> FontRecord:
-        """Return the resolved font record at ``font_index``."""
+        """Return the font record at ``font_index``."""
         h = self._require()
         ptr = S.alloc_struct(LIB, S.FONT_RECORD)
         try:
@@ -3043,7 +3496,7 @@ class Workbook:
             LIB.free(ptr)
 
     def get_fill(self, fill_index: int) -> FillRecord:
-        """Return the resolved fill record at ``fill_index``."""
+        """Return the fill record at ``fill_index``."""
         h = self._require()
         ptr = S.alloc_struct(LIB, S.FILL_RECORD)
         try:
@@ -3053,7 +3506,7 @@ class Workbook:
             LIB.free(ptr)
 
     def get_border(self, border_index: int) -> Dict[str, object]:
-        """Return the resolved border record at ``border_index``.
+        """Return the border record at ``border_index``.
 
         Each side is a ``{"style", "color_argb", "color"}`` dict, where
         ``color`` is the round-trip :class:`ColorSpec`; the result also
@@ -3086,6 +3539,8 @@ class Workbook:
                 border=_decode_border_record(ptr + offsets["border"][1]) if d["border_engaged"] else None,
                 num_fmt_id=d["num_fmt_id"] if d["num_fmt_engaged"] else None,
                 num_fmt_code=LIB.read_cstr(d["num_fmt_code"]) if d["num_fmt_engaged"] else "",
+                alignment_xml=LIB.read_cstr(d["alignment_xml"]),
+                protection_xml=LIB.read_cstr(d["protection_xml"]),
             )
         finally:
             LIB.free(ptr)
@@ -3203,63 +3658,24 @@ class Workbook:
 
     def add_cell_xf(self, record: CellXf) -> int:
         """Add (dedup) an ``<xf>`` record; return its index."""
+        return self._add_xf_record(record, LIB.fm_styles_add_cell_xf_ex2, "fm_styles_add_cell_xf_ex2")
+
+    def add_cell_style_xf(self, record: CellXf) -> int:
+        """Add (dedup) a named-style ``<xf>``; return its ``<cellStyleXfs>`` id.
+
+        The counterpart of :meth:`get_cell_style_xf`. Named-style xfs are
+        the records a ``<cellStyle>`` points at; :meth:`add_cell_xf` writes
+        the per-cell ``<cellXfs>`` pool instead.
+        """
+        return self._add_xf_record(record, LIB.fm_styles_add_cell_style_xf_ex2, "fm_styles_add_cell_style_xf_ex2")
+
+    def _add_xf_record(self, record: CellXf, fn, op: str) -> int:
         h = self._require()
         ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
         out = _alloc_out_ptr()
         try:
-            S.CELL_XF_EX2.pack(
-                LIB,
-                ptr,
-                {
-                    "font_index": int(record.font_index),
-                    "fill_index": int(record.fill_index),
-                    "border_index": int(record.border_index),
-                    "num_fmt_id": int(record.num_fmt_id),
-                    "horizontal_align": int(record.horizontal_align),
-                    "vertical_align": int(record.vertical_align),
-                    "wrap_text": 1 if record.wrap_text else 0,
-                    "has_alignment": 1
-                    if (record.has_alignment if record.has_alignment is not None else _cell_xf_has_alignment(record))
-                    else 0,
-                    "justify_last_line": 1 if record.justify_last_line else 0,
-                    "xf_id": int(record.xf_id),
-                    "has_text_rotation": 1 if record.text_rotation is not None else 0,
-                    "text_rotation": int(record.text_rotation or 0),
-                    "has_indent": 1 if record.indent is not None else 0,
-                    "indent": int(record.indent or 0),
-                    "has_relative_indent": 1 if record.relative_indent is not None else 0,
-                    "relative_indent": int(record.relative_indent or 0),
-                    "has_shrink_to_fit": 1 if record.shrink_to_fit is not None else 0,
-                    "shrink_to_fit": 1 if record.shrink_to_fit else 0,
-                    "has_reading_order": 1 if record.reading_order is not None else 0,
-                    "reading_order": int(record.reading_order or 0),
-                    "has_horizontal_align": 1
-                    if (
-                        record.has_horizontal_align
-                        if record.has_horizontal_align is not None
-                        else record.horizontal_align != 0
-                    )
-                    else 0,
-                    "has_vertical_align": 1
-                    if (
-                        record.has_vertical_align
-                        if record.has_vertical_align is not None
-                        else record.vertical_align != 2
-                    )
-                    else 0,
-                    "has_wrap_text": 1
-                    if (record.has_wrap_text if record.has_wrap_text is not None else record.wrap_text)
-                    else 0,
-                    "has_justify_last_line": 1
-                    if (
-                        record.has_justify_last_line
-                        if record.has_justify_last_line is not None
-                        else record.justify_last_line
-                    )
-                    else 0,
-                },
-            )
-            _check(LIB.fm_styles_add_cell_xf_ex2(h, ptr, out), "fm_styles_add_cell_xf_ex2")
+            S.CELL_XF_EX2.pack(LIB, ptr, _cell_xf_ex2_fields(record))
+            _check(fn(h, ptr, out), op)
             return LIB.read_u32(out)
         finally:
             LIB.free(ptr)
@@ -3291,6 +3707,8 @@ class Workbook:
             if record.border is not None:
                 _pack_border_record(ptr + offsets["border"][1], record.border)
             S.write_str_field(LIB, ptr, S.DXF_RECORD, "num_fmt_code", record.num_fmt_code, owned)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "alignment_xml", record.alignment_xml, owned)
+            S.write_str_field(LIB, ptr, S.DXF_RECORD, "protection_xml", record.protection_xml, owned)
             _check(LIB.fm_styles_add_dxf(h, ptr, out), "fm_styles_add_dxf")
             return LIB.read_u32(out)
         finally:
@@ -3298,6 +3716,24 @@ class Workbook:
             LIB.free(out)
             for owned_ptr in owned:
                 LIB.free(owned_ptr)
+
+    def set_cell_style(self, name: str, xf_id: int, builtin_id: int = CELL_STYLE_BUILTIN_ID_NONE) -> None:
+        """Add or replace a named ``<cellStyle>`` record.
+
+        ``xf_id`` must reference an existing named-style xf -- register one
+        with :meth:`add_cell_style_xf` first. ``builtin_id`` is an Excel
+        built-in style ordinal (0..47); leave it at
+        ``CELL_STYLE_BUILTIN_ID_NONE`` for a custom style.
+        """
+        h = self._require()
+        name_ptr, _ = LIB.alloc_utf8(name)
+        try:
+            _check(
+                LIB.fm_styles_set_cell_style(h, name_ptr, _uint(xf_id, "xf_id"), _uint(builtin_id, "builtin_id")),
+                "fm_styles_set_cell_style",
+            )
+        finally:
+            LIB.free(name_ptr)
 
     def get_cell_style(self, index: int) -> CellStyle:
         """Return the named cell style at ``index``."""
@@ -3378,9 +3814,11 @@ class Workbook:
                 LIB.free(cols_p)
             cells: List[PivotCell] = []
             n = LIB.fm_pivot_cells_count(handle)
-            for i in range(n):
-                cptr = S.alloc_struct(LIB, S.PIVOT_CELL)
-                try:
+            # One scratch block for the whole walk; see iter_defined_names.
+            cptr = S.alloc_struct(LIB, S.PIVOT_CELL)
+            try:
+                for i in range(n):
+                    S.zero_struct(LIB, S.PIVOT_CELL, cptr)
                     _check(
                         LIB.fm_pivot_cells_at(handle, _uint(i, "idx"), cptr),
                         "fm_pivot_cells_at",
@@ -3392,14 +3830,14 @@ class Workbook:
                             row=d["row"],
                             col=d["col"],
                             value=value,
-                            kind=d["kind"],
+                            kind=PivotCellKind(d["kind"]),
                             depth=d["depth"],
                             field_name=LIB.read_cstr(d["field_name"]),
                             number_format=LIB.read_cstr(d["number_format"]),
                         )
                     )
-                finally:
-                    LIB.free(cptr)
+            finally:
+                LIB.free(cptr)
             return PivotLayout(top=top, left=left, rows=rows, cols=cols, cells=cells)
         finally:
             if handle:
@@ -3753,7 +4191,7 @@ class Workbook:
         finally:
             LIB.free(out)
 
-    def set_pivot_report_layout(self, sheet: int, pivot_index: int, layout: PivotReportLayout) -> None:
+    def set_pivot_report_layout(self, sheet: int, pivot_index: int, layout: "PivotReportLayout | int") -> None:
         """Set the pivot's compact, tabular, or outline report layout."""
         h = self._require()
         _check(
@@ -3874,7 +4312,7 @@ class Workbook:
             "fm_workbook_pivot_field_clear",
         )
 
-    def pivot_field_set_axis(self, sheet: int, pivot_index: int, field_idx: int, axis: int) -> None:
+    def pivot_field_set_axis(self, sheet: int, pivot_index: int, field_idx: int, axis: "PivotAxis | int") -> None:
         """Set the axis of pivot field ``field_idx``."""
         h = self._require()
         _check(
@@ -3930,7 +4368,9 @@ class Workbook:
             "fm_workbook_pivot_field_set_subtotal_top",
         )
 
-    def pivot_field_add_aggregation(self, sheet: int, pivot_index: int, field_idx: int, agg: int) -> None:
+    def pivot_field_add_aggregation(
+        self, sheet: int, pivot_index: int, field_idx: int, agg: "PivotAggregation | int"
+    ) -> None:
         """Append an aggregation to pivot field ``field_idx``."""
         h = self._require()
         _check(
@@ -4005,7 +4445,9 @@ class Workbook:
             "fm_workbook_pivot_field_set_item_visible",
         )
 
-    def pivot_field_add_subtotal_fn(self, sheet: int, pivot_index: int, field_idx: int, agg: int) -> None:
+    def pivot_field_add_subtotal_fn(
+        self, sheet: int, pivot_index: int, field_idx: int, agg: "PivotAggregation | int"
+    ) -> None:
         """Append a subtotal-fn entry to pivot field ``field_idx``."""
         h = self._require()
         _check(
@@ -4034,8 +4476,8 @@ class Workbook:
         sheet: int,
         pivot_index: int,
         field_idx: int,
-        granularity: int,
-        calendar: int,
+        granularity: "PivotDateGrouping | int",
+        calendar: "PivotCalendar | int",
         start_year: int = -1,
         end_year: int = -1,
     ) -> None:
@@ -4193,12 +4635,63 @@ class Workbook:
         )
 
     def pivot_filter_count(self, sheet: int, pivot_index: int) -> int:
-        """Return the number of active filters on the pivot."""
+        """Return the number of active filters on the pivot.
+
+        Counts only the entries this session added; see
+        :meth:`pivot_filter_at` for why.
+        """
         h = self._require()
         return _read_count(LIB.fm_workbook_pivot_filter_count, h, int(sheet), int(pivot_index))
 
+    def pivot_filter_at(self, sheet: int, pivot_index: int, filter_idx: int) -> PivotFilterSpec:
+        """Read the active filter at ``filter_idx`` without mutating it.
+
+        The active-filter list is **session state**. An entry added through
+        :meth:`pivot_filter_add` affects evaluation only while this
+        workbook handle lives and is not written by :meth:`save`.
+        Conversely a ``<filters>`` block Excel wrote is preserved verbatim
+        on save but does not appear here, so :meth:`pivot_filter_count`
+        reports only what this session added. The filter surface that does
+        persist is pivot field item visibility
+        (:meth:`pivot_field_set_item_visible`).
+        """
+        h = self._require()
+        ptr = S.alloc_struct(LIB, S.PIVOT_FILTER_SPEC)
+        try:
+            _check(
+                LIB.fm_workbook_pivot_filter_at(
+                    h,
+                    _uint(sheet, "sheet_index"),
+                    _uint(pivot_index, "pivot_index"),
+                    _uint(filter_idx, "filter_idx"),
+                    ptr,
+                ),
+                "fm_workbook_pivot_filter_at",
+            )
+            d = S.PIVOT_FILTER_SPEC.unpack(LIB, ptr)
+            return PivotFilterSpec(
+                axis=PivotAxis(d["axis"]),
+                field_name=LIB.read_cstr(d["field_name"]),
+                type=PivotFilterType(d["type"]),
+                value_kind=PivotFilterValueKind(d["value_kind"]),
+                value_int=d["value_int"],
+                value_double=d["value_double"],
+                value_text=LIB.read_cstr(d["value_text"]),
+                value_high_kind=PivotFilterValueKind(d["value_high_kind"]),
+                value_high_int=d["value_high_int"],
+                value_high_double=d["value_high_double"],
+                data_field_index=d["data_field_index"],
+            )
+        finally:
+            LIB.free(ptr)
+
     def pivot_filter_add(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> None:
-        """Append an active filter to the pivot."""
+        """Append an active filter to the pivot.
+
+        The entry is session state: it affects evaluation only while this
+        workbook handle lives and is not written by :meth:`save`. See
+        :meth:`pivot_filter_at`.
+        """
         h = self._require()
         owned: List[int] = []
         ptr = S.alloc_struct(LIB, S.PIVOT_FILTER_SPEC)
@@ -4270,14 +4763,16 @@ class Workbook:
             handle = LIB.read_u32(out)
             nodes: List[CellNode] = []
             n = LIB.fm_cell_nodes_count(handle)
-            for i in range(n):
-                nptr = S.alloc_struct(LIB, S.CELL_NODE)
-                try:
+            # One scratch block for the whole walk; see iter_defined_names.
+            nptr = S.alloc_struct(LIB, S.CELL_NODE)
+            try:
+                for i in range(n):
+                    S.zero_struct(LIB, S.CELL_NODE, nptr)
                     _check(LIB.fm_cell_nodes_at(handle, _uint(i, "idx"), nptr), "fm_cell_nodes_at")
                     d = S.CELL_NODE.unpack(LIB, nptr)
                     nodes.append(CellNode(sheet=d["sheet"], row=d["row"], col=d["col"]))
-                finally:
-                    LIB.free(nptr)
+            finally:
+                LIB.free(nptr)
             return nodes
         finally:
             if handle:
@@ -4326,7 +4821,29 @@ class Workbook:
         """Return metadata for ``name`` or ``None`` when unknown.
 
         ``locale`` is ``0`` for ``en-US`` and ``1`` for ``ja-JP``.
+
+        Args:
+          name: canonical function name, matched case-insensitively.
+          locale: catalog locale ordinal.
+
+        Returns:
+          The metadata, or ``None`` when ``name`` matches no registered
+          function.
+
+        Raises:
+          FormulonError: when ``locale`` is outside the supported range.
+            The C ABI reports an invalid locale and an unknown function
+            with the same status, so the locale is range-checked here to
+            keep ``None`` meaning "unknown function" only -- matching
+            ``localize_function_name`` / ``canonicalize_function_name``,
+            which raise for the same bad ``locale``.
         """
+        if not _LOCALE_MIN <= int(locale) <= _LOCALE_MAX:
+            raise FormulonError(
+                _STATUS_INVALID_ARGUMENT,
+                op="fm_function_metadata",
+                _diagnostic_override=("invalid locale", f"locale={int(locale)}"),
+            )
         name_ptr, _ = LIB.alloc_utf8(name)
         ptr = S.alloc_struct(LIB, S.FUNCTION_METADATA)
         try:
@@ -4412,7 +4929,7 @@ class Workbook:
                 part_path=LIB.read_cstr(d["part_path"]),
                 target=LIB.read_cstr(d["target"]),
                 target_external=bool(d["target_external"]),
-                kind=d["kind"],
+                kind=ExternalLinkKind(d["kind"]),
             )
         finally:
             LIB.free(ptr)

@@ -288,6 +288,12 @@ Napi::Value Workbook::GetSheetColumns(const Napi::CallbackInfo& info) {
     col.Set("width", Napi::Number::New(env, entry.width));
     col.Set("hidden", Napi::Number::New(env, entry.hidden));
     col.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
+    // The C getter reports logical presence, including legacy aggregate
+    // layouts with a non-zero width but a clear raw presence bit. Keep the
+    // binding defensive in case an older ABI implementation is loaded.
+    col.Set("hasWidth", Napi::Number::New(env, entry.has_width || entry.width != 0.0));
+    col.Set("hasStyle", Napi::Number::New(env, entry.has_style));
+    col.Set("styleXf", Napi::Number::New(env, entry.style_xf));
     arr.Set(static_cast<uint32_t>(emitted), col);
     ++emitted;
   }
@@ -366,6 +372,8 @@ Napi::Value Workbook::GetSheetRowOverrides(const Napi::CallbackInfo& info) {
     row.Set("height", Napi::Number::New(env, entry.height));
     row.Set("hidden", Napi::Number::New(env, entry.hidden));
     row.Set("outlineLevel", Napi::Number::New(env, static_cast<int32_t>(entry.outline_level)));
+    row.Set("hasStyle", Napi::Number::New(env, entry.has_style));
+    row.Set("styleXf", Napi::Number::New(env, entry.style_xf));
     arr.Set(static_cast<uint32_t>(emitted), row);
     ++emitted;
   }

@@ -14,7 +14,10 @@ Checks:
                   packages/python/formulon/*.py is present in
                   tools/wasm/capi_exports.txt (the staged WASM export
                   list the Python binding loads), and every symbol in
-                  that list is declared in src/c_api/formulon_c.h.
+                  that list is declared in src/c_api/formulon_c.h. The
+                  literal `_STATUS_RETURNING_EXPORT_NAMES` tuple in `_c.py`
+                  must also equal exactly the intersection of the manifest
+                  and header declarations returning `fm_status_t`.
   dts-wasm        src/wasm/formulon.d.ts (Workbook / WorkbookCtor /
                   FormulonModule method surface) matches what is
                   registered in src/wasm/parts/bindings_register.cpp.
@@ -32,7 +35,15 @@ Checks:
                   plain numbers rather than registering a real
                   `enum_<T>`, so the `.d.ts` copy is the only place the
                   ordinal values live on the JS side) matches its
-                  source enum's ordinal sequence.
+                  source enum's ordinal sequence. The frozen ordinal
+                  tables the two published ESM entry points export
+                  (packages/npm/index.mjs and
+                  packages/npm-native/index.mjs) must then carry the same
+                  names and the same values as each other, as that
+                  canonical `.d.ts`, and as the declaration file their own
+                  package ships -- swapping one JS package for the other
+                  is only safe if a named constant means the same thing in
+                  both.
   style-record-fields
                   Every public type that projects a style record
                   (`ColorSpec` / `FontRecord` / `FillRecord` /
@@ -48,6 +59,7 @@ Stdlib only; no build artifacts or network access required.
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.util
 import re
 import sys
@@ -59,6 +71,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CAPI_HEADER = REPO_ROOT / "src" / "c_api" / "formulon_c.h"
 CAPI_EXPORTS = REPO_ROOT / "tools" / "wasm" / "capi_exports.txt"
 PYTHON_PKG_DIR = REPO_ROOT / "packages" / "python" / "formulon"
+PYTHON_C_BINDING = PYTHON_PKG_DIR / "_c.py"
 
 WASM_BINDINGS_CPP = REPO_ROOT / "src" / "wasm" / "parts" / "bindings_register.cpp"
 WASM_DTS = REPO_ROOT / "src" / "wasm" / "formulon.d.ts"
@@ -67,6 +80,8 @@ NODE_WORKBOOK_CLASS_CC = REPO_ROOT / "src" / "node_addon" / "parts" / "workbook_
 NODE_ADDON_CC = REPO_ROOT / "src" / "node_addon" / "addon.cc"
 NODE_DTS = REPO_ROOT / "packages" / "npm-native" / "index.d.ts"
 NODE_README = REPO_ROOT / "packages" / "npm-native" / "README.md"
+NODE_INDEX_MJS = REPO_ROOT / "packages" / "npm-native" / "index.mjs"
+NPM_INDEX_MJS = REPO_ROOT / "packages" / "npm" / "index.mjs"
 
 VALUE_H = REPO_ROOT / "src" / "value.h"
 CF_MATCH_H = REPO_ROOT / "src" / "cf" / "cf_match.h"
@@ -158,6 +173,46 @@ def _format_diff(label_a: str, only_a: Set[str], label_b: str, only_b: Set[str])
     return problems
 
 
+def _parse_literal_status_exports() -> tuple[Set[str], Optional[str]]:
+    """Read `_STATUS_RETURNING_EXPORT_NAMES` without importing `_c.py`.
+
+    Importing the binding would load wasmtime and, depending on the
+    environment, initialize a real WASM instance. The drift check is a
+    source-level consistency check, so an AST walk keeps it stdlib-only and
+    side-effect-free.
+    """
+    try:
+        tree = ast.parse(_read(PYTHON_C_BINDING), filename=str(PYTHON_C_BINDING))
+    except SyntaxError as exc:
+        return set(), f"python-exports: cannot parse {PYTHON_C_BINDING.relative_to(REPO_ROOT)}: {exc}"
+
+    for statement in tree.body:
+        if isinstance(statement, ast.Assign):
+            targets = statement.targets
+        elif isinstance(statement, ast.AnnAssign):
+            targets = [statement.target]
+        else:
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "_STATUS_RETURNING_EXPORT_NAMES" for target in targets
+        ):
+            continue
+        value = statement.value
+        if not isinstance(value, ast.Tuple):
+            return set(), "python-exports: _STATUS_RETURNING_EXPORT_NAMES must be a literal tuple"
+        names: Set[str] = set()
+        for element in value.elts:
+            if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
+                return set(), "python-exports: _STATUS_RETURNING_EXPORT_NAMES must contain only string literals"
+            names.add(element.value)
+        return names, None
+
+    return (
+        set(),
+        "python-exports: _STATUS_RETURNING_EXPORT_NAMES literal tuple not found in packages/python/formulon/_c.py",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Check 1: Python `LIB.fm_*` calls <-> tools/wasm/capi_exports.txt <->
 #          src/c_api/formulon_c.h declarations.
@@ -178,7 +233,8 @@ def check_python_exports() -> List[str]:
         if stripped and not stripped.startswith("#"):
             exports.add(stripped)
 
-    header_fns = set(re.findall(r"\bfm_[A-Za-z0-9_]+(?=\s*\()", _read(CAPI_HEADER)))
+    header_text = _read(CAPI_HEADER)
+    header_fns = set(re.findall(r"\bfm_[A-Za-z0-9_]+(?=\s*\()", header_text))
 
     missing_from_exports = python_calls - exports
     if missing_from_exports:
@@ -198,6 +254,29 @@ def check_python_exports() -> List[str]:
             "python-exports: symbol staged in "
             f"{CAPI_EXPORTS.relative_to(REPO_ROOT)} but not declared in "
             f"{CAPI_HEADER.relative_to(REPO_ROOT)}: {sorted(exports_not_in_header)}"
+        )
+
+    # The WASM result type is not enough to identify status calls: counts,
+    # indices, and pointers are also i32. Keep the binding's capture list as
+    # a literal and compare it to the authoritative header/manifest
+    # intersection without importing `_c.py` or wasmtime.
+    header_status_fns = set(re.findall(r"\bFM_API\s+fm_status_t\s+(fm_[A-Za-z0-9_]+)\s*\(", header_text))
+    expected_status_exports = header_status_fns & fm_exports
+    binding_status_exports, parse_problem = _parse_literal_status_exports()
+    if parse_problem:
+        problems.append(parse_problem)
+
+    missing_status_exports = expected_status_exports - binding_status_exports
+    if missing_status_exports:
+        problems.append(
+            "python-exports: _STATUS_RETURNING_EXPORT_NAMES is missing status-returning exports: "
+            f"{sorted(missing_status_exports)}"
+        )
+
+    extra_status_exports = binding_status_exports - expected_status_exports
+    if extra_status_exports:
+        problems.append(
+            f"python-exports: _STATUS_RETURNING_EXPORT_NAMES has extra exports: {sorted(extra_status_exports)}"
         )
 
     return problems
@@ -594,6 +673,7 @@ _DTS_ENUM_SOURCES = {
     "PivotFilterValueKind": (CAPI_HEADER, "fm_pivot_filter_value_kind_t", _extract_c_typedef_enum),
     "CfMatchKind": (CF_MATCH_H, "CFMatchKind", _extract_cpp_enum_class),
     "CalcMode": (CALC_MODE_H, "CalcMode", _extract_cpp_enum_class),
+    "ErrorCode": (VALUE_H, "ErrorCode", _extract_cpp_enum_class),
     "ExternalLinkKind": (EXTERNAL_LINKS_H, "Kind", _extract_cpp_enum_class),
 }
 
@@ -625,6 +705,111 @@ def check_dts_enums() -> List[str]:
                 f"but its source {source_enum} in {source_path.relative_to(REPO_ROOT)} has {source_values}"
             )
 
+    problems.extend(_check_js_constant_tables(dts_text))
+    return problems
+
+
+# Frozen ordinal tables are the only way a JS consumer can name a value
+# that crosses the boundary as a plain number, so both published ESM entry
+# points have to carry the same ones. The WASM `.d.ts` above is already
+# pinned to the C/C++ enums, which makes it the single source the two
+# `index.mjs` files are measured against -- comparing them only to each
+# other would let a shared mistake pass.
+_JS_TABLE_RE = re.compile(r"^export const (\w+) = Object\.freeze\(\{(.*?)\}\);", re.DOTALL | re.MULTILINE)
+_JS_SCALAR_RE = re.compile(r"^export const (\w+) = (-?\d+);", re.MULTILINE)
+_JS_MEMBER_RE = re.compile(r"(\w+)\s*:\s*(-?\d+)")
+
+
+def _parse_js_constants(path: Path) -> dict:
+    """Reads an `index.mjs`'s exported ordinal tables and scalar constants."""
+    text = _read(path)
+    out: dict = {}
+    for match in _JS_TABLE_RE.finditer(text):
+        out[match.group(1)] = {name: int(value) for name, value in _JS_MEMBER_RE.findall(match.group(2))}
+    for match in _JS_SCALAR_RE.finditer(text):
+        out[match.group(1)] = int(match.group(2))
+    return out
+
+
+def _parse_ts_named_enum(text: str, name: str) -> Optional[dict]:
+    """Reads a `.d.ts` ordinal table in either idiom used across the two
+    declaration files: a TS `export enum` or an `export const` whose type
+    is a `Readonly<{...}>` literal."""
+    match = re.search(r"export enum\s+" + re.escape(name) + r"\s*\{([^}]*)\}", text, re.DOTALL)
+    if match is None:
+        match = re.search(r"export const\s+" + re.escape(name) + r"\s*:\s*Readonly<\{([^}]*)\}>", text, re.DOTALL)
+    if match is None:
+        return None
+    body = _ENUM_BODY_COMMENT_RE.sub("", match.group(1))
+    members: dict = {}
+    next_value = 0
+    for part in body.replace(";", ",").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        member = re.match(r"([A-Za-z_]\w*)\s*(?:[:=]\s*(-?\d+))?$", part)
+        if member is None:
+            return None
+        if member.group(2) is not None:
+            next_value = int(member.group(2))
+        members[member.group(1)] = next_value
+        next_value += 1
+    return members
+
+
+def _check_js_constant_tables(wasm_dts_text: str) -> List[str]:
+    problems: List[str] = []
+    npm = _parse_js_constants(NPM_INDEX_MJS)
+    native = _parse_js_constants(NODE_INDEX_MJS)
+    npm_label = NPM_INDEX_MJS.relative_to(REPO_ROOT)
+    native_label = NODE_INDEX_MJS.relative_to(REPO_ROOT)
+
+    only_npm = sorted(set(npm) - set(native))
+    only_native = sorted(set(native) - set(npm))
+    if only_npm:
+        problems.append(f"dts-enums: exported by {npm_label} but not {native_label}: {only_npm}")
+    if only_native:
+        problems.append(f"dts-enums: exported by {native_label} but not {npm_label}: {only_native}")
+
+    for name in sorted(set(npm) & set(native)):
+        if npm[name] != native[name]:
+            problems.append(f"dts-enums: {name} is {npm[name]} in {npm_label} but {native[name]} in {native_label}")
+
+    # Each runtime table must also match the declaration file its own
+    # package ships, and the tables (not the bare scalars) must match the
+    # canonical WASM `.d.ts`.
+    node_dts_text = _read(NODE_DTS)
+    for label, constants, dts_text, dts_path in (
+        (npm_label, npm, wasm_dts_text, WASM_DTS),
+        (native_label, native, node_dts_text, NODE_DTS),
+    ):
+        for name, value in sorted(constants.items()):
+            if not isinstance(value, dict):
+                if not re.search(r"export const\s+" + re.escape(name) + r"\s*=\s*" + str(value) + r"\b", dts_text):
+                    problems.append(
+                        f"dts-enums: {label} exports {name} = {value}, "
+                        f"not declared with that value in {dts_path.relative_to(REPO_ROOT)}"
+                    )
+                continue
+            declared = _parse_ts_named_enum(dts_text, name)
+            if declared is None:
+                problems.append(
+                    f"dts-enums: {label} exports the table {name}, "
+                    f"which {dts_path.relative_to(REPO_ROOT)} does not declare as a value"
+                )
+            elif declared != value:
+                problems.append(
+                    f"dts-enums: {name} is {value} in {label} but {declared} in {dts_path.relative_to(REPO_ROOT)}"
+                )
+
+    canonical_only = sorted(
+        name for name in _DTS_ENUM_SOURCES if name not in npm or not isinstance(npm.get(name), dict)
+    )
+    if canonical_only:
+        problems.append(
+            f"dts-enums: {WASM_DTS.relative_to(REPO_ROOT)} declares these enums but {npm_label} "
+            f"does not export them as runtime tables: {canonical_only}"
+        )
     return problems
 
 

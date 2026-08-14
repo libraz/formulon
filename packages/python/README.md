@@ -72,14 +72,43 @@ with Workbook.load(blob) as wb:
 
 ## API surface
 
-`Workbook` mirrors the full C ABI surface that the npm bindings expose.
-Every method is documented via Python docstrings and the hand-rolled type
-stubs in `formulon/__init__.pyi`. The groups, with one example each:
+`Workbook` mirrors the C ABI surface that the npm bindings expose, minus
+the exclusions listed under [Not exposed](#not-exposed). Every public
+method carries a docstring (`help(Workbook.set_number)`), and the
+signatures live in the hand-rolled type stubs in `formulon/__init__.pyi`.
+The groups, with one example each:
 
 **Core** -- `create_default()` / `create_empty()` / `load(bytes)` factories,
 `set_number/set_bool/set_text/set_blank/set_formula`, `get_value`,
 `recalc()`, `save()`, and the `iter_cells/iter_defined_names/iter_tables/
 iter_passthrough` iterators.
+
+**Tables** -- create, retarget, and drop `xl/tables/tableN.xml` entries:
+
+```python
+wb.set_text(0, 0, 0, "Region")
+wb.set_text(0, 0, 1, "Amount")
+index = wb.table_create(0, "A1:B3", "Table1", "Table1", ["Region", "Amount"])
+wb.table_update(index, "A1:B9")  # retarget; None preserves style / flags
+wb.table_remove(index)
+```
+
+**Phonetic guides** -- the OOXML `<rPh>` furigana attached to a cell string:
+
+```python
+wb.set_text(0, 0, 0, "日本語")
+wb.set_phonetic(0, 0, 0, "ニホンゴ")
+wb.get_phonetic(0, 0, 0)  # -> 'ニホンゴ'; '' when the cell has none
+```
+
+**AutoFilter** -- the raw `<autoFilter>` fragment, preserved verbatim so
+filter criteria and extensions survive a round trip:
+
+```python
+wb.set_auto_filter_xml(0, '<autoFilter ref="A1:B3"/>')
+wb.get_auto_filter_xml(0)
+wb.set_auto_filter_xml(0, "")  # removes it
+```
 
 **Sheets & matrix edits**
 
@@ -217,9 +246,11 @@ comment is anchored at the requested cell.
 
 ### Not exposed
 
-`recalc()` is always serial under WASM: the parallel scheduler requires a
-pthread runtime that wasmtime does not provide (the native CLI uses up to
-8 worker threads). Result fidelity is identical.
+`recalc()` is always serial in this no-pthread WASM wheel: the parallel
+scheduler requires a pthread runtime that wasmtime does not provide.
+Thread-capable native surfaces can opt in separately (the CLI uses
+`formulon recalc --threads N`), while Python intentionally exposes no
+parallel-recalc method. Result fidelity is identical.
 
 The iterative-solver progress callback (`fm_workbook_set_iterative_progress`
 in the C ABI) is intentionally **not** bound -- it takes a C function
@@ -227,6 +258,14 @@ pointer that the host cannot synthesise into the WebAssembly module's
 function table through `wasmtime`. Configure iterative calculation via
 `set_iterative(enabled, max_iterations, max_change)` instead; only the
 per-sweep callback is unavailable.
+
+The structured-log **sink** (`fm_set_log_sink`) is unavailable for the same
+reason: it too takes a C function pointer. The threshold half of that
+surface is bound as the module-level `set_log_min_level(level)`, which is
+process-wide state rather than a `Workbook` method. The default is
+`LogLevel.OFF`, so a caller that never touches it sees no engine output;
+raising it to `LogLevel.WARN` or below sends one JSON record per line to
+stderr.
 
 Worksheet XML is read through the DOM parser only. The native CLI
 switches to a streaming parser for worksheets past 256 KiB; that

@@ -49,13 +49,17 @@ from .workbook import (
     DataValidationInput,
     DefinedName,
     DifferentialFormat,
+    ErrorCode,
     ExternalLink,
+    ExternalLinkKind,
     FillRecord,
     FontRecord,
     FormulonError,
     FunctionMetadata,
     Hyperlink,
     IconSet,
+    IterativeSettings,
+    LogLevel,
     MergeRange,
     PaginationResult,
     PassthroughPart,
@@ -84,6 +88,7 @@ from .workbook import (
     Workbook,
     WorkbookFormat,
     XlsbReadDiagnostics,
+    _check,
     _sint,
 )
 
@@ -158,8 +163,11 @@ __all__ = [
     "DataValidationInput",
     "DefinedName",
     "DifferentialFormat",
+    "ErrorCode",
     "ExternalLink",
+    "ExternalLinkKind",
     "FillRecord",
+    "LogLevel",
     "FontRecord",
     "FormulonError",
     "FunctionMetadata",
@@ -167,6 +175,7 @@ __all__ = [
     "FunctionMetadataLocalized",
     "FunctionMetadataProvider",
     "Hyperlink",
+    "IterativeSettings",
     "IconSet",
     "MergeRange",
     "MergedFunctionMetadata",
@@ -202,6 +211,7 @@ __all__ = [
     "error_display_name",
     "eval_formula",
     "library_version",
+    "set_log_min_level",
     "merge_function_metadata",
     "version_string",
 ]
@@ -226,6 +236,27 @@ def error_display_name(error_code: int) -> str:
 
 # Backward-compat alias mirroring the npm binding's ``versionString`` name.
 version_string = library_version
+
+
+def set_log_min_level(level: int) -> None:
+    """Set the engine's minimum structured-log severity.
+
+    This is **process-wide** state, not per :class:`Workbook`, so it is a
+    module-level function rather than a method.
+
+    The default is :attr:`LogLevel.OFF`, under which the engine writes
+    nothing: an embedded library must not write to the host's stderr
+    unless the host asks it to. Raising the threshold to
+    :attr:`LogLevel.WARN` or below makes the engine emit one JSON record
+    per line on stderr, including the per-cell XLSB downgrade diagnostics.
+
+    Args:
+      level: a :class:`LogLevel` ordinal.
+
+    Raises:
+      FormulonError: when ``level`` is outside :class:`LogLevel`.
+    """
+    _check(LIB.fm_set_log_min_level(_sint(level, "level")), "fm_set_log_min_level")
 
 
 def eval_formula(formula: str) -> Value:

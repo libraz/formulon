@@ -102,6 +102,12 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
         "sheet_index=" + std::to_string(sheet_index) + " pivot_index=" + std::to_string(pivot_index));
   }
 
+  // Resolved before evaluation, not just before projection: the label of an
+  // axis group with no source value is baked into the result rather than
+  // synthesised by the projection.
+  const formulon::pivot::PivotLayoutOptions layout_options =
+      formulon::eval::pivot_layout_options_for(wb->workbook().excel_profile());
+
   std::shared_ptr<const formulon::pivot::PivotResult> result = table->last_result();
   if (!result) {
     const formulon::pivot::PivotCache* cache = wb->workbook().find_pivot_cache(table->pivot_cache_id());
@@ -110,7 +116,7 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
                                "fm_workbook_pivot_layout: pivot cache not found",
                                "cache_id=" + std::to_string(table->pivot_cache_id()));
     }
-    auto eval_or = formulon::pivot::evaluate(*table, *cache);
+    auto eval_or = formulon::pivot::evaluate(*table, *cache, layout_options);
     if (!eval_or) {
       return set_last_error(eval_or.error());
     }
@@ -122,8 +128,6 @@ extern "C" fm_status_t fm_workbook_pivot_layout(const fm_workbook_t* wb, std::si
                              "pivot result cache was invalidated during layout projection");
   }
 
-  const formulon::pivot::PivotLayoutOptions layout_options =
-      formulon::eval::pivot_layout_options_for(wb->workbook().excel_profile());
   auto layout_or = formulon::pivot::layout(*table, *result, layout_options);
   if (!layout_or) {
     return set_last_error(layout_or.error());

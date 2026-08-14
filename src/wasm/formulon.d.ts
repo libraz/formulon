@@ -33,6 +33,26 @@ export interface Status {
   context: string;
 }
 
+/** Per-call telemetry returned by `Workbook.recalcParallel`. The five
+ * scheduler counters are `uint64_t` in the C ABI but are exposed as
+ * JavaScript `number` values by the WASM binding. They are exact through
+ * `Number.MAX_SAFE_INTEGER` (2^53 - 1). */
+export interface ParallelRecalcStats {
+  cellsEvaluated: number;
+  sccsProcessed: number;
+  parallelSteps: number;
+  serialFallbackSteps: number;
+  cycleRecoveries: number;
+  workerThreadsStarted: number;
+  workerThreadsUsed: number;
+}
+
+/** `{ status, stats }` returned by `Workbook.recalcParallel`. */
+export interface ParallelRecalcResult {
+  status: Status;
+  stats: ParallelRecalcStats;
+}
+
 /** A JS array with the status of the list enumeration that produced it. */
 export type ListResult<T> = ReadonlyArray<T> & { readonly status: Status };
 
@@ -373,12 +393,58 @@ export interface PivotFilterSpec {
   valueHighDouble?: number;
 }
 
+/** Return type of `Workbook.pivotFilterAt(...)`: the stored filter plus a
+ *  status envelope. Field names and semantics match `PivotFilterSpec`.
+ *
+ *  The active-filter list is **session state**. An entry added through
+ *  `pivotFilterAdd` affects evaluation only while the workbook handle
+ *  lives and is not written by `save`. Conversely a `<filters>` block
+ *  Excel wrote is preserved verbatim on save but does not appear here, so
+ *  `pivotFilterCount` reports only what this session added. The filter
+ *  surface that does persist is pivot field item visibility. */
+export interface PivotFilterResult {
+  status: Status;
+  axis: number;
+  fieldName: string;
+  type: number;
+  dataFieldIndex: number;
+  valueKind: number;
+  valueInt: number;
+  valueDouble: number;
+  valueText: string;
+  valueHighKind: number;
+  valueHighInt: number;
+  valueHighDouble: number;
+}
+
 /** Conditional-format match kind. Mirrors `formulon::cf::CFMatchKind`. */
 export enum CfMatchKind {
   DifferentialFormat = 0,
   ColorScale = 1,
   DataBar = 2,
   IconSet = 3,
+}
+
+/** Excel cell-error ordinals. Mirrors `formulon::ErrorCode`; these are the
+ *  values carried by `Value.errorCode` and accepted by `setError`. */
+export enum ErrorCode {
+  Null = 0,
+  Div0 = 1,
+  Value = 2,
+  Ref = 3,
+  Name = 4,
+  Num = 5,
+  NA = 6,
+  GettingData = 7,
+  Spill = 8,
+  Calc = 9,
+  Field = 10,
+  Blocked = 11,
+  Connect = 12,
+  External = 13,
+  Busy = 14,
+  Python = 15,
+  Unknown = 16,
 }
 
 /**
@@ -456,6 +522,10 @@ export interface CfRangeResult {
 /** Resolved print geometry for one worksheet. All coordinates are 0-based. */
 export interface PaginationResult {
   status: Status;
+  /** The sheet's declared `_xlnm.Print_Area`. Empty when the sheet declares
+   *  none -- it is not backfilled with the used range. Pagination itself
+   *  still falls back to the used range in that case, so `pageCount` can be
+   *  non-zero while this is empty. */
   printArea: Array<{ firstRow: number; firstCol: number; lastRow: number; lastCol: number }>;
   horizontalBreaks: number[];
   verticalBreaks: number[];
@@ -545,6 +615,11 @@ export interface ColumnLayout {
   /** Boolean stored as 0/1. */
   hidden: number;
   outlineLevel: number;
+  /** Whether the width is logically explicit (raw presence or non-zero legacy width). */
+  hasWidth: number;
+  /** Whether the source / model carries an explicit style attribute. */
+  hasStyle: number;
+  styleXf: number;
 }
 
 /** Return type of `Workbook.getSheetColumns(sheet)`. */
@@ -560,6 +635,9 @@ export interface RowLayout {
   /** Boolean stored as 0/1. */
   hidden: number;
   outlineLevel: number;
+  /** Whether OOXML customFormat=1 makes the row style effective. */
+  hasStyle: number;
+  styleXf: number;
 }
 
 /** Return type of `Workbook.getSheetRowOverrides(sheet)`. */
@@ -843,6 +921,9 @@ export interface ConditionalFormatEntry {
     readonly thresholds: ReadonlyArray<CfValueObjectInput>;
     readonly reverse: boolean;
     readonly showValue: boolean;
+    /** Round-trip only: the `percent` attribute is preserved across load
+     *  and save but never consulted during evaluation. Each threshold
+     *  carries its own `type`, and that type is what interprets it. */
     readonly percent: boolean;
   };
 }
@@ -890,6 +971,9 @@ export interface ConditionalFormatInput {
     thresholds: ReadonlyArray<CfValueObjectInput>;
     reverse?: boolean;
     showValue?: boolean;
+    /** Round-trip only: preserved across load and save but never
+     *  consulted during evaluation (each threshold's own `type` is
+     *  authoritative). */
     percent?: boolean;
   };
 }
@@ -940,10 +1024,12 @@ export interface CellXfResult {
 /** How an OOXML `<color>` element expressed its value.
  *  Mirrors `formulon::io::ColorSpec`.
  *
- *  A record read from a workbook carries the original specification here
- *  while the sibling `*Argb` field carries the resolved colour. Pass it
- *  back unchanged to reproduce the source markup; leave `kind` at 0 on a
- *  record built from scratch and the writer emits the resolved value. */
+ *  A record read from a workbook carries the original specification here.
+ *  When `kind` is non-zero, this selector is authoritative; the sibling
+ *  `*Argb` field is not an Excel-rendered value for theme/indexed/auto
+ *  selectors. It is literal RGB for `kind === 1`, or a compatibility
+ *  fallback otherwise. Leave `kind` at 0 on a record built from scratch and
+ *  the writer emits the sibling `*Argb` as `rgb`. */
 export interface ColorSpec {
   /** 0=none, 1=rgb, 2=theme, 3=indexed, 4=auto. */
   kind: number;
@@ -984,7 +1070,8 @@ export interface FontRecord {
   hasCharset: boolean;
   /** OOXML charset codepage id (e.g. 128 = Shift_JIS). */
   charset: number;
-  /** AARRGGBB packed colour. */
+  /** AARRGGBB literal RGB or compatibility fallback; not a resolved
+   *  theme/indexed/auto render colour. */
   colorArgb: number;
   /** Original `<color>` specification, preserved for round-tripping. */
   color: ColorSpec;
@@ -994,9 +1081,9 @@ export interface FontRecord {
 export interface FillRecord {
   /** OOXML pattern ordinal: 0=none, 1=solid, 2..18=standard pattern set. */
   pattern: number;
-  /** Foreground AARRGGBB colour. */
+  /** Foreground literal RGB or compatibility fallback. */
   fgArgb: number;
-  /** Background AARRGGBB colour. */
+  /** Background literal RGB or compatibility fallback. */
   bgArgb: number;
   /** Original `<fgColor>` specification, preserved for round-tripping. */
   fg: ColorSpec;
@@ -1008,7 +1095,8 @@ export interface FillRecord {
 export interface BorderSide {
   /** OOXML border-style ordinal: 0=none, 1=thin, ..., 13=slantDashDot. */
   style: number;
-  /** AARRGGBB packed colour. */
+  /** AARRGGBB literal RGB or compatibility fallback; not a resolved
+   *  theme/indexed/auto render colour. */
   colorArgb: number;
   /** Original `<color>` specification, preserved for round-tripping. */
   color: ColorSpec;
@@ -1096,6 +1184,10 @@ export interface DxfRecord {
     numFmtId: number;
     formatCode: string;
   };
+  /** Serialized OOXML `<alignment .../>` child; lexical formatting may normalize on load. */
+  alignmentXml?: string;
+  /** Serialized OOXML `<protection .../>` child; lexical formatting may normalize on load. */
+  protectionXml?: string;
 }
 
 export interface DxfResult extends DxfRecord {
@@ -1113,9 +1205,20 @@ export interface LambdaTextResult {
   text: string;
 }
 
+/** Minimum severity for the engine's structured log stream. Mirrors
+ *  `fm_log_level_t`. `Off` discards every record and is the default: an
+ *  embedded library must not write to the host's stderr unless asked. */
+export enum LogLevel {
+  Debug = 0,
+  Info = 1,
+  Warn = 2,
+  Error = 3,
+  Off = 4,
+}
+
 /** External-link kinds. Mirrors
  *  `formulon::io::ExternalLinkRecord::Kind`. */
-export const enum ExternalLinkKind {
+export enum ExternalLinkKind {
   Unknown = 0,
   ExternalBook = 1,
   Ole = 2,
@@ -1174,8 +1277,9 @@ export interface AddStyleResult {
   index: number;
 }
 
-/** Return type of `Workbook.addNumFmt(formatCode)`. The id is either a
- *  matched built-in (`0..163`) or a freshly-assigned custom id (`>= 164`). */
+/** Return type of `Workbook.addNumFmt(formatCode)`. The id may reuse any
+ *  existing effective mapping (built-in or custom, including a custom record
+ *  overriding a built-in slot), or be a freshly-assigned custom id (`>= 164`). */
 export interface AddNumFmtResult {
   status: Status;
   numFmtId: number;
@@ -1290,7 +1394,20 @@ export interface Workbook {
   /** Returns the cell's OOXML phonetic guide (`<rPh>`), or an empty string. */
   getCellPhonetic(sheet: number, row: number, col: number): StringResult;
 
+  /** Recalculates all dirty cells serially on the caller thread. */
   recalc(): Status;
+  /**
+   * Recalculates all dirty cells using the parallel SCC scheduler and returns
+   * per-call telemetry. This call is synchronous: it returns after all
+   * workers have joined. `threadCount` must be a finite integer: 0 selects
+   * automatic detection (capped at 8), 1 keeps evaluation on the caller and
+   * starts no workers, and 2..8 set the worker upper bound. Missing,
+   * fractional, non-finite, negative, or above-8 values fail with
+   * `kInvalidArgument`.
+   * The `uint64_t` counters in `stats` are JavaScript numbers and are exact
+   * through `Number.MAX_SAFE_INTEGER` (2^53 - 1).
+   */
+  recalcParallel(threadCount: number): ParallelRecalcResult;
   /** Recalculates only cells touched by the supplied viewport. */
   partialRecalc(viewport: RecalcViewport): PartialRecalcResult;
 
@@ -1509,18 +1626,25 @@ export interface Workbook {
   /** Replaces the data-field entry at `dataFieldIdx` in place. */
   pivotDataFieldSet(sheet: number, pivotIdx: number, dataFieldIdx: number, spec: PivotDataFieldSpec): Status;
 
-  /** Number of active (slicer-applied) filters on the pivot. */
+  /** Number of active (slicer-applied) filters on the pivot. Counts only
+   *  the entries this session added -- see {@link PivotFilterResult}. */
   pivotFilterCount(sheet: number, pivotIdx: number): number;
-  /** Appends an active filter. */
+  /** Appends an active filter. The entry is session state and is not
+   *  written by `save`; see {@link PivotFilterResult}. */
   pivotFilterAdd(sheet: number, pivotIdx: number, spec: PivotFilterSpec): Status;
+  /** Reads the active filter at `filterIdx`. The list is session state:
+   *  see {@link PivotFilterResult}. */
+  pivotFilterAt(sheet: number, pivotIdx: number, filterIdx: number): PivotFilterResult;
   /** Drops every active filter from the pivot. */
   pivotFilterClear(sheet: number, pivotIdx: number): Status;
   /** Removes the active filter at `filterIdx`. */
   pivotFilterRemoveAt(sheet: number, pivotIdx: number, filterIdx: number): Status;
 
   /** Evaluates every CF block on `sheet` against the inclusive range
-   *  `[(firstRow, firstCol), (lastRow, lastCol)]`. Pass `NaN` for
-   *  `todaySerial` to disable `TimePeriod` rules. */
+   *  `[(firstRow, firstCol), (lastRow, lastCol)]`. `todaySerial` pins the
+   *  date basis for `TimePeriod` rules; pass `NaN` to disable them (no
+   *  `TimePeriod` rule then matches). `0` does *not* disable them -- it is
+   *  the valid serial for 1899-12-30. */
   evaluateCfRange(
     sheet: number,
     firstRow: number,
@@ -1592,11 +1716,11 @@ export interface Workbook {
   setCellXfIndex(sheet: number, row: number, col: number, xfIndex: number): Status;
   /** Returns the resolved XF record at `xfIndex`. */
   getCellXf(xfIndex: number): CellXfResult;
-  /** Returns the resolved font record at `fontIndex`. */
+  /** Returns the font record at `fontIndex`, including its ColorSpec selector. */
   getFont(fontIndex: number): FontResult;
-  /** Returns the resolved fill record at `fillIndex`. */
+  /** Returns the fill record at `fillIndex`, including its ColorSpec selectors. */
   getFill(fillIndex: number): FillResult;
-  /** Returns the resolved border record at `borderIndex`. */
+  /** Returns the border record at `borderIndex`, including its ColorSpec selectors. */
   getBorder(borderIndex: number): BorderResult;
   /** Returns the format string registered for `numFmtId`. */
   getNumFmt(numFmtId: number): NumFmtResult;
@@ -1610,9 +1734,13 @@ export interface Workbook {
   addFill(record: FillRecord): AddStyleResult;
   /** Adds a border (deduplicating against existing entries). */
   addBorder(record: BorderRecord): AddStyleResult;
-  /** Adds a number-format code. Built-in matches return the built-in id
-   *  without modifying the table; custom codes are appended at
-   *  `max(existing_custom_id, 163) + 1`. */
+  /** Adds a number-format code. An existing effective mapping is reused,
+   *  including an existing custom record; a built-in id is reused without
+   *  modifying the table only when its current effective mapping matches the
+   *  code. Otherwise custom codes are appended at
+   *  `max(existing_custom_id, 163) + 1`. Effective mappings use the first
+   *  valid custom record for an id in document order, then a non-empty
+   *  built-in code. */
   addNumFmt(formatCode: string): AddNumFmtResult;
   /** Adds an `<xf>` record (deduplicating against existing entries).
    *  Out-of-range font/fill/border indices or unregistered `numFmtId`
@@ -1802,8 +1930,12 @@ export interface WorkbookCtor {
 export interface FormulonModule {
   Workbook: WorkbookCtor;
 
-  /** Convenience: evaluates a single formula in a fresh workbook
-   *  (place at `Sheet1!A1`, recalc, return the cached value). */
+  /** Convenience: evaluates `formula` read-only against a fresh
+   *  single-sheet workbook, anchored at `Sheet1!A1`. Nothing is written
+   *  and no recalc runs, so an anchor-referencing formula such as `=A1`
+   *  or `=COUNTA(A1)` reads the blank anchor rather than becoming a
+   *  self-reference. An array result is reduced to its top-left element;
+   *  use `Workbook.evaluateFormulaArray` for the whole grid. */
   evalFormula(formula: string): EvalResult;
 
   /** Library version string (UTF-8). */
@@ -1823,6 +1955,23 @@ export interface FormulonModule {
 
   /** Most-recent thread-local error context. */
   lastErrorContext(): string;
+
+  /** Sets the engine's minimum structured-log severity (a `LogLevel`
+   *  ordinal). This is **process-wide** state, not per `Workbook`. The
+   *  default is `LogLevel.Off`, under which the engine writes nothing to
+   *  stderr and invokes no sink. */
+  setLogMinLevel(level: number): Status;
+
+  /** Routes structured-log records to `sink`, or restores the (silent at
+   *  the default threshold) stderr fallback when `sink` is `null`.
+   *  **Process-wide** state, not per `Workbook`.
+   *
+   *  `sink` receives one complete JSON record as raw bytes -- the C ABI
+   *  hands the binding a length-delimited range, never a NUL-terminated
+   *  string. The view is only valid for the duration of the call; copy it
+   *  (`new Uint8Array(record)`) or decode it (`new TextDecoder().decode(
+   *  record)`) before returning. */
+  setLogSink(sink: ((record: Uint8Array) => void) | null): Status;
 }
 
 /** Optional Emscripten module-init overrides. Pass to the factory to

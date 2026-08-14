@@ -716,6 +716,33 @@ JsStatus JsWorkbook::pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripte
   return status_from_rc(rc);
 }
 
+emscripten::val JsWorkbook::pivotFilterAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx) const {
+  emscripten::val o = emscripten::val::object();
+  if (handle_ == nullptr) {
+    o.set("status", error_status(7000));
+    return o;
+  }
+  fm_pivot_filter_spec_t spec{};
+  fm_status_t rc = fm_workbook_pivot_filter_at(handle_, sheet, pivotIdx, filterIdx, &spec);
+  if (rc != 0) {
+    o.set("status", error_status(rc));
+    return o;
+  }
+  o.set("status", ok_status());
+  o.set("axis", static_cast<int32_t>(spec.axis));
+  o.set("fieldName", std::string(spec.field_name != nullptr ? spec.field_name : ""));
+  o.set("type", static_cast<int32_t>(spec.type));
+  o.set("dataFieldIndex", spec.data_field_index);
+  o.set("valueKind", static_cast<int32_t>(spec.value_kind));
+  o.set("valueInt", spec.value_int);
+  o.set("valueDouble", spec.value_double);
+  o.set("valueText", std::string(spec.value_text != nullptr ? spec.value_text : ""));
+  o.set("valueHighKind", static_cast<int32_t>(spec.value_high_kind));
+  o.set("valueHighInt", spec.value_high_int);
+  o.set("valueHighDouble", spec.value_high_double);
+  return o;
+}
+
 JsStatus JsWorkbook::pivotFilterClear(uint32_t sheet, uint32_t pivotIdx) {
   if (handle_ == nullptr) {
     return error_status(7000);

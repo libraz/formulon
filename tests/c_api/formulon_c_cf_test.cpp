@@ -70,6 +70,11 @@ struct BufferGuard {
 template <typename MutateFn>
 WorkbookGuard WorkbookFromMutator(MutateFn&& mutate) {
   formulon::Workbook wb = formulon::Workbook::create();
+  // Registers the `<dxf>` records the CF rules below reference. The
+  // writer omits any `dxfId` its styles part cannot resolve, so a rule
+  // whose differential format was never registered would come back from
+  // the load with no `dxf_id` at all.
+  wb.mutable_styles().dxfs.resize(8);
   mutate(wb);
   auto bytes = wb.save();
   EXPECT_TRUE(static_cast<bool>(bytes)) << "Workbook::save: " << (bytes ? "" : bytes.error().message);
@@ -81,6 +86,13 @@ WorkbookGuard WorkbookFromMutator(MutateFn&& mutate) {
   EXPECT_EQ(fm_workbook_load(src.data(), src.size(), &guard.handle), 0)
       << "fm_workbook_load: " << fm_last_error_message();
   return guard;
+}
+
+// Registers `count` `<dxf>` slots on an existing handle. `fm_sheet_cf_add_rule`
+// refuses a `dxf_id` past the end of the table, so a mutation test that
+// engages a differential format has to seed the table first.
+void SeedDxfs(fm_workbook_t* handle, std::size_t count) {
+  handle->workbook().mutable_styles().dxfs.resize(count);
 }
 
 formulon::cf::CFCellRange MakeRange(std::uint32_t r1, std::uint32_t c1, std::uint32_t r2, std::uint32_t c2) {
@@ -324,6 +336,7 @@ TEST(FormulonCApiCf, OutOfGridOrReversedRectReturnsInvalidArgument) {
 TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  SeedDxfs(wb.handle, 4);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2"), 0);
   ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 11.0), 0);  // Sheet1!A1
   ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 0, 0, 5.0), 0);   // Sheet2!A1
@@ -355,6 +368,7 @@ TEST(FormulonCApiCf, ExpressionRuleEvaluatesFunctionsAndQualifiedRefs) {
 TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  SeedDxfs(wb.handle, 5);
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2"), 0);
   ASSERT_EQ(fm_workbook_set_number(wb.handle, 1, 0, 0, 7.0), 0);                   // Sheet2!A1
   ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=SUM(Sheet2!A1,5)"), 0);  // Sheet1!A1
@@ -392,6 +406,7 @@ TEST(FormulonCApiCf, ExpressionRuleRecursivelyEvaluatesFormulaCells) {
 TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  SeedDxfs(wb.handle, 1);
 
   fm_cf_cell_range_t sqref{};
   sqref.first_row = 0;
@@ -433,6 +448,64 @@ TEST(FormulonCApiCfMutate, AddCellIsRuleRoundTrips) {
   EXPECT_EQ(out.sqref[0].last_row, 9U);
   ASSERT_NE(out.id, nullptr);
   EXPECT_FALSE(std::string(out.id).empty());
+}
+
+TEST(FormulonCApiCfMutate, AddRuleRejectsDxfIdPastTheStylesTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  SeedDxfs(wb.handle, 2);
+
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 1;  // CellIs
+  rule.op_engaged = 1;
+  rule.op = 5;  // GreaterThan
+  rule.formula1 = "50";
+  rule.dxf_id_engaged = 1;
+  rule.dxf_id = 2;  // one past the last registered `<dxf>`
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+
+  std::size_t rule_index = 99U;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_STREQ(fm_last_error_message(), "fm_sheet_cf_add_rule: dxf_id out of range");
+
+  // The rejected rule is not appended, so a workbook saved after the failed
+  // call carries no `<cfRule>` whose `dxfId` Excel cannot resolve.
+  std::size_t count = 99U;
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 0U);
+
+  // The last in-range index is still accepted.
+  rule.dxf_id = 1;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  ASSERT_EQ(fm_sheet_cf_count(wb.handle, 0, &count), 0);
+  EXPECT_EQ(count, 1U);
+}
+
+TEST(FormulonCApiCfMutate, AddRuleWithoutDxfIdIgnoresTheEmptyStylesTable) {
+  // A rule that engages no differential format must stay addable on a
+  // workbook that has registered no `<dxf>` at all.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule{};
+  rule.type = 1;  // CellIs
+  rule.op_engaged = 1;
+  rule.op = 5;  // GreaterThan
+  rule.formula1 = "50";
+  rule.sqref = &sqref;
+  rule.sqref_count = 1;
+
+  std::size_t rule_index = 99U;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+  EXPECT_EQ(rule_index, 0U);
+
+  fm_cf_rule_t out{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.dxf_id_engaged, 0);
 }
 
 TEST(FormulonCApiCfMutate, AddMultipleRulesAutoIncrementsPriority) {
@@ -633,6 +706,181 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   EXPECT_EQ(reloaded_blocks[2].rules[0].icon_set->thresholds.size(), 2U);
 }
 
+namespace {
+
+// Minimal valid DataBar rule. Extension fields stay zero-initialized so
+// each test below engages only what it is about to assert.
+fm_cf_rule_t MakeDataBarRule(const fm_cf_cell_range_t* sqref) {
+  fm_cf_rule_t rule{};
+  rule.type = 3;  // DataBar
+  rule.sqref = sqref;
+  rule.sqref_count = 1;
+  rule.data_bar_engaged = 1;
+  rule.data_bar_min.type = 3;  // Min
+  rule.data_bar_min.gte = 1;
+  rule.data_bar_max.type = 4;  // Max
+  rule.data_bar_max.gte = 1;
+  rule.data_bar_fill = fm_cf_color_t{99, 142, 198, 255};
+  rule.data_bar_show_value = 1;
+  rule.data_bar_min_length_pct = 10;
+  rule.data_bar_max_length_pct = 90;
+  return rule;
+}
+
+const formulon::cf::DataBarSpec& OnlyDataBarSpec(fm_workbook_t* handle) {
+  const auto& blocks = handle->workbook().sheet(0).conditional_formats();
+  EXPECT_EQ(blocks.size(), 1U);
+  EXPECT_EQ(blocks[0].rules.size(), 1U);
+  EXPECT_TRUE(blocks[0].rules[0].data_bar.has_value());
+  return *blocks[0].rules[0].data_bar;
+}
+
+}  // namespace
+
+TEST(FormulonCApiCfMutate, ZeroInitializedDataBarExtensionKeepsTheModelDefaults) {
+  // The extension fields were appended to a struct callers already
+  // zero-initialize. Leaving every `*_engaged` flag at zero must produce
+  // exactly the spec the ABI produced before those fields existed.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  const fm_cf_rule_t rule = MakeDataBarRule(&sqref);
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+
+  const formulon::cf::DataBarSpec& spec = OnlyDataBarSpec(wb.handle);
+  EXPECT_TRUE(spec.gradient);
+  EXPECT_EQ(spec.axis_position, formulon::cf::DataBarAxisPosition::Automatic);
+  // Unengaged negative fill still mirrors the positive fill.
+  EXPECT_EQ(spec.negative_fill.r, spec.fill.r);
+  EXPECT_EQ(spec.negative_fill.g, spec.fill.g);
+  EXPECT_EQ(spec.negative_fill.b, spec.fill.b);
+  EXPECT_EQ(spec.negative_fill.a, spec.fill.a);
+  EXPECT_FALSE(spec.border.has_value());
+  EXPECT_FALSE(spec.negative_border.has_value());
+  EXPECT_EQ(spec.axis_color.r, 0U);
+  EXPECT_EQ(spec.axis_color.g, 0U);
+  EXPECT_EQ(spec.axis_color.b, 0U);
+  EXPECT_EQ(spec.axis_color.a, 255U);
+}
+
+TEST(FormulonCApiCfMutate, DataBarExtensionFieldsReachTheModelWhenEngaged) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t rule = MakeDataBarRule(&sqref);
+  rule.data_bar_gradient_engaged = 1;
+  rule.data_bar_gradient = 0;  // solid, not gradient
+  rule.data_bar_axis_position_engaged = 1;
+  rule.data_bar_axis_position = 1;  // middle
+  rule.data_bar_negative_fill_engaged = 1;
+  rule.data_bar_negative_fill = fm_cf_color_t{255, 0, 0, 255};
+  rule.data_bar_border_engaged = 1;
+  rule.data_bar_border = fm_cf_color_t{1, 2, 3, 255};
+  rule.data_bar_negative_border_engaged = 1;
+  rule.data_bar_negative_border = fm_cf_color_t{4, 5, 6, 255};
+  rule.data_bar_axis_color_engaged = 1;
+  rule.data_bar_axis_color = fm_cf_color_t{7, 8, 9, 255};
+
+  std::size_t rule_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, rule, &rule_index), 0) << fm_last_error_message();
+
+  const formulon::cf::DataBarSpec& spec = OnlyDataBarSpec(wb.handle);
+  EXPECT_FALSE(spec.gradient);
+  EXPECT_EQ(spec.axis_position, formulon::cf::DataBarAxisPosition::Middle);
+  EXPECT_EQ(spec.negative_fill.r, 255U);
+  EXPECT_EQ(spec.negative_fill.g, 0U);
+  ASSERT_TRUE(spec.border.has_value());
+  EXPECT_EQ(spec.border->r, 1U);
+  EXPECT_EQ(spec.border->b, 3U);
+  ASSERT_TRUE(spec.negative_border.has_value());
+  EXPECT_EQ(spec.negative_border->r, 4U);
+  EXPECT_EQ(spec.negative_border->b, 6U);
+  EXPECT_EQ(spec.axis_color.r, 7U);
+  EXPECT_EQ(spec.axis_color.b, 9U);
+}
+
+TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
+  // The only way to edit a CF rule through this ABI is get -> remove ->
+  // add, so that path has to be an identity on the rule model. Before the
+  // extension fields existed it silently reset axis, gradient and the
+  // negative colours to their defaults.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+  fm_cf_rule_t seed = MakeDataBarRule(&sqref);
+  seed.data_bar_gradient_engaged = 1;
+  seed.data_bar_gradient = 0;
+  seed.data_bar_axis_position_engaged = 1;
+  seed.data_bar_axis_position = 1;  // middle
+  seed.data_bar_negative_fill_engaged = 1;
+  seed.data_bar_negative_fill = fm_cf_color_t{200, 30, 40, 255};
+  seed.data_bar_border_engaged = 1;
+  seed.data_bar_border = fm_cf_color_t{11, 22, 33, 255};
+  seed.data_bar_axis_color_engaged = 1;
+  seed.data_bar_axis_color = fm_cf_color_t{44, 55, 66, 255};
+  std::size_t seed_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, seed, &seed_index), 0) << fm_last_error_message();
+
+  // Read it back, change one unrelated field, and write it out again.
+  fm_cf_rule_t round_trip{};
+  ASSERT_EQ(fm_sheet_cf_get_at(wb.handle, 0, 0, &round_trip), 0);
+  EXPECT_EQ(round_trip.data_bar_gradient_engaged, 1);
+  EXPECT_EQ(round_trip.data_bar_gradient, 0);
+  EXPECT_EQ(round_trip.data_bar_axis_position_engaged, 1);
+  EXPECT_EQ(round_trip.data_bar_axis_position, 1U);
+  EXPECT_EQ(round_trip.data_bar_negative_fill_engaged, 1);
+  EXPECT_EQ(round_trip.data_bar_negative_fill.r, 200U);
+  EXPECT_EQ(round_trip.data_bar_border_engaged, 1);
+  EXPECT_EQ(round_trip.data_bar_border.g, 22U);
+  // No negative border was set, so the getter must report it absent
+  // rather than handing back an engaged black.
+  EXPECT_EQ(round_trip.data_bar_negative_border_engaged, 0);
+  EXPECT_EQ(round_trip.data_bar_axis_color_engaged, 1);
+  EXPECT_EQ(round_trip.data_bar_axis_color.b, 66U);
+
+  round_trip.stop_if_true = 1;
+  ASSERT_EQ(fm_sheet_cf_remove_at(wb.handle, 0, 0), 0);
+  std::size_t rewritten_index = 0;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, round_trip, &rewritten_index), 0) << fm_last_error_message();
+
+  const formulon::cf::DataBarSpec& spec = OnlyDataBarSpec(wb.handle);
+  EXPECT_FALSE(spec.gradient);
+  EXPECT_EQ(spec.axis_position, formulon::cf::DataBarAxisPosition::Middle);
+  EXPECT_EQ(spec.negative_fill.r, 200U);
+  EXPECT_EQ(spec.negative_fill.g, 30U);
+  ASSERT_TRUE(spec.border.has_value());
+  EXPECT_EQ(spec.border->b, 33U);
+  EXPECT_FALSE(spec.negative_border.has_value());
+  EXPECT_EQ(spec.axis_color.g, 55U);
+}
+
+TEST(FormulonCApiCfMutate, DataBarRejectsInvertedLengthsAndUnknownAxisPosition) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  fm_cf_cell_range_t sqref{0, 0, 9, 0};
+
+  fm_cf_rule_t inverted = MakeDataBarRule(&sqref);
+  inverted.data_bar_min_length_pct = 90;
+  inverted.data_bar_max_length_pct = 10;
+  std::size_t rule_index = 0;
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, inverted, &rule_index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  fm_cf_rule_t bad_axis = MakeDataBarRule(&sqref);
+  bad_axis.data_bar_axis_position_engaged = 1;
+  bad_axis.data_bar_axis_position = 3;  // one past `none`
+  EXPECT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, bad_axis, &rule_index),
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+
+  // An unengaged out-of-domain axis ordinal is ignored, not rejected: the
+  // flag is what makes the value meaningful.
+  fm_cf_rule_t stale_axis = MakeDataBarRule(&sqref);
+  stale_axis.data_bar_axis_position = 3;
+  ASSERT_EQ(fm_sheet_cf_add_rule(wb.handle, 0, stale_axis, &rule_index), 0) << fm_last_error_message();
+  EXPECT_EQ(OnlyDataBarSpec(wb.handle).axis_position, formulon::cf::DataBarAxisPosition::Automatic);
+}
+
 TEST(FormulonCApiCfMutate, EmptySqrefRejected) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
@@ -714,6 +962,7 @@ TEST(FormulonCApiCfMutate, DuplicatePredicateRulesGetDistinctStableIndices) {
   // identity.
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  SeedDxfs(wb.handle, 1);
 
   fm_cf_cell_range_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule{};

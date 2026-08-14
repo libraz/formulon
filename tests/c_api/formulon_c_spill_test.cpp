@@ -59,6 +59,63 @@ TEST(FormulonCApiSpill, SequenceSpillReportsAnchorAndShape) {
   EXPECT_EQ(outside.engaged, 0);
 }
 
+TEST(FormulonCApiSpill, ExpandBlankPadSpillsZerosAndCountReadsTwelve) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=EXPAND({1,2;3,4},3,4,)"), 0);  // A1
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  fm_spill_info_t info{};
+  ASSERT_EQ(fm_workbook_spill_info(wb.handle, 0, 0, 0, &info), 0);
+  ASSERT_EQ(info.engaged, 1);
+  EXPECT_EQ(info.rows, 3U);
+  EXPECT_EQ(info.cols, 4U);
+
+  // C1 and D3 are generated pad cells, and the committed spill stores their
+  // projected numeric-zero values for later grid reads.
+  fm_value_t c1{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 2, &c1), 0);
+  ASSERT_EQ(c1.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(c1.u.number, 0.0);
+  fm_value_t d3{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 2, 3, &d3), 0);
+  ASSERT_EQ(d3.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(d3.u.number, 0.0);
+
+  // A dependent spill reference reads the committed grid values, including
+  // all eight zero pads, so COUNT reports all twelve cells.
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 5, "=COUNT(A1#)"), 0);  // F1
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  fm_value_t count{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 5, &count), 0);
+  ASSERT_EQ(count.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(count.u.number, 12.0);
+}
+
+TEST(FormulonCApiSpill, RawRangeSortSpillsBlankAsZeroAndCountReadsThree) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_excel_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  // A1:A3 is {2, blank, 1}; the absent A2 is the interior raw-grid blank.
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=2"), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 2, 0, "=1"), 0);
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 3, "=SORT(A1:A3)"), 0);  // D1
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+
+  fm_value_t d3{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 2, 3, &d3), 0);
+  ASSERT_EQ(d3.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(d3.u.number, 0.0);
+
+  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 5, "=COUNT(D1#)"), 0);  // F1
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  fm_value_t count{};
+  ASSERT_EQ(fm_workbook_get_value(wb.handle, 0, 0, 5, &count), 0);
+  ASSERT_EQ(count.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(count.u.number, 3.0);
+}
+
 TEST(FormulonCApiSpill, CellEnumerationIncludesSpillPhantoms) {
   // D1 (row 0, col 3) = =SEQUENCE(3,1) spills to D1:D3. The phantoms D2 and
   // D3 must appear in the flat enumeration with their spilled values and no

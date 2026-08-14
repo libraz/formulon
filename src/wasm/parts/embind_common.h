@@ -74,6 +74,27 @@ struct JsStatus {
   std::string context;
 };
 
+/// Per-call counters returned by `Workbook.recalcParallel`. The five
+/// scheduler counters originate as `uint64_t` in the C ABI but are widened
+/// to `double` here deliberately: embind then exposes them as JavaScript
+/// `number` values (exact for every value through `Number.MAX_SAFE_INTEGER`)
+/// instead of depending on WASM BigInt support.
+struct JsParallelRecalcStats {
+  double cellsEvaluated = 0.0;
+  double sccsProcessed = 0.0;
+  double parallelSteps = 0.0;
+  double serialFallbackSteps = 0.0;
+  double cycleRecoveries = 0.0;
+  uint32_t workerThreadsStarted = 0U;
+  uint32_t workerThreadsUsed = 0U;
+};
+
+/// `{ status, stats }` envelope returned by `Workbook.recalcParallel`.
+struct JsParallelRecalcResult {
+  JsStatus status;
+  JsParallelRecalcStats stats;
+};
+
 /// Bundles `JsStatus` and a `JsValue` payload for `evalFormula`.
 struct JsEvalResult {
   JsStatus status;
@@ -203,9 +224,11 @@ struct JsAddStyleResult {
   uint32_t index = 0U;
 };
 
-/// Return envelope for `Workbook.addNumFmt`. `numFmtId` is either the
-/// matched built-in id (`0..163`) or the freshly-assigned custom id
-/// (`>= 164`).
+/// Return envelope for `Workbook.addNumFmt`. `numFmtId` may reuse any
+/// existing effective mapping (built-in or custom, including a custom record
+/// overriding a built-in slot), or be the freshly-assigned custom id
+/// (`>= 164`). Effective mappings use the first valid custom record for an id
+/// in document order, then a non-empty built-in code.
 struct JsAddNumFmtResult {
   JsStatus status;
   uint32_t numFmtId = 0U;
@@ -327,7 +350,9 @@ inline std::string js_pull_string(const emscripten::val& v, const char* key) {
 
 /// Pulls the `{kind, rgb, theme, tint, indexed}` colour specification out
 /// of `v[key]`. An absent object leaves `kind` at `kFmColorNone`, which
-/// makes the writer fall back to the sibling resolved `*Argb` value.
+/// makes the writer emit the sibling `*Argb` as literal `rgb`. A supplied
+/// selector is authoritative; the binding does not resolve theme/indexed /
+/// auto colours.
 inline fm_color_spec js_pull_color_spec(const emscripten::val& v, const char* key) {
   fm_color_spec spec{};
   emscripten::val f = v[key];

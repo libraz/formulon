@@ -25,6 +25,7 @@ const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
 const srcPath = path.join(repoRoot, 'src', 'wasm', 'formulon.d.ts');
 const distPath = path.join(repoRoot, 'packages', 'npm', 'dist', 'formulon.d.ts');
+const exportedAmbientConstEnum = /^\s*export\s+(?:declare\s+)?const\s+enum\s+([A-Za-z_$][\w$]*)\b/m;
 
 async function main() {
   let src;
@@ -40,6 +41,12 @@ async function main() {
   } catch (e) {
     console.error(`check-dts: cannot read staged copy ${distPath}: ${e.message}`);
     console.error('  Run `make npm-package` (or copy src/wasm/formulon.d.ts) to stage it.');
+    process.exit(1);
+  }
+
+  const ambientConstEnum = src.match(exportedAmbientConstEnum);
+  if (ambientConstEnum) {
+    console.error(`check-dts: exported ambient const enum ${ambientConstEnum[1]} is not supported; use a regular enum`);
     process.exit(1);
   }
 

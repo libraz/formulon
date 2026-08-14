@@ -63,6 +63,31 @@ TEST(WorkbookSheetOpsCApi, RenameRejectsBadName) {
   EXPECT_STREQ(SheetName(wb.handle, 0), "Alpha");
 }
 
+TEST(WorkbookSheetOpsCApi, UnicodeSimpleFoldAddRejectsDuplicateAndRenameWorks) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x84"), 0);                         // Ä
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "\xC3\x96"), 0);                         // Ö
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, "\xC3\xA4"), 0);                         // ä
+  const fm_status_t collision = fm_workbook_rename_sheet(wb.handle, 1U, "\xC3\xA4");  // ä
+  EXPECT_NE(collision, 0);
+  EXPECT_STREQ(fm_status_string(collision), "kInvalidSheetName");
+  EXPECT_STREQ(SheetName(wb.handle, 0U), "\xC3\x84");  // Ä
+  EXPECT_STREQ(SheetName(wb.handle, 1U), "\xC3\x96");  // Ö
+  ASSERT_EQ(fm_workbook_rename_sheet(wb.handle, 0U, "\xC3\xA4"), 0);
+  EXPECT_STREQ(SheetName(wb.handle, 0U), "\xC3\xA4");
+  EXPECT_STREQ(SheetName(wb.handle, 1U), "\xC3\x96");  // Ö
+}
+
+TEST(WorkbookSheetOpsCApi, UnicodeMalformedUtf8Rejected) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_empty(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Valid"), 0);
+  const char malformed[] = {'\xC3', '\0'};
+  EXPECT_NE(fm_workbook_add_sheet(wb.handle, malformed), 0);
+  EXPECT_NE(fm_workbook_rename_sheet(wb.handle, 0U, malformed), 0);
+}
+
 TEST(WorkbookSheetOpsCApi, RenameRejectsOutOfRange) {
   WorkbookGuard wb;
   MakeThreeSheets(wb);

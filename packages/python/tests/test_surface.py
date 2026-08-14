@@ -24,6 +24,7 @@ from formulon import (
     CfColor,
     CfValueObject,
     ColorScale,
+    ColorSpec,
     ConditionalFormatInput,
     DataBar,
     DataValidationInput,
@@ -104,7 +105,7 @@ class StructLayoutTests(unittest.TestCase):
         "SHEET_PROTECTION": 88,
         "VIEWPORT": 20,
         "CF_MATCH": 72,
-        "CF_RULE": 168,
+        "CF_RULE": 216,
         "PIVOT_CELL": 40,
         "PIVOT_FIELD_SPEC": 20,
         "PIVOT_DATA_FIELD_SPEC": 28,
@@ -112,8 +113,8 @@ class StructLayoutTests(unittest.TestCase):
         "SPILL_INFO": 20,
         "FUNCTION_METADATA": 24,
         "SHEET_VIEW": 16,
-        "COLUMN_LAYOUT": 24,
-        "ROW_LAYOUT": 24,
+        "COLUMN_LAYOUT": 40,
+        "ROW_LAYOUT": 32,
         "CELL_XF": 20,
         "CELL_XF_EX2": 88,
         "COLOR_SPEC": 24,
@@ -121,7 +122,7 @@ class StructLayoutTests(unittest.TestCase):
         "FILL_RECORD": 64,
         "BORDER_SIDE": 32,
         "BORDER_RECORD": 168,
-        "DXF_RECORD": 352,
+        "DXF_RECORD": 360,
         "CELL_STYLE_RECORD": 24,
         "EXTERNAL_LINK_RECORD": 24,
     }
@@ -389,10 +390,18 @@ class SheetViewProtectionTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             wb.set_column_width(0, 0, 2, 18.5)
             cols = wb.get_sheet_columns(0)
-            self.assertTrue(any(abs(c.width - 18.5) < 1e-9 for c in cols))
+            explicit = next(c for c in cols if abs(c.width - 18.5) < 1e-9)
+            self.assertTrue(explicit.has_width)
+            self.assertFalse(explicit.has_style)
+            wb.set_column_width(0, 4, 4, 0.0)
+            zero = next(c for c in wb.get_sheet_columns(0) if c.first == 4 and c.last == 4)
+            self.assertEqual(zero.width, 0.0)
+            self.assertTrue(zero.has_width)
             wb.set_row_height(0, 0, 30.0)
             rows = wb.get_sheet_row_overrides(0)
-            self.assertTrue(any(abs(r.height - 30.0) < 1e-9 for r in rows))
+            explicit_row = next(r for r in rows if abs(r.height - 30.0) < 1e-9)
+            self.assertFalse(explicit_row.has_style)
+            self.assertEqual(explicit_row.style_xf, 0)
 
     def test_protection_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
@@ -538,12 +547,97 @@ class StyleTests(unittest.TestCase):
             self.assertEqual(got.num_fmt_id, 164)
             self.assertEqual(got.num_fmt_code, "0.00")
 
+    def test_dxf_alignment_and_protection_xml_survive_get_add_and_save_load(self) -> None:
+        alignment_xml = '<alignment horizontal="center" wrapText="1"/>'
+        protection_xml = '<protection locked="0" hidden="1"/>'
+        with Workbook.create_default() as wb:
+            alignment_index = wb.add_dxf(DifferentialFormat(alignment_xml=alignment_xml))
+            protection_index = wb.add_dxf(DifferentialFormat(protection_xml=protection_xml))
+            self.assertNotEqual(alignment_index, protection_index)
+
+            got_alignment = wb.get_dxf(alignment_index)
+            self.assertEqual(got_alignment.alignment_xml, alignment_xml)
+            self.assertEqual(got_alignment.protection_xml, "")
+            got_protection = wb.get_dxf(protection_index)
+            self.assertEqual(got_protection.alignment_xml, "")
+            self.assertEqual(got_protection.protection_xml, protection_xml)
+            self.assertEqual(wb.add_dxf(got_alignment), alignment_index)
+            self.assertEqual(wb.add_dxf(got_protection), protection_index)
+
+            with Workbook.load(wb.save()) as reloaded:
+                reloaded_alignment = reloaded.get_dxf(alignment_index)
+                reloaded_protection = reloaded.get_dxf(protection_index)
+                self.assertEqual(reloaded_alignment.alignment_xml, alignment_xml)
+                self.assertEqual(reloaded_alignment.protection_xml, "")
+                self.assertEqual(reloaded_protection.alignment_xml, "")
+                self.assertEqual(reloaded_protection.protection_xml, protection_xml)
+                self.assertEqual(reloaded.add_dxf(reloaded_alignment), alignment_index)
+                self.assertEqual(reloaded.add_dxf(reloaded_protection), protection_index)
+
+    def test_selector_colours_survive_get_add_identity_and_save_load(self) -> None:
+        theme = ColorSpec(kind=2, theme=3, tint=0.5)
+        indexed = ColorSpec(kind=3, indexed=9)
+        automatic = ColorSpec(kind=4)
+        with Workbook.create_default() as wb:
+            font_index = wb.add_font(FontRecord(name="SelectorFont", size=11.0, color_argb=0x01020304, color=theme))
+            got_font = wb.get_font(font_index)
+            self.assertEqual(got_font.color, theme)
+            self.assertEqual(got_font.color_argb, 0x01020304)
+            self.assertEqual(wb.add_font(got_font), font_index)
+
+            fill_index = wb.add_fill(
+                FillRecord(
+                    pattern=1,
+                    fg_argb=0x05060708,
+                    bg_argb=0x090A0B0C,
+                    fg=indexed,
+                    bg=automatic,
+                )
+            )
+            got_fill = wb.get_fill(fill_index)
+            self.assertEqual(got_fill.fg, indexed)
+            self.assertEqual(got_fill.bg, automatic)
+            self.assertEqual(wb.add_fill(got_fill), fill_index)
+
+            border = {
+                "left": {"style": 1, "color_argb": 0x01020304, "color": theme},
+                "right": {"style": 1, "color_argb": 0x05060708, "color": indexed},
+                "top": {"style": 1, "color_argb": 0x090A0B0C, "color": automatic},
+            }
+            border_index = wb.add_border(border)
+            got_border = wb.get_border(border_index)
+            self.assertEqual(got_border["left"]["color"], theme)
+            self.assertEqual(got_border["right"]["color"], indexed)
+            self.assertEqual(got_border["top"]["color"], automatic)
+            self.assertEqual(wb.add_border(got_border), border_index)
+
+            dxf_index = wb.add_dxf(
+                DifferentialFormat(
+                    font=FontRecord(name="DxfSelector", size=9.0, color_argb=0x11121314, color=automatic),
+                    fill=FillRecord(pattern=1, fg_argb=0x15161718, fg=indexed),
+                    border={"left": {"style": 1, "color_argb": 0x191A1B1C, "color": theme}},
+                )
+            )
+            got_dxf = wb.get_dxf(dxf_index)
+            self.assertEqual(got_dxf.font.color, automatic)
+            self.assertEqual(got_dxf.fill.fg, indexed)
+            self.assertEqual(got_dxf.border["left"]["color"], theme)
+            self.assertEqual(wb.add_dxf(got_dxf), dxf_index)
+
+            with Workbook.load(wb.save()) as reloaded:
+                self.assertEqual(reloaded.get_font(font_index).color, theme)
+                self.assertEqual(reloaded.get_fill(fill_index).fg, indexed)
+                self.assertEqual(reloaded.get_border(border_index)["left"]["color"], theme)
+                self.assertEqual(reloaded.get_dxf(dxf_index).font.color, automatic)
+
 
 class ConditionalFormatTests(unittest.TestCase):
     def test_cf_add_get_evaluate_clear(self) -> None:
         with Workbook.create_default() as wb:
             for r in range(3):
                 wb.set_number(0, r, 0, float(r * 5))  # A1=0, A2=5, A3=10
+            # A rule's dxf_id must resolve against a registered dxf.
+            dxf_index = wb.add_dxf(DifferentialFormat())
             wb.add_conditional_format(
                 0,
                 ConditionalFormatInput(
@@ -553,7 +647,7 @@ class ConditionalFormatTests(unittest.TestCase):
                     op=4,  # greaterThan
                     formula1="4",
                     dxf_id_engaged=True,
-                    dxf_id=0,
+                    dxf_id=dxf_index,
                 ),
             )
             rules = wb.get_conditional_formats(0)

@@ -386,6 +386,48 @@ async function run() {
     assert.equal(r.value.text, 'hello world');
   });
 
+  test('numeric comparisons share the 15-digit bucket without fuzzy exact lookups', () => {
+    const operators = [
+      ['=', 1],
+      ['<>', 0],
+      ['<', 0],
+      ['<=', 1],
+      ['>', 0],
+      ['>=', 1],
+    ];
+    for (const [operator, expected] of operators) {
+      const r = Module.evalFormula(`=7.1${operator}7.1000000000000005`);
+      assert.ok(r.status.ok, `operator=${operator} status=${JSON.stringify(r.status)}`);
+      assert.equal(r.value.kind, VAL.BOOL, `operator=${operator}`);
+      assert.equal(r.value.boolean, expected, `operator=${operator}`);
+    }
+
+    // MATCH and XLOOKUP exact modes intentionally retain literal IEEE equality;
+    // the formula comparison bucket must not make their exact guards fuzzy.
+    // Populate the two worksheet values through setNumber so the parser's
+    // decimal-literal canonicalisation cannot collapse the adjacent doubles.
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.ok(wb.setNumber(0, 0, 0, 7.1).ok);
+      assert.ok(wb.setNumber(0, 1, 0, 7.1000000000000005).ok);
+      assert.ok(wb.setFormula(0, 2, 0, '=MATCH(A2,A1:A1,0)').ok);
+      assert.ok(wb.setFormula(0, 3, 0, '=XLOOKUP(A2,A1:A1,A1:A1,"MISS",0)').ok);
+      assert.ok(wb.recalc().ok);
+
+      const match = wb.getValue(0, 2, 0);
+      assert.ok(match.status.ok, `MATCH status=${JSON.stringify(match.status)}`);
+      assert.equal(match.value.kind, VAL.ERROR);
+      assert.equal(match.value.errorCode, 6); // ErrorCode::NA / #N/A.
+
+      const xlookup = wb.getValue(0, 3, 0);
+      assert.ok(xlookup.status.ok, `XLOOKUP status=${JSON.stringify(xlookup.status)}`);
+      assert.equal(xlookup.value.kind, VAL.TEXT);
+      assert.equal(xlookup.value.text, 'MISS');
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('Workbook construction + setNumber + recalc + getValue', () => {
     const wb = Module.Workbook.createDefault();
     try {
@@ -412,6 +454,93 @@ async function run() {
       // addSheet should grow sheetCount.
       assert.ok(wb.addSheet('Second').ok);
       assert.equal(wb.sheetCount(), 2);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry', () => {
+    const wb = Module.Workbook.createDefault();
+    const branchCount = 32;
+    try {
+      assert.ok(wb.setNumber(0, 0, 0, 1).ok);
+      for (let i = 0; i < branchCount; i += 1) {
+        const row = i + 1;
+        assert.ok(wb.setFormula(0, row, 1, `=A1+${i + 2}`).ok);
+        assert.ok(wb.setFormula(0, row, 2, `=B${row + 1}*2`).ok);
+      }
+
+      const parallel = wb.recalcParallel(4);
+      assert.ok(parallel.status.ok, `status=${JSON.stringify(parallel.status)}`);
+      assert.equal(typeof parallel.stats.cellsEvaluated, 'number');
+      assert.equal(typeof parallel.stats.sccsProcessed, 'number');
+      assert.equal(typeof parallel.stats.parallelSteps, 'number');
+      assert.ok(parallel.stats.cellsEvaluated > 0);
+      assert.ok(parallel.stats.sccsProcessed > 0);
+      if (parallel.stats.workerThreadsStarted <= 1) {
+        // OS launch refusal or a partial launch of one worker is a documented
+        // successful serial degradation.
+        assert.equal(parallel.stats.workerThreadsUsed, 0);
+        assert.equal(parallel.stats.parallelSteps, 0);
+        assert.ok(parallel.stats.serialFallbackSteps > 0, `stats=${JSON.stringify(parallel.stats)}`);
+      } else {
+        assert.ok(parallel.stats.parallelSteps > 0, `stats=${JSON.stringify(parallel.stats)}`);
+        assert.ok(parallel.stats.workerThreadsStarted >= 2);
+        assert.ok(parallel.stats.workerThreadsStarted <= 4);
+        assert.ok(parallel.stats.workerThreadsUsed > 0);
+        assert.ok(parallel.stats.workerThreadsUsed <= parallel.stats.workerThreadsStarted);
+      }
+
+      const first = wb.getValue(0, 1, 1);
+      const last = wb.getValue(0, branchCount, 2);
+      assert.ok(first.status.ok);
+      assert.ok(last.status.ok);
+      assert.equal(first.value.kind, VAL.NUMBER);
+      assert.equal(last.value.kind, VAL.NUMBER);
+      assert.equal(first.value.number, 3);
+      assert.equal(last.value.number, (1 + branchCount + 1) * 2);
+
+      assert.ok(wb.setNumber(0, 0, 0, 5).ok);
+      const callerOnly = wb.recalcParallel(1);
+      assert.ok(callerOnly.status.ok, `status=${JSON.stringify(callerOnly.status)}`);
+      assert.equal(callerOnly.stats.parallelSteps, 0);
+      assert.ok(callerOnly.stats.serialFallbackSteps > 0);
+      assert.equal(callerOnly.stats.workerThreadsStarted, 0);
+      assert.equal(callerOnly.stats.workerThreadsUsed, 0);
+      assert.equal(wb.getValue(0, branchCount, 2).value.number, (5 + branchCount + 1) * 2);
+
+      const invalid = wb.recalcParallel(9);
+      assert.equal(invalid.status.ok, false);
+      assert.notEqual(invalid.status.status, 0);
+      assert.equal(invalid.stats.cellsEvaluated, 0);
+      assert.equal(invalid.stats.sccsProcessed, 0);
+      assert.equal(invalid.stats.parallelSteps, 0);
+      assert.equal(invalid.stats.serialFallbackSteps, 0);
+      assert.equal(invalid.stats.cycleRecoveries, 0);
+      assert.equal(invalid.stats.workerThreadsStarted, 0);
+      assert.equal(invalid.stats.workerThreadsUsed, 0);
+
+      for (const invalidThreadCount of [
+        -0.5,
+        1.5,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+        2 ** 32 + 1,
+        null,
+        undefined,
+      ]) {
+        const invalidShape = wb.recalcParallel(invalidThreadCount);
+        assert.equal(invalidShape.status.ok, false, `threadCount=${String(invalidThreadCount)}`);
+        assert.notEqual(invalidShape.status.status, 0);
+        assert.equal(invalidShape.stats.cellsEvaluated, 0);
+        assert.equal(invalidShape.stats.sccsProcessed, 0);
+        assert.equal(invalidShape.stats.parallelSteps, 0);
+        assert.equal(invalidShape.stats.serialFallbackSteps, 0);
+        assert.equal(invalidShape.stats.cycleRecoveries, 0);
+        assert.equal(invalidShape.stats.workerThreadsStarted, 0);
+        assert.equal(invalidShape.stats.workerThreadsUsed, 0);
+      }
     } finally {
       wb.delete();
     }
@@ -1070,6 +1199,159 @@ async function run() {
       const rfmt = wb.getNumFmt(custom.numFmtId);
       assert.ok(rfmt.status.ok);
       assert.equal(rfmt.formatCode, '"USD" #,##0');
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('selector colours survive get/add identity and save/load', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const theme = { kind: 2, rgb: 0, theme: 3, tint: 0.5, indexed: 0 };
+      const indexed = { kind: 3, rgb: 0, theme: 0, tint: 0, indexed: 9 };
+      const automatic = { kind: 4, rgb: 0, theme: 0, tint: 0, indexed: 0 };
+      const font = wb.addFont({
+        name: 'SelectorFont',
+        size: 11,
+        colorArgb: 0x01020304,
+        color: theme,
+      });
+      assert.ok(font.status.ok);
+      const gotFont = wb.getFont(font.index);
+      assert.ok(gotFont.status.ok);
+      assert.equal(gotFont.color.kind, 2);
+      assert.equal(gotFont.color.theme, 3);
+      assert.equal(gotFont.color.tint, 0.5);
+      assert.equal(gotFont.colorArgb, 0x01020304);
+      const fontAgain = wb.addFont(gotFont);
+      assert.ok(fontAgain.status.ok);
+      assert.equal(fontAgain.index, font.index);
+
+      const fill = wb.addFill({
+        pattern: 1,
+        fgArgb: 0x05060708,
+        bgArgb: 0x090a0b0c,
+        fg: indexed,
+        bg: automatic,
+      });
+      assert.ok(fill.status.ok);
+      const gotFill = wb.getFill(fill.index);
+      assert.ok(gotFill.status.ok);
+      assert.equal(gotFill.fg.kind, 3);
+      assert.equal(gotFill.fg.indexed, 9);
+      assert.equal(gotFill.bg.kind, 4);
+      const fillAgain = wb.addFill(gotFill);
+      assert.ok(fillAgain.status.ok);
+      assert.equal(fillAgain.index, fill.index);
+
+      const border = wb.addBorder({
+        left: { style: 1, colorArgb: 0x01020304, color: theme },
+        right: { style: 1, colorArgb: 0x05060708, color: indexed },
+        top: { style: 1, colorArgb: 0x090a0b0c, color: automatic },
+        bottom: { style: 0, colorArgb: 0 },
+        diagonal: { style: 0, colorArgb: 0 },
+      });
+      assert.ok(border.status.ok);
+      const gotBorder = wb.getBorder(border.index);
+      assert.ok(gotBorder.status.ok);
+      assert.equal(gotBorder.left.color.kind, 2);
+      assert.equal(gotBorder.left.color.theme, 3);
+      assert.equal(gotBorder.right.color.kind, 3);
+      assert.equal(gotBorder.right.color.indexed, 9);
+      assert.equal(gotBorder.top.color.kind, 4);
+      const borderAgain = wb.addBorder(gotBorder);
+      assert.ok(borderAgain.status.ok);
+      assert.equal(borderAgain.index, border.index);
+
+      const dxf = wb.addDxf({
+        font: { name: 'DxfSelector', size: 9, colorArgb: 0x11121314, color: automatic },
+        fill: { pattern: 1, fgArgb: 0x15161718, fg: indexed },
+        border: { left: { style: 1, colorArgb: 0x191a1b1c, color: theme } },
+      });
+      assert.ok(dxf.status.ok);
+      const gotDxf = wb.getDxf(dxf.index);
+      assert.ok(gotDxf.status.ok);
+      assert.equal(gotDxf.font.color.kind, 4);
+      assert.equal(gotDxf.fill.fg.kind, 3);
+      assert.equal(gotDxf.border.left.color.kind, 2);
+      const dxfAgain = wb.addDxf(gotDxf);
+      assert.ok(dxfAgain.status.ok);
+      assert.equal(dxfAgain.index, dxf.index);
+
+      const saved = wb.save();
+      assert.ok(saved.status.ok);
+      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      try {
+        assert.ok(loaded.isValid());
+        const loadedFont = loaded.getFont(font.index);
+        const loadedFill = loaded.getFill(fill.index);
+        const loadedBorder = loaded.getBorder(border.index);
+        const loadedDxf = loaded.getDxf(dxf.index);
+        assert.ok(loadedFont.status.ok);
+        assert.ok(loadedFill.status.ok);
+        assert.ok(loadedBorder.status.ok);
+        assert.ok(loadedDxf.status.ok);
+        assert.equal(loadedFont.color.kind, 2);
+        assert.equal(loadedFill.fg.kind, 3);
+        assert.equal(loadedBorder.left.color.kind, 2);
+        assert.equal(loadedDxf.font.color.kind, 4);
+      } finally {
+        loaded.delete();
+      }
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('dxf alignment and protection XML survive get/add identity and save/load', () => {
+    const wb = Module.Workbook.createDefault();
+    const alignmentXml = '<alignment horizontal="center" wrapText="1"/>';
+    const protectionXml = '<protection locked="0" hidden="1"/>';
+    try {
+      const alignment = wb.addDxf({ alignmentXml });
+      assert.ok(alignment.status.ok);
+      const protection = wb.addDxf({ protectionXml });
+      assert.ok(protection.status.ok);
+      assert.notEqual(alignment.index, protection.index);
+
+      const gotAlignment = wb.getDxf(alignment.index);
+      assert.ok(gotAlignment.status.ok);
+      assert.equal(gotAlignment.alignmentXml, alignmentXml);
+      assert.equal(gotAlignment.protectionXml, undefined);
+      const gotProtection = wb.getDxf(protection.index);
+      assert.ok(gotProtection.status.ok);
+      assert.equal(gotProtection.alignmentXml, undefined);
+      assert.equal(gotProtection.protectionXml, protectionXml);
+
+      const alignmentAgain = wb.addDxf(gotAlignment);
+      assert.ok(alignmentAgain.status.ok);
+      assert.equal(alignmentAgain.index, alignment.index);
+      const protectionAgain = wb.addDxf(gotProtection);
+      assert.ok(protectionAgain.status.ok);
+      assert.equal(protectionAgain.index, protection.index);
+
+      const saved = wb.save();
+      assert.ok(saved.status.ok);
+      const loaded = Module.Workbook.loadBytes(saved.bytes);
+      try {
+        assert.ok(loaded.isValid());
+        const loadedAlignment = loaded.getDxf(alignment.index);
+        assert.ok(loadedAlignment.status.ok);
+        assert.equal(loadedAlignment.alignmentXml, alignmentXml);
+        assert.equal(loadedAlignment.protectionXml, undefined);
+        const loadedProtection = loaded.getDxf(protection.index);
+        assert.ok(loadedProtection.status.ok);
+        assert.equal(loadedProtection.alignmentXml, undefined);
+        assert.equal(loadedProtection.protectionXml, protectionXml);
+        const loadedAlignmentAgain = loaded.addDxf(loadedAlignment);
+        assert.ok(loadedAlignmentAgain.status.ok);
+        assert.equal(loadedAlignmentAgain.index, alignment.index);
+        const loadedProtectionAgain = loaded.addDxf(loadedProtection);
+        assert.ok(loadedProtectionAgain.status.ok);
+        assert.equal(loadedProtectionAgain.index, protection.index);
+      } finally {
+        loaded.delete();
+      }
     } finally {
       wb.delete();
     }

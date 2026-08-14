@@ -110,6 +110,10 @@ class JsWorkbook {
   // ---- Recalc / calc mode ------------------------------------------------
 
   JsStatus recalc();
+  /// Takes the raw JS argument so the binding can reject non-numeric,
+  /// fractional, non-finite, and out-of-range values before embind's normal
+  /// unsigned-integer coercion would silently change them.
+  JsParallelRecalcResult recalcParallel(emscripten::val threadCount);
   JsStatus setIterative(bool enabled, uint32_t max_iterations, double max_change);
   uint32_t calcMode() const;
   JsStatus setCalcMode(uint32_t mode);
@@ -325,6 +329,15 @@ class JsWorkbook {
   JsStatus pivotDataFieldSet(uint32_t sheet, uint32_t pivotIdx, uint32_t dataFieldIdx, emscripten::val spec);
 
   uint32_t pivotFilterCount(uint32_t sheet, uint32_t pivotIdx) const;
+  /// Reads the active filter at `filterIdx`.
+  ///
+  /// The active-filter list is **session state**: an entry added through
+  /// `pivotFilterAdd` affects evaluation only while this workbook handle
+  /// lives and is not written by `save`. Conversely a `<filters>` block
+  /// Excel wrote is preserved verbatim on save but does not appear here, so
+  /// `pivotFilterCount` reports only what this session added. The filter
+  /// surface that does persist is pivot field item visibility.
+  emscripten::val pivotFilterAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx) const;
   JsStatus pivotFilterAdd(uint32_t sheet, uint32_t pivotIdx, emscripten::val spec);
   JsStatus pivotFilterClear(uint32_t sheet, uint32_t pivotIdx);
   JsStatus pivotFilterRemoveAt(uint32_t sheet, uint32_t pivotIdx, uint32_t filterIdx);
@@ -347,9 +360,11 @@ class JsWorkbook {
   static emscripten::val& js_progress_callback();
 
   // C-ABI compatible trampoline that forwards to the held JS callback.
-  // Returning `false` from the JS side aborts the iterative solve.
-  static bool iterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
-                                          void* user_data);
+  // Returning `false` from the JS side aborts the iterative solve. The
+  // return type matches `fm_iterative_progress_cb`: the header-wide
+  // wide-POD boolean convention (`int32_t`, `0` = abort), not a C `bool`.
+  static int32_t iterativeProgressTrampoline(uint32_t iteration, double max_residual, uint32_t max_iterations,
+                                             void* user_data);
 
   fm_workbook_t* handle_ = nullptr;
 };
@@ -375,6 +390,18 @@ std::string last_error_message();
 
 /// Returns the most-recent thread-local error context.
 std::string last_error_context();
+
+/// Sets the engine's minimum structured-log severity. Process-wide, not
+/// per workbook handle; the default is `FM_LOG_LEVEL_OFF` (4), under which
+/// the engine writes nothing anywhere.
+JsStatus set_log_min_level(int32_t level);
+
+/// Routes structured-log records to `sink`, or restores the (silent at the
+/// default threshold) stderr fallback when `sink` is null/undefined.
+/// Process-wide, not per workbook handle. The sink receives one complete
+/// JSON record as a `Uint8Array` view valid only for the duration of the
+/// call; copy or decode it before returning.
+JsStatus set_log_sink(emscripten::val sink);
 
 }  // namespace parts
 }  // namespace wasm

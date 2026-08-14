@@ -16,6 +16,7 @@ fm_workbook_create
 fm_workbook_create_empty
 fm_workbook_load
 fm_workbook_destroy
+fm_workbook_memory_usage
 
 # -- Save ------------------------------------------------------------------------
 fm_workbook_save
@@ -46,9 +47,11 @@ fm_workbook_set_text
 fm_workbook_set_blank
 fm_workbook_set_formula
 fm_workbook_set_error
+fm_workbook_set_cell_phonetic
 
 # -- Cell read -------------------------------------------------------------------
 fm_workbook_get_value
+fm_workbook_get_cell_phonetic
 fm_workbook_lambda_text_at
 
 # -- Ad-hoc array evaluation (two-step: evaluate + per-cell readback) -------------
@@ -64,6 +67,9 @@ fm_workbook_defined_name_at
 fm_workbook_defined_name_at_ex
 fm_workbook_table_count
 fm_workbook_table_at
+fm_workbook_table_create
+fm_workbook_table_update
+fm_workbook_table_remove
 fm_workbook_passthrough_count
 fm_workbook_passthrough_at
 
@@ -109,6 +115,8 @@ fm_sheet_get_protection
 fm_sheet_set_protection
 
 # -- Sheet view / layout ---------------------------------------------------------
+fm_sheet_get_auto_filter_xml
+fm_sheet_set_auto_filter_xml
 fm_sheet_get_view
 fm_sheet_get_view_ex
 fm_sheet_set_zoom
@@ -182,6 +190,7 @@ fm_styles_add_cell_xf
 fm_styles_add_cell_xf_ex2
 fm_styles_add_dxf
 fm_styles_add_cell_style_xf_ex2
+fm_styles_set_cell_style
 
 # -- Pivot layout projection -----------------------------------------------------
 fm_workbook_pivot_count
@@ -249,6 +258,7 @@ fm_workbook_pivot_data_field_add
 fm_workbook_pivot_data_field_clear
 fm_workbook_pivot_data_field_set
 fm_workbook_pivot_filter_count
+fm_workbook_pivot_filter_at
 fm_workbook_pivot_filter_add
 fm_workbook_pivot_filter_clear
 fm_workbook_pivot_filter_remove_at
@@ -271,6 +281,10 @@ fm_last_error_message
 fm_last_error_context
 fm_status_string
 fm_error_display_name
+
+# -- Structured logging (process-wide, not per handle) ---------------------------
+fm_set_log_min_level
+fm_set_log_sink
 
 # -- Print pagination -------------------------------------------------------------
 fm_workbook_paginate

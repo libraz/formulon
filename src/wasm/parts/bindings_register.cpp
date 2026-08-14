@@ -33,6 +33,19 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("message", &JsStatus::message)
       .field("context", &JsStatus::context);
 
+  value_object<JsParallelRecalcStats>("ParallelRecalcStats")
+      .field("cellsEvaluated", &JsParallelRecalcStats::cellsEvaluated)
+      .field("sccsProcessed", &JsParallelRecalcStats::sccsProcessed)
+      .field("parallelSteps", &JsParallelRecalcStats::parallelSteps)
+      .field("serialFallbackSteps", &JsParallelRecalcStats::serialFallbackSteps)
+      .field("cycleRecoveries", &JsParallelRecalcStats::cycleRecoveries)
+      .field("workerThreadsStarted", &JsParallelRecalcStats::workerThreadsStarted)
+      .field("workerThreadsUsed", &JsParallelRecalcStats::workerThreadsUsed);
+
+  value_object<JsParallelRecalcResult>("ParallelRecalcResult")
+      .field("status", &JsParallelRecalcResult::status)
+      .field("stats", &JsParallelRecalcResult::stats);
+
   value_object<JsValue>("Value")
       .field("kind", &JsValue::kind)
       .field("number", &JsValue::number)
@@ -268,6 +281,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotFieldSetSort", &JsWorkbook::pivotFieldSetSort)
       .function("pivotFieldSetSubtotalTop", &JsWorkbook::pivotFieldSetSubtotalTop)
       .function("pivotFilterAdd", &JsWorkbook::pivotFilterAdd)
+      .function("pivotFilterAt", &JsWorkbook::pivotFilterAt)
       .function("pivotFilterClear", &JsWorkbook::pivotFilterClear)
       .function("pivotFilterCount", &JsWorkbook::pivotFilterCount)
       .function("pivotFilterRemoveAt", &JsWorkbook::pivotFilterRemoveAt)
@@ -282,6 +296,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("pivotSetRowFieldOrder", &JsWorkbook::pivotSetRowFieldOrder)
       .function("precedents", &JsWorkbook::precedents)
       .function("recalc", &JsWorkbook::recalc)
+      .function("recalcParallel", &JsWorkbook::recalcParallel)
       .function("removeConditionalFormatAt", &JsWorkbook::removeConditionalFormatAt)
       .function("removeHyperlink", &JsWorkbook::removeHyperlink)
       .function("removeHyperlinkAt", &JsWorkbook::removeHyperlinkAt)
@@ -344,6 +359,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
   function("errorDisplayName", &error_display_name);
   function("lastErrorMessage", &last_error_message);
   function("lastErrorContext", &last_error_context);
+  function("setLogMinLevel", &set_log_min_level);
+  function("setLogSink", &set_log_sink);
 }
 
 }  // namespace parts

@@ -20,7 +20,8 @@
 //   * `parts/sheet_view.cc`        -- view / column / row layout +
 //     merges / comments / hyperlinks / validations.
 //   * `parts/free_funcs.{h,cc}`    -- evalFormula / version /
-//     lastError* / statusString.
+//     lastError* / statusString / the process-wide structured-log
+//     controls.
 //
 // ## Design notes
 //
@@ -52,6 +53,12 @@
 //     owning Workbook and passes that wrapper as C ABI user-data. The
 //     solver invokes it synchronously inside `recalc()`, so no
 //     thread-safe-function plumbing is required.
+//
+//   * `setLogSink` cannot make that assumption: the engine may emit a
+//     record from any thread it owns, so the sink goes through a
+//     `Napi::ThreadSafeFunction` and is delivered asynchronously. It is
+//     process-wide state, hence a module-level function rather than a
+//     `Workbook` method.
 
 #include "node_addon/parts/free_funcs.h"
 #include "node_addon/parts/workbook_class.h"
@@ -67,6 +74,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("lastErrorContext", Napi::Function::New(env, &formulon_node::LastErrorContext, "lastErrorContext"));
   exports.Set("statusString", Napi::Function::New(env, &formulon_node::StatusString, "statusString"));
   exports.Set("errorDisplayName", Napi::Function::New(env, &formulon_node::ErrorDisplayName, "errorDisplayName"));
+  exports.Set("setLogMinLevel", Napi::Function::New(env, &formulon_node::SetLogMinLevel, "setLogMinLevel"));
+  exports.Set("setLogSink", Napi::Function::New(env, &formulon_node::SetLogSink, "setLogSink"));
   return exports;
 }
 

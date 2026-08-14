@@ -57,8 +57,16 @@ class CommentEntry(NamedTuple):
     author: str
     text: str
 
+class IterativeSettings(NamedTuple):
+    enabled: bool
+    max_iterations: int
+    max_change: float
+
 class PaginationResult:
     page_count: int
+    # The declared `_xlnm.Print_Area`; empty when the sheet declares none
+    # (not backfilled with the used range, so `page_count` can be non-zero
+    # while this is empty).
     print_area: List[tuple[int, int, int, int]]
     horizontal_breaks: List[int]
     vertical_breaks: List[int]
@@ -95,6 +103,38 @@ class CalcMode(IntEnum):
     AUTO = 0
     MANUAL = 1
     AUTO_NO_TABLE = 2
+
+class LogLevel(IntEnum):
+    DEBUG = 0
+    INFO = 1
+    WARN = 2
+    ERROR = 3
+    OFF = 4
+
+class ErrorCode(IntEnum):
+    NULL = 0
+    DIV0 = 1
+    VALUE = 2
+    REF = 3
+    NAME = 4
+    NUM = 5
+    NA = 6
+    GETTING_DATA = 7
+    SPILL = 8
+    CALC = 9
+    FIELD = 10
+    BLOCKED = 11
+    CONNECT = 12
+    EXTERNAL = 13
+    BUSY = 14
+    PYTHON = 15
+    UNKNOWN = 16
+
+class ExternalLinkKind(IntEnum):
+    UNKNOWN = 0
+    EXTERNAL_BOOK = 1
+    OLE = 2
+    DDE = 3
 
 class PivotAxis(IntEnum):
     ROW = 0
@@ -313,12 +353,18 @@ class ColumnLayout:
     width: float
     hidden: bool
     outline_level: int
+    # True when width is logically explicit, including legacy non-zero widths.
+    has_width: bool
+    has_style: bool
+    style_xf: int
 
 class RowLayout:
     row: int
     height: float
     hidden: bool
     outline_level: int
+    has_style: bool
+    style_xf: int
 
 class CfMatch:
     kind: int
@@ -381,6 +427,8 @@ class IconSet:
     thresholds: List[CfValueObject]
     reverse: bool
     show_value: bool
+    # Round-trip only: preserved across load and save but never consulted
+    # during evaluation; each threshold's own `type` is authoritative.
     percent: bool
     def __init__(
         self,
@@ -631,6 +679,8 @@ class DifferentialFormat:
     border: Optional[Dict[str, object]]
     num_fmt_id: Optional[int]
     num_fmt_code: str
+    alignment_xml: str
+    protection_xml: str
     def __init__(
         self,
         font: Optional[FontRecord] = ...,
@@ -638,6 +688,8 @@ class DifferentialFormat:
         border: Optional[Dict[str, object]] = ...,
         num_fmt_id: Optional[int] = ...,
         num_fmt_code: str = ...,
+        alignment_xml: str = ...,
+        protection_xml: str = ...,
     ) -> None: ...
 
 class CellStyle:
@@ -654,13 +706,13 @@ class ExternalLink:
     part_path: str
     target: str
     target_external: bool
-    kind: int
+    kind: ExternalLinkKind
 
 class PivotCell:
     row: int
     col: int
     value: Value
-    kind: int
+    kind: PivotCellKind
     depth: int
     field_name: str
     number_format: str
@@ -686,14 +738,14 @@ class PivotWorksheetSource:
 class PivotFieldSpec:
     source_name: str
     custom_name: str
-    axis: int
+    axis: Union[PivotAxis, int]
     subtotal_top: bool
     number_format: str
     def __init__(
         self,
         source_name: str,
         custom_name: str = ...,
-        axis: int = ...,
+        axis: Union[PivotAxis, int] = ...,
         subtotal_top: bool = ...,
         number_format: str = ...,
     ) -> None: ...
@@ -701,44 +753,44 @@ class PivotFieldSpec:
 class PivotDataFieldSpec:
     name: str
     field_index: int
-    aggregation: int
+    aggregation: Union[PivotAggregation, int]
     number_format: str
-    show_as: int
+    show_as: Union[PivotShowValuesAs, int]
     show_as_base_field: int
     show_as_base_item: int
     def __init__(
         self,
         name: str,
         field_index: int,
-        aggregation: int = ...,
+        aggregation: Union[PivotAggregation, int] = ...,
         number_format: str = ...,
-        show_as: int = ...,
+        show_as: Union[PivotShowValuesAs, int] = ...,
         show_as_base_field: int = ...,
         show_as_base_item: int = ...,
     ) -> None: ...
 
 class PivotFilterSpec:
-    axis: int
+    axis: Union[PivotAxis, int]
     field_name: str
-    type: int
-    value_kind: int
+    type: Union[PivotFilterType, int]
+    value_kind: Union[PivotFilterValueKind, int]
     value_int: int
     value_double: float
     value_text: str
-    value_high_kind: int
+    value_high_kind: Union[PivotFilterValueKind, int]
     value_high_int: int
     value_high_double: float
     data_field_index: int
     def __init__(
         self,
-        axis: int,
+        axis: Union[PivotAxis, int],
         field_name: str,
-        type: int,
-        value_kind: int = ...,
+        type: Union[PivotFilterType, int],
+        value_kind: Union[PivotFilterValueKind, int] = ...,
         value_int: int = ...,
         value_double: float = ...,
         value_text: str = ...,
-        value_high_kind: int = ...,
+        value_high_kind: Union[PivotFilterValueKind, int] = ...,
         value_high_int: int = ...,
         value_high_double: float = ...,
         data_field_index: int = ...,
@@ -761,6 +813,7 @@ class Workbook:
     def close(self) -> None: ...
     @property
     def is_valid(self) -> bool: ...
+    def memory_usage(self) -> int: ...
 
     # Sheets.
     def sheet_count(self) -> int: ...
@@ -777,6 +830,8 @@ class Workbook:
     def set_text(self, sheet: int, row: int, col: int, value: str) -> None: ...
     def set_blank(self, sheet: int, row: int, col: int) -> None: ...
     def set_formula(self, sheet: int, row: int, col: int, formula: str) -> None: ...
+    def set_phonetic(self, sheet: int, row: int, col: int, text: str) -> None: ...
+    def get_phonetic(self, sheet: int, row: int, col: int) -> str: ...
     def get_value(self, sheet: int, row: int, col: int) -> Value: ...
     def evaluate_formula_array(self, sheet: int, row: int, col: int, formula: str) -> List[List[Value]]: ...
     def lambda_text_at(self, sheet: int, row: int, col: int) -> str: ...
@@ -794,6 +849,7 @@ class Workbook:
     # Recalc + calc policy / profile.
     def recalc(self) -> None: ...
     def set_iterative(self, enabled: bool, max_iterations: int, max_change: float) -> None: ...
+    def get_iterative(self) -> IterativeSettings: ...
     def partial_recalc(
         self,
         sheet: int,
@@ -803,14 +859,14 @@ class Workbook:
         last_col: int,
     ) -> int: ...
     def calc_mode(self) -> CalcMode: ...
-    def set_calc_mode(self, mode: int) -> None: ...
+    def set_calc_mode(self, mode: Union[CalcMode, int]) -> None: ...
     def excel_profile_id(self) -> str: ...
     def set_excel_profile_id(self, profile_id: str) -> None: ...
 
     # Save.
     def save(self) -> bytes: ...
-    def save_ex(self, fmt: int) -> bytes: ...
-    def save_ex_with_diagnostics(self, fmt: int) -> SaveDiagnostics: ...
+    def save_ex(self, fmt: Union[WorkbookFormat, int]) -> bytes: ...
+    def save_ex_with_diagnostics(self, fmt: Union[WorkbookFormat, int]) -> SaveDiagnostics: ...
     def xlsb_read_diagnostics(self) -> XlsbReadDiagnostics: ...
 
     # Iteration.
@@ -818,6 +874,26 @@ class Workbook:
     def iter_defined_names(self) -> Iterator[DefinedName]: ...
     def iter_tables(self) -> Iterator[Table]: ...
     def iter_passthrough(self) -> Iterator[PassthroughPart]: ...
+    def table_create(
+        self,
+        sheet: int,
+        ref: str,
+        name: str,
+        display_name: str,
+        column_names: Sequence[str],
+        style_name: str = ...,
+        header_row: bool = ...,
+        totals_row: bool = ...,
+    ) -> int: ...
+    def table_update(
+        self,
+        index: int,
+        ref: str,
+        style_name: Optional[str] = ...,
+        header_row: Optional[bool] = ...,
+        totals_row: Optional[bool] = ...,
+    ) -> None: ...
+    def table_remove(self, index: int) -> None: ...
 
     # Merges.
     def add_merge(self, sheet: int, merge: MergeRange) -> None: ...
@@ -891,6 +967,8 @@ class Workbook:
     def set_sheet_right_to_left(self, sheet: int, right_to_left: bool) -> None: ...
     def set_sheet_tab_selected(self, sheet: int, selected: bool) -> None: ...
     def set_sheet_view_mode(self, sheet: int, mode: str) -> None: ...
+    def get_auto_filter_xml(self, sheet: int) -> str: ...
+    def set_auto_filter_xml(self, sheet: int, xml: str) -> None: ...
     def get_sheet_columns(self, sheet: int) -> List[ColumnLayout]: ...
     def set_column_width(self, sheet: int, first: int, last: int, width: float) -> None: ...
     def set_column_hidden(self, sheet: int, first: int, last: int, hidden: bool) -> None: ...
@@ -938,7 +1016,9 @@ class Workbook:
     def add_border(self, sides: Dict[str, object]) -> int: ...
     def add_num_fmt(self, format_code: str) -> int: ...
     def add_cell_xf(self, record: CellXf) -> int: ...
+    def add_cell_style_xf(self, record: CellXf) -> int: ...
     def add_dxf(self, record: DifferentialFormat) -> int: ...
+    def set_cell_style(self, name: str, xf_id: int, builtin_id: int = ...) -> None: ...
     def get_cell_style(self, index: int) -> CellStyle: ...
     def get_cell_style_xf(self, index: int) -> CellXf: ...
 
@@ -946,7 +1026,7 @@ class Workbook:
     def pivot_count(self, sheet: int) -> int: ...
     def pivot_layout(self, sheet: int, pivot_index: int) -> PivotLayout: ...
     def get_pivot_report_layout(self, sheet: int, pivot_index: int) -> PivotReportLayout: ...
-    def set_pivot_report_layout(self, sheet: int, pivot_index: int, layout: PivotReportLayout) -> None: ...
+    def set_pivot_report_layout(self, sheet: int, pivot_index: int, layout: Union[PivotReportLayout, int]) -> None: ...
 
     # Pivot caches.
     def pivot_cache_count(self) -> int: ...
@@ -992,7 +1072,9 @@ class Workbook:
     def pivot_field_count(self, sheet: int, pivot_index: int) -> int: ...
     def pivot_field_add(self, sheet: int, pivot_index: int, spec: PivotFieldSpec) -> int: ...
     def pivot_field_clear(self, sheet: int, pivot_index: int) -> None: ...
-    def pivot_field_set_axis(self, sheet: int, pivot_index: int, field_idx: int, axis: int) -> None: ...
+    def pivot_field_set_axis(
+        self, sheet: int, pivot_index: int, field_idx: int, axis: Union[PivotAxis, int]
+    ) -> None: ...
     def pivot_field_set_sort(
         self,
         sheet: int,
@@ -1002,7 +1084,9 @@ class Workbook:
         by_field: str = ...,
     ) -> None: ...
     def pivot_field_set_subtotal_top(self, sheet: int, pivot_index: int, field_idx: int, top: bool) -> None: ...
-    def pivot_field_add_aggregation(self, sheet: int, pivot_index: int, field_idx: int, agg: int) -> None: ...
+    def pivot_field_add_aggregation(
+        self, sheet: int, pivot_index: int, field_idx: int, agg: Union[PivotAggregation, int]
+    ) -> None: ...
     def pivot_field_clear_aggregations(self, sheet: int, pivot_index: int, field_idx: int) -> None: ...
     def pivot_field_add_item(
         self,
@@ -1021,15 +1105,17 @@ class Workbook:
         item_idx: int,
         visible: bool,
     ) -> None: ...
-    def pivot_field_add_subtotal_fn(self, sheet: int, pivot_index: int, field_idx: int, agg: int) -> None: ...
+    def pivot_field_add_subtotal_fn(
+        self, sheet: int, pivot_index: int, field_idx: int, agg: Union[PivotAggregation, int]
+    ) -> None: ...
     def pivot_field_clear_subtotal_fns(self, sheet: int, pivot_index: int, field_idx: int) -> None: ...
     def pivot_field_set_date_group(
         self,
         sheet: int,
         pivot_index: int,
         field_idx: int,
-        granularity: int,
-        calendar: int,
+        granularity: Union[PivotDateGrouping, int],
+        calendar: Union[PivotCalendar, int],
         start_year: int = ...,
         end_year: int = ...,
     ) -> None: ...
@@ -1049,6 +1135,7 @@ class Workbook:
     def pivot_data_field_clear(self, sheet: int, pivot_index: int) -> None: ...
     def pivot_filter_count(self, sheet: int, pivot_index: int) -> int: ...
     def pivot_filter_add(self, sheet: int, pivot_index: int, spec: PivotFilterSpec) -> None: ...
+    def pivot_filter_at(self, sheet: int, pivot_index: int, filter_idx: int) -> PivotFilterSpec: ...
     def pivot_filter_clear(self, sheet: int, pivot_index: int) -> None: ...
     def pivot_filter_remove_at(self, sheet: int, pivot_index: int, filter_idx: int) -> None: ...
 
@@ -1077,4 +1164,5 @@ class Workbook:
 def library_version() -> str: ...
 def version_string() -> str: ...
 def error_display_name(error_code: int) -> str: ...
+def set_log_min_level(level: Union[LogLevel, int]) -> None: ...
 def eval_formula(formula: str) -> Value: ...

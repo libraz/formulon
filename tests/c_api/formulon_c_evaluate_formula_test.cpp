@@ -222,6 +222,32 @@ TEST(EvaluateFormulaArray, MatrixDimensionsAndRowMajorOrder) {
   }
 }
 
+TEST(EvaluateFormulaArray, ExpandBlankPadProjectsToZeroAndNestedCountSkipsIt) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+
+  uint32_t rows = 0;
+  uint32_t cols = 0;
+  ASSERT_EQ(fm_workbook_evaluate_formula_array(wb.handle, 0, 0, 0, "=EXPAND({1,2;3,4},3,4,)", &rows, &cols), 0);
+  EXPECT_EQ(rows, 3U);
+  EXPECT_EQ(cols, 4U);
+
+  // The four generated cells in row 0/row 1 and all cells in row 2 are
+  // numeric zero at the direct C-API grid surface.
+  const uint32_t generated[] = {2U, 3U, 6U, 7U, 8U, 9U, 10U, 11U};
+  for (uint32_t index : generated) {
+    fm_value_t cell{};
+    ASSERT_EQ(fm_workbook_evaluate_formula_array_cell(wb.handle, index, &cell), 0);
+    ASSERT_EQ(cell.kind, FM_VAL_NUMBER) << "index=" << index;
+    EXPECT_DOUBLE_EQ(cell.u.number, 0.0) << "index=" << index;
+  }
+
+  fm_value_t count{};
+  ASSERT_EQ(fm_workbook_evaluate_formula(wb.handle, 0, 0, 0, "=COUNT(EXPAND({1,2;3,4},3,4,))", &count), 0);
+  ASSERT_EQ(count.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(count.u.number, 4.0);
+}
+
 TEST(EvaluateFormulaArray, ForeignSpillPhantomSurfacesSpill) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
