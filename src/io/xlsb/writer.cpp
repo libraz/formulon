@@ -304,7 +304,8 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
   return paths;
 }
 
-Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_dynamic_metadata) {
+Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_dynamic_metadata,
+                                                WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
   // Existing XLSB packages retain their original styles bytes verbatim.  This
@@ -348,6 +349,9 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
           .field("path", part.path)
           .field("reason", std::string_view("generated_path_wins"))
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_part_count;
+      }
       continue;
     }
     // Drop parts that would be stale or orphaned after we regenerate the
@@ -372,6 +376,9 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
           .field("path", part.path)
           .field("reason", std::string_view("duplicate_passthrough_path"))
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_part_count;
+      }
       continue;
     }
     if (part.content_type.empty()) {
@@ -543,7 +550,7 @@ bool HasPassthrough(const EmissionPlan& plan, std::string_view path) {
   return false;
 }
 
-std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
+std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
   std::string out;
   out.reserve(384);
   out.append(kXmlDecl);
@@ -568,6 +575,9 @@ std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
           .field("type", r.type)
           .field("target", r.target)
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_relationship_count;
+      }
       continue;
     }
     AppendRelationship(out, &next_rid, r.type, r.target, r.target_external);
@@ -584,7 +594,7 @@ std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
 // BrtHLink records are emitted separately and get ids from the same collision
 // set; a relationship whose target part is not in the package is dropped so
 // the emitted rels never dangle.
-std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan) {
+std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
   std::string entries;
   for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
     if (!rel.target_external && !HasPassthrough(plan, rel.target)) {
@@ -593,6 +603,12 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan) {
           .field("type", rel.type)
           .field("target", rel.target)
           .warn();
+      // Counted alongside the package- and workbook-scope drops: a dropped
+      // sheet relationship is a dropped relationship, and OOXML having no
+      // sheet-scope equivalent must not make it invisible.
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_relationship_count;
+      }
       continue;
     }
     const std::string target = rel.target_external ? rel.target : TargetRelativeToWorksheet(rel.target);
@@ -639,7 +655,8 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan) {
   return out;
 }
 
-std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan, const Workbook& wb) {
+std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan, const Workbook& wb,
+                              WriteDiagnostics* diagnostics) {
   std::string out;
   out.reserve(256 + sheet_count * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
@@ -683,6 +700,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
           .field("type", rel.type)
           .field("target", rel.target)
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_relationship_count;
+      }
       continue;
     }
     if (!rel.target_external && ((rel.type == kRelTheme && rel.target == "xl/theme/theme1.xml") ||
@@ -1066,8 +1086,9 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
 
   SstBuilder sst;
   const DynamicArrayMetadataPlan dynamic_array = BuildDynamicArrayMetadataPlan(workbook);
+  WriteDiagnostics diagnostics;
   std::uint32_t downgraded_formula_count = 0;
-  const std::uint32_t deferred_feature_count = ReportDeferredSheetFeatures(workbook);
+  diagnostics.deferred_feature_count = ReportDeferredSheetFeatures(workbook);
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
   for (std::size_t i = 0; i < sheet_count; ++i) {
@@ -1080,7 +1101,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   const bool emit_sst_part = !sst.empty();
 
-  auto plan_or = BuildEmissionPlan(workbook, emit_sst_part, dynamic_array.generate_part);
+  auto plan_or = BuildEmissionPlan(workbook, emit_sst_part, dynamic_array.generate_part, &diagnostics);
   if (!plan_or) {
     return plan_or.error();
   }
@@ -1096,7 +1117,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     return r.error();
   }
   // 2. _rels/.rels
-  if (auto r = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(workbook, plan)); !r) {
+  if (auto r = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(workbook, plan, &diagnostics)); !r) {
     return r.error();
   }
   // 3. xl/_rels/workbook.bin.rels
@@ -1104,7 +1125,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // discoverable through workbook relationships; BuildWorkbookRels emits a rel
   // for each part actually present so none dangle on reload.
   if (auto r = AddPart(writer.get(), "xl/_rels/workbook.bin.rels",
-                       BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook));
+                       BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook, &diagnostics));
       !r) {
     return r.error();
   }
@@ -1144,7 +1165,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     if (auto r = AddPartBytes(writer.get(), path, sheet_bodies[i]); !r) {
       return r.error();
     }
-    const std::string sheet_rels = BuildSheetRels(workbook.sheet(i), plan);
+    const std::string sheet_rels = BuildSheetRels(workbook.sheet(i), plan, &diagnostics);
     if (!sheet_rels.empty()) {
       std::string rels_path("xl/worksheets/_rels/sheet");
       rels_path.append(std::to_string(i + 1));
@@ -1201,7 +1222,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   if (archive_ptr != nullptr) {
     mz_free(archive_ptr);
   }
-  return XlsbWriteResult{std::move(bytes), downgraded_formula_count, deferred_feature_count};
+  diagnostics.downgraded_formula_count = downgraded_formula_count;
+  return XlsbWriteResult{std::move(bytes), diagnostics};
 }
 
 Expected<std::vector<std::uint8_t>, Error> write_xlsb(const Workbook& workbook) {

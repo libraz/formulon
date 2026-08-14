@@ -17,6 +17,8 @@
 #include <string_view>
 #include <vector>
 
+#include "io/package_diagnostics.h"
+
 namespace formulon {
 
 class Workbook;
@@ -157,7 +159,13 @@ struct EmissionPlan {
 /// Builds the emission plan. Performs collision detection between
 /// generated and passthrough paths; collisions are logged via
 /// `StructuredLog` (warn) and the passthrough copy is dropped.
-EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings);
+///
+/// Every drop or fallback the plan decides on also bumps the matching
+/// `diagnostics` counter. The structured log is off by default in shipped
+/// builds, so those counters are the only way a caller learns that saving
+/// cost it something. `diagnostics` may be NULL, which discards the
+/// counts and changes nothing else — the same rule the readers follow.
+EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings, WriteDiagnostics* diagnostics);
 
 /// Helper: composes a path of the form `<prefix><id><suffix>` (e.g.
 /// `("xl/tables/table", 3, ".xml")` -> `"xl/tables/table3.xml"`).

@@ -137,7 +137,7 @@ Napi::Value Workbook::DefinedNameAt(const Napi::CallbackInfo& info) {
   const char* name = nullptr;
   const char* formula = nullptr;
   int32_t local_sheet_id = -1;
-  fm_status_t rc = fm_workbook_defined_name_at_ex(handle_, idx, &name, &formula, &local_sheet_id);
+  fm_status_t rc = fm_workbook_defined_name_at(handle_, idx, &name, &formula, &local_sheet_id);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;

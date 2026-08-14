@@ -113,20 +113,27 @@ struct JsSaveResult {
   emscripten::val bytes = emscripten::val::null();
 };
 
-/// Result envelope for an explicit-format save with XLSB loss counters.
+/// Result envelope for an explicit-format save with the loss counters the
+/// write produced. Counters a given container cannot produce stay zero.
 struct JsSaveDiagnosticsResult {
   JsStatus status;
   emscripten::val bytes = emscripten::val::null();
   uint32_t downgradedFormulaCount = 0;
   uint32_t deferredFeatureCount = 0;
+  uint32_t droppedPartCount = 0;
+  uint32_t droppedRelationshipCount = 0;
+  uint32_t renumberedPartCount = 0;
 };
 
-/// XLSB recovery / passthrough counters captured while loading a workbook.
-struct JsXlsbReadDiagnosticsResult {
+/// Recovery / passthrough counters captured while loading a workbook, for
+/// either container format.
+struct JsReadDiagnosticsResult {
   JsStatus status;
   uint32_t undecodedFormulaCount = 0;
   uint32_t undecodedDefinedNameCount = 0;
-  uint32_t droppedPartCount = 0;
+  uint32_t undecodedPartCount = 0;
+  uint32_t skippedFeatureCount = 0;
+  uint32_t unknownContentTypeCount = 0;
 };
 
 /// Result envelope for the string-payload accessors (`sheetName`,
@@ -164,7 +171,7 @@ struct JsCfMatch {
   int32_t iconIndex = 0;
 };
 
-/// JS-side mirror of `fm_sheet_view_ex_t` (superset of `fm_sheet_view_t`).
+/// JS-side mirror of `fm_sheet_view_t`.
 struct JsSheetView {
   uint32_t zoomScale = 100U;
   uint32_t freezeRows = 0U;

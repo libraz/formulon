@@ -239,9 +239,11 @@ std::vector<std::uint8_t> BuildWorksheetShellBytes(const std::vector<std::uint8_
 /// path (full document) and the SAX path (metadata shell). Per-row
 /// overrides (`<row ht=/hidden=>`) live inside `<sheetData>` and are only
 /// populated on the DOM path; on the SAX shell that content is stripped.
-Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std::size_t i, Workbook& wb) {
+/// Every overlay entry these readers drop lands in `diagnostics`.
+Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std::size_t i, Workbook& wb,
+                                             ReadDiagnostics* diagnostics) {
   const pugi::xml_node worksheet = doc.child("worksheet");
-  auto cfs_or = read_conditional_formats(worksheet);
+  auto cfs_or = read_conditional_formats(worksheet, diagnostics);
   if (!cfs_or) {
     return cfs_or.error();
   }
@@ -250,17 +252,17 @@ Expected<void, Error> ApplyWorksheetMetadata(const pugi::xml_document& doc, std:
   if (!view_layout_or) {
     return view_layout_or.error();
   }
-  auto merges_or = read_merges(worksheet);
+  auto merges_or = read_merges(worksheet, diagnostics);
   if (!merges_or) {
     return merges_or.error();
   }
   wb.sheet(i).mutable_merges() = std::move(merges_or.value());
-  auto hls_or = read_hyperlinks(worksheet);
+  auto hls_or = read_hyperlinks(worksheet, diagnostics);
   if (!hls_or) {
     return hls_or.error();
   }
   wb.sheet(i).mutable_hyperlinks() = std::move(hls_or.value());
-  auto dvs_or = read_data_validations(worksheet);
+  auto dvs_or = read_data_validations(worksheet, diagnostics);
   if (!dvs_or) {
     return dvs_or.error();
   }
@@ -364,6 +366,7 @@ Expected<std::string, Error> ResolveRelativePathForTesting(std::string_view base
 // pugixml DOM; production passes `kSaxThresholdBytes`, tests pass a tiny
 // value to force the SAX branch on ordinary-size sheets.
 static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, std::size_t sax_threshold) {
+  ReadDiagnostics diagnostics;
   // Surface a precise "encrypted" diagnostic before the ZIP layer reports the
   // CDFV2 container as a corrupt archive.
   if (IsCdfv2Container(bytes)) {
@@ -388,7 +391,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     return ct_bytes_or.error();
   }
   const std::vector<std::uint8_t>& ct_bytes = ct_bytes_or.value();
-  auto kind_or = ooxml::verify_content_types(ct_bytes);
+  auto kind_or = ooxml::verify_content_types(ct_bytes, &diagnostics);
   if (!kind_or) {
     return kind_or.error();
   }
@@ -799,7 +802,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         return rs.error();
       }
     }
-    RETURN_IF_ERROR(ApplyWorksheetMetadata(sheet_doc, i, wb));
+    RETURN_IF_ERROR(ApplyWorksheetMetadata(sheet_doc, i, wb, &diagnostics));
 
     // Sheet rels file (`xl/worksheets/_rels/sheetN.xml.rels`) — drives
     // the table-part and pivot-table lookups. Optional: most sheets have
@@ -1221,7 +1224,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   wb.set_unknown_package_rels(std::move(package_rels_or.value()));
   wb.set_default_content_types(std::move(default_content_types));
 
-  OoxmlReadResult result{std::move(wb), pending_sst_count};
+  OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;
 }
 

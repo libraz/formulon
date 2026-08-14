@@ -79,7 +79,7 @@ TEST_F(CApiLogging, DefaultConfigurationEmitsNothingForALoadSaveRoundTrip) {
   ASSERT_EQ(fm_workbook_load(xlsx.data, xlsx.len, &reloaded.handle), 0);
 
   BufferGuard xlsb;
-  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb.data, &xlsb.len), 0);
+  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb.data, &xlsb.len), 0);
   WorkbookGuard from_xlsb;
   ASSERT_EQ(fm_workbook_load(xlsb.data, xlsb.len, &from_xlsb.handle), 0);
 

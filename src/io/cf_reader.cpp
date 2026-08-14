@@ -595,7 +595,8 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
 
 }  // namespace
 
-Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet) {
+Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet,
+                                                                             ReadDiagnostics* diagnostics) {
   std::vector<cf::ConditionalFormat> out;
   const std::unordered_map<std::string, pugi::xml_node> x14_data_bars = CollectX14DataBarOverlay(worksheet);
   for (pugi::xml_node block = worksheet.child("conditionalFormatting"); block;
@@ -612,6 +613,9 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
           .field("reason", std::string_view("sqref attribute missing"))
           .error_code(FormulonErrorCode::kIoSheetCorrupt)
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->skipped_feature_count;
+      }
       continue;
     }
     auto ranges_or = ParseSqref(sqref_attr.value());
@@ -621,6 +625,9 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
           .field("sqref", std::string_view(sqref_attr.value()))
           .error_code(FormulonErrorCode::kIoSheetCorrupt)
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->skipped_feature_count;
+      }
       continue;
     }
     cf::ConditionalFormat cfmt;

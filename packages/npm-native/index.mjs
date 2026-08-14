@@ -190,7 +190,7 @@ export const PivotFilterValueKind = Object.freeze({ None: -1, Int: 0, Double: 1,
 /** `fm_pivot_layout_t` ordinals. */
 export const PivotReportLayout = Object.freeze({ Compact: 0, Tabular: 1, Outline: 2 });
 
-/** `fm_workbook_format_t` ordinals: container format for `saveEx`. */
+/** `fm_workbook_format_t` ordinals: container format for `saveAs`. */
 export const WorkbookFormat = Object.freeze({
   Unknown: 0,
   Xlsx: 1,

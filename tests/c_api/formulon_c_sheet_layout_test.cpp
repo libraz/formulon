@@ -25,6 +25,15 @@ static_assert(sizeof(fm_column_layout_t) == 40U);
 static_assert(offsetof(fm_row_layout_t, has_style) == 24U);
 static_assert(offsetof(fm_row_layout_t, style_xf) == 28U);
 static_assert(sizeof(fm_row_layout_t) == 32U);
+// `fm_sheet_get_view` writes through a caller-supplied pointer, so a caller
+// compiled against a narrower definition of this struct is overwritten past
+// the end of its own storage rather than getting a diagnosable error. Pin the
+// size here: changing the struct must break the build and be acknowledged,
+// not merely be reflected in the bindings afterwards.
+static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4U ? 40U : 48U));
+static_assert(offsetof(fm_sheet_view_t, tab_hidden) == 12U);
+static_assert(offsetof(fm_sheet_view_t, tab_selected) == 32U);
+static_assert(offsetof(fm_sheet_view_t, view_mode) == (sizeof(void*) == 4U ? 36U : 40U));
 
 struct WorkbookGuard {
   fm_workbook_t* handle = nullptr;
@@ -54,6 +63,13 @@ TEST(FormulonCApiSheetLayout, GetViewDefaults) {
   EXPECT_EQ(v.freeze_rows, 0U);
   EXPECT_EQ(v.freeze_cols, 0U);
   EXPECT_EQ(v.tab_hidden, 0);
+  EXPECT_EQ(v.show_grid_lines, 1);
+  EXPECT_EQ(v.show_row_col_headers, 1);
+  EXPECT_EQ(v.show_zeros, 1);
+  EXPECT_EQ(v.right_to_left, 0);
+  EXPECT_EQ(v.tab_selected, 0);
+  ASSERT_NE(v.view_mode, nullptr);
+  EXPECT_STREQ(v.view_mode, "");
 }
 
 TEST(FormulonCApiSheetLayout, SetViewSetters) {
@@ -70,25 +86,7 @@ TEST(FormulonCApiSheetLayout, SetViewSetters) {
   EXPECT_EQ(v.tab_hidden, 1);
 }
 
-TEST(FormulonCApiSheetLayout, GetViewExDefaults) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_sheet_view_ex_t v{};
-  ASSERT_EQ(fm_sheet_get_view_ex(wb.handle, 0, &v), 0);
-  EXPECT_EQ(v.zoom_scale, 100U);
-  EXPECT_EQ(v.freeze_rows, 0U);
-  EXPECT_EQ(v.freeze_cols, 0U);
-  EXPECT_EQ(v.tab_hidden, 0);
-  EXPECT_EQ(v.show_grid_lines, 1);
-  EXPECT_EQ(v.show_row_col_headers, 1);
-  EXPECT_EQ(v.show_zeros, 1);
-  EXPECT_EQ(v.right_to_left, 0);
-  EXPECT_EQ(v.tab_selected, 0);
-  ASSERT_NE(v.view_mode, nullptr);
-  EXPECT_STREQ(v.view_mode, "");
-}
-
-TEST(FormulonCApiSheetLayout, SetViewExSetters) {
+TEST(FormulonCApiSheetLayout, SetViewDisplayFlagSetters) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_show_grid_lines(wb.handle, 0, 0), 0);
@@ -97,8 +95,8 @@ TEST(FormulonCApiSheetLayout, SetViewExSetters) {
   ASSERT_EQ(fm_sheet_set_right_to_left(wb.handle, 0, 1), 0);
   ASSERT_EQ(fm_sheet_set_tab_selected(wb.handle, 0, 1), 0);
   ASSERT_EQ(fm_sheet_set_view_mode(wb.handle, 0, "pageBreakPreview"), 0);
-  fm_sheet_view_ex_t v{};
-  ASSERT_EQ(fm_sheet_get_view_ex(wb.handle, 0, &v), 0);
+  fm_sheet_view_t v{};
+  ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &v), 0);
   EXPECT_EQ(v.show_grid_lines, 0);
   EXPECT_EQ(v.show_row_col_headers, 0);
   EXPECT_EQ(v.show_zeros, 0);

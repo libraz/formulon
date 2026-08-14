@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "io/default_content_type.h"
+#include "io/package_diagnostics.h"
 #include "io/workbook_kind.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
@@ -46,10 +47,12 @@ struct OverrideEntry {
 /// Accepts the four canonical Excel workbook content types
 /// (xlsx / xlsm / xltx / xltm). When the package declares a
 /// workbook-shaped override (PartName=`/xl/workbook.xml`) whose
-/// ContentType is not recognised, surfaces a structured-log warning
-/// and falls back to `WorkbookKind::kXlsx` rather than failing the
-/// read (Excel-compatibility-first behaviour).
-Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes);
+/// ContentType is not recognised, surfaces a structured-log warning,
+/// bumps `diagnostics->unknown_content_type_count` when `diagnostics` is
+/// non-NULL, and falls back to `WorkbookKind::kXlsx` rather than failing
+/// the read (Excel-compatibility-first behaviour).
+Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes,
+                                                   ReadDiagnostics* diagnostics = nullptr);
 
 /// Lists every part name advertised by `[Content_Types].xml`'s
 /// `<Override>` elements together with its content type. `<Default>`

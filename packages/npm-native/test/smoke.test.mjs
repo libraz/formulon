@@ -218,7 +218,7 @@ test('a registered sink receives the record as raw bytes', async () => {
     // which makes the writer emit a per-cell warn record.
     assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
     assert.ok(wb.recalc().ok);
-    assert.ok(wb.saveEx(mod.WorkbookFormat.Xlsb).status.ok);
+    assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).status.ok);
     wb.dispose();
     await waitForRecords(records, 1);
     assert.ok(records.length > 0, 'expected at least one record');
@@ -242,7 +242,7 @@ test('the default threshold delivers nothing to a registered sink', async () => 
     const wb = mod.Workbook.createDefault();
     assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
     assert.ok(wb.recalc().ok);
-    assert.ok(wb.saveEx(mod.WorkbookFormat.Xlsb).status.ok);
+    assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).status.ok);
     wb.dispose();
     // Wait the same budget the positive case needs, so silence here is a
     // result rather than an artefact of not having waited long enough.
@@ -1465,20 +1465,20 @@ test('setError() rejects a missing errorCode argument', async () => {
   assert.throws(() => wb.setError(0, 0, 0), TypeError);
 });
 
-test('saveEx() writes xlsx and xlsb bytes; rejects a missing format argument', async () => {
+test('saveAs() writes xlsx and xlsb bytes; rejects a missing format argument', async () => {
   const mod = await getModule();
   assert.equal(typeof mod.WorkbookFormat, 'object');
   const wb = mod.Workbook.createDefault();
-  const xlsx = wb.saveEx(mod.WorkbookFormat.Xlsx);
+  const xlsx = wb.saveAs(mod.WorkbookFormat.Xlsx);
   assert.ok(xlsx.status.ok, JSON.stringify(xlsx.status));
   assert.ok(xlsx.bytes.length > 0);
-  const xlsb = wb.saveEx(mod.WorkbookFormat.Xlsb);
+  const xlsb = wb.saveAs(mod.WorkbookFormat.Xlsb);
   assert.ok(xlsb.status.ok, JSON.stringify(xlsb.status));
   assert.ok(xlsb.bytes.length > 0);
-  assert.throws(() => wb.saveEx(), TypeError);
+  assert.throws(() => wb.saveAs(), TypeError);
 });
 
-test('saveExWithDiagnostics() reports counters and xlsbReadDiagnostics keeps a stable shape', async () => {
+test('saveWithDiagnostics() reports counters and readDiagnostics keeps a stable shape', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
@@ -1503,45 +1503,57 @@ test('saveExWithDiagnostics() reports counters and xlsbReadDiagnostics keeps a s
     }).status.ok,
   );
 
-  const xlsx = wb.saveExWithDiagnostics(mod.WorkbookFormat.Xlsx);
+  const xlsx = wb.saveWithDiagnostics(mod.WorkbookFormat.Xlsx);
   assert.ok(xlsx.status.ok, JSON.stringify(xlsx.status));
   assert.ok(xlsx.bytes instanceof Uint8Array);
   assert.equal(xlsx.downgradedFormulaCount, 0);
   assert.equal(xlsx.deferredFeatureCount, 0);
+  assert.equal(xlsx.droppedPartCount, 0);
+  assert.equal(xlsx.droppedRelationshipCount, 0);
+  assert.equal(xlsx.renumberedPartCount, 0);
 
-  const xlsb = wb.saveExWithDiagnostics(mod.WorkbookFormat.Xlsb);
+  const xlsb = wb.saveWithDiagnostics(mod.WorkbookFormat.Xlsb);
   assert.ok(xlsb.status.ok, JSON.stringify(xlsb.status));
   assert.ok(xlsb.bytes instanceof Uint8Array);
   assert.equal(xlsb.downgradedFormulaCount, 1);
   assert.ok(xlsb.deferredFeatureCount >= 2);
+  // The binary writer never reassigns a part id.
+  assert.equal(xlsb.renumberedPartCount, 0);
 
   const loaded = mod.Workbook.loadBytes(xlsb.bytes);
-  const read = loaded.xlsbReadDiagnostics();
+  const read = loaded.readDiagnostics();
   assert.ok(read.status.ok, JSON.stringify(read.status));
   assert.equal(read.undecodedFormulaCount, 0);
   assert.equal(read.undecodedDefinedNameCount, 0);
-  assert.equal(read.droppedPartCount, 0);
+  assert.equal(read.undecodedPartCount, 0);
+  assert.equal(read.skippedFeatureCount, 0);
+  assert.equal(read.unknownContentTypeCount, 0);
   const preservedLoaded = mod.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
-  const preserved = preservedLoaded.xlsbReadDiagnostics();
+  const preserved = preservedLoaded.readDiagnostics();
   assert.ok(preserved.status.ok, JSON.stringify(preserved.status));
-  assert.equal(preserved.droppedPartCount, 0);
+  assert.equal(preserved.undecodedPartCount, 0);
   preservedLoaded.dispose();
-  const invalidSave = wb.saveExWithDiagnostics(0);
+  const invalidSave = wb.saveWithDiagnostics(0);
   assert.ok(!invalidSave.status.ok, JSON.stringify(invalidSave));
   assert.equal(invalidSave.bytes, null);
   assert.equal(invalidSave.downgradedFormulaCount, 0);
   assert.equal(invalidSave.deferredFeatureCount, 0);
-  assert.ok(wb.saveEx(mod.WorkbookFormat.Xlsb).bytes instanceof Uint8Array);
+  assert.equal(invalidSave.droppedPartCount, 0);
+  assert.equal(invalidSave.droppedRelationshipCount, 0);
+  assert.equal(invalidSave.renumberedPartCount, 0);
+  assert.ok(wb.saveAs(mod.WorkbookFormat.Xlsb).bytes instanceof Uint8Array);
 });
 
 test('invalid workbook read diagnostics return a zeroed failure envelope', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.loadBytes(new Uint8Array());
-  const read = wb.xlsbReadDiagnostics();
+  const read = wb.readDiagnostics();
   assert.ok(!read.status.ok, JSON.stringify(read));
   assert.equal(read.undecodedFormulaCount, 0);
   assert.equal(read.undecodedDefinedNameCount, 0);
-  assert.equal(read.droppedPartCount, 0);
+  assert.equal(read.undecodedPartCount, 0);
+  assert.equal(read.skippedFeatureCount, 0);
+  assert.equal(read.unknownContentTypeCount, 0);
   wb.dispose();
 });
 

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "io/package_diagnostics.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -54,7 +55,12 @@ namespace formulon::io {
 ///
 /// This reader does not return `kIoSheetCorrupt` for CF-local problems:
 /// malformed blocks are skipped, never fatal.
-Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet);
+///
+/// Each skipped block bumps `diagnostics->skipped_feature_count` when
+/// `diagnostics` is non-NULL, so a caller that never reads the structured
+/// log still learns the load was lossy. Passing NULL discards the count.
+Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(const pugi::xml_node& worksheet,
+                                                                             ReadDiagnostics* diagnostics = nullptr);
 
 }  // namespace formulon::io
 

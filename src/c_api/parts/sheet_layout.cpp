@@ -265,22 +265,6 @@ extern "C" fm_status_t fm_sheet_get_row_override(const fm_workbook_t* wb, size_t
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out) {
-  clear_last_error();
-  if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_view: NULL argument");
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_view"); rc != 0) {
-    return rc;
-  }
-  const formulon::SheetView& v = wb->workbook().sheet(sheet_index).view();
-  out->zoom_scale = v.zoom_scale;
-  out->freeze_rows = v.freeze_rows;
-  out->freeze_cols = v.freeze_cols;
-  out->tab_hidden = v.tab_hidden ? 1 : 0;
-  return 0;
-}
-
 extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last,
                                                  double width) {
   clear_last_error();
@@ -399,12 +383,12 @@ extern "C" fm_status_t fm_sheet_set_tab_hidden(fm_workbook_t* wb, size_t sheet_i
   return 0;
 }
 
-extern "C" fm_status_t fm_sheet_get_view_ex(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_ex_t* out) {
+extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_t* out) {
   clear_last_error();
   if (out == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_view_ex: NULL argument");
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "fm_sheet_get_view: NULL argument");
   }
-  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_view_ex"); rc != 0) {
+  if (auto rc = check_sheet_index(wb, sheet_index, "fm_sheet_get_view"); rc != 0) {
     return rc;
   }
   const formulon::SheetView& v = wb->workbook().sheet(sheet_index).view();

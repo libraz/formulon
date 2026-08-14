@@ -80,6 +80,7 @@ __all__ = [
     "PivotReportLayout",
     "PivotShowValuesAs",
     "PivotWorksheetSource",
+    "ReadDiagnostics",
     "RowLayout",
     "SaveDiagnostics",
     "SheetProtection",
@@ -89,7 +90,6 @@ __all__ = [
     "Value",
     "ValueKind",
     "Workbook",
-    "XlsbReadDiagnostics",
 ]
 
 
@@ -157,20 +157,52 @@ class FormulonError(Exception):
 
 @dataclass(frozen=True)
 class SaveDiagnostics:
-    """Bytes and loss counters returned by ``save_ex_with_diagnostics``."""
+    """Bytes and loss counters returned by ``save_with_diagnostics``.
+
+    A field means the same thing whichever container was written; where
+    the underlying event exists in only one container, the other simply
+    never raises it. Coverage is partial by design -- an all-zero result
+    means none of these losses occurred, not that nothing was logged.
+
+    Summing the fields does **not** give "how many things did I lose":
+    ``dropped_part_count`` and ``dropped_relationship_count`` both rise
+    for one dropped part.
+    """
 
     bytes: bytes
+    #: Formula cells emitted as cached literals. Zero for XLSX.
     downgraded_formula_count: int
+    #: Sheet features not lowered to records. Zero for XLSX.
     deferred_feature_count: int
+    #: Passthrough parts dropped for a path collision. Both containers.
+    dropped_part_count: int
+    #: Relationships dropped because their target part is gone. Both
+    #: containers. Rises with ``dropped_part_count`` for one dropped part.
+    dropped_relationship_count: int
+    #: Tables emitted under a writer-assigned id. Zero for XLSB.
+    renumbered_part_count: int
 
 
 @dataclass(frozen=True)
-class XlsbReadDiagnostics:
-    """Loss and recovery counters captured while loading an XLSB workbook."""
+class ReadDiagnostics:
+    """Loss and recovery counters captured while loading a workbook.
 
+    Same contract as :class:`SaveDiagnostics`: one meaning per field
+    across both containers, partial coverage by design.
+    """
+
+    #: Formula cells whose stored formula could not be decoded. XLSB only.
     undecoded_formula_count: int
+    #: Defined names skipped for the same reason. XLSB only.
     undecoded_defined_name_count: int
-    dropped_part_count: int
+    #: Package parts whose content type could not be resolved. XLSB only;
+    #: the XLSX reader keeps unmodelled parts as passthrough.
+    undecoded_part_count: int
+    #: Presentation-overlay entries dropped for an unusable reference.
+    #: XLSX only.
+    skipped_feature_count: int
+    #: Workbook parts with an unrecognised content type. Max 1. XLSX only.
+    unknown_content_type_count: int
 
 
 def _check(status: int, op: str) -> None:
@@ -410,7 +442,7 @@ class PivotAxis(IntEnum):
 
 
 class WorkbookFormat(IntEnum):
-    """Container format selector for :meth:`Workbook.save_ex`.
+    """Container format selector for :meth:`Workbook.save_as`.
 
     Mirrors ``fm_workbook_format_t``. ``UNKNOWN`` is not a valid save
     target.
@@ -1257,8 +1289,8 @@ class PivotFilterSpec:
     data_field_index: int = 0
 
 
-def _cell_xf_ex2_fields(record: CellXf) -> Dict[str, object]:
-    """Project a :class:`CellXf` onto the ``fm_cell_xf_ex2`` field map.
+def _cell_xf_fields(record: CellXf) -> Dict[str, object]:
+    """Project a :class:`CellXf` onto the ``fm_cell_xf`` field map.
 
     Shared by the direct ``<xf>`` writer and the named-style ``<xf>``
     writer, which pack the same struct, so the presence-flag defaulting
@@ -1839,7 +1871,7 @@ class Workbook:
             LIB.free(out_ptr_ptr)
             LIB.free(out_len_ptr)
 
-    def save_ex(self, fmt: "WorkbookFormat | int") -> bytes:
+    def save_as(self, fmt: "WorkbookFormat | int") -> bytes:
         """Serialise the workbook to an in-memory byte stream in ``fmt``.
 
         ``WorkbookFormat.XLSX`` produces the same bytes as :meth:`save`;
@@ -1853,8 +1885,8 @@ class Workbook:
         LIB.write_bytes(out_ptr_ptr, b"\x00\x00\x00\x00")
         LIB.write_bytes(out_len_ptr, b"\x00\x00\x00\x00")
         try:
-            status = LIB.fm_workbook_save_ex(h, _sint(fmt, "format"), out_ptr_ptr, out_len_ptr)
-            _check(status, "fm_workbook_save_ex")
+            status = LIB.fm_workbook_save_as(h, _sint(fmt, "format"), out_ptr_ptr, out_len_ptr)
+            _check(status, "fm_workbook_save_as")
             data_ptr = LIB.read_u32(out_ptr_ptr)
             data_len = LIB.read_u32(out_len_ptr)
             try:
@@ -1868,25 +1900,24 @@ class Workbook:
             LIB.free(out_ptr_ptr)
             LIB.free(out_len_ptr)
 
-    def save_ex_with_diagnostics(self, fmt: "WorkbookFormat | int") -> SaveDiagnostics:
-        """Serialise the workbook and return XLSB loss/defer counters.
+    def save_with_diagnostics(self, fmt: "WorkbookFormat | int") -> SaveDiagnostics:
+        """Serialise the workbook and return what the save cost.
 
-        XLSX saves return zero counters. The returned bytes are an
-        independent copy and the underlying WASM allocation is released
-        before this method returns.
+        The returned bytes are an independent copy and the underlying
+        WASM allocation is released before this method returns.
         """
         h = self._require()
         scratch: list[int] = []
         try:
-            for _ in range(4):
+            for _ in range(2):
                 ptr = LIB.alloc(4)
                 scratch.append(ptr)
                 LIB.write_bytes(ptr, b"\x00\x00\x00\x00")
-            out_ptr_ptr, out_len_ptr, downgraded_ptr, deferred_ptr = scratch
-            status = LIB.fm_workbook_save_ex_with_diagnostics(
-                h, _sint(fmt, "format"), out_ptr_ptr, out_len_ptr, downgraded_ptr, deferred_ptr
-            )
-            _check(status, "fm_workbook_save_ex_with_diagnostics")
+            out_ptr_ptr, out_len_ptr = scratch
+            diag_ptr = S.alloc_struct(LIB, S.SAVE_DIAGNOSTICS)
+            scratch.append(diag_ptr)
+            status = LIB.fm_workbook_save_with_diagnostics(h, _sint(fmt, "format"), out_ptr_ptr, out_len_ptr, diag_ptr)
+            _check(status, "fm_workbook_save_with_diagnostics")
             data_ptr = LIB.read_u32(out_ptr_ptr)
             data_len = LIB.read_u32(out_len_ptr)
             try:
@@ -1894,35 +1925,35 @@ class Workbook:
             finally:
                 if data_ptr:
                     LIB.fm_buffer_free(data_ptr)
+            d = S.SAVE_DIAGNOSTICS.unpack(LIB, diag_ptr)
             return SaveDiagnostics(
                 bytes=data,
-                downgraded_formula_count=LIB.read_u32(downgraded_ptr),
-                deferred_feature_count=LIB.read_u32(deferred_ptr),
+                downgraded_formula_count=d["downgraded_formula_count"],
+                deferred_feature_count=d["deferred_feature_count"],
+                dropped_part_count=d["dropped_part_count"],
+                dropped_relationship_count=d["dropped_relationship_count"],
+                renumbered_part_count=d["renumbered_part_count"],
             )
         finally:
             for ptr in scratch:
                 LIB.free(ptr)
 
-    def xlsb_read_diagnostics(self) -> XlsbReadDiagnostics:
-        """Return recovery and dropped-part counters captured on load."""
+    def read_diagnostics(self) -> ReadDiagnostics:
+        """Return the loss counters captured when this workbook was loaded."""
         h = self._require()
-        scratch: list[int] = []
+        ptr = S.alloc_struct(LIB, S.READ_DIAGNOSTICS)
         try:
-            for _ in range(3):
-                ptr = LIB.alloc(4)
-                scratch.append(ptr)
-                LIB.write_bytes(ptr, b"\x00\x00\x00\x00")
-            formula_ptr, name_ptr, dropped_ptr = scratch
-            status = LIB.fm_workbook_xlsb_read_diagnostics_ex(h, formula_ptr, name_ptr, dropped_ptr)
-            _check(status, "fm_workbook_xlsb_read_diagnostics_ex")
-            return XlsbReadDiagnostics(
-                undecoded_formula_count=LIB.read_u32(formula_ptr),
-                undecoded_defined_name_count=LIB.read_u32(name_ptr),
-                dropped_part_count=LIB.read_u32(dropped_ptr),
+            _check(LIB.fm_workbook_read_diagnostics(h, ptr), "fm_workbook_read_diagnostics")
+            d = S.READ_DIAGNOSTICS.unpack(LIB, ptr)
+            return ReadDiagnostics(
+                undecoded_formula_count=d["undecoded_formula_count"],
+                undecoded_defined_name_count=d["undecoded_defined_name_count"],
+                undecoded_part_count=d["undecoded_part_count"],
+                skipped_feature_count=d["skipped_feature_count"],
+                unknown_content_type_count=d["unknown_content_type_count"],
             )
         finally:
-            for ptr in scratch:
-                LIB.free(ptr)
+            LIB.free(ptr)
 
     # -- Iteration ---------------------------------------------------------
     def iter_cells(self, sheet: int) -> Iterator[Cell]:
@@ -1983,8 +2014,8 @@ class Workbook:
         local_sheet_ptr = _alloc_out_ptr()
         try:
             for i in range(n):
-                status = LIB.fm_workbook_defined_name_at_ex(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
-                _check(status, "fm_workbook_defined_name_at_ex")
+                status = LIB.fm_workbook_defined_name_at(h, _uint(i, "idx"), name_ptr, formula_ptr, local_sheet_ptr)
+                _check(status, "fm_workbook_defined_name_at")
                 name = LIB.read_cstr(LIB.read_u32(name_ptr))
                 formula = LIB.read_cstr(LIB.read_u32(formula_ptr))
                 local_sheet_id = LIB.read_i32(local_sheet_ptr)
@@ -2830,10 +2861,10 @@ class Workbook:
         """Read the full per-sheet view (zoom, freeze, tab-hidden, and the
         display / orientation flags)."""
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.SHEET_VIEW_EX)
+        ptr = S.alloc_struct(LIB, S.SHEET_VIEW)
         try:
-            _check(LIB.fm_sheet_get_view_ex(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_get_view_ex")
-            d = S.SHEET_VIEW_EX.unpack(LIB, ptr)
+            _check(LIB.fm_sheet_get_view(h, _uint(sheet, "sheet_index"), ptr), "fm_sheet_get_view")
+            d = S.SHEET_VIEW.unpack(LIB, ptr)
             return SheetView(
                 zoom_scale=d["zoom_scale"],
                 freeze_rows=d["freeze_rows"],
@@ -3449,7 +3480,7 @@ class Workbook:
 
     @staticmethod
     def _decode_cell_xf(ptr: int) -> CellXf:
-        d = S.CELL_XF_EX2.unpack(LIB, ptr)
+        d = S.CELL_XF.unpack(LIB, ptr)
         return CellXf(
             font_index=d["font_index"],
             fill_index=d["fill_index"],
@@ -3475,11 +3506,11 @@ class Workbook:
     def get_cell_xf(self, xf_index: int) -> CellXf:
         """Return the resolved ``<xf>`` record at ``xf_index``."""
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
+        ptr = S.alloc_struct(LIB, S.CELL_XF)
         try:
             _check(
-                LIB.fm_styles_get_cell_xf_ex2(h, _uint(xf_index, "xf_index"), ptr),
-                "fm_styles_get_cell_xf_ex2",
+                LIB.fm_styles_get_cell_xf(h, _uint(xf_index, "xf_index"), ptr),
+                "fm_styles_get_cell_xf",
             )
             return self._decode_cell_xf(ptr)
         finally:
@@ -3658,7 +3689,7 @@ class Workbook:
 
     def add_cell_xf(self, record: CellXf) -> int:
         """Add (dedup) an ``<xf>`` record; return its index."""
-        return self._add_xf_record(record, LIB.fm_styles_add_cell_xf_ex2, "fm_styles_add_cell_xf_ex2")
+        return self._add_xf_record(record, LIB.fm_styles_add_cell_xf, "fm_styles_add_cell_xf")
 
     def add_cell_style_xf(self, record: CellXf) -> int:
         """Add (dedup) a named-style ``<xf>``; return its ``<cellStyleXfs>`` id.
@@ -3667,14 +3698,14 @@ class Workbook:
         the records a ``<cellStyle>`` points at; :meth:`add_cell_xf` writes
         the per-cell ``<cellXfs>`` pool instead.
         """
-        return self._add_xf_record(record, LIB.fm_styles_add_cell_style_xf_ex2, "fm_styles_add_cell_style_xf_ex2")
+        return self._add_xf_record(record, LIB.fm_styles_add_cell_style_xf, "fm_styles_add_cell_style_xf")
 
     def _add_xf_record(self, record: CellXf, fn, op: str) -> int:
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
+        ptr = S.alloc_struct(LIB, S.CELL_XF)
         out = _alloc_out_ptr()
         try:
-            S.CELL_XF_EX2.pack(LIB, ptr, _cell_xf_ex2_fields(record))
+            S.CELL_XF.pack(LIB, ptr, _cell_xf_fields(record))
             _check(fn(h, ptr, out), op)
             return LIB.read_u32(out)
         finally:
@@ -3759,11 +3790,11 @@ class Workbook:
     def get_cell_style_xf(self, index: int) -> CellXf:
         """Return the named-style xf record at ``index``."""
         h = self._require()
-        ptr = S.alloc_struct(LIB, S.CELL_XF_EX2)
+        ptr = S.alloc_struct(LIB, S.CELL_XF)
         try:
             _check(
-                LIB.fm_styles_get_cell_style_xf_ex2(h, _uint(index, "index"), ptr),
-                "fm_styles_get_cell_style_xf_ex2",
+                LIB.fm_styles_get_cell_style_xf(h, _uint(index, "index"), ptr),
+                "fm_styles_get_cell_style_xf",
             )
             return self._decode_cell_xf(ptr)
         finally:
@@ -4395,7 +4426,13 @@ class Workbook:
         )
 
     def pivot_field_add_item(self, sheet: int, pivot_index: int, field_idx: int, name: str, visible: bool) -> None:
-        """Append a manual-filter item to pivot field ``field_idx``."""
+        """Append a manual-filter item addressed by its label.
+
+        The item carries no cache binding, so records are matched by
+        comparing their rendered label against ``name``. The blank item has
+        no label of its own; build it with
+        :meth:`pivot_field_add_item_at` instead.
+        """
         h = self._require()
         name_ptr, _ = LIB.alloc_utf8(name)
         try:
@@ -4412,6 +4449,29 @@ class Workbook:
             )
         finally:
             LIB.free(name_ptr)
+
+    def pivot_field_add_item_at(
+        self, sheet: int, pivot_index: int, field_idx: int, cache_index: int, visible: bool
+    ) -> None:
+        """Append a manual-filter item addressed by its cache shared-item index.
+
+        ``cache_index`` selects ``shared_items[cache_index]`` of the bound
+        cache field, the same index space as OOXML ``<item x="N">``. The
+        label is resolved from that shared item, so a shared item that
+        renders to nothing produces the blank item.
+        """
+        h = self._require()
+        _check(
+            LIB.fm_workbook_pivot_field_add_item_at(
+                h,
+                _uint(sheet, "sheet_index"),
+                _uint(pivot_index, "pivot_index"),
+                _uint(field_idx, "field_idx"),
+                _uint(cache_index, "cache_index"),
+                1 if visible else 0,
+            ),
+            "fm_workbook_pivot_field_add_item_at",
+        )
 
     def pivot_field_clear_items(self, sheet: int, pivot_index: int, field_idx: int) -> None:
         """Drop every manual-filter item from pivot field ``field_idx``."""

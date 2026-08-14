@@ -41,8 +41,8 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
     return out;
   }
   const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-  fm_sheet_view_ex_t v{};
-  fm_status_t rc = fm_sheet_get_view_ex(handle_, sheet, &v);
+  fm_sheet_view_t v{};
+  fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     out.Set("view", DefaultSheetView(env));

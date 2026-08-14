@@ -109,7 +109,8 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
                     "context=ooxml_reader part=_rels/.rels");
 }
 
-Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes) {
+Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes,
+                                                   ReadDiagnostics* diagnostics) {
   pugi::xml_document doc;
   RETURN_IF_ERROR(load_xml_buffer(doc, ct_bytes, "ooxml_reader", "[Content_Types].xml"));
   pugi::xml_node root = doc.child("Types");
@@ -158,6 +159,9 @@ Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_
         .field("content_type", first_unknown_ct)
         .field("fallback_kind", std::string_view("kXlsx"))
         .warn();
+    if (diagnostics != nullptr) {
+      ++diagnostics->unknown_content_type_count;
+    }
     return WorkbookKind::kXlsx;
   }
   return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: no workbook content-type override",

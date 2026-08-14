@@ -51,6 +51,13 @@ Checks:
                   struct, across the WASM `.d.ts`, the Node `.d.ts` and
                   the Python dataclasses. Deliberate omissions live in
                   `_STYLE_RECORD_EXEMPT_TYPES`.
+  staged-dist     packages/npm-native/dist/{index.d.ts,index.mjs} are
+                  byte-identical to the package-root sources `stage.mjs`
+                  copied them from, so the published package cannot ship a
+                  declaration file or ordinal table that no longer matches
+                  the source every other check here reads. Reports
+                  "SKIPPED" when the package has not been staged, because
+                  `dist/` is gitignored and absent in a fresh clone.
   all             Run every check above (default).
 
 Stdlib only; no build artifacts or network access required.
@@ -64,7 +71,7 @@ import importlib.util
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, NamedTuple, Optional, Set
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -81,6 +88,7 @@ NODE_ADDON_CC = REPO_ROOT / "src" / "node_addon" / "addon.cc"
 NODE_DTS = REPO_ROOT / "packages" / "npm-native" / "index.d.ts"
 NODE_README = REPO_ROOT / "packages" / "npm-native" / "README.md"
 NODE_INDEX_MJS = REPO_ROOT / "packages" / "npm-native" / "index.mjs"
+NODE_DIST_DIR = REPO_ROOT / "packages" / "npm-native" / "dist"
 NPM_INDEX_MJS = REPO_ROOT / "packages" / "npm" / "index.mjs"
 
 VALUE_H = REPO_ROOT / "src" / "value.h"
@@ -118,11 +126,26 @@ NODE_ONLY_METHODS = {"dispose", "memoryUsage"}
 NODE_PURE_JS_FREE_FUNCTIONS = {"mergeFunctionMetadata"}
 
 
+# A sub-check appends here when an input it needs is legitimately absent, as
+# opposed to wrong. `main` prints these alongside the verdict so "not checked"
+# is visible in the output and can never be read as "checked and clean" -- a
+# guard that quietly passes when its input is missing is not a guard.
+_SKIPPED: List[str] = []
+
+
 def _read(path: Path) -> str:
     if not path.is_file():
         print(f"check_binding_drift: missing file: {path}", file=sys.stderr)
         sys.exit(2)
     return path.read_text(encoding="utf-8")
+
+
+def _read_bytes(path: Path) -> bytes:
+    """`_read` for a comparison that must not normalise line endings."""
+    if not path.is_file():
+        print(f"check_binding_drift: missing file: {path}", file=sys.stderr)
+        sys.exit(2)
+    return path.read_bytes()
 
 
 def _extract_braced_block(text: str, start: int) -> str:
@@ -287,7 +310,8 @@ def check_python_exports() -> List[str]:
 # ---------------------------------------------------------------------------
 
 
-def _wasm32_layout(fields: List[tuple[str, int, int]]) -> tuple[dict[str, int], int]:
+def _wasm32_layout(fields: List[tuple[str, int, int]]) -> tuple[dict[str, int], int, int]:
+    """Lays `fields` out in sequence, returning `(offsets, size, alignment)`."""
     offsets: dict[str, int] = {}
     offset = 0
     max_align = 1
@@ -296,115 +320,206 @@ def _wasm32_layout(fields: List[tuple[str, int, int]]) -> tuple[dict[str, int], 
         offsets[name] = offset
         offset += size
         max_align = max(max_align, align)
-    return offsets, (offset + max_align - 1) // max_align * max_align
+    return offsets, (offset + max_align - 1) // max_align * max_align, max_align
+
+
+# wasm32 (ILP32) size and alignment for the leaf types the C ABI structs are
+# built from. These are properties of the target ABI rather than anything the
+# header states, which is why they are the only layout facts tabulated here:
+# every type that has a declaration to read -- struct, union, array -- is
+# measured from that declaration instead of quoted. A literal for an embedded
+# struct would keep asserting its old size after the struct changed, which is
+# the one thing this check exists to catch.
+_WASM32_SCALARS = {
+    "uint8_t": (1, 1),
+    "uint16_t": (2, 2),
+    "uint32_t": (4, 4),
+    "int32_t": (4, 4),
+    "double": (8, 8),
+    "size_t": (4, 4),
+}
+_WASM32_POINTER = (4, 4)
+# A C enum takes `int` representation. The header pins each enumerator's
+# ordinal but says nothing about the storage width, so this is not derivable
+# either; *which* names are enums is read off the header.
+_WASM32_ENUM = (4, 4)
+
+_C_STRUCT_RE = re.compile(r"typedef\s+struct\s*\{(.*?)\}\s*(fm_[A-Za-z0-9_]+)\s*;", re.S)
+_C_ENUM_RE = re.compile(r"typedef\s+enum\s*\{[^}]*\}\s*([A-Za-z_][A-Za-z0-9_]*)\s*;")
+# An anonymous `union { ... } name;` member, matched before the enclosing body
+# is split on `;` so the union's own members are not mistaken for the parent's.
+_C_UNION_MEMBER_RE = re.compile(r"union\s*\{(.*?)\}\s*([A-Za-z_][A-Za-z0-9_]*)\s*;", re.S)
+_C_DECLARATION_RE = re.compile(r"(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\[(\d+)\])?")
+
+
+class _LayoutError(Exception):
+    """A C declaration the wasm32 layout resolver cannot measure."""
+
+
+class _Member(NamedTuple):
+    """One measured struct member. `ctype` is empty for an anonymous union."""
+
+    name: str
+    ctype: str
+    size: int
+    align: int
+
+
+class _Wasm32Layouts:
+    """Measures the C ABI's structs against the wasm32 ABI, from the header.
+
+    Struct members are resolved recursively, so an embedded POD is measured
+    rather than quoted: changing a field of `fm_color_spec` moves every struct
+    that embeds it, and the Python side is checked against the new offsets.
+    """
+
+    def __init__(self, header: str) -> None:
+        self._structs = {name: body for body, name in _C_STRUCT_RE.findall(header)}
+        self._enums = set(_C_ENUM_RE.findall(header))
+        self._members: dict[str, List[_Member]] = {}
+        self._pending: Set[str] = set()
+
+    def is_struct(self, ctype: str) -> bool:
+        return ctype in self._structs
+
+    def members(self, struct_name: str) -> List[_Member]:
+        """Members of `struct_name` in declaration order, each measured."""
+        cached = self._members.get(struct_name)
+        if cached is not None:
+            return cached
+        body = self._structs.get(struct_name)
+        if body is None:
+            raise _LayoutError(f"{struct_name} missing from C header")
+        if struct_name in self._pending:
+            raise _LayoutError(f"{struct_name} embeds itself")
+        self._pending.add(struct_name)
+        try:
+            measured = self._parse_body(struct_name, body)
+        finally:
+            self._pending.discard(struct_name)
+        self._members[struct_name] = measured
+        return measured
+
+    def extent(self, ctype: str) -> tuple[int, int]:
+        """`(size, alignment)` of one member's declared type."""
+        if "*" in ctype:
+            return _WASM32_POINTER
+        ctype = ctype.replace("const ", "").strip()
+        if ctype in self._structs:
+            _, size, align = _wasm32_layout([(m.name, m.size, m.align) for m in self.members(ctype)])
+            return size, align
+        if ctype in _WASM32_SCALARS:
+            return _WASM32_SCALARS[ctype]
+        if ctype in self._enums:
+            return _WASM32_ENUM
+        raise _LayoutError(f"unknown field type {ctype!r}")
+
+    def _parse_body(self, owner: str, body: str) -> List[_Member]:
+        measured: List[_Member] = []
+        position = 0
+        for union in _C_UNION_MEMBER_RE.finditer(body):
+            measured.extend(self._parse_declarations(owner, body[position : union.start()]))
+            size, align = self._union_extent(owner, union.group(1))
+            measured.append(_Member(union.group(2), "", size, align))
+            position = union.end()
+        measured.extend(self._parse_declarations(owner, body[position:]))
+        return measured
+
+    def _parse_declarations(self, owner: str, text: str) -> List[_Member]:
+        measured: List[_Member] = []
+        for declaration in text.split(";"):
+            declaration = " ".join(declaration.split())
+            if not declaration:
+                continue
+            match = _C_DECLARATION_RE.fullmatch(declaration)
+            if not match:
+                raise _LayoutError(f"cannot parse {owner}: {declaration!r}")
+            ctype, name, count_text = match.groups()
+            size, align = self.extent(ctype)
+            measured.append(_Member(name, ctype.replace("const ", "").strip(), size * int(count_text or "1"), align))
+        return measured
+
+    def _union_extent(self, owner: str, body: str) -> tuple[int, int]:
+        """A union overlays its members: widest size, strictest alignment."""
+        size = 0
+        align = 1
+        for member in self._parse_declarations(owner, body):
+            size = max(size, member.size)
+            align = max(align, member.align)
+        return (size + align - 1) // align * align, align
+
+
+def _flatten_for_python(
+    layouts: _Wasm32Layouts, struct_name: str, py_field_names: Set[str]
+) -> List[tuple[str, int, int]]:
+    """C members of `struct_name` in the shape the Python layout models them.
+
+    Python keeps one flat field map per struct, so an embedded POD appears in
+    it one of two ways and both have to be accepted: as a single opaque blob
+    under the C member's own name (`fm_pivot_cell_t.value`), or spread into
+    the parent's map (`fm_cf_color_t color` contributing `color_r`). Which one
+    applies is read off the Python layout, so a struct that switches
+    representation needs no edit here -- only the nesting depth Python
+    actually flattens is followed.
+    """
+    fields: List[tuple[str, int, int]] = []
+    for member in layouts.members(struct_name):
+        if member.name in py_field_names or not layouts.is_struct(member.ctype):
+            fields.append((member.name, member.size, member.align))
+            continue
+        for inner in layouts.members(member.ctype):
+            name = inner.name if inner.name in py_field_names else f"{member.name}_{inner.name}"
+            fields.append((name, inner.size, inner.align))
+    return fields
 
 
 def check_python_struct_layouts() -> List[str]:
     """Verify Python's hand-written WASM32 structs against the C header.
 
-    This intentionally parses the authoritative C declarations rather than
-    repeating sizes in a Python table. It covers every ``Struct`` exported by
-    ``_structs.py`` and reports field order, offsets, and final size.
+    Every size and offset is measured from the authoritative C declarations
+    rather than repeated in a Python table -- including the structs embedded
+    inside other structs, which are laid out recursively. Only the wasm32
+    scalar, pointer and enum widths are tabulated, because the header does not
+    state those. It covers every ``Struct`` exported by ``_structs.py`` and
+    reports field order, offsets, and final size.
     """
-    header = re.sub(r"/\*.*?\*/", "", _read(CAPI_HEADER), flags=re.S)
-    blocks = {
-        name: body for body, name in re.findall(r"typedef\s+struct\s*\{(.*?)\}\s*(fm_[A-Za-z0-9_]+)\s*;", header, re.S)
-    }
+    layouts = _Wasm32Layouts(re.sub(r"/\*.*?\*/", "", _read(CAPI_HEADER), flags=re.S))
     spec = importlib.util.spec_from_file_location("formulon_struct_layouts", PYTHON_STRUCTS)
     if spec is None or spec.loader is None:
         return ["python-struct-layout: could not load packages/python/formulon/_structs.py"]
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    primitive = {
-        "uint8_t": (1, 1),
-        "uint16_t": (2, 2),
-        "uint32_t": (4, 4),
-        "int32_t": (4, 4),
-        "double": (8, 8),
-        "size_t": (4, 4),
-        "fm_value_kind_t": (4, 4),
-        "fm_function_availability_t": (4, 4),
-        "fm_cf_match_kind_t": (4, 4),
-        "fm_pivot_cell_kind_t": (4, 4),
-        "fm_pivot_axis_t": (4, 4),
-        "fm_pivot_aggregation_t": (4, 4),
-        "fm_pivot_show_as_t": (4, 4),
-        "fm_pivot_filter_type_t": (4, 4),
-        "fm_pivot_filter_value_kind_t": (4, 4),
-        "fm_calc_mode_t": (4, 4),
-        "fm_value_t": (16, 8),
-        "fm_cf_color_t": (4, 1),
-        "fm_cfvo_t": (12, 4),
-        "fm_color_spec": (24, 8),
-        "fm_border_side": (32, 8),
-        "fm_font_record": (80, 8),
-        "fm_fill_record": (64, 8),
-        "fm_border_record": (168, 8),
-    }
-    # Versioned style records embed the stable ``fm_cell_xf`` prefix rather
-    # than repeating its fields. Expand that nested POD here so the Python
-    # marshaller can keep its flat field map while still checking the exact
-    # C offsets and final size.
-    embedded_cell_xf = [
-        ("font_index", 4, 4),
-        ("fill_index", 4, 4),
-        ("border_index", 4, 4),
-        ("num_fmt_id", 2, 2),
-        ("horizontal_align", 1, 1),
-        ("vertical_align", 1, 1),
-        ("wrap_text", 4, 4),
-    ]
     problems: List[str] = []
     for layout in (value for value in vars(module).values() if isinstance(value, module.Struct)):
-        body = blocks.get(layout.name)
-        if body is None:
-            problems.append(f"python-struct-layout: {layout.name} missing from C header")
-            continue
-        c_fields: List[tuple[str, int, int]] = []
         py_field_names = {name for name, _ in layout.fields}
-        for declaration in body.split(";"):
-            declaration = " ".join(declaration.split())
-            if not declaration:
-                continue
-            match = re.fullmatch(r"(.+?)\s+([A-Za-z_][A-Za-z0-9_]*)(?:\[(\d+)\])?", declaration)
-            if not match:
-                problems.append(f"python-struct-layout: cannot parse {layout.name}: {declaration!r}")
-                continue
-            ctype, name, count_text = match.groups()
-            count = int(count_text or "1")
-            if "*" in ctype:
-                size, align = 4, 4
-            else:
-                ctype = ctype.replace("const ", "").strip()
-                if ctype == "fm_cell_xf":
-                    c_fields.extend(embedded_cell_xf)
-                    continue
-                if ctype == "fm_cf_color_t":
-                    if name in py_field_names:
-                        c_fields.append((name, 4, 1))
-                    else:
-                        c_fields.extend((f"{name}_{channel}", 1, 1) for channel in ("r", "g", "b", "a"))
-                    continue
-                if ctype not in primitive:
-                    problems.append(f"python-struct-layout: unknown {layout.name} field type {ctype!r}")
-                    continue
-                size, align = primitive[ctype]
-            # Explicit C padding need not be represented in Struct: its
-            # alignment effect is reproduced by the following semantic field.
-            if not name.startswith("_pad"):
-                c_fields.append((name, size * count, align))
-            else:
-                c_fields.append((name, size * count, align))
-        c_offsets, c_size = _wasm32_layout(c_fields)
+        try:
+            c_fields = _flatten_for_python(layouts, layout.name, py_field_names)
+        except _LayoutError as exc:
+            problems.append(f"python-struct-layout: {exc}")
+            continue
+        # Explicit C padding need not be represented in Struct: its alignment
+        # effect is reproduced by the following semantic field. It is still
+        # laid out here so the offsets after it are right.
+        c_offsets, c_size, _ = _wasm32_layout(c_fields)
+        c_sizes = {name: size for name, size, _ in c_fields}
         semantic_names = [name for name, _, _ in c_fields if not name.startswith("_pad")]
         py_names = [name for name, _ in layout.fields if not name.startswith("_pad")]
+        py_sizes = {name: spec[1] for name, spec in layout.fields}
         if py_names != semantic_names:
             problems.append(f"python-struct-layout: {layout.name} fields differ: C={semantic_names}, Python={py_names}")
         for name in py_names:
             if name in c_offsets and layout.offsets[name][1] != c_offsets[name]:
                 problems.append(
                     f"python-struct-layout: {layout.name}.{name} offset C={c_offsets[name]} Python={layout.offsets[name][1]}"
+                )
+            # Field width is checked separately from offset: narrowing a field
+            # whose successor is more strictly aligned leaves every offset and
+            # the total size intact, so the offset comparison alone reads the
+            # wrong number of bytes without ever disagreeing.
+            if name in c_sizes and py_sizes[name] != c_sizes[name]:
+                problems.append(
+                    f"python-struct-layout: {layout.name}.{name} size C={c_sizes[name]} Python={py_sizes[name]}"
                 )
         if layout.size != c_size:
             problems.append(f"python-struct-layout: {layout.name} size C={c_size} Python={layout.size}")
@@ -827,6 +942,7 @@ PYTHON_WORKBOOK = PYTHON_PKG_DIR / "workbook.py"
 
 # Public type name -> the C struct it projects.
 _STYLE_RECORD_STRUCTS = {
+    "CellXf": "fm_cell_xf",
     "ColorSpec": "fm_color_spec",
     "FontRecord": "fm_font_record",
     "FillRecord": "fm_fill_record",
@@ -840,6 +956,21 @@ _STYLE_RECORD_EXEMPT_TYPES = {
     ("python", "BorderSide"),
 }
 
+# C presence flags that neither host language mirrors as a field, because both
+# already have a way to say "absent": the TS surface omits the optional
+# property, Python leaves it `None`. Naming the value field alone would let a
+# host drop the distinction entirely, so each entry lists the value field the
+# flag governs and both are required to exist together.
+_STYLE_RECORD_PRESENCE_FLAGS = {
+    "fm_cell_xf": {
+        "has_text_rotation": "text_rotation",
+        "has_indent": "indent",
+        "has_relative_indent": "relative_indent",
+        "has_shrink_to_fit": "shrink_to_fit",
+        "has_reading_order": "reading_order",
+    },
+}
+
 _TS_FIELD_RE = re.compile(r"^\s*([A-Za-z_$][A-Za-z0-9_$]*)\??\s*:", re.MULTILINE)
 _PY_FIELD_RE = re.compile(r"^    ([a-z_][A-Za-z0-9_]*)\s*:", re.MULTILINE)
 
@@ -850,9 +981,7 @@ def _snake_to_camel(name: str) -> str:
 
 
 def _c_struct_fields(header: str, struct_name: str, source: Path) -> List[str]:
-    blocks = {
-        name: body for body, name in re.findall(r"typedef\s+struct\s*\{(.*?)\}\s*(fm_[A-Za-z0-9_]+)\s*;", header, re.S)
-    }
+    blocks = {name: body for body, name in _C_STRUCT_RE.findall(header)}
     body = blocks.get(struct_name)
     if body is None:
         print(f"check_binding_drift: struct {struct_name!r} not found in {source}", file=sys.stderr)
@@ -887,6 +1016,20 @@ def check_style_record_fields() -> List[str]:
 
     for type_name, struct_name in sorted(_STYLE_RECORD_STRUCTS.items()):
         c_fields = _c_struct_fields(header, struct_name, CAPI_HEADER)
+        # A presence flag is dropped from the comparison, but only once its
+        # governed value field is confirmed present on the C side -- otherwise
+        # renaming the value field would silently retire the flag with it.
+        presence = _STYLE_RECORD_PRESENCE_FLAGS.get(struct_name, {})
+        for flag, value_field in sorted(presence.items()):
+            if flag in c_fields and value_field not in c_fields:
+                problems.append(
+                    f"style-record-fields: {struct_name}.{flag} is exempted as a presence flag for "
+                    f"{value_field!r}, which no longer exists in {CAPI_HEADER.relative_to(REPO_ROOT)}"
+                )
+        stale_flags = sorted(flag for flag in presence if flag not in c_fields)
+        if stale_flags:
+            problems.append(f"style-record-fields: stale presence-flag exemptions for {struct_name}: {stale_flags}")
+        c_fields = [name for name in c_fields if name not in presence]
         camel_fields = {_snake_to_camel(name) for name in c_fields}
         for surface, source, dts_text in (
             ("wasm", WASM_DTS, wasm_dts),
@@ -931,6 +1074,48 @@ def check_style_record_fields() -> List[str]:
     return problems
 
 
+# ---------------------------------------------------------------------------
+# Check 7: the npm-native package's staged copies <-> their sources.
+#
+# `stage.mjs` publishes `packages/npm-native/dist/` by copying `index.d.ts`
+# and `index.mjs` verbatim out of the package root. Every other check in this
+# file reads the source side only, so an edit that lands in the source but is
+# never re-staged publishes a declaration file that no longer describes the
+# runtime, or an ordinal table that no longer matches the one `dts-enums`
+# verified. The WASM package already guards its own staged `.d.ts`
+# (packages/npm/scripts/check-dts.mjs); npm-native had no equivalent, which
+# matters most for a mechanical rewrite that touches one side of the pair.
+# ---------------------------------------------------------------------------
+
+# (source, staged copy) pairs `stage.mjs` produces with a verbatim copyFile.
+_NODE_STAGED_COPIES = (
+    (NODE_DTS, NODE_DIST_DIR / "index.d.ts"),
+    (NODE_INDEX_MJS, NODE_DIST_DIR / "index.mjs"),
+)
+
+
+def check_staged_dist() -> List[str]:
+    problems: List[str] = []
+    for source, staged in _NODE_STAGED_COPIES:
+        if not staged.is_file():
+            # `dist/` is gitignored, so a fresh clone has nothing to compare
+            # until the package is staged. Record that as not-checked instead
+            # of passing: this check exists because a silent pass is
+            # indistinguishable from a real one.
+            _SKIPPED.append(
+                f"staged-dist: {staged.relative_to(REPO_ROOT)} is absent; the npm-native "
+                "package has not been staged in this tree (`make node-package`)"
+            )
+            continue
+        if _read_bytes(source) != _read_bytes(staged):
+            problems.append(
+                f"staged-dist: {staged.relative_to(REPO_ROOT)} differs from "
+                f"{source.relative_to(REPO_ROOT)}; the published copy is stale -- "
+                "re-stage the package with `make node-package`"
+            )
+    return problems
+
+
 CHECKS = {
     "python-exports": check_python_exports,
     "python-struct-layouts": check_python_struct_layouts,
@@ -939,6 +1124,7 @@ CHECKS = {
     "readme-counts": check_readme_counts,
     "dts-enums": check_dts_enums,
     "style-record-fields": check_style_record_fields,
+    "staged-dist": check_staged_dist,
 }
 
 
@@ -954,9 +1140,15 @@ def main(argv: List[str]) -> int:
     args = parser.parse_args(argv)
 
     names = list(CHECKS.keys()) if args.check == "all" else [args.check]
+    _SKIPPED.clear()
     problems: List[str] = []
     for name in names:
         problems.extend(CHECKS[name]())
+
+    # Printed either way: a skip is not a pass, and the reader has to be able
+    # to tell which parts of the run actually looked at anything.
+    for note in _SKIPPED:
+        print(f"check_binding_drift ({args.check}): SKIPPED {note}")
 
     if problems:
         print(f"check_binding_drift ({args.check}): DRIFT DETECTED")

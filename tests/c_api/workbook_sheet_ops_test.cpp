@@ -169,14 +169,15 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameAddsAndUpdates) {
 
   const char* nm = nullptr;
   const char* fr = nullptr;
-  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr), 0);
+  // The scope out-param is optional; NULL exercises the skip path.
+  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr, nullptr), 0);
   EXPECT_STREQ(nm, "MyName");
   EXPECT_STREQ(fr, "=42");
 
   // Update the formula text via case-insensitive match.
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, "MYNAME", "=99"), 0);
   EXPECT_EQ(fm_workbook_defined_name_count(wb.handle), 1U);
-  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr), 0);
+  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr, nullptr), 0);
   EXPECT_STREQ(nm, "MyName");  // authored case preserved
   EXPECT_STREQ(fr, "=99");
 }
@@ -192,25 +193,25 @@ TEST(WorkbookSheetOpsCApi, SetDefinedNameScopedAllowsWorkbookAndSheetNames) {
   const char* nm = nullptr;
   const char* fr = nullptr;
   int32_t local_sheet_id = -99;
-  ASSERT_EQ(fm_workbook_defined_name_at_ex(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
+  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
   EXPECT_STREQ(nm, "Rate");
   EXPECT_STREQ(fr, "=1");
   EXPECT_EQ(local_sheet_id, -1);
 
-  ASSERT_EQ(fm_workbook_defined_name_at_ex(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
+  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
   EXPECT_STREQ(nm, "Rate");
   EXPECT_STREQ(fr, "=2");
   EXPECT_EQ(local_sheet_id, 1);
 
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "RATE", "=3", 1), 0);
-  ASSERT_EQ(fm_workbook_defined_name_at_ex(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
+  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 1, &nm, &fr, &local_sheet_id), 0);
   EXPECT_STREQ(nm, "Rate");
   EXPECT_STREQ(fr, "=3");
   EXPECT_EQ(local_sheet_id, 1);
 
   ASSERT_EQ(fm_workbook_set_defined_name_scoped(wb.handle, "Rate", "", 1), 0);
   EXPECT_EQ(fm_workbook_defined_name_count(wb.handle), 1U);
-  ASSERT_EQ(fm_workbook_defined_name_at_ex(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
+  ASSERT_EQ(fm_workbook_defined_name_at(wb.handle, 0, &nm, &fr, &local_sheet_id), 0);
   EXPECT_EQ(local_sheet_id, -1);
 }
 

@@ -8,7 +8,7 @@
 //   1. Reads `in` into memory (binary mode).
 //   2. Calls `fm_workbook_load`, then the serial `fm_workbook_recalc` or
 //      opt-in `fm_workbook_recalc_parallel`, then
-//      `fm_workbook_save_ex_with_diagnostics` with a format derived from
+//      `fm_workbook_save_with_diagnostics` with a format derived from
 //      `-o`'s extension (`.xlsb` -> MS-XLSB, anything else -> `.xlsx`).
 //   3. Writes the saved buffer back out to `out`.
 //
@@ -73,7 +73,7 @@ void print_recalc_usage(std::ostream& out) {
       << "recalc remains serial.\n"
       << "Options must precede --; after --, exactly one input path is accepted.\n"
       << "Status: prints \"formulon: recalc: ok, wrote M bytes to 'OUT'\" on stderr unless\n"
-      << "--quiet is supplied; --quiet does not suppress XLSB loss warnings.\n";
+      << "--quiet is supplied; --quiet does not suppress load/save loss warnings.\n";
 }
 
 bool parse_thread_count(std::string_view text, std::uint32_t* out) {
@@ -107,7 +107,7 @@ void emit_last_error(std::ostream& err, const char* subcommand) {
   err << '\n';
 }
 
-// Derives the `fm_workbook_save_ex_with_diagnostics` container format from `path`'s
+// Derives the `fm_workbook_save_with_diagnostics` container format from `path`'s
 // extension: `.xlsb` (case-insensitive) selects MS-XLSB; every other
 // extension (including none) selects `.xlsx` so existing callers that
 // never named `.xlsb` keep writing OOXML, matching `fm_workbook_save`'s
@@ -124,35 +124,61 @@ fm_workbook_format_t format_from_extension(const std::string& path) {
   return ext == "xlsb" ? FM_WORKBOOK_FORMAT_XLSB : FM_WORKBOOK_FORMAT_XLSX;
 }
 
-void emit_read_diagnostics(std::ostream& err, std::size_t undecoded_formula_count,
-                           std::size_t undecoded_defined_name_count, std::size_t dropped_part_count) {
-  if (undecoded_formula_count == 0 && undecoded_defined_name_count == 0 && dropped_part_count == 0) {
+// Appends `; name=value` for a counter that is actually non-zero. A zero
+// counter is the normal case and printing it would bury the one number
+// the user needs to act on.
+void emit_counter(std::ostream& err, const char* name, std::uint32_t value) {
+  if (value != 0U) {
+    err << "; " << name << '=' << value;
+  }
+}
+
+// The XLSB half of the load counters: lossy Ptg recovery and parts the
+// reader could not decode. Zero for every `.xlsx` load.
+void emit_read_diagnostics(std::ostream& err, const fm_read_diagnostics_t& d) {
+  if (d.undecoded_formula_count == 0U && d.undecoded_defined_name_count == 0U && d.undecoded_part_count == 0U) {
     return;
   }
   err << "formulon: recalc: warning: XLSB read diagnostics";
-  if (undecoded_formula_count != 0) {
-    err << "; undecoded_formula_count=" << undecoded_formula_count;
-  }
-  if (undecoded_defined_name_count != 0) {
-    err << "; undecoded_defined_name_count=" << undecoded_defined_name_count;
-  }
-  if (dropped_part_count != 0) {
-    err << "; dropped_part_count=" << dropped_part_count;
-  }
+  emit_counter(err, "undecoded_formula_count", d.undecoded_formula_count);
+  emit_counter(err, "undecoded_defined_name_count", d.undecoded_defined_name_count);
+  emit_counter(err, "undecoded_part_count", d.undecoded_part_count);
   err << '\n';
 }
 
-void emit_write_diagnostics(std::ostream& err, std::size_t downgraded_formula_count,
-                            std::size_t deferred_feature_count) {
-  if (downgraded_formula_count == 0 && deferred_feature_count == 0) {
+// The OOXML half of the same load counters: presentation-overlay entries
+// dropped for an unusable reference, and an unrecognised workbook content
+// type. Zero for every `.xlsb` load.
+void emit_ooxml_read_diagnostics(std::ostream& err, const fm_read_diagnostics_t& d) {
+  if (d.skipped_feature_count == 0U && d.unknown_content_type_count == 0U) {
     return;
   }
-  err << "formulon: recalc: warning: XLSB write diagnostics";
-  if (downgraded_formula_count != 0) {
-    err << "; downgraded_formula_count=" << downgraded_formula_count;
+  err << "formulon: recalc: warning: OOXML read diagnostics";
+  emit_counter(err, "skipped_feature_count", d.skipped_feature_count);
+  emit_counter(err, "unknown_content_type_count", d.unknown_content_type_count);
+  err << '\n';
+}
+
+// Save counters. Three of the five are produced by both writers, so the
+// line is labelled by the container actually written rather than split
+// into a per-format emitter.
+void emit_write_diagnostics(std::ostream& err, fm_workbook_format_t format, const fm_save_diagnostics_t& d) {
+  if (d.downgraded_formula_count == 0U && d.deferred_feature_count == 0U && d.dropped_part_count == 0U &&
+      d.dropped_relationship_count == 0U && d.renumbered_part_count == 0U) {
+    return;
   }
-  if (deferred_feature_count != 0) {
-    err << "; deferred_feature_count=" << deferred_feature_count;
+  err << "formulon: recalc: warning: " << (format == FM_WORKBOOK_FORMAT_XLSB ? "XLSB" : "OOXML")
+      << " write diagnostics";
+  emit_counter(err, "downgraded_formula_count", d.downgraded_formula_count);
+  emit_counter(err, "deferred_feature_count", d.deferred_feature_count);
+  emit_counter(err, "dropped_part_count", d.dropped_part_count);
+  emit_counter(err, "dropped_relationship_count", d.dropped_relationship_count);
+  emit_counter(err, "renumbered_part_count", d.renumbered_part_count);
+  // A dropped part also drops the relationship pointing at it, so the two
+  // numbers above can describe one loss twice. Say so rather than leaving
+  // the reader to add them up.
+  if (d.dropped_part_count != 0U && d.dropped_relationship_count != 0U) {
+    err << " (a dropped part also drops its relationship; these may describe the same loss)";
   }
   err << '\n';
 }
@@ -246,16 +272,13 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     return rc;
   }
 
-  std::size_t undecoded_formula_count = 0;
-  std::size_t undecoded_defined_name_count = 0;
-  std::size_t dropped_part_count = 0;
-  if (auto rc = fm_workbook_xlsb_read_diagnostics_ex(wb.handle, &undecoded_formula_count, &undecoded_defined_name_count,
-                                                     &dropped_part_count);
-      rc != 0) {
+  fm_read_diagnostics_t read_diagnostics{};
+  if (auto rc = fm_workbook_read_diagnostics(wb.handle, &read_diagnostics); rc != 0) {
     emit_last_error(err, "recalc");
     return rc;
   }
-  emit_read_diagnostics(err, undecoded_formula_count, undecoded_defined_name_count, dropped_part_count);
+  emit_read_diagnostics(err, read_diagnostics);
+  emit_ooxml_read_diagnostics(err, read_diagnostics);
 
   if (iterative) {
     if (auto rc = fm_workbook_set_iterative_enabled(wb.handle, 1); rc != 0) {
@@ -279,15 +302,12 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   SaveBuffer buf;
   const fm_workbook_format_t format = format_from_extension(output_path);
-  std::size_t downgraded_formula_count = 0;
-  std::size_t deferred_feature_count = 0;
-  if (auto rc = fm_workbook_save_ex_with_diagnostics(wb.handle, format, &buf.data, &buf.len, &downgraded_formula_count,
-                                                     &deferred_feature_count);
-      rc != 0) {
+  fm_save_diagnostics_t save_diagnostics{};
+  if (auto rc = fm_workbook_save_with_diagnostics(wb.handle, format, &buf.data, &buf.len, &save_diagnostics); rc != 0) {
     emit_last_error(err, "recalc");
     return rc;
   }
-  emit_write_diagnostics(err, downgraded_formula_count, deferred_feature_count);
+  emit_write_diagnostics(err, format, save_diagnostics);
 
   if (auto rc = write_file_atomically(output_path, buf.data, buf.len); rc != 0) {
     err << "formulon: recalc: cannot write '" << output_path << "': " << std::strerror(errno) << '\n';

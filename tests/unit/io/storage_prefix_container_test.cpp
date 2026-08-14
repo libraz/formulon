@@ -166,7 +166,7 @@ TEST(StoragePrefixContainers, IsoCeilingSurvivesXlsbSaveWithoutDowngrade) {
 
   auto write_or = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
 
   std::string workbook_part;
   const ::testing::AssertionResult got_workbook =
@@ -232,7 +232,7 @@ TEST(StoragePrefixContainers, ModelHoldingJisSavesAsDbcsInBothContainers) {
 
   auto xlsb_or = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message << " | " << xlsb_or.error().context;
-  EXPECT_EQ(xlsb_or.value().downgraded_formula_count, 0U);
+  EXPECT_EQ(xlsb_or.value().diagnostics.downgraded_formula_count, 0U);
   auto from_xlsb = xlsb::read_xlsb(test::span_of(xlsb_or.value().bytes));
   ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
   const Cell* xlsb_a1 = from_xlsb.value().workbook.sheet(0).cell_at(0U, 0U);

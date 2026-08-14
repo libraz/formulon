@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "io/package_diagnostics.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -205,7 +206,13 @@ Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet
 /// metadata carries a cell value, so one malformed entry must not cost
 /// the caller the whole workbook. Corruption inside `<sheetData>` still
 /// fails the sheet with `kIoSheetCorrupt`.
-Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& worksheet);
+///
+/// Every such drop bumps `diagnostics->skipped_feature_count` when
+/// `diagnostics` is non-NULL. The structured log is off by default in
+/// shipped builds, so that counter is what surfaces the loss to a caller.
+/// Passing NULL discards the count.
+Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& worksheet,
+                                                     ReadDiagnostics* diagnostics = nullptr);
 
 /// Walks `<hyperlinks>` inside `worksheet` and returns the parsed
 /// `Hyperlink` list in document order. The reader populates
@@ -213,8 +220,9 @@ Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& works
 /// is responsible for joining each rid against the sheet's rels file
 /// to fill in `target` (external URL) — see `apply_hyperlink_rels`.
 /// A malformed `ref=` drops that hyperlink under the invalid-reference
-/// policy documented on `read_merges`.
-Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& worksheet);
+/// policy documented on `read_merges`, `diagnostics` included.
+Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& worksheet,
+                                                        ReadDiagnostics* diagnostics = nullptr);
 
 /// Joins `hyperlinks` against the parsed sheet rels file (`rid -> target`
 /// map) populating `Hyperlink::target` in place for entries whose `rid`
@@ -228,8 +236,9 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
 /// `DataValidation` list in document order. Returns an empty vector
 /// when the sheet has no validations. A malformed `sqref=` drops that
 /// validation under the invalid-reference policy documented on
-/// `read_merges`.
-Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet);
+/// `read_merges`, `diagnostics` included.
+Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet,
+                                                                   ReadDiagnostics* diagnostics = nullptr);
 
 /// Reads `<sheetProtection>` from the sheet and returns the parsed
 /// `SheetProtection`. When the element is absent the result has

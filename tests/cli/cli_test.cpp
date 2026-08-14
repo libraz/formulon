@@ -29,6 +29,7 @@
 #include "c_api/formulon_c.h"
 #include "io/defined_names.h"
 #include "io/format_detect.h"
+#include "support/ooxml_package_fixture.h"
 #include "workbook.h"
 
 #ifndef FORMULON_CLI_PATH
@@ -373,13 +374,33 @@ std::vector<std::uint8_t> append_empty_zip_entry(const std::vector<std::uint8_t>
   return out;
 }
 
+// An `.xlsx` whose sheet carries one unusable reference per overlay kind and
+// whose workbook part declares a content type the reader does not recognise.
+// The engine's writer never produces either, so the package is assembled by
+// hand.
+bool write_lossy_ooxml_fixture(const std::string& path) {
+  const std::string content_types = formulon::test::OoxmlContentTypes("application/vnd.formulon-test.unknown+xml");
+  const std::vector<std::uint8_t> bytes = formulon::test::BuildOoxmlPackage(
+      content_types,
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData/>"
+      "<mergeCells><mergeCell ref=\"nope\"/></mergeCells>"
+      "<conditionalFormatting><cfRule type=\"expression\" priority=\"1\"/></conditionalFormatting>"
+      "</worksheet>");
+  if (bytes.empty()) {
+    return false;
+  }
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  return out.good();
+}
+
 bool write_dropped_xlsb_fixture(const std::string& path) {
   fm_workbook_t* wb = nullptr;
   if (fm_workbook_create(&wb) != 0)
     return false;
   std::uint8_t* raw = nullptr;
   std::size_t len = 0;
-  const bool saved = fm_workbook_save_ex(wb, FM_WORKBOOK_FORMAT_XLSB, &raw, &len) == 0;
+  const bool saved = fm_workbook_save_as(wb, FM_WORKBOOK_FORMAT_XLSB, &raw, &len) == 0;
   fm_workbook_destroy(wb);
   if (!saved)
     return false;
@@ -730,6 +751,25 @@ TEST(FormulonCli, RecalcLossWarningsAreNonfatalAndNotSuppressedByQuiet) {
   EXPECT_NE(r.stderr_text.find("deferred_feature_count=2"), std::string::npos);
 }
 
+TEST(FormulonCli, RecalcReportsOoxmlReadDiagnosticsSeparatelyFromXlsbOnes) {
+  const std::string input = "/tmp/fm_cli_lossy_ooxml_input.xlsx";
+  const std::string output = "/tmp/fm_cli_lossy_ooxml_output.xlsx";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  ASSERT_TRUE(write_lossy_ooxml_fixture(input));
+
+  CliRun r = run_cli({"recalc", "--quiet", input, "-o", output});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_NE(r.stderr_text.find("warning: OOXML read diagnostics"), std::string::npos) << r.stderr_text;
+  // One unparseable merge ref plus one conditional-formatting block with no
+  // `sqref`; the unrecognised workbook content type is reported separately.
+  EXPECT_NE(r.stderr_text.find("skipped_feature_count=2"), std::string::npos) << r.stderr_text;
+  EXPECT_NE(r.stderr_text.find("unknown_content_type_count=1"), std::string::npos) << r.stderr_text;
+  // The XLSB line must not appear: an `.xlsx` load produces none of its
+  // counters, and a zero counter is never printed.
+  EXPECT_EQ(r.stderr_text.find("XLSB read diagnostics"), std::string::npos) << r.stderr_text;
+}
+
 TEST(FormulonCli, RecalcDroppedPartWarningIsNonfatalAndQuietStillReportsIt) {
   const std::string input = "/tmp/fm_cli_dropped_input.xlsb";
   const std::string output = "/tmp/fm_cli_dropped_output.xlsx";
@@ -739,7 +779,7 @@ TEST(FormulonCli, RecalcDroppedPartWarningIsNonfatalAndQuietStillReportsIt) {
 
   CliRun r = run_cli({"recalc", "--quiet", input, "-o", output});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
-  EXPECT_NE(r.stderr_text.find("dropped_part_count=1"), std::string::npos);
+  EXPECT_NE(r.stderr_text.find("undecoded_part_count=1"), std::string::npos);
   EXPECT_NE(r.stderr_text.find("warning: XLSB read diagnostics"), std::string::npos);
 }
 

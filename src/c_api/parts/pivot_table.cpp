@@ -463,6 +463,28 @@ extern "C" fm_status_t fm_workbook_pivot_field_add_item(fm_workbook_t* wb, std::
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_pivot_field_add_item_at(fm_workbook_t* wb, std::size_t sheet_index,
+                                                           std::size_t pivot_index, std::size_t field_idx,
+                                                           std::uint32_t cache_index, std::int32_t visible) {
+  clear_last_error();
+  formulon::pivot::PivotTable* table = nullptr;
+  auto* field =
+      lookup_pivot_field_mut(wb, sheet_index, pivot_index, field_idx, "fm_workbook_pivot_field_add_item_at", &table);
+  if (field == nullptr) {
+    return static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+  }
+  // The label is left empty so `resolve_pivot_names` fills it from the bound
+  // shared item. A binding that resolves to a blank value keeps it empty,
+  // which is what makes this the constructor for the blank item.
+  formulon::pivot::PivotItem item;
+  item.visible = visible != 0;
+  item.has_cache_index = true;
+  item.cache_index = cache_index;
+  field->items.push_back(std::move(item));
+  invalidate_pivot_result(*table);
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_pivot_field_clear_items(fm_workbook_t* wb, std::size_t sheet_index,
                                                            std::size_t pivot_index, std::size_t field_idx) {
   clear_last_error();

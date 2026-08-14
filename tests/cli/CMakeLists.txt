@@ -20,6 +20,9 @@ target_link_libraries(formulon_cli_tests
 target_include_directories(formulon_cli_tests
   PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    # `support/ooxml_package_fixture.h`: the reader-side warnings the CLI
+    # prints need a package the engine's own writer would never emit.
+    ${CMAKE_SOURCE_DIR}/tests
 )
 
 # Generator expression resolves to the absolute path of the binary

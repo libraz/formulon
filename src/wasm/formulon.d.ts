@@ -95,30 +95,65 @@ export interface EvalArrayResult {
   cells: Value[][];
 }
 
-/** Return type of `Workbook.save()` / `Workbook.saveEx(format)`. */
+/** Return type of `Workbook.save()` / `Workbook.saveAs(format)`. */
 export interface SaveResult {
   status: Status;
   /** Freshly-allocated `Uint8Array` on success; `null` on failure. */
   bytes: Uint8Array | null;
 }
 
-/** Return type of `Workbook.saveExWithDiagnostics(format)`. */
+/**
+ * Return type of `Workbook.saveWithDiagnostics(format)`.
+ *
+ * A field means the same thing whichever container was written; where the
+ * underlying event exists in only one container, the other simply never
+ * raises it. Coverage is partial by design — an all-zero result means
+ * none of the losses below occurred, not that nothing was logged.
+ *
+ * Summing these does NOT give "how many things did I lose":
+ * `droppedPartCount` and `droppedRelationshipCount` both rise for one
+ * dropped part.
+ */
 export interface SaveDiagnosticsResult extends SaveResult {
-  /** XLSB formula cells emitted as cached literals. Always zero for XLSX. */
+  /** Formula cells emitted as cached literals. Always zero for XLSX. */
   downgradedFormulaCount: number;
-  /** XLSB modelled features omitted by the binary writer (data loss). */
+  /** Sheet features not lowered to records. Always zero for XLSX. */
   deferredFeatureCount: number;
-}
-
-/** Return type of `Workbook.xlsbReadDiagnostics()`. */
-export interface XlsbReadDiagnosticsResult {
-  status: Status;
-  undecodedFormulaCount: number;
-  undecodedDefinedNameCount: number;
+  /** Passthrough parts dropped for colliding with a generated path, or
+   *  for two entries claiming one path. Both containers. */
   droppedPartCount: number;
+  /** Relationships dropped because their target part is gone. Both
+   *  containers, at package / workbook / (XLSB) sheet scope. Rises with
+   *  `droppedPartCount` for one dropped part — do not add them. */
+  droppedRelationshipCount: number;
+  /** Tables emitted under a writer-assigned id. Always zero for XLSB. */
+  renumberedPartCount: number;
 }
 
-/** `fm_workbook_format_t` ordinals: container format for `saveEx`. */
+/**
+ * Return type of `Workbook.readDiagnostics()`. Same contract as
+ * `SaveDiagnosticsResult`: one meaning per field across both containers,
+ * partial coverage by design.
+ */
+export interface ReadDiagnosticsResult {
+  status: Status;
+  /** Formula cells whose stored formula could not be decoded. XLSB only. */
+  undecodedFormulaCount: number;
+  /** Defined names skipped for the same reason. XLSB only. */
+  undecodedDefinedNameCount: number;
+  /** Package parts whose content type could not be resolved, so they were
+   *  not decoded. XLSB only — the XLSX reader keeps unmodelled parts as
+   *  passthrough instead of dropping them. */
+  undecodedPartCount: number;
+  /** Presentation-overlay entries dropped for an unusable reference: one
+   *  per merge / hyperlink / data validation, one per conditional-format
+   *  block (a block can carry several rules). XLSX only. */
+  skippedFeatureCount: number;
+  /** Workbook parts whose content type was unrecognised. Max 1. XLSX only. */
+  unknownContentTypeCount: number;
+}
+
+/** `fm_workbook_format_t` ordinals: container format for `saveAs`. */
 export enum WorkbookFormat {
   Unknown = 0,
   Xlsx = 1,
@@ -1327,11 +1362,11 @@ export interface Workbook {
 
   save(): SaveResult;
   /** Serialises using an explicit container `format` (see `WorkbookFormat`). */
-  saveEx(format: WorkbookFormat | number): SaveResult;
+  saveAs(format: WorkbookFormat | number): SaveResult;
   /** Serialises using an explicit format and reports loss/defer counters. */
-  saveExWithDiagnostics(format: WorkbookFormat | number): SaveDiagnosticsResult;
-  /** Returns XLSB read recovery and dropped-part counters for this handle. */
-  xlsbReadDiagnostics(): XlsbReadDiagnosticsResult;
+  saveWithDiagnostics(format: WorkbookFormat | number): SaveDiagnosticsResult;
+  /** Returns the loss counters captured when this handle was loaded. */
+  readDiagnostics(): ReadDiagnosticsResult;
   addSheet(name: string): Status;
   /** Removes the sheet at `index`. */
   removeSheet(index: number): Status;

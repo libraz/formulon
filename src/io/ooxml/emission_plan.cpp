@@ -122,7 +122,7 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
 
 }  // namespace
 
-EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings) {
+EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings, WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
   plan.generated_shared_strings = generated_shared_strings;
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
@@ -140,12 +140,19 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     if (t.sheet_index >= wb.sheet_count()) {
       // Defensive: stale metadata referencing a removed sheet. Skip
       // rather than crash; round-trip preserves what is consistent.
+      // `write_ooxml_with_result` rejects this workbook with
+      // `kIoWriteFailed` before it builds a plan, so a caller loses the
+      // save rather than the table; the branch stays for any future
+      // caller that builds a plan directly.
       StructuredLog("ooxml_writer.table_skipped")
           .field("reason", std::string_view("sheet_index_out_of_range"))
           .field("sheet_index", static_cast<std::int64_t>(t.sheet_index))
           .field("sheet_count", static_cast<std::int64_t>(wb.sheet_count()))
           .field("table_name", t.name)
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->deferred_feature_count;
+      }
       continue;
     }
     EmissionPlan::PerSheetTable entry;
@@ -164,6 +171,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
           .field("table_name", t.name)
           .field("assigned_id", static_cast<std::int64_t>(entry.numeric_id))
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->renumbered_part_count;
+      }
     }
     entry.path = NumberedPartPath("xl/tables/table", entry.numeric_id, ".xml");
     plan.tables_by_sheet[t.sheet_index].push_back(entry);
@@ -302,6 +312,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
           .field("path", part.path)
           .field("reason", std::string_view("generated_path_wins"))
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_part_count;
+      }
       continue;
     }
     plan.passthrough_kept.push_back(&part);

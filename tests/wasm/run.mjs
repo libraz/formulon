@@ -694,7 +694,7 @@ async function run() {
     }
   });
 
-  test('saveExWithDiagnostics() and xlsbReadDiagnostics() expose stable counters', () => {
+  test('saveWithDiagnostics() and readDiagnostics() expose stable counters', () => {
     const wb = Module.Workbook.createDefault();
     try {
       assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
@@ -705,50 +705,66 @@ async function run() {
           formula1: '"Yes,No"',
         }).ok,
       );
+      // `dxfId` is a real index into `<dxfs>`, not a sentinel: every binding
+      // signals "no differential format" by omitting the field, which leaves
+      // the C ABI's `dxf_id_engaged` at 0. Supplying `0` therefore claims the
+      // first dxf, so the table has to have one.
+      const dxf = wb.addDxf({ font: { bold: true } });
+      assert.ok(dxf.status.ok, `addDxf failed: ${JSON.stringify(dxf.status)}`);
       assert.ok(
         wb.addConditionalFormat(0, {
           sqref: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
           type: 1,
           op: 5,
           formula1: '10',
-          dxfId: 0,
+          dxfId: dxf.index,
           stopIfTrue: false,
         }).status.ok,
       );
-      const xlsx = wb.saveExWithDiagnostics(1);
+      const xlsx = wb.saveWithDiagnostics(1);
       assert.ok(xlsx.status.ok, `xlsx save failed: ${JSON.stringify(xlsx.status)}`);
       assert.equal(xlsx.downgradedFormulaCount, 0);
       assert.equal(xlsx.deferredFeatureCount, 0);
+      assert.equal(xlsx.droppedPartCount, 0);
+      assert.equal(xlsx.droppedRelationshipCount, 0);
+      assert.equal(xlsx.renumberedPartCount, 0);
 
-      const xlsb = wb.saveExWithDiagnostics(2);
+      const xlsb = wb.saveWithDiagnostics(2);
       assert.ok(xlsb.status.ok, `xlsb save failed: ${JSON.stringify(xlsb.status)}`);
       assert.equal(xlsb.downgradedFormulaCount, 1);
       assert.ok(xlsb.deferredFeatureCount >= 2);
+      // The binary writer never reassigns a part id.
+      assert.equal(xlsb.renumberedPartCount, 0);
 
       const loaded = Module.Workbook.loadBytes(xlsb.bytes);
       try {
-        const read = loaded.xlsbReadDiagnostics();
+        const read = loaded.readDiagnostics();
         assert.ok(read.status.ok, `read diagnostics failed: ${JSON.stringify(read.status)}`);
         assert.equal(read.undecodedFormulaCount, 0);
         assert.equal(read.undecodedDefinedNameCount, 0);
-        assert.equal(read.droppedPartCount, 0);
+        assert.equal(read.undecodedPartCount, 0);
+        assert.equal(read.skippedFeatureCount, 0);
+        assert.equal(read.unknownContentTypeCount, 0);
       } finally {
         loaded.delete();
       }
       const preservedLoaded = Module.Workbook.loadBytes(appendEmptyZipEntry(xlsb.bytes, 'xl/preserved.bin'));
       try {
-        const preserved = preservedLoaded.xlsbReadDiagnostics();
+        const preserved = preservedLoaded.readDiagnostics();
         assert.ok(preserved.status.ok, `passthrough diagnostics failed: ${JSON.stringify(preserved.status)}`);
-        assert.equal(preserved.droppedPartCount, 0);
+        assert.equal(preserved.undecodedPartCount, 0);
       } finally {
         preservedLoaded.delete();
       }
-      const invalidSave = wb.saveExWithDiagnostics(0);
+      const invalidSave = wb.saveWithDiagnostics(0);
       assert.ok(!invalidSave.status.ok, `unknown format unexpectedly succeeded: ${JSON.stringify(invalidSave)}`);
       assert.equal(invalidSave.bytes, null);
       assert.equal(invalidSave.downgradedFormulaCount, 0);
       assert.equal(invalidSave.deferredFeatureCount, 0);
-      assert.ok(wb.saveEx(2).status.ok);
+      assert.equal(invalidSave.droppedPartCount, 0);
+      assert.equal(invalidSave.droppedRelationshipCount, 0);
+      assert.equal(invalidSave.renumberedPartCount, 0);
+      assert.ok(wb.saveAs(2).status.ok);
     } finally {
       wb.delete();
     }
@@ -777,11 +793,13 @@ async function run() {
   test('invalid workbook read diagnostics return a zeroed failure envelope', () => {
     const wb = Module.Workbook.loadBytes(new Uint8Array());
     try {
-      const read = wb.xlsbReadDiagnostics();
+      const read = wb.readDiagnostics();
       assert.ok(!read.status.ok, `invalid handle unexpectedly succeeded: ${JSON.stringify(read)}`);
       assert.equal(read.undecodedFormulaCount, 0);
       assert.equal(read.undecodedDefinedNameCount, 0);
-      assert.equal(read.droppedPartCount, 0);
+      assert.equal(read.undecodedPartCount, 0);
+      assert.equal(read.skippedFeatureCount, 0);
+      assert.equal(read.unknownContentTypeCount, 0);
     } finally {
       wb.delete();
     }

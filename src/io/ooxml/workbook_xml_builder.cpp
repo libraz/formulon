@@ -219,7 +219,7 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
+std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
   std::string out;
   out.reserve(256);
   out.append(kXmlDecl);
@@ -242,6 +242,9 @@ std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan) {
           .field("type", r.type)
           .field("target", r.target)
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_relationship_count;
+      }
       continue;
     }
     AppendRelationship(out, next_rid++, r.type, r.target, r.target_external, /*escape_target=*/true);
@@ -389,7 +392,8 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   return out;
 }
 
-std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan, const Workbook& wb) {
+std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan, const Workbook& wb,
+                              WriteDiagnostics* diagnostics) {
   std::string out;
   out.reserve(256 + sheet_count * 192 + plan.pivot_caches.size() * 192 + wb.unknown_workbook_rels().size() * 192);
   out.append(kXmlDecl);
@@ -461,6 +465,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
           .field("type", r.type)
           .field("target", r.target)
           .warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->dropped_relationship_count;
+      }
       continue;
     }
     const std::string_view target =

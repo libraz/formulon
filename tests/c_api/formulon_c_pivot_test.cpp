@@ -1482,3 +1482,156 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(fm_workbook_pivot_cache_field_count(wb.handle, cache_id, &field_count), 0);
   EXPECT_EQ(field_count, 0U);
 }
+
+namespace {
+
+// Region shared items are `[0] = "North"`, `[1] = blank`; the two records
+// carry one of each. The blank shared item deliberately does NOT sit at index
+// 0, which is what a name-addressed item silently binds to.
+fm_status_t BuildBlankItemPivot(fm_workbook_t* wb, std::uint32_t* out_cache_id, std::size_t* out_pivot_index) {
+  std::uint32_t cache_id = 0;
+  if (fm_status_t st = fm_workbook_pivot_cache_create(wb, 0U, &cache_id); st != 0) {
+    return st;
+  }
+  std::size_t region_idx = 99;
+  std::size_t amount_idx = 99;
+  if (fm_status_t st = fm_workbook_pivot_cache_field_add(wb, cache_id, "Region", &region_idx); st != 0) {
+    return st;
+  }
+  if (fm_status_t st = fm_workbook_pivot_cache_field_add(wb, cache_id, "Amount", &amount_idx); st != 0) {
+    return st;
+  }
+  if (fm_status_t st = fm_workbook_pivot_cache_field_add_shared_item_text(wb, cache_id, region_idx, "North"); st != 0) {
+    return st;
+  }
+  if (fm_status_t st = fm_workbook_pivot_cache_field_add_shared_item_blank(wb, cache_id, region_idx); st != 0) {
+    return st;
+  }
+
+  std::size_t rec_idx = 99;
+  if (fm_status_t st = fm_workbook_pivot_cache_record_add(wb, cache_id, &rec_idx); st != 0) {
+    return st;
+  }
+  if (fm_status_t st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, region_idx, 0.0); st != 0) {
+    return st;
+  }
+  if (fm_status_t st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, amount_idx, 100.0); st != 0) {
+    return st;
+  }
+  if (fm_status_t st = fm_workbook_pivot_cache_record_add(wb, cache_id, &rec_idx); st != 0) {
+    return st;
+  }
+  if (fm_status_t st = fm_workbook_pivot_cache_record_set_blank(wb, cache_id, rec_idx, region_idx); st != 0) {
+    return st;
+  }
+  if (fm_status_t st = fm_workbook_pivot_cache_record_set_number(wb, cache_id, rec_idx, amount_idx, 200.0); st != 0) {
+    return st;
+  }
+
+  std::size_t pivot_idx = 99;
+  if (fm_status_t st = fm_workbook_pivot_create(wb, 0, "PT", cache_id, 0U, 0U, &pivot_idx); st != 0) {
+    return st;
+  }
+  fm_pivot_field_spec_t region_spec{};
+  region_spec.source_name = "Region";
+  region_spec.custom_name = "";
+  region_spec.axis = FM_PIVOT_AXIS_ROW;
+  region_spec.subtotal_top = 0;
+  region_spec.number_format = "";
+  std::size_t region_field = 99;
+  if (fm_status_t st = fm_workbook_pivot_field_add(wb, 0, pivot_idx, &region_spec, &region_field); st != 0) {
+    return st;
+  }
+  fm_pivot_field_spec_t amount_spec{};
+  amount_spec.source_name = "Amount";
+  amount_spec.custom_name = "";
+  amount_spec.axis = FM_PIVOT_AXIS_VALUE;
+  amount_spec.subtotal_top = 0;
+  amount_spec.number_format = "";
+  std::size_t amount_field = 99;
+  if (fm_status_t st = fm_workbook_pivot_field_add(wb, 0, pivot_idx, &amount_spec, &amount_field); st != 0) {
+    return st;
+  }
+  const std::uint32_t row_order[] = {static_cast<std::uint32_t>(region_field)};
+  if (fm_status_t st = fm_workbook_pivot_set_row_field_order(wb, 0, pivot_idx, row_order, 1U); st != 0) {
+    return st;
+  }
+  fm_pivot_data_field_spec_t df_spec{};
+  df_spec.name = "Sum of Amount";
+  df_spec.field_index = static_cast<std::uint32_t>(amount_field);
+  df_spec.aggregation = FM_PIVOT_AGG_SUM;
+  df_spec.number_format = "";
+  df_spec.show_as = FM_PIVOT_SHOW_AS_NORMAL;
+  df_spec.show_as_base_field = -1;
+  df_spec.show_as_base_item = -1;
+  std::size_t df_idx = 99;
+  if (fm_status_t st = fm_workbook_pivot_data_field_add(wb, 0, pivot_idx, &df_spec, &df_idx); st != 0) {
+    return st;
+  }
+  if (out_cache_id != nullptr) {
+    *out_cache_id = cache_id;
+  }
+  if (out_pivot_index != nullptr) {
+    *out_pivot_index = pivot_idx;
+  }
+  return 0;
+}
+
+// Sum of every `FM_PIVOT_CELL_DATA` cell in the projected layout.
+double SumDataCells(fm_pivot_cells_t* handle) {
+  double total = 0.0;
+  const std::size_t n = fm_pivot_cells_count(handle);
+  for (std::size_t i = 0; i < n; ++i) {
+    fm_pivot_cell_t cell{};
+    EXPECT_EQ(fm_pivot_cells_at(handle, i, &cell), 0);
+    if (cell.kind == FM_PIVOT_CELL_DATA && cell.value.kind == FM_VAL_NUMBER) {
+      total += cell.value.u.number;
+    }
+  }
+  return total;
+}
+
+}  // namespace
+
+TEST(FormulonCApiPivot, AddItemAtBindsTheBlankItemByCacheIndex) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildBlankItemPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  // Both source rows contribute before any manual filter exists.
+  {
+    PivotCellsGuard projected;
+    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+    EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 300.0);
+  }
+
+  // The blank shared item is at cache index 1, so the index-addressed adder is
+  // the only way to name it: an empty label carries no binding of its own.
+  ASSERT_EQ(fm_workbook_pivot_field_add_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_add_item_at(wb.handle, 0, pivot_idx, 0, /*cache_index=*/1U, /*visible=*/0), 0);
+  {
+    PivotCellsGuard projected;
+    ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+    EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 100.0);
+  }
+}
+
+TEST(FormulonCApiPivot, AddItemWithEmptyNameCannotHideTheBlankRow) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  std::uint32_t cache_id = 0;
+  std::size_t pivot_idx = 0;
+  ASSERT_EQ(BuildBlankItemPivot(wb.handle, &cache_id, &pivot_idx), 0) << fm_last_error_message();
+
+  // A name-addressed item defaults to cache index 0, which here holds
+  // "North". The item is unlabelled, so it is matched by its binding, and that
+  // binding is not blank -- it filters nothing at all. This is the gap
+  // `fm_workbook_pivot_field_add_item_at` closes.
+  ASSERT_EQ(fm_workbook_pivot_field_add_item(wb.handle, 0, pivot_idx, 0, "North", 1), 0);
+  ASSERT_EQ(fm_workbook_pivot_field_add_item(wb.handle, 0, pivot_idx, 0, "", 0), 0);
+  PivotCellsGuard projected;
+  ASSERT_EQ(fm_workbook_pivot_layout(wb.handle, 0, pivot_idx, &projected.handle), 0) << fm_last_error_message();
+  EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 300.0);
+}

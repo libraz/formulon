@@ -24,6 +24,8 @@
 #include "c_api/parts/common.h"
 #include "gtest/gtest.h"
 #include "io/format_detect.h"
+#include "io/passthrough_part.h"
+#include "io/unknown_relationship.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
@@ -38,6 +40,22 @@ static_assert(offsetof(fm_parallel_recalc_stats, serial_fallback_steps) == 24U);
 static_assert(offsetof(fm_parallel_recalc_stats, cycle_recoveries) == 32U);
 static_assert(offsetof(fm_parallel_recalc_stats, worker_threads_started) == 40U);
 static_assert(offsetof(fm_parallel_recalc_stats, worker_threads_used) == 44U);
+
+// The two counter structs must have the same layout on native and wasm32,
+// which is the whole reason they use `uint32_t` rather than `size_t`. A
+// binding's hand-written offsets are only safe while this holds.
+static_assert(sizeof(fm_read_diagnostics_t) == 20U);
+static_assert(offsetof(fm_read_diagnostics_t, undecoded_formula_count) == 0U);
+static_assert(offsetof(fm_read_diagnostics_t, undecoded_defined_name_count) == 4U);
+static_assert(offsetof(fm_read_diagnostics_t, undecoded_part_count) == 8U);
+static_assert(offsetof(fm_read_diagnostics_t, skipped_feature_count) == 12U);
+static_assert(offsetof(fm_read_diagnostics_t, unknown_content_type_count) == 16U);
+static_assert(sizeof(fm_save_diagnostics_t) == 20U);
+static_assert(offsetof(fm_save_diagnostics_t, downgraded_formula_count) == 0U);
+static_assert(offsetof(fm_save_diagnostics_t, deferred_feature_count) == 4U);
+static_assert(offsetof(fm_save_diagnostics_t, dropped_part_count) == 8U);
+static_assert(offsetof(fm_save_diagnostics_t, dropped_relationship_count) == 12U);
+static_assert(offsetof(fm_save_diagnostics_t, renumbered_part_count) == 16U);
 static_assert(sizeof(fm_parallel_recalc_stats) == 48U);
 
 namespace {
@@ -686,7 +704,7 @@ TEST(FormulonCApi, SaveExXlsxMatchesSave) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard xlsx_buf;
-  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len), 0);
+  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len), 0);
   ASSERT_NE(xlsx_buf.data, nullptr);
   EXPECT_GT(xlsx_buf.len, 0U);
 
@@ -704,7 +722,7 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
 
   BufferGuard xlsb_buf;
-  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len), 0);
+  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len), 0);
   ASSERT_NE(xlsb_buf.data, nullptr);
   EXPECT_GT(xlsb_buf.len, 0U);
 
@@ -723,20 +741,7 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   EXPECT_DOUBLE_EQ(v.u.number, 42.0);
 }
 
-TEST(FormulonCApi, SaveXlsbWithResultReportsUnsupportedFormulaDowngrade) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=@A1:A10"), 0);
-
-  BufferGuard xlsb_buf;
-  size_t downgraded = 0;
-  ASSERT_EQ(fm_workbook_save_xlsb_with_result(wb.handle, &xlsb_buf.data, &xlsb_buf.len, &downgraded), 0);
-  ASSERT_NE(xlsb_buf.data, nullptr);
-  EXPECT_GT(xlsb_buf.len, 0U);
-  EXPECT_EQ(downgraded, 1U);
-}
-
-TEST(FormulonCApi, SaveExWithDiagnosticsReportsBothXlsbCountersAndKeepsLegacyShapes) {
+TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnesZero) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_formula(wb.handle, 0, 0, 0, "=@A1:A10"), 0);
@@ -748,151 +753,159 @@ TEST(FormulonCApi, SaveExWithDiagnosticsReportsBothXlsbCountersAndKeepsLegacySha
   sheet.mutable_validations().push_back(formulon::DataValidation{});
   sheet.set_auto_filter_xml("<autoFilter ref=\"A1:B2\"/>");
 
+  // The OOXML writer represents all of the above, so a clean XLSX save
+  // reports nothing lost -- including on the two fields both writers own.
   BufferGuard xlsx_buf;
-  size_t downgraded = 99U;
-  size_t deferred = 99U;
-  ASSERT_EQ(fm_workbook_save_ex_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len,
-                                                 &downgraded, &deferred),
+  fm_save_diagnostics_t xlsx{99U, 99U, 99U, 99U, 99U};
+  ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &xlsx_buf.data, &xlsx_buf.len, &xlsx),
             0);
-  EXPECT_EQ(downgraded, 0U);
-  EXPECT_EQ(deferred, 0U);
+  EXPECT_EQ(xlsx.downgraded_formula_count, 0U);
+  EXPECT_EQ(xlsx.deferred_feature_count, 0U);
+  EXPECT_EQ(xlsx.dropped_part_count, 0U);
+  EXPECT_EQ(xlsx.dropped_relationship_count, 0U);
+  EXPECT_EQ(xlsx.renumbered_part_count, 0U);
 
   BufferGuard xlsb_buf;
-  downgraded = 0U;
-  deferred = 0U;
-  ASSERT_EQ(fm_workbook_save_ex_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len,
-                                                 &downgraded, &deferred),
+  fm_save_diagnostics_t xlsb{};
+  ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len, &xlsb),
             0);
-  EXPECT_EQ(downgraded, 1U);
+  EXPECT_EQ(xlsb.downgraded_formula_count, 1U);
   // Validation and auto-filter state remain deferred. Hyperlinks emit as
   // BrtHLink records and are therefore not counted here.
-  EXPECT_EQ(deferred, 2U);
-
-  BufferGuard legacy_buf;
-  size_t legacy_downgraded = 0U;
-  ASSERT_EQ(fm_workbook_save_xlsb_with_result(wb.handle, &legacy_buf.data, &legacy_buf.len, &legacy_downgraded), 0);
-  EXPECT_EQ(legacy_downgraded, downgraded);
-  EXPECT_GT(legacy_buf.len, 0U);
+  EXPECT_EQ(xlsb.deferred_feature_count, 2U);
+  // `renumbered_part_count` has no XLSB source: the binary writer never
+  // reassigns a part id.
+  EXPECT_EQ(xlsb.renumbered_part_count, 0U);
 }
 
-TEST(FormulonCApi, XlsbReadDiagnosticsAreZeroForCleanRoundTrip) {
+TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi) {
+  // The OOXML writer's own counters are unit-tested at the io layer; this
+  // pins that they survive the projection onto `fm_save_diagnostics_t`
+  // instead of arriving as zero.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+
+  // A preserved copy of a part the writer always generates loses the
+  // collision and is dropped; a relationship whose target part is absent is
+  // dropped rather than left dangling.
+  formulon::io::PassthroughPart stale;
+  stale.path = "xl/styles.xml";
+  stale.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
+  stale.bytes = {'<', '/', '>'};
+  wb.handle->workbook().set_passthrough_parts({std::move(stale)});
+  formulon::io::UnknownRelationship orphan;
+  orphan.id = "rId9";
+  orphan.type = "http://schemas.example.com/orphan";
+  orphan.target = "xl/missing.xml";
+  wb.handle->workbook().set_unknown_workbook_rels({std::move(orphan)});
+
+  BufferGuard buf;
+  fm_save_diagnostics_t d{99U, 99U, 99U, 99U, 99U};
+  ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len, &d), 0);
+  EXPECT_GT(buf.len, 0U);
+  EXPECT_EQ(d.dropped_part_count, 1U);
+  EXPECT_EQ(d.dropped_relationship_count, 1U);
+  EXPECT_EQ(d.downgraded_formula_count, 0U);
+  EXPECT_EQ(d.deferred_feature_count, 0U);
+  EXPECT_EQ(d.renumbered_part_count, 0U);
+}
+
+TEST(FormulonCApi, ReadDiagnosticsAreZeroForCleanRoundTrip) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_number(wb.handle, 0, 0, 0, 42.0), 0);
 
-  BufferGuard bytes;
-  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
-  WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    BufferGuard bytes;
+    ASSERT_EQ(fm_workbook_save_as(wb.handle, format, &bytes.data, &bytes.len), 0);
+    WorkbookGuard loaded;
+    ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
 
-  size_t formulas = 99U;
-  size_t names = 99U;
-  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics(loaded.handle, &formulas, &names), 0);
-  EXPECT_EQ(formulas, 0U);
-  EXPECT_EQ(names, 0U);
-
-  size_t dropped = 99U;
-  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics_ex(loaded.handle, &formulas, &names, &dropped), 0);
-  EXPECT_EQ(formulas, 0U);
-  EXPECT_EQ(names, 0U);
-  EXPECT_EQ(dropped, 0U);
+    fm_read_diagnostics_t d{99U, 99U, 99U, 99U, 99U};
+    ASSERT_EQ(fm_workbook_read_diagnostics(loaded.handle, &d), 0);
+    EXPECT_EQ(d.undecoded_formula_count, 0U) << "format=" << format;
+    EXPECT_EQ(d.undecoded_defined_name_count, 0U) << "format=" << format;
+    EXPECT_EQ(d.undecoded_part_count, 0U) << "format=" << format;
+    EXPECT_EQ(d.skipped_feature_count, 0U) << "format=" << format;
+    EXPECT_EQ(d.unknown_content_type_count, 0U) << "format=" << format;
+  }
 }
 
-TEST(FormulonCApi, XlsbReadDiagnosticsExReportsDroppedPartAndInitializesOutputsOnFailure) {
+TEST(FormulonCApi, DiagnosticsEntryPointsInitializeOutputsOnFailure) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  size_t formulas = 99U;
-  size_t names = 99U;
-  size_t dropped = 99U;
-  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics_ex(wb.handle, &formulas, &names, &dropped), 0);
-  EXPECT_EQ(formulas, 0U);
-  EXPECT_EQ(names, 0U);
-  EXPECT_EQ(dropped, 0U);
+  // A workbook that was never loaded reports every counter as zero rather
+  // than leaving the caller's struct untouched.
+  fm_read_diagnostics_t read{99U, 99U, 99U, 99U, 99U};
+  ASSERT_EQ(fm_workbook_read_diagnostics(wb.handle, &read), 0);
+  EXPECT_EQ(read.undecoded_formula_count, 0U);
+  EXPECT_EQ(read.skipped_feature_count, 0U);
 
   uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   size_t len = 99U;
-  size_t downgraded = 99U;
-  size_t deferred = 99U;
-  EXPECT_NE(
-      fm_workbook_save_ex_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_UNKNOWN, &bytes, &len, &downgraded, &deferred),
-      0);
+  fm_save_diagnostics_t save{99U, 99U, 99U, 99U, 99U};
+  EXPECT_NE(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_UNKNOWN, &bytes, &len, &save), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
-  EXPECT_EQ(downgraded, 0U);
-  EXPECT_EQ(deferred, 0U);
+  EXPECT_EQ(save.downgraded_formula_count, 0U);
+  EXPECT_EQ(save.deferred_feature_count, 0U);
+  EXPECT_EQ(save.dropped_part_count, 0U);
+  EXPECT_EQ(save.dropped_relationship_count, 0U);
+  EXPECT_EQ(save.renumbered_part_count, 0U);
 
-  formulas = 99U;
-  names = 99U;
-  dropped = 99U;
-  EXPECT_NE(fm_workbook_xlsb_read_diagnostics_ex(nullptr, &formulas, &names, &dropped), 0);
-  EXPECT_EQ(formulas, 0U);
-  EXPECT_EQ(names, 0U);
-  EXPECT_EQ(dropped, 0U);
+  read = fm_read_diagnostics_t{99U, 99U, 99U, 99U, 99U};
+  EXPECT_NE(fm_workbook_read_diagnostics(nullptr, &read), 0);
+  EXPECT_EQ(read.undecoded_formula_count, 0U);
+  EXPECT_EQ(read.undecoded_defined_name_count, 0U);
+  EXPECT_EQ(read.undecoded_part_count, 0U);
+  EXPECT_EQ(read.skipped_feature_count, 0U);
+  EXPECT_EQ(read.unknown_content_type_count, 0U);
 }
 
-TEST(FormulonCApi, XlsbReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) {
+TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   BufferGuard bytes;
-  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
+  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &bytes.data, &bytes.len), 0);
   const std::vector<std::uint8_t> fixture =
       AppendEmptyZipEntry(std::vector<std::uint8_t>(bytes.data, bytes.data + bytes.len), "xl/dropped.bin");
   ASSERT_FALSE(fixture.empty());
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(fixture.data(), fixture.size(), &loaded.handle), 0);
-  size_t formulas = 0;
-  size_t names = 0;
-  size_t dropped = 0;
-  ASSERT_EQ(fm_workbook_xlsb_read_diagnostics_ex(loaded.handle, &formulas, &names, &dropped), 0);
-  EXPECT_EQ(formulas, 0U);
-  EXPECT_EQ(names, 0U);
+  fm_read_diagnostics_t d{};
+  ASSERT_EQ(fm_workbook_read_diagnostics(loaded.handle, &d), 0);
+  EXPECT_EQ(d.undecoded_formula_count, 0U);
+  EXPECT_EQ(d.undecoded_defined_name_count, 0U);
   // Unknown package parts are retained as passthrough data, so loading the
-  // fixture is lossless and the dropped-part diagnostic remains zero.
-  EXPECT_EQ(dropped, 0U);
+  // fixture is lossless and the undecoded-part diagnostic remains zero.
+  EXPECT_EQ(d.undecoded_part_count, 0U);
 }
 
-TEST(FormulonCApi, DiagnosticFailuresNameTheInvokedLegacyOrExtendedSymbol) {
-  size_t formulas = 77U;
-  size_t names = 77U;
-  EXPECT_NE(fm_workbook_xlsb_read_diagnostics(nullptr, &formulas, &names), 0);
-  EXPECT_EQ(formulas, 0U);
-  EXPECT_EQ(names, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_xlsb_read_diagnostics: NULL argument");
-
-  formulas = 77U;
-  names = 77U;
-  size_t dropped = 77U;
-  EXPECT_NE(fm_workbook_xlsb_read_diagnostics_ex(nullptr, &formulas, &names, &dropped), 0);
-  EXPECT_EQ(formulas, 0U);
-  EXPECT_EQ(names, 0U);
-  EXPECT_EQ(dropped, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_xlsb_read_diagnostics_ex: NULL argument");
+TEST(FormulonCApi, DiagnosticFailuresNameTheInvokedSymbol) {
+  fm_read_diagnostics_t read{77U, 77U, 77U, 77U, 77U};
+  EXPECT_NE(fm_workbook_read_diagnostics(nullptr, &read), 0);
+  EXPECT_EQ(read.undecoded_formula_count, 0U);
+  EXPECT_EQ(read.skipped_feature_count, 0U);
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_read_diagnostics: NULL argument");
 
   uint8_t* bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   size_t len = 77U;
-  EXPECT_NE(fm_workbook_save_ex(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
+  EXPECT_NE(fm_workbook_save_as(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_ex: NULL argument");
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_as: NULL argument");
 
-  size_t downgraded = 77U;
-  EXPECT_NE(fm_workbook_save_xlsb_with_result(nullptr, &bytes, &len, &downgraded), 0);
-  EXPECT_EQ(bytes, nullptr);
-  EXPECT_EQ(len, 0U);
-  EXPECT_EQ(downgraded, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_xlsb_with_result: NULL argument");
-
-  size_t deferred = 77U;
+  fm_save_diagnostics_t save{77U, 77U, 77U, 77U, 77U};
   bytes = reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(1));
   len = 77U;
-  EXPECT_NE(
-      fm_workbook_save_ex_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len, &downgraded, &deferred), 0);
+  EXPECT_NE(fm_workbook_save_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len, &save), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
-  EXPECT_EQ(downgraded, 0U);
-  EXPECT_EQ(deferred, 0U);
-  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_ex_with_diagnostics: NULL argument");
+  EXPECT_EQ(save.downgraded_formula_count, 0U);
+  EXPECT_EQ(save.renumbered_part_count, 0U);
+  EXPECT_STREQ(fm_last_error_message(), "fm_workbook_save_with_diagnostics: NULL argument");
 }
 
 TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
@@ -911,28 +924,21 @@ TEST(FormulonCApi, EverySaveEntryPointZeroesOutParamsOnFailure) {
 
   bytes = poison;
   len = 77U;
-  EXPECT_NE(fm_workbook_save_ex(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
+  EXPECT_NE(fm_workbook_save_as(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
 
   bytes = poison;
   len = 77U;
-  size_t downgraded = 77U;
-  EXPECT_NE(fm_workbook_save_xlsb_with_result(nullptr, &bytes, &len, &downgraded), 0);
+  fm_save_diagnostics_t save{77U, 77U, 77U, 77U, 77U};
+  EXPECT_NE(fm_workbook_save_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len, &save), 0);
   EXPECT_EQ(bytes, nullptr);
   EXPECT_EQ(len, 0U);
-  EXPECT_EQ(downgraded, 0U);
-
-  bytes = poison;
-  len = 77U;
-  downgraded = 77U;
-  size_t deferred = 77U;
-  EXPECT_NE(
-      fm_workbook_save_ex_with_diagnostics(nullptr, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len, &downgraded, &deferred), 0);
-  EXPECT_EQ(bytes, nullptr);
-  EXPECT_EQ(len, 0U);
-  EXPECT_EQ(downgraded, 0U);
-  EXPECT_EQ(deferred, 0U);
+  EXPECT_EQ(save.downgraded_formula_count, 0U);
+  EXPECT_EQ(save.deferred_feature_count, 0U);
+  EXPECT_EQ(save.dropped_part_count, 0U);
+  EXPECT_EQ(save.dropped_relationship_count, 0U);
+  EXPECT_EQ(save.renumbered_part_count, 0U);
 
   // A NULL out-parameter is rejected without being dereferenced, on the base
   // entry point as well as the extended ones.
@@ -957,7 +963,7 @@ TEST(FormulonCApi, BaseSaveProducesTheSameBytesAsTheXlsxFormatSelector) {
   BufferGuard base;
   ASSERT_EQ(fm_workbook_save(wb.handle, &base.data, &base.len), 0);
   BufferGuard selected;
-  ASSERT_EQ(fm_workbook_save_ex(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &selected.data, &selected.len), 0);
+  ASSERT_EQ(fm_workbook_save_as(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &selected.data, &selected.len), 0);
 
   ASSERT_EQ(base.len, selected.len);
   ASSERT_GT(base.len, 0U);
@@ -1025,18 +1031,20 @@ TEST(FormulonCApi, SaveExRejectsUnknownFormat) {
                                           std::numeric_limits<std::int32_t>::max()};
   for (const std::int32_t raw : invalid_formats) {
     BufferGuard buf;
-    EXPECT_EQ(fm_workbook_save_ex(wb.handle, raw, &buf.data, &buf.len),
+    EXPECT_EQ(fm_workbook_save_as(wb.handle, raw, &buf.data, &buf.len),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
     EXPECT_EQ(buf.data, nullptr);
     EXPECT_EQ(buf.len, 0U);
-    std::size_t downgraded = 99;
-    std::size_t deferred = 99;
-    EXPECT_EQ(fm_workbook_save_ex_with_diagnostics(wb.handle, raw, &buf.data, &buf.len, &downgraded, &deferred),
+    fm_save_diagnostics_t save{99U, 99U, 99U, 99U, 99U};
+    EXPECT_EQ(fm_workbook_save_with_diagnostics(wb.handle, raw, &buf.data, &buf.len, &save),
               static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
     EXPECT_EQ(buf.data, nullptr);
     EXPECT_EQ(buf.len, 0U);
-    EXPECT_EQ(downgraded, 0U);
-    EXPECT_EQ(deferred, 0U);
+    EXPECT_EQ(save.downgraded_formula_count, 0U);
+    EXPECT_EQ(save.deferred_feature_count, 0U);
+    EXPECT_EQ(save.dropped_part_count, 0U);
+    EXPECT_EQ(save.dropped_relationship_count, 0U);
+    EXPECT_EQ(save.renumbered_part_count, 0U);
   }
 }
 

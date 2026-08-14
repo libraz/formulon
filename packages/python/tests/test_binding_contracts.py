@@ -263,7 +263,7 @@ class StructuredLogTests(unittest.TestCase):
                     # warn record.
                     wb.set_formula(0, 0, 0, "=@A1:A10")
                     wb.recalc()
-                    wb.save_ex(formulon.WorkbookFormat.XLSB)
+                    wb.save_as(formulon.WorkbookFormat.XLSB)
             finally:
                 os.dup2(saved, 2)
                 os.close(saved)

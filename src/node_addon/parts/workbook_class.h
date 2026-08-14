@@ -65,9 +65,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetIterative(const Napi::CallbackInfo& info);
   Napi::Value SetIterativeProgress(const Napi::CallbackInfo& info);
   Napi::Value Save(const Napi::CallbackInfo& info);
-  Napi::Value SaveEx(const Napi::CallbackInfo& info);
-  Napi::Value SaveExWithDiagnostics(const Napi::CallbackInfo& info);
-  Napi::Value XlsbReadDiagnostics(const Napi::CallbackInfo& info);
+  Napi::Value SaveAs(const Napi::CallbackInfo& info);
+  Napi::Value SaveWithDiagnostics(const Napi::CallbackInfo& info);
+  Napi::Value ReadDiagnostics(const Napi::CallbackInfo& info);
 
   // Workbook-level calc policy / behaviour profile.
   Napi::Value CalcMode(const Napi::CallbackInfo& info);

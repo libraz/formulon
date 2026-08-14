@@ -24,6 +24,8 @@
 #include "io/a1_ref.h"
 #include "io/format_detect.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
+#include "io/package_diagnostics.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "io/xml_escape.h"
@@ -208,33 +210,22 @@ fm_status_t set_api_error(const formulon::Error& error, const char* api_name) {
   return set_last_error(named);
 }
 
-fm_status_t xlsb_read_diagnostics_impl(const fm_workbook_t* wb, size_t* out_undecoded_formula_count,
-                                       size_t* out_undecoded_defined_name_count, size_t* out_dropped_part_count,
-                                       const char* api_name) {
-  clear_last_error();
-  if (out_undecoded_formula_count != nullptr) {
-    *out_undecoded_formula_count = 0;
-  }
-  if (out_undecoded_defined_name_count != nullptr) {
-    *out_undecoded_defined_name_count = 0;
-  }
-  if (out_dropped_part_count != nullptr) {
-    *out_dropped_part_count = 0;
-  }
-  if (wb == nullptr || out_undecoded_formula_count == nullptr || out_undecoded_defined_name_count == nullptr ||
-      out_dropped_part_count == nullptr) {
-    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             (std::string(api_name) + ": NULL argument").c_str());
-  }
-  *out_undecoded_formula_count = wb->xlsb_undecoded_formula_count;
-  *out_undecoded_defined_name_count = wb->xlsb_undecoded_defined_name_count;
-  *out_dropped_part_count = wb->xlsb_dropped_part_count;
-  return 0;
+// Projects the io layer's `WriteDiagnostics` onto the C ABI struct. Both
+// carry the same five `uint32_t` counters under the same names; the copy is
+// explicit so a field added on one side fails to compile rather than
+// silently reading zero on the other.
+fm_save_diagnostics_t to_c_save_diagnostics(const formulon::io::WriteDiagnostics& src) {
+  fm_save_diagnostics_t out{};
+  out.downgraded_formula_count = src.downgraded_formula_count;
+  out.deferred_feature_count = src.deferred_feature_count;
+  out.dropped_part_count = src.dropped_part_count;
+  out.dropped_relationship_count = src.dropped_relationship_count;
+  out.renumbered_part_count = src.renumbered_part_count;
+  return out;
 }
 
-fm_status_t save_ex_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
-                                          size_t* out_len, size_t* out_downgraded_formula_count,
-                                          size_t* out_deferred_feature_count, const char* api_name) {
+fm_status_t save_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
+                                       size_t* out_len, fm_save_diagnostics_t* out_diagnostics, const char* api_name) {
   clear_last_error();
   if (out_bytes != nullptr) {
     *out_bytes = nullptr;
@@ -242,28 +233,26 @@ fm_status_t save_ex_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t 
   if (out_len != nullptr) {
     *out_len = 0;
   }
-  if (out_downgraded_formula_count != nullptr) {
-    *out_downgraded_formula_count = 0;
-  }
-  if (out_deferred_feature_count != nullptr) {
-    *out_deferred_feature_count = 0;
+  if (out_diagnostics != nullptr) {
+    *out_diagnostics = fm_save_diagnostics_t{};
   }
   if (wb == nullptr || !wb->wb.has_value() || out_bytes == nullptr || out_len == nullptr ||
-      out_downgraded_formula_count == nullptr || out_deferred_feature_count == nullptr) {
+      out_diagnostics == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
                              (std::string(api_name) + ": NULL argument").c_str());
   }
 
   std::vector<std::uint8_t> bytes;
-  std::uint32_t downgraded_formula_count = 0;
-  std::uint32_t deferred_feature_count = 0;
+  fm_save_diagnostics_t diagnostics{};
   switch (format) {
     case FM_WORKBOOK_FORMAT_XLSX: {
-      auto result = wb->workbook().save_ex(formulon::io::WorkbookFormat::Ooxml);
+      auto result = formulon::io::write_ooxml_with_result(wb->workbook());
       if (!result) {
         return set_api_error(result.error(), api_name);
       }
-      bytes = std::move(result.value());
+      formulon::io::OoxmlWriteResult write_result = std::move(result.value());
+      bytes = std::move(write_result.bytes);
+      diagnostics = to_c_save_diagnostics(write_result.diagnostics);
       break;
     }
     case FM_WORKBOOK_FORMAT_XLSB: {
@@ -273,8 +262,7 @@ fm_status_t save_ex_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t 
       }
       formulon::io::xlsb::XlsbWriteResult write_result = std::move(result.value());
       bytes = std::move(write_result.bytes);
-      downgraded_formula_count = write_result.downgraded_formula_count;
-      deferred_feature_count = write_result.deferred_feature_count;
+      diagnostics = to_c_save_diagnostics(write_result.diagnostics);
       break;
     }
     case FM_WORKBOOK_FORMAT_UNKNOWN:
@@ -290,8 +278,7 @@ fm_status_t save_ex_with_diagnostics_impl(const fm_workbook_t* wb, std::int32_t 
   }
   *out_bytes = buffer;
   *out_len = bytes.size();
-  *out_downgraded_formula_count = downgraded_formula_count;
-  *out_deferred_feature_count = deferred_feature_count;
+  *out_diagnostics = diagnostics;
   return 0;
 }
 
@@ -348,9 +335,9 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
       return set_last_error(result.error());
     }
     formulon::io::xlsb::XlsbReadResult read_result = std::move(result.value());
-    handle->xlsb_undecoded_formula_count = read_result.undecoded_formula_count;
-    handle->xlsb_undecoded_defined_name_count = read_result.undecoded_defined_name_count;
-    handle->xlsb_dropped_part_count = read_result.dropped_part_count;
+    handle->read_diagnostics.undecoded_formula_count = read_result.undecoded_formula_count;
+    handle->read_diagnostics.undecoded_defined_name_count = read_result.undecoded_defined_name_count;
+    handle->read_diagnostics.undecoded_part_count = read_result.dropped_part_count;
     handle->wb.emplace(std::move(read_result.workbook));
   } else {
     auto result = formulon::io::read_ooxml(span);
@@ -361,25 +348,25 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
     // Text-cell `string_view` as well as the passthrough payload, so
     // moving it out takes everything the handle needs; the read result's
     // remaining audit counter is discarded.
+    handle->read_diagnostics.skipped_feature_count = result.value().diagnostics.skipped_feature_count;
+    handle->read_diagnostics.unknown_content_type_count = result.value().diagnostics.unknown_content_type_count;
     handle->wb.emplace(std::move(result.value().workbook));
   }
   *out = handle.release();
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_xlsb_read_diagnostics_ex(const fm_workbook_t* wb,
-                                                            size_t* out_undecoded_formula_count,
-                                                            size_t* out_undecoded_defined_name_count,
-                                                            size_t* out_dropped_part_count) {
-  return xlsb_read_diagnostics_impl(wb, out_undecoded_formula_count, out_undecoded_defined_name_count,
-                                    out_dropped_part_count, "fm_workbook_xlsb_read_diagnostics_ex");
-}
-
-extern "C" fm_status_t fm_workbook_xlsb_read_diagnostics(const fm_workbook_t* wb, size_t* out_undecoded_formula_count,
-                                                         size_t* out_undecoded_defined_name_count) {
-  size_t dropped_part_count = 0;
-  return xlsb_read_diagnostics_impl(wb, out_undecoded_formula_count, out_undecoded_defined_name_count,
-                                    &dropped_part_count, "fm_workbook_xlsb_read_diagnostics");
+extern "C" fm_status_t fm_workbook_read_diagnostics(const fm_workbook_t* wb, fm_read_diagnostics_t* out_diagnostics) {
+  clear_last_error();
+  if (out_diagnostics != nullptr) {
+    *out_diagnostics = fm_read_diagnostics_t{};
+  }
+  if (wb == nullptr || out_diagnostics == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "fm_workbook_read_diagnostics: NULL argument");
+  }
+  *out_diagnostics = wb->read_diagnostics;
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_memory_usage(const fm_workbook_t* wb, size_t* out_bytes) {
@@ -404,35 +391,23 @@ extern "C" void fm_workbook_destroy(fm_workbook_t* wb) {
 extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len) {
   // Delegates so the whole save family shares one failure-path contract:
   // every out-param is zeroed before validation and stays zeroed on every
-  // non-`kOk` return. `Workbook::save()` is itself `save_ex(Ooxml)`, so the
+  // non-`kOk` return. `Workbook::save()` is itself `save_as(Ooxml)`, so the
   // produced bytes are unchanged.
-  size_t downgraded_formula_count = 0;
-  size_t deferred_feature_count = 0;
-  return save_ex_with_diagnostics_impl(wb, FM_WORKBOOK_FORMAT_XLSX, out_bytes, out_len, &downgraded_formula_count,
-                                       &deferred_feature_count, "fm_workbook_save");
+  fm_save_diagnostics_t diagnostics{};
+  return save_with_diagnostics_impl(wb, FM_WORKBOOK_FORMAT_XLSX, out_bytes, out_len, &diagnostics, "fm_workbook_save");
 }
 
-extern "C" fm_status_t fm_workbook_save_ex_with_diagnostics(const fm_workbook_t* wb, std::int32_t format,
-                                                            uint8_t** out_bytes, size_t* out_len,
-                                                            size_t* out_downgraded_formula_count,
-                                                            size_t* out_deferred_feature_count) {
-  return save_ex_with_diagnostics_impl(wb, format, out_bytes, out_len, out_downgraded_formula_count,
-                                       out_deferred_feature_count, "fm_workbook_save_ex_with_diagnostics");
+extern "C" fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb, std::int32_t format,
+                                                         uint8_t** out_bytes, size_t* out_len,
+                                                         fm_save_diagnostics_t* out_diagnostics) {
+  return save_with_diagnostics_impl(wb, format, out_bytes, out_len, out_diagnostics,
+                                    "fm_workbook_save_with_diagnostics");
 }
 
-extern "C" fm_status_t fm_workbook_save_ex(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
+extern "C" fm_status_t fm_workbook_save_as(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
                                            size_t* out_len) {
-  size_t downgraded_formula_count = 0;
-  size_t deferred_feature_count = 0;
-  return save_ex_with_diagnostics_impl(wb, format, out_bytes, out_len, &downgraded_formula_count,
-                                       &deferred_feature_count, "fm_workbook_save_ex");
-}
-
-extern "C" fm_status_t fm_workbook_save_xlsb_with_result(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len,
-                                                         size_t* out_downgraded_formula_count) {
-  size_t deferred_feature_count = 0;
-  return save_ex_with_diagnostics_impl(wb, FM_WORKBOOK_FORMAT_XLSB, out_bytes, out_len, out_downgraded_formula_count,
-                                       &deferred_feature_count, "fm_workbook_save_xlsb_with_result");
+  fm_save_diagnostics_t diagnostics{};
+  return save_with_diagnostics_impl(wb, format, out_bytes, out_len, &diagnostics, "fm_workbook_save_as");
 }
 
 extern "C" void fm_buffer_free(uint8_t* bytes) {
@@ -610,21 +585,16 @@ extern "C" fm_status_t fm_workbook_delete_cols(fm_workbook_t* wb, uint32_t sheet
 // codegen (see `src/c_api/generated/workbook_counts.cpp`).
 
 extern "C" fm_status_t fm_workbook_defined_name_at(const fm_workbook_t* wb, size_t idx, const char** out_name,
-                                                   const char** out_formula) {
-  return fm_workbook_defined_name_at_ex(wb, idx, out_name, out_formula, nullptr);
-}
-
-extern "C" fm_status_t fm_workbook_defined_name_at_ex(const fm_workbook_t* wb, size_t idx, const char** out_name,
-                                                      const char** out_formula, int32_t* out_local_sheet_id) {
+                                                   const char** out_formula, int32_t* out_local_sheet_id) {
   clear_last_error();
   if (wb == nullptr || out_name == nullptr || out_formula == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
-                             "fm_workbook_defined_name_at_ex: NULL argument");
+                             "fm_workbook_defined_name_at: NULL argument");
   }
   const auto& names = wb->workbook().defined_names();
   if (idx >= names.size()) {
     return set_binding_error(formulon::FormulonErrorCode::kInvalidArgument,
-                             "fm_workbook_defined_name_at_ex: idx out of range",
+                             "fm_workbook_defined_name_at: idx out of range",
                              "idx=" + std::to_string(idx) + " count=" + std::to_string(names.size()));
   }
   *out_name = names[idx].name.c_str();

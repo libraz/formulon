@@ -50,6 +50,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/ooxml_unknown_kind_test.cpp
   unit/io/ooxml_writer_cell_test.cpp
   unit/io/ooxml_xlsm_test.cpp
+  unit/io/package_diagnostics_test.cpp
   unit/io/pivot_cache_reader_test.cpp
   unit/io/pivot_cache_writer_test.cpp
   unit/io/pivot_table_reader_test.cpp
@@ -152,6 +153,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/eval_spill_dispatch_test.cpp
   unit/eval/eval_context_spill_read_test.cpp
   unit/eval/spill_committer_test.cpp
+  unit/eval/whole_axis_spill_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/builtins_subtotal_test.cpp
   unit/eval/builtins_aggregate_fn_test.cpp
@@ -382,6 +384,17 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME binding_drift_style_record_fields
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py style-record-fields
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # Byte-compares the files `stage.mjs` copies verbatim into the native
+  # package against their sources. Unlike the sibling checks this one has an
+  # input that need not exist: `dist/` is a build output, so in an unstaged
+  # tree the check reports itself as skipped rather than passing silently.
+  # That makes it a local-loop guard only -- a job that must not publish a
+  # one-sided edit has to run it after staging, where the skip cannot apply.
+  add_test(
+    NAME binding_drift_staged_dist
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py staged-dist
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   # Structural invariants enforced by "exactly one implementation exists":

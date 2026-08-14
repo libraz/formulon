@@ -16,7 +16,8 @@
 // sheet that came from an `.xlsb` survive as `Sheet::xlsb_tail()`, whose
 // framed bytes are appended around the merged-cell and hyperlink blocks; a
 // sheet from any other source carries no retained tail and the writer reports
-// unsupported features through `XlsbWriteResult::deferred_feature_count`.
+// unsupported features through
+// `XlsbWriteResult::diagnostics.deferred_feature_count`.
 //
 // Design references:
 //   * [MS-XLSB] §2.4.x (BrtBeginSheet / BrtRowHdr / cell records)

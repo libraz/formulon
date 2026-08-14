@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "io/package_diagnostics.h"
 #include "io/passthrough_part.h"
 #include "io/zip_reader.h"
 #include "utils/error.h"
@@ -78,9 +79,16 @@ namespace io {
 /// package — `xl/media/*` above all — so a second copy doubles the
 /// resident cost of opening a workbook that embeds large images, and
 /// the writer only ever reads the workbook's copy anyway.
+///
+/// `diagnostics` records what the read had to drop or fall back on:
+/// presentation-overlay entries with an unusable reference, and a
+/// workbook content type the reader did not recognise. Both are also
+/// emitted as structured-log warnings, but that log is off by default in
+/// shipped builds, so these counters are the caller-visible signal.
 struct OoxmlReadResult {
   Workbook workbook;
   std::uint32_t pending_sst_count = 0;
+  ReadDiagnostics diagnostics;
 };
 
 /// Reads an OOXML (.xlsx) package from in-memory bytes.

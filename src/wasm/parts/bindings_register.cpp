@@ -63,13 +63,18 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("status", &JsSaveDiagnosticsResult::status)
       .field("bytes", &JsSaveDiagnosticsResult::bytes)
       .field("downgradedFormulaCount", &JsSaveDiagnosticsResult::downgradedFormulaCount)
-      .field("deferredFeatureCount", &JsSaveDiagnosticsResult::deferredFeatureCount);
+      .field("deferredFeatureCount", &JsSaveDiagnosticsResult::deferredFeatureCount)
+      .field("droppedPartCount", &JsSaveDiagnosticsResult::droppedPartCount)
+      .field("droppedRelationshipCount", &JsSaveDiagnosticsResult::droppedRelationshipCount)
+      .field("renumberedPartCount", &JsSaveDiagnosticsResult::renumberedPartCount);
 
-  value_object<JsXlsbReadDiagnosticsResult>("XlsbReadDiagnosticsResult")
-      .field("status", &JsXlsbReadDiagnosticsResult::status)
-      .field("undecodedFormulaCount", &JsXlsbReadDiagnosticsResult::undecodedFormulaCount)
-      .field("undecodedDefinedNameCount", &JsXlsbReadDiagnosticsResult::undecodedDefinedNameCount)
-      .field("droppedPartCount", &JsXlsbReadDiagnosticsResult::droppedPartCount);
+  value_object<JsReadDiagnosticsResult>("ReadDiagnosticsResult")
+      .field("status", &JsReadDiagnosticsResult::status)
+      .field("undecodedFormulaCount", &JsReadDiagnosticsResult::undecodedFormulaCount)
+      .field("undecodedDefinedNameCount", &JsReadDiagnosticsResult::undecodedDefinedNameCount)
+      .field("undecodedPartCount", &JsReadDiagnosticsResult::undecodedPartCount)
+      .field("skippedFeatureCount", &JsReadDiagnosticsResult::skippedFeatureCount)
+      .field("unknownContentTypeCount", &JsReadDiagnosticsResult::unknownContentTypeCount);
 
   value_object<JsStringResult>("StringResult")
       .field("status", &JsStringResult::status)
@@ -307,9 +312,9 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("removeValidationAt", &JsWorkbook::removeValidationAt)
       .function("renameSheet", &JsWorkbook::renameSheet)
       .function("save", &JsWorkbook::save)
-      .function("saveEx", &JsWorkbook::saveEx)
-      .function("saveExWithDiagnostics", &JsWorkbook::saveExWithDiagnostics)
-      .function("xlsbReadDiagnostics", &JsWorkbook::xlsbReadDiagnostics)
+      .function("saveAs", &JsWorkbook::saveAs)
+      .function("saveWithDiagnostics", &JsWorkbook::saveWithDiagnostics)
+      .function("readDiagnostics", &JsWorkbook::readDiagnostics)
       .function("setBlank", &JsWorkbook::setBlank)
       .function("setBool", &JsWorkbook::setBool)
       .function("setCalcMode", &JsWorkbook::setCalcMode)

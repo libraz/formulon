@@ -9,15 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Stable XLSB read/write diagnostics across the C API, WASM, native Node,
-  Python, and CLI surfaces, including downgraded formulas, omitted features,
-  undecoded formulas/names, and dropped package parts.
-  `fm_workbook_save_ex_with_diagnostics` reports the formula cells the XLSB
-  writer downgraded to cached literals and the modelled features it omitted;
-  `fm_workbook_xlsb_read_diagnostics_ex` adds the dropped package-part
-  counter. They reach the bindings as `saveExWithDiagnostics` /
-  `xlsbReadDiagnostics` and `save_ex_with_diagnostics()` /
-  `xlsb_read_diagnostics()`.
+- `fm_workbook_pivot_field_add_item_at(wb, sheet, pivot, field, cache_index,
+  visible)` appends a manual-filter item addressed by its position in the
+  bound cache field's shared items — the same index space as OOXML
+  `<item x="N">` — and reaches Python as `pivot_field_add_item_at`. This is
+  the only way to construct the blank item: it has no label of its own, so
+  the filter engine matches it by what it binds to, and the name-addressed
+  `fm_workbook_pivot_field_add_item` leaves that binding at index 0 whatever
+  the caller passes. The file-load path was already index-addressed; only
+  hand-built pivots were affected. Purely additive.
+- Container-agnostic save/load loss counters across the C API, WASM, native
+  Node, Python, and CLI surfaces. `fm_workbook_save_with_diagnostics` fills
+  an `fm_save_diagnostics_t` and `fm_workbook_read_diagnostics` fills an
+  `fm_read_diagnostics_t`; both structs are 20 bytes with identical layout
+  on native and wasm32. A field means the same thing whichever container
+  was written or read, so a caller never has to know which writer ran. On
+  top of the previous XLSB-only counters this adds the OOXML reader's
+  skipped presentation overlays and unrecognised workbook content type, the
+  OOXML writer's renumbered table parts, and — for both writers — dropped
+  passthrough parts and dropped relationships, including the XLSB
+  sheet-scope relationships that have no OOXML counterpart. They reach the
+  bindings as `saveWithDiagnostics` / `readDiagnostics` and
+  `save_with_diagnostics()` / `read_diagnostics()`. The CLI reports the
+  OOXML load counters on their own `warning: OOXML read diagnostics` line
+  and labels the save line by the container actually written. Coverage is
+  deliberately partial: these count part-, relationship- and feature-level
+  loss in the package readers and writers, so an all-zero result means none
+  of the documented losses occurred rather than that nothing was logged.
 - Table authoring: `fm_workbook_table_create` / `_update` / `_remove` and
   their `createTable` / `updateTable` / `removeTable` counterparts, which
   reject a column list whose count disagrees with the width of `ref` because
@@ -31,13 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`getSheetAutoFilterXml` / `setSheetAutoFilterXml`) hand over the whole
   `<autoFilter>` element verbatim, so filter criteria, sort state and filter
   extensions can be read, modified and written back without loss.
-- Alignment-complete cell formats. `fm_cell_xf_ex` carries `justifyLastLine`
-  and enables named-style authoring through `fm_styles_add_cell_style_xf_ex`
-  and `fm_styles_set_cell_style`; `fm_cell_xf_ex2` adds `textRotation`,
-  `indent`, `relativeIndent`, `shrinkToFit`, `readingOrder` and the alignment
-  presence flags. Both embed the existing `fm_cell_xf` as `base`, so the
-  established struct layouts are untouched, and the extended getters and
-  adders reach WASM, the native Node addon and Python.
+- Alignment-complete cell formats. `fm_cell_xf` now carries
+  `justifyLastLine`, `textRotation`, `indent`, `relativeIndent`,
+  `shrinkToFit`, `readingOrder` and a presence flag for each alignment
+  attribute, so an explicit zero / false is distinguishable from an omitted
+  one. Named-style authoring is reachable through
+  `fm_styles_add_cell_style_xf` and `fm_styles_set_cell_style`. The complete
+  record reaches WASM, the native Node addon and Python. See **Changed** for
+  the struct layout break this implies.
 - Multi-cell hyperlinks: `fm_hyperlink` carries the inclusive rectangle end
   as `last_row` / `last_col`, `fm_sheet_add_hyperlink` accepts that
   rectangle, and the bindings expose it as `addHyperlinkRange` /
@@ -64,10 +83,114 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The C ABI carries one entry point per operation instead of a base name plus
+  an `_ex` / `_ex2` successor. The surviving rung is the one that represents
+  the whole model; the narrower one is gone. This is a coordinated,
+  source-and-binary breaking change against v0.9.7 — see **Removed** below
+  for the per-symbol mapping and the two struct layout changes.
+  - `fm_workbook_save_ex` is now `fm_workbook_save_as`, and reaches the
+    bindings as `saveAs(format)` (WASM and native Node, replacing `saveEx`)
+    and `save_as(fmt)` (Python, replacing `save_ex`). `fm_workbook_save`
+    stays as the `.xlsx` default every binding's `save()` calls: it is the
+    common case with no argument to get wrong, not a compatibility shim.
+  - `fm_cell_xf` is now 88 bytes and carries every optional alignment
+    attribute with its presence flag, replacing the 20-byte projection.
+    `fm_styles_add_cell_xf` takes it **by value**, so this changes the
+    calling convention rather than a buffer size: a caller built against the
+    v0.9.7 header reads its arguments from the wrong registers and stack
+    slots with nothing to diagnose it. Recompile.
+  - `fm_sheet_view_t` is now 48 bytes native / 40 bytes wasm32 and carries
+    the display and orientation flags. It is written through a
+    caller-supplied pointer, so a stale caller is overwritten 32 (native) or
+    24 (wasm32) bytes past the end of its own storage. Recompile.
+  - `fm_workbook_defined_name_at` gained the `int32_t* out_local_sheet_id`
+    fifth parameter. It is optional: pass `NULL` for the previous behaviour.
+  - **Behavioural, and silent: `fm_styles_add_cell_xf` and
+    `fm_styles_add_batch` write a different `<alignment>` than before for
+    the same caller code.** They now read an alignment attribute only when
+    its `has_*` flag is set, instead of inferring presence from the value
+    differing from the model default. So a caller that set
+    `record.horizontal_align = 3` and relied on that being enough
+    recompiles cleanly against the widened record, still gets `kOk`, still
+    gets an xf index — and now produces an xf with *no* `<alignment>` child,
+    because the value is ignored without its flag. There is no compile error
+    and no status to check; the difference is only visible in the emitted
+    file. Set the matching `has_*` flag for every alignment attribute you
+    mean to write. The same rule makes a value outside its Excel range
+    ignored rather than rejected when its flag is clear.
+    `fm_styles_add_batch` also now rejects a record whose `xf_id` names a
+    `<cellStyleXfs>` entry that does not exist, which it previously could
+    not express at all.
 - `fm_hyperlink` gained the `last_row` / `last_col` rectangle end, so its
   layout differs from the previous release; recompile against the current
   header before linking.
 - miniz is tracked at 3.1.2.
+
+### Removed
+
+Every entry below is a binary ABI break against v0.9.7: the symbols are
+gone rather than deprecated, so a caller linked against the old shared
+library must be recompiled.
+
+Which consumers a removal reaches depends on which of three distribution
+surfaces carried the symbol in v0.9.7, so each entry names them:
+
+- **native** — declared in the header, so reachable by a third party linking
+  the library directly.
+- **wasm** — listed in `tools/wasm/capi_exports.txt`. The npm WASM package
+  and the Python wheel load the same `.wasm`, so they are one surface, not
+  two: a symbol absent here was never callable from either.
+- **npm-native** — wrapped by the Node addon. The addon binds a subset by
+  hand, so a symbol can be native-and-wasm reachable and still absent here.
+
+Entries reaching **native only** are the ones easiest to under-report: they
+have no binding to notice their absence and no test in this repo calls them.
+
+- `fm_styles_get_cell_xf`, `fm_styles_add_cell_xf` and
+  `fm_styles_get_cell_style_xf` keep their names but take the widened
+  `fm_cell_xf` described above; the 20-byte forms are gone. All three:
+  native + wasm + npm-native. No binding called them — every one already
+  used the `_ex2` forms — so the JS and Python method surfaces are
+  unchanged, but a native caller must recompile and a wasm caller passing a
+  hand-built 20-byte record will now read past it.
+- `fm_styles_get_cell_xf_ex2`, `fm_styles_add_cell_xf_ex2`,
+  `fm_styles_get_cell_style_xf_ex2`, `fm_styles_add_cell_style_xf_ex2` —
+  renamed to the base names above. Unshipped: on none of the three surfaces
+  in v0.9.7, so no consumer is affected.
+- `fm_cell_xf_ex2` — merged into `fm_cell_xf`. The `base` member is gone and
+  its seven fields are now the first seven members of the flat record, at
+  the same offsets. Unshipped.
+- `fm_sheet_get_view_ex` / `fm_sheet_view_ex_t` — renamed to
+  `fm_sheet_get_view` / `fm_sheet_view_t`, replacing the 16-byte form. The
+  `_ex` entry point was native + wasm + npm-native; the base it replaces was
+  native + wasm only, so an npm-native consumer sees no change here.
+- `fm_workbook_defined_name_at_ex` — folded into
+  `fm_workbook_defined_name_at`, which now takes the scope out-param
+  directly. Same split as the sheet-view pair: the `_ex` form was on all
+  three surfaces, the base was native + wasm only.
+- `fm_workbook_save_ex` — renamed to `fm_workbook_save_as`, same signature.
+  Native + wasm + npm-native.
+- `fm_styles_get_font_ex` and `fm_styles_add_font_ex` — removed earlier in
+  this cycle when the font record absorbed the fields they carried; use
+  `fm_styles_get_font` / `fm_styles_add_font`, which now return and accept
+  the complete `fm_font_record`. **Native only**: both were declared in the
+  v0.9.7 header but never exported to wasm and never wrapped by the Node
+  addon, so the only consumer affected is a third party linking the header.
+- `fm_workbook_save_xlsb_with_result` — replaced by
+  `fm_workbook_save_with_diagnostics(wb, FM_WORKBOOK_FORMAT_XLSB, &bytes,
+  &len, &diagnostics)`, reading the downgrade count from
+  `diagnostics.downgraded_formula_count`. The replacement also reports the
+  four other save counters the old entry point discarded. **Native only**:
+  it was declared in the v0.9.7 header but never exported to wasm and never
+  wrapped by the Node addon, so neither the npm packages nor the Python
+  wheel could ever call it.
+- `fm_workbook_xlsb_read_diagnostics` — replaced by
+  `fm_workbook_read_diagnostics(wb, &diagnostics)`, reading
+  `diagnostics.undecoded_formula_count` and
+  `diagnostics.undecoded_defined_name_count`. The old dropped-part
+  projection is now `diagnostics.undecoded_part_count`, renamed so it can
+  no longer be confused with the save-side `dropped_part_count`, which
+  counts a different event. Native + wasm; the Node addon never wrapped it.
 
 ### Fixed
 

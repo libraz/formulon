@@ -135,12 +135,11 @@ fm_status_t check_sheet_u32(const fm_workbook_t* wb, std::uint32_t sheet, const 
 struct fm_workbook {
   std::optional<formulon::Workbook> wb;
 
-  // Diagnostics captured only while loading an XLSB package. They remain
-  // attached to this handle so callers can inspect lossy Ptg recovery after
-  // `fm_workbook_load` returns successfully.
-  std::uint32_t xlsb_undecoded_formula_count = 0;
-  std::uint32_t xlsb_undecoded_defined_name_count = 0;
-  std::uint32_t xlsb_dropped_part_count = 0;
+  // Loss / fallback counters captured while loading this handle's package,
+  // for either container format. They stay attached to the handle so callers
+  // can inspect what the load cost after `fm_workbook_load` returns
+  // successfully. A workbook built in memory leaves every counter zero.
+  fm_read_diagnostics_t read_diagnostics{};
 
   // Scratch storage for strings handed back to the caller on the read path.
   // After argument/model validation, each successful text-producing read

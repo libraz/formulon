@@ -82,17 +82,32 @@ class SaveDiagnostics:
     bytes: bytes
     downgraded_formula_count: int
     deferred_feature_count: int
-    def __init__(self, bytes: bytes, downgraded_formula_count: int, deferred_feature_count: int) -> None: ...
+    dropped_part_count: int
+    dropped_relationship_count: int
+    renumbered_part_count: int
+    def __init__(
+        self,
+        bytes: bytes,
+        downgraded_formula_count: int,
+        deferred_feature_count: int,
+        dropped_part_count: int,
+        dropped_relationship_count: int,
+        renumbered_part_count: int,
+    ) -> None: ...
 
-class XlsbReadDiagnostics:
+class ReadDiagnostics:
     undecoded_formula_count: int
     undecoded_defined_name_count: int
-    dropped_part_count: int
+    undecoded_part_count: int
+    skipped_feature_count: int
+    unknown_content_type_count: int
     def __init__(
         self,
         undecoded_formula_count: int,
         undecoded_defined_name_count: int,
-        dropped_part_count: int,
+        undecoded_part_count: int,
+        skipped_feature_count: int,
+        unknown_content_type_count: int,
     ) -> None: ...
 
 # ---------------------------------------------------------------------------
@@ -865,9 +880,9 @@ class Workbook:
 
     # Save.
     def save(self) -> bytes: ...
-    def save_ex(self, fmt: Union[WorkbookFormat, int]) -> bytes: ...
-    def save_ex_with_diagnostics(self, fmt: Union[WorkbookFormat, int]) -> SaveDiagnostics: ...
-    def xlsb_read_diagnostics(self) -> XlsbReadDiagnostics: ...
+    def save_as(self, fmt: Union[WorkbookFormat, int]) -> bytes: ...
+    def save_with_diagnostics(self, fmt: Union[WorkbookFormat, int]) -> SaveDiagnostics: ...
+    def read_diagnostics(self) -> ReadDiagnostics: ...
 
     # Iteration.
     def iter_cells(self, sheet: int) -> Iterator[Cell]: ...
@@ -1094,6 +1109,14 @@ class Workbook:
         pivot_index: int,
         field_idx: int,
         name: str,
+        visible: bool,
+    ) -> None: ...
+    def pivot_field_add_item_at(
+        self,
+        sheet: int,
+        pivot_index: int,
+        field_idx: int,
+        cache_index: int,
         visible: bool,
     ) -> None: ...
     def pivot_field_clear_items(self, sheet: int, pivot_index: int, field_idx: int) -> None: ...

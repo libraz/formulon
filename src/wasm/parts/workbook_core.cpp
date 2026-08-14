@@ -91,7 +91,7 @@ JsSaveResult JsWorkbook::save() const {
   return r;
 }
 
-JsSaveResult JsWorkbook::saveEx(int32_t format) const {
+JsSaveResult JsWorkbook::saveAs(int32_t format) const {
   JsSaveResult r;
   if (handle_ == nullptr) {
     r.status = error_status(kBindingInvalidHandle);
@@ -99,7 +99,7 @@ JsSaveResult JsWorkbook::saveEx(int32_t format) const {
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  fm_status_t rc = fm_workbook_save_ex(handle_, format, &out, &len);
+  fm_status_t rc = fm_workbook_save_as(handle_, format, &out, &len);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
@@ -110,7 +110,7 @@ JsSaveResult JsWorkbook::saveEx(int32_t format) const {
   return r;
 }
 
-JsSaveDiagnosticsResult JsWorkbook::saveExWithDiagnostics(int32_t format) const {
+JsSaveDiagnosticsResult JsWorkbook::saveWithDiagnostics(int32_t format) const {
   JsSaveDiagnosticsResult r;
   if (handle_ == nullptr) {
     r.status = error_status(kBindingInvalidHandle);
@@ -118,40 +118,40 @@ JsSaveDiagnosticsResult JsWorkbook::saveExWithDiagnostics(int32_t format) const 
   }
   uint8_t* out = nullptr;
   std::size_t len = 0;
-  std::size_t downgraded_formula_count = 0;
-  std::size_t deferred_feature_count = 0;
-  fm_status_t rc = fm_workbook_save_ex_with_diagnostics(handle_, format, &out, &len, &downgraded_formula_count,
-                                                        &deferred_feature_count);
+  fm_save_diagnostics_t d{};
+  fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, format, &out, &len, &d);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
   }
   r.bytes = bytes_to_val(out, len);
   fm_buffer_free(out);
-  r.downgradedFormulaCount = static_cast<uint32_t>(downgraded_formula_count);
-  r.deferredFeatureCount = static_cast<uint32_t>(deferred_feature_count);
+  r.downgradedFormulaCount = d.downgraded_formula_count;
+  r.deferredFeatureCount = d.deferred_feature_count;
+  r.droppedPartCount = d.dropped_part_count;
+  r.droppedRelationshipCount = d.dropped_relationship_count;
+  r.renumberedPartCount = d.renumbered_part_count;
   r.status = ok_status();
   return r;
 }
 
-JsXlsbReadDiagnosticsResult JsWorkbook::xlsbReadDiagnostics() const {
-  JsXlsbReadDiagnosticsResult r;
+JsReadDiagnosticsResult JsWorkbook::readDiagnostics() const {
+  JsReadDiagnosticsResult r;
   if (handle_ == nullptr) {
     r.status = error_status(kBindingInvalidHandle);
     return r;
   }
-  std::size_t undecoded_formula_count = 0;
-  std::size_t undecoded_defined_name_count = 0;
-  std::size_t dropped_part_count = 0;
-  fm_status_t rc = fm_workbook_xlsb_read_diagnostics_ex(handle_, &undecoded_formula_count,
-                                                        &undecoded_defined_name_count, &dropped_part_count);
+  fm_read_diagnostics_t d{};
+  fm_status_t rc = fm_workbook_read_diagnostics(handle_, &d);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;
   }
-  r.undecodedFormulaCount = static_cast<uint32_t>(undecoded_formula_count);
-  r.undecodedDefinedNameCount = static_cast<uint32_t>(undecoded_defined_name_count);
-  r.droppedPartCount = static_cast<uint32_t>(dropped_part_count);
+  r.undecodedFormulaCount = d.undecoded_formula_count;
+  r.undecodedDefinedNameCount = d.undecoded_defined_name_count;
+  r.undecodedPartCount = d.undecoded_part_count;
+  r.skippedFeatureCount = d.skipped_feature_count;
+  r.unknownContentTypeCount = d.unknown_content_type_count;
   r.status = ok_status();
   return r;
 }

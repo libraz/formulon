@@ -22,7 +22,12 @@
 
 namespace {
 
-static_assert(sizeof(fm_cell_xf) == 20U, "fm_cell_xf ABI layout changed");
+// `fm_styles_add_cell_xf` takes this struct BY VALUE, so its size is part of
+// the calling convention rather than merely of a buffer: a caller compiled
+// against a different definition reads its arguments from the wrong registers
+// and stack slots with no diagnosable failure. Pin the layout here so a change
+// has to break the build and be acknowledged.
+static_assert(sizeof(fm_cell_xf) == 88U, "fm_cell_xf ABI layout changed");
 static_assert(offsetof(fm_cell_xf, font_index) == 0U, "fm_cell_xf.font_index offset changed");
 static_assert(offsetof(fm_cell_xf, fill_index) == 4U, "fm_cell_xf.fill_index offset changed");
 static_assert(offsetof(fm_cell_xf, border_index) == 8U, "fm_cell_xf.border_index offset changed");
@@ -30,16 +35,15 @@ static_assert(offsetof(fm_cell_xf, num_fmt_id) == 12U, "fm_cell_xf.num_fmt_id of
 static_assert(offsetof(fm_cell_xf, horizontal_align) == 14U, "fm_cell_xf.horizontal_align offset changed");
 static_assert(offsetof(fm_cell_xf, vertical_align) == 15U, "fm_cell_xf.vertical_align offset changed");
 static_assert(offsetof(fm_cell_xf, wrap_text) == 16U, "fm_cell_xf.wrap_text offset changed");
-static_assert(sizeof(fm_cell_xf_ex2) == 88U, "fm_cell_xf_ex2 ABI layout changed");
-static_assert(offsetof(fm_cell_xf_ex2, has_alignment) == 28U, "fm_cell_xf_ex2.has_alignment offset changed");
-static_assert(offsetof(fm_cell_xf_ex2, has_text_rotation) == 32U, "fm_cell_xf_ex2.has_text_rotation offset changed");
-static_assert(offsetof(fm_cell_xf_ex2, reading_order) == 68U, "fm_cell_xf_ex2.reading_order offset changed");
-static_assert(offsetof(fm_cell_xf_ex2, has_horizontal_align) == 72U,
-              "fm_cell_xf_ex2.has_horizontal_align offset changed");
-static_assert(offsetof(fm_cell_xf_ex2, has_vertical_align) == 76U, "fm_cell_xf_ex2.has_vertical_align offset changed");
-static_assert(offsetof(fm_cell_xf_ex2, has_wrap_text) == 80U, "fm_cell_xf_ex2.has_wrap_text offset changed");
-static_assert(offsetof(fm_cell_xf_ex2, has_justify_last_line) == 84U,
-              "fm_cell_xf_ex2.has_justify_last_line offset changed");
+static_assert(offsetof(fm_cell_xf, justify_last_line) == 20U, "fm_cell_xf.justify_last_line offset changed");
+static_assert(offsetof(fm_cell_xf, xf_id) == 24U, "fm_cell_xf.xf_id offset changed");
+static_assert(offsetof(fm_cell_xf, has_alignment) == 28U, "fm_cell_xf.has_alignment offset changed");
+static_assert(offsetof(fm_cell_xf, has_text_rotation) == 32U, "fm_cell_xf.has_text_rotation offset changed");
+static_assert(offsetof(fm_cell_xf, reading_order) == 68U, "fm_cell_xf.reading_order offset changed");
+static_assert(offsetof(fm_cell_xf, has_horizontal_align) == 72U, "fm_cell_xf.has_horizontal_align offset changed");
+static_assert(offsetof(fm_cell_xf, has_vertical_align) == 76U, "fm_cell_xf.has_vertical_align offset changed");
+static_assert(offsetof(fm_cell_xf, has_wrap_text) == 80U, "fm_cell_xf.has_wrap_text offset changed");
+static_assert(offsetof(fm_cell_xf, has_justify_last_line) == 84U, "fm_cell_xf.has_justify_last_line offset changed");
 static_assert(sizeof(fm_dxf_record) == (sizeof(void*) == 4U ? 360U : 368U), "fm_dxf_record ABI layout changed");
 static_assert(offsetof(fm_dxf_record, num_fmt_code) == 344U, "fm_dxf_record.num_fmt_code offset changed");
 static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 348U : 352U),
@@ -556,11 +560,8 @@ TEST(FormulonCApiStyles, CellXfGetterDiagnosticsUseInvokedApi) {
   };
 
   fm_cell_xf cell_xf{};
-  fm_cell_xf_ex2 cell_xf_ex2{};
   expect_prefix(fm_styles_get_cell_xf(wb.handle, 0, &cell_xf), "fm_styles_get_cell_xf:");
-  expect_prefix(fm_styles_get_cell_xf_ex2(wb.handle, 0, &cell_xf_ex2), "fm_styles_get_cell_xf_ex2:");
   expect_prefix(fm_styles_get_cell_style_xf(wb.handle, 0, &cell_xf), "fm_styles_get_cell_style_xf:");
-  expect_prefix(fm_styles_get_cell_style_xf_ex2(wb.handle, 0, &cell_xf_ex2), "fm_styles_get_cell_style_xf_ex2:");
 }
 
 TEST(FormulonCApiStyles, CellXfAdderDiagnosticsUseInvokedApi) {
@@ -573,25 +574,21 @@ TEST(FormulonCApiStyles, CellXfAdderDiagnosticsUseInvokedApi) {
 
   uint32_t index = 0;
   fm_cell_xf cell_xf{};
-  fm_cell_xf_ex2 cell_xf_ex2{};
   expect_prefix(fm_styles_add_cell_xf(nullptr, cell_xf, &index), "fm_styles_add_cell_xf:");
-  expect_prefix(fm_styles_add_cell_xf_ex2(nullptr, cell_xf_ex2, &index), "fm_styles_add_cell_xf_ex2:");
 
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
   cell_xf.font_index = 1U;
-  cell_xf_ex2.base.font_index = 1U;
   expect_prefix(fm_styles_add_cell_xf(wb.handle, cell_xf, &index), "fm_styles_add_cell_xf:");
-  expect_prefix(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf_ex2, &index), "fm_styles_add_cell_xf_ex2:");
 
-  cell_xf_ex2 = fm_cell_xf_ex2{};
-  cell_xf_ex2.xf_id = 1U;
-  expect_prefix(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf_ex2, &index), "fm_styles_add_cell_xf_ex2:");
+  cell_xf = fm_cell_xf{};
+  cell_xf.xf_id = 1U;
+  expect_prefix(fm_styles_add_cell_xf(wb.handle, cell_xf, &index), "fm_styles_add_cell_xf:");
 
-  cell_xf_ex2 = fm_cell_xf_ex2{};
-  cell_xf_ex2.has_text_rotation = 1;
-  cell_xf_ex2.text_rotation = 181U;
-  expect_prefix(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf_ex2, &index), "fm_styles_add_cell_xf_ex2:");
+  cell_xf = fm_cell_xf{};
+  cell_xf.has_text_rotation = 1;
+  cell_xf.text_rotation = 181U;
+  expect_prefix(fm_styles_add_cell_xf(wb.handle, cell_xf, &index), "fm_styles_add_cell_xf:");
 }
 
 TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
@@ -602,15 +599,35 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     EXPECT_EQ(std::string(message).rfind(api, 0), 0U) << message;
   };
 
-  // The upper boundary of each ordinal is accepted by the legacy entrypoint.
+  // The upper boundary of each ordinal is accepted.
   {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
     fm_cell_xf record{};
     record.horizontal_align = 7;  // distributed
-    record.vertical_align = 4;    // distributed
+    record.has_horizontal_align = 1;
+    record.vertical_align = 4;  // distributed
+    record.has_vertical_align = 1;
     uint32_t index = 0;
     ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, record, &index), 0);
+  }
+
+  // The presence flag decides whether a value is read at all, so an
+  // out-of-range ordinal on an omitted attribute is ignored rather than
+  // rejected: the record it describes has no such attribute to be invalid.
+  {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    fm_cell_xf record{};
+    record.horizontal_align = 8;
+    record.vertical_align = 5;
+    uint32_t index = 0xAABBCCDDU;
+    ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, record, &index), 0);
+    EXPECT_NE(index, 0xAABBCCDDU);
+    fm_cell_xf got{};
+    ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, index, &got), 0);
+    EXPECT_EQ(got.horizontal_align, 0U);
+    EXPECT_EQ(got.vertical_align, 2U);
   }
 
   // Every add shape validates before it creates default roots or changes the
@@ -620,6 +637,7 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
     fm_cell_xf record{};
     record.horizontal_align = 8;
+    record.has_horizontal_align = 1;
     uint32_t index = 0xAABBCCDDU;
     const std::size_t before = wb.handle->workbook().styles().cell_xfs.size();
     expect_invalid(fm_styles_add_cell_xf(wb.handle, record, &index), "fm_styles_add_cell_xf:");
@@ -629,24 +647,12 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
   {
     WorkbookGuard wb;
     ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-    fm_cell_xf_ex2 record{};
-    record.base.horizontal_align = 8;
-    record.has_horizontal_align = 1;
-    uint32_t index = 0xAABBCCDDU;
-    const std::size_t before = wb.handle->workbook().styles().cell_xfs.size();
-    expect_invalid(fm_styles_add_cell_xf_ex2(wb.handle, record, &index), "fm_styles_add_cell_xf_ex2:");
-    EXPECT_EQ(index, 0xAABBCCDDU);
-    EXPECT_EQ(wb.handle->workbook().styles().cell_xfs.size(), before);
-  }
-  {
-    WorkbookGuard wb;
-    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-    fm_cell_xf_ex2 record{};
-    record.base.vertical_align = 5;
+    fm_cell_xf record{};
+    record.vertical_align = 5;
     record.has_vertical_align = 1;
     uint32_t index = 0xAABBCCDDU;
     const std::size_t before = wb.handle->workbook().styles().cell_style_xfs.size();
-    expect_invalid(fm_styles_add_cell_style_xf_ex2(wb.handle, record, &index), "fm_styles_add_cell_style_xf_ex2:");
+    expect_invalid(fm_styles_add_cell_style_xf(wb.handle, record, &index), "fm_styles_add_cell_style_xf:");
     EXPECT_EQ(index, 0xAABBCCDDU);
     EXPECT_EQ(wb.handle->workbook().styles().cell_style_xfs.size(), before);
   }
@@ -655,6 +661,7 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
     fm_cell_xf record{};
     record.horizontal_align = 8;
+    record.has_horizontal_align = 1;
     uint32_t indices[] = {0xAABBCCDDU};
     const fm_styles_batch batch{nullptr, 0U,      nullptr, nullptr, 0U,      nullptr, nullptr, 0U,
                                 nullptr, &record, 1U,      indices, nullptr, 0U,      nullptr};
@@ -662,6 +669,19 @@ TEST(FormulonCApiStyles, CellXfAlignmentEnumsValidateRangesBeforeMutation) {
     expect_invalid(fm_styles_add_batch(wb.handle, &batch), "fm_styles_add_batch:");
     EXPECT_EQ(indices[0], 0xAABBCCDDU);
     EXPECT_EQ(wb.handle->workbook().styles().cell_xfs.size(), before);
+  }
+  // A batch record naming a `<cellStyleXfs>` entry that does not exist is
+  // rejected rather than emitted as a dangling `xfId`.
+  {
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
+    fm_cell_xf record{};
+    record.xf_id = 3U;
+    uint32_t indices[] = {0xAABBCCDDU};
+    const fm_styles_batch batch{nullptr, 0U,      nullptr, nullptr, 0U,      nullptr, nullptr, 0U,
+                                nullptr, &record, 1U,      indices, nullptr, 0U,      nullptr};
+    expect_invalid(fm_styles_add_batch(wb.handle, &batch), "fm_styles_add_batch:");
+    EXPECT_EQ(indices[0], 0xAABBCCDDU);
   }
 }
 
@@ -1301,6 +1321,8 @@ TEST(FormulonCApiStyles, AddCellXfDistinctReturnsNewIndex) {
   xf.vertical_align = 2;
   xf.wrap_text = 1;
 
+  xf.has_wrap_text = 1;
+
   uint32_t a = 0;
   uint32_t b = 0;
   ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &a), 0);
@@ -1328,8 +1350,10 @@ TEST(FormulonCApiStyles, AddCellXfGrowsTable) {
   xf.num_fmt_id = 0;
   // Distinguish this record from the all-zero placeholder xf that
   // `ensure_default_cell_xf` seeds at index 0 so the caller's record is
-  // guaranteed to land at a fresh index instead of deduping to it.
+  // guaranteed to land at a fresh index instead of deduping to it. The
+  // presence flag is what makes the value part of the record.
   xf.wrap_text = 1;
+  xf.has_wrap_text = 1;
   uint32_t idx = 0;
   ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &idx), 0);
   uint32_t after = 0;
@@ -1363,8 +1387,10 @@ TEST(FormulonCApiStyles, AddCellXfOnFreshWorkbookKeepsZeroAsDefault) {
   xf.num_fmt_id = 0;
   // Distinguish this record from the all-zero placeholder xf that
   // `ensure_default_cell_xf` seeds at index 0 so the caller's record is
-  // guaranteed to land at a fresh index instead of deduping to it.
+  // guaranteed to land at a fresh index instead of deduping to it. The
+  // presence flag is what makes the value part of the record.
   xf.wrap_text = 1;
+  xf.has_wrap_text = 1;
 
   uint32_t xf_idx = 0;
   ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_idx), 0);
@@ -1546,18 +1572,18 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf_ex2 xf{};
+  fm_cell_xf xf{};
   xf.has_alignment = 1;
-  xf.base.horizontal_align = 7;  // distributed
+  xf.horizontal_align = 7;  // distributed
   xf.has_horizontal_align = 1;
-  xf.base.vertical_align = 2;  // bottom
+  xf.vertical_align = 2;  // bottom
   xf.justify_last_line = 1;
   xf.has_justify_last_line = 1;
   uint32_t xf_idx = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, xf, &xf_idx), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &xf_idx), 0);
 
   uint32_t duplicate_idx = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, xf, &duplicate_idx), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &duplicate_idx), 0);
   EXPECT_EQ(duplicate_idx, xf_idx);
 
   ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "distributed"), 0);
@@ -1570,30 +1596,30 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
   uint32_t reread_idx = 0;
   ASSERT_EQ(fm_cell_get_xf_index(reloaded.handle, 0, 0, 0, &reread_idx), 0);
-  fm_cell_xf_ex2 reread{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex2(reloaded.handle, reread_idx, &reread), 0);
-  EXPECT_EQ(reread.base.horizontal_align, 7U);
+  fm_cell_xf reread{};
+  ASSERT_EQ(fm_styles_get_cell_xf(reloaded.handle, reread_idx, &reread), 0);
+  EXPECT_EQ(reread.horizontal_align, 7U);
   EXPECT_EQ(reread.justify_last_line, 1);
 }
 
 TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf_ex2 style_xf{};
+  fm_cell_xf style_xf{};
   style_xf.has_alignment = 1;
-  style_xf.base.horizontal_align = 2;
+  style_xf.horizontal_align = 2;
   style_xf.has_horizontal_align = 1;
   uint32_t xf_id = 0;
-  ASSERT_EQ(fm_styles_add_cell_style_xf_ex2(wb.handle, style_xf, &xf_id), 0);
+  ASSERT_EQ(fm_styles_add_cell_style_xf(wb.handle, style_xf, &xf_id), 0);
   ASSERT_EQ(fm_styles_set_cell_style(wb.handle, "Highlight", xf_id, FM_CELL_STYLE_BUILTIN_ID_NONE), 0);
 
-  fm_cell_xf_ex2 cell_xf{};
+  fm_cell_xf cell_xf{};
   cell_xf.has_alignment = 1;
-  cell_xf.base.horizontal_align = 2;
+  cell_xf.horizontal_align = 2;
   cell_xf.has_horizontal_align = 1;
   cell_xf.xf_id = xf_id;
   uint32_t cell_xf_id = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf, &cell_xf_id), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, cell_xf, &cell_xf_id), 0);
   ASSERT_EQ(fm_workbook_set_text(wb.handle, 0, 0, 0, "styled"), 0);
   ASSERT_EQ(fm_cell_set_xf_index(wb.handle, 0, 0, 0, cell_xf_id), 0);
 
@@ -1609,8 +1635,8 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   EXPECT_STREQ(style.name, "Highlight");
   uint32_t reread_cell_xf = 0;
   ASSERT_EQ(fm_cell_get_xf_index(loaded.handle, 0, 0, 0, &reread_cell_xf), 0);
-  fm_cell_xf_ex2 reread{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex2(loaded.handle, reread_cell_xf, &reread), 0);
+  fm_cell_xf reread{};
+  ASSERT_EQ(fm_styles_get_cell_xf(loaded.handle, reread_cell_xf, &reread), 0);
   EXPECT_EQ(reread.xf_id, style.xf_id);
 }
 
@@ -1619,25 +1645,25 @@ TEST(FormulonCApiStyles, NamedStyleXfRejectsDanglingReferences) {
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
   // A cell xf may only inherit from a named-style xf that already exists.
-  fm_cell_xf_ex2 cell_xf{};
+  fm_cell_xf cell_xf{};
   cell_xf.xf_id = 3;
   uint32_t cell_xf_index = 0;
-  EXPECT_NE(fm_styles_add_cell_xf_ex2(wb.handle, cell_xf, &cell_xf_index), 0);
+  EXPECT_NE(fm_styles_add_cell_xf(wb.handle, cell_xf, &cell_xf_index), 0);
 
   // The named-style table validates its own font / fill / border / numFmt
   // references exactly like the cell-xf table does.
-  fm_cell_xf_ex2 style_xf{};
-  style_xf.base.font_index = 9;
+  fm_cell_xf style_xf{};
+  style_xf.font_index = 9;
   uint32_t xf_id = 0;
-  EXPECT_NE(fm_styles_add_cell_style_xf_ex2(wb.handle, style_xf, &xf_id), 0);
+  EXPECT_NE(fm_styles_add_cell_style_xf(wb.handle, style_xf, &xf_id), 0);
 
-  style_xf.base.font_index = 0;
+  style_xf.font_index = 0;
   style_xf.has_alignment = 1;
   style_xf.justify_last_line = 1;
   style_xf.has_justify_last_line = 1;
-  ASSERT_EQ(fm_styles_add_cell_style_xf_ex2(wb.handle, style_xf, &xf_id), 0);
-  fm_cell_xf_ex2 reread{};
-  ASSERT_EQ(fm_styles_get_cell_style_xf_ex2(wb.handle, xf_id, &reread), 0);
+  ASSERT_EQ(fm_styles_add_cell_style_xf(wb.handle, style_xf, &xf_id), 0);
+  fm_cell_xf reread{};
+  ASSERT_EQ(fm_styles_get_cell_style_xf(wb.handle, xf_id, &reread), 0);
   EXPECT_EQ(reread.justify_last_line, 1);
 
   // 0..47 is the whole OOXML ordinal space; anything else needs the sentinel.
@@ -1676,6 +1702,42 @@ TEST(FormulonCApiStyles, AddBatchDeduplicatesAllStyleTables) {
   EXPECT_EQ(border_indices[0], border_indices[1]);
   EXPECT_EQ(xf_indices[0], xf_indices[1]);
   EXPECT_EQ(num_fmt_ids[0], num_fmt_ids[1]);
+}
+
+// The batch adder shares the single-record presence-flag contract, which is a
+// behavioural change rather than a layout one: a caller that set an alignment
+// value and relied on it being inferred as present still compiles against the
+// widened record and still succeeds, but now emits no `<alignment>` child.
+// Pin both halves so the silent half cannot regress unnoticed.
+TEST(FormulonCApiStyles, AddBatchEmitsAlignmentOnlyForFlaggedAttributes) {
+  const auto batch_xf_alignment = [](const fm_cell_xf& record) {
+    WorkbookGuard wb;
+    EXPECT_EQ(fm_workbook_create(&wb.handle), 0);
+    uint32_t xf_indices[] = {0xDEADBEEFU};
+    const fm_styles_batch batch{nullptr, 0U,      nullptr, nullptr,    0U,      nullptr, nullptr, 0U,
+                                nullptr, &record, 1U,      xf_indices, nullptr, 0U,      nullptr};
+    EXPECT_EQ(fm_styles_add_batch(wb.handle, &batch), 0) << fm_last_error_message();
+    fm_cell_xf got{};
+    EXPECT_EQ(fm_styles_get_cell_xf(wb.handle, xf_indices[0], &got), 0);
+    return got;
+  };
+
+  // The pre-collapse caller shape: a value with no presence flag.
+  fm_cell_xf inferred{};
+  inferred.horizontal_align = 3;  // center-continuous
+  const fm_cell_xf without_flag = batch_xf_alignment(inferred);
+  EXPECT_EQ(without_flag.has_alignment, 0);
+  EXPECT_EQ(without_flag.has_horizontal_align, 0);
+  EXPECT_EQ(without_flag.horizontal_align, 0U);
+
+  // The same value, now declared present, is the post-collapse spelling.
+  fm_cell_xf flagged{};
+  flagged.horizontal_align = 3;
+  flagged.has_horizontal_align = 1;
+  const fm_cell_xf with_flag = batch_xf_alignment(flagged);
+  EXPECT_EQ(with_flag.has_alignment, 1);
+  EXPECT_EQ(with_flag.has_horizontal_align, 1);
+  EXPECT_EQ(with_flag.horizontal_align, 3U);
 }
 
 TEST(FormulonCApiStyles, AddBatchCommitsNumFmtReferencesTransactionally) {
@@ -1733,20 +1795,20 @@ TEST(FormulonCApiStyles, AddBatchFailureLeavesTableAndOutputsUnchanged) {
   EXPECT_EQ(formulon::io::write_styles(wb.handle->workbook().styles()), before_xml);
 }
 
-TEST(FormulonCApiStyles, ZeroInitializedCellXfEx2UsesDefaultAlignment) {
+TEST(FormulonCApiStyles, ZeroInitializedCellXfUsesDefaultAlignment) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf_ex2 record{};
+  fm_cell_xf record{};
   uint32_t index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, record, &index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, record, &index), 0);
   EXPECT_EQ(index, 0U);
 
-  fm_cell_xf_ex2 got{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, index, &got), 0);
-  EXPECT_EQ(got.base.horizontal_align, 0U);
-  EXPECT_EQ(got.base.vertical_align, 2U);
-  EXPECT_EQ(got.base.wrap_text, 0);
+  fm_cell_xf got{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, index, &got), 0);
+  EXPECT_EQ(got.horizontal_align, 0U);
+  EXPECT_EQ(got.vertical_align, 2U);
+  EXPECT_EQ(got.wrap_text, 0);
   EXPECT_EQ(got.justify_last_line, 0);
   EXPECT_EQ(got.has_alignment, 0);
   EXPECT_EQ(got.has_horizontal_align, 0);
@@ -1764,35 +1826,35 @@ TEST(FormulonCApiStyles, ZeroInitializedCellXfEx2UsesDefaultAlignment) {
   EXPECT_EQ(styles_xml.substr(cell_xfs_begin, cell_xfs_end - cell_xfs_begin).find("<alignment"), std::string::npos);
 }
 
-TEST(FormulonCApiStyles, CellXfEx2IgnoresPoisonForOmittedAlignmentAttributes) {
+TEST(FormulonCApiStyles, CellXfIgnoresPoisonForOmittedAlignmentAttributes) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf_ex2 poison{};
-  poison.base.horizontal_align = 0xFFU;
-  poison.base.vertical_align = 0xFFU;
-  poison.base.wrap_text = 7;
+  fm_cell_xf poison{};
+  poison.horizontal_align = 0xFFU;
+  poison.vertical_align = 0xFFU;
+  poison.wrap_text = 7;
   poison.justify_last_line = 9;
 
   uint32_t omitted_index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, poison, &omitted_index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, poison, &omitted_index), 0);
   EXPECT_EQ(omitted_index, 0U);
 
   poison.has_alignment = 1;
   uint32_t explicit_index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, poison, &explicit_index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, poison, &explicit_index), 0);
 
-  fm_cell_xf_ex2 empty{};
+  fm_cell_xf empty{};
   empty.has_alignment = 1;
   uint32_t empty_index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, empty, &empty_index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, empty, &empty_index), 0);
   EXPECT_EQ(empty_index, explicit_index);
 
-  fm_cell_xf_ex2 got{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, explicit_index, &got), 0);
-  EXPECT_EQ(got.base.horizontal_align, 0U);
-  EXPECT_EQ(got.base.vertical_align, 2U);
-  EXPECT_EQ(got.base.wrap_text, 0);
+  fm_cell_xf got{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, explicit_index, &got), 0);
+  EXPECT_EQ(got.horizontal_align, 0U);
+  EXPECT_EQ(got.vertical_align, 2U);
+  EXPECT_EQ(got.wrap_text, 0);
   EXPECT_EQ(got.justify_last_line, 0);
   EXPECT_EQ(got.has_alignment, 1);
   EXPECT_EQ(got.has_horizontal_align, 0);
@@ -1811,19 +1873,19 @@ TEST(FormulonCApiStyles, CellXfEx2IgnoresPoisonForOmittedAlignmentAttributes) {
   EXPECT_NE(cell_xfs.find("<alignment/>"), std::string::npos);
 }
 
-TEST(FormulonCApiStyles, CellXfEx2ExplicitTopAlignmentRemainsPresent) {
+TEST(FormulonCApiStyles, CellXfExplicitTopAlignmentRemainsPresent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf_ex2 record{};
-  record.base.vertical_align = 0;  // top
+  fm_cell_xf record{};
+  record.vertical_align = 0;  // top
   record.has_vertical_align = 1;
   uint32_t index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, record, &index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, record, &index), 0);
 
-  fm_cell_xf_ex2 got{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, index, &got), 0);
-  EXPECT_EQ(got.base.vertical_align, 0U);
+  fm_cell_xf got{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, index, &got), 0);
+  EXPECT_EQ(got.vertical_align, 0U);
   EXPECT_EQ(got.has_vertical_align, 1);
 
   BufferGuard saved;
@@ -1837,19 +1899,19 @@ TEST(FormulonCApiStyles, CellXfEx2ExplicitTopAlignmentRemainsPresent) {
             std::string::npos);
 }
 
-TEST(FormulonCApiStyles, ZeroInitializedCellStyleXfEx2UsesDefaultAlignment) {
+TEST(FormulonCApiStyles, ZeroInitializedCellStyleXfUsesDefaultAlignment) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf_ex2 record{};
+  fm_cell_xf record{};
   uint32_t index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_cell_style_xf_ex2(wb.handle, record, &index), 0);
+  ASSERT_EQ(fm_styles_add_cell_style_xf(wb.handle, record, &index), 0);
 
-  fm_cell_xf_ex2 got{};
-  ASSERT_EQ(fm_styles_get_cell_style_xf_ex2(wb.handle, index, &got), 0);
-  EXPECT_EQ(got.base.horizontal_align, 0U);
-  EXPECT_EQ(got.base.vertical_align, 2U);
-  EXPECT_EQ(got.base.wrap_text, 0);
+  fm_cell_xf got{};
+  ASSERT_EQ(fm_styles_get_cell_style_xf(wb.handle, index, &got), 0);
+  EXPECT_EQ(got.horizontal_align, 0U);
+  EXPECT_EQ(got.vertical_align, 2U);
+  EXPECT_EQ(got.wrap_text, 0);
   EXPECT_EQ(got.justify_last_line, 0);
   EXPECT_EQ(got.has_alignment, 0);
   EXPECT_EQ(got.has_vertical_align, 0);
@@ -1864,29 +1926,33 @@ TEST(FormulonCApiStyles, ZeroInitializedCellStyleXfEx2UsesDefaultAlignment) {
   EXPECT_EQ(styles_xml.substr(style_xfs_begin, style_xfs_end - style_xfs_begin).find("<alignment"), std::string::npos);
 }
 
-TEST(FormulonCApiStyles, LegacyCellXfAlignmentZeroStillMeansExplicitTop) {
+TEST(FormulonCApiStyles, CellXfVerticalAlignZeroIsExplicitTopOnlyWithItsPresenceFlag) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf legacy{};
-  legacy.vertical_align = 0;  // top
-  uint32_t legacy_index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, legacy, &legacy_index), 0);
+  // Without the presence flag, `vertical_align` is not read at all: the record
+  // describes an omitted attribute and canonicalizes to the model default.
+  fm_cell_xf omitted{};
+  omitted.vertical_align = 0;  // top
+  uint32_t omitted_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, omitted, &omitted_index), 0);
+  fm_cell_xf got_omitted{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, omitted_index, &got_omitted), 0);
+  EXPECT_EQ(got_omitted.vertical_align, 2U);  // bottom
+  EXPECT_EQ(got_omitted.has_vertical_align, 0);
 
-  fm_cell_xf_ex2 legacy_ex{};
-  legacy_ex.has_alignment = 1;
-  legacy_ex.base.vertical_align = 0;  // top
-  legacy_ex.has_vertical_align = 1;
-  uint32_t legacy_ex_index = 0xFFFFFFFFU;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, legacy_ex, &legacy_ex_index), 0);
-  EXPECT_EQ(legacy_ex_index, legacy_index);
+  fm_cell_xf explicit_top{};
+  explicit_top.has_alignment = 1;
+  explicit_top.vertical_align = 0;  // top
+  explicit_top.has_vertical_align = 1;
+  uint32_t explicit_index = 0xFFFFFFFFU;
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, explicit_top, &explicit_index), 0);
+  EXPECT_NE(explicit_index, omitted_index);
 
-  fm_cell_xf got{};
-  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, legacy_index, &got), 0);
-  EXPECT_EQ(got.vertical_align, 0U);
-  fm_cell_xf_ex2 got_ex{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, legacy_ex_index, &got_ex), 0);
-  EXPECT_EQ(got_ex.base.vertical_align, 0U);
+  fm_cell_xf got_explicit{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, explicit_index, &got_explicit), 0);
+  EXPECT_EQ(got_explicit.vertical_align, 0U);
+  EXPECT_EQ(got_explicit.has_vertical_align, 1);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, &saved.data, &saved.len), 0);
@@ -1899,12 +1965,12 @@ TEST(FormulonCApiStyles, LegacyCellXfAlignmentZeroStillMeansExplicitTop) {
             std::string::npos);
 }
 
-TEST(FormulonCApiStyles, CellXfEx2PreservesOptionalAlignmentAndPresence) {
+TEST(FormulonCApiStyles, CellXfPreservesOptionalAlignmentAndPresence) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf_ex2 xf{};
-  xf.base.vertical_align = 2;
+  fm_cell_xf xf{};
+  xf.vertical_align = 2;
   xf.justify_last_line = 1;
   xf.xf_id = 0;
   xf.has_alignment = 1;
@@ -1924,13 +1990,13 @@ TEST(FormulonCApiStyles, CellXfEx2PreservesOptionalAlignmentAndPresence) {
   xf.has_justify_last_line = 1;
 
   uint32_t index = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, xf, &index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &index), 0);
   uint32_t duplicate = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, xf, &duplicate), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &duplicate), 0);
   EXPECT_EQ(duplicate, index);
 
-  fm_cell_xf_ex2 reread{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, index, &reread), 0);
+  fm_cell_xf reread{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, index, &reread), 0);
   EXPECT_EQ(reread.justify_last_line, 1);
   EXPECT_EQ(reread.xf_id, 0U);
   EXPECT_EQ(reread.has_alignment, 1);
@@ -1951,77 +2017,77 @@ TEST(FormulonCApiStyles, CellXfEx2PreservesOptionalAlignmentAndPresence) {
 
   // Presence is part of the dedup key: explicit zero / false differs from
   // an omitted attribute even when the effective value is the same.
-  fm_cell_xf_ex2 absent = xf;
+  fm_cell_xf absent = xf;
   absent.has_text_rotation = 0;
   absent.has_indent = 0;
   absent.has_relative_indent = 0;
   absent.has_shrink_to_fit = 0;
   absent.has_reading_order = 0;
   uint32_t absent_index = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, absent, &absent_index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, absent, &absent_index), 0);
   EXPECT_NE(absent_index, index);
 }
 
-TEST(FormulonCApiStyles, CellXfEx2RejectsInvalidExcelAlignmentRanges) {
+TEST(FormulonCApiStyles, CellXfRejectsInvalidExcelAlignmentRanges) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf_ex2 xf{};
+  fm_cell_xf xf{};
   uint32_t index = 0;
 
   xf.has_text_rotation = 1;
   xf.text_rotation = 181;
-  EXPECT_NE(fm_styles_add_cell_xf_ex2(wb.handle, xf, &index), 0);
+  EXPECT_NE(fm_styles_add_cell_xf(wb.handle, xf, &index), 0);
   xf.text_rotation = 255;
-  EXPECT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, xf, &index), 0);
+  EXPECT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &index), 0);
 
   xf.has_text_rotation = 0;
   xf.has_indent = 1;
   xf.indent = 256;
-  EXPECT_NE(fm_styles_add_cell_xf_ex2(wb.handle, xf, &index), 0);
+  EXPECT_NE(fm_styles_add_cell_xf(wb.handle, xf, &index), 0);
   xf.indent = 255;
-  EXPECT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, xf, &index), 0);
+  EXPECT_EQ(fm_styles_add_cell_xf(wb.handle, xf, &index), 0);
 
   xf.has_indent = 0;
   xf.has_reading_order = 1;
   xf.reading_order = 3;
-  EXPECT_NE(fm_styles_add_cell_xf_ex2(wb.handle, xf, &index), 0);
+  EXPECT_NE(fm_styles_add_cell_xf(wb.handle, xf, &index), 0);
 }
 
-TEST(FormulonCApiStyles, CellXfEx2PresenceFlagsDistinguishExplicitDefaults) {
+TEST(FormulonCApiStyles, CellXfPresenceFlagsDistinguishExplicitDefaults) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
 
-  fm_cell_xf_ex2 explicit_defaults{};
-  explicit_defaults.base.vertical_align = 2;
+  fm_cell_xf explicit_defaults{};
+  explicit_defaults.vertical_align = 2;
   explicit_defaults.has_alignment = 1;
   explicit_defaults.has_horizontal_align = 1;
   explicit_defaults.has_vertical_align = 1;
   explicit_defaults.has_wrap_text = 1;
   explicit_defaults.has_justify_last_line = 1;
   uint32_t explicit_index = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, explicit_defaults, &explicit_index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, explicit_defaults, &explicit_index), 0);
 
-  fm_cell_xf_ex2 omitted_defaults = explicit_defaults;
+  fm_cell_xf omitted_defaults = explicit_defaults;
   omitted_defaults.has_horizontal_align = 0;
   omitted_defaults.has_vertical_align = 0;
   omitted_defaults.has_wrap_text = 0;
   omitted_defaults.has_justify_last_line = 0;
   uint32_t omitted_index = 0;
-  ASSERT_EQ(fm_styles_add_cell_xf_ex2(wb.handle, omitted_defaults, &omitted_index), 0);
+  ASSERT_EQ(fm_styles_add_cell_xf(wb.handle, omitted_defaults, &omitted_index), 0);
   EXPECT_NE(explicit_index, omitted_index);
 
-  fm_cell_xf_ex2 reread{};
-  ASSERT_EQ(fm_styles_get_cell_xf_ex2(wb.handle, explicit_index, &reread), 0);
+  fm_cell_xf reread{};
+  ASSERT_EQ(fm_styles_get_cell_xf(wb.handle, explicit_index, &reread), 0);
   EXPECT_EQ(reread.has_horizontal_align, 1);
   EXPECT_EQ(reread.has_vertical_align, 1);
   EXPECT_EQ(reread.has_wrap_text, 1);
   EXPECT_EQ(reread.has_justify_last_line, 1);
 }
 
-TEST(FormulonCApiStyles, CellStyleXfEx2RoundTripsOptionalAlignment) {
+TEST(FormulonCApiStyles, CellStyleXfRoundTripsOptionalAlignment) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create(&wb.handle), 0);
-  fm_cell_xf_ex2 style{};
+  fm_cell_xf style{};
   style.has_text_rotation = 1;
   style.text_rotation = 0;
   style.has_relative_indent = 1;
@@ -2029,10 +2095,10 @@ TEST(FormulonCApiStyles, CellStyleXfEx2RoundTripsOptionalAlignment) {
   style.has_shrink_to_fit = 1;
   style.shrink_to_fit = false;
   uint32_t style_index = 0;
-  ASSERT_EQ(fm_styles_add_cell_style_xf_ex2(wb.handle, style, &style_index), 0);
+  ASSERT_EQ(fm_styles_add_cell_style_xf(wb.handle, style, &style_index), 0);
 
-  fm_cell_xf_ex2 reread{};
-  ASSERT_EQ(fm_styles_get_cell_style_xf_ex2(wb.handle, style_index, &reread), 0);
+  fm_cell_xf reread{};
+  ASSERT_EQ(fm_styles_get_cell_style_xf(wb.handle, style_index, &reread), 0);
   EXPECT_EQ(reread.has_text_rotation, 1);
   EXPECT_EQ(reread.text_rotation, 0U);
   EXPECT_EQ(reread.has_relative_indent, 1);

@@ -897,13 +897,17 @@ Expected<MergeRange, Error> ParseA1RangeMerge(std::string_view ref) {
 /// drops that entry and load continues — the same disposition
 /// `read_conditional_formats` applies to a malformed `<conditionalFormatting>`
 /// block. Genuine cell-data corruption still fails the sheet.
-void SkipOverlayEntry(std::string_view part, std::string_view reason, std::string_view ref) {
+void SkipOverlayEntry(std::string_view part, std::string_view reason, std::string_view ref,
+                      ReadDiagnostics* diagnostics) {
   StructuredLog("io.sheet.overlay.skip")
       .field("part", part)
       .field("reason", reason)
       .field("ref", ref)
       .error_code(FormulonErrorCode::kIoSheetCorrupt)
       .warn();
+  if (diagnostics != nullptr) {
+    ++diagnostics->skipped_feature_count;
+  }
 }
 
 /// Splits a whitespace-separated `sqref="A1 B2:C3 D4"` attribute and
@@ -934,7 +938,7 @@ Expected<std::vector<MergeRange>, Error> ParseSqrefRanges(std::string_view sqref
 
 }  // namespace
 
-Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& worksheet) {
+Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& worksheet, ReadDiagnostics* diagnostics) {
   std::vector<MergeRange> out;
   if (!worksheet) {
     return out;
@@ -946,12 +950,12 @@ Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& works
   for (pugi::xml_node m = mc.child("mergeCell"); m; m = m.next_sibling("mergeCell")) {
     const std::string_view ref = attr_str(m, "ref");
     if (ref.empty()) {
-      SkipOverlayEntry("mergeCells", "ref attribute missing or empty", ref);
+      SkipOverlayEntry("mergeCells", "ref attribute missing or empty", ref, diagnostics);
       continue;
     }
     auto r = ParseA1RangeMerge(ref);
     if (!r) {
-      SkipOverlayEntry("mergeCells", "ref unparseable", ref);
+      SkipOverlayEntry("mergeCells", "ref unparseable", ref, diagnostics);
       continue;
     }
     out.push_back(r.value());
@@ -959,7 +963,7 @@ Expected<std::vector<MergeRange>, Error> read_merges(const pugi::xml_node& works
   return out;
 }
 
-Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& worksheet) {
+Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& worksheet, ReadDiagnostics* diagnostics) {
   std::vector<Hyperlink> out;
   if (!worksheet) {
     return out;
@@ -971,7 +975,7 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
   for (pugi::xml_node h = node.child("hyperlink"); h; h = h.next_sibling("hyperlink")) {
     const std::string_view ref = attr_str(h, "ref");
     if (ref.empty()) {
-      SkipOverlayEntry("hyperlinks", "ref attribute missing or empty", ref);
+      SkipOverlayEntry("hyperlinks", "ref attribute missing or empty", ref, diagnostics);
       continue;
     }
     // Hyperlinks may span a range (`ref="A1:B2"`); Excel applies the link
@@ -980,7 +984,7 @@ Expected<std::vector<Hyperlink>, Error> read_hyperlinks(const pugi::xml_node& wo
     // A1 reference from numeric coordinates.
     auto range_or = ParseA1RangeMerge(ref);
     if (!range_or) {
-      SkipOverlayEntry("hyperlinks", "ref unparseable", ref);
+      SkipOverlayEntry("hyperlinks", "ref unparseable", ref, diagnostics);
       continue;
     }
     Hyperlink hl;
@@ -1017,7 +1021,8 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
   }
 }
 
-Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet) {
+Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::xml_node& worksheet,
+                                                                   ReadDiagnostics* diagnostics) {
   std::vector<DataValidation> out;
   if (!worksheet) {
     return out;
@@ -1030,12 +1035,12 @@ Expected<std::vector<DataValidation>, Error> read_data_validations(const pugi::x
     DataValidation v;
     const std::string_view sqref = attr_str(dv, "sqref");
     if (sqref.empty()) {
-      SkipOverlayEntry("dataValidations", "sqref attribute missing or empty", sqref);
+      SkipOverlayEntry("dataValidations", "sqref attribute missing or empty", sqref, diagnostics);
       continue;
     }
     auto ranges_or = ParseSqrefRanges(sqref);
     if (!ranges_or) {
-      SkipOverlayEntry("dataValidations", "sqref unparseable", sqref);
+      SkipOverlayEntry("dataValidations", "sqref unparseable", sqref, diagnostics);
       continue;
     }
     v.ranges = std::move(ranges_or.value());

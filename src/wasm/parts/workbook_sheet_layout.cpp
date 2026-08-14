@@ -79,8 +79,8 @@ JsSheetViewResult JsWorkbook::getSheetView(uint32_t sheet) const {
     r.status = error_status(7000);
     return r;
   }
-  fm_sheet_view_ex_t v{};
-  fm_status_t rc = fm_sheet_get_view_ex(handle_, sheet, &v);
+  fm_sheet_view_t v{};
+  fm_status_t rc = fm_sheet_get_view(handle_, sheet, &v);
   if (rc != 0) {
     r.status = error_status(rc);
     return r;

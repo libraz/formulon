@@ -49,9 +49,9 @@ class JsWorkbook {
   /// Serialises the workbook using an explicit container `format`
   /// (`fm_workbook_format_t` ordinal: 1 = xlsx, 2 = xlsb). Unknown /
   /// undocumented values return `kInvalidArgument` via `status`.
-  JsSaveResult saveEx(int32_t format) const;
-  JsSaveDiagnosticsResult saveExWithDiagnostics(int32_t format) const;
-  JsXlsbReadDiagnosticsResult xlsbReadDiagnostics() const;
+  JsSaveResult saveAs(int32_t format) const;
+  JsSaveDiagnosticsResult saveWithDiagnostics(int32_t format) const;
+  JsReadDiagnosticsResult readDiagnostics() const;
 
   // ---- Sheet management ---------------------------------------------------
 

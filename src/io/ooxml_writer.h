@@ -13,12 +13,22 @@
 #include <cstdint>
 #include <vector>
 
+#include "io/package_diagnostics.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "workbook.h"
 
 namespace formulon {
 namespace io {
+
+/// Result of `write_ooxml_with_result`: the package bytes plus the loss /
+/// fallback counters this write accumulated. Mirrors
+/// `xlsb::XlsbWriteResult` so the C ABI can project either onto the same
+/// `fm_save_diagnostics_t`.
+struct OoxmlWriteResult {
+  std::vector<std::uint8_t> bytes;
+  WriteDiagnostics diagnostics;
+};
 
 /// Serialises `wb` into an in-memory OOXML byte stream.
 ///
@@ -71,6 +81,21 @@ namespace io {
 ///
 /// Returns `FormulonErrorCode::kIoWriteFailed` on any miniz failure;
 /// the error context identifies the offending part.
+///
+/// Every drop and fallback described above also increments a
+/// `WriteDiagnostics` counter: fallback table ids land in
+/// `renumbered_part_count`, dropped passthrough copies in
+/// `dropped_part_count`, and relationships whose target part is gone in
+/// `dropped_relationship_count`. The structured log is off by default in
+/// shipped builds, so these counters are what a caller actually sees.
+/// `downgraded_formula_count` and `deferred_feature_count` stay zero:
+/// this writer emits formula text verbatim and represents every modelled
+/// feature.
+Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb);
+
+/// Serialises `wb` and discards the write diagnostics. Equivalent to
+/// `write_ooxml_with_result(wb).bytes` for callers that do not inspect
+/// the counters.
 Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb);
 
 }  // namespace io

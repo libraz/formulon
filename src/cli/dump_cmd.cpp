@@ -147,7 +147,7 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     const char* name = nullptr;
     const char* formula = nullptr;
     int32_t local_sheet_id = -1;
-    if (auto rc = fm_workbook_defined_name_at_ex(wb, i, &name, &formula, &local_sheet_id); rc != 0) {
+    if (auto rc = fm_workbook_defined_name_at(wb, i, &name, &formula, &local_sheet_id); rc != 0) {
       return rc;
     }
     if (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) < n_sheets) {

@@ -488,14 +488,14 @@ Napi::Value Workbook::Save(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Value Workbook::SaveEx(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SaveAs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1) {
     // `format` has no sane default (unlike the other setters' 0-valued
     // fallbacks): a silent default would pick a container format the
     // caller never asked for. Reject like the WASM binding (embind
     // arity check) and the Python binding (required positional arg).
-    Napi::TypeError::New(env, "saveEx requires 1 argument (format)").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "saveAs requires 1 argument (format)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object out = Napi::Object::New(env);
@@ -507,7 +507,7 @@ Napi::Value Workbook::SaveEx(const Napi::CallbackInfo& info) {
   const std::int32_t format = info[0].As<Napi::Number>().Int32Value();
   uint8_t* buf = nullptr;
   std::size_t len = 0;
-  fm_status_t rc = fm_workbook_save_ex(handle_, format, &buf, &len);
+  fm_status_t rc = fm_workbook_save_as(handle_, format, &buf, &len);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     out.Set("bytes", env.Null());
@@ -523,16 +523,19 @@ Napi::Value Workbook::SaveEx(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Value Workbook::SaveExWithDiagnostics(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SaveWithDiagnostics(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 1) {
-    Napi::TypeError::New(env, "saveExWithDiagnostics requires 1 argument (format)").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "saveWithDiagnostics requires 1 argument (format)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   Napi::Object out = Napi::Object::New(env);
   out.Set("bytes", env.Null());
   out.Set("downgradedFormulaCount", Napi::Number::New(env, 0));
   out.Set("deferredFeatureCount", Napi::Number::New(env, 0));
+  out.Set("droppedPartCount", Napi::Number::New(env, 0));
+  out.Set("droppedRelationshipCount", Napi::Number::New(env, 0));
+  out.Set("renumberedPartCount", Napi::Number::New(env, 0));
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
     return out;
@@ -540,10 +543,8 @@ Napi::Value Workbook::SaveExWithDiagnostics(const Napi::CallbackInfo& info) {
   const std::int32_t format = info[0].As<Napi::Number>().Int32Value();
   uint8_t* buf = nullptr;
   std::size_t len = 0;
-  std::size_t downgraded_formula_count = 0;
-  std::size_t deferred_feature_count = 0;
-  fm_status_t rc = fm_workbook_save_ex_with_diagnostics(handle_, format, &buf, &len, &downgraded_formula_count,
-                                                        &deferred_feature_count);
+  fm_save_diagnostics_t d{};
+  fm_status_t rc = fm_workbook_save_with_diagnostics(handle_, format, &buf, &len, &d);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
@@ -555,34 +556,38 @@ Napi::Value Workbook::SaveExWithDiagnostics(const Napi::CallbackInfo& info) {
   fm_buffer_free(buf);
   out.Set("status", MakeOkStatus(env));
   out.Set("bytes", dst);
-  out.Set("downgradedFormulaCount", Napi::Number::New(env, static_cast<double>(downgraded_formula_count)));
-  out.Set("deferredFeatureCount", Napi::Number::New(env, static_cast<double>(deferred_feature_count)));
+  out.Set("downgradedFormulaCount", Napi::Number::New(env, static_cast<double>(d.downgraded_formula_count)));
+  out.Set("deferredFeatureCount", Napi::Number::New(env, static_cast<double>(d.deferred_feature_count)));
+  out.Set("droppedPartCount", Napi::Number::New(env, static_cast<double>(d.dropped_part_count)));
+  out.Set("droppedRelationshipCount", Napi::Number::New(env, static_cast<double>(d.dropped_relationship_count)));
+  out.Set("renumberedPartCount", Napi::Number::New(env, static_cast<double>(d.renumbered_part_count)));
   return out;
 }
 
-Napi::Value Workbook::XlsbReadDiagnostics(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::ReadDiagnostics(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   Napi::Object out = Napi::Object::New(env);
   out.Set("undecodedFormulaCount", Napi::Number::New(env, 0));
   out.Set("undecodedDefinedNameCount", Napi::Number::New(env, 0));
-  out.Set("droppedPartCount", Napi::Number::New(env, 0));
+  out.Set("undecodedPartCount", Napi::Number::New(env, 0));
+  out.Set("skippedFeatureCount", Napi::Number::New(env, 0));
+  out.Set("unknownContentTypeCount", Napi::Number::New(env, 0));
   if (handle_ == nullptr) {
     out.Set("status", NullHandleError(env));
     return out;
   }
-  std::size_t undecoded_formula_count = 0;
-  std::size_t undecoded_defined_name_count = 0;
-  std::size_t dropped_part_count = 0;
-  fm_status_t rc = fm_workbook_xlsb_read_diagnostics_ex(handle_, &undecoded_formula_count,
-                                                        &undecoded_defined_name_count, &dropped_part_count);
+  fm_read_diagnostics_t d{};
+  fm_status_t rc = fm_workbook_read_diagnostics(handle_, &d);
   if (rc != 0) {
     out.Set("status", MakeErrorStatus(env, rc));
     return out;
   }
   out.Set("status", MakeOkStatus(env));
-  out.Set("undecodedFormulaCount", Napi::Number::New(env, static_cast<double>(undecoded_formula_count)));
-  out.Set("undecodedDefinedNameCount", Napi::Number::New(env, static_cast<double>(undecoded_defined_name_count)));
-  out.Set("droppedPartCount", Napi::Number::New(env, static_cast<double>(dropped_part_count)));
+  out.Set("undecodedFormulaCount", Napi::Number::New(env, static_cast<double>(d.undecoded_formula_count)));
+  out.Set("undecodedDefinedNameCount", Napi::Number::New(env, static_cast<double>(d.undecoded_defined_name_count)));
+  out.Set("undecodedPartCount", Napi::Number::New(env, static_cast<double>(d.undecoded_part_count)));
+  out.Set("skippedFeatureCount", Napi::Number::New(env, static_cast<double>(d.skipped_feature_count)));
+  out.Set("unknownContentTypeCount", Napi::Number::New(env, static_cast<double>(d.unknown_content_type_count)));
   return out;
 }
 

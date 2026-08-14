@@ -20,8 +20,8 @@ fm_workbook_memory_usage
 
 # -- Save ------------------------------------------------------------------------
 fm_workbook_save
-fm_workbook_save_ex
-fm_workbook_save_ex_with_diagnostics
+fm_workbook_save_as
+fm_workbook_save_with_diagnostics
 fm_buffer_free
 
 # -- Sheets ----------------------------------------------------------------------
@@ -64,7 +64,6 @@ fm_workbook_cell_count
 fm_workbook_cell_at
 fm_workbook_defined_name_count
 fm_workbook_defined_name_at
-fm_workbook_defined_name_at_ex
 fm_workbook_table_count
 fm_workbook_table_at
 fm_workbook_table_create
@@ -118,7 +117,6 @@ fm_sheet_set_protection
 fm_sheet_get_auto_filter_xml
 fm_sheet_set_auto_filter_xml
 fm_sheet_get_view
-fm_sheet_get_view_ex
 fm_sheet_set_zoom
 fm_sheet_set_freeze
 fm_sheet_set_tab_hidden
@@ -165,7 +163,6 @@ fm_workbook_spill_info
 fm_cell_get_xf_index
 fm_cell_set_xf_index
 fm_styles_get_cell_xf
-fm_styles_get_cell_xf_ex2
 fm_styles_get_font
 fm_styles_get_fill
 fm_styles_get_border
@@ -180,16 +177,14 @@ fm_styles_get_cell_style_count
 fm_styles_get_cell_style
 fm_styles_get_cell_style_xf_count
 fm_styles_get_cell_style_xf
-fm_styles_get_cell_style_xf_ex2
 fm_styles_add_font
 fm_styles_add_fill
 fm_styles_add_border
 fm_styles_add_batch
 fm_styles_add_num_fmt
 fm_styles_add_cell_xf
-fm_styles_add_cell_xf_ex2
 fm_styles_add_dxf
-fm_styles_add_cell_style_xf_ex2
+fm_styles_add_cell_style_xf
 fm_styles_set_cell_style
 
 # -- Pivot layout projection -----------------------------------------------------
@@ -244,6 +239,7 @@ fm_workbook_pivot_field_set_subtotal_top
 fm_workbook_pivot_field_add_aggregation
 fm_workbook_pivot_field_clear_aggregations
 fm_workbook_pivot_field_add_item
+fm_workbook_pivot_field_add_item_at
 fm_workbook_pivot_field_clear_items
 fm_workbook_pivot_field_set_item_visible
 fm_workbook_pivot_field_add_subtotal_fn
@@ -275,8 +271,7 @@ fm_workbook_external_link_count
 fm_workbook_external_link_at
 
 # -- Diagnostics -----------------------------------------------------------------
-fm_workbook_xlsb_read_diagnostics
-fm_workbook_xlsb_read_diagnostics_ex
+fm_workbook_read_diagnostics
 fm_last_error_message
 fm_last_error_context
 fm_status_string

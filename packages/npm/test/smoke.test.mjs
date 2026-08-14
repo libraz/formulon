@@ -78,7 +78,7 @@ function emitXlsbWarning(Module, xlsbFormat) {
   try {
     assert.ok(wb.setFormula(0, 0, 0, '=@A1:A10').ok);
     assert.ok(wb.recalc().ok);
-    assert.ok(wb.saveEx(xlsbFormat).status.ok);
+    assert.ok(wb.saveAs(xlsbFormat).status.ok);
   } finally {
     wb.delete();
   }

@@ -212,7 +212,8 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
 
 }  // namespace
 
-Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
+Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
+  WriteDiagnostics diagnostics;
   const std::size_t sheet_count = wb.sheet_count();
   if (sheet_count == 0) {
     return make_error(FormulonErrorCode::kIoWriteFailed, "workbook has zero sheets", "context=write_ooxml");
@@ -239,7 +240,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   }
 
   const SharedStrings shared_strings = BuildSharedStrings(wb);
-  const EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty());
+  const EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics);
 
   ZipWriterGuard writer;
   if (!writer.init()) {
@@ -263,7 +264,7 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 2. _rels/.rels
   {
-    auto result = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(wb, plan), &written_paths);
+    auto result = AddPart(writer.get(), "_rels/.rels", BuildPackageRels(wb, plan, &diagnostics), &written_paths);
     if (!result) {
       return result.error();
     }
@@ -279,8 +280,8 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
 
   // 4. xl/_rels/workbook.xml.rels
   {
-    auto result =
-        AddPart(writer.get(), "xl/_rels/workbook.xml.rels", BuildWorkbookRels(sheet_count, plan, wb), &written_paths);
+    auto result = AddPart(writer.get(), "xl/_rels/workbook.xml.rels",
+                          BuildWorkbookRels(sheet_count, plan, wb, &diagnostics), &written_paths);
     if (!result) {
       return result.error();
     }
@@ -497,7 +498,15 @@ Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
   if (archive_ptr != nullptr) {
     mz_free(archive_ptr);
   }
-  return bytes;
+  return OoxmlWriteResult{std::move(bytes), diagnostics};
+}
+
+Expected<std::vector<std::uint8_t>, Error> write_ooxml(const Workbook& wb) {
+  auto result = write_ooxml_with_result(wb);
+  if (!result) {
+    return result.error();
+  }
+  return std::move(result.value().bytes);
 }
 
 }  // namespace io

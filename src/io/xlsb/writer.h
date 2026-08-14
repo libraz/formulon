@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "io/package_diagnostics.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "workbook.h"
@@ -44,13 +45,13 @@ namespace xlsb {
 
 struct XlsbWriteResult {
   std::vector<std::uint8_t> bytes;
-  std::uint32_t downgraded_formula_count = 0;
-  std::uint32_t deferred_feature_count = 0;
+  WriteDiagnostics diagnostics;
 };
 
 /// Serialises a workbook and reports formulas emitted as cached literals
-/// because their AST could not be lowered to XLSB Ptg tokens, plus modelled
-/// features the current XLSB writer could not represent.
+/// because their AST could not be lowered to XLSB Ptg tokens, modelled
+/// features the current XLSB writer could not represent, and the
+/// passthrough parts / relationships this write had to drop.
 Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook);
 
 /// Serialises `workbook` into an in-memory `.xlsb` byte stream.

@@ -373,7 +373,7 @@ TEST(XlsbWriter, InvalidWorksheetFormatDefaultsUseSafeFallbacksAndAreDeferred) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().deferred_feature_count, 3U);
+  EXPECT_EQ(write_or.value().diagnostics.deferred_feature_count, 3U);
 
   ZipReader zip;
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
@@ -894,7 +894,7 @@ TEST(XlsbWriter, FutureFunctionCallRegistersHiddenName) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
   ZipReader zip;
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
   auto workbook_or = zip.read_entry("xl/workbook.bin");
@@ -918,7 +918,7 @@ TEST(XlsbWriter, CallWithNoKnownFuncIdIsNotEncodedAsAFutureFunction) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().downgraded_formula_count, 1U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 1U);
   ZipReader zip;
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
   auto workbook_or = zip.read_entry("xl/workbook.bin");
@@ -947,7 +947,7 @@ TEST(XlsbWriter, LocalisedJisSpellingSavesAsTheStoredDbcsSpelling) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
 
   auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
@@ -979,7 +979,7 @@ TEST(XlsbWriter, HarvestedFuncIdCallsRoundTripWithIdenticalFormulaText) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
 
   auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
@@ -1008,7 +1008,7 @@ TEST(XlsbWriter, UnencodableFormulaDowngradesToCachedLiteralAndReportsIt) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().downgraded_formula_count, 1U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 1U);
   auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
   const Cell* cell = read_or.value().workbook.sheet(0).cell_at(0U, 0U);
@@ -1026,7 +1026,7 @@ TEST(XlsbWriter, UnencodableSpillFormulaDowngradesAnchorWithoutPhantoms) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().downgraded_formula_count, 1U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 1U);
   auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
   const Sheet& rt = read_or.value().workbook.sheet(0);
@@ -1291,7 +1291,7 @@ TEST(XlsbWriter, ReportsDeferredSheetFeatures) {
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
   // Validation and auto-filter state remain deferred; hyperlinks now emit as
   // BrtHLink records and therefore no longer inflate this counter.
-  EXPECT_EQ(write_or.value().deferred_feature_count, 2U);
+  EXPECT_EQ(write_or.value().diagnostics.deferred_feature_count, 2U);
 }
 
 TEST(XlsbWriter, RejectsInvalidHyperlinkRectangle) {
@@ -1551,7 +1551,7 @@ TEST(XlsbWriter, WholeColumnFormulaSavesWithoutDowngrade) {
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  EXPECT_EQ(write_or.value().downgraded_formula_count, 0U);
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
   auto read_or = read_xlsb(SpanOf(write_or.value().bytes));
   ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message << " | " << read_or.error().context;
   const Cell* cell = read_or.value().workbook.sheet(0).cell_at(0U, 0U);

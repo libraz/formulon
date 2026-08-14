@@ -39,12 +39,12 @@ from formulon import (
     PivotFieldSpec,
     PivotReportLayout,
     PivotWorksheetSource,
+    ReadDiagnostics,
     SaveDiagnostics,
     SheetProtection,
     ValueKind,
     Workbook,
     WorkbookFormat,
-    XlsbReadDiagnostics,
 )
 from formulon import _structs as S
 
@@ -97,6 +97,12 @@ def _append_empty_zip_entry(data: bytes, name: str) -> bytes:
 class StructLayoutTests(unittest.TestCase):
     """Guards against silent field-reorder breakage in _structs.py."""
 
+    # One pinned wasm32 size per `Struct` in `_structs.py`. The values are
+    # deliberately literal rather than derived -- a derived table would agree
+    # with any layout and assert nothing. What binds them to the C header is
+    # `python-struct-layouts` below; this table's job is to make a silent
+    # *size* change loud, and `test_every_struct_has_a_pinned_size` is what
+    # stops a new struct from opting out by simply not being listed.
     EXPECTED_SIZES = {
         "MERGE_RANGE": 16,
         "HYPERLINK": 32,
@@ -104,19 +110,24 @@ class StructLayoutTests(unittest.TestCase):
         "DATA_VALIDATION": 52,
         "SHEET_PROTECTION": 88,
         "VIEWPORT": 20,
+        "CELL_NODE": 12,
+        "CFVO": 12,
+        "CF_CELL_RANGE": 16,
+        "CF_COLOR": 4,
         "CF_MATCH": 72,
         "CF_RULE": 216,
         "PIVOT_CELL": 40,
         "PIVOT_FIELD_SPEC": 20,
         "PIVOT_DATA_FIELD_SPEC": 28,
         "PIVOT_FILTER_SPEC": 64,
+        "READ_DIAGNOSTICS": 20,
+        "SAVE_DIAGNOSTICS": 20,
         "SPILL_INFO": 20,
         "FUNCTION_METADATA": 24,
-        "SHEET_VIEW": 16,
+        "SHEET_VIEW": 40,
         "COLUMN_LAYOUT": 40,
         "ROW_LAYOUT": 32,
-        "CELL_XF": 20,
-        "CELL_XF_EX2": 88,
+        "CELL_XF": 88,
         "COLOR_SPEC": 24,
         "FONT_RECORD": 80,
         "FILL_RECORD": 64,
@@ -131,6 +142,22 @@ class StructLayoutTests(unittest.TestCase):
         for name, expected in self.EXPECTED_SIZES.items():
             layout = getattr(S, name)
             self.assertEqual(layout.size, expected, f"{name} size drifted to {layout.size}")
+
+    def test_every_struct_has_a_pinned_size(self) -> None:
+        """No `Struct` may be absent from ``EXPECTED_SIZES``.
+
+        Without this the table degrades quietly: a struct added to
+        ``_structs.py`` and never listed here is not size-pinned, and nothing
+        says so. Both directions are checked so a removed struct cannot leave
+        a stale entry behind either.
+        """
+        declared = {name for name, value in vars(S).items() if isinstance(value, S.Struct)}
+        pinned = set(self.EXPECTED_SIZES)
+        self.assertEqual(
+            declared,
+            pinned,
+            f"not size-pinned: {sorted(declared - pinned)}; stale entries: {sorted(pinned - declared)}",
+        )
 
     def test_pivot_cell_value_offset(self) -> None:
         self.assertEqual(S.PIVOT_CELL_VALUE_OFFSET, 8)
@@ -808,14 +835,14 @@ class ExternalLinkTests(unittest.TestCase):
             self.assertEqual(wb.get_external_links(), [])
 
 
-class XlsbDiagnosticsTests(unittest.TestCase):
+class PackageDiagnosticsTests(unittest.TestCase):
     def test_unknown_save_format_raises_formulon_error(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(formulon.FormulonError) as ctx:
-                wb.save_ex_with_diagnostics(WorkbookFormat.UNKNOWN)
+                wb.save_with_diagnostics(WorkbookFormat.UNKNOWN)
             self.assertIn("unsupported format", str(ctx.exception))
 
-    def test_save_and_read_diagnostics_preserve_old_save_shape(self) -> None:
+    def test_save_and_read_diagnostics_report_every_counter(self) -> None:
         with Workbook.create_default() as wb:
             wb.set_formula(0, 0, 0, "=@A1:A10")
             wb.add_validation(
@@ -837,53 +864,59 @@ class XlsbDiagnosticsTests(unittest.TestCase):
                 ),
             )
 
-            xlsx = wb.save_ex_with_diagnostics(WorkbookFormat.XLSX)
+            xlsx = wb.save_with_diagnostics(WorkbookFormat.XLSX)
             self.assertIsInstance(xlsx, SaveDiagnostics)
             self.assertIsInstance(xlsx.bytes, bytes)
             self.assertEqual(xlsx.downgraded_formula_count, 0)
             self.assertEqual(xlsx.deferred_feature_count, 0)
+            self.assertEqual(xlsx.dropped_part_count, 0)
+            self.assertEqual(xlsx.dropped_relationship_count, 0)
+            self.assertEqual(xlsx.renumbered_part_count, 0)
 
-            xlsb = wb.save_ex_with_diagnostics(WorkbookFormat.XLSB)
+            xlsb = wb.save_with_diagnostics(WorkbookFormat.XLSB)
             self.assertEqual(xlsb.downgraded_formula_count, 1)
             self.assertGreaterEqual(xlsb.deferred_feature_count, 2)
+            # The binary writer never reassigns a part id.
+            self.assertEqual(xlsb.renumbered_part_count, 0)
 
-            # The legacy API remains a plain bytes return value.
-            self.assertIsInstance(wb.save_ex(WorkbookFormat.XLSB), bytes)
+            # `save_as` remains a plain bytes return value.
+            self.assertIsInstance(wb.save_as(WorkbookFormat.XLSB), bytes)
 
             with Workbook.load(xlsb.bytes) as loaded:
-                read = loaded.xlsb_read_diagnostics()
-                self.assertIsInstance(read, XlsbReadDiagnostics)
+                read = loaded.read_diagnostics()
+                self.assertIsInstance(read, ReadDiagnostics)
                 self.assertEqual(read.undecoded_formula_count, 0)
                 self.assertEqual(read.undecoded_defined_name_count, 0)
-                self.assertEqual(read.dropped_part_count, 0)
+                self.assertEqual(read.undecoded_part_count, 0)
+                self.assertEqual(read.skipped_feature_count, 0)
+                self.assertEqual(read.unknown_content_type_count, 0)
 
             with Workbook.load(_append_empty_zip_entry(xlsb.bytes, "xl/preserved.bin")) as preserved_loaded:
-                preserved = preserved_loaded.xlsb_read_diagnostics()
-                self.assertEqual(preserved.dropped_part_count, 0)
+                preserved = preserved_loaded.read_diagnostics()
+                self.assertEqual(preserved.undecoded_part_count, 0)
 
     def test_diagnostic_scratch_is_freed_when_a_later_allocation_fails(self) -> None:
+        # `save_with_diagnostics` takes three blocks (two out-pointers plus the
+        # counter struct). If the second allocation raises, the first must
+        # still be released rather than leaked into the WASM heap.
         with Workbook.create_default() as wb:
             original_alloc = formulon.workbook.LIB.alloc
-            for method, args, expected_frees in (
-                (wb.save_ex_with_diagnostics, (WorkbookFormat.XLSB,), 1),
-                (wb.xlsb_read_diagnostics, (), 1),
+            calls = 0
+
+            def alloc_then_fail(size: int) -> int:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise RuntimeError("synthetic allocation failure")
+                return original_alloc(size)
+
+            with (
+                mock.patch.object(formulon.workbook.LIB, "alloc", side_effect=alloc_then_fail),
+                mock.patch.object(formulon.workbook.LIB, "free", wraps=formulon.workbook.LIB.free) as free,
             ):
-                calls = 0
-
-                def alloc_then_fail(size: int) -> int:
-                    nonlocal calls
-                    calls += 1
-                    if calls == 2:
-                        raise RuntimeError("synthetic allocation failure")
-                    return original_alloc(size)
-
-                with (
-                    mock.patch.object(formulon.workbook.LIB, "alloc", side_effect=alloc_then_fail),
-                    mock.patch.object(formulon.workbook.LIB, "free", wraps=formulon.workbook.LIB.free) as free,
-                ):
-                    with self.assertRaises(RuntimeError):
-                        method(*args)
-                self.assertEqual(free.call_count, expected_frees)
+                with self.assertRaises(RuntimeError):
+                    wb.save_with_diagnostics(WorkbookFormat.XLSB)
+            self.assertEqual(free.call_count, 1)
 
 
 class SurfaceParityTests(unittest.TestCase):
@@ -993,6 +1026,8 @@ class SurfaceParityTests(unittest.TestCase):
         "pivot_set_anchor",
         "pivot_set_grand_totals",
         "pivot_field_add",
+        "pivot_field_add_item",
+        "pivot_field_add_item_at",
         "pivot_field_set_axis",
         "pivot_data_field_add",
         "pivot_data_field_set",
@@ -1010,8 +1045,10 @@ class SurfaceParityTests(unittest.TestCase):
         "external_link_count",
         "get_external_link_at",
         "get_external_links",
-        "save_ex_with_diagnostics",
-        "xlsb_read_diagnostics",
+        "save",
+        "save_as",
+        "save_with_diagnostics",
+        "read_diagnostics",
     ]
 
     def test_all_methods_present(self) -> None:

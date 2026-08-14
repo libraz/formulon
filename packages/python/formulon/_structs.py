@@ -371,6 +371,28 @@ PIVOT_FILTER_SPEC = Struct(
     ],
 )
 
+READ_DIAGNOSTICS = Struct(
+    "fm_read_diagnostics_t",
+    [
+        ("undecoded_formula_count", U32),
+        ("undecoded_defined_name_count", U32),
+        ("undecoded_part_count", U32),
+        ("skipped_feature_count", U32),
+        ("unknown_content_type_count", U32),
+    ],
+)
+
+SAVE_DIAGNOSTICS = Struct(
+    "fm_save_diagnostics_t",
+    [
+        ("downgraded_formula_count", U32),
+        ("deferred_feature_count", U32),
+        ("dropped_part_count", U32),
+        ("dropped_relationship_count", U32),
+        ("renumbered_part_count", U32),
+    ],
+)
+
 SPILL_INFO = Struct(
     "fm_spill_info_t",
     [
@@ -396,16 +418,6 @@ FUNCTION_METADATA = Struct(
 
 SHEET_VIEW = Struct(
     "fm_sheet_view_t",
-    [
-        ("zoom_scale", U32),
-        ("freeze_rows", U32),
-        ("freeze_cols", U32),
-        ("tab_hidden", I32),
-    ],
-)
-
-SHEET_VIEW_EX = Struct(
-    "fm_sheet_view_ex_t",
     [
         ("zoom_scale", U32),
         ("freeze_rows", U32),
@@ -446,24 +458,10 @@ ROW_LAYOUT = Struct(
     ],
 )
 
+# Every optional alignment attribute has an explicit presence flag so zero /
+# false values can be round-tripped.
 CELL_XF = Struct(
     "fm_cell_xf",
-    [
-        ("font_index", U32),
-        ("fill_index", U32),
-        ("border_index", U32),
-        ("num_fmt_id", U16),
-        ("horizontal_align", U8),
-        ("vertical_align", U8),
-        ("wrap_text", I32),
-    ],
-)
-
-# ABI-safe superset of ``fm_cell_xf``. Keep ``CELL_XF`` and the legacy C
-# struct unchanged; every optional alignment attribute has an explicit
-# presence flag so zero / false values can be round-tripped.
-CELL_XF_EX2 = Struct(
-    "fm_cell_xf_ex2",
     [
         ("font_index", U32),
         ("fill_index", U32),

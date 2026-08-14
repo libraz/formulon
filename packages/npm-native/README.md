@@ -71,7 +71,7 @@ Cells & recalc
   setNumber, setBool, setText, setBlank, setFormula
   getValue, getLambdaText
   recalc, recalcParallel, partialRecalc, setIterative, setIterativeProgress, save,
-  saveEx, saveExWithDiagnostics, xlsbReadDiagnostics
+  saveAs, saveWithDiagnostics, readDiagnostics
 
 Workbook policy / catalog
   calcMode, setCalcMode, excelProfileId, setExcelProfileId

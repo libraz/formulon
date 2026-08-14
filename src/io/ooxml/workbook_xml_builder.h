@@ -27,7 +27,11 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan);
 /// Builds the package-level `_rels/.rels` part: the relationship to the
 /// workbook part itself plus optional core / extended property
 /// relationships when the corresponding passthrough parts survived.
-std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan);
+///
+/// A round-tripped relationship whose target part is no longer in the
+/// package is omitted and bumps `diagnostics->dropped_relationship_count`.
+/// `diagnostics` may be NULL, which discards the count.
+std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics);
 
 /// Builds the `xl/workbook.xml` part: `<sheets>`, optional
 /// `<externalReferences>`, `<definedNames>`, `<calcPr>`, and
@@ -37,7 +41,11 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan);
 /// Builds the `xl/_rels/workbook.xml.rels` part: per-sheet worksheet
 /// relationships, the styles relationship, pivot-cache / external-link
 /// relationships, and any round-tripped `UnknownRelationship` entries.
-std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan, const Workbook& wb);
+///
+/// Drops entries whose target part is absent under the same rule, the
+/// same counter and the same NULL policy as `BuildPackageRels`.
+std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan, const Workbook& wb,
+                              WriteDiagnostics* diagnostics);
 
 }  // namespace io
 }  // namespace formulon
