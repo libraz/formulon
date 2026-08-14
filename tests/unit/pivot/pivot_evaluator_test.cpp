@@ -22,6 +22,7 @@
 #include "eval/groupby_pivotby/common.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_index.h"
 #include "pivot/pivot_layout.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
@@ -142,6 +143,50 @@ PivotCache build_non_integral_amount_cache() {
   add("North", "Gadget", 2.0);
   add("South", "Widget", 1e20);
   add("South", "Gadget", 4.0);
+  return cache;
+}
+
+// Index into `build_shared_region_cache()`'s Region `shared_items` of the
+// entry with no value, and of the text entry deliberately spelled like the
+// default blank placeholder.
+constexpr std::uint32_t kSharedRegionBlank = 1U;
+constexpr std::uint32_t kSharedRegionPlaceholderText = 2U;
+
+// Same three-column shape as `build_basic_cache()`, but Region is a *shared*
+// field the way a discrete axis column arrives from OOXML: each record stores
+// an index into `shared_items`, one of which has no value at all.
+//
+// The third shared item is a genuine text value spelled exactly like the
+// default blank placeholder, so a filter that identified the empty item by its
+// rendered label would catch this row too.
+//
+//   Region     Product  Amount
+//   ---------  -------  ------
+//   North      Widget    100
+//   <no value> Widget     10
+//   "(blank)"  Widget      7
+PivotCache build_shared_region_cache() {
+  PivotCache cache;
+  cache.set_cache_id(1);
+  PivotCacheField region;
+  region.name = "Region";
+  region.shared_items.push_back(owned_text(cache, "North"));
+  region.shared_items.push_back(Value::blank());
+  region.shared_items.push_back(owned_text(cache, std::string{PivotLayoutOptions{}.blank_item_label}));
+  cache.mutable_fields().push_back(std::move(region));
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+
+  auto add = [&](std::uint32_t region_index, const char* product, double amount) {
+    PivotCacheRecord rec;
+    rec.cells = {Value::number(region_index), owned_text(cache, product), Value::number(amount)};
+    rec.cell_is_index = {true, false, false};
+    cache.mutable_records().push_back(std::move(rec));
+  };
+
+  add(0U, "Widget", 100.0);
+  add(kSharedRegionBlank, "Widget", 10.0);
+  add(kSharedRegionPlaceholderText, "Widget", 7.0);
   return cache;
 }
 
@@ -1879,6 +1924,66 @@ TEST(PivotEvaluator, ManualFilterHidesItem) {
   ASSERT_EQ(r.rows.size(), 1U);
   EXPECT_EQ(r.rows[0].label, "North");
   EXPECT_DOUBLE_EQ(r.values[0][0][0].as_number(), 175.0);
+}
+
+// A source cell with no value is an axis item like any other, so the manual
+// filter has to be able to hide it. It is the one item that cannot be named:
+// its label is the locale's placeholder, which a genuine text value is free to
+// spell identically, so the filter identifies it by the cache value the item
+// binds to instead.
+TEST(PivotEvaluator, ManualFilterHidesTheBlankItem) {
+  PivotCache cache = build_shared_region_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  PivotItem hidden_blank;
+  hidden_blank.visible = false;
+  hidden_blank.has_cache_index = true;
+  hidden_blank.cache_index = kSharedRegionBlank;
+  table.mutable_fields()[0].items.push_back(hidden_blank);
+  // The load path leaves the item unnamed, because the value it binds to
+  // renders to nothing. Running it here pins that the filter works on the
+  // shape a workbook actually arrives in.
+  resolve_pivot_names(table, cache);
+  ASSERT_TRUE(table.fields()[0].items[0].name.empty());
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  const PivotLayoutOptions defaults;
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_DOUBLE_EQ(r.values[row_index(r, "North")][0][0].as_number(), 100.0);
+  // The text value spelled like the placeholder is untouched; only the group
+  // with no value is gone, and its 10 is out of every aggregate.
+  const std::size_t placeholder_text = row_index(r, defaults.blank_item_label);
+  ASSERT_NE(placeholder_text, static_cast<std::size_t>(-1));
+  EXPECT_DOUBLE_EQ(r.values[placeholder_text][0][0].as_number(), 7.0);
+}
+
+// The mirror direction: hiding the text item that happens to be spelled like
+// the placeholder must not take the blank group with it.
+TEST(PivotEvaluator, HidingPlaceholderSpelledTextKeepsTheBlankItem) {
+  PivotCache cache = build_shared_region_cache();
+  PivotTable table = build_sum_amount_table(/*row=*/{0}, /*col=*/{});
+  table.set_grand_totals(/*rows=*/false, /*cols=*/false);
+  PivotItem hidden_text;
+  hidden_text.visible = false;
+  hidden_text.has_cache_index = true;
+  hidden_text.cache_index = kSharedRegionPlaceholderText;
+  table.mutable_fields()[0].items.push_back(hidden_text);
+  resolve_pivot_names(table, cache);
+  const PivotLayoutOptions defaults;
+  ASSERT_EQ(table.fields()[0].items[0].name, defaults.blank_item_label);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  const PivotResult& r = r_or.value();
+
+  ASSERT_EQ(r.rows.size(), 2U);
+  EXPECT_DOUBLE_EQ(r.values[row_index(r, "North")][0][0].as_number(), 100.0);
+  const std::size_t blank_leaf = row_index(r, defaults.blank_item_label);
+  ASSERT_NE(blank_leaf, static_cast<std::size_t>(-1));
+  EXPECT_DOUBLE_EQ(r.values[blank_leaf][0][0].as_number(), 10.0);
 }
 
 TEST(PivotEvaluator, ManualFilterMatchesNumericDisplayLabel) {

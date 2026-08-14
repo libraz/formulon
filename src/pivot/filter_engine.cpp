@@ -131,6 +131,22 @@ bool label_filter_passes(const PivotFilter& f, std::string_view label) {
   return true;
 }
 
+// Resolves the cache value a manual-filter item binds to, using the same
+// index `resolve_pivot_names` reads when it derives `PivotItem::name`, so the
+// two cannot disagree about which shared item an entry denotes. Returns
+// `nullptr` when the cache does not cover the field or the index falls outside
+// `shared_items`: such an item has no trustworthy binding.
+const Value* item_cache_value(const PivotCache& cache, std::size_t field_index, const PivotItem& item) {
+  if (field_index >= cache.fields().size()) {
+    return nullptr;
+  }
+  const std::vector<Value>& shared = cache.fields()[field_index].shared_items;
+  if (item.cache_index >= shared.size()) {
+    return nullptr;
+  }
+  return &shared[item.cache_index];
+}
+
 enum class ScoreAxis { Row, Col };
 
 Value leaf_score(const PivotResult& result, std::size_t r, std::size_t c, std::size_t data_field_index) {
@@ -213,13 +229,24 @@ bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cach
     }
     const Value v = cell_value(cache, record, fi);
     for (const PivotItem& item : field.items) {
-      // An item whose cache index did not resolve has no trustworthy label.
-      // Treating its empty name as a hidden label accidentally filters every
-      // genuine blank source value instead of only the malformed item.
-      if (item.name.empty()) {
+      if (item.visible) {
         continue;
       }
-      if (!item.visible && with_display_string(v, [&](std::string_view name) { return item.name == name; })) {
+      if (item.name.empty()) {
+        // The one axis item with no label of its own is the blank: it binds to
+        // a cache value that renders to nothing, so `resolve_pivot_names`
+        // leaves the name empty. Identify it by that binding rather than by the
+        // label it is drawn with — the placeholder is an ordinary string a
+        // genuine text value is free to spell identically, and matching on it
+        // would hide that value too. An item whose binding does not resolve is
+        // merely malformed and must not filter anything.
+        const Value* bound = item_cache_value(cache, fi, item);
+        if (bound != nullptr && bound->is_blank() && v.is_blank()) {
+          return false;
+        }
+        continue;
+      }
+      if (with_display_string(v, [&](std::string_view name) { return item.name == name; })) {
         return false;
       }
     }

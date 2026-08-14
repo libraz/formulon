@@ -33,7 +33,17 @@ namespace formulon::pivot {
 /// field that declares one, AND the axis-level label filters in
 /// `active_filters`. Empty `items` lists match all values (Excel default
 /// — items[] is only authored when the user has hidden at least one
-/// value). An axis filter names its field under the shared resolution rule
+/// value).
+///
+/// A hidden item normally matches records by its label. The blank item is the
+/// exception: it has no label of its own, so it is matched by the cache value
+/// it binds to (`shared_items[cache_index]`, the same binding
+/// `resolve_pivot_names` reads) being blank. Identifying it by the placeholder
+/// the grid draws instead would also hide any genuine text value spelled the
+/// same way. An item that is unlabelled *and* binds to nothing resolvable is
+/// malformed and filters nothing.
+///
+/// An axis filter names its field under the shared resolution rule
 /// (`resolve_field_by_any_name`); a name that resolves to nothing is skipped
 /// here because the public mutators already reject one on entry.
 bool record_passes_manual_filter(const PivotTable& table, const PivotCache& cache, const PivotCacheRecord& record);
