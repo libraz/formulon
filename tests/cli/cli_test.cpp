@@ -27,7 +27,9 @@
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "io/defined_names.h"
 #include "io/format_detect.h"
+#include "workbook.h"
 
 #ifndef FORMULON_CLI_PATH
 #error "FORMULON_CLI_PATH must be defined by the build system"
@@ -189,6 +191,69 @@ bool write_fixture_workbook(const std::string& path, std::string_view extra_text
   out.close();
   fm_buffer_free(bytes);
   fm_workbook_destroy(wb);
+  return out.good();
+}
+
+// A wide, pure formula layer makes the CLI's parallel route observable
+// without relying on volatile functions or timing. The caller receives an
+// ordinary .xlsx that the command must load, recalculate, save, and whose
+// last lane we inspect after reopening.
+bool write_wide_recalc_fixture(const std::string& path) {
+  fm_workbook_t* wb = nullptr;
+  if (fm_workbook_create(&wb) != 0) {
+    return false;
+  }
+  constexpr std::uint32_t kRows = 48U;
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    const std::string formula = "=A" + std::to_string(row + 1U) + "*2+1";
+    if (fm_workbook_set_number(wb, 0U, row, 0U, static_cast<double>(row + 1U)) != 0 ||
+        fm_workbook_set_formula(wb, 0U, row, 1U, formula.c_str()) != 0) {
+      fm_workbook_destroy(wb);
+      return false;
+    }
+  }
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0U;
+  if (fm_workbook_save(wb, &bytes, &len) != 0) {
+    fm_workbook_destroy(wb);
+    return false;
+  }
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  if (!out) {
+    fm_buffer_free(bytes);
+    fm_workbook_destroy(wb);
+    return false;
+  }
+  out.write(reinterpret_cast<const char*>(bytes), static_cast<std::streamsize>(len));
+  out.close();
+  fm_buffer_free(bytes);
+  fm_workbook_destroy(wb);
+  return out.good();
+}
+
+bool write_out_of_range_defined_names_fixture(const std::string& path) {
+  formulon::Workbook wb = formulon::Workbook::create();
+  for (std::size_t i = 1; i < 7; ++i) {
+    wb.add_sheet("Sheet" + std::to_string(i + 1));
+  }
+
+  std::vector<formulon::io::DefinedName> names;
+  names.push_back(formulon::io::DefinedName{"Before", "=1", -1, false, ""});
+  names.push_back(formulon::io::DefinedName{"Bad", "=Sheet1!$A$1", 99, false, ""});
+  names.push_back(formulon::io::DefinedName{"After", "=2", -1, false, ""});
+  wb.set_defined_names(std::move(names));
+
+  auto saved = wb.save();
+  if (!saved) {
+    return false;
+  }
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  if (!out) {
+    return false;
+  }
+  const std::vector<std::uint8_t>& bytes = saved.value();
+  out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  out.close();
   return out.good();
 }
 
@@ -365,6 +430,8 @@ TEST(FormulonCli, RecalcHelpDocumentsActualSuccessStatus) {
   CliRun r = run_cli({"recalc", "--help"});
   EXPECT_EQ(r.exit_code, 0);
   EXPECT_NE(r.stdout_text.find("formulon: recalc: ok, wrote M bytes to 'OUT'"), std::string::npos);
+  EXPECT_NE(r.stdout_text.find("--threads N"), std::string::npos);
+  EXPECT_NE(r.stdout_text.find("recalc remains serial"), std::string::npos);
 }
 
 TEST(FormulonCli, PaginatePrintsResolvedGeometry) {
@@ -486,6 +553,12 @@ TEST(FormulonCli, EvalUnknownFlagExits64) {
   EXPECT_EQ(r.exit_code, 64);
 }
 
+TEST(FormulonCli, EvalNegativeFormulaWithoutTerminatorExits64) {
+  CliRun r = run_cli({"eval", "-1+2"});
+  EXPECT_EQ(r.exit_code, 64);
+  EXPECT_TRUE(r.stdout_text.empty());
+}
+
 TEST(FormulonCli, EvalOptionTerminatorAcceptsNegativeFormula) {
   CliRun r = run_cli({"eval", "--", "-1+2"});
   EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
@@ -565,6 +638,81 @@ TEST(FormulonCli, RecalcRoundTripsFormulae) {
   EXPECT_EQ(v.kind, FM_VAL_NUMBER);
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
   fm_workbook_destroy(wb);
+}
+
+TEST(FormulonCli, RecalcWithoutThreadsKeepsSerialStatusShape) {
+  const std::string input = "/tmp/fm_cli_default_recalc_input.xlsx";
+  const std::string output = "/tmp/fm_cli_default_recalc_output.xlsx";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun result = run_cli({"recalc", input, "-o", output});
+  ASSERT_EQ(result.exit_code, 0) << result.stderr_text;
+  EXPECT_EQ(result.stderr_text.find("threads="), std::string::npos);
+  EXPECT_NE(result.stderr_text.find("formulon: recalc: ok, wrote "), std::string::npos);
+  EXPECT_NE(result.stderr_text.find(" bytes to '" + output + "'"), std::string::npos);
+}
+
+TEST(FormulonCli, RecalcThreadsUsesParallelSchedulerAndSavesWideDag) {
+  const std::string input = "/tmp/fm_cli_parallel_recalc_input.xlsx";
+  const std::string output = "/tmp/fm_cli_parallel_recalc_output.xlsx";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  ASSERT_TRUE(write_wide_recalc_fixture(input));
+
+  const CliRun result = run_cli({"recalc", "--threads", "4", input, "-o", output});
+  ASSERT_EQ(result.exit_code, 0) << result.stderr_text;
+  EXPECT_TRUE(result.stdout_text.empty());
+  EXPECT_NE(result.stderr_text.find("threads=4"), std::string::npos);
+  EXPECT_NE(result.stderr_text.find("cells_evaluated=48"), std::string::npos);
+  EXPECT_NE(result.stderr_text.find("sccs_processed="), std::string::npos);
+  EXPECT_NE(result.stderr_text.find("parallel_steps="), std::string::npos);
+  EXPECT_NE(result.stderr_text.find("worker_threads_started="), std::string::npos);
+  EXPECT_NE(result.stderr_text.find("worker_threads_used="), std::string::npos);
+
+  std::ifstream in(output, std::ios::binary);
+  ASSERT_TRUE(in);
+  const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  ASSERT_FALSE(bytes.empty());
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(wb, 0U, 47U, 1U, &value), 0);
+  EXPECT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 97.0);
+  fm_workbook_destroy(wb);
+}
+
+TEST(FormulonCli, RecalcThreadsOneStartsNoWorkers) {
+  const std::string input = "/tmp/fm_cli_serial_threads_input.xlsx";
+  const std::string output = "/tmp/fm_cli_serial_threads_output.xlsx";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun result = run_cli({"recalc", "--threads", "1", input, "-o", output});
+  ASSERT_EQ(result.exit_code, 0) << result.stderr_text;
+  EXPECT_NE(result.stderr_text.find("threads=1"), std::string::npos);
+  EXPECT_NE(result.stderr_text.find("worker_threads_started=0"), std::string::npos);
+  EXPECT_NE(result.stderr_text.find("worker_threads_used=0"), std::string::npos);
+}
+
+TEST(FormulonCli, RecalcThreadsRejectsInvalidValuesBeforeWriting) {
+  const std::string input = "/tmp/fm_cli_invalid_threads_input.xlsx";
+  const std::string output = "/tmp/fm_cli_invalid_threads_output.xlsx";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  ASSERT_TRUE(write_fixture_workbook(input));
+  std::remove(output.c_str());
+
+  for (const char* value : {"9", "-1", "abc", "4294967296", "--"}) {
+    const CliRun result = run_cli({"recalc", "--threads", value, input, "-o", output});
+    EXPECT_EQ(result.exit_code, 64) << value << " stderr=" << result.stderr_text;
+    EXPECT_NE(result.stderr_text.find("--threads"), std::string::npos);
+    std::ifstream absent(output, std::ios::binary);
+    EXPECT_FALSE(absent.good()) << "invalid value wrote output: " << value;
+  }
 }
 
 TEST(FormulonCli, RecalcLossWarningsAreNonfatalAndNotSuppressedByQuiet) {
@@ -894,6 +1042,103 @@ TEST(FormulonCli, RecalcNonexistentFileFailsCleanly) {
   EXPECT_EQ(r.stderr_text.find("warning:"), std::string::npos);
 }
 
+TEST(FormulonCli, RecalcOptionTerminatorAcceptsDashLeadingRelativePaths) {
+  const std::string input = "-fm_cli_recalc_dash_input.xlsx";
+  const std::string output = "-fm_cli_recalc_dash_output.xlsx";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  std::remove(output.c_str());
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun result = run_cli({"recalc", "--threads", "1", "-o", output, "--", input});
+  ASSERT_EQ(result.exit_code, 0) << result.stderr_text;
+
+  std::ifstream saved(output, std::ios::binary);
+  ASSERT_TRUE(saved);
+  const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(saved)), std::istreambuf_iterator<char>());
+  ASSERT_FALSE(bytes.empty());
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb), 0);
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(wb, 0U, 0U, 1U, &value), 0);
+  EXPECT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 8.0);
+  fm_workbook_destroy(wb);
+}
+
+TEST(FormulonCli, RecalcDashLeadingInputWithoutTerminatorIsUsageError) {
+  const std::string input = "-fm_cli_recalc_dash_without_terminator_input.xlsx";
+  const std::string output = "-fm_cli_recalc_dash_without_terminator_output.xlsx";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  std::remove(output.c_str());
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun result = run_cli({"recalc", input, "-o", output});
+  EXPECT_EQ(result.exit_code, 64);
+  EXPECT_TRUE(result.stdout_text.empty());
+  EXPECT_FALSE(std::ifstream(output, std::ios::binary).good());
+}
+
+TEST(FormulonCli, RecalcAcceptsDoubleDashAsOutputPathValue) {
+  const std::string input = "fm_cli_recalc_double_dash_input.xlsx";
+  const std::string output = "--";
+  PathGuard input_guard(input);
+  PathGuard output_guard(output);
+  std::remove(output.c_str());
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun result = run_cli({"recalc", input, "-o", output});
+  ASSERT_EQ(result.exit_code, 0) << result.stderr_text;
+
+  std::ifstream saved(output, std::ios::binary);
+  ASSERT_TRUE(saved);
+  const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(saved)), std::istreambuf_iterator<char>());
+  ASSERT_FALSE(bytes.empty());
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb), 0);
+  fm_value_t value{};
+  ASSERT_EQ(fm_workbook_get_value(wb, 0U, 0U, 1U, &value), 0);
+  EXPECT_EQ(value.kind, FM_VAL_NUMBER);
+  EXPECT_DOUBLE_EQ(value.u.number, 8.0);
+  fm_workbook_destroy(wb);
+}
+
+TEST(FormulonCli, OptionTerminatorRequiresExactlyOnePositional) {
+  const std::string output = "/tmp/fm_cli_terminator_recalc_output.xlsx";
+  PathGuard output_guard(output);
+
+  for (const std::vector<std::string>& args : {
+           std::vector<std::string>{"eval", "--"},
+           std::vector<std::string>{"dump", "--"},
+           std::vector<std::string>{"paginate", "--"},
+       }) {
+    const CliRun result = run_cli(args);
+    EXPECT_EQ(result.exit_code, 64) << "bare terminator command=" << args.front();
+  }
+
+  std::remove(output.c_str());
+  CliRun recalc_bare = run_cli({"recalc", "-o", output, "--"});
+  EXPECT_EQ(recalc_bare.exit_code, 64);
+  EXPECT_FALSE(std::ifstream(output, std::ios::binary).good());
+
+  for (const std::vector<std::string>& args : {
+           std::vector<std::string>{"eval", "--", "-1+2", "--json"},
+           std::vector<std::string>{"dump", "--", "-fm_cli_missing.xlsx", "--sheets"},
+           std::vector<std::string>{"paginate", "--", "-fm_cli_missing.xlsx", "--sheet"},
+       }) {
+    const CliRun result = run_cli(args);
+    EXPECT_EQ(result.exit_code, 64) << "post-terminator extra command=" << args.front();
+  }
+
+  std::remove(output.c_str());
+  CliRun recalc_extra = run_cli({"recalc", "-o", output, "--", "-fm_cli_missing.xlsx", "--quiet"});
+  EXPECT_EQ(recalc_extra.exit_code, 64);
+  EXPECT_FALSE(std::ifstream(output, std::ios::binary).good());
+}
+
 // ---------------------------------------------------------------------------
 // dump
 // ---------------------------------------------------------------------------
@@ -953,6 +1198,41 @@ TEST(FormulonCli, DumpMissingInputExits64) {
   EXPECT_EQ(r.exit_code, 64);
 }
 
+TEST(FormulonCli, DumpOptionTerminatorAcceptsDashLeadingRelativePath) {
+  const std::string input = "-fm_cli_dump_dash_input.xlsx";
+  PathGuard guard(input);
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun without_terminator = run_cli({"dump", "--sheets", input});
+  EXPECT_EQ(without_terminator.exit_code, 64);
+
+  const CliRun with_terminator = run_cli({"dump", "--sheets", "--", input});
+  EXPECT_EQ(with_terminator.exit_code, 0) << with_terminator.stderr_text;
+  EXPECT_EQ(with_terminator.stdout_text, "Sheet1\n");
+}
+
+TEST(FormulonCli, DumpPostTerminatorHelpIsAnInputPath) {
+  const std::string input = "-h";
+  PathGuard guard(input);
+  std::remove(input.c_str());
+
+  const CliRun result = run_cli({"dump", "--", input});
+  EXPECT_EQ(result.exit_code, 1);
+  EXPECT_TRUE(result.stdout_text.empty());
+  EXPECT_NE(result.stderr_text.find("cannot read"), std::string::npos);
+}
+
+TEST(FormulonCli, SecondLiteralTerminatorIsAnExtraPositional) {
+  const std::string input = "-fm_cli_second_literal_terminator.xlsx";
+  PathGuard guard(input);
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun dump = run_cli({"dump", "--", input, "--"});
+  EXPECT_EQ(dump.exit_code, 64);
+  const CliRun paginate = run_cli({"paginate", "--", input, "--"});
+  EXPECT_EQ(paginate.exit_code, 64);
+}
+
 TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   std::string in = "/tmp/fm_cli_dump_metadata_scoped.xlsx";
   PathGuard g_in(in);
@@ -979,4 +1259,55 @@ TEST(FormulonCli, DumpMetadataDistinguishesDefinedNameScope) {
   // with `SheetName!` so the two scopes don't collide in the dump.
   EXPECT_NE(r.stdout_text.find("WorkbookConst =1"), std::string::npos) << "stdout=" << r.stdout_text;
   EXPECT_NE(r.stdout_text.find("Sheet1!SheetLocal ="), std::string::npos) << "stdout=" << r.stdout_text;
+}
+
+TEST(FormulonCli, DumpMetadataRecoversFromOutOfRangeDefinedNameScope) {
+  std::string in = "/tmp/fm_cli_dump_metadata_out_of_range_scope.xlsx";
+  PathGuard guard(in);
+  ASSERT_TRUE(write_out_of_range_defined_names_fixture(in));
+
+  CliRun r = run_cli({"dump", "--metadata", in});
+  EXPECT_EQ(r.exit_code, 0) << "stderr=" << r.stderr_text;
+  EXPECT_TRUE(r.stderr_text.empty());
+  EXPECT_EQ(r.stdout_text,
+            "[defined_names]\n"
+            "Before =1\n"
+            "#99!Bad =Sheet1!$A$1\n"
+            "After =2\n"
+            "[tables]\n"
+            "[passthrough_parts]\n");
+}
+
+TEST(FormulonCli, PaginateOptionTerminatorAcceptsDashLeadingRelativePath) {
+  const std::string input = "-fm_cli_paginate_dash_input.xlsx";
+  PathGuard guard(input);
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun without_terminator = run_cli({"paginate", "--sheet", "0", input});
+  EXPECT_EQ(without_terminator.exit_code, 64);
+
+  const CliRun with_terminator = run_cli({"paginate", "--sheet", "0", "--", input});
+  EXPECT_EQ(with_terminator.exit_code, 0) << with_terminator.stderr_text;
+  EXPECT_EQ(with_terminator.stdout_text, "sheet=0\npages=1\nprint_area=\nhorizontal_breaks=\nvertical_breaks=\n");
+}
+
+TEST(FormulonCli, PaginatePostTerminatorHelpIsAnInputPath) {
+  const std::string input = "-h";
+  PathGuard guard(input);
+  std::remove(input.c_str());
+
+  const CliRun result = run_cli({"paginate", "--", input});
+  EXPECT_EQ(result.exit_code, 1);
+  EXPECT_TRUE(result.stdout_text.empty());
+  EXPECT_NE(result.stderr_text.find("cannot read"), std::string::npos);
+}
+
+TEST(FormulonCli, PaginateConsumesTerminatorAsSheetValue) {
+  const std::string input = "-fm_cli_paginate_sheet_value_terminator.xlsx";
+  PathGuard guard(input);
+  ASSERT_TRUE(write_fixture_workbook(input));
+
+  const CliRun result = run_cli({"paginate", "--sheet", "--", input});
+  EXPECT_EQ(result.exit_code, 64);
+  EXPECT_TRUE(result.stdout_text.empty());
 }

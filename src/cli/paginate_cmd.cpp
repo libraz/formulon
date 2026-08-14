@@ -26,10 +26,11 @@ struct PaginationGuard {
 };
 
 void print_paginate_usage(std::ostream& out) {
-  out << "Usage: formulon paginate [--sheet INDEX] <in.xlsx>\n"
+  out << "Usage: formulon paginate [--sheet INDEX] [--] <in.xlsx>\n"
       << "\n"
       << "Resolve a worksheet's print area, automatic page breaks, and physical page count.\n"
-      << "INDEX is zero-based and defaults to 0. Output coordinates are zero-based inclusive.\n";
+      << "INDEX is zero-based and defaults to 0. Output coordinates are zero-based inclusive.\n"
+      << "  --           end options; the next token is the input path\n";
 }
 
 void emit_last_error(std::ostream& err) {
@@ -57,16 +58,21 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::string input_path;
   std::size_t sheet_index = 0;
   bool input_seen = false;
+  bool options_ended = false;
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view arg = args[i];
-    if (arg == "-h" || arg == "--help") {
+    if (!options_ended && arg == "--") {
+      options_ended = true;
+      continue;
+    }
+    if (!options_ended && (arg == "-h" || arg == "--help")) {
       print_paginate_usage(out);
       return 0;
     }
-    if (arg == "--version") {
+    if (!options_ended && arg == "--version") {
       return print_version(out);
     }
-    if (arg == "--sheet") {
+    if (!options_ended && arg == "--sheet") {
       if (i + 1 == args.size() || !parse_sheet_index(args[i + 1], sheet_index)) {
         err << "formulon: paginate: --sheet requires a non-negative integer\n";
         return kExitUsage;
@@ -74,7 +80,7 @@ int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err) {
       ++i;
       continue;
     }
-    if (!arg.empty() && arg[0] == '-') {
+    if (!options_ended && !arg.empty() && arg[0] == '-') {
       err << "formulon: paginate: unknown flag '" << arg << "'\n";
       return kExitUsage;
     }

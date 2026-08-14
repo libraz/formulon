@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <cstring>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -40,13 +41,14 @@ struct WorkbookGuard {
 enum class DumpMode { kFormulas, kValues, kSheets, kMetadata };
 
 void print_dump_usage(std::ostream& out) {
-  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] <in.xlsx>\n"
+  out << "Usage: formulon dump [--formulas|--values|--sheets|--metadata] [--] <in.xlsx>\n"
       << "\n"
       << "Print a diff-friendly snapshot of <in.xlsx>:\n"
       << "  --formulas  list every formula cell (default)\n"
       << "  --values    list every non-blank cell with its rendered value\n"
       << "  --sheets    list sheet names in document order\n"
-      << "  --metadata  list defined names, tables and passthrough parts\n";
+      << "  --metadata  list defined names, tables and passthrough parts\n"
+      << "  --           end options; the next token is the input path\n";
 }
 
 void emit_last_error(std::ostream& err, const char* subcommand) {
@@ -136,7 +138,10 @@ fm_status_t dump_sheets(const fm_workbook_t* wb, std::ostream& out) {
 // section headers. Empty sections still emit their header so callers
 // can diff "now empty" vs "had entries".
 fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
-  out << "[defined_names]\n";
+  std::ostringstream snapshot;
+  const std::size_t n_sheets = fm_workbook_sheet_count(wb);
+
+  snapshot << "[defined_names]\n";
   const std::size_t n_names = fm_workbook_defined_name_count(wb);
   for (std::size_t i = 0; i < n_names; ++i) {
     const char* name = nullptr;
@@ -145,20 +150,24 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_defined_name_at_ex(wb, i, &name, &formula, &local_sheet_id); rc != 0) {
       return rc;
     }
-    if (local_sheet_id >= 0) {
+    if (local_sheet_id >= 0 && static_cast<std::size_t>(local_sheet_id) < n_sheets) {
       const char* sheet_name = nullptr;
       if (auto rc = fm_workbook_sheet_name(wb, static_cast<std::size_t>(local_sheet_id), &sheet_name); rc != 0) {
         return rc;
       }
-      out << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
-          << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
-          << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
+      snapshot << escape_single_line(sheet_name != nullptr ? std::string_view(sheet_name) : std::string_view{}) << '!'
+               << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
+               << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
+    } else if (local_sheet_id >= 0) {
+      snapshot << '#' << local_sheet_id << '!'
+               << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
+               << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
     } else {
-      out << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
-          << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
+      snapshot << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
+               << escape_single_line(formula != nullptr ? std::string_view(formula) : std::string_view{}) << '\n';
     }
   }
-  out << "[tables]\n";
+  snapshot << "[tables]\n";
   const std::size_t n_tables = fm_workbook_table_count(wb);
   for (std::size_t i = 0; i < n_tables; ++i) {
     const char* name = nullptr;
@@ -168,19 +177,21 @@ fm_status_t dump_metadata(const fm_workbook_t* wb, std::ostream& out) {
     if (auto rc = fm_workbook_table_at(wb, i, &name, &display, &ref, &sheet_index); rc != 0) {
       return rc;
     }
-    out << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
-        << escape_single_line(display != nullptr ? std::string_view(display) : std::string_view{}) << ' ' << sheet_index
-        << ' ' << escape_single_line(ref != nullptr ? std::string_view(ref) : std::string_view{}) << '\n';
+    snapshot << escape_single_line(name != nullptr ? std::string_view(name) : std::string_view{}) << ' '
+             << escape_single_line(display != nullptr ? std::string_view(display) : std::string_view{}) << ' '
+             << sheet_index << ' ' << escape_single_line(ref != nullptr ? std::string_view(ref) : std::string_view{})
+             << '\n';
   }
-  out << "[passthrough_parts]\n";
+  snapshot << "[passthrough_parts]\n";
   const std::size_t n_parts = fm_workbook_passthrough_count(wb);
   for (std::size_t i = 0; i < n_parts; ++i) {
     const char* path = nullptr;
     if (auto rc = fm_workbook_passthrough_at(wb, i, &path); rc != 0) {
       return rc;
     }
-    out << escape_single_line(path != nullptr ? std::string_view(path) : std::string_view{}) << '\n';
+    snapshot << escape_single_line(path != nullptr ? std::string_view(path) : std::string_view{}) << '\n';
   }
+  out << snapshot.str();
   return 0;
 }
 
@@ -191,6 +202,7 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
   bool mode_set = false;
   std::string input_path;
   bool input_seen = false;
+  bool options_ended = false;
 
   auto select_mode = [&](DumpMode m, std::string_view flag) -> bool {
     if (mode_set) {
@@ -204,38 +216,42 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view a = args[i];
-    if (a == "-h" || a == "--help") {
+    if (!options_ended && a == "--") {
+      options_ended = true;
+      continue;
+    }
+    if (!options_ended && (a == "-h" || a == "--help")) {
       print_dump_usage(out);
       return 0;
     }
-    if (a == "--version") {
+    if (!options_ended && a == "--version") {
       return print_version(out);
     }
-    if (a == "--formulas") {
+    if (!options_ended && a == "--formulas") {
       if (!select_mode(DumpMode::kFormulas, a)) {
         return kExitUsage;
       }
       continue;
     }
-    if (a == "--values") {
+    if (!options_ended && a == "--values") {
       if (!select_mode(DumpMode::kValues, a)) {
         return kExitUsage;
       }
       continue;
     }
-    if (a == "--sheets") {
+    if (!options_ended && a == "--sheets") {
       if (!select_mode(DumpMode::kSheets, a)) {
         return kExitUsage;
       }
       continue;
     }
-    if (a == "--metadata") {
+    if (!options_ended && a == "--metadata") {
       if (!select_mode(DumpMode::kMetadata, a)) {
         return kExitUsage;
       }
       continue;
     }
-    if (!a.empty() && a[0] == '-') {
+    if (!options_ended && !a.empty() && a[0] == '-') {
       err << "formulon: dump: unknown flag '" << a << "'\n";
       return kExitUsage;
     }

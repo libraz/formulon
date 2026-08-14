@@ -101,7 +101,11 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err);
 /// argument is the input path.
 ///
 /// Supported flags: `-o | --output PATH` (required), `--iterative`
-/// (enable iterative calc), `--quiet`, `-h | --help`.
+/// (enable iterative calc), `--threads N` (opt in to parallel recalc with
+/// an inclusive 0..8 worker setting), `--quiet`, `-h | --help`, and `--` to
+/// end option parsing before the input path. All options, including `-o`,
+/// must precede `--`; omitting `--threads` preserves the serial recalc
+/// contract.
 int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `dump` handler: print workbook contents in a diff-friendly form.
@@ -110,12 +114,14 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err);
 /// is the input path.
 ///
 /// Supported flags (mutually exclusive): `--formulas` (default),
-/// `--values`, `--sheets`, `--metadata`, `-h | --help`.
+/// `--values`, `--sheets`, `--metadata`, `-h | --help`, and `--` to end
+/// option parsing before an input path.
 int run_dump(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// `paginate` handler: resolve the print geometry of one worksheet.
 ///
-/// Supported flags: `--sheet INDEX` (0-based, default 0), `-h | --help`.
+/// Supported flags: `--sheet INDEX` (0-based, default 0), `-h | --help`, and
+/// `--` to end option parsing before an input path.
 int run_paginate(const ArgList& args, std::ostream& out, std::ostream& err);
 
 /// Prints the top-level usage banner to `out` and returns `0`.

@@ -6,21 +6,24 @@
 // bindings. The CLI handler:
 //
 //   1. Reads `in` into memory (binary mode).
-//   2. Calls `fm_workbook_load`, then `fm_workbook_recalc`, then
+//   2. Calls `fm_workbook_load`, then the serial `fm_workbook_recalc` or
+//      opt-in `fm_workbook_recalc_parallel`, then
 //      `fm_workbook_save_ex_with_diagnostics` with a format derived from
 //      `-o`'s extension (`.xlsb` -> MS-XLSB, anything else -> `.xlsx`).
 //   3. Writes the saved buffer back out to `out`.
 //
 // `--iterative` enables iterative-calc while preserving any iteration cap
-// and convergence threshold loaded from the workbook. `--quiet` suppresses
-// the `Recalculated ...` status line on stderr; otherwise we print one per
-// successful run.
+// and convergence threshold loaded from the workbook. `--threads N` opts
+// into the parallel scheduler; omitting it deliberately preserves the
+// serial `recalc` contract. `--quiet` suppresses the `Recalculated ...`
+// status line on stderr; otherwise we print one per successful run.
 
 #include <cctype>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -59,13 +62,40 @@ struct SaveBuffer {
 };
 
 void print_recalc_usage(std::ostream& out) {
-  out << "Usage: formulon recalc [--iterative] [--quiet] <in.xlsx-or-xlsb> -o <out.xlsx-or-xlsb>\n"
+  out << "Usage: formulon recalc [--iterative] [--threads N] [--quiet] <in.xlsx-or-xlsb> -o <out.xlsx-or-xlsb>\n"
+      << "       formulon recalc [--iterative] [--threads N] [--quiet] -o <out.xlsx-or-xlsb> -- <in.xlsx-or-xlsb>\n"
       << "\n"
       << "Load <in.xlsx-or-xlsb>, drive a full recalc, and write the result to <out.xlsx-or-xlsb>.\n"
       << "The output format is chosen from -o's extension: '.xlsb' writes MS-XLSB,\n"
       << "any other extension (or none) writes OOXML .xlsx.\n"
+      << "--threads N opts into parallel recalc: 0 selects automatic detection (capped at 8),\n"
+      << "1 stays on the caller thread, and 2..8 select the worker cap. Without --threads,\n"
+      << "recalc remains serial.\n"
+      << "Options must precede --; after --, exactly one input path is accepted.\n"
       << "Status: prints \"formulon: recalc: ok, wrote M bytes to 'OUT'\" on stderr unless\n"
       << "--quiet is supplied; --quiet does not suppress XLSB loss warnings.\n";
+}
+
+bool parse_thread_count(std::string_view text, std::uint32_t* out) {
+  if (text.empty()) {
+    return false;
+  }
+  std::uint32_t parsed = 0U;
+  for (const char c : text) {
+    if (c < '0' || c > '9') {
+      return false;
+    }
+    const std::uint32_t digit = static_cast<std::uint32_t>(c - '0');
+    if (parsed > (std::numeric_limits<std::uint32_t>::max() - digit) / 10U) {
+      return false;
+    }
+    parsed = parsed * 10U + digit;
+  }
+  if (parsed > 8U) {
+    return false;
+  }
+  *out = parsed;
+  return true;
 }
 
 void emit_last_error(std::ostream& err, const char* subcommand) {
@@ -134,26 +164,46 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   std::string output_path;
   bool iterative = false;
   bool quiet = false;
+  bool parallel = false;
+  std::uint32_t thread_count = 0U;
   bool input_seen = false;
+  bool options_ended = false;
 
   for (std::size_t i = 0; i < args.size(); ++i) {
     const std::string_view a = args[i];
-    if (a == "-h" || a == "--help") {
+    if (!options_ended && a == "--") {
+      options_ended = true;
+      continue;
+    }
+    if (!options_ended && (a == "-h" || a == "--help")) {
       print_recalc_usage(out);
       return 0;
     }
-    if (a == "--version") {
+    if (!options_ended && a == "--version") {
       return print_version(out);
     }
-    if (a == "--iterative") {
+    if (!options_ended && a == "--iterative") {
       iterative = true;
       continue;
     }
-    if (a == "--quiet") {
+    if (!options_ended && a == "--quiet") {
       quiet = true;
       continue;
     }
-    if (a == "-o" || a == "--output") {
+    if (!options_ended && a == "--threads") {
+      if (i + 1 >= args.size()) {
+        err << "formulon: recalc: --threads requires an integer from 0 to 8\n";
+        return kExitUsage;
+      }
+      if (!parse_thread_count(args[i + 1], &thread_count)) {
+        err << "formulon: recalc: --threads must be an integer from 0 to 8\n";
+        return kExitUsage;
+      }
+      parallel = true;
+      ++i;
+      continue;
+    }
+    if (!options_ended && (a == "-o" || a == "--output")) {
       if (i + 1 >= args.size()) {
         err << "formulon: recalc: " << a << " requires a path argument\n";
         return kExitUsage;
@@ -162,7 +212,7 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
       ++i;
       continue;
     }
-    if (!a.empty() && a[0] == '-') {
+    if (!options_ended && !a.empty() && a[0] == '-') {
       err << "formulon: recalc: unknown flag '" << a << "'\n";
       return kExitUsage;
     }
@@ -214,9 +264,17 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
   }
 
-  if (auto rc = fm_workbook_recalc(wb.handle); rc != 0) {
-    emit_last_error(err, "recalc");
-    return rc;
+  fm_parallel_recalc_stats parallel_stats{};
+  if (parallel) {
+    if (auto rc = fm_workbook_recalc_parallel(wb.handle, thread_count, &parallel_stats); rc != 0) {
+      emit_last_error(err, "recalc");
+      return rc;
+    }
+  } else {
+    if (auto rc = fm_workbook_recalc(wb.handle); rc != 0) {
+      emit_last_error(err, "recalc");
+      return rc;
+    }
   }
 
   SaveBuffer buf;
@@ -237,10 +295,17 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
   }
 
   if (!quiet) {
-    // We do not have a per-pass cell count from the C ABI yet, so the
-    // status line reports the saved-byte budget alongside the input
-    // workbook's sheet count to give an order-of-magnitude signal.
-    err << "formulon: recalc: ok, wrote " << buf.len << " bytes to '" << output_path << "'\n";
+    if (parallel) {
+      err << "formulon: recalc: ok, threads=" << thread_count << " cells_evaluated=" << parallel_stats.cells_evaluated
+          << " sccs_processed=" << parallel_stats.sccs_processed << " parallel_steps=" << parallel_stats.parallel_steps
+          << " serial_fallback_steps=" << parallel_stats.serial_fallback_steps
+          << " cycle_recoveries=" << parallel_stats.cycle_recoveries
+          << " worker_threads_started=" << parallel_stats.worker_threads_started
+          << " worker_threads_used=" << parallel_stats.worker_threads_used << ", wrote " << buf.len << " bytes to '"
+          << output_path << "'\n";
+    } else {
+      err << "formulon: recalc: ok, wrote " << buf.len << " bytes to '" << output_path << "'\n";
+    }
   }
   // Suppress unused-stream warnings: the success path of `recalc` is
   // intentionally silent on stdout. The block below is a no-op in
