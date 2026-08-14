@@ -23,6 +23,7 @@
 #include "parser/parser.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -275,11 +276,11 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
   // retains the `:` operator's qualifier on the LHS in practice, so
   // `Sheet2!A1:B2` parses as RangeOp(Ref{sheet=Sheet2}, Ref{sheet=""}) —
   // the RHS must inherit. Defensive symmetry is kept for the opposite
-  // shape. When both endpoints carry a qualifier they must agree
-  // (case-insensitively) or the range is `#REF!`.
+  // shape. When both endpoints carry a qualifier they must agree under
+  // locale-independent Unicode simple case folding or the range is `#REF!`.
   std::string_view effective_sheet_name;
   if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
-    if (!strings::case_insensitive_eq(lhs.sheet, rhs.sheet)) {
+    if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
       return ErrorCode::Ref;
     }
     effective_sheet_name = lhs.sheet;
@@ -401,6 +402,14 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
     // the dispatcher can honour `propagate_errors`. The shared resolver
     // scalarizes ordinary formula references, including 3-D callers.
     out[index] = resolve_ref(cell_ref, arena, registry);
+  }
+  // Mark only the copied range values. The source sheet/cache remains plain
+  // Blank; range-aware consumers still observe the Blank kind, while the
+  // terminal grid boundary can project these raw-grid cells to zero.
+  for (Value& value : out) {
+    if (value.is_blank()) {
+      value = Value::blank(BlankGridProjection::kReferenceGridZero);
+    }
   }
   set_shape(out_rows, out_cols, r_max - r_min + 1U, c_max - c_min + 1U);
   return out;

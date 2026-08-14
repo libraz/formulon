@@ -35,6 +35,36 @@ TEST(ValueTest, DefaultIsBlank) {
   EXPECT_FALSE(v.is_lambda());
 }
 
+TEST(ValueTest, BlankGridProjectionPreservesKindAndEquality) {
+  const Value preserved = Value::blank();
+  const Value reference_grid = Value::blank(BlankGridProjection::kReferenceGridZero);
+  const Value value_array = Value::blank(BlankGridProjection::kValueArrayZero);
+
+  EXPECT_EQ(ValueKind::Blank, preserved.kind());
+  EXPECT_EQ(ValueKind::Blank, reference_grid.kind());
+  EXPECT_EQ(ValueKind::Blank, value_array.kind());
+  EXPECT_TRUE(preserved.is_blank());
+  EXPECT_TRUE(reference_grid.is_blank());
+  EXPECT_TRUE(value_array.is_blank());
+  EXPECT_FALSE(preserved.blank_projects_to_zero());
+  EXPECT_TRUE(reference_grid.blank_projects_to_zero());
+  EXPECT_TRUE(value_array.blank_projects_to_zero());
+  EXPECT_FALSE(preserved.blank_counts_for_counta());
+  EXPECT_FALSE(reference_grid.blank_counts_for_counta());
+  EXPECT_TRUE(value_array.blank_counts_for_counta());
+  EXPECT_EQ(preserved, reference_grid);
+  EXPECT_EQ(reference_grid, value_array);
+  EXPECT_EQ(reference_grid.promote_reference_blank_to_value_array(), value_array);
+  EXPECT_EQ(value_array.promote_reference_blank_to_value_array(), value_array);
+  EXPECT_EQ(preserved.promote_reference_blank_to_value_array(), preserved);
+
+  // Empty text is a distinct scalar kind, not a projected Blank.
+  const Value empty_text = Value::text("");
+  EXPECT_TRUE(empty_text.is_text());
+  EXPECT_FALSE(empty_text.is_blank());
+  EXPECT_FALSE(empty_text.blank_projects_to_zero());
+}
+
 TEST(ValueTest, NumberFactoryRoundTrip) {
   const double samples[] = {
       0.0,
@@ -240,6 +270,9 @@ TEST(ValueTest, SizeofValueIsReasonable) {
   EXPECT_LE(sizeof(Value), static_cast<std::size_t>(24));
   EXPECT_TRUE(std::is_trivially_copyable<Value>::value);
 }
+
+static_assert(sizeof(Value) <= 24, "Value ABI budget");
+static_assert(std::is_trivially_copyable_v<Value>, "Value must remain trivially copyable");
 
 TEST(ValueTest, AllErrorCodesHaveWireCodeAndDisplayName) {
   // Sanity: every `ErrorCode` listed in kAllErrorCodes has both a

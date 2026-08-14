@@ -382,6 +382,32 @@ TEST(BuiltinsCellWidth, ExplicitColumnLayoutIsReported) {
   EXPECT_FALSE(v.as_array()->cells[1].as_boolean());
 }
 
+TEST(BuiltinsCellWidth, ExplicitZeroAndStyleOnlyColumnLayoutsRemainDistinct) {
+  Workbook wb = Workbook::create();
+  ColumnLayout explicit_zero;
+  explicit_zero.first = 0U;
+  explicit_zero.last = 0U;
+  explicit_zero.has_width = true;
+  explicit_zero.width = 0.0;
+  wb.sheet(0).mutable_layout().columns.push_back(explicit_zero);
+  ColumnLayout style_only;
+  style_only.first = 1U;
+  style_only.last = 1U;
+  style_only.has_style = true;
+  style_only.style_xf = 0U;
+  wb.sheet(0).mutable_layout().columns.push_back(style_only);
+
+  const Value zero = EvalSourceIn("=CELL(\"width\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(zero.is_array());
+  EXPECT_DOUBLE_EQ(zero.as_array()->cells[0].as_number(), 0.0);
+  EXPECT_FALSE(zero.as_array()->cells[1].as_boolean());
+
+  const Value style = EvalSourceIn("=CELL(\"width\", B1)", wb, wb.sheet(0));
+  ASSERT_TRUE(style.is_array());
+  EXPECT_DOUBLE_EQ(style.as_array()->cells[0].as_number(), 8.0);
+  EXPECT_TRUE(style.as_array()->cells[1].as_boolean());
+}
+
 // ---------------------------------------------------------------------------
 // Case insensitivity of info_type
 // ---------------------------------------------------------------------------

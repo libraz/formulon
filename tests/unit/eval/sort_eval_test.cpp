@@ -302,7 +302,8 @@ TEST(BuiltinsSort, CrossKindOrderingFollowsExcelRanks) {
   EXPECT_TRUE(cells[5].as_boolean());
   EXPECT_TRUE(cells[6].is_error());
   EXPECT_EQ(cells[6].as_error(), ErrorCode::NA);
-  EXPECT_TRUE(cells[7].is_blank());
+  ASSERT_TRUE(cells[7].is_number());
+  EXPECT_DOUBLE_EQ(cells[7].as_number(), 0.0);
 }
 
 TEST(BuiltinsSort, BlanksStayLastInDescending) {
@@ -325,7 +326,75 @@ TEST(BuiltinsSort, BlanksStayLastInDescending) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 3.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 2.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 1.0);
-  EXPECT_TRUE(v.as_array_cells()[3].is_blank());
+  ASSERT_TRUE(v.as_array_cells()[3].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[3].as_number(), 0.0);
+}
+
+TEST(BuiltinsSort, RawRangeBlankProjectsAfterSortAndCountsAsValueArrayNested) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(2.0));
+  // A2 intentionally remains blank; A3 is the second sortable number.
+  sheet.set_cell_value(2, 0, Value::number(1.0));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value direct = EvalUnder("=SORT(A1:A3)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(direct.is_array());
+  ASSERT_EQ(direct.as_array_rows(), 3U);
+  ASSERT_EQ(direct.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[1].as_number(), 2.0);
+  ASSERT_TRUE(direct.as_array_cells()[2].is_number());
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[2].as_number(), 0.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value count = EvalUnder("=COUNT(SORT(A1:A3))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 2.0);
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value counta = EvalUnder("=COUNTA(SORT(A1:A3))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(counta.is_number());
+  EXPECT_DOUBLE_EQ(counta.as_number(), 3.0);
+}
+
+TEST(BuiltinsSort, SortTrimRangePreservesRawBlankProjection) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(2.0));
+  sheet.set_cell_value(2, 0, Value::number(1.0));
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value direct = EvalUnder("=SORT(TRIMRANGE(A1:A3))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(direct.is_array());
+  ASSERT_EQ(direct.as_array_rows(), 3U);
+  ASSERT_EQ(direct.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[1].as_number(), 2.0);
+  ASSERT_TRUE(direct.as_array_cells()[2].is_number());
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[2].as_number(), 0.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value raw_counta = EvalUnder("=COUNTA(TRIMRANGE(A1:A3))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(raw_counta.is_number());
+  EXPECT_DOUBLE_EQ(raw_counta.as_number(), 2.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value count = EvalUnder("=COUNT(SORT(TRIMRANGE(A1:A3)))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 2.0);
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value counta = EvalUnder("=COUNTA(SORT(TRIMRANGE(A1:A3)))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(counta.is_number());
+  EXPECT_DOUBLE_EQ(counta.as_number(), 3.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -479,6 +548,31 @@ TEST(BuiltinsSort, StableSortPreservesEqualKeyOrder) {
   EXPECT_EQ(cells[5].as_text(), "a");
   EXPECT_DOUBLE_EQ(cells[6].as_number(), 5.0);
   EXPECT_EQ(cells[7].as_text(), "c");
+}
+
+TEST(BuiltinsSort, AdmitsResultPastTheConjuredArrayCeiling) {
+  // SORT permutes rows of an input the range reader already admitted under
+  // `kMaxRangeExpansionCells`, so the permuted copy is bounded by
+  // `kMaxDerivedArrayCells`, not by the narrower ceiling for arrays a
+  // formula conjures from its arguments. 2 x 550,000 sits just past that
+  // narrower ceiling (2^20 cells). FILTER / SORTBY / UNIQUE reach the same
+  // materialiser, so this pins the shared seam.
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(2.0));
+  sheet.set_cell_value(1, 0, Value::number(1.0));
+
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=SORT(A1:B550000)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array()) << "a derived permutation must not be capped at the conjured-array ceiling";
+  EXPECT_EQ(v.as_array_rows(), 550000U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  // Blanks sink to the end, so the two populated rows lead in sorted order.
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 2.0);
 }
 
 }  // namespace

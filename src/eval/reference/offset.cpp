@@ -22,6 +22,7 @@
 #include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/lookups/classic.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/range_expanders.h"
@@ -74,16 +75,18 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(expanded.error());
   }
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(height, width, arena, buffer);
+  // The cells are a copy of the rectangle `expand_range` just admitted under
+  // the range-expansion bound, so the copy is bounded the same way. Using the
+  // narrower ceiling that applies to arrays a formula conjures from its
+  // arguments would reject a rectangle the read itself accepted.
+  ArrayValue* out = dynamic_array::allocate_array_value(height, width, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   const std::vector<Value>& cells = expanded.value();
   const std::size_t total = static_cast<std::size_t>(height) * width;
   for (std::size_t i = 0; i < total && i < cells.size(); ++i) {
-    // When a reference rectangle spills, Excel exposes empty cells as zero
-    // values in the materialised array (rather than blank scalar cells).
-    buffer[i] = cells[i].is_blank() ? Value::number(0.0) : cells[i];
+    buffer[i] = cells[i];
   }
   return Value::array(out);
 }
@@ -144,6 +147,27 @@ bool expand_choose_call(const parser::AstNode& call, Arena& arena, const Functio
   if (idx_val.is_error()) {
     *out_err_code = idx_val.as_error();
     return false;
+  }
+  if (idx_val.is_array()) {
+    const Value result = eval_choose_array_index_lazy(call, idx_val, arena, registry, ctx);
+    if (result.is_error()) {
+      *out_err_code = result.as_error();
+      return false;
+    }
+    if (!result.is_array()) {
+      *out_err_code = ErrorCode::Value;
+      return false;
+    }
+    const ArrayValue* array = result.as_array();
+    const std::size_t count = static_cast<std::size_t>(array->rows) * array->cols;
+    out_cells->assign(array->cells, array->cells + count);
+    if (out_rows != nullptr) {
+      *out_rows = array->rows;
+    }
+    if (out_cols != nullptr) {
+      *out_cols = array->cols;
+    }
+    return true;
   }
   auto idx_num = coerce_to_number(idx_val);
   if (!idx_num) {

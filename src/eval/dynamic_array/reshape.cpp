@@ -8,6 +8,7 @@
 
 #include "eval/dynamic_array/common.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
@@ -47,7 +48,7 @@ bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena&
       continue;
     }
     Value* buffer = nullptr;
-    ArrayValue* cell = dynamic_array::allocate_array_value(1U, 1U, arena, buffer);
+    ArrayValue* cell = dynamic_array::allocate_array_value(1U, 1U, arena, buffer, kMaxDerivedArrayCells);
     if (cell == nullptr) {
       error_out = Value::error(ErrorCode::Num);
       return false;
@@ -79,7 +80,7 @@ Value materialise_stacked_arrays(const std::vector<const ArrayValue*>& arrays, b
   const auto out_rows = static_cast<std::uint32_t>(out_rows_sz);
   const auto out_cols = static_cast<std::uint32_t>(out_cols_sz);
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer);
+  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -91,7 +92,9 @@ Value materialise_stacked_arrays(const std::vector<const ArrayValue*>& arrays, b
         for (std::uint32_t c = 0; c < a->cols; ++c) {
           const std::size_t dst = static_cast<std::size_t>(r) * out_cols + col_off + c;
           buffer[dst] =
-              (r < a->rows) ? a->cells[static_cast<std::size_t>(r) * a->cols + c] : Value::error(ErrorCode::NA);
+              (r < a->rows)
+                  ? a->cells[static_cast<std::size_t>(r) * a->cols + c].promote_reference_blank_to_value_array()
+                  : Value::error(ErrorCode::NA);
         }
       }
       col_off += a->cols;
@@ -103,7 +106,9 @@ Value materialise_stacked_arrays(const std::vector<const ArrayValue*>& arrays, b
         for (std::uint32_t c = 0; c < out_cols; ++c) {
           const std::size_t dst = static_cast<std::size_t>(row_off + r) * out_cols + c;
           buffer[dst] =
-              (c < a->cols) ? a->cells[static_cast<std::size_t>(r) * a->cols + c] : Value::error(ErrorCode::NA);
+              (c < a->cols)
+                  ? a->cells[static_cast<std::size_t>(r) * a->cols + c].promote_reference_blank_to_value_array()
+                  : Value::error(ErrorCode::NA);
         }
       }
       row_off += a->rows;
@@ -161,9 +166,11 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
     return err;
   }
 
-  // Resolve the new row count. `rows` is required.
-  double rows_d = 0.0;
-  if (!dynamic_array::eval_truncated_number_arg(call.as_call_arg(1), arena, registry, ctx, rows_d, err)) {
+  // Resolve the new row count. An omitted `rows` slot keeps the source
+  // height, matching Excel's optional-argument default.
+  double rows_d = static_cast<double>(array->rows);
+  if (!is_omitted_arg(call.as_call_arg(1)) &&
+      !dynamic_array::eval_truncated_number_arg(call.as_call_arg(1), arena, registry, ctx, rows_d, err)) {
     return err;
   }
   if (rows_d < static_cast<double>(array->rows)) {
@@ -176,7 +183,7 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Resolve the new column count. Optional; defaults to the existing
   // column count (no horizontal expansion).
   std::uint32_t out_cols = array->cols;
-  if (arity >= 3U) {
+  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
     double cols_d = 0.0;
     if (!dynamic_array::eval_truncated_number_arg(call.as_call_arg(2), arena, registry, ctx, cols_d, err)) {
       return err;
@@ -191,10 +198,12 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
   const auto out_rows = static_cast<std::uint32_t>(rows_d);
 
-  // Resolve the pad value. Default is #N/A. If `pad_with` is supplied as
-  // an array (range / range literal), Excel takes the scalar at cell 0
-  // and pads with that — matching the dispatcher's scalar coercion path
-  // for non-array contexts. Errors at the argument level propagate.
+  // Resolve the pad value. An absent `pad_with` defaults to #N/A. A present
+  // empty slot evaluates to Blank, which remains Blank for nested consumers;
+  // the same applies to a blank first cell selected from an array pad.
+  // Explicit empty text remains text. If `pad_with` is supplied as an array
+  // (range / range literal), Excel takes the scalar at cell 0 and pads with
+  // that. Errors at the argument level propagate.
   Value pad = Value::error(ErrorCode::NA);
   if (arity == 4U) {
     const Value pad_v = eval_node(call.as_call_arg(3), arena, registry, ctx);
@@ -221,9 +230,13 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
     for (std::uint32_t c = 0; c < out_cols; ++c) {
       const std::size_t dst = static_cast<std::size_t>(r) * out_cols + c;
       if (r < array->rows && c < array->cols) {
-        buffer[dst] = array->cells[static_cast<std::size_t>(r) * array->cols + c];
+        buffer[dst] =
+            array->cells[static_cast<std::size_t>(r) * array->cols + c].promote_reference_blank_to_value_array();
       } else {
-        buffer[dst] = pad;
+        // Generated pad cells get the direct-grid zero projection, while a
+        // source Blank copied from the input array remains untouched.
+        buffer[dst] = pad.is_blank() ? Value::blank(BlankGridProjection::kValueArrayZero)
+                                     : pad.promote_reference_blank_to_value_array();
       }
     }
   }

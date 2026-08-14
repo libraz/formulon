@@ -29,7 +29,11 @@ class FunctionRegistry;
 /// (`"A1:B2"`) resolves to the full rectangle as a `Value::Array`, which
 /// spills when used directly and is navigable by range-aware consumers
 /// (`SUM` / `VLOOKUP` / ...). R1C1 style (`a1=FALSE`) is deferred and
-/// surfaces as `#REF!`. Empty / malformed text -> `#REF!`.
+/// surfaces as `#REF!` -- see tests/divergence.yaml's
+/// `indirect_r1c1_style_deferred` entry and the INDIRECT note in
+/// tools/catalog/function_status.tsv, which surface this gap outside
+/// this header so it isn't only a private-comment disclosure. Empty /
+/// malformed text -> `#REF!`.
 Value eval_indirect_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
 

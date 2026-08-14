@@ -27,6 +27,12 @@ cases:
   - id: take_rows_zero_with_cols
     description: "TAKE rows=0 with cols arg keeps full row count -> 2x2 spill"
     formula: '=TAKE({1,2,3;4,5,6}, 0, 2)'
+  - id: take_omitted_rows_keeps_source_height
+    description: "TAKE omitted rows uses the source height -> 2x2 spill"
+    formula: '=TAKE({1,2,3;4,5,6},,2)'
+  - id: take_omitted_cols_keeps_source_width
+    description: "TAKE omitted columns uses the source width -> 2x3 spill"
+    formula: '=TAKE({1,2,3;4,5,6},2,)'
 
   # =========================================================================
   # DROP
@@ -52,6 +58,12 @@ cases:
   - id: drop_negative_cols_all_error
     description: "DROP negative cols removing all columns -> #CALC!"
     formula: '=DROP({1,2;3,4}, 0, -2)'
+  - id: drop_omitted_rows_keeps_source_height
+    description: "DROP omitted rows keeps the source height while dropping columns"
+    formula: '=DROP({1,2,3;4,5,6},,1)'
+  - id: drop_omitted_cols_keeps_source_width
+    description: "DROP omitted columns keeps the source width while dropping rows"
+    formula: '=DROP({1,2,3;4,5,6},1,)'
 
   # =========================================================================
   # EXPAND
@@ -77,6 +89,35 @@ cases:
   - id: expand_identity_pass_through
     description: "EXPAND target equals source dimensions -> identity 2x2 spill"
     formula: '=EXPAND({1,2;3,4}, 2, 2, 0)'
+  - id: expand_omitted_rows_keeps_source_height
+    description: "EXPAND omitted rows uses source height -> 2x4 spill"
+    formula: '=EXPAND({1,2;3,4},,4)'
+  - id: expand_omitted_cols_keeps_source_width
+    description: "EXPAND omitted columns uses source width -> 3x2 spill"
+    formula: '=EXPAND({1,2;3,4},3,)'
+  - id: expand_explicit_empty_pad_count
+    description: "Present-but-empty pad remains Blank for nested consumers"
+    formula: '=COUNT(EXPAND({1,2;3,4},3,4,))'
+  - id: expand_explicit_empty_pad_direct_spill
+    description: "Present-but-empty pad has the Excel grid projection when EXPAND is the top-level formula"
+    formula: '=EXPAND({1,2;3,4},3,4,)'
+  - id: expand_explicit_empty_pad_spill_ref_count
+    description: "A spilled explicit-empty EXPAND pad is consumed through a grid reference"
+    setup:
+      A1: '=EXPAND({1,2;3,4},3,4,)'
+    formula: '=COUNT(A1#)'
+  - id: expand_explicit_empty_pad_spill_ref_isblank
+    description: "A spilled explicit-empty EXPAND pad has Excel's grid-cell type through a spill reference"
+    setup:
+      A1: '=EXPAND({1,2;3,4},3,4,)'
+    formula: '=ISBLANK(INDEX(A1#,3,4))'
+  - id: expand_blank_ref_pad_count
+    description: "A blank-cell pad reference remains Blank for nested consumers"
+    setup: { D1: null }
+    formula: '=COUNT(EXPAND({1,2;3,4},3,4,D1))'
+  - id: expand_empty_text_pad_is_text
+    description: "An explicit empty-text pad stays Text rather than coercing to Blank/0"
+    formula: '=ISTEXT(INDEX(EXPAND({1,2;3,4},3,4,""),3,4))'
 
   # =========================================================================
   # TOCOL
@@ -328,3 +369,15 @@ cases:
   - id: trimrange_all_blank_ref_error
     description: "TRIMRANGE A1:A3 with all cells blank -> #REF! (Mac rejects empty spill with #REF!)"
     formula: '=TRIMRANGE(A1:A3)'
+  - id: trimrange_internal_blank_direct_spill
+    description: "TRIMRANGE preserves an interior blank with its Excel top-level grid projection"
+    setup: { A1: 1, A3: 2 }
+    formula: '=TRIMRANGE(A1:A3)'
+  - id: trimrange_internal_blank_nested_count
+    description: "TRIMRANGE's interior blank keeps blank semantics for COUNT"
+    setup: { A1: 1, A3: 2 }
+    formula: '=COUNT(TRIMRANGE(A1:A3))'
+  - id: trimrange_internal_blank_nested_counta
+    description: "TRIMRANGE's interior blank keeps blank semantics for COUNTA"
+    setup: { A1: 1, A3: 2 }
+    formula: '=COUNTA(TRIMRANGE(A1:A3))'

@@ -153,16 +153,15 @@ cases:
   # -- Intersection operator (space) --------------------------------------
   - id: arg_intersection_operator
     description: |
-      Excel: A1:C3 ∩ B2:D4 is a single area (B2:C3) → 1. Formulon's
-      count_areas does not handle IntersectOp → #VALUE!.
+      Excel: A1:C3 ∩ B2:D4 is a single area (B2:C3) → 1. Formulon resolves
+      IntersectOp and reports the same single-area count.
     formula: "=AREAS(A1:C3 B2:D4)"
     expect: { kind: number, value: 1 }
 
   - id: arg_intersection_disjoint
     description: |
-      Disjoint operands intersect to nothing — Excel returns #NULL!.
-      Formulon: still rejects shape → #VALUE!. Documents the error-class
-      divergence in addition to the value divergence.
+      Disjoint operands intersect to nothing; both Excel and Formulon
+      return #NULL!.
     formula: "=AREAS(A1:B2 C3:D4)"
     expect: { kind: error, code: "#NULL!" }
 

@@ -189,7 +189,7 @@ Value run_count(const Value* args, std::uint32_t arity) {
 Value run_counta(const Value* args, std::uint32_t arity) {
   std::uint32_t n = 0;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    if (!args[i].is_blank()) {
+    if (!args[i].is_blank() || args[i].blank_counts_for_counta()) {
       ++n;
     }
   }

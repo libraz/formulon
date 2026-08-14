@@ -217,6 +217,25 @@ cases:
     setup: { A1: 1, B1: 2, A2: 3, B2: 4 }
     formula: "=OFFSET(A1,0,0,2,2)"
 
+  - id: offset_internal_blank_direct_spill
+    description: "OFFSET preserves an interior blank with its Excel top-level grid projection"
+    setup: { A1: 1, A3: 2 }
+    formula: "=OFFSET(A1,0,0,3,1)"
+
+  - id: offset_internal_blank_nested_count
+    description: "OFFSET's interior blank keeps blank semantics for COUNT"
+    setup: { A1: 1, A3: 2 }
+    formula: "=COUNT(OFFSET(A1,0,0,3,1))"
+
+  - id: offset_internal_blank_nested_counta
+    description: "OFFSET's interior blank keeps blank semantics for COUNTA"
+    setup: { A1: 1, A3: 2 }
+    formula: "=COUNTA(OFFSET(A1,0,0,3,1))"
+
+  - id: offset_all_blank_nested_and
+    description: "An all-blank OFFSET range retains Excel's logical-aggregate behavior"
+    formula: "=AND(OFFSET(A1,0,0,3,1))"
+
   - id: offset_negative_height_walks_up
     description: "Negative height extends the rectangle upward with the base as the bottom edge"
     setup: { C2: 42, C3: 99 }

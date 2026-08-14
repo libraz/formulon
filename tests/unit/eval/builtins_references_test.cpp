@@ -289,6 +289,21 @@ TEST(BuiltinsIndirect, RangeTextSpillsArray) {
   EXPECT_DOUBLE_EQ(cells[1].as_number(), 2.0);
 }
 
+TEST(BuiltinsIndirect, RangeTextAdmitsRectanglesPastTheConjuredArrayCeiling) {
+  // Same rule as the spilled OFFSET rectangle: the array is a copy of an
+  // already-admitted read, so the narrower ceiling for argument-synthesised
+  // arrays (2^20 cells) must not apply to it.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(549999U, 1U, Value::number(2.0));
+  const Value v = EvalSourceIn("=INDIRECT(\"A1:B550000\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "a rectangle the read admits must not fail to materialise";
+  EXPECT_EQ(v.as_array_rows(), 550000U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1099999U].as_number(), 2.0);
+}
+
 TEST(BuiltinsIndirect, RangeTextInSumAggregates) {
   // SUM(INDIRECT("A1:A3")) aggregates the multi-cell range.
   Workbook wb = Workbook::create();
@@ -555,6 +570,22 @@ TEST(BuiltinsOffset, MultiCellSpillsRectangle) {
   EXPECT_DOUBLE_EQ(v.as_array()->cells[4].as_number(), 4.0);
 }
 
+TEST(BuiltinsOffset, MultiCellSpillAdmitsRectanglesPastTheConjuredArrayCeiling) {
+  // The spilled array is a copy of the rectangle the range reader already
+  // admitted, so it is bounded like a read, not like an array a formula
+  // conjures from its arguments. 2 x 550,000 sits past that narrower
+  // ceiling (2^20 cells) and well inside the range-expansion bound.
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(549999U, 1U, Value::number(2.0));
+  const Value v = EvalSourceIn("=OFFSET(A1,0,0,550000,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << "a rectangle the read admits must not fail to materialise";
+  EXPECT_EQ(v.as_array_rows(), 550000U);
+  EXPECT_EQ(v.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1099999U].as_number(), 2.0);
+}
+
 TEST(BuiltinsOffset, MultiCellSpillMaterialisesBlankCellsAsZero) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=OFFSET(A1,2,2,2,-2)", wb, wb.sheet(0));
@@ -564,6 +595,63 @@ TEST(BuiltinsOffset, MultiCellSpillMaterialisesBlankCellsAsZero) {
   for (std::uint32_t i = 0; i < 4U; ++i) {
     ASSERT_TRUE(v.as_array()->cells[i].is_number());
     EXPECT_DOUBLE_EQ(v.as_array()->cells[i].as_number(), 0.0);
+  }
+}
+
+TEST(BuiltinsOffset, RangeConsumersRetainBlankProvenance) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
+
+  // Direct OFFSET projects the two interior source blanks to numeric zero,
+  // but its range-aware consumers still receive genuine Blank cells.
+  const Value count = EvalSourceIn("=COUNT(OFFSET(A1,0,0,2,2))", wb, wb.sheet(0));
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 2.0);
+  const Value counta = EvalSourceIn("=COUNTA(OFFSET(A1,0,0,2,2))", wb, wb.sheet(0));
+  ASSERT_TRUE(counta.is_number());
+  EXPECT_DOUBLE_EQ(counta.as_number(), 2.0);
+
+  // An all-blank range has no logical values; it must not become FALSE just
+  // because the direct spill surface renders its cells as zero.
+  const Value all_blank_and = EvalSourceIn("=AND(OFFSET(D1,0,0,2,2))", wb, wb.sheet(0));
+  ASSERT_TRUE(all_blank_and.is_error());
+  EXPECT_EQ(all_blank_and.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsReferences, RawRangeIngressProjectsBlankAcrossReferenceForms) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(2.0));
+  // A2 is intentionally untouched, and A3 closes the interior-blank range.
+  sheet.set_cell_value(2, 0, Value::number(1.0));
+
+  const std::string expressions[] = {
+      "A1:A3",          "OFFSET(A1,0,0,3,1)",    "INDIRECT(\"A1:A3\")",
+      "INDEX(A1:A3,0)", "CHOOSE(1,A1:A3,B1:B3)", "IF(TRUE,A1:A3,B1:B3)",
+  };
+  for (const std::string& expression : expressions) {
+    const std::string direct_formula = "=" + expression;
+    const Value direct = EvalSourceIn(direct_formula, wb, sheet);
+    ASSERT_TRUE(direct.is_array()) << expression << ": " << direct.debug_to_string();
+    ASSERT_EQ(direct.as_array_rows(), 3U) << expression;
+    ASSERT_EQ(direct.as_array_cols(), 1U) << expression;
+    ASSERT_TRUE(direct.as_array_cells()[0].is_number()) << expression;
+    EXPECT_DOUBLE_EQ(direct.as_array_cells()[0].as_number(), 2.0) << expression;
+    ASSERT_TRUE(direct.as_array_cells()[1].is_number()) << expression;
+    EXPECT_DOUBLE_EQ(direct.as_array_cells()[1].as_number(), 0.0) << expression;
+    ASSERT_TRUE(direct.as_array_cells()[2].is_number()) << expression;
+    EXPECT_DOUBLE_EQ(direct.as_array_cells()[2].as_number(), 1.0) << expression;
+
+    const Value count = EvalSourceIn("=COUNT(" + expression + ")", wb, sheet);
+    ASSERT_TRUE(count.is_number()) << expression << ": " << count.debug_to_string();
+    EXPECT_DOUBLE_EQ(count.as_number(), 2.0) << expression;
+    const Value counta = EvalSourceIn("=COUNTA(" + expression + ")", wb, sheet);
+    ASSERT_TRUE(counta.is_number()) << expression << ": " << counta.debug_to_string();
+    EXPECT_DOUBLE_EQ(counta.as_number(), 2.0) << expression;
+    const Value and_value = EvalSourceIn("=AND(" + expression + ")", wb, sheet);
+    ASSERT_TRUE(and_value.is_boolean()) << expression << ": " << and_value.debug_to_string();
+    EXPECT_TRUE(and_value.as_boolean()) << expression;
   }
 }
 

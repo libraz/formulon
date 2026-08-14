@@ -524,17 +524,27 @@ TEST(BuiltinsNow, ZeroArgsArity) {
 }
 
 TEST(BuiltinsToday, IsFloorOfNow) {
-  // floor(NOW()) must equal TODAY() whenever both were read in the same
-  // calendar second; use a 1-day tolerance as a safety net for the
-  // extremely unlikely midnight-crossing race.
-  const LocalNowExpect exp = ExpectedLocalNow();
-  const Value v = EvalSource("=TODAY()");
-  ASSERT_TRUE(v.is_number());
-  EXPECT_LE(std::fabs(v.as_number() - exp.date_serial), 1.0);
-  // And the floor relationship, reading NOW again within the same test.
+  // floor(NOW()) must equal TODAY() exactly whenever no real local
+  // midnight boundary was crossed while this test ran -- a systematic
+  // UTC/local mixup is exactly 1.0 serial days off and must not be
+  // masked by a tolerance that size. Bracket the engine reads with
+  // independent wall-clock reads (ExpectedLocalNow) and only skip the
+  // iteration if a boundary genuinely moved during the test's own
+  // microsecond-scale runtime; otherwise assert strict equality.
+  const LocalNowExpect exp_before = ExpectedLocalNow();
+  const Value today_before = EvalSource("=TODAY()");
+  ASSERT_TRUE(today_before.is_number());
   const Value now = EvalSource("=NOW()");
   ASSERT_TRUE(now.is_number());
-  EXPECT_LE(std::fabs(std::floor(now.as_number()) - v.as_number()), 1.0);
+  const Value today_after = EvalSource("=TODAY()");
+  ASSERT_TRUE(today_after.is_number());
+  const LocalNowExpect exp_after = ExpectedLocalNow();
+
+  if (exp_before.date_serial != exp_after.date_serial || today_before.as_number() != today_after.as_number()) {
+    GTEST_SKIP() << "local midnight crossed during the test; floor(NOW()) vs TODAY() is ambiguous for this run";
+  }
+  EXPECT_EQ(today_before.as_number(), exp_before.date_serial);
+  EXPECT_EQ(std::floor(now.as_number()), today_before.as_number());
 }
 
 TEST(BuiltinsToday, ZeroArgsArity) {

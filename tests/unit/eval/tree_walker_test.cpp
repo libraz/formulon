@@ -88,6 +88,28 @@ TEST(TreeWalkerResourceFailure, ArenaExhaustionMarksEvalState) {
   EXPECT_TRUE(state.out_of_memory());
 }
 
+TEST(TreeWalkerResourceFailure, GridProjectionAllocationFailureReturnsNum) {
+  // The literal itself is already backed by caller-owned storage, so the
+  // output arena is untouched until terminal grid projection tries to clone
+  // the marked blank cell. This keeps the failure isolated to that seam.
+  const Value cell = Value::blank(BlankGridProjection::kZero);
+  const ArrayValue literal_array{1U, 1U, &cell};
+  Arena parse_arena;
+  parser::AstNode* root = parser::make_literal(parse_arena, Value::array(&literal_array));
+  ASSERT_NE(root, nullptr);
+
+  Arena eval_arena(64, 63);
+  Sheet sheet("Sheet1");
+  EvalState state;
+  const EvalContext ctx(sheet, state);
+  const Value v = evaluate(*root, eval_arena, default_registry(), ctx);
+
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+  EXPECT_TRUE(eval_arena.exhausted());
+  EXPECT_TRUE(state.out_of_memory());
+}
+
 // ---------------------------------------------------------------------------
 // Unary operators
 // ---------------------------------------------------------------------------

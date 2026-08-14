@@ -24,8 +24,9 @@ namespace parser {
 
 /// Renames every reference that names `old_name` to `new_name`.
 ///
-/// Matching is ASCII-case-insensitive (Excel's sheet-name comparison
-/// rule). Quoting of the new sheet name is recomputed from the new bytes:
+/// Matching uses locale-independent Unicode simple case folding for worksheet
+/// identity (not full Excel-equivalence, normalization, or locale
+/// tailoring). Quoting of the new sheet name is recomputed from the new bytes:
 /// if it cannot be represented unambiguously in bare A1 syntax, the
 /// `Reference.sheet_quoted` flag is set so `format_a1` round-trips with
 /// the canonical quoted form.
@@ -103,7 +104,7 @@ enum class RowColAxis : std::uint8_t {
 /// Reference rewriter for row / column insert and delete operations.
 ///
 /// The transform applies to references whose sheet field matches
-/// `target_sheet` case-insensitively. References with an empty sheet
+/// `target_sheet` under Unicode simple case folding. References with an empty sheet
 /// field are local to the formula's owning sheet; whether they fall in
 /// scope depends on the formula's location, which is information the
 /// per-Reference walker does not carry. The caller therefore runs the

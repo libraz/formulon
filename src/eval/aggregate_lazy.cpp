@@ -124,9 +124,16 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
   }
 
   // Anything else (literal scalar, arithmetic expression, function call) is
-  // treated as a single direct scalar. The caller's per-mode filter decides
-  // whether non-numerics contribute.
+  // evaluated normally. Array-valued calls are flattened in row-major order
+  // so AGGREGATE's code-3 COUNTA path sees the same marker-bearing cells as
+  // the eager COUNTA dispatcher; scalar values remain one direct argument.
   const Value v = eval_node(node, arena, registry, ctx);
+  if (v.is_array()) {
+    const ArrayValue* array = v.as_array();
+    const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
+    out_cells->insert(out_cells->end(), array->cells, array->cells + n);
+    return true;
+  }
   out_cells->push_back(v);
   return true;
 }
@@ -136,7 +143,8 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
 //
 //   * Errors: dropped silently when ignore_errors == true; the first error
 //     short-circuits the call and is written to `*out_err` otherwise.
-//   * COUNTA (code 3): keep every non-blank, drop blanks.
+//   * COUNTA (code 3): keep every non-blank, plus blanks owned by a derived
+//     value array; raw-reference blanks are dropped.
 //   * Numeric modes (everything else): keep only Numbers; drop Bool / Text /
 //     Blank.
 //
@@ -154,7 +162,7 @@ bool apply_filters(std::vector<Value>* cells, int code, bool ignore_errors, Valu
       return false;
     }
     if (code == kCodeCountA) {
-      if (!v.is_blank()) {
+      if (!v.is_blank() || v.blank_counts_for_counta()) {
         kept.push_back(v);
       }
       continue;
@@ -211,8 +219,8 @@ Value run_count(const std::vector<Value>& cells) {
 }
 
 Value run_counta(const std::vector<Value>& cells) {
-  // The COUNTA branch of `apply_filters` already dropped Blanks; everything
-  // remaining contributes 1.
+  // The COUNTA branch of `apply_filters` already dropped plain and
+  // raw-reference Blanks; everything remaining contributes 1.
   return Value::number(static_cast<double>(cells.size()));
 }
 

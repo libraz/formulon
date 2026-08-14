@@ -397,8 +397,12 @@ Value build_width_result(const Sheet& sheet, std::uint32_t col, Arena& arena) {
   bool is_default = true;
   for (const ColumnLayout& layout : sheet.layout().columns) {
     if (layout.first <= col && col <= layout.last) {
-      width = layout.width;
-      is_default = false;
+      // A style/visibility-only span does not override the column metric.
+      // Keep an explicit width="0" distinct from an omitted width.
+      if (HasExplicitColumnWidth(layout)) {
+        width = layout.width;
+        is_default = false;
+      }
     }
   }
   Value* cells = nullptr;

@@ -669,6 +669,85 @@ TEST(CollectNumericsErrorOnText, UnparseableTextAborts) {
   EXPECT_EQ(r.error(), ErrorCode::Value);
 }
 
+// ---------------------------------------------------------------------------
+// `from_date_text` provenance flag
+// ---------------------------------------------------------------------------
+//
+// The flag tells a caller that renders the result back as a date (TEXT) that
+// the returned number is a 1900-date-system serial produced by the date rung,
+// rather than a magnitude the input already carried. Reporting it for a rung
+// that did not parse a calendar date would shift a 1904 workbook's rendering
+// by the 1462-day epoch gap, so each rung is pinned separately.
+
+TEST(CoerceTextProvenance, NumericRungsDoNotReportDateProvenance) {
+  bool from_date_text = true;  // pre-set: the callee must clear it
+
+  auto plain = coerce_text_to_number("45366", &from_date_text);
+  ASSERT_TRUE(plain.has_value());
+  EXPECT_DOUBLE_EQ(plain.value(), 45366.0);
+  EXPECT_FALSE(from_date_text) << "a plain numeric string carries no date provenance";
+
+  from_date_text = true;
+  auto percent = coerce_text_to_number("50%", &from_date_text);
+  ASSERT_TRUE(percent.has_value());
+  EXPECT_DOUBLE_EQ(percent.value(), 0.5);
+  EXPECT_FALSE(from_date_text);
+
+  from_date_text = true;
+  auto grouped = coerce_text_to_number("1,000", &from_date_text);
+  ASSERT_TRUE(grouped.has_value());
+  EXPECT_DOUBLE_EQ(grouped.value(), 1000.0);
+  EXPECT_FALSE(from_date_text);
+}
+
+TEST(CoerceTextProvenance, OnlyTheDateRungWithACalendarDateReportsProvenance) {
+  bool from_date_text = false;
+  auto date = coerce_text_to_number("2024-03-15", &from_date_text);
+  ASSERT_TRUE(date.has_value());
+  EXPECT_DOUBLE_EQ(date.value(), 45366.0);
+  EXPECT_TRUE(from_date_text);
+
+  from_date_text = false;
+  auto date_time = coerce_text_to_number("2024-03-15 12:00", &from_date_text);
+  ASSERT_TRUE(date_time.has_value());
+  EXPECT_DOUBLE_EQ(date_time.value(), 45366.5);
+  EXPECT_TRUE(from_date_text);
+
+  // Time-only text resolves to a day fraction, which is the same number under
+  // either epoch. The date rung parsed it, but there is no calendar day to
+  // move, so the flag stays clear.
+  from_date_text = true;
+  auto time_only = coerce_text_to_number("13:30", &from_date_text);
+  ASSERT_TRUE(time_only.has_value());
+  EXPECT_DOUBLE_EQ(time_only.value(), 13.5 / 24.0);
+  EXPECT_FALSE(from_date_text);
+}
+
+TEST(CoerceTextProvenance, RejectedInputLeavesTheFlagClear) {
+  bool from_date_text = true;
+  auto rejected = coerce_text_to_number("abc", &from_date_text);
+  ASSERT_FALSE(rejected.has_value());
+  EXPECT_EQ(rejected.error(), ErrorCode::Value);
+  EXPECT_FALSE(from_date_text);
+
+  from_date_text = true;
+  auto empty = coerce_text_to_number("   ", &from_date_text);
+  ASSERT_FALSE(empty.has_value());
+  EXPECT_EQ(empty.error(), ErrorCode::Value);
+  EXPECT_FALSE(from_date_text);
+}
+
+TEST(CoerceTextProvenance, OmittedOutParamIsAccepted) {
+  // Every caller other than TEXT passes no out-param; the default overload
+  // must behave exactly like the 1-argument form used to.
+  auto date = coerce_text_to_number("2024-03-15");
+  ASSERT_TRUE(date.has_value());
+  EXPECT_DOUBLE_EQ(date.value(), 45366.0);
+  auto via_value = coerce_to_number(Value::text("2024-03-15"));
+  ASSERT_TRUE(via_value.has_value());
+  EXPECT_DOUBLE_EQ(via_value.value(), date.value());
+}
+
 TEST(CollectNumericsErrorOnErrorCellDisabled, ErrorDroppedSilently) {
   // `error_on_error_cell = false`: stray Error cells are dropped so
   // the regression family can run its own ordered error-propagation

@@ -267,7 +267,7 @@ Value eval_wraprows_lazy(const parser::AstNode& call, Arena& arena, const Functi
       static_cast<std::uint32_t>((n + static_cast<std::size_t>(effective_wrap) - 1) / effective_wrap);
   const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer);
+  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -297,7 +297,7 @@ Value eval_wrapcols_lazy(const parser::AstNode& call, Arena& arena, const Functi
       static_cast<std::uint32_t>((n + static_cast<std::size_t>(effective_wrap) - 1) / effective_wrap);
   const std::size_t total = static_cast<std::size_t>(out_rows) * static_cast<std::size_t>(out_cols);
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer);
+  ArrayValue* out = dynamic_array::allocate_array_value(out_rows, out_cols, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }

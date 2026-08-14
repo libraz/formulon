@@ -11,12 +11,12 @@
 // (which is typically blank, because nothing populates it in that mode).
 //
 // When a context is constructed with a `Workbook` (the three-arg form),
-// qualified references (`Reference::sheet` non-empty) are looked up
-// case-insensitively in the workbook and resolved against the matching
-// sheet. Cycle detection and memoisation live on `(sheet, row, col)` via
-// `EvalState`, so cross-sheet cycles are caught. A context bound only to a
-// `Sheet` (two-arg form) still resolves qualified references to `#REF!`,
-// because there is no workbook to query.
+// qualified references (`Reference::sheet` non-empty) are looked up under
+// locale-independent Unicode simple case folding in the workbook and
+// resolved against the matching sheet. Cycle detection and memoisation live
+// on `(sheet, row, col)` via `EvalState`, so cross-sheet cycles are caught. A
+// context bound only to a `Sheet` (two-arg form) still resolves qualified
+// references to `#REF!`, because there is no workbook to query.
 
 #ifndef FORMULON_EVAL_EVAL_CONTEXT_H_
 #define FORMULON_EVAL_EVAL_CONTEXT_H_
@@ -55,9 +55,10 @@ struct DefinedNameFrame;
 ///     qualified references still resolve to `#REF!` because there is no
 ///     workbook to look up the target sheet.
 ///   * Bound to a `Workbook` + current `Sheet` + `EvalState`: local refs
-///     resolve against the current sheet; qualified refs are looked up
-///     case-insensitively in the workbook. Cross-sheet cycles are caught
-///     via the `(sheet, row, col)` key in `EvalState`.
+///     resolve against the current sheet; qualified refs are looked up using
+///     locale-independent Unicode simple case folding in the workbook.
+///     Cross-sheet cycles are caught via the `(sheet, row, col)` key in
+///     `EvalState`.
 ///
 /// A context is a lightweight, non-owning view — the referenced `Sheet`,
 /// `Workbook`, and `EvalState` must outlive every evaluator invocation
@@ -88,9 +89,11 @@ class EvalContext {
 
   /// Evaluating + cross-sheet–aware context. Unqualified refs resolve
   /// against `current_sheet`; qualified refs (`Reference::sheet` non-empty)
-  /// are looked up in `workbook` case-insensitively. Cycle detection and
-  /// memoisation operate on `(sheet, row, col)` via `state`, so cross-sheet
-  /// cycles are caught.
+  /// are looked up in `workbook` under locale-independent Unicode simple case
+  /// folding. Cycle detection and memoisation operate on `(sheet, row, col)`
+  /// via `state`, so cross-sheet cycles are caught. This is not a claim of
+  /// normalization, full/expanding folding, locale tailoring, or full
+  /// Excel-equivalence.
   ///
   /// `current_sheet` MUST be a sheet owned by `workbook` (no check is
   /// enforced). `workbook`, `current_sheet`, and `state` must outlive the
@@ -167,9 +170,13 @@ class EvalContext {
   ///
   /// Each cell is resolved via `resolve_ref(cell_ref, arena, registry)` so
   /// formula cells are recursed into (subject to `EvalState` cycle detection
-  /// when bound) and cell absence is reported as `Value::blank()`. Returning
-  /// an error `Value` inside the vector is legal - the dispatcher propagates
-  /// it per `propagate_errors`.
+  /// when bound) and cell absence is reported as `Value::blank()`. A copied
+  /// blank from the raw grid is returned as a `Blank` with
+  /// `BlankGridProjection::kReferenceGridZero`; semantic consumers still see the Blank
+  /// kind, while the terminal grid boundary can project that copied cell to
+  /// numeric zero. The source Sheet/cache is never mutated. Returning an
+  /// error `Value` inside the vector is legal - the dispatcher propagates it
+  /// per `propagate_errors`.
   ///
   /// Sheet-qualifier handling:
   ///   * Both endpoints unqualified → expands over the current sheet.

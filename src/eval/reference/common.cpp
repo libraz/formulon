@@ -31,6 +31,7 @@
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/a1_column.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -383,7 +384,13 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
     a1_style = b.value();
   }
   if (!a1_style) {
-    // R1C1 style not yet supported by the A1 parser.
+    // R1C1 style not yet supported by the A1 parser: every
+    // `a1=FALSE` call takes this branch straight to #REF!, including
+    // inputs ADDRESS() itself can produce. Tracked as
+    // tests/divergence.yaml: indirect_r1c1_style_deferred and
+    // tools/catalog/function_status.tsv's INDIRECT note (status stays
+    // `implemented` since the A1 path is complete; only R1C1 is
+    // deferred).
     *out_err = ErrorCode::Ref;
     return false;
   }
@@ -451,7 +458,7 @@ bool resolve_offset_base(const parser::AstNode& arg, Arena& arena, const Functio
     // The effective sheet qualifier mirrors `expand_range`: whichever
     // endpoint carries it wins, and mismatched qualifiers are `#REF!`.
     if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
-      if (!strings::case_insensitive_eq(lhs.sheet, rhs.sheet)) {
+      if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
         *out_err = ErrorCode::Ref;
         return false;
       }

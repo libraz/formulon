@@ -299,3 +299,91 @@ cases:
   - id: very_large_minus_self_is_zero
     description: "1e15 - 1e15 = 0 cleanly"
     formula: "=1E15-1E15"
+
+  # -- Worksheet numeric-comparison precision ----------------------------
+  # These deliberately compare distinct binary64 payloads.  They pin the
+  # 15-significant-decimal-digit comparison used by worksheet operators;
+  # exact lookup matching intentionally has a different contract.
+  - id: cmp_adjacent_mround_round_eq
+    description: "Adjacent results of 71*0.1 and 71/10 compare equal in worksheet formulas"
+    formula: "=(71*0.1)=(71/10)"
+
+  - id: cmp_adjacent_mround_round_ne
+    description: "The worksheet comparison bucket also drives <>"
+    formula: "=(71*0.1)<>(71/10)"
+
+  - id: cmp_adjacent_mround_round_lt
+    formula: "=(71*0.1)<(71/10)"
+
+  - id: cmp_adjacent_mround_round_lte
+    formula: "=(71*0.1)<=(71/10)"
+
+  - id: cmp_adjacent_mround_round_gt
+    formula: "=(71*0.1)>(71/10)"
+
+  - id: cmp_adjacent_mround_round_gte
+    formula: "=(71*0.1)>=(71/10)"
+
+  - id: cmp_one_same_15_digit_bucket
+    description: "One plus 2^-48 shares Excel's 15-digit comparison bucket with one"
+    formula: "=1=(1+2^-48)"
+
+  - id: cmp_one_next_15_digit_bucket
+    description: "One plus 2^-47 is outside that comparison bucket"
+    formula: "=1=(1+2^-47)"
+
+  - id: cmp_fractional_bucket_low_high_equal
+    description: "Two nearby normal values can share a decimal comparison key"
+    formula: "=(1+1/2^50)=(1+4/2^50)"
+
+  - id: cmp_fractional_bucket_middle_ordered
+    description: "Adjacent decimal comparison keys retain numeric ordering"
+    formula: "=(1+4/2^50)<(1+7/2^50)"
+
+  - id: cmp_fractional_bucket_high_equal
+    description: "The next pair shares the following decimal comparison key"
+    formula: "=(1+7/2^50)=(1+10/2^50)"
+
+  - id: cmp_15_digit_half_lower_equal
+    description: "The 15-digit boundary rounds 10^15+4 down to 10^15"
+    formula: "=(10^15+4)=10^15"
+
+  - id: cmp_15_digit_half_lower_not_upper
+    description: "The halfway input does not share the lower decimal key"
+    formula: "=(10^15+5)=10^15"
+
+  - id: cmp_15_digit_half_upper_equal
+    description: "The halfway input shares the upper decimal key"
+    formula: "=(10^15+5)=(10^15+10)"
+
+  - id: cmp_15_digit_half_negative_upper_equal
+    description: "The half-up decimal key is sign-symmetric"
+    formula: "=-(10^15+5)=-(10^15+10)"
+
+  - id: cmp_zero_normal_tiny_ne
+    description: "Zero and a tiny normal remain distinct; no relative epsilon applies"
+    formula: "=0=1E-300"
+
+  - id: cmp_negative_positive_tiny_order
+    description: "Opposite signs retain raw numeric ordering"
+    formula: "=-1E-300<1E-300"
+
+  - id: cmp_large_same_15_digit_bucket
+    description: "The 15-digit comparison bucket also applies at large normal magnitudes"
+    formula: "=1E300=(1E300*(1+2^-48))"
+
+  - id: cmp_large_next_15_digit_bucket
+    description: "A larger large-magnitude delta remains distinguishable"
+    formula: "=1E300=(1E300*(1+2^-47))"
+
+  # Exact lookup matching must not inherit worksheet-operator bucketing.
+  - id: lookup_match_adjacent_numbers_stays_exact
+    setup:
+      A1: { kind: formula, formula: "=71/10" }
+    formula: "=MATCH(71*0.1,A1,0)"
+
+  - id: lookup_xlookup_adjacent_numbers_stays_exact
+    setup:
+      A1: { kind: formula, formula: "=71/10" }
+      B1: "hit"
+    formula: "=XLOOKUP(71*0.1,A1:A1,B1:B1,\"miss\")"

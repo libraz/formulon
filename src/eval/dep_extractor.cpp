@@ -23,6 +23,7 @@
 #include "parser/parser.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
 #include "utils/rect_iterator.h"
@@ -191,7 +192,7 @@ void emit_range_cells(WalkState& state, const parser::Reference& lhs, const pars
   if (!lhs.sheet.empty() && !rhs.sheet.empty()) {
     // Mismatched qualifiers are an evaluator-level #REF!; statically we
     // simply skip the range.
-    if (lhs.sheet != rhs.sheet) {
+    if (!sheet_names::equal(lhs.sheet, rhs.sheet)) {
       return;
     }
     effective_sheet = lhs.sheet;

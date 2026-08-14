@@ -27,6 +27,7 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/pivot_locale.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -154,6 +155,20 @@ Workbook BuildBasicWorkbook() {
   return wb;
 }
 
+// The basic workbook plus one record whose Region cell carries no value —
+// the shape a source row with an empty row-field cell produces.
+Workbook BuildBlankRegionWorkbook() {
+  Workbook wb = Workbook::create();
+  auto cache = BuildBasicCache();
+  pivot::PivotCacheRecord blank_region;
+  blank_region.cells.push_back(Value::blank());
+  blank_region.cells.push_back(Value::number(500.0));
+  cache->mutable_records().push_back(std::move(blank_region));
+  wb.add_pivot_cache(std::move(cache));
+  wb.sheet(0).add_pivot_table(BuildBasicTable());
+  return wb;
+}
+
 Workbook BuildMultiDataWorkbook() {
   Workbook wb = Workbook::create();
   wb.add_pivot_cache(BuildBasicCache());
@@ -205,6 +220,23 @@ TEST(GetPivotDataLazy, RowFieldSouthReturnsLeafSum) {
   const Value v = EvalWith("=GETPIVOTDATA(\"Sum of Amount\", A3, \"Region\", \"South\")", ctx);
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 700.0);
+}
+
+// The lookup matches axis labels exactly, so the group formed by blank source
+// cells is only reachable if it carries the workbook locale's placeholder
+// label. An unnamed group would leave those records addressable by nothing at
+// all. The expected literal is read back out of the locale vocabulary rather
+// than spelled here, so the test pins addressability, not the placeholder text.
+TEST(GetPivotDataLazy, BlankRowFieldGroupIsAddressableByItsPlaceholderLabel) {
+  Workbook wb = BuildBlankRegionWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const std::string placeholder = pivot_layout_options_for(wb.excel_profile()).blank_item_label;
+  ASSERT_FALSE(placeholder.empty());
+  const std::string formula = "=GETPIVOTDATA(\"Sum of Amount\", A3, \"Region\", \"" + placeholder + "\")";
+  const Value v = EvalWith(formula, ctx);
+  ASSERT_TRUE(v.is_number()) << "the blank group has no label a formula can name";
+  EXPECT_EQ(v.as_number(), 500.0);
 }
 
 // ---------------------------------------------------------------------------

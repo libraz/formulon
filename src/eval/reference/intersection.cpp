@@ -21,6 +21,7 @@
 #include "eval/reference/common.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -214,7 +215,7 @@ bool resolve_range_endpoint(const parser::AstNode& node, Arena& arena, const Fun
       return false;
     }
     if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
-      if (!strings::case_insensitive_eq(lhs_sheet, rhs_sheet)) {
+      if (!sheet_names::equal(lhs_sheet, rhs_sheet)) {
         *out_err = ErrorCode::Ref;
         return false;
       }
@@ -309,7 +310,7 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
       return false;
     }
     if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
-      if (!strings::case_insensitive_eq(lhs_sheet, rhs_sheet)) {
+      if (!sheet_names::equal(lhs_sheet, rhs_sheet)) {
         *out_err = ErrorCode::Ref;
         return false;
       }
@@ -357,7 +358,7 @@ bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& r
     return false;
   }
   if (!lhs_sheet.empty() && !rhs_sheet.empty()) {
-    if (!strings::case_insensitive_eq(lhs_sheet, rhs_sheet)) {
+    if (!sheet_names::equal(lhs_sheet, rhs_sheet)) {
       *out_err = ErrorCode::Ref;
       return false;
     }

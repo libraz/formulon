@@ -16,6 +16,7 @@
 #include <string>
 #include <string_view>
 
+#include "double-conversion/double-conversion.h"
 #include "eval/coerce.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -25,6 +26,57 @@
 
 namespace formulon {
 namespace eval {
+
+namespace {
+
+// Excel's numeric equality has a 15-significant-digit display bucket for
+// finite normal values. The bucket is used only to decide equality: values
+// whose keys differ retain their raw IEEE-754 ordering. Keeping the special
+// value and subnormal cases on the raw path is important because precision
+// formatting would otherwise turn distinct tiny values into the same key.
+int compare_numeric_values(double a, double b, bool* out_unordered) {
+  if (std::isnan(a) || std::isnan(b)) {
+    *out_unordered = true;
+    return 0;
+  }
+
+  // This exact check deliberately comes before the classification guards:
+  // it covers equal finite values, signed zero, and equal infinities.
+  if (a == b) {
+    return 0;
+  }
+
+  const bool same_sign_finite_normals = std::signbit(a) == std::signbit(b) && std::isfinite(a) && std::isfinite(b) &&
+                                        std::fpclassify(a) == FP_NORMAL && std::fpclassify(b) == FP_NORMAL;
+  if (!same_sign_finite_normals) {
+    return a < b ? -1 : 1;
+  }
+
+  using DoubleConverter = double_conversion::DoubleToStringConverter;
+  const DoubleConverter& converter = DoubleConverter::EcmaScriptConverter();
+  // ToPrecision(15) cannot produce more than a few dozen bytes for a double,
+  // including sign and a three-digit exponent. Keep both keys on the stack so
+  // comparisons do not allocate or retain any temporary string state.
+  char lhs_key[64];
+  char rhs_key[64];
+  double_conversion::StringBuilder lhs_builder(lhs_key, sizeof(lhs_key));
+  double_conversion::StringBuilder rhs_builder(rhs_key, sizeof(rhs_key));
+  const bool lhs_ok = converter.ToPrecision(a, 15, &lhs_builder);
+  const bool rhs_ok = converter.ToPrecision(b, 15, &rhs_builder);
+  if (lhs_ok && rhs_ok) {
+    const std::string_view lhs_view(lhs_key, static_cast<std::size_t>(lhs_builder.position()));
+    const std::string_view rhs_view(rhs_key, static_cast<std::size_t>(rhs_builder.position()));
+    if (lhs_view == rhs_view) {
+      return 0;
+    }
+  }
+
+  // Different precision keys (or an unexpected conversion failure) must not
+  // become a lexical ordering. Preserve the raw numeric relation instead.
+  return a < b ? -1 : 1;
+}
+
+}  // namespace
 
 // Excel cross-type comparison order: Number < Text < Bool. Blank coerces to
 // numeric zero. Text equality and ordering are case-insensitive over ASCII
@@ -95,17 +147,7 @@ int compare_values(const Value& lhs, const Value& rhs, bool* out_unordered) {
     case 0: {
       const double a = lhs.is_blank() ? 0.0 : lhs.as_number();
       const double b = rhs.is_blank() ? 0.0 : rhs.as_number();
-      if (std::isnan(a) || std::isnan(b)) {
-        *out_unordered = true;
-        return 0;
-      }
-      if (a < b) {
-        return -1;
-      }
-      if (a > b) {
-        return 1;
-      }
-      return 0;
+      return compare_numeric_values(a, b, out_unordered);
     }
     case 1: {
       const std::string_view a = lhs.as_text();

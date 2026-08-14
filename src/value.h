@@ -50,6 +50,25 @@ enum class ValueKind : std::uint8_t {
   Lambda = 7,
 };
 
+/// Surface projection for a blank cell when it is materialised into a
+/// top-level dynamic-array grid. All variants remain `ValueKind::Blank`;
+/// this metadata is consumed only at array/grid boundaries and by the
+/// provenance-sensitive COUNTA implementation.
+enum class BlankGridProjection : std::uint8_t {
+  kPreserve = 0,
+  /// A blank copied from a raw worksheet reference. It projects to zero at
+  /// the terminal grid boundary, but remains excluded from COUNTA until an
+  /// array materialiser copies it into a value array.
+  kReferenceGridZero = 1,
+  /// A blank owned by a derived array. It projects to zero at the terminal
+  /// grid boundary and is counted by COUNTA as an occupied array cell.
+  kValueArrayZero = 2,
+  // Compatibility spelling retained for existing callers that only need
+  // the terminal projection bit. New code should choose the provenance
+  // specific name above.
+  kZero = kValueArrayZero,
+};
+
 /// Excel-visible error codes that surface in cell values.
 ///
 /// This enum is distinct from Formulon's internal `FormulonErrorCode`
@@ -193,9 +212,12 @@ constexpr const char* display_name(ErrorCode e) noexcept {
 class Value {
  public:
   /// Builds a `Blank` value. This is the zero-state used by empty cells.
-  static Value blank() noexcept {
+  /// The projection metadata records whether a copied raw-reference blank or
+  /// a derived-array blank should display as numeric zero at a grid boundary.
+  static Value blank(BlankGridProjection projection = BlankGridProjection::kPreserve) noexcept {
     Value v;
     v.kind_ = ValueKind::Blank;
+    v.blank_projection_ = projection;
     v.data_.number = 0.0;
     return v;
   }
@@ -270,6 +292,29 @@ class Value {
   bool is_ref() const noexcept { return kind_ == ValueKind::Ref; }
   bool is_lambda() const noexcept { return kind_ == ValueKind::Lambda; }
 
+  /// Returns whether this Blank should project to numeric zero at a
+  /// top-level array/grid boundary. Non-Blank values always return false.
+  bool blank_projects_to_zero() const noexcept {
+    return is_blank() && blank_projection_ != BlankGridProjection::kPreserve;
+  }
+
+  /// Returns whether this blank is counted by COUNTA. Plain blanks and
+  /// reference-grid blanks are not occupied values; only blanks born in a
+  /// derived value array count as populated array cells.
+  bool blank_counts_for_counta() const noexcept {
+    return is_blank() && blank_projection_ == BlankGridProjection::kValueArrayZero;
+  }
+
+  /// Promotes only a raw-reference blank copied into a derived array. The
+  /// operation is idempotent: plain blanks remain plain, and value-array
+  /// blanks remain value-array blanks.
+  Value promote_reference_blank_to_value_array() const noexcept {
+    if (!is_blank() || blank_projection_ != BlankGridProjection::kReferenceGridZero) {
+      return *this;
+    }
+    return Value::blank(BlankGridProjection::kValueArrayZero);
+  }
+
   /// Returns the numeric payload. Aborts if `kind() != Number`.
   double as_number() const;
 
@@ -319,7 +364,7 @@ class Value {
   friend bool operator!=(const Value& a, const Value& b) noexcept { return !(a == b); }
 
  private:
-  Value() noexcept : kind_(ValueKind::Blank), data_{} {}
+  Value() noexcept : kind_(ValueKind::Blank), blank_projection_(BlankGridProjection::kPreserve), data_{} {}
 
   union Payload {
     double number;
@@ -341,6 +386,7 @@ class Value {
   };
 
   ValueKind kind_;
+  BlankGridProjection blank_projection_;
   Payload data_;
 };
 

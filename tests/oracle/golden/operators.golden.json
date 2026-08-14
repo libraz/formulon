@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-13T00:16:13Z"
+    "generated_at": "2026-08-14T00:20:38Z"
   },
   "tolerance": {
     "abs": 1e-12,
@@ -722,6 +722,209 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "cmp_adjacent_mround_round_eq",
+      "formula": "=(71*0.1)=(71/10)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_adjacent_mround_round_ne",
+      "formula": "=(71*0.1)<>(71/10)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_adjacent_mround_round_lt",
+      "formula": "=(71*0.1)<(71/10)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_adjacent_mround_round_lte",
+      "formula": "=(71*0.1)<=(71/10)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_adjacent_mround_round_gt",
+      "formula": "=(71*0.1)>(71/10)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_adjacent_mround_round_gte",
+      "formula": "=(71*0.1)>=(71/10)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_one_same_15_digit_bucket",
+      "formula": "=1=(1+2^-48)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_one_next_15_digit_bucket",
+      "formula": "=1=(1+2^-47)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_fractional_bucket_low_high_equal",
+      "formula": "=(1+1/2^50)=(1+4/2^50)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_fractional_bucket_middle_ordered",
+      "formula": "=(1+4/2^50)<(1+7/2^50)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_fractional_bucket_high_equal",
+      "formula": "=(1+7/2^50)=(1+10/2^50)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_15_digit_half_lower_equal",
+      "formula": "=(10^15+4)=10^15",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_15_digit_half_lower_not_upper",
+      "formula": "=(10^15+5)=10^15",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_15_digit_half_upper_equal",
+      "formula": "=(10^15+5)=(10^15+10)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_15_digit_half_negative_upper_equal",
+      "formula": "=-(10^15+5)=-(10^15+10)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_zero_normal_tiny_ne",
+      "formula": "=0=1E-300",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "cmp_negative_positive_tiny_order",
+      "formula": "=-1E-300<1E-300",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_large_same_15_digit_bucket",
+      "formula": "=1E300=(1E300*(1+2^-48))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "cmp_large_next_15_digit_bucket",
+      "formula": "=1E300=(1E300*(1+2^-47))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "lookup_match_adjacent_numbers_stays_exact",
+      "formula": "=MATCH(71*0.1,A1,0)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=71/10"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "lookup_xlookup_adjacent_numbers_stays_exact",
+      "formula": "=XLOOKUP(71*0.1,A1:A1,B1:B1,\"miss\")",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=71/10"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "hit"
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "miss"
       }
     }
   ]

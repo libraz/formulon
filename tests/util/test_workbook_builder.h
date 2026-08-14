@@ -60,7 +60,7 @@ class WorkbookBuilder {
 
   // Selects (or appends) the sheet with display name `name` and marks
   // it as the active target for subsequent `cell(...)` calls.
-  // Case-insensitive match, matching Excel and `Workbook::sheet_by_name`.
+  // Unicode-simple-fold match, matching `Workbook::sheet_by_name`.
   WorkbookBuilder& sheet(std::string_view name);
 
   // Stores a numeric literal at A1-notation address `a1` on the active

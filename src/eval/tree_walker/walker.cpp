@@ -842,33 +842,40 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   if (v.is_blank() && node.kind() != parser::NodeKind::Literal) {
     return Value::number(0.0);
   }
-  // The same blank -> 0 grid contract applies per cell to a spilled *bare
-  // range*: Excel renders a blank source cell inside a spilled `=A1:A3` as
-  // 0. This is gated on the top-level node being a RangeOp so it fires only
-  // for a bare-range spill. Operator paths (`=A1:A3&"x"`, `=A1:A3+1`) have
-  // already coerced each blank per context by the time they reach here
-  // (concat -> "", arithmetic -> 0), and array-producing functions (SORT,
-  // TOCOL, TOROW, PIVOTBY) legitimately preserve blank / empty cells, which
-  // Excel keeps as blank rather than 0. Rebuild only when a blank exists.
-  if (v.is_array() && node.kind() == parser::NodeKind::RangeOp) {
+  // The same blank -> 0 grid contract applies per cell to a spilled raw
+  // range: Excel renders a blank source cell inside a spilled `=A1:A3` as
+  // 0. Raw-grid ingress marks those copied cells in the shared range seam;
+  // other array-producing functions project only blanks explicitly marked by
+  // their producer (e.g. generated EXPAND pads). Genuine source blanks remain
+  // Blank for nested consumers and neutral producers. Rebuild only when a
+  // conversion is required.
+  if (v.is_array()) {
     const ArrayValue* arr = v.as_array();
     const std::size_t n = static_cast<std::size_t>(arr->rows) * static_cast<std::size_t>(arr->cols);
-    bool any_blank = false;
+    bool any_projection = false;
     for (std::size_t i = 0; i < n; ++i) {
-      if (arr->cells[i].is_blank()) {
-        any_blank = true;
+      const Value& cell = arr->cells[i];
+      if (cell.blank_projects_to_zero()) {
+        any_projection = true;
         break;
       }
     }
-    if (any_blank) {
+    if (any_projection) {
       Value* buffer = nullptr;
       ArrayValue* promoted = allocate_array_value(arr->rows, arr->cols, arena, buffer, kMaxDerivedArrayCells);
-      if (promoted != nullptr) {
-        for (std::size_t i = 0; i < n; ++i) {
-          buffer[i] = arr->cells[i].is_blank() ? Value::number(0.0) : arr->cells[i];
+      if (promoted == nullptr) {
+        if (arena.exhausted()) {
+          if (EvalState* state = ctx.state(); state != nullptr) {
+            state->mark_out_of_memory();
+          }
         }
-        v = Value::array(promoted);
+        return Value::error(ErrorCode::Num);
       }
+      for (std::size_t i = 0; i < n; ++i) {
+        const Value& cell = arr->cells[i];
+        buffer[i] = cell.blank_projects_to_zero() ? Value::number(0.0) : cell;
+      }
+      v = Value::array(promoted);
     }
   }
 #ifdef FORMULON_VM_PARITY_CHECK

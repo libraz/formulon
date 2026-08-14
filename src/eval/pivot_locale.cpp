@@ -79,6 +79,10 @@ pivot::PivotLayoutOptions pivot_layout_options_for(ExcelProfile profile) {
     options.row_labels_label = "行ラベル";
     options.column_labels_label = "列ラベル";
     options.subtotal_suffix = " 集計";
+    // Provisional spelling: unlike the labels above, this one is not backed
+    // by an Excel observation yet. Pinning it needs a ja-JP capture of a
+    // pivot whose row field contains empty source cells.
+    options.blank_item_label = "(空白)";
   }
   return options;
 }

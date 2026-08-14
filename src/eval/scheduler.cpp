@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -166,11 +167,11 @@ std::vector<std::vector<std::size_t>> kahn_layers(const CondensedGraph& cg) {
 // worth the indirection).
 using ThreadArenas = std::vector<std::unique_ptr<Arena>>;
 
-ThreadArenas make_thread_arenas(std::size_t count) {
+ThreadArenas make_thread_arenas(std::size_t count, std::size_t max_arena_bytes) {
   ThreadArenas arenas;
   arenas.reserve(count);
   for (std::size_t i = 0; i < count; ++i) {
-    arenas.emplace_back(std::make_unique<Arena>(/*initial_chunk_bytes=*/4096, kMaxEvalArenaBytes));
+    arenas.emplace_back(std::make_unique<Arena>(/*initial_chunk_bytes=*/4096, max_arena_bytes));
   }
   return arenas;
 }
@@ -185,6 +186,12 @@ ThreadArenas make_thread_arenas(std::size_t count) {
 struct SccOutcome {
   std::uint64_t cells_evaluated = 0;
   std::uint64_t cycle_recoveries = 0;
+  /// Set when the worker's arena reported exhaustion for this component.
+  /// The committed values are degraded (an allocation failure surfaces as a
+  /// value-level error), so the pass must abort with `kOutOfMemory` rather
+  /// than report success — the same contract the serial engine applies at
+  /// each of its evaluation sites.
+  bool arena_exhausted = false;
 };
 
 SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, const DepGraph& graph,
@@ -242,6 +249,10 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
 
     const IterativeOutcome outcome =
         run_iterative_solve(component, iter_opts, evaluate_one, commit, progress_cb, progress_user_data);
+    if (arena.exhausted()) {
+      out.arena_exhausted = true;
+      return out;
+    }
     if (outcome.converged) {
       ++out.cycle_recoveries;
       out.cells_evaluated += component.size();
@@ -264,6 +275,10 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
   opts.spill_release_callback = release_callback;
   opts.spill_release_user_data = release_user_data;
   Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, only.row, only.col, registry, arena, opts);
+  if (arena.exhausted()) {
+    out.arena_exhausted = true;
+    return out;
+  }
   {
     std::lock_guard<std::mutex> guard(write_mutex);
     sheet.set_cell_cached_value(only.row, only.col, result);
@@ -291,6 +306,7 @@ struct LayerWork {
   SpillReleaseCallback release_callback = nullptr;
   void* release_user_data = nullptr;
   std::vector<SccOutcome>* outcomes = nullptr;
+  std::vector<std::uint8_t>* worker_used = nullptr;
 };
 
 // Drains the layer's task queue from one worker. `outcomes` is
@@ -313,6 +329,13 @@ void worker_loop(std::size_t worker_id, LayerWork* work) {
     if (idx >= work->tasks->size()) {
       return;
     }
+    // Each worker owns one byte in this vector. The scheduler reads the
+    // flags only after the layer barrier (and, ultimately, after the pool is
+    // joined), so distinct workers can set their own flags without a result
+    // lock or an atomic increment on the hot task-claim path.
+    if (work->worker_used != nullptr) {
+      (*work->worker_used)[worker_id] = 1U;
+    }
     (*work->outcomes)[idx] =
         process_scc((*work->components)[(*work->tasks)[idx]], *work->wb, *work->graph, *work->registry,
                     *work->iter_opts, arena, work->progress_cb, work->progress_user_data, *work->write_mutex,
@@ -333,7 +356,7 @@ void worker_loop(std::size_t worker_id, LayerWork* work) {
 // is slower but produces identical results.
 class LayerWorkerPool {
  public:
-  explicit LayerWorkerPool(std::uint32_t worker_count) {
+  explicit LayerWorkerPool(std::uint32_t worker_count) : worker_used_(worker_count, 0U) {
     // Both vectors are reserved and never grown afterwards: each live
     // worker holds a pointer into `slots_`, which a reallocation would
     // dangle.
@@ -378,6 +401,20 @@ class LayerWorkerPool {
   /// asked for.
   std::uint32_t size() const noexcept { return static_cast<std::uint32_t>(workers_.size()); }
 
+  /// Number of workers that claimed at least one task. Must be called after
+  /// the caller has drained all layers (or after destruction), because worker
+  /// flags are intentionally non-atomic and are published by the layer
+  /// barrier / thread joins.
+  std::uint32_t used_count() const noexcept {
+    std::uint32_t count = 0U;
+    for (const std::uint8_t used : worker_used_) {
+      count += used != 0U ? 1U : 0U;
+    }
+    return count;
+  }
+
+  std::vector<std::uint8_t>* used_flags() noexcept { return &worker_used_; }
+
   /// Dispatches one layer across the live workers and returns once they
   /// have all come back to the barrier. Requires `size() >= 1`: with no
   /// worker to drain the queue this would return with the layer
@@ -406,6 +443,11 @@ class LayerWorkerPool {
 
   static void worker_entry(void* raw) {
     auto* slot = static_cast<WorkerSlot*>(raw);
+    // The re-entry guard is thread-local. The caller's guard therefore does
+    // not protect callbacks running on a pool worker; install a worker-side
+    // guard so a nested serial or parallel recalc fails before trying to
+    // acquire the already-held engine mutex.
+    RecalcReentryGuard guard;
     slot->pool->worker_main(slot->worker_id);
   }
 
@@ -435,6 +477,7 @@ class LayerWorkerPool {
 
   std::vector<WorkerSlot> slots_;
   std::vector<Thread> workers_;
+  std::vector<std::uint8_t> worker_used_;
   std::mutex mutex_;
   std::condition_variable work_ready_;
   std::condition_variable layer_done_;
@@ -462,6 +505,18 @@ std::uint32_t resolve_thread_count(std::uint32_t requested) {
 // ---------------------------------------------------------------------------
 Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry& registry, const SchedulerConfig& cfg,
                                            SchedulerStats* stats, RecalcEngine& engine) {
+  // Keep the public scheduler contract bounded as well as the C ABI wrapper:
+  // values above the eight-worker ceiling are invalid, not silently rounded
+  // down. The output is already reset before any validation or re-entry
+  // check, so every failure path leaves a caller-provided stats object clean.
+  if (stats != nullptr) {
+    *stats = SchedulerStats{};
+  }
+  if (cfg.num_threads > kMaxAutoThreads) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "recalc_parallel thread count exceeds the scheduler limit",
+                      "thread_count=" + std::to_string(cfg.num_threads) + " max=8");
+  }
+
   // Re-entrancy check. If this thread is already inside a
   // `recalc_parallel` invocation, surface `kGraphRecalcReentrant` instead
   // of corrupting the dirty / dep-graph bookkeeping. Triggered today only
@@ -489,6 +544,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   const SpillReleaseCallback release_callback = &queue_spill_release;
   std::uint64_t cells_evaluated = 0;
   std::uint64_t sccs_processed = 0;
+  std::uint64_t scc_nodes_considered = 0;
   std::uint64_t parallel_steps = 0;
   std::uint64_t serial_fallback_steps = 0;
   std::uint64_t cycle_recoveries = 0;
@@ -498,6 +554,13 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
   std::vector<BlockedSpillState> previous_release_state;
   std::vector<CellNodeId> previous_release_targets;
   bool have_previous_release_state = false;
+  const std::uint32_t configured_worker_count = resolve_thread_count(cfg.num_threads);
+  // Keep one pool for the complete pass. A spill/dependency retry is another
+  // wave of the same recalc, not a new recalc invocation; workers therefore
+  // remain parked at the layer barrier until the final wave is complete.
+  std::unique_ptr<LayerWorkerPool> worker_pool;
+  ThreadArenas arenas = make_thread_arenas(1U, cfg.max_arena_bytes);
+  std::mutex write_mutex;
   const auto mark_release_targets_dirty = [&](const std::vector<CellNodeId>& anchors) {
     for (const CellNodeId anchor : anchors) {
       engine.dirty_.mark(anchor);
@@ -543,23 +606,21 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       }
     }
 
-    // Phase 3: Tarjan SCC over the entire graph (same as the serial engine).
-    const std::vector<std::vector<CellNodeId>> all_sccs = engine.graph_.tarjan_scc();
+    // Phase 3: Tarjan SCC over the dirty induced subgraph, exactly the node
+    // set the serial engine passes to `tarjan_scc_subset`. Running it over
+    // the whole registered graph instead would make every wave of the retry
+    // loop below cost the workbook rather than the edit.
+    std::unordered_set<CellNodeId, CellNodeIdHash> dirty_nodes;
+    dirty_nodes.reserve(engine.dirty_.size());
+    engine.dirty_.for_each([&](CellNodeId c) { dirty_nodes.insert(c); });
+    const std::vector<std::vector<CellNodeId>> dirty_sccs = engine.graph_.tarjan_scc_subset(dirty_nodes);
+    scc_nodes_considered += dirty_nodes.size();
 
-    // Filter to dirty SCCs and assign condensed-graph indices.
+    // Assign condensed-graph indices. Every emitted component is dirty by
+    // construction, so no filtering pass is needed.
     SccIndex idx;
-    idx.components.reserve(all_sccs.size());
-    for (const std::vector<CellNodeId>& comp : all_sccs) {
-      bool any_dirty = false;
-      for (CellNodeId c : comp) {
-        if (engine.dirty_.contains(c)) {
-          any_dirty = true;
-          break;
-        }
-      }
-      if (!any_dirty) {
-        continue;
-      }
+    idx.components.reserve(dirty_sccs.size());
+    for (const std::vector<CellNodeId>& comp : dirty_sccs) {
       const std::size_t scc_id = idx.components.size();
       for (CellNodeId c : comp) {
         idx.cell_to_scc.emplace(c, scc_id);
@@ -570,16 +631,6 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     const CondensedGraph cg = build_condensed_graph(idx, engine.graph_);
     const std::vector<std::vector<std::size_t>> layers = kahn_layers(cg);
 
-    // The pool is built before the arenas because it may come back smaller
-    // than requested: an OS that refuses a thread degrades the pass instead
-    // of ending the process. Every layer then dispatches against the live
-    // worker count, and zero live workers falls all the way through to the
-    // serial branch below — which still needs one arena of its own.
-    LayerWorkerPool worker_pool(resolve_thread_count(cfg.num_threads));
-    const std::uint32_t worker_count = worker_pool.size();
-    ThreadArenas arenas = make_thread_arenas(std::max<std::uint32_t>(worker_count, 1U));
-    std::mutex write_mutex;
-
     const IterativeOptions iter_opts = engine.iterative_options();
     const IterativeProgressCb progress_cb = engine.progress_cb_;
     void* const progress_user_data = engine.progress_user_data_;
@@ -587,7 +638,38 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     for (const std::vector<std::size_t>& layer : layers) {
       sccs_processed += layer.size();
 
-      if (layer.size() <= 1U || worker_count <= 1U) {
+      // A progress callback is user code and must stay on the caller. It is
+      // enough for one cyclic SCC to occur in the layer to force the whole
+      // barrier through the caller, preserving serial callback affinity and
+      // avoiding callback races between otherwise independent SCCs.
+      bool callback_cycle = false;
+      if (progress_cb != nullptr) {
+        for (const std::size_t scc_id : layer) {
+          if (is_cyclic_component(idx.components[scc_id], engine.graph_)) {
+            callback_cycle = true;
+            break;
+          }
+        }
+      }
+
+      bool run_serial = layer.size() <= 1U || configured_worker_count <= 1U || callback_cycle;
+      if (!run_serial && worker_pool == nullptr) {
+        // The pool is lazy so a no-op / serial-only recalc starts no OS
+        // workers merely because the caller selected a parallel cap. Once
+        // created, this object is retained across all subsequent waves.
+        worker_pool = std::make_unique<LayerWorkerPool>(configured_worker_count);
+        arenas = make_thread_arenas(std::max<std::uint32_t>(worker_pool->size(), 1U), cfg.max_arena_bytes);
+      }
+      if (!run_serial && worker_pool->size() <= 1U) {
+        // A launch refusal is a successful degradation, not a scheduler
+        // failure. A single surviving worker cannot make a layer parallel,
+        // so keep the caller-only path. Keep the pool (even when empty) so a
+        // later spill wave does not retry the OS launch and accidentally
+        // create a second pool in this pass.
+        run_serial = true;
+      }
+
+      if (run_serial) {
         // Tiny layer or single-worker mode: process serially on this thread.
         ++serial_fallback_steps;
         Arena& arena = *arenas[0U];
@@ -595,6 +677,9 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
           const SccOutcome o =
               process_scc(idx.components[scc_id], wb, engine.graph_, registry, iter_opts, arena, progress_cb,
                           progress_user_data, write_mutex, release_callback, &release_queue);
+          if (o.arena_exhausted) {
+            return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+          }
           cells_evaluated += o.cells_evaluated;
           cycle_recoveries += o.cycle_recoveries;
         }
@@ -618,9 +703,13 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       work.release_callback = release_callback;
       work.release_user_data = &release_queue;
       work.outcomes = &outcomes;
-      worker_pool.run(work);
+      work.worker_used = worker_pool->used_flags();
+      worker_pool->run(work);
 
       for (const SccOutcome& o : outcomes) {
+        if (o.arena_exhausted) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+        }
         cells_evaluated += o.cells_evaluated;
         cycle_recoveries += o.cycle_recoveries;
       }
@@ -653,6 +742,9 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
         opts.spill_release_callback = release_callback;
         opts.spill_release_user_data = &release_queue;
         Value result = evaluate_cell_for_recalc(wb, sheet, *cell_data, c.row, c.col, registry, arena, opts);
+        if (arena.exhausted()) {
+          return make_error(FormulonErrorCode::kOutOfMemory, "evaluation arena exhausted during parallel recalc");
+        }
         sheet.set_cell_cached_value(c.row, c.col, result);
         ++cells_evaluated;
         ++sccs_processed;  // Treat a standalone formula as its own component.
@@ -708,9 +800,14 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     if (stats != nullptr) {
       stats->cells_evaluated = cells_evaluated;
       stats->sccs_processed = sccs_processed;
+      stats->scc_nodes_considered = scc_nodes_considered;
       stats->parallel_steps = parallel_steps;
       stats->serial_fallback_steps = serial_fallback_steps;
       stats->cycle_recoveries = cycle_recoveries;
+      if (worker_pool != nullptr) {
+        stats->worker_threads_started = worker_pool->size();
+        stats->worker_threads_used = worker_pool->used_count();
+      }
     }
 
     return Expected<void, Error>::Ok();

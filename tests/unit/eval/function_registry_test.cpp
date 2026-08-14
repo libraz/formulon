@@ -165,6 +165,12 @@ TEST(FunctionRegistry, SpillPotentialCoversLazyReturnShapes) {
   EXPECT_TRUE(FormulaMaySpill("=LINEST(A:A,B:B)"));
   EXPECT_TRUE(FormulaMaySpill("=TRIMRANGE(A1:B2)"));
   EXPECT_TRUE(FormulaMaySpill("=XLOOKUP(1,A:A,B:C)"));
+  EXPECT_TRUE(FormulaMaySpill("=VLOOKUP(1,A:A,1)"));
+  EXPECT_TRUE(FormulaMaySpill("=HLOOKUP(1,1:1,1)"));
+  EXPECT_TRUE(FormulaMaySpill("=MATCH(1,A:A)"));
+  EXPECT_FALSE(FormulaMaySpill("=CHOOSE(1,10,20)"));
+  EXPECT_TRUE(FormulaMaySpill("=CHOOSE(SEQUENCE(1),10,20)"));
+  EXPECT_TRUE(FormulaMaySpill("=INDEX(A1:A2,1)"));
   EXPECT_FALSE(FormulaMaySpill("=LOOKUP(1,A:A,B:B)"));
   EXPECT_FALSE(FormulaMaySpill("=ROW(A1)"));
   EXPECT_TRUE(FormulaMaySpill("=ROW(A1:A2)"));

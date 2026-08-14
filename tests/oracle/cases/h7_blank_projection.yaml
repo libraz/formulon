@@ -1,0 +1,122 @@
+suite: h7_blank_projection
+description: "Blank grid projection across raw references and dynamic-array wrappers (Excel 365)."
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  # Raw grid reference: visible spill cells project to 0, but nested
+  # consumers still observe a Blank semantic cell.
+  - id: sort_raw_range_direct
+    setup: { A1: 2, A3: 1 }
+    formula: "=SORT(A1:A3)"
+  - id: sort_raw_range_count
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNT(SORT(A1:A3))"
+  - id: sort_raw_range_counta
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNTA(SORT(A1:A3))"
+  - id: sort_raw_range_and
+    setup: { A1: 2, A3: 1 }
+    formula: "=AND(SORT(A1:A3))"
+  - id: sort_raw_range_isblank_tail
+    setup: { A1: 2, A3: 1 }
+    formula: "=ISBLANK(INDEX(SORT(A1:A3),3,1))"
+
+  # All reference-producing paths preserve the same raw-grid behavior.
+  - id: offset_raw_grid_direct
+    setup: { A1: 2, A3: 1 }
+    formula: "=OFFSET(A1,0,0,3,1)"
+  - id: offset_raw_grid_count
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNT(OFFSET(A1,0,0,3,1))"
+  - id: offset_raw_grid_counta
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNTA(OFFSET(A1,0,0,3,1))"
+  - id: offset_raw_grid_countblank
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNTBLANK(OFFSET(A1,0,0,3,1))"
+  - id: offset_raw_grid_isblank_tail
+    setup: { A1: 2, A3: 1 }
+    formula: "=ISBLANK(INDEX(OFFSET(A1,0,0,3,1),3,1))"
+  - id: indirect_raw_grid_direct
+    setup: { A1: 2, A3: 1 }
+    formula: "=INDIRECT(\"A1:A3\")"
+  - id: indirect_raw_grid_count
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNT(INDIRECT(\"A1:A3\"))"
+  - id: indirect_raw_grid_counta
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNTA(INDIRECT(\"A1:A3\"))"
+  - id: index_raw_grid_direct
+    setup: { A1: 2, A3: 1 }
+    formula: "=INDEX(A1:A3,0)"
+  - id: index_raw_grid_count
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNT(INDEX(A1:A3,0))"
+  - id: index_raw_grid_counta
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNTA(INDEX(A1:A3,0))"
+  - id: choose_raw_grid_direct
+    setup: { A1: 2, A3: 1 }
+    formula: "=CHOOSE(1,A1:A3)"
+  - id: choose_raw_grid_count
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNT(CHOOSE(1,A1:A3))"
+  - id: choose_raw_grid_counta
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNTA(CHOOSE(1,A1:A3))"
+  - id: if_raw_grid_direct
+    setup: { A1: 2, A3: 1 }
+    formula: "=IF(TRUE,A1:A3,B1:B3)"
+  - id: if_raw_grid_count
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNT(IF(TRUE,A1:A3,B1:B3))"
+  - id: if_raw_grid_counta
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNTA(IF(TRUE,A1:A3,B1:B3))"
+
+  # Projection is committed before spill-reference consumers read it.
+  - id: sort_raw_range_spill_ref_count
+    setup:
+      A1: 2
+      A3: 1
+      D1: { kind: formula, formula: "=SORT(A1:A3)" }
+    formula: "=COUNT(D1#)"
+  - id: sort_raw_range_spill_ref_isblank
+    setup:
+      A1: 2
+      A3: 1
+      D1: { kind: formula, formula: "=SORT(A1:A3)" }
+    formula: "=ISBLANK(INDEX(D1#,3,1))"
+
+  # Generated EXPAND pads carry the same display projection through copies.
+  - id: sort_trimrange_direct
+    setup: { A1: 2, A3: 1 }
+    formula: "=SORT(TRIMRANGE(A1:A3))"
+  - id: sort_trimrange_count
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNT(SORT(TRIMRANGE(A1:A3)))"
+  - id: sort_trimrange_counta
+    setup: { A1: 2, A3: 1 }
+    formula: "=COUNTA(SORT(TRIMRANGE(A1:A3)))"
+  - id: sort_expand_empty_pad_direct
+    formula: "=SORT(EXPAND({2;1},3,1,))"
+  - id: sort_expand_empty_pad_count
+    formula: "=COUNT(SORT(EXPAND({2;1},3,1,)))"
+  - id: sort_expand_empty_pad_counta
+    formula: "=COUNTA(SORT(EXPAND({2;1},3,1,)))"
+  - id: expand_empty_pad_counta
+    formula: "=COUNTA(EXPAND({2;1},3,1,))"
+  - id: expand_empty_pad_isblank_tail
+    formula: "=ISBLANK(INDEX(EXPAND({2;1},3,1,),3,1))"
+  - id: take_expand_empty_pad_direct
+    formula: "=TAKE(EXPAND({2;1},3,1,),3)"
+  - id: take_expand_empty_pad_count
+    formula: "=COUNT(TAKE(EXPAND({2;1},3,1,),3))"
+  - id: take_expand_empty_pad_counta
+    formula: "=COUNTA(TAKE(EXPAND({2;1},3,1,),3))"
+  - id: hstack_expand_empty_pad_direct
+    formula: "=HSTACK(EXPAND({1},2,1,),{2;3})"
+  - id: hstack_expand_empty_pad_count
+    formula: "=COUNT(HSTACK(EXPAND({1},2,1,),{2;3}))"
+  - id: hstack_expand_empty_pad_counta
+    formula: "=COUNTA(HSTACK(EXPAND({1},2,1,),{2;3}))"

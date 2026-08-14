@@ -127,6 +127,36 @@ TEST(ArrayProducer, ArrayLiteralExpands) {
   EXPECT_EQ(Value::number(4.0), v.as_array_cells()[3]);
 }
 
+TEST(ArrayProducer, RawRangeMarksCopiedBlankButArrayLiteralStaysNeutral) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::number(2.0));
+  // A2 intentionally remains a plain blank in the Sheet.
+  sheet.set_cell_value(2, 0, Value::number(1.0));
+  EvalHarness range_harness;
+  const Value range = RunArrayCtx(&range_harness, "=A1:A3", wb, sheet);
+  ASSERT_TRUE(range.is_array());
+  ASSERT_TRUE(range.as_array_cells()[1].is_blank());
+  EXPECT_TRUE(range.as_array_cells()[1].blank_projects_to_zero());
+  EXPECT_TRUE(sheet.resolve_cell_value(1, 0).is_blank());
+  EXPECT_FALSE(sheet.resolve_cell_value(1, 0).blank_projects_to_zero());
+
+  EvalHarness literal_harness;
+  const parser::AstNode* elements[] = {
+      parser::make_literal(literal_harness.parse_arena, Value::number(2.0)),
+      parser::make_literal(literal_harness.parse_arena, Value::blank()),
+      parser::make_literal(literal_harness.parse_arena, Value::number(1.0)),
+  };
+  parser::AstNode* literal = parser::make_array_literal(literal_harness.parse_arena, 3U, 1U, elements);
+  ASSERT_NE(literal, nullptr);
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  const Value array_literal = eval_node_as_array(*literal, literal_harness.eval_arena, default_registry(), ctx);
+  ASSERT_TRUE(array_literal.is_array());
+  ASSERT_TRUE(array_literal.as_array_cells()[1].is_blank());
+  EXPECT_FALSE(array_literal.as_array_cells()[1].blank_projects_to_zero());
+}
+
 // ---------------------------------------------------------------------------
 // BinaryOp broadcasting
 // ---------------------------------------------------------------------------

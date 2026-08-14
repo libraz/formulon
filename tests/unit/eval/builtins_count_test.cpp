@@ -355,6 +355,28 @@ TEST(BuiltinsCountA, BlankArgIsSkipped) {
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
+TEST(BuiltinsCountA, ValueArrayProjectionBlankIsCounted) {
+  const Value args[] = {
+      Value::number(1.0),
+      Value::blank(),
+      Value::blank(BlankGridProjection::kReferenceGridZero),
+      Value::blank(BlankGridProjection::kValueArrayZero),
+  };
+  const Value v = CallDirect("COUNTA", args, 4u);
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsCountA, AggregateAndSubtotalCountValueArrayBlank) {
+  const Value aggregate = EvalSource("=AGGREGATE(3,0,EXPAND({2;1},3,1,))");
+  ASSERT_TRUE(aggregate.is_number()) << aggregate.debug_to_string();
+  EXPECT_DOUBLE_EQ(aggregate.as_number(), 3.0);
+
+  const Value subtotal = EvalSource("=SUBTOTAL(3,EXPAND({2;1},3,1,))");
+  ASSERT_TRUE(subtotal.is_number()) << subtotal.debug_to_string();
+  EXPECT_DOUBLE_EQ(subtotal.as_number(), 3.0);
+}
+
 TEST(BuiltinsCountA, ZeroArgsIsArityViolation) {
   const Value v = EvalSource("=COUNTA()");
   ASSERT_TRUE(v.is_error());

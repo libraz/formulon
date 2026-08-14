@@ -12,7 +12,9 @@
 #include "cell.h"
 #include "eval/dep_graph.h"
 #include "eval/function_registry.h"
+#include "eval/scheduler.h"
 #include "gtest/gtest.h"
+#include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -89,11 +91,29 @@ TEST(RecalcEngine, WholeColumnDependencyTracksNewValuesAndFormulas) {
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 6.0);
 }
 
-TEST(RecalcEngine, WholeColumnOrderingEdgeRefreshesFormulaBeforeAggregate) {
+// Drives the ordering contract for a whole-column reference — registered as
+// one compact rectangle spanning every row — in one of the two registration
+// orders. `D1` is the literal both the interior formula and the aggregate
+// ultimately read. Registering the aggregate first is the case where the
+// ordering edge has to be acquired after the fact, when the interior formula
+// appears inside a rectangle that is already being watched.
+void AssertWholeColumnOrdering(bool aggregate_first) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(10.0))));  // D1
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=D1+1")));            // A1
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A:A)")));        // B1
+
+  const auto write_aggregate = [&wb]() {
+    return static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=SUM(A:A)"));  // B1
+  };
+  const auto write_interior = [&wb]() {
+    return static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=D1+1"));  // A1
+  };
+  if (aggregate_first) {
+    ASSERT_TRUE(write_aggregate());
+    ASSERT_TRUE(write_interior());
+  } else {
+    ASSERT_TRUE(write_interior());
+    ASSERT_TRUE(write_aggregate());
+  }
 
   auto initial = wb.recalc(default_registry());
   ASSERT_TRUE(static_cast<bool>(initial));
@@ -103,11 +123,18 @@ TEST(RecalcEngine, WholeColumnOrderingEdgeRefreshesFormulaBeforeAggregate) {
   const auto dependencies = wb.recalc_engine().dep_graph().dependencies_of(CellNodeId{0U, 0U, 1U});
   EXPECT_NE(std::find(dependencies.begin(), dependencies.end(), CellNodeId{0U, 0U, 0U}), dependencies.end());
 
+  // One pass must refresh A1 before B1 reads it; a missing ordering edge
+  // leaves B1 on the previous value for a whole recalc.
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(20.0))));
   auto updated = wb.recalc(default_registry());
   ASSERT_TRUE(static_cast<bool>(updated));
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 21.0);
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 21.0);
+}
+
+TEST(RecalcEngine, WholeColumnOrderingEdgeRefreshesFormulaBeforeAggregateInBothRegistrationOrders) {
+  AssertWholeColumnOrdering(/*aggregate_first=*/false);
+  AssertWholeColumnOrdering(/*aggregate_first=*/true);
 }
 
 TEST(RecalcEngine, MultiColumnWholeRangeDirtiesOnFarColumnWrite) {
@@ -448,6 +475,62 @@ TEST(RecalcEngine, FormulaUpdateRewritesDependencies) {
     ASSERT_EQ(deps.size(), 1u);
     EXPECT_EQ(deps[0], (CellNodeId{0U, 0U, 1U}));  // B1 == col 1
   }
+}
+
+// ---------------------------------------------------------------------------
+// Parallel scheduler contracts shared with the serial engine
+// ---------------------------------------------------------------------------
+
+TEST(SchedulerContract, ArenaExhaustionAbortsThePassWithOutOfMemory) {
+  // An allocation failure during evaluation is a resource error, not a
+  // formula result: the pass must surface `kOutOfMemory` instead of
+  // committing the degraded value, exactly as `RecalcEngine::recalc` does.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=SEQUENCE(1000)")));
+
+  SchedulerConfig tiny;
+  tiny.num_threads = 1U;
+  tiny.max_arena_bytes = 4096U;  // far below the 1,000-cell result
+  SchedulerStats tiny_stats;
+  auto exhausted = recalc_parallel(wb, tiny, &tiny_stats);
+  ASSERT_FALSE(static_cast<bool>(exhausted)) << "a pass that ran out of arena must not report success";
+  EXPECT_EQ(exhausted.error().code, FormulonErrorCode::kOutOfMemory);
+
+  // The same workbook under the default ceiling completes and commits.
+  SchedulerConfig roomy;
+  roomy.num_threads = 1U;
+  SchedulerStats roomy_stats;
+  ASSERT_TRUE(static_cast<bool>(recalc_parallel(wb, roomy, &roomy_stats)));
+  EXPECT_EQ(roomy_stats.cells_evaluated, 1u);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 1.0);
+}
+
+TEST(SchedulerContract, SccPhaseWalksOnlyTheDirtySubgraph) {
+  // The SCC phase is scoped to the dirty induced subgraph, like the serial
+  // engine's `tarjan_scc_subset` call. A one-cell edit to a workbook with
+  // many registered formulas must submit one node to Tarjan, not the whole
+  // registered graph.
+  Workbook wb = Workbook::create();
+  constexpr std::uint32_t kFormulaCount = 200U;
+  for (std::uint32_t row = 0; row < kFormulaCount; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, row, 0U, Value::number(static_cast<double>(row)))));
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 1U, "=A" + std::to_string(row + 1U) + "+1")));
+  }
+  SchedulerConfig cfg;
+  cfg.num_threads = 1U;
+  // The first pass is dirty everywhere: each literal and each formula.
+  SchedulerStats warmup;
+  ASSERT_TRUE(static_cast<bool>(recalc_parallel(wb, cfg, &warmup)));
+  EXPECT_EQ(warmup.scc_nodes_considered, 2U * kFormulaCount);
+
+  // Touch one input: the dirty closure is that literal plus the one formula
+  // reading it, whatever the registered graph's size.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(42.0))));
+  SchedulerStats incremental;
+  ASSERT_TRUE(static_cast<bool>(recalc_parallel(wb, cfg, &incremental)));
+  EXPECT_EQ(incremental.scc_nodes_considered, 2u) << "Tarjan must not walk the whole registered graph";
+  EXPECT_EQ(incremental.cells_evaluated, 1u);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 43.0);
 }
 
 }  // namespace

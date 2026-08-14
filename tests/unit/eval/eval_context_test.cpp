@@ -492,11 +492,15 @@ TEST(EvalContextExpandRange, BlankCellsBecomeBlank) {
   sheet.set_cell_value(0, 0, Value::number(1.0));
   // A2 is intentionally untouched.
   sheet.set_cell_value(2, 0, Value::number(3.0));
+  const Value source_blank = sheet.resolve_cell_value(1, 0);
+  EXPECT_TRUE(source_blank.is_blank());
+  EXPECT_FALSE(source_blank.blank_projects_to_zero());
   auto result = ExpandRange(sheet, MakeLocalRef(0, 0), MakeLocalRef(2, 0));
   ASSERT_TRUE(result);
   ASSERT_EQ(result.value().size(), 3u);
   EXPECT_TRUE(result.value()[0].is_number());
   EXPECT_TRUE(result.value()[1].is_blank());
+  EXPECT_TRUE(result.value()[1].blank_projects_to_zero());
   EXPECT_TRUE(result.value()[2].is_number());
 }
 

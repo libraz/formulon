@@ -190,6 +190,29 @@ TEST(StructuredRefEval, SingleColumnDataReturnsArray) {
   EXPECT_EQ(v.as_number(), 60.0);
 }
 
+TEST(StructuredRefEval, SortProjectsTableBlankButNestedCountKeepsBlank) {
+  Workbook wb = MakeWorkbookWithSalesTable(/*with_totals_row=*/false);
+  // Sales[Amount] is now {10, blank, 30}; the blank is an interior table
+  // cell, so SORT keeps it as the last sort key and the grid boundary
+  // projects it to numeric zero only for the direct result.
+  wb.sheet(0).set_cell_value(2, 2, Value::blank());
+
+  Arena direct_arena;
+  const Value direct = EvalAt(wb, "=SORT(Sales[Amount])", /*formula_row=*/4, direct_arena);
+  ASSERT_TRUE(direct.is_array()) << direct.debug_to_string();
+  ASSERT_EQ(direct.as_array_rows(), 3U);
+  ASSERT_EQ(direct.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[1].as_number(), 30.0);
+  ASSERT_TRUE(direct.as_array_cells()[2].is_number());
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[2].as_number(), 0.0);
+
+  Arena nested_arena;
+  const Value count = EvalAt(wb, "=COUNT(SORT(Sales[Amount]))", /*formula_row=*/4, nested_arena);
+  ASSERT_TRUE(count.is_number()) << count.debug_to_string();
+  EXPECT_DOUBLE_EQ(count.as_number(), 2.0);
+}
+
 TEST(StructuredRefEval, RowImplicitOnDataRow) {
   // `Sales[@Amount]` from row index 2 (cell D3) -> should pick row 3 -> 20.
   Workbook wb = MakeWorkbookWithSalesTable(/*with_totals_row=*/false);

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "eval/dynamic_array/common.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -95,17 +96,18 @@ Value eval_take_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
-  if (!dynamic_array::resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/true, arena, registry, ctx,
-                                              row_lo, row_hi, err)) {
+  const parser::AstNode* row_arg = is_omitted_arg(call.as_call_arg(1)) ? nullptr : &call.as_call_arg(1);
+  if (!dynamic_array::resolve_take_drop_range(row_arg, array->rows, /*take=*/true, arena, registry, ctx, row_lo, row_hi,
+                                              err)) {
     return err;
   }
   std::uint32_t col_lo = 0;
   std::uint32_t col_hi = array->cols;
-  if (arity == 3U) {
-    if (!dynamic_array::resolve_take_drop_range(&call.as_call_arg(2), array->cols, /*take=*/true, arena, registry, ctx,
-                                                col_lo, col_hi, err)) {
-      return err;
-    }
+  const parser::AstNode* col_arg =
+      (arity == 3U && !is_omitted_arg(call.as_call_arg(2))) ? &call.as_call_arg(2) : nullptr;
+  if (!dynamic_array::resolve_take_drop_range(col_arg, array->cols, /*take=*/true, arena, registry, ctx, col_lo, col_hi,
+                                              err)) {
+    return err;
   }
 
   ArrayValue* out = dynamic_array::materialise_slice(*array, row_lo, row_hi, col_lo, col_hi, arena);
@@ -130,17 +132,18 @@ Value eval_drop_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
-  if (!dynamic_array::resolve_take_drop_range(&call.as_call_arg(1), array->rows, /*take=*/false, arena, registry, ctx,
-                                              row_lo, row_hi, err)) {
+  const parser::AstNode* row_arg = is_omitted_arg(call.as_call_arg(1)) ? nullptr : &call.as_call_arg(1);
+  if (!dynamic_array::resolve_take_drop_range(row_arg, array->rows, /*take=*/false, arena, registry, ctx, row_lo,
+                                              row_hi, err)) {
     return err;
   }
   std::uint32_t col_lo = 0;
   std::uint32_t col_hi = array->cols;
-  if (arity == 3U) {
-    if (!dynamic_array::resolve_take_drop_range(&call.as_call_arg(2), array->cols, /*take=*/false, arena, registry, ctx,
-                                                col_lo, col_hi, err)) {
-      return err;
-    }
+  const parser::AstNode* col_arg =
+      (arity == 3U && !is_omitted_arg(call.as_call_arg(2))) ? &call.as_call_arg(2) : nullptr;
+  if (!dynamic_array::resolve_take_drop_range(col_arg, array->cols, /*take=*/false, arena, registry, ctx, col_lo,
+                                              col_hi, err)) {
+    return err;
   }
 
   ArrayValue* out = dynamic_array::materialise_slice(*array, row_lo, row_hi, col_lo, col_hi, arena);

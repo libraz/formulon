@@ -31,6 +31,12 @@ namespace eval {
 /// Excel cross-type comparison. Returns -1 / 0 / +1 with Excel's ordering
 /// (Number < Text < Bool; Blank coerces to numeric zero, except in the
 /// chameleonic `Blank == ""` case where it compares as the empty string).
+/// Numeric values first retain exact IEEE equality (including signed zero and
+/// equal infinities). Sign-mismatched, zero, non-finite, and subnormal values
+/// retain raw numeric ordering. Same-sign finite normals use the exact bytes
+/// emitted by double-conversion's `ToPrecision(value, 15)` as an equality
+/// key; different keys retain raw ordering. This is an equality rule, not an
+/// epsilon or lexical ordering rule.
 /// Sets `*out_unordered` to true iff one of the operands is NaN; in that
 /// case the integer result is meaningless and the caller must short-circuit
 /// every relational operator to FALSE except `<>`.

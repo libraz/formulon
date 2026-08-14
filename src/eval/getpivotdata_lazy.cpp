@@ -57,6 +57,7 @@
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/pivot_locale.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "pivot/pivot_cache.h"
@@ -287,7 +288,11 @@ Value eval_getpivotdata_lazy(const parser::AstNode& call, Arena& arena, const Fu
     if (cache == nullptr) {
       return Value::error(kPivotRefError);
     }
-    Expected<pivot::PivotResult, Error> evaluated = pivot::evaluate(*table, *cache);
+    // The workbook's locale decides how an axis group with no source value is
+    // named, and that label is what the (field, item) pairs below match, so it
+    // has to be resolved before the hierarchy is built.
+    Expected<pivot::PivotResult, Error> evaluated =
+        pivot::evaluate(*table, *cache, pivot_layout_options_for(ctx.workbook()->excel_profile()));
     if (!evaluated) {
       // Hide internal evaluator error codes behind the Mac-visible
       // GETPIVOTDATA surface.

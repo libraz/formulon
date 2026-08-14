@@ -517,9 +517,16 @@ Value MRound(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double abs_m = std::fabs(m);
-  // `std::floor(x + 0.5)` implements round-half-away-from-zero on the
-  // positive half-line; the outer `signum(n)` restores the sign.
-  const double r = signum(n) * std::floor(std::fabs(n) / abs_m + 0.5) * abs_m;
+  const double q = std::fabs(n) / abs_m;
+  const double integer_quotient = std::floor(q);
+  const double fraction = q - integer_quotient;
+  // Mac Excel 16.112 ja-JP oracle-derived local cutoff: values below the
+  // half boundary by at most C = 90 * 2^-54 = 0x1.68p-48 round up.
+  constexpr double kMacExcelMRoundCutoff = 0x1.68p-48;
+  const bool round_up = fraction >= 0.5 || (fraction < 0.5 && 0.5 - fraction <= kMacExcelMRoundCutoff);
+  const double rounded_quotient = integer_quotient + (round_up ? 1.0 : 0.0);
+  // Restore the sign only after choosing the nearest magnitude quotient.
+  const double r = signum(n) * rounded_quotient * abs_m;
   if (std::isnan(r) || std::isinf(r)) {
     return Value::error(ErrorCode::Num);
   }

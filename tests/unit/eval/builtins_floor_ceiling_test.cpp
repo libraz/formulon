@@ -191,6 +191,58 @@ TEST(MRoundBlankScalar, BasicSanityFifteenAndFive) {
   EXPECT_EQ(v.as_number(), 15.0);
 }
 
+// ---------------------------------------------------------------------------
+// MROUND Mac Excel 16.112 ja-JP midpoint cutoff
+// ---------------------------------------------------------------------------
+
+TEST(MRoundMacCutoff, DecimalMidpoint145RoundsUp) {
+  const Value v = EvalSource("=MROUND(0.145,0.01)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.15);
+}
+
+TEST(MRoundMacCutoff, NegativeDecimalMidpoint145RoundsAwayFromZero) {
+  const Value v = EvalSource("=MROUND(-0.145,-0.01)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), -0.15);
+}
+
+TEST(MRoundMacCutoff, DecimalMidpoint605RoundsDown) {
+  const Value v = EvalSource("=MROUND(6.05,0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 6.0);
+}
+
+TEST(MRoundMacCutoff, DecimalMidpoint1005RoundsDown) {
+  const Value v = EvalSource("=MROUND(1.005,0.01)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(MRoundMacCutoff, K90BelowHalfRoundsUp) {
+  const Value v = EvalSource("=MROUND(0.5-90*2^-54,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
+TEST(MRoundMacCutoff, K91BelowHalfRoundsDown) {
+  const Value v = EvalSource("=MROUND(0.5-91*2^-54,1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(MRoundMacCutoff, B14ScaledByPointOneStaysDown) {
+  const Value v = EvalSource("=MROUND((14+0.5-90*2^-54)*0.1,0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.4);
+}
+
+TEST(MRoundMacCutoff, NegativeB14ScaledByPointOneStaysDown) {
+  const Value v = EvalSource("=MROUND(-((14+0.5-90*2^-54)*0.1),-0.1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), -1.4);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

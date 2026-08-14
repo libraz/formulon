@@ -54,7 +54,10 @@ bool strtod_full(std::string_view s, double* out) noexcept {
   return true;
 }
 
-Expected<double, ErrorCode> coerce_text_to_number(std::string_view text) {
+Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* from_date_text) {
+  if (from_date_text != nullptr) {
+    *from_date_text = false;
+  }
   // Implementation factored out of the Value-shaped overload's `Text`
   // arm so hot-path callers (criterion parsing) can avoid wrapping a
   // raw string_view in a `Value::text(...)` temporary. The trim / numeric
@@ -130,6 +133,9 @@ Expected<double, ErrorCode> coerce_text_to_number(std::string_view text) {
     if (std::isnan(combined) || std::isinf(combined)) {
       return ErrorCode::Num;
     }
+    if (from_date_text != nullptr) {
+      *from_date_text = has_date;
+    }
     return combined;
   }
   return ErrorCode::Value;
@@ -162,6 +168,14 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v) {
       return ErrorCode::Value;
   }
   return ErrorCode::Value;
+}
+
+Expected<double, ErrorCode> coerce_to_index_number(const Value& v) {
+  auto number = coerce_to_number(v);
+  if (!number) {
+    return number.error();
+  }
+  return truncate_index(number.value());
 }
 
 Expected<std::string, ErrorCode> coerce_to_text(const Value& v) {

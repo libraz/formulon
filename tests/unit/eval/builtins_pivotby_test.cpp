@@ -35,6 +35,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "test_eval_helpers.h"
+#include "util/test_log_recorder.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -424,6 +425,8 @@ TEST(PivotBy, FilterArrayBasicIncludeExclude) {
   EXPECT_EQ(std::string(Cell(v, 1, 0).as_text()), "B");
   // (B, X) has no surviving rows -> Blank cell.
   EXPECT_TRUE(Cell(v, 1, 1).is_blank()) << Cell(v, 1, 1).debug_to_string();
+  EXPECT_FALSE(Cell(v, 1, 1).blank_projects_to_zero());
+  EXPECT_FALSE(Cell(v, 1, 1).blank_counts_for_counta());
   EXPECT_DOUBLE_EQ(Cell(v, 1, 2).as_number(), 4.0);
 }
 
@@ -970,27 +973,27 @@ TEST(PivotBy, RowTotalDepthTwoWithOneRowKeyColumnKeepsTheGrandTotalOnlyLayout) {
   EXPECT_EQ(std::string(Cell(v, 2, 0).as_text()), "合計");
 }
 
-TEST(PivotBy, RowTotalDepthTwoEmitsNoFallbackDiagnostic) {
+TEST(PivotBy, RowTotalDepthTwoEmitsNoDiagnostic) {
   // Row subtotals are implemented, so the degraded-layout warning must not
-  // fire on this path.
-  testing::internal::CaptureStderr();
+  // fire on this path. Asserted against a log sink rather than captured
+  // stderr: logging ships off, so a stderr assertion would hold even if the
+  // code did warn.
+  ::formulon::test::LogRecorder log;
+  ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
   const Value v =
       EvalSrc("=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0, 2)");
-  const std::string captured = testing::internal::GetCapturedStderr();
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(captured.find("subtotals_unsupported"), std::string::npos)
-      << "unexpected fallback diagnostic; stderr was: " << captured;
+  EXPECT_TRUE(log.empty()) << "unexpected diagnostic: " << log.joined();
 }
 
-TEST(PivotBy, ColTotalDepthTwoEmitsNoFallbackDiagnostic) {
+TEST(PivotBy, ColTotalDepthTwoEmitsNoDiagnostic) {
   // Column subtotals are implemented, so the ±2 column request must not
   // announce a degraded grand-total-only layout.
-  testing::internal::CaptureStderr();
+  ::formulon::test::LogRecorder log;
+  ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
   const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\",\"p\";\"X\",\"q\"}, {10;20}, SUM, 0, 1, 0, 2)");
-  const std::string captured = testing::internal::GetCapturedStderr();
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos)
-      << "unexpected fallback diagnostic; stderr was: " << captured;
+  EXPECT_TRUE(log.empty()) << "unexpected diagnostic: " << log.joined();
 }
 
 TEST(PivotBy, ColTotalDepthPositiveTwoMatchesMacExcelObservedMatrix) {
@@ -1147,24 +1150,23 @@ TEST(PivotBy, ColSubtotalFilterAndErrorRemainLocal) {
 }
 
 TEST(PivotBy, ColTotalDepthTwoWithOneColumnLevelKeepsOrdinaryLayout) {
-  testing::internal::CaptureStderr();
+  ::formulon::test::LogRecorder log;
+  ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
   const Value v = EvalSrc("=PIVOTBY({\"A\";\"B\"}, {\"X\";\"Y\"}, {1;2}, SUM, 0, 0, 0, 2, 0)");
-  const std::string captured = testing::internal::GetCapturedStderr();
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
   ASSERT_EQ(v.as_array_cols(), 4U);  // key + two leaves + ordinary grand total
   EXPECT_DOUBLE_EQ(Cell(v, 0, 1).as_number(), 1.0);
   EXPECT_TRUE(Cell(v, 0, 2).is_blank());
-  EXPECT_EQ(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos);
+  EXPECT_TRUE(log.empty()) << "unexpected diagnostic: " << log.joined();
 }
 
-TEST(PivotBy, DefaultDepthEmitsNoSubtotalDiagnostic) {
+TEST(PivotBy, DefaultDepthEmitsNoDiagnostic) {
   // The ordinary ±1 grand-total path must NOT emit the fallback warning.
-  testing::internal::CaptureStderr();
+  ::formulon::test::LogRecorder log;
+  ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
   const Value v = EvalSrc("=PIVOTBY({\"A\",\"x\";\"A\",\"y\";\"B\",\"x\"}, {\"X\";\"Y\";\"X\"}, {10;20;30}, SUM, 0)");
-  const std::string captured = testing::internal::GetCapturedStderr();
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(captured.find("eval.pivotby.subtotals_unsupported"), std::string::npos)
-      << "unexpected fallback diagnostic on ±1 path; stderr was: " << captured;
+  EXPECT_TRUE(log.empty()) << "unexpected diagnostic on the ±1 path: " << log.joined();
 }
 
 }  // namespace

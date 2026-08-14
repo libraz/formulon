@@ -131,6 +131,135 @@ TEST(BuiltinsExpand, ExplicitPadValueIsUsed) {
   EXPECT_DOUBLE_EQ(cells[11].as_number(), 0.0);
 }
 
+TEST(BuiltinsExpand, OmittedDimensionsAndBlankPadsProjectAtGridBoundary) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Populate2x3(sheet);
+  // D1 is intentionally left blank. A reference to it is an explicit pad
+  // value and, like a present empty slot, remains an internal Blank for
+  // nested consumers while direct grid output projects it to zero.
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  const Value omitted_rows = EvalUnder("=EXPAND(A1:C2,,5)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(omitted_rows.is_array());
+  ASSERT_EQ(omitted_rows.as_array_rows(), 2U);
+  ASSERT_EQ(omitted_rows.as_array_cols(), 5U);
+  ASSERT_TRUE(omitted_rows.as_array_cells()[3].is_error());
+  EXPECT_EQ(omitted_rows.as_array_cells()[3].as_error(), ErrorCode::NA);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value omitted_columns = EvalUnder("=EXPAND(A1:C2,4,)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(omitted_columns.is_array());
+  ASSERT_EQ(omitted_columns.as_array_rows(), 4U);
+  ASSERT_EQ(omitted_columns.as_array_cols(), 3U);
+  ASSERT_TRUE(omitted_columns.as_array_cells()[6].is_error());
+  EXPECT_EQ(omitted_columns.as_array_cells()[6].as_error(), ErrorCode::NA);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value empty_slot_pad = EvalUnder("=EXPAND(A1:C2,4,5,)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(empty_slot_pad.is_array());
+  ASSERT_EQ(empty_slot_pad.as_array_rows(), 4U);
+  ASSERT_EQ(empty_slot_pad.as_array_cols(), 5U);
+  ASSERT_TRUE(empty_slot_pad.as_array_cells()[3].is_number());
+  EXPECT_DOUBLE_EQ(empty_slot_pad.as_array_cells()[3].as_number(), 0.0);
+  ASSERT_TRUE(empty_slot_pad.as_array_cells()[10].is_number());
+  EXPECT_DOUBLE_EQ(empty_slot_pad.as_array_cells()[10].as_number(), 0.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value blank_pad = EvalUnder("=EXPAND(A1:C2,4,5,D1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(blank_pad.is_array());
+  ASSERT_EQ(blank_pad.as_array_rows(), 4U);
+  ASSERT_EQ(blank_pad.as_array_cols(), 5U);
+  ASSERT_TRUE(blank_pad.as_array_cells()[3].is_number());
+  EXPECT_DOUBLE_EQ(blank_pad.as_array_cells()[3].as_number(), 0.0);
+  ASSERT_TRUE(blank_pad.as_array_cells()[10].is_number());
+  EXPECT_DOUBLE_EQ(blank_pad.as_array_cells()[10].as_number(), 0.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value blank_range_pad = EvalUnder("=EXPAND(A1:C2,4,5,D1:D2)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(blank_range_pad.is_array());
+  ASSERT_EQ(blank_range_pad.as_array_rows(), 4U);
+  ASSERT_EQ(blank_range_pad.as_array_cols(), 5U);
+  ASSERT_TRUE(blank_range_pad.as_array_cells()[3].is_number());
+  EXPECT_DOUBLE_EQ(blank_range_pad.as_array_cells()[3].as_number(), 0.0);
+  ASSERT_TRUE(blank_range_pad.as_array_cells()[10].is_number());
+  EXPECT_DOUBLE_EQ(blank_range_pad.as_array_cells()[10].as_number(), 0.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value empty_text_pad = EvalUnder("=EXPAND(A1:C2,4,5,\"\")", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(empty_text_pad.is_array());
+  ASSERT_EQ(empty_text_pad.as_array_rows(), 4U);
+  ASSERT_EQ(empty_text_pad.as_array_cols(), 5U);
+  ASSERT_TRUE(empty_text_pad.as_array_cells()[3].is_text());
+  EXPECT_TRUE(empty_text_pad.as_array_cells()[3].as_text().empty());
+  ASSERT_TRUE(empty_text_pad.as_array_cells()[10].is_text());
+  EXPECT_TRUE(empty_text_pad.as_array_cells()[10].as_text().empty());
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value nested_count = EvalUnder("=COUNT(EXPAND({1,2;3,4},3,4,))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(nested_count.is_number());
+  EXPECT_DOUBLE_EQ(nested_count.as_number(), 4.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value nested_counta = EvalUnder("=COUNTA(EXPAND({2;1},3,1,))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(nested_counta.is_number());
+  EXPECT_DOUBLE_EQ(nested_counta.as_number(), 3.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value nested_range_count = EvalUnder("=COUNT(EXPAND({1,2;3,4},3,4,D1:D2))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(nested_range_count.is_number());
+  EXPECT_DOUBLE_EQ(nested_range_count.as_number(), 4.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value nested_blank = EvalUnder("=ISBLANK(INDEX(EXPAND({1,2;3,4},3,4,),3,4))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(nested_blank.is_boolean());
+  EXPECT_TRUE(nested_blank.as_boolean());
+}
+
+TEST(BuiltinsHstack, ExpandBlankPadProjectsAfterStackAndCountsAsValueArrayNested) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+
+  const Value direct = EvalUnder("=HSTACK(EXPAND({1},2,1,),{2;3})", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(direct.is_array());
+  ASSERT_EQ(direct.as_array_rows(), 2U);
+  ASSERT_EQ(direct.as_array_cols(), 2U);
+  const Value* cells = direct.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 2.0);
+  ASSERT_TRUE(cells[2].is_number());
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 3.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value count = EvalUnder("=COUNT(HSTACK(EXPAND({1},2,1,),{2;3}))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 3.0);
+
+  parse_arena.reset();
+  eval_arena.reset();
+  const Value counta = EvalUnder("=COUNTA(HSTACK(EXPAND({1},2,1,),{2;3}))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(counta.is_number());
+  EXPECT_DOUBLE_EQ(counta.as_number(), 4.0);
+}
+
 TEST(BuiltinsExpand, ShrinkingRowsReturnsValue) {
   // Cannot shrink: requesting fewer rows than the source has -> #VALUE!.
   Workbook wb = Workbook::create();

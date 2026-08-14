@@ -335,7 +335,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     // well-defined. Error / blank surface via `resolve_ref` as a Value and
     // are forwarded unchanged; the matcher handles them correctly.
     out_cells->clear();
-    out_cells->push_back(ctx.resolve_ref(ref, arena, registry));
+    const Value cell = ctx.resolve_ref(ref, arena, registry);
+    out_cells->push_back(cell.is_blank() ? Value::blank(BlankGridProjection::kReferenceGridZero) : cell);
     if (out_rows != nullptr) {
       *out_rows = 1U;
     }

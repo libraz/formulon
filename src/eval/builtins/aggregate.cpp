@@ -215,11 +215,13 @@ Value SumSq(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 
 // COUNTA(value, ...) - count of non-Blank values. Numbers, booleans, text
 // (including the empty string produced by a formula returning ""), and
-// errors are all counted. Only the Blank scalar is skipped.
+// errors are all counted. Plain blanks and raw-reference blanks remain
+// skipped; a blank explicitly owned by a derived value array counts as an
+// occupied array cell.
 Value CountA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   double total = 0.0;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    if (!args[i].is_blank()) {
+    if (!args[i].is_blank() || args[i].blank_counts_for_counta()) {
       total += 1.0;
     }
   }

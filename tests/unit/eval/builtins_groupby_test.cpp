@@ -36,6 +36,7 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "test_eval_helpers.h"
+#include "util/test_log_recorder.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -315,15 +316,16 @@ TEST(GroupBy, SubtotalsKeepEachOuterGroupContiguousUnderASort) {
   EXPECT_EQ(std::string(Cell(v, 4, 0).as_text()), "Y");
 }
 
-TEST(GroupBy, TotalDepthTwoEmitsNoFallbackDiagnostic) {
-  // The ±2 path is implemented, so it must not warn about a degraded
-  // layout the way the earlier grand-total-only fallback did.
-  testing::internal::CaptureStderr();
+TEST(GroupBy, TotalDepthTwoEmitsNoDiagnostic) {
+  // The ±2 path is implemented, so it must not warn about a degraded layout
+  // the way the earlier grand-total-only fallback did. The assertion is
+  // against a log sink rather than captured stderr: logging ships off, so a
+  // stderr assertion would hold even if the code did warn.
+  ::formulon::test::LogRecorder log;
+  ASSERT_TRUE(log.probe_and_clear()) << "log sink is not carrying records; the assertion below would be vacuous";
   const Value v = EvalSrc("=GROUPBY({\"X\",\"A\";\"X\",\"B\";\"Y\",\"A\"}, {10;20;30}, SUM, 0, 2, 0)");
-  const std::string captured = testing::internal::GetCapturedStderr();
   ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  EXPECT_EQ(captured.find("subtotals_unsupported"), std::string::npos)
-      << "unexpected fallback diagnostic; stderr was: " << captured;
+  EXPECT_TRUE(log.empty()) << "unexpected diagnostic: " << log.joined();
 }
 
 TEST(GroupBy, TotalDepthOutOfRangeYieldsValueError) {

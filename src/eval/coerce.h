@@ -9,6 +9,7 @@
 #ifndef FORMULON_EVAL_COERCE_H_
 #define FORMULON_EVAL_COERCE_H_
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -47,7 +48,34 @@ Expected<double, ErrorCode> coerce_to_number(const Value& v);
 /// the Value-shaped overload byte-for-byte: empty / whitespace-only input
 /// yields `#VALUE!`, plain numerics / percent / currency / date strings
 /// pass through their respective fallbacks.
-Expected<double, ErrorCode> coerce_text_to_number(std::string_view text);
+///
+/// `from_date_text` (when non-null) reports which rung of the ladder
+/// produced the result: `true` only when the input was accepted by the
+/// date fallback and carried a date component, i.e. when the returned
+/// number is a 1900-date-system serial rather than a plain magnitude.
+/// Callers that render the result back as a date (TEXT) need this to move
+/// the serial into a 1904-system workbook's epoch; callers doing plain
+/// arithmetic can ignore it.
+Expected<double, ErrorCode> coerce_text_to_number(std::string_view text, bool* from_date_text = nullptr);
+
+/// Narrows an already-coerced number to an integer-valued index / mode
+/// argument the way Excel does: truncation toward zero, never `floor`. The
+/// two differ only for a negative fractional argument, which is exactly
+/// where the lookup family used to disagree with itself (`-0.5` is `0`, not
+/// `-1`). Every integer argument in that family — MATCH's `match_type`,
+/// XLOOKUP / XMATCH's `match_mode` and `search_mode`, INDEX's `row_num` /
+/// `column_num`, CHOOSE's `index_num`, VLOOKUP / HLOOKUP's column index —
+/// narrows through this one helper. Callers keep their own domain check
+/// (whitelist, 1-based range, ...) and their own error code for a value
+/// outside it.
+inline double truncate_index(double value) noexcept {
+  return std::trunc(value);
+}
+
+/// `coerce_to_number` followed by `truncate_index`, for the call sites that
+/// do not need the pre-truncation magnitude. Coercion failures propagate
+/// unchanged.
+Expected<double, ErrorCode> coerce_to_index_number(const Value& v);
 
 /// Coerces `v` to its Excel-visible string representation.
 ///

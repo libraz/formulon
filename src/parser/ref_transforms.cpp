@@ -10,6 +10,7 @@
 
 #include "parser/reference.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -22,7 +23,7 @@ std::optional<std::string_view> SheetRenameTransform::remap_sheet(std::string_vi
   if (sheet.empty()) {
     return std::nullopt;
   }
-  if (!strings::case_insensitive_eq(sheet, old_name_)) {
+  if (!sheet_names::equal(sheet, old_name_)) {
     return std::nullopt;
   }
   return new_name_;
@@ -54,7 +55,7 @@ SheetRemovalTransform::SheetRemovalTransform(const std::vector<std::string_view>
 
 std::size_t SheetRemovalTransform::find_sheet(std::string_view sheet) const noexcept {
   for (std::size_t i = 0; i < pre_removal_sheet_order_.size(); ++i) {
-    if (strings::case_insensitive_eq(sheet, pre_removal_sheet_order_[i])) {
+    if (sheet_names::equal(sheet, pre_removal_sheet_order_[i])) {
       return i;
     }
   }
@@ -144,7 +145,7 @@ bool RowColShiftTransform::sheet_in_scope(std::string_view sheet) const noexcept
     // reference always falls outside the local scope.
     return false;
   }
-  return strings::case_insensitive_eq(sheet, target_sheet_);
+  return sheet_names::equal(sheet, target_sheet_);
 }
 
 std::optional<std::uint32_t> RowColShiftTransform::shift_axis(std::uint32_t coord, std::uint32_t bound) const noexcept {
@@ -266,8 +267,8 @@ std::optional<std::pair<Reference, Reference>> RowColShiftTransform::apply_range
   // outside scope (including a cross-sheet range), retain the base contract:
   // transform each endpoint independently and let a deleted endpoint poison
   // the range.
-  if (!strings::case_insensitive_eq(lhs.sheet, rhs.sheet) || !sheet_in_scope(lhs.sheet) ||
-      lhs.is_full_col != rhs.is_full_col || lhs.is_full_row != rhs.is_full_row) {
+  if (!sheet_names::equal(lhs.sheet, rhs.sheet) || !sheet_in_scope(lhs.sheet) || lhs.is_full_col != rhs.is_full_col ||
+      lhs.is_full_row != rhs.is_full_row) {
     return RefTransform::apply_range(lhs, rhs);
   }
   // A whole-column range is independent of row edits, and a whole-row range

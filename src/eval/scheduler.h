@@ -8,6 +8,12 @@
 // pool whenever a topological layer contains more than one independent
 // super-node.
 //
+// Every phase is scoped to the same working set as the serial engine: the
+// SCC phase runs Tarjan over the dirty induced subgraph, not the registered
+// dependency graph, so a small edit to a large workbook costs the edit in
+// both engines. Only the evaluation phase differs, and only in how the work
+// is distributed.
+//
 // Algorithm
 // ---------
 // Once `RecalcEngine::recalc` has computed the SCC list, the scheduler
@@ -43,10 +49,12 @@
 #ifndef FORMULON_EVAL_SCHEDULER_H_
 #define FORMULON_EVAL_SCHEDULER_H_
 
+#include <cstddef>
 #include <cstdint>
 
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 
 namespace formulon {
 
@@ -65,6 +73,16 @@ struct SchedulerConfig {
   /// thread cap matches the WASM `PTHREAD_POOL_SIZE` ceiling so behaviour
   /// is consistent across native and browser runtimes.
   std::uint32_t num_threads = 0;
+
+  /// Byte ceiling for one worker's evaluation arena. The default matches
+  /// the serial engine's single arena, so a cell that evaluates under
+  /// `RecalcEngine::recalc` also evaluates here; the pass-wide footprint is
+  /// therefore this value times the worker count. Hosts with a tighter
+  /// memory budget (wasm32 in particular, whose address space is smaller
+  /// than the default ceiling times the worker cap) can lower it: an
+  /// evaluation that outgrows the ceiling fails the pass with
+  /// `kOutOfMemory` instead of committing a degraded value.
+  std::size_t max_arena_bytes = kMaxEvalArenaBytes;
 };
 
 /// Counters reported by a `recalc_parallel` invocation. Mirrors the
@@ -77,6 +95,10 @@ struct SchedulerStats {
   /// Number of (dirty) SCCs the scheduler processed. Equal to the sum of
   /// per-layer super-node counts walked.
   std::uint64_t sccs_processed = 0;
+  /// Nodes submitted to the SCC phase, summed over the pass's waves. This
+  /// is the dirty induced subgraph's size, never the registered dependency
+  /// graph's, and is reported so that scoping stays observable.
+  std::uint64_t scc_nodes_considered = 0;
   /// Layers dispatched on the worker pool (i.e. layer size >= 2 AND the
   /// pool was successfully spawned).
   std::uint64_t parallel_steps = 0;
@@ -86,6 +108,12 @@ struct SchedulerStats {
   /// Number of cyclic SCCs successfully resolved by the iterative solver
   /// (excluding `#REF!`-fallback components).
   std::uint64_t cycle_recoveries = 0;
+  /// Number of worker OS threads successfully started for this complete
+  /// recalc pass. A caller-only pass reports zero.
+  std::uint32_t worker_threads_started = 0;
+  /// Number of started workers that claimed at least one SCC task during
+  /// this recalc pass. This is a distinct-worker count, not a task count.
+  std::uint32_t worker_threads_used = 0;
 };
 
 /// Drives a parallel incremental recalc on `wb`.
@@ -95,8 +123,14 @@ struct SchedulerStats {
 /// `RecalcEngine::recalc`, and clears the dirty set on completion.
 ///
 /// `cfg` selects the worker count (see `SchedulerConfig::num_threads`).
-/// `stats` (when non-null) receives the per-pass counters. The `Expected`
-/// return slot is reserved for scheduler failures.
+/// `stats` (when non-null) receives the per-pass counters.
+///
+/// A returned `Ok()` means every cell the pass evaluated completed without
+/// exhausting its worker's arena. An allocation failure during evaluation
+/// aborts the pass with `kOutOfMemory` rather than committing the degraded
+/// value, matching `RecalcEngine::recalc`; the remaining `Expected` errors
+/// are scheduler failures (invalid worker count, nested recalc, a spill
+/// release loop that made no progress).
 ///
 /// `num_threads` is an upper bound, not a guarantee. Workers are started
 /// through `launch_thread`, which reports an operating-system refusal

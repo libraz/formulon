@@ -322,6 +322,27 @@ TEST(BuiltinsTrimRange, MixedRowWithBlankAndNumberPreserved) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
 }
 
+TEST(BuiltinsTrimRange, RangeConsumersRetainCopiedBlankProvenance) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+
+  // Mode 0 keeps the 2x2 rectangle, including its two blank cells. The
+  // direct result projects those copied blanks to zero, while nested
+  // range-aware consumers still count only the two numeric source cells.
+  const Value count = EvalIn("=COUNT(TRIMRANGE(A1:B2,0,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 2.0);
+  const Value counta = EvalIn("=COUNTA(TRIMRANGE(A1:B2,0,0))", wb, wb.sheet(0));
+  ASSERT_TRUE(counta.is_number());
+  EXPECT_DOUBLE_EQ(counta.as_number(), 2.0);
+
+  const Value direct = EvalIn("=TRIMRANGE(A1:B2,0,0)", wb, wb.sheet(0));
+  ASSERT_TRUE(direct.is_array());
+  ASSERT_TRUE(direct.as_array_cells()[1].is_number());
+  EXPECT_DOUBLE_EQ(direct.as_array_cells()[1].as_number(), 0.0);
+}
+
 // ---------------------------------------------------------------------------
 // Single-cell pass-through
 // ---------------------------------------------------------------------------

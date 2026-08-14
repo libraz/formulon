@@ -263,7 +263,8 @@ TEST(EvalContextCrossSheetRange, QualifiedRangeOnOtherSheet) {
 }
 
 TEST(EvalContextCrossSheetRange, BothEndpointsQualifiedMatching) {
-  // Both endpoints naming the same sheet (case-insensitively) is legal.
+  // Both endpoints naming the same sheet under Unicode simple folding are
+  // legal.
   Workbook wb = MakeTwoSheetWorkbook();
   wb.sheet(1).set_cell_value(0, 0, Value::number(10.0));
   wb.sheet(1).set_cell_value(1, 0, Value::number(20.0));

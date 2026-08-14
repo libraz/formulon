@@ -19,9 +19,14 @@
 #include "eval/scheduler.h"
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
 #include <random>
+#include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "cell.h"
@@ -56,6 +61,81 @@ struct ProgressAbortAfter {
   std::atomic<std::uint32_t> calls{0U};
   std::uint32_t abort_after = 0U;
 };
+
+struct ProgressThreadProbe {
+  std::thread::id caller;
+  std::mutex mutex;
+  std::vector<std::thread::id> callback_threads;
+};
+
+bool RecordIterativeProgressThread(std::uint32_t /*iteration*/, double /*max_residual*/,
+                                   std::uint32_t /*max_iterations*/, void* user_data) {
+  auto* probe = static_cast<ProgressThreadProbe*>(user_data);
+  std::lock_guard<std::mutex> guard(probe->mutex);
+  probe->callback_threads.push_back(std::this_thread::get_id());
+  return true;
+}
+
+struct WorkerThreadProbe {
+  std::condition_variable condition;
+  std::mutex mutex;
+  std::set<std::thread::id> ids;
+  bool synchronize = false;
+  bool released = true;
+  bool timed_out = false;
+};
+
+WorkerThreadProbe g_worker_thread_probe;
+
+void ResetWorkerThreadProbe(bool synchronize) {
+  std::lock_guard<std::mutex> guard(g_worker_thread_probe.mutex);
+  g_worker_thread_probe.ids.clear();
+  g_worker_thread_probe.synchronize = synchronize;
+  g_worker_thread_probe.released = !synchronize;
+  g_worker_thread_probe.timed_out = false;
+}
+
+Value RecordWorkerThreadImpl(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  if (arity != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  std::unique_lock<std::mutex> lock(g_worker_thread_probe.mutex);
+  g_worker_thread_probe.ids.insert(std::this_thread::get_id());
+  if (g_worker_thread_probe.synchronize && !g_worker_thread_probe.released) {
+    // Keep the first worker occupied until a sibling SCC reaches this same
+    // rendezvous. The bounded deadline only prevents a deadlock if the host
+    // unexpectedly launches fewer workers than the fixture requests.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!g_worker_thread_probe.released && g_worker_thread_probe.ids.size() < 2U) {
+      if (g_worker_thread_probe.condition.wait_until(lock, deadline) == std::cv_status::timeout) {
+        g_worker_thread_probe.timed_out = true;
+        g_worker_thread_probe.released = true;
+        g_worker_thread_probe.condition.notify_all();
+        break;
+      }
+    }
+    if (g_worker_thread_probe.ids.size() >= 2U && !g_worker_thread_probe.released) {
+      g_worker_thread_probe.released = true;
+      g_worker_thread_probe.condition.notify_all();
+    }
+  }
+  return args[0];
+}
+
+Workbook* g_worker_reentry_workbook = nullptr;
+std::atomic<int> g_worker_reentry_code{0};
+
+Value WorkerReentryImpl(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  if (arity != 1U || g_worker_reentry_workbook == nullptr) {
+    return Value::error(ErrorCode::Value);
+  }
+  SchedulerConfig config;
+  config.num_threads = 1U;
+  const auto nested = g_worker_reentry_workbook->recalc_parallel(default_registry(), config, nullptr);
+  g_worker_reentry_code.store(nested ? static_cast<int>(FormulonErrorCode::kOk) : static_cast<int>(nested.error().code),
+                              std::memory_order_release);
+  return args[0];
+}
 
 bool AbortIterativeSolve(std::uint32_t /*iteration*/, double /*max_residual*/, std::uint32_t /*max_iterations*/,
                          void* user_data) {
@@ -134,6 +214,8 @@ TEST(Scheduler, SingleConstantCellSingleThread) {
   cfg.num_threads = 1U;
   ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, &stats)));
   EXPECT_EQ(stats.cells_evaluated, 0U);  // No formula to execute.
+  EXPECT_EQ(stats.worker_threads_started, 0U);
+  EXPECT_EQ(stats.worker_threads_used, 0U);
   // A literal mark may seed the dirty set but nothing in the SCC graph;
   // the standalone-dirty sweep will skip it because formula_text is empty.
 }
@@ -173,6 +255,49 @@ TEST(Scheduler, ParallelIterativeProgressCallbackCanAbort) {
   const Value value = StoredValue(wb, 0U, 0U, 0U);
   ASSERT_TRUE(value.is_number()) << "an aborted solve must retain the last approximation";
   EXPECT_DOUBLE_EQ(value.as_number(), 875.0);
+}
+
+TEST(Scheduler, IterativeProgressCallbackRunsOnCallerThread) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=(A1+1000)/2")));
+  // A second, disjoint self-cycle makes the cyclic layer genuinely wide.
+  // Before callback affinity was enforced, the scheduler dispatched these
+  // two SCCs to separate workers and invoked the progress callback there.
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=(C1+2000)/2")));
+
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 100U;
+  options.max_change = 1e-6;
+  wb.set_iterative_options(options);
+
+  ProgressThreadProbe probe;
+  probe.caller = std::this_thread::get_id();
+  wb.recalc_engine().set_iterative_progress(&RecordIterativeProgressThread, &probe);
+
+  SchedulerConfig config;
+  config.num_threads = 4U;
+  SchedulerStats stats;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), config, &stats)));
+  EXPECT_EQ(stats.cycle_recoveries, 2U);
+  EXPECT_EQ(stats.cells_evaluated, 2U);
+  EXPECT_EQ(stats.parallel_steps, 0U);
+  EXPECT_EQ(stats.serial_fallback_steps, 1U);
+
+  {
+    std::lock_guard<std::mutex> guard(probe.mutex);
+    ASSERT_FALSE(probe.callback_threads.empty());
+    for (const std::thread::id callback_thread : probe.callback_threads) {
+      EXPECT_EQ(callback_thread, probe.caller);
+    }
+  }
+
+  const Value a1 = StoredValue(wb, 0U, 0U, 0U);
+  const Value c1 = StoredValue(wb, 0U, 0U, 2U);
+  ASSERT_TRUE(a1.is_number());
+  ASSERT_TRUE(c1.is_number());
+  EXPECT_NEAR(a1.as_number(), 1000.0, 1e-4);
+  EXPECT_NEAR(c1.as_number(), 2000.0, 1e-4);
 }
 
 // ---------------------------------------------------------------------------
@@ -221,12 +346,117 @@ TEST(Scheduler, WideIndependentLayer) {
   ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, &stats)));
   EXPECT_EQ(stats.cells_evaluated, 100U);
   EXPECT_GE(stats.parallel_steps, 1U);
+  EXPECT_GE(stats.worker_threads_started, 2U);
+  EXPECT_GE(stats.worker_threads_used, 1U);
 
   for (std::uint32_t r = 0; r < 100; ++r) {
     Value v = StoredValue(wb, 0U, r, 1U);
     ASSERT_TRUE(v.is_number()) << "row " << r;
     EXPECT_DOUBLE_EQ(v.as_number(), static_cast<double>(r) * 2.0);
   }
+}
+
+TEST(Scheduler, WideLayerExecutesOnDistinctWorkerThreads) {
+  Workbook wb = Workbook::create();
+  FunctionRegistry registry;
+  FunctionDef def{};
+  def.canonical_name = "RECORD_WORKER_THREAD";
+  def.min_arity = 1U;
+  def.max_arity = 1U;
+  def.impl = &RecordWorkerThreadImpl;
+  ASSERT_TRUE(registry.register_function(def));
+
+  ResetWorkerThreadProbe(/*synchronize=*/true);
+
+  constexpr std::uint32_t kRows = 16U;
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, row, 0U, Value::number(static_cast<double>(row + 1U)))));
+    ASSERT_TRUE(static_cast<bool>(
+        wb.set_cell_formula(0U, row, 1U, "=RECORD_WORKER_THREAD(A" + std::to_string(row + 1U) + ")")));
+  }
+
+  SchedulerConfig config;
+  config.num_threads = 4U;
+  SchedulerStats stats;
+  ASSERT_TRUE(static_cast<bool>(recalc_parallel(wb, registry, config, &stats)));
+  EXPECT_GE(stats.worker_threads_started, 2U);
+  EXPECT_GE(stats.worker_threads_used, 2U);
+  EXPECT_GE(stats.parallel_steps, 1U);
+
+  std::set<std::thread::id> observed_threads;
+  bool timed_out = false;
+  {
+    std::lock_guard<std::mutex> guard(g_worker_thread_probe.mutex);
+    observed_threads = g_worker_thread_probe.ids;
+    timed_out = g_worker_thread_probe.timed_out;
+  }
+  EXPECT_FALSE(timed_out);
+  EXPECT_GE(observed_threads.size(), 2U);
+  for (std::uint32_t row = 0U; row < kRows; ++row) {
+    const Value value = StoredValue(wb, 0U, row, 1U);
+    ASSERT_TRUE(value.is_number()) << "row " << row;
+    EXPECT_DOUBLE_EQ(value.as_number(), static_cast<double>(row + 1U));
+  }
+}
+
+TEST(Scheduler, SingleThreadConfigKeepsEvaluationOnCaller) {
+  Workbook wb = Workbook::create();
+  FunctionRegistry registry;
+  FunctionDef def{};
+  def.canonical_name = "RECORD_CALLER_THREAD";
+  def.min_arity = 1U;
+  def.max_arity = 1U;
+  def.impl = &RecordWorkerThreadImpl;
+  ASSERT_TRUE(registry.register_function(def));
+
+  ResetWorkerThreadProbe(/*synchronize=*/false);
+  const std::thread::id caller = std::this_thread::get_id();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(3.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=RECORD_CALLER_THREAD(A1)")));
+
+  SchedulerConfig config;
+  config.num_threads = 1U;
+  SchedulerStats stats;
+  ASSERT_TRUE(static_cast<bool>(recalc_parallel(wb, registry, config, &stats)));
+  EXPECT_EQ(stats.worker_threads_started, 0U);
+  EXPECT_EQ(stats.worker_threads_used, 0U);
+
+  std::set<std::thread::id> observed;
+  {
+    std::lock_guard<std::mutex> guard(g_worker_thread_probe.mutex);
+    observed = g_worker_thread_probe.ids;
+  }
+  ASSERT_EQ(observed.size(), 1U);
+  EXPECT_EQ(*observed.begin(), caller);
+}
+
+TEST(Scheduler, NestedRecalcFromWorkerReturnsReentrant) {
+  Workbook wb = Workbook::create();
+  FunctionRegistry registry;
+  FunctionDef def{};
+  def.canonical_name = "NESTED_WORKER_RECALC";
+  def.min_arity = 1U;
+  def.max_arity = 1U;
+  def.impl = &WorkerReentryImpl;
+  ASSERT_TRUE(registry.register_function(def));
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(10.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 0U, Value::number(20.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=NESTED_WORKER_RECALC(A1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 1U, 1U, "=NESTED_WORKER_RECALC(A2)")));
+
+  g_worker_reentry_workbook = &wb;
+  g_worker_reentry_code.store(0, std::memory_order_release);
+  SchedulerConfig config;
+  config.num_threads = 4U;
+  const auto outer = recalc_parallel(wb, registry, config, nullptr);
+  g_worker_reentry_workbook = nullptr;
+
+  ASSERT_TRUE(static_cast<bool>(outer));
+  EXPECT_EQ(g_worker_reentry_code.load(std::memory_order_acquire),
+            static_cast<int>(FormulonErrorCode::kGraphRecalcReentrant));
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 0U, 1U).as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(StoredValue(wb, 0U, 1U, 1U).as_number(), 20.0);
 }
 
 // Repeats the wide-independent-layer scenario in a tight loop with the
@@ -340,6 +570,8 @@ TEST(Scheduler, NoWorkerThreadsFallsBackToSerialEvaluation) {
   EXPECT_EQ(stats.parallel_steps, 0U) << "no worker was started, so no layer can have been dispatched to the pool";
   EXPECT_GE(stats.serial_fallback_steps, 1U);
   EXPECT_EQ(stats.cells_evaluated, 3U);
+  EXPECT_EQ(stats.worker_threads_started, 0U);
+  EXPECT_EQ(stats.worker_threads_used, 0U);
 
   Value d1 = StoredValue(wp.parallel, 0, 0, 3);
   ASSERT_TRUE(d1.is_number());
@@ -365,6 +597,9 @@ TEST(Scheduler, PartialWorkerLaunchStillDispatchesWideLayers) {
 
   EXPECT_GE(stats.parallel_steps, 1U) << "the B/C layer should still reach the two workers that did start";
   EXPECT_EQ(stats.cells_evaluated, 3U);
+  EXPECT_EQ(stats.worker_threads_started, 2U);
+  EXPECT_GE(stats.worker_threads_used, 1U);
+  EXPECT_LE(stats.worker_threads_used, stats.worker_threads_started);
 
   Value d1 = StoredValue(wp.parallel, 0, 0, 3);
   ASSERT_TRUE(d1.is_number());

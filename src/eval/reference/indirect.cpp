@@ -80,7 +80,11 @@ Value eval_indirect_lazy(const parser::AstNode& call, Arena& arena, const Functi
       return Value::blank();
     }
     Value* buffer = nullptr;
-    ArrayValue* out = dynamic_array::allocate_array_value(rows, cols, arena, buffer);
+    // The cells are a copy of the rectangle `expand_range` just admitted under
+    // the range-expansion bound, so the copy is bounded the same way. Using the
+    // narrower ceiling that applies to arrays a formula conjures from its
+    // arguments would reject a rectangle the read itself accepted.
+    ArrayValue* out = dynamic_array::allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
     if (out == nullptr) {
       return Value::error(ErrorCode::Num);
     }
