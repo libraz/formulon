@@ -1,0 +1,195 @@
+{
+  "suite": "datetime_bounds",
+  "description": "DATE / EDATE / EOMONTH upper-bound and overflow probes in the 1900 date system",
+  "environment": {
+    "excel_version": "16.112",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-08-14T01:20:56Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "date_9999_12_31",
+      "formula": "=DATE(9999,12,31)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "date_9999_11_61_normalises_to_endpoint",
+      "formula": "=DATE(9999,11,61)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "date_9999_12_32_overflow",
+      "formula": "=DATE(9999,12,32)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "edate_endpoint_zero_months",
+      "formula": "=EDATE(DATE(9999,12,31),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "edate_dec_1_plus_one_month_overflow",
+      "formula": "=EDATE(DATE(9999,12,1),1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "eomonth_dec_1_zero_months_endpoint",
+      "formula": "=EOMONTH(DATE(9999,12,1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "eomonth_dec_1_plus_one_month_overflow",
+      "formula": "=EOMONTH(DATE(9999,12,1),1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "edate_endpoint_plus_one_day_overflow",
+      "formula": "=EDATE(DATE(9999,12,31)+1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "edate_large_month_offset_overflow",
+      "formula": "=EDATE(DATE(2024,1,1),1E20)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "eomonth_true_month_offset",
+      "formula": "=EOMONTH(DATE(2024,1,1),TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "edate_error_input_large_month_offset",
+      "formula": "=EDATE(1/0,1E20)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "date_max_serial_1900",
+      "formula": "=N(DATE(9999,12,31))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "year_final_day_time_fraction",
+      "formula": "=YEAR(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)+TIME(23,59,59)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9999.0
+      }
+    },
+    {
+      "id": "edate_final_day_time_fraction_zero_months",
+      "formula": "=N(EDATE(A1,0))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)+TIME(23,59,59)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "eomonth_final_day_time_fraction_zero_months",
+      "formula": "=N(EOMONTH(A1,0))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)+TIME(23,59,59)"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2958465.0
+      }
+    },
+    {
+      "id": "edate_final_day_time_fraction_plus_one_month_overflow",
+      "formula": "=EDATE(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)+TIME(23,59,59)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "eomonth_final_day_time_fraction_plus_one_month_overflow",
+      "formula": "=EOMONTH(A1,1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=DATE(9999,12,31)+TIME(23,59,59)"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

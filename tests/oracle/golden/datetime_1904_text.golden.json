@@ -1,0 +1,793 @@
+{
+  "suite": "datetime_1904_text",
+  "description": "Mac Excel 16.112 ja-JP date1904 probes for date-text coercion across calendar extractors, day-count functions, serial zero, cell references, whitespace, time-only input, and pre-epoch strings.\n",
+  "environment": {
+    "excel_version": "16.112",
+    "excel_locale": "ja-JP",
+    "date1904": true,
+    "iterative": false,
+    "generated_at": "2026-08-13T16:40:41Z"
+  },
+  "tolerance": {
+    "abs": 1e-12,
+    "rel": 1e-12
+  },
+  "cases": [
+    {
+      "id": "datevalue_text_2024_03_15",
+      "formula": "=DATEVALUE(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43904.0
+      }
+    },
+    {
+      "id": "year_text_2024_03_15",
+      "formula": "=YEAR(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "month_text_2024_03_15",
+      "formula": "=MONTH(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "day_text_2024_03_15",
+      "formula": "=DAY(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
+      "id": "weekday_text_2024_03_15",
+      "formula": "=WEEKDAY(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "weeknum_text_2024_03_15",
+      "formula": "=WEEKNUM(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "isoweeknum_text_2024_03_15",
+      "formula": "=ISOWEEKNUM(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
+    },
+    {
+      "id": "edate_text_2024_03_15_plus_one",
+      "formula": "=EDATE(\"2024-03-15\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42473.0
+      }
+    },
+    {
+      "id": "edate_text_2024_03_15_zero",
+      "formula": "=EDATE(\"2024-03-15\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42442.0
+      }
+    },
+    {
+      "id": "n_edate_text_2024_03_15_zero",
+      "formula": "=N(EDATE(\"2024-03-15\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42442.0
+      }
+    },
+    {
+      "id": "eomonth_text_2024_03_15_zero",
+      "formula": "=EOMONTH(\"2024-03-15\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42459.0
+      }
+    },
+    {
+      "id": "edate_text_leap_2024_02_29_zero",
+      "formula": "=EDATE(\"2024-02-29\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42427.0
+      }
+    },
+    {
+      "id": "n_edate_text_leap_2024_02_29_zero",
+      "formula": "=N(EDATE(\"2024-02-29\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42427.0
+      }
+    },
+    {
+      "id": "eomonth_text_leap_2024_02_29_zero",
+      "formula": "=EOMONTH(\"2024-02-29\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42428.0
+      }
+    },
+    {
+      "id": "n_eomonth_text_leap_2024_02_29_zero",
+      "formula": "=N(EOMONTH(\"2024-02-29\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42428.0
+      }
+    },
+    {
+      "id": "edate_text_threshold_1908_01_01_zero",
+      "formula": "=EDATE(\"1908-01-01\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "n_edate_text_threshold_1908_01_01_zero",
+      "formula": "=N(EDATE(\"1908-01-01\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "eomonth_text_threshold_1908_01_01_zero",
+      "formula": "=EOMONTH(\"1908-01-01\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "n_eomonth_text_threshold_1908_01_01_zero",
+      "formula": "=N(EOMONTH(\"1908-01-01\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "edate_text_threshold_1908_01_02_zero",
+      "formula": "=EDATE(\"1908-01-02\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n_edate_text_threshold_1908_01_02_zero",
+      "formula": "=N(EDATE(\"1908-01-02\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "eomonth_text_threshold_1908_01_02_zero",
+      "formula": "=EOMONTH(\"1908-01-02\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "n_eomonth_text_threshold_1908_01_02_zero",
+      "formula": "=N(EOMONTH(\"1908-01-02\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "edate_native_2024_03_15_plus_one",
+      "formula": "=EDATE(DATE(2024,3,15),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43935.0
+      }
+    },
+    {
+      "id": "eomonth_native_2024_03_15_zero",
+      "formula": "=EOMONTH(DATE(2024,3,15),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43920.0
+      }
+    },
+    {
+      "id": "edate_text_equals_native_date",
+      "formula": "=EDATE(\"2024-03-15\",1)=DATE(2024,4,15)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "edate_text_minus_native_epoch",
+      "formula": "=N(EDATE(\"2024-03-15\",1))-N(DATE(1904,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42473.0
+      }
+    },
+    {
+      "id": "eomonth_text_equals_native_date",
+      "formula": "=EOMONTH(\"2024-03-15\",0)=DATE(2024,3,31)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "eomonth_text_minus_native_epoch",
+      "formula": "=N(EOMONTH(\"2024-03-15\",0))-N(DATE(1904,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42459.0
+      }
+    },
+    {
+      "id": "yearfrac_text_to_native_basis_3",
+      "formula": "=YEARFRAC(\"2024-01-01\",DATE(2024,12,31),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.005479452054795
+      }
+    },
+    {
+      "id": "yearfrac_native_to_text_basis_3",
+      "formula": "=YEARFRAC(DATE(2024,1,1),\"2024-12-31\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0054794520547947
+      }
+    },
+    {
+      "id": "yearfrac_datevalue_to_native_basis_3",
+      "formula": "=YEARFRAC(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "yearfrac_datevalue_to_datevalue_basis_3",
+      "formula": "=YEARFRAC(DATEVALUE(\"2024-01-01\"),DATEVALUE(\"2024-12-31\"),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "yearfrac_text_to_text_basis_3",
+      "formula": "=YEARFRAC(\"2024-01-01\",\"2024-12-31\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "yearfrac_text_to_text_basis_0",
+      "formula": "=YEARFRAC(\"2024-01-01\",\"2024-12-31\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "yearfrac_text_to_text_basis_1",
+      "formula": "=YEARFRAC(\"2024-01-01\",\"2024-12-31\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.9972677595628415
+      }
+    },
+    {
+      "id": "yearfrac_text_to_datevalue_basis_3",
+      "formula": "=YEARFRAC(\"2024-01-01\",DATEVALUE(\"2024-12-31\"),3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.005479452054795
+      }
+    },
+    {
+      "id": "yearfrac_datevalue_to_text_basis_3",
+      "formula": "=YEARFRAC(DATEVALUE(\"2024-01-01\"),\"2024-12-31\",3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0054794520547947
+      }
+    },
+    {
+      "id": "datedif_text_to_native_days",
+      "formula": "=DATEDIF(\"2024-01-01\",DATE(2024,12,31),\"D\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "datedif_native_to_text_days",
+      "formula": "=DATEDIF(DATE(2024,1,1),\"2024-12-31\",\"D\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 365.0
+      }
+    },
+    {
+      "id": "datedif_text_matches_datevalue_days",
+      "formula": "=DATEDIF(\"2024-01-01\",DATE(2024,12,31),\"D\")=DATEDIF(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31),\"D\")",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "days360_text_to_native",
+      "formula": "=DAYS360(\"2024-01-01\",DATE(2024,12,31))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "days360_native_to_text",
+      "formula": "=DAYS360(DATE(2024,1,1),\"2024-12-31\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "days360_text_matches_datevalue",
+      "formula": "=DAYS360(\"2024-01-01\",DATE(2024,12,31))=DAYS360(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "days_text_2024_03_15_to_native_2024_03_14",
+      "formula": "=DAYS(\"2024-03-15\",DATE(2024,3,14))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "days_native_2024_03_14_to_text_2024_03_15",
+      "formula": "=DAYS(DATE(2024,3,14),\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "days_text_matches_datevalue",
+      "formula": "=DAYS(\"2024-03-15\",DATE(2024,3,14))=DAYS(DATEVALUE(\"2024-03-15\"),DATE(2024,3,14))",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "days_datevalue_rebased_text_to_native",
+      "formula": "=DAYS(DATEVALUE(\"2024-03-15\"),DATE(2024,3,14))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "datevalue_rebased_minus_native",
+      "formula": "=N(DATEVALUE(\"2024-03-15\"))-N(DATE(2024,3,15))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "datevalue_numeric_minus_native",
+      "formula": "=N(DATEVALUE(\"2024-03-15\"))-N(DATE(2024,3,14))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "n_edate_text_2024_03_15_plus_one",
+      "formula": "=N(EDATE(\"2024-03-15\",1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42473.0
+      }
+    },
+    {
+      "id": "n_eomonth_text_2024_03_15_zero",
+      "formula": "=N(EOMONTH(\"2024-03-15\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 42459.0
+      }
+    },
+    {
+      "id": "n_date_native_2024_04_15",
+      "formula": "=N(DATE(2024,4,15))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43935.0
+      }
+    },
+    {
+      "id": "n_datevalue_text_2024_03_15",
+      "formula": "=N(DATEVALUE(\"2024-03-15\"))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43904.0
+      }
+    },
+    {
+      "id": "n_text_date_2024_03_15",
+      "formula": "=N(\"2024-03-15\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "year_serial_zero",
+      "formula": "=YEAR(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1904.0
+      }
+    },
+    {
+      "id": "date1904_native_epoch_serial",
+      "formula": "=N(DATE(1904,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "date1904_native_2024_03_15_serial",
+      "formula": "=N(DATE(2024,3,15))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43904.0
+      }
+    },
+    {
+      "id": "date1904_native_epoch_year",
+      "formula": "=YEAR(DATE(1904,1,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1904.0
+      }
+    },
+    {
+      "id": "month_serial_zero",
+      "formula": "=MONTH(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "day_serial_zero",
+      "formula": "=DAY(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weekday_serial_zero",
+      "formula": "=WEEKDAY(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "datevalue_text_1904_01_01",
+      "formula": "=DATEVALUE(\"1904-01-01\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "year_text_1904_01_01",
+      "formula": "=YEAR(\"1904-01-01\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1904.0
+      }
+    },
+    {
+      "id": "year_text_date_cell_reference",
+      "formula": "=YEAR(A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "2024-03-15"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "year_formula_text_date_cell_reference",
+      "formula": "=YEAR(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"2024-03-15\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "datevalue_formula_text_date_cell_reference",
+      "formula": "=DATEVALUE(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"2024-03-15\""
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 43904.0
+      }
+    },
+    {
+      "id": "istext_formula_text_date_cell_reference",
+      "formula": "=ISTEXT(A1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"2024-03-15\""
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "year_numeric_text_zero",
+      "formula": "=YEAR(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1904.0
+      }
+    },
+    {
+      "id": "datevalue_numeric_text_zero",
+      "formula": "=DATEVALUE(\"0\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "year_time_only_text",
+      "formula": "=YEAR(\"12:00\")",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1904.0
+      }
+    },
+    {
+      "id": "year_whitespace_padded_date",
+      "formula": "=YEAR(\" 2024-03-15 \" )",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "datevalue_whitespace_padded_date",
+      "formula": "=DATEVALUE(\" 2024-03-15 \" )",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 43904.0
+      }
+    },
+    {
+      "id": "datevalue_text_pre_epoch_1903_12_31",
+      "formula": "=DATEVALUE(\"1903-12-31\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "year_text_pre_epoch_1903_12_31",
+      "formula": "=YEAR(\"1903-12-31\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "edate_text_pre_epoch_1903_12_31",
+      "formula": "=EDATE(\"1903-12-31\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "eomonth_text_pre_epoch_1903_12_31",
+      "formula": "=EOMONTH(\"1903-12-31\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "edate_text_lower_boundary_1904_01_01_zero",
+      "formula": "=EDATE(\"1904-01-01\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1462.0
+      }
+    },
+    {
+      "id": "n_edate_text_lower_boundary_1904_01_01_zero",
+      "formula": "=N(EDATE(\"1904-01-01\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1462.0
+      }
+    },
+    {
+      "id": "eomonth_text_lower_boundary_1904_01_01_zero",
+      "formula": "=EOMONTH(\"1904-01-01\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1431.0
+      }
+    },
+    {
+      "id": "n_eomonth_text_lower_boundary_1904_01_01_zero",
+      "formula": "=N(EOMONTH(\"1904-01-01\",0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1431.0
+      }
+    },
+    {
+      "id": "year_numeric_negative_one",
+      "formula": "=YEAR(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "year_existing_1904_serial",
+      "formula": "=YEAR(43904)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    },
+    {
+      "id": "year_existing_date_serial",
+      "formula": "=YEAR(N(DATE(2024,3,15)))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2024.0
+      }
+    }
+  ]
+}

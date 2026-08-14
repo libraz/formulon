@@ -20,6 +20,7 @@
 //   DATE(2026, 4, 23) = 46135   (today's date per CLAUDE.md currentDate)
 
 #include <cmath>
+#include <string>
 #include <string_view>
 
 #include "eval/eval_context.h"
@@ -183,7 +184,29 @@ TEST(DateTimeDate, NegativeMonthSubtracts) {
 TEST(DateTimeDate, Year9999Accepted) {
   const Value v = EvalSource("=DATE(9999, 12, 31)");
   ASSERT_TRUE(v.is_number());
-  EXPECT_GT(v.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(v.as_number(), 2958465.0);
+}
+
+TEST(DateTimeDate, DayOverflowNormalisesToUpperEndpoint) {
+  const Value v = EvalSource("=DATE(9999, 11, 61)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2958465.0);
+}
+
+TEST(DateTimeDate, DayOverflowPastUpperEndpointIsNum) {
+  const Value v = EvalSource("=DATE(9999, 12, 32)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeDate, NegativeDayNormalisesToLowerBoundary) {
+  const Value serial_one = EvalSource("=DATE(1901, 1, -364)");
+  ASSERT_TRUE(serial_one.is_number());
+  EXPECT_DOUBLE_EQ(serial_one.as_number(), 1.0);
+
+  const Value serial_zero = EvalSource("=DATE(1901, 1, -365)");
+  ASSERT_TRUE(serial_zero.is_number());
+  EXPECT_DOUBLE_EQ(serial_zero.as_number(), 0.0);
 }
 
 TEST(DateTimeDate, Year10000Rejected) {
@@ -304,6 +327,30 @@ TEST(DateTimeYear, IgnoresTimeFraction) {
   const Value v = EvalSource("=YEAR(DATE(2026, 4, 23) + 0.75)");
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 2026.0);
+}
+
+TEST(DateTimeUpperEndpoint, AcceptsFinalDayTimeFraction) {
+  const Value year = EvalSource("=YEAR(2958465.999988426)");
+  const Value month = EvalSource("=MONTH(2958465.999988426)");
+  const Value day = EvalSource("=DAY(2958465.999988426)");
+  ASSERT_TRUE(year.is_number());
+  ASSERT_TRUE(month.is_number());
+  ASSERT_TRUE(day.is_number());
+  EXPECT_DOUBLE_EQ(year.as_number(), 9999.0);
+  EXPECT_DOUBLE_EQ(month.as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(day.as_number(), 31.0);
+}
+
+TEST(DateTimeUpperEndpoint, RejectsExactNextDay) {
+  const Value year = EvalSource("=YEAR(2958466)");
+  const Value month = EvalSource("=MONTH(2958466)");
+  const Value day = EvalSource("=DAY(2958466)");
+  ASSERT_TRUE(year.is_error());
+  ASSERT_TRUE(month.is_error());
+  ASSERT_TRUE(day.is_error());
+  EXPECT_EQ(year.as_error(), ErrorCode::Num);
+  EXPECT_EQ(month.as_error(), ErrorCode::Num);
+  EXPECT_EQ(day.as_error(), ErrorCode::Num);
 }
 
 TEST(DateTimeYear, NegativeSerialIsNum) {
@@ -500,6 +547,54 @@ TEST(DateTimeEdate, TruncatesMonthArgument) {
   EXPECT_EQ(a.as_number(), b.as_number());
 }
 
+TEST(DateTimeEdate, UpperEndpointWithZeroMonths) {
+  const Value v = EvalSource("=EDATE(DATE(9999, 12, 31), 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2958465.0);
+}
+
+TEST(DateTimeEdate, CrossingUpperEndpointIsNum) {
+  const Value v = EvalSource("=EDATE(DATE(9999, 12, 1), 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeEdate, InputOnePastUpperEndpointIsNum) {
+  const Value v = EvalSource("=EDATE(DATE(9999, 12, 31) + 1, 0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeEdate, AcceptsFinalDayTimeFraction) {
+  const Value endpoint = EvalSource("=EDATE(2958465.999988426, 0)");
+  ASSERT_TRUE(endpoint.is_number());
+  EXPECT_DOUBLE_EQ(endpoint.as_number(), 2958465.0);
+}
+
+TEST(DateTimeEdate, FinalDayTimeFractionCannotCrossUpperEndpoint) {
+  const Value overflow = EvalSource("=EDATE(2958465.999988426, 1)");
+  ASSERT_TRUE(overflow.is_error());
+  EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeEdate, GiganticMonthOffsetIsNum) {
+  const Value v = EvalSource("=EDATE(DATE(2024, 1, 1), 1E20)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeEdate, LeftmostErrorPrecedesGiganticMonthOffset) {
+  const Value v = EvalSource("=EDATE(1/0, 1E20)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(DateTimeEdate, LowerBoundaryWithZeroMonths) {
+  const Value v = EvalSource("=EDATE(DATE(1900, 1, 1), 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+}
+
 // ---------------------------------------------------------------------------
 // EOMONTH
 // ---------------------------------------------------------------------------
@@ -567,6 +662,48 @@ TEST(DateTimeEomonth, RejectsBooleanArgument) {
   const Value v_months = EvalSource("=EOMONTH(44987, TRUE)");
   ASSERT_TRUE(v_months.is_error());
   EXPECT_EQ(v_months.as_error(), ErrorCode::Value);
+}
+
+TEST(DateTimeEomonth, UpperEndpointWithZeroMonths) {
+  const Value v = EvalSource("=EOMONTH(DATE(9999, 12, 1), 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 2958465.0);
+}
+
+TEST(DateTimeEomonth, CrossingUpperEndpointIsNum) {
+  const Value v = EvalSource("=EOMONTH(DATE(9999, 12, 1), 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeEomonth, AcceptsFinalDayTimeFraction) {
+  const Value endpoint = EvalSource("=EOMONTH(2958465.999988426, 0)");
+  ASSERT_TRUE(endpoint.is_number());
+  EXPECT_DOUBLE_EQ(endpoint.as_number(), 2958465.0);
+}
+
+TEST(DateTimeEomonth, FinalDayTimeFractionCannotCrossUpperEndpoint) {
+  const Value overflow = EvalSource("=EOMONTH(2958465.999988426, 1)");
+  ASSERT_TRUE(overflow.is_error());
+  EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeEomonth, LowerBoundaryPreviousMonthIsZero) {
+  const Value v = EvalSource("=EOMONTH(1, -1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(DateTimeEomonth, GiganticMonthOffsetIsNum) {
+  const Value v = EvalSource("=EOMONTH(DATE(2024, 1, 1), 1E20)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTimeEomonth, BooleanPrecedenceBeatsGiganticMonthOffset) {
+  const Value v = EvalSource("=EOMONTH(TRUE, 1E20)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(DateTimeEomonth, Century2000IsLeap) {
@@ -1024,6 +1161,209 @@ TEST(DateTime1904, DateSerialIs1462Less) {
   EXPECT_DOUBLE_EQ(v1904.as_number(), 42369.0);
 }
 
+TEST(DateTime1904, TextRendersDateTextInTheWorkbookEpoch) {
+  // TEXT coerces its first argument through the shared numeric ladder, whose
+  // date fallback always produces a 1900-system serial. Rendering it with
+  // 1904 format codes must therefore round-trip to the same calendar day
+  // under both epochs, not shift by the 1462-day gap.
+  const Value v1900 = EvalSource("=TEXT(\"2024-03-15\", \"yyyy/m/d\")");
+  ASSERT_TRUE(v1900.is_text());
+  EXPECT_EQ(v1900.as_text(), "2024/3/15");
+
+  const Value v1904 = EvalSource1904("=TEXT(\"2024-03-15\", \"yyyy/m/d\")");
+  ASSERT_TRUE(v1904.is_text());
+  EXPECT_EQ(v1904.as_text(), "2024/3/15");
+}
+
+TEST(DateTime1904, TextShiftsOnlyDateDerivedSerials) {
+  // The epoch shift is keyed on the coercion ladder's date rung, not on the
+  // format codes. A value that already is a serial — whether it arrives as a
+  // number or as numeric text — is read in the workbook's own epoch and must
+  // not be moved again.
+  const std::string number_1900 = std::string(EvalSource("=TEXT(45366,\"yyyy/m/d\")").as_text());
+  EXPECT_EQ(number_1900, "2024/3/15");
+
+  const std::string number_1904 = std::string(EvalSource1904("=TEXT(45366,\"yyyy/m/d\")").as_text());
+  EXPECT_EQ(number_1904, "2028/3/16") << "a bare serial follows the workbook epoch";
+
+  const std::string numeric_text_1904 = std::string(EvalSource1904("=TEXT(\"45366\",\"yyyy/m/d\")").as_text());
+  EXPECT_EQ(numeric_text_1904, number_1904) << "numeric text must not pick up the date rung's epoch shift";
+
+  // A non-date rung of the ladder renders identically under both epochs.
+  const std::string percent_1900 = std::string(EvalSource("=TEXT(\"50%\",\"0.00\")").as_text());
+  const std::string percent_1904 = std::string(EvalSource1904("=TEXT(\"50%\",\"0.00\")").as_text());
+  EXPECT_EQ(percent_1900, "0.50");
+  EXPECT_EQ(percent_1904, percent_1900);
+
+  // Time-only text is a day fraction: the same number, and the same
+  // rendering, under either epoch.
+  const std::string time_1900 = std::string(EvalSource("=TEXT(\"13:30\",\"h:mm\")").as_text());
+  const std::string time_1904 = std::string(EvalSource1904("=TEXT(\"13:30\",\"h:mm\")").as_text());
+  EXPECT_EQ(time_1900, "13:30");
+  EXPECT_EQ(time_1904, time_1900);
+}
+
+TEST(DateTime1904, SerialZeroExtractorsFollowTheWorkbookEpoch) {
+  // Serial 0 is the fictitious "1900-01-00" origin under the 1900 system and
+  // a real 1904-01-01 under the 1904 one, so the day component differs while
+  // the month does not. Two branches of `coerce_serial_ymd` meet here: the
+  // explicit day-0 alias, which only applies under the 1900 epoch, and the
+  // epoch shift that rebases a 1904 serial before decoding. Expected values
+  // come from the `datetime` / `datetime_1904_text` oracle suites, not from
+  // this implementation.
+  const Value year_1900 = EvalSource("=YEAR(0)");
+  const Value month_1900 = EvalSource("=MONTH(0)");
+  const Value day_1900 = EvalSource("=DAY(0)");
+  ASSERT_TRUE(year_1900.is_number());
+  ASSERT_TRUE(month_1900.is_number());
+  ASSERT_TRUE(day_1900.is_number());
+  EXPECT_DOUBLE_EQ(year_1900.as_number(), 1900.0);
+  EXPECT_DOUBLE_EQ(month_1900.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(day_1900.as_number(), 0.0);
+
+  const Value year_1904 = EvalSource1904("=YEAR(0)");
+  const Value month_1904 = EvalSource1904("=MONTH(0)");
+  const Value day_1904 = EvalSource1904("=DAY(0)");
+  ASSERT_TRUE(year_1904.is_number());
+  ASSERT_TRUE(month_1904.is_number());
+  ASSERT_TRUE(day_1904.is_number());
+  EXPECT_DOUBLE_EQ(year_1904.as_number(), 1904.0);
+  EXPECT_DOUBLE_EQ(month_1904.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(day_1904.as_number(), 1.0);
+}
+
+TEST(DateTime1904, UpperEndpointIsEpochSpecific) {
+  const Value endpoint = EvalSource1904("=DATE(9999, 12, 31)");
+  ASSERT_TRUE(endpoint.is_number());
+  EXPECT_DOUBLE_EQ(endpoint.as_number(), 2957003.0);
+
+  const Value normalised = EvalSource1904("=DATE(9999, 11, 61)");
+  ASSERT_TRUE(normalised.is_number());
+  EXPECT_DOUBLE_EQ(normalised.as_number(), 2957003.0);
+}
+
+TEST(DateTime1904, DateOverflowPastUpperEndpointIsNum) {
+  const Value v = EvalSource1904("=DATE(9999, 12, 32)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, EdateUpperEndpointAndOverflow) {
+  const Value endpoint = EvalSource1904("=EDATE(DATE(9999, 12, 31), 0)");
+  ASSERT_TRUE(endpoint.is_number());
+  EXPECT_DOUBLE_EQ(endpoint.as_number(), 2957003.0);
+
+  const Value overflow = EvalSource1904("=EDATE(DATE(9999, 12, 1), 1)");
+  ASSERT_TRUE(overflow.is_error());
+  EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, EdateInputOnePastUpperEndpointIsNum) {
+  const Value v = EvalSource1904("=EDATE(DATE(9999, 12, 31) + 1, 0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, ExtractorRejectsOnePastEpochSpecificUpperEndpoint) {
+  const Value v = EvalSource1904("=YEAR(DATE(9999, 12, 31) + 1)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, AcceptsFinalDayTimeFraction) {
+  const Value year = EvalSource1904("=YEAR(2957003.999988426)");
+  const Value month = EvalSource1904("=MONTH(2957003.999988426)");
+  const Value day = EvalSource1904("=DAY(2957003.999988426)");
+  ASSERT_TRUE(year.is_number());
+  ASSERT_TRUE(month.is_number());
+  ASSERT_TRUE(day.is_number());
+  EXPECT_DOUBLE_EQ(year.as_number(), 9999.0);
+  EXPECT_DOUBLE_EQ(month.as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(day.as_number(), 31.0);
+}
+
+TEST(DateTime1904, RejectsExactNextDay) {
+  const Value year = EvalSource1904("=YEAR(2957004)");
+  const Value month = EvalSource1904("=MONTH(2957004)");
+  const Value day = EvalSource1904("=DAY(2957004)");
+  ASSERT_TRUE(year.is_error());
+  ASSERT_TRUE(month.is_error());
+  ASSERT_TRUE(day.is_error());
+  EXPECT_EQ(year.as_error(), ErrorCode::Num);
+  EXPECT_EQ(month.as_error(), ErrorCode::Num);
+  EXPECT_EQ(day.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, EdateGiganticMonthOffsetIsNum) {
+  const Value v = EvalSource1904("=EDATE(DATE(2024, 1, 1), 1E20)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, EdateLeftmostErrorPrecedesGiganticMonthOffset) {
+  const Value v = EvalSource1904("=EDATE(1/0, 1E20)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(DateTime1904, EdateLowerBoundaryWithZeroMonths) {
+  const Value v = EvalSource1904("=EDATE(DATE(1904, 1, 1), 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(DateTime1904, EomonthUpperEndpointAndOverflow) {
+  const Value endpoint = EvalSource1904("=EOMONTH(DATE(9999, 12, 1), 0)");
+  ASSERT_TRUE(endpoint.is_number());
+  EXPECT_DOUBLE_EQ(endpoint.as_number(), 2957003.0);
+
+  const Value overflow = EvalSource1904("=EOMONTH(DATE(9999, 12, 1), 1)");
+  ASSERT_TRUE(overflow.is_error());
+  EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, EdateAcceptsFinalDayTimeFraction) {
+  const Value endpoint = EvalSource1904("=EDATE(2957003.999988426, 0)");
+  ASSERT_TRUE(endpoint.is_number());
+  EXPECT_DOUBLE_EQ(endpoint.as_number(), 2957003.0);
+}
+
+TEST(DateTime1904, EdateFinalDayTimeFractionCannotCrossUpperEndpoint) {
+  const Value overflow = EvalSource1904("=EDATE(2957003.999988426, 1)");
+  ASSERT_TRUE(overflow.is_error());
+  EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, EomonthAcceptsFinalDayTimeFraction) {
+  const Value endpoint = EvalSource1904("=EOMONTH(2957003.999988426, 0)");
+  ASSERT_TRUE(endpoint.is_number());
+  EXPECT_DOUBLE_EQ(endpoint.as_number(), 2957003.0);
+}
+
+TEST(DateTime1904, EomonthFinalDayTimeFractionCannotCrossUpperEndpoint) {
+  const Value overflow = EvalSource1904("=EOMONTH(2957003.999988426, 1)");
+  ASSERT_TRUE(overflow.is_error());
+  EXPECT_EQ(overflow.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, EomonthGiganticMonthOffsetIsNum) {
+  const Value v = EvalSource1904("=EOMONTH(DATE(2024, 1, 1), 1E20)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(DateTime1904, EomonthBooleanPrecedenceBeatsGiganticMonthOffset) {
+  const Value v = EvalSource1904("=EOMONTH(TRUE, 1E20)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(DateTime1904, EomonthLowerBoundaryControl) {
+  const Value v = EvalSource1904("=EOMONTH(DATE(1904, 1, 1), 0)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 30.0);
+}
+
 TEST(DateTime1904, YearMonthDayInvertUnder1904) {
   // Serial 42369 is 2020-01-01 in the 1904 system.
   const Value y = EvalSource1904("=YEAR(42369)");
@@ -1098,6 +1438,193 @@ TEST(DateTime1904, TextNumericFormatUnaffectedByEpoch) {
   const Value v = EvalSource1904("=TEXT(1234.5,\"0.00\")");
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "1234.50");
+}
+
+TEST(DateTimeSerialZero, 1900SystemKeepsFictitiousDayAlias) {
+  const Value year = EvalSource("=YEAR(0)");
+  const Value month = EvalSource("=MONTH(0)");
+  const Value day = EvalSource("=DAY(0)");
+  ASSERT_TRUE(year.is_number());
+  ASSERT_TRUE(month.is_number());
+  ASSERT_TRUE(day.is_number());
+  EXPECT_DOUBLE_EQ(year.as_number(), 1900.0);
+  EXPECT_DOUBLE_EQ(month.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(day.as_number(), 0.0);
+}
+
+TEST(DateTimeSerialZero, 1904SystemUsesRealEpochDay) {
+  const Value year = EvalSource1904("=YEAR(0)");
+  const Value month = EvalSource1904("=MONTH(0)");
+  const Value day = EvalSource1904("=DAY(0)");
+  ASSERT_TRUE(year.is_number());
+  ASSERT_TRUE(month.is_number());
+  ASSERT_TRUE(day.is_number());
+  EXPECT_DOUBLE_EQ(year.as_number(), 1904.0);
+  EXPECT_DOUBLE_EQ(month.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(day.as_number(), 1.0);
+}
+
+TEST(DateTime1904, RawTextUsesCalendarDateAcrossExtractors) {
+  const Value year = EvalSource1904("=YEAR(\"2024-03-15\")");
+  const Value month = EvalSource1904("=MONTH(\"2024-03-15\")");
+  const Value day = EvalSource1904("=DAY(\"2024-03-15\")");
+  const Value weekday = EvalSource1904("=WEEKDAY(\"2024-03-15\")");
+  const Value weeknum = EvalSource1904("=WEEKNUM(\"2024-03-15\")");
+  const Value isoweeknum = EvalSource1904("=ISOWEEKNUM(\"2024-03-15\")");
+  ASSERT_TRUE(year.is_number());
+  ASSERT_TRUE(month.is_number());
+  ASSERT_TRUE(day.is_number());
+  ASSERT_TRUE(weekday.is_number());
+  ASSERT_TRUE(weeknum.is_number());
+  ASSERT_TRUE(isoweeknum.is_number());
+  EXPECT_DOUBLE_EQ(year.as_number(), 2024.0);
+  EXPECT_DOUBLE_EQ(month.as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(day.as_number(), 15.0);
+  EXPECT_DOUBLE_EQ(weekday.as_number(), 6.0);  // Friday, Sunday-first.
+  EXPECT_DOUBLE_EQ(weeknum.as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(isoweeknum.as_number(), 11.0);
+}
+
+TEST(DateTime1904, RawTextDayCountsMatchDatevalueNumbers) {
+  const Value datedif_raw = EvalSource1904("=DATEDIF(\"2024-01-01\",DATE(2024,12,31),\"D\")");
+  const Value datedif_datevalue = EvalSource1904("=DATEDIF(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31),\"D\")");
+  const Value days360_raw = EvalSource1904("=DAYS360(\"2024-01-01\",DATE(2024,12,31))");
+  const Value days360_datevalue = EvalSource1904("=DAYS360(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31))");
+  const Value days_raw = EvalSource1904("=DAYS(\"2024-03-15\",DATE(2024,3,14))");
+  const Value days_datevalue = EvalSource1904("=DAYS(DATEVALUE(\"2024-03-15\"),DATE(2024,3,14))");
+  ASSERT_TRUE(datedif_raw.is_number());
+  ASSERT_TRUE(datedif_datevalue.is_number());
+  ASSERT_TRUE(days360_raw.is_number());
+  ASSERT_TRUE(days360_datevalue.is_number());
+  ASSERT_TRUE(days_raw.is_number());
+  ASSERT_TRUE(days_datevalue.is_number());
+  EXPECT_DOUBLE_EQ(datedif_raw.as_number(), 365.0);
+  EXPECT_DOUBLE_EQ(datedif_datevalue.as_number(), 365.0);
+  EXPECT_DOUBLE_EQ(days360_raw.as_number(), 360.0);
+  EXPECT_DOUBLE_EQ(days360_datevalue.as_number(), 360.0);
+  EXPECT_DOUBLE_EQ(days_raw.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(days_datevalue.as_number(), 1.0);
+}
+
+TEST(DateTime1904, DaysBroadcastsArrayArguments) {
+  const Value result = EvalSource1904("=DAYS({\"2024-03-15\",\"2024-03-16\"},DATE(2024,3,14))");
+  ASSERT_TRUE(result.is_array());
+  ASSERT_EQ(result.as_array_rows(), 1U);
+  ASSERT_EQ(result.as_array_cols(), 2U);
+  ASSERT_TRUE(result.as_array()->cells[0].is_number());
+  ASSERT_TRUE(result.as_array()->cells[1].is_number());
+  EXPECT_DOUBLE_EQ(result.as_array()->cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(result.as_array()->cells[1].as_number(), 2.0);
+}
+
+TEST(DateTime1904, LegacyMonthFunctionsUseRawTextInputCoordinateAfterValidation) {
+  const Value edate_raw = EvalSource1904("=EDATE(\"2024-03-15\",1)");
+  const Value edate_datevalue = EvalSource1904("=EDATE(DATEVALUE(\"2024-03-15\"),1)");
+  const Value eomonth_raw = EvalSource1904("=EOMONTH(\"2024-03-15\",0)");
+  const Value eomonth_datevalue = EvalSource1904("=EOMONTH(DATEVALUE(\"2024-03-15\"),0)");
+  ASSERT_TRUE(edate_raw.is_number());
+  ASSERT_TRUE(edate_datevalue.is_number());
+  ASSERT_TRUE(eomonth_raw.is_number());
+  ASSERT_TRUE(eomonth_datevalue.is_number());
+  EXPECT_DOUBLE_EQ(edate_raw.as_number(), 42473.0);
+  EXPECT_DOUBLE_EQ(edate_datevalue.as_number(), 43935.0);
+  EXPECT_DOUBLE_EQ(eomonth_raw.as_number(), 42459.0);
+  EXPECT_DOUBLE_EQ(eomonth_datevalue.as_number(), 43920.0);
+}
+
+TEST(DateTime1904, YearfracRawTextUsesLegacyEndpoints) {
+  const Value raw_start = EvalSource1904("=YEARFRAC(\"2024-01-01\",DATE(2024,12,31),3)");
+  const Value raw_end = EvalSource1904("=YEARFRAC(DATE(2024,1,1),\"2024-12-31\",3)");
+  const Value datevalue_start = EvalSource1904("=YEARFRAC(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31),3)");
+  const Value datevalue_end = EvalSource1904("=YEARFRAC(DATE(2024,1,1),DATEVALUE(\"2024-12-31\"),3)");
+  const Value both_raw_basis3 = EvalSource1904("=YEARFRAC(\"2024-01-01\",\"2024-12-31\",3)");
+  const Value both_raw_basis1 = EvalSource1904("=YEARFRAC(\"2024-01-01\",\"2024-12-31\",1)");
+  ASSERT_TRUE(raw_start.is_number());
+  ASSERT_TRUE(raw_end.is_number());
+  ASSERT_TRUE(datevalue_start.is_number());
+  ASSERT_TRUE(datevalue_end.is_number());
+  ASSERT_TRUE(both_raw_basis3.is_number());
+  ASSERT_TRUE(both_raw_basis1.is_number());
+  EXPECT_DOUBLE_EQ(raw_start.as_number(), 1827.0 / 365.0);
+  EXPECT_DOUBLE_EQ(raw_end.as_number(), 1097.0 / 365.0);
+  EXPECT_DOUBLE_EQ(datevalue_start.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(datevalue_end.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(both_raw_basis3.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(both_raw_basis1.as_number(), 365.0 / 366.0);
+}
+
+TEST(DateTime1904, LegacyEdateTextBoundaryProjections) {
+  struct Case {
+    const char* date;
+    int months;
+    double expected;
+  };
+  constexpr Case cases[] = {
+      {"1904-01-01", 0, -1462.0}, {"1907-12-31", 0, -2.0},   {"1908-01-01", 0, -1.0},
+      {"1908-01-02", 0, 0.0},     {"1908-01-01", -1, -32.0}, {"2024-02-29", 0, 42427.0},
+  };
+  for (const Case& tc : cases) {
+    const std::string formula = "=EDATE(\"" + std::string(tc.date) + "\"," + std::to_string(tc.months) + ")";
+    const Value v = EvalSource1904(formula);
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_DOUBLE_EQ(v.as_number(), tc.expected) << formula;
+  }
+}
+
+TEST(DateTime1904, LegacyEomonthTextBoundaryProjections) {
+  struct Case {
+    const char* date;
+    double expected;
+  };
+  constexpr Case cases[] = {
+      {"1904-01-01", -1431.0}, {"1907-12-31", -1.0},    {"1908-01-01", -1.0},
+      {"1908-01-02", 30.0},    {"2024-02-29", 42428.0},
+  };
+  for (const Case& tc : cases) {
+    const std::string formula = "=EOMONTH(\"" + std::string(tc.date) + "\",0)";
+    const Value v = EvalSource1904(formula);
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_DOUBLE_EQ(v.as_number(), tc.expected) << formula;
+  }
+}
+
+TEST(DateTime1904, PreEpochRawDateTextIsValueError) {
+  const Value year = EvalSource1904("=YEAR(\"1903-12-31\")");
+  const Value edate = EvalSource1904("=EDATE(\"1903-12-31\",0)");
+  const Value eomonth = EvalSource1904("=EOMONTH(\"1903-12-31\",0)");
+  ASSERT_TRUE(year.is_error());
+  ASSERT_TRUE(edate.is_error());
+  ASSERT_TRUE(eomonth.is_error());
+  EXPECT_EQ(year.as_error(), ErrorCode::Value);
+  EXPECT_EQ(edate.as_error(), ErrorCode::Value);
+  EXPECT_EQ(eomonth.as_error(), ErrorCode::Value);
+}
+
+TEST(DateTime1904, NumericTextWhitespaceAndTimeOnlyStayNonDirect) {
+  const Value numeric_text = EvalSource1904("=YEAR(\"42369\")");
+  const Value whitespace = EvalSource1904("=YEAR(\" 2024-03-15 \")");
+  const Value time_value = EvalSource1904("=YEAR(\"12:00\")");
+  ASSERT_TRUE(numeric_text.is_number());
+  ASSERT_TRUE(whitespace.is_error());
+  ASSERT_TRUE(time_value.is_number());
+  EXPECT_DOUBLE_EQ(numeric_text.as_number(), 2020.0);
+  EXPECT_EQ(whitespace.as_error(), ErrorCode::Value);
+  EXPECT_DOUBLE_EQ(time_value.as_number(), 1904.0);
+}
+
+TEST(DateTime1904, NumericAndDatevalueMonthBoundsStayCanonical) {
+  const Value numeric_lower = EvalSource1904("=EDATE(0,0)");
+  const Value datevalue_lower = EvalSource1904("=EDATE(DATEVALUE(\"1904-01-01\"),0)");
+  const Value numeric_upper = EvalSource1904("=EDATE(DATE(9999,12,31),0)");
+  const Value datevalue_upper = EvalSource1904("=EDATE(DATEVALUE(\"9999-12-31\"),0)");
+  ASSERT_TRUE(numeric_lower.is_number());
+  ASSERT_TRUE(datevalue_lower.is_number());
+  ASSERT_TRUE(numeric_upper.is_number());
+  ASSERT_TRUE(datevalue_upper.is_number());
+  EXPECT_DOUBLE_EQ(numeric_lower.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(datevalue_lower.as_number(), 0.0);
+  EXPECT_DOUBLE_EQ(numeric_upper.as_number(), 2957003.0);
+  EXPECT_DOUBLE_EQ(datevalue_upper.as_number(), 2957003.0);
 }
 
 }  // namespace

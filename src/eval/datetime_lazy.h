@@ -2,15 +2,16 @@
 // Lazy-form routing for the date1904-sensitive calendar builtins. The
 // calendar functions that interpret or produce a date serial (DATE, YEAR,
 // MONTH, DAY, WEEKDAY, EDATE, EOMONTH, WEEKNUM, ISOWEEKNUM, YEARFRAC,
-// DATEDIF, DAYS360, DATEVALUE, TODAY, NOW) must honour the workbook's
+// DATEDIF, DAYS360, DAYS, DATEVALUE, TODAY, NOW) must honour the workbook's
 // `<workbookPr date1904>` epoch, which is only reachable via `EvalContext`.
 // The eager `FunctionDef` calling convention (`const Value*`, arity, Arena)
 // cannot carry it, so these functions are served through a single lazy
 // impl (tree-walker) and a shared `DateEntry` lookup (the VM, which has no
 // call AST and therefore reuses the eager-style impl directly).
 //
-// Time-of-day functions (TIME / HOUR / MINUTE / SECOND / TIMEVALUE) and the
-// pure serial-difference DAYS are date1904-independent and stay eager.
+// Time-of-day functions (TIME / HOUR / MINUTE / SECOND / TIMEVALUE) remain
+// date1904-independent and eager. DAYS is date-aware and therefore follows
+// the lazy route as well, which also supplies its array broadcasting.
 
 #ifndef FORMULON_EVAL_DATETIME_LAZY_H_
 #define FORMULON_EVAL_DATETIME_LAZY_H_

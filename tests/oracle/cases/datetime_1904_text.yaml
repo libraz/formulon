@@ -1,0 +1,337 @@
+suite: datetime_1904_text
+description: >
+  Mac Excel 16.112 ja-JP date1904 probes for date-text coercion across
+  calendar extractors, day-count functions, serial zero, cell references,
+  whitespace, time-only input, and pre-epoch strings.
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+options:
+  date1904: true
+  iterative: false
+cases:
+  # -- Direct ISO date text ------------------------------------------------
+  - id: datevalue_text_2024_03_15
+    formula: "=DATEVALUE(\"2024-03-15\")"
+
+  - id: year_text_2024_03_15
+    formula: "=YEAR(\"2024-03-15\")"
+
+  - id: month_text_2024_03_15
+    formula: "=MONTH(\"2024-03-15\")"
+
+  - id: day_text_2024_03_15
+    formula: "=DAY(\"2024-03-15\")"
+
+  - id: weekday_text_2024_03_15
+    formula: "=WEEKDAY(\"2024-03-15\")"
+
+  - id: weeknum_text_2024_03_15
+    formula: "=WEEKNUM(\"2024-03-15\")"
+
+  - id: isoweeknum_text_2024_03_15
+    formula: "=ISOWEEKNUM(\"2024-03-15\")"
+
+  - id: edate_text_2024_03_15_plus_one
+    formula: "=EDATE(\"2024-03-15\",1)"
+
+  - id: edate_text_2024_03_15_zero
+    description: "Raw text EDATE month-zero sentinel (diagnostic of Excel legacy coercion)"
+    formula: "=EDATE(\"2024-03-15\",0)"
+
+  - id: n_edate_text_2024_03_15_zero
+    description: "N() raw text EDATE month-zero sentinel"
+    formula: "=N(EDATE(\"2024-03-15\",0))"
+
+  - id: eomonth_text_2024_03_15_zero
+    description: "Raw text EOMONTH month-zero sentinel (diagnostic of Excel legacy coercion)"
+    formula: "=EOMONTH(\"2024-03-15\",0)"
+
+  - id: edate_text_leap_2024_02_29_zero
+    description: "Raw leap-date text EDATE month-zero sentinel"
+    formula: "=EDATE(\"2024-02-29\",0)"
+
+  - id: n_edate_text_leap_2024_02_29_zero
+    description: "N() raw leap-date text EDATE month-zero sentinel"
+    formula: "=N(EDATE(\"2024-02-29\",0))"
+
+  - id: eomonth_text_leap_2024_02_29_zero
+    description: "Raw leap-date text EOMONTH month-zero sentinel"
+    formula: "=EOMONTH(\"2024-02-29\",0)"
+
+  - id: n_eomonth_text_leap_2024_02_29_zero
+    description: "N() raw leap-date text EOMONTH month-zero sentinel"
+    formula: "=N(EOMONTH(\"2024-02-29\",0))"
+
+  - id: edate_text_threshold_1908_01_01_zero
+    description: "Raw text EDATE threshold date 1908-01-01"
+    formula: "=EDATE(\"1908-01-01\",0)"
+
+  - id: n_edate_text_threshold_1908_01_01_zero
+    description: "N() raw text EDATE threshold date 1908-01-01"
+    formula: "=N(EDATE(\"1908-01-01\",0))"
+
+  - id: eomonth_text_threshold_1908_01_01_zero
+    description: "Raw text EOMONTH threshold date 1908-01-01"
+    formula: "=EOMONTH(\"1908-01-01\",0)"
+
+  - id: n_eomonth_text_threshold_1908_01_01_zero
+    description: "N() raw text EOMONTH threshold date 1908-01-01"
+    formula: "=N(EOMONTH(\"1908-01-01\",0))"
+
+  - id: edate_text_threshold_1908_01_02_zero
+    description: "Raw text EDATE threshold date 1908-01-02"
+    formula: "=EDATE(\"1908-01-02\",0)"
+
+  - id: n_edate_text_threshold_1908_01_02_zero
+    description: "N() raw text EDATE threshold date 1908-01-02"
+    formula: "=N(EDATE(\"1908-01-02\",0))"
+
+  - id: eomonth_text_threshold_1908_01_02_zero
+    description: "Raw text EOMONTH threshold date 1908-01-02"
+    formula: "=EOMONTH(\"1908-01-02\",0)"
+
+  - id: n_eomonth_text_threshold_1908_01_02_zero
+    description: "N() raw text EOMONTH threshold date 1908-01-02"
+    formula: "=N(EOMONTH(\"1908-01-02\",0))"
+
+  - id: edate_native_2024_03_15_plus_one
+    description: "Native 1904 DATE control for EDATE"
+    formula: "=EDATE(DATE(2024,3,15),1)"
+
+  - id: eomonth_native_2024_03_15_zero
+    description: "Native 1904 DATE control for EOMONTH"
+    formula: "=EOMONTH(DATE(2024,3,15),0)"
+
+  - id: edate_text_equals_native_date
+    description: "Boolean guard comparing EDATE text with native 1904 DATE"
+    formula: "=EDATE(\"2024-03-15\",1)=DATE(2024,4,15)"
+
+  - id: edate_text_minus_native_epoch
+    description: "Numeric guard for EDATE text against native 1904 epoch"
+    formula: "=N(EDATE(\"2024-03-15\",1))-N(DATE(1904,1,1))"
+
+  - id: eomonth_text_equals_native_date
+    description: "Boolean guard comparing EOMONTH text with native 1904 DATE"
+    formula: "=EOMONTH(\"2024-03-15\",0)=DATE(2024,3,31)"
+
+  - id: eomonth_text_minus_native_epoch
+    description: "Numeric guard for EOMONTH text against native 1904 epoch"
+    formula: "=N(EOMONTH(\"2024-03-15\",0))-N(DATE(1904,1,1))"
+
+  # -- Mixed text / native 1904 serials -----------------------------------
+  - id: yearfrac_text_to_native_basis_3
+    description: "YEARFRAC with text start and native 1904 serial end"
+    formula: "=YEARFRAC(\"2024-01-01\",DATE(2024,12,31),3)"
+
+  - id: yearfrac_native_to_text_basis_3
+    description: "YEARFRAC with native 1904 serial start and text end"
+    formula: "=YEARFRAC(DATE(2024,1,1),\"2024-12-31\",3)"
+
+  - id: yearfrac_datevalue_to_native_basis_3
+    description: "YEARFRAC with DATEVALUE text start and native 1904 serial end"
+    formula: "=YEARFRAC(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31),3)"
+
+  - id: yearfrac_datevalue_to_datevalue_basis_3
+    description: "YEARFRAC with DATEVALUE text at both endpoints"
+    formula: "=YEARFRAC(DATEVALUE(\"2024-01-01\"),DATEVALUE(\"2024-12-31\"),3)"
+
+  - id: yearfrac_text_to_text_basis_3
+    description: "YEARFRAC keeps matching raw-text endpoints in the legacy coordinate"
+    formula: "=YEARFRAC(\"2024-01-01\",\"2024-12-31\",3)"
+
+  - id: yearfrac_text_to_text_basis_0
+    description: "YEARFRAC basis 0 uses the raw-text legacy calendar fields"
+    formula: "=YEARFRAC(\"2024-01-01\",\"2024-12-31\",0)"
+
+  - id: yearfrac_text_to_text_basis_1
+    description: "YEARFRAC basis 1 uses the raw-text legacy leap-year fields"
+    formula: "=YEARFRAC(\"2024-01-01\",\"2024-12-31\",1)"
+
+  - id: yearfrac_text_to_datevalue_basis_3
+    description: "YEARFRAC with raw text start and DATEVALUE text end"
+    formula: "=YEARFRAC(\"2024-01-01\",DATEVALUE(\"2024-12-31\"),3)"
+
+  - id: yearfrac_datevalue_to_text_basis_3
+    description: "YEARFRAC with DATEVALUE text start and raw text end"
+    formula: "=YEARFRAC(DATEVALUE(\"2024-01-01\"),\"2024-12-31\",3)"
+
+  - id: datedif_text_to_native_days
+    description: "DATEDIF with text start and native 1904 serial end"
+    formula: "=DATEDIF(\"2024-01-01\",DATE(2024,12,31),\"D\")"
+
+  - id: datedif_native_to_text_days
+    description: "DATEDIF with native 1904 serial start and text end"
+    formula: "=DATEDIF(DATE(2024,1,1),\"2024-12-31\",\"D\")"
+
+  - id: datedif_text_matches_datevalue_days
+    description: "DATEDIF raw text agrees with DATEVALUE text coercion"
+    formula: "=DATEDIF(\"2024-01-01\",DATE(2024,12,31),\"D\")=DATEDIF(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31),\"D\")"
+
+  - id: days360_text_to_native
+    description: "DAYS360 with text start and native 1904 serial end"
+    formula: "=DAYS360(\"2024-01-01\",DATE(2024,12,31))"
+
+  - id: days360_native_to_text
+    description: "DAYS360 with native 1904 serial start and text end"
+    formula: "=DAYS360(DATE(2024,1,1),\"2024-12-31\")"
+
+  - id: days360_text_matches_datevalue
+    description: "DAYS360 raw text agrees with DATEVALUE text coercion"
+    formula: "=DAYS360(\"2024-01-01\",DATE(2024,12,31))=DAYS360(DATEVALUE(\"2024-01-01\"),DATE(2024,12,31))"
+
+  - id: days_text_2024_03_15_to_native_2024_03_14
+    description: "DAYS distinguishes a text date from a native 1904 serial"
+    formula: "=DAYS(\"2024-03-15\",DATE(2024,3,14))"
+
+  - id: days_native_2024_03_14_to_text_2024_03_15
+    description: "Reverse DAYS ordering for the same mixed operands"
+    formula: "=DAYS(DATE(2024,3,14),\"2024-03-15\")"
+
+  - id: days_text_matches_datevalue
+    description: "DAYS raw text agrees with DATEVALUE text coercion"
+    formula: "=DAYS(\"2024-03-15\",DATE(2024,3,14))=DAYS(DATEVALUE(\"2024-03-15\"),DATE(2024,3,14))"
+
+  - id: days_datevalue_rebased_text_to_native
+    description: "DAYS date-aware coercion of DATEVALUE text and a native 1904 serial"
+    formula: "=DAYS(DATEVALUE(\"2024-03-15\"),DATE(2024,3,14))"
+
+  - id: datevalue_rebased_minus_native
+    description: "N() keeps same-date text and native serial arithmetic numeric"
+    formula: "=N(DATEVALUE(\"2024-03-15\"))-N(DATE(2024,3,15))"
+
+  - id: datevalue_numeric_minus_native
+    description: "N() compares DATEVALUE text with the preceding native 1904 date serial"
+    formula: "=N(DATEVALUE(\"2024-03-15\"))-N(DATE(2024,3,14))"
+
+  - id: n_edate_text_2024_03_15_plus_one
+    description: "N() control for EDATE text coercion"
+    formula: "=N(EDATE(\"2024-03-15\",1))"
+
+  - id: n_eomonth_text_2024_03_15_zero
+    description: "N() control for EOMONTH text coercion"
+    formula: "=N(EOMONTH(\"2024-03-15\",0))"
+
+  - id: n_date_native_2024_04_15
+    description: "N() control for a native 1904 DATE result"
+    formula: "=N(DATE(2024,4,15))"
+
+  - id: n_datevalue_text_2024_03_15
+    description: "N() control for DATEVALUE text coercion"
+    formula: "=N(DATEVALUE(\"2024-03-15\"))"
+
+  - id: n_text_date_2024_03_15
+    description: "N() control for a bare date string"
+    formula: "=N(\"2024-03-15\")"
+
+  # -- Serial zero and the 1904 epoch -------------------------------------
+  - id: year_serial_zero
+    formula: "=YEAR(0)"
+
+  - id: date1904_native_epoch_serial
+    description: "Native DATE confirms serial zero is 1904-01-01 in this workbook"
+    formula: "=N(DATE(1904,1,1))"
+
+  - id: date1904_native_2024_03_15_serial
+    description: "Native DATE serial for 2024-03-15 in the 1904 date system"
+    formula: "=N(DATE(2024,3,15))"
+
+  - id: date1904_native_epoch_year
+    description: "Native DATE at serial zero resolves to calendar year 1904"
+    formula: "=YEAR(DATE(1904,1,1))"
+
+  - id: month_serial_zero
+    formula: "=MONTH(0)"
+
+  - id: day_serial_zero
+    formula: "=DAY(0)"
+
+  - id: weekday_serial_zero
+    formula: "=WEEKDAY(0)"
+
+  - id: datevalue_text_1904_01_01
+    formula: "=DATEVALUE(\"1904-01-01\")"
+
+  - id: year_text_1904_01_01
+    formula: "=YEAR(\"1904-01-01\")"
+
+  # -- Input contracts -----------------------------------------------------
+  - id: year_text_date_cell_reference
+    description: "Diagnostic only: Excel auto-coerces setup text to a native date when written to a cell"
+    setup:
+      A1: "2024-03-15"
+    formula: "=YEAR(A1)"
+
+  - id: year_formula_text_date_cell_reference
+    description: "YEAR reads text returned by a cell formula through a reference"
+    setup:
+      A1: '="2024-03-15"'
+    formula: "=YEAR(A1)"
+
+  - id: datevalue_formula_text_date_cell_reference
+    description: "DATEVALUE reads text returned by a cell formula through a reference"
+    setup:
+      A1: '="2024-03-15"'
+    formula: "=DATEVALUE(A1)"
+
+  - id: istext_formula_text_date_cell_reference
+    description: "Valid text-reference gate: ISTEXT proves the cell-reference input remains text"
+    setup:
+      A1: '="2024-03-15"'
+    formula: "=ISTEXT(A1)"
+
+  - id: year_numeric_text_zero
+    formula: "=YEAR(\"0\")"
+
+  - id: datevalue_numeric_text_zero
+    formula: "=DATEVALUE(\"0\")"
+
+  - id: year_time_only_text
+    description: "YEAR receives time-only text"
+    formula: "=YEAR(\"12:00\")"
+
+  - id: year_whitespace_padded_date
+    formula: "=YEAR(\" 2024-03-15 \" )"
+
+  - id: datevalue_whitespace_padded_date
+    formula: "=DATEVALUE(\" 2024-03-15 \" )"
+
+  # -- Pre-epoch text: preserve function-specific behavior ----------------
+  - id: datevalue_text_pre_epoch_1903_12_31
+    formula: "=DATEVALUE(\"1903-12-31\")"
+
+  - id: year_text_pre_epoch_1903_12_31
+    formula: "=YEAR(\"1903-12-31\")"
+
+  - id: edate_text_pre_epoch_1903_12_31
+    formula: "=EDATE(\"1903-12-31\",0)"
+
+  - id: eomonth_text_pre_epoch_1903_12_31
+    formula: "=EOMONTH(\"1903-12-31\",0)"
+
+  - id: edate_text_lower_boundary_1904_01_01_zero
+    description: "Raw text EDATE at the 1904 lower boundary"
+    formula: "=EDATE(\"1904-01-01\",0)"
+
+  - id: n_edate_text_lower_boundary_1904_01_01_zero
+    description: "N() raw text EDATE at the 1904 lower boundary"
+    formula: "=N(EDATE(\"1904-01-01\",0))"
+
+  - id: eomonth_text_lower_boundary_1904_01_01_zero
+    description: "Raw text EOMONTH at the 1904 lower boundary"
+    formula: "=EOMONTH(\"1904-01-01\",0)"
+
+  - id: n_eomonth_text_lower_boundary_1904_01_01_zero
+    description: "N() raw text EOMONTH at the 1904 lower boundary"
+    formula: "=N(EOMONTH(\"1904-01-01\",0))"
+
+  # -- Numeric controls ----------------------------------------------------
+  - id: year_numeric_negative_one
+    formula: "=YEAR(-1)"
+
+  - id: year_existing_1904_serial
+    description: "43904 is 2024-03-15 in the 1904 date system"
+    formula: "=YEAR(43904)"
+
+  - id: year_existing_date_serial
+    description: "Native DATE result remains a date-aware serial"
+    formula: "=YEAR(N(DATE(2024,3,15)))"

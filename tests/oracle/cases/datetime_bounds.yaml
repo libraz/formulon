@@ -1,0 +1,90 @@
+suite: datetime_bounds
+description: DATE / EDATE / EOMONTH upper-bound and overflow probes in the 1900 date system
+tolerance: { abs: 1.0e-12, rel: 1.0e-12 }
+locale: ja-JP
+options:
+  date1904: false
+  iterative: false
+cases:
+  # Keep the endpoint and overflow probes independent: each formula is
+  # evaluated in its own isolated case sheet by the oracle driver.
+  - id: date_9999_12_31
+    description: "DATE upper endpoint"
+    formula: "=DATE(9999,12,31)"
+
+  - id: date_9999_11_61_normalises_to_endpoint
+    description: "DATE day overflow that normalises to the upper endpoint"
+    formula: "=DATE(9999,11,61)"
+
+  - id: date_9999_12_32_overflow
+    description: "DATE one day beyond the upper endpoint"
+    formula: "=DATE(9999,12,32)"
+
+  - id: edate_endpoint_zero_months
+    description: "EDATE at the upper endpoint with zero month offset"
+    formula: "=EDATE(DATE(9999,12,31),0)"
+
+  - id: edate_dec_1_plus_one_month_overflow
+    description: "EDATE from December 1 across the upper endpoint"
+    formula: "=EDATE(DATE(9999,12,1),1)"
+
+  - id: eomonth_dec_1_zero_months_endpoint
+    description: "EOMONTH of the final month at zero offset"
+    formula: "=EOMONTH(DATE(9999,12,1),0)"
+
+  - id: eomonth_dec_1_plus_one_month_overflow
+    description: "EOMONTH one month beyond the final month"
+    formula: "=EOMONTH(DATE(9999,12,1),1)"
+
+  - id: edate_endpoint_plus_one_day_overflow
+    description: "EDATE of max plus one day with zero month offset"
+    formula: "=EDATE(DATE(9999,12,31)+1,0)"
+
+  - id: edate_large_month_offset_overflow
+    description: "EDATE with an extremely large month offset"
+    formula: "=EDATE(DATE(2024,1,1),1E20)"
+
+  - id: eomonth_true_month_offset
+    description: "EOMONTH boolean TRUE month offset"
+    formula: "=EOMONTH(DATE(2024,1,1),TRUE)"
+
+  - id: edate_error_input_large_month_offset
+    description: "EDATE error input with an extremely large month offset"
+    formula: "=EDATE(1/0,1E20)"
+
+  - id: date_max_serial_1900
+    description: "Numeric serial for the 1900-system upper endpoint"
+    formula: "=N(DATE(9999,12,31))"
+
+  # Probe the final representable day with a non-zero time fraction through
+  # the same setup anchor. The month helpers must discard that fraction for
+  # zero-month calls and reject a one-month overflow.
+  - id: year_final_day_time_fraction
+    description: "YEAR of the final day at 23:59:59"
+    setup:
+      A1: { kind: formula, formula: "=DATE(9999,12,31)+TIME(23,59,59)" }
+    formula: "=YEAR(A1)"
+
+  - id: edate_final_day_time_fraction_zero_months
+    description: "EDATE zero-month projection of the final day at 23:59:59"
+    setup:
+      A1: { kind: formula, formula: "=DATE(9999,12,31)+TIME(23,59,59)" }
+    formula: "=N(EDATE(A1,0))"
+
+  - id: eomonth_final_day_time_fraction_zero_months
+    description: "EOMONTH zero-month projection of the final day at 23:59:59"
+    setup:
+      A1: { kind: formula, formula: "=DATE(9999,12,31)+TIME(23,59,59)" }
+    formula: "=N(EOMONTH(A1,0))"
+
+  - id: edate_final_day_time_fraction_plus_one_month_overflow
+    description: "EDATE one-month overflow from the final day at 23:59:59"
+    setup:
+      A1: { kind: formula, formula: "=DATE(9999,12,31)+TIME(23,59,59)" }
+    formula: "=EDATE(A1,1)"
+
+  - id: eomonth_final_day_time_fraction_plus_one_month_overflow
+    description: "EOMONTH one-month overflow from the final day at 23:59:59"
+    setup:
+      A1: { kind: formula, formula: "=DATE(9999,12,31)+TIME(23,59,59)" }
+    formula: "=EOMONTH(A1,1)"

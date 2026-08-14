@@ -45,6 +45,12 @@ struct HMS {
   unsigned s;
 };
 
+/// Gap between the two Excel date systems, in days: the 1904-system serial
+/// for a calendar day is exactly this much less than its 1900-system serial.
+/// Shared by the calendar builtins and by callers that must move a serial
+/// produced under the 1900 system into the workbook's epoch.
+inline constexpr double kDate1904EpochGap = 1462.0;
+
 /// Last valid day-of-month for a Gregorian (year, month) pair, under the
 /// Gregorian leap rule. Months outside `[1, 12]` return 31 rather than
 /// asserting: every caller normalises first, and the fallback keeps a

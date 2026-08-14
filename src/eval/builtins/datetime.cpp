@@ -54,6 +54,32 @@ using date_time::days_in_month;
 // Excel's maximum serial value: 2958465 = 9999-12-31. Serial 2958466 would
 // map to 10000-01-01 which is outside the representable range.
 constexpr double kExcelMaxSerial = 2958465.0;
+using date_time::kDate1904EpochGap;
+
+double max_date_serial(bool date1904) noexcept {
+  return date_time::serial_from_ymd(9999, 12, 31, date1904);
+}
+
+bool is_valid_generated_date_serial(double serial, bool date1904) noexcept {
+  return std::isfinite(serial) && serial >= 0.0 && serial <= max_date_serial(date1904);
+}
+
+bool is_valid_date_time_serial(double serial, bool date1904) noexcept {
+  return std::isfinite(serial) && serial >= 0.0 && serial < max_date_serial(date1904) + 1.0;
+}
+
+double serial_from_date_components(int y, unsigned m, long long d, bool date1904) noexcept {
+  // Preserve the 1900-system ghost-day spelling before normalising the raw
+  // components into a civil date. All other dates can be converted from the
+  // civil day of the first of the month plus the signed day offset, avoiding
+  // any signed-to-unsigned wrap for valid negative day arguments.
+  if (!date1904 && y == 1900 && m == 2u && d == 29) {
+    return 60.0;
+  }
+  const std::int64_t civil_day = date_time::days_from_civil(y, m, 1u) + d - 1;
+  const date_time::YMD normalised = date_time::civil_from_days(civil_day);
+  return date_time::serial_from_ymd(normalised.y, normalised.m, normalised.d, date1904);
+}
 
 Expected<double, ErrorCode> coerce_serial(const Value& v) {
   auto n = coerce_to_number(v);
@@ -64,6 +90,78 @@ Expected<double, ErrorCode> coerce_serial(const Value& v) {
     return ErrorCode::Num;
   }
   return n.value();
+}
+
+// A date argument keeps the raw serial produced by generic numeric coercion,
+// together with the one provenance bit that the 1904 workbook needs. Excel's
+// direct date-text coercion starts from the parser's 1900-system date, while
+// a native Number (including a DATEVALUE result) already carries the
+// workbook's serial convention. Keeping this distinction local avoids
+// changing the shared `coerce_to_number` contract for unrelated builtins.
+struct CoercedDateArg {
+  double serial;
+  bool direct_date_text;
+};
+
+Expected<CoercedDateArg, ErrorCode> coerce_date_arg(const Value& v, bool date1904) {
+  auto n = coerce_to_number(v);
+  if (!n) {
+    return n.error();
+  }
+  CoercedDateArg out{n.value(), false};
+  if (!date1904 || v.kind() != ValueKind::Text) {
+    return out;
+  }
+
+  double parsed_serial = 0.0;
+  double parsed_frac = 0.0;
+  bool has_date = false;
+  bool has_time = false;
+  if (!date_parse::parse_date_time_text(v.as_text(), &parsed_serial, &parsed_frac, &has_date, &has_time) || !has_date) {
+    return out;
+  }
+
+  // The parser emits a 1900-system date serial. Reconstruct through YMD so
+  // the canonical normal serial is explicit (including serial 60's ghost
+  // spelling), then use the 1904 conversion only to reject dates before the
+  // workbook epoch. The time fraction survives the rebasing unchanged.
+  const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(parsed_serial), /*date1904=*/false);
+  const double workbook_serial = date_time::serial_from_ymd(ymd.y, ymd.m, ymd.d, /*date1904=*/true);
+  if (!std::isfinite(workbook_serial) || workbook_serial < 0.0) {
+    return ErrorCode::Value;
+  }
+  const double normal_serial = date_time::serial_from_ymd(ymd.y, ymd.m, ymd.d, /*date1904=*/false) + parsed_frac;
+  if (!std::isfinite(normal_serial)) {
+    return ErrorCode::Num;
+  }
+  out.serial = normal_serial;
+  out.direct_date_text = true;
+  return out;
+}
+
+// Convert every accepted date argument to the normal 1900-system serial for
+// calendar arithmetic. Direct date text is already normal; native serials in
+// a 1904 workbook need the inverse epoch offset. Fractions are preserved.
+double normal_date_serial(const CoercedDateArg& arg, bool date1904) noexcept {
+  return date1904 && !arg.direct_date_text ? arg.serial + kDate1904EpochGap : arg.serial;
+}
+
+// Convert direct Text's normal-1900 serial into the workbook serial. Native
+// Numbers (including DATEVALUE/DATE) already use the workbook coordinate.
+double workbook_date_serial(const CoercedDateArg& arg, bool date1904) noexcept {
+  return date1904 && arg.direct_date_text ? arg.serial - kDate1904EpochGap : arg.serial;
+}
+
+Expected<CoercedDateArg, ErrorCode> coerce_bounded_date_arg(const Value& v, bool date1904) {
+  auto out = coerce_date_arg(v, date1904);
+  if (!out) {
+    return out.error();
+  }
+  const double workbook_serial = workbook_date_serial(out.value(), date1904);
+  if (!is_valid_date_time_serial(workbook_serial, date1904)) {
+    return ErrorCode::Num;
+  }
+  return out.value();
 }
 
 Expected<double, ErrorCode> read_truncated_number_arg(const Value* args, std::uint32_t index) {
@@ -87,15 +185,15 @@ Expected<int, ErrorCode> read_optional_truncated_int_arg(const Value* args, std:
 }
 
 Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1904) {
-  auto serial = coerce_serial(v);
+  auto serial = coerce_bounded_date_arg(v, date1904);
   if (!serial) {
     return serial.error();
   }
-  const double day_serial = std::floor(serial.value());
-  if (day_serial == 0.0) {
+  const double day_serial = std::floor(normal_date_serial(serial.value(), date1904));
+  if (day_serial == 0.0 && !date1904) {
     return date_time::YMD{1900, 1u, 0u};
   }
-  return date_time::ymd_from_serial(day_serial, date1904);
+  return date_time::ymd_from_serial(day_serial, /*date1904=*/false);
 }
 
 Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v) {
@@ -131,7 +229,7 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   if (y >= 0.0 && y < 1900.0) {
     y += 1900.0;
   }
-  if (y < 1900.0 || y > 9999.0) {
+  if (!std::isfinite(y) || y < 1900.0 || y > 9999.0) {
     return Value::error(ErrorCode::Num);
   }
   // Normalise month into [1, 12] so the ymd -> days routine stays within a
@@ -144,8 +242,13 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   // Python-style floor-division so negative months wrap correctly
   // (C++ integer division truncates toward zero, which would map month 0
   // to the *same* year instead of the previous December).
-  long long mm = static_cast<long long>(m);
   long long yy = yi;
+  const double min_month = static_cast<double>(12LL * (1900 - yi) + 1);
+  const double max_month = static_cast<double>(12LL * (9999 - yi) + 12);
+  if (!std::isfinite(m) || m < min_month || m > max_month) {
+    return Value::error(ErrorCode::Num);
+  }
+  long long mm = static_cast<long long>(m);
   long long mm0 = mm - 1;  // 0-based month in "signed" space
   long long year_shift = mm0 / 12;
   long long rem = mm0 % 12;
@@ -163,9 +266,19 @@ Value Date_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool d
   if (yy < 1900 || yy > 9999) {
     return Value::error(ErrorCode::Num);
   }
-  const double serial = date_time::serial_from_ymd(static_cast<int>(yy), static_cast<unsigned>(mm),
-                                                   static_cast<unsigned>(static_cast<long long>(d)), date1904);
-  if (serial < 0.0) {
+  const std::int64_t first_civil_day = date_time::days_from_civil(static_cast<int>(yy), static_cast<unsigned>(mm), 1u);
+  const std::int64_t min_civil_day =
+      date1904 ? date_time::days_from_civil(1904, 1, 1) : date_time::days_from_civil(1899, 12, 31);
+  const std::int64_t max_civil_day = date_time::days_from_civil(9999, 12, 31);
+  const double min_day = static_cast<double>(min_civil_day - first_civil_day + 1);
+  const double max_day = static_cast<double>(max_civil_day - first_civil_day + 1);
+  if (!std::isfinite(d) || d < min_day || d > max_day) {
+    return Value::error(ErrorCode::Num);
+  }
+  const auto day_value = static_cast<long long>(d);
+  const double serial =
+      serial_from_date_components(static_cast<int>(yy), static_cast<unsigned>(mm), day_value, date1904);
+  if (!is_valid_generated_date_serial(serial, date1904)) {
     return Value::error(ErrorCode::Num);
   }
   return Value::number(serial);
@@ -256,7 +369,7 @@ Value Second_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// three original encodings (1, 2, 3) and the 2010+ additions (11..17),
 /// which simply rotate the week start. Anything else is `#NUM!`.
 Value Weekday_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto serial = coerce_serial(args[0]);
+  auto serial = coerce_bounded_date_arg(args[0], date1904);
   if (!serial) {
     return Value::error(serial.error());
   }
@@ -265,7 +378,8 @@ Value Weekday_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     return Value::error(return_type_arg.error());
   }
   const int return_type = return_type_arg.value();
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial.value(), date1904);
+  const date_time::YMD ymd =
+      date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
   // `days_from_civil` at epoch 1970-01-01 (a Thursday). A Thursday has
   // weekday index 4 in the Sunday=0..Saturday=6 convention, so
   // `(days + 4) mod 7` recovers the 0..6 weekday where 0 = Sunday.
@@ -294,25 +408,16 @@ Value Weekday_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
 // EDATE / EOMONTH share the same month-shift preamble: parse the base
 // serial, the month delta, then compute the target (year, month) pair
 // with the day clamped to the new month's length.
-struct ShiftedMonth {
+struct MonthFields {
   int y;
   unsigned m;
   unsigned d;      // EDATE result (clamped original day)
   unsigned eom_d;  // EOMONTH result (last day of target month)
 };
 
-Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904) {
-  auto serial = coerce_serial(args[0]);
-  if (!serial) {
-    return serial.error();
-  }
-  auto months_c = coerce_to_number(args[1]);
-  if (!months_c) {
-    return months_c.error();
-  }
-  const long long months = static_cast<long long>(std::trunc(months_c.value()));
-  const date_time::YMD base = date_time::ymd_from_serial(serial.value(), date1904);
-  long long total_months = static_cast<long long>(base.y) * 12 + static_cast<long long>(base.m - 1) + months;
+MonthFields shift_month_fields(const date_time::YMD& base, long long months) noexcept {
+  const long long base_months = static_cast<long long>(base.y) * 12 + static_cast<long long>(base.m - 1);
+  const long long total_months = base_months + months;
   // Python-style floor-division so negative deltas work correctly.
   long long new_y = total_months / 12;
   long long new_m = total_months % 12;
@@ -320,13 +425,87 @@ Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904)
     new_m += 12;
     new_y -= 1;
   }
-  ShiftedMonth out;
+  MonthFields out;
   out.y = static_cast<int>(new_y);
   out.m = static_cast<unsigned>(new_m + 1);
   const unsigned dim = days_in_month(out.y, out.m);
   out.d = base.d > dim ? dim : base.d;
   out.eom_d = dim;
   return out;
+}
+
+// Excel's 1904 direct-Text month functions first map the Text date back to
+// the old 1900 coordinate. Serial zero in that coordinate has Excel's
+// special 1900-01-00 spelling, which `ymd_from_serial` intentionally does
+// not expose. Keeping it explicit also prevents passing day zero to the
+// unsigned civil-date conversion helpers.
+date_time::YMD legacy_1900_ymd(double serial) noexcept {
+  if (std::floor(serial) == 0.0) {
+    return date_time::YMD{1900, 1u, 0u};
+  }
+  return date_time::ymd_from_serial(serial, /*date1904=*/false);
+}
+
+struct ShiftedMonth {
+  int y;
+  unsigned m;
+  unsigned d;      // EDATE result (clamped original day)
+  unsigned eom_d;  // EOMONTH result (last day of target month)
+  bool direct_date_text;
+  long long months;
+  double legacy_input_1900;
+};
+
+Expected<ShiftedMonth, ErrorCode> shift_months(const Value* args, bool date1904) {
+  auto serial = coerce_bounded_date_arg(args[0], date1904);
+  if (!serial) {
+    return serial.error();
+  }
+  auto months_c = coerce_to_number(args[1]);
+  if (!months_c) {
+    return months_c.error();
+  }
+  const double canonical_input = workbook_date_serial(serial.value(), date1904);
+  if (!is_valid_date_time_serial(canonical_input, date1904)) {
+    return ErrorCode::Num;
+  }
+  const double truncated_months = std::trunc(months_c.value());
+  const date_time::YMD base =
+      date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
+  const long long base_months = static_cast<long long>(base.y) * 12 + static_cast<long long>(base.m - 1);
+  const long long min_target_months = (date1904 ? 1904LL : 1899LL) * 12;
+  const double min_months = static_cast<double>(min_target_months - base_months);
+  const double max_months = static_cast<double>(10000LL * 12 - 1 - base_months);
+  if (!std::isfinite(truncated_months) || truncated_months < min_months || truncated_months > max_months) {
+    return ErrorCode::Num;
+  }
+  const long long months = static_cast<long long>(truncated_months);
+  const MonthFields target = shift_month_fields(base, months);
+  ShiftedMonth out;
+  out.y = target.y;
+  out.m = target.m;
+  out.d = target.d;
+  out.eom_d = target.eom_d;
+  out.direct_date_text = serial.value().direct_date_text;
+  out.months = months;
+  out.legacy_input_1900 = canonical_input;
+  return out;
+}
+
+double legacy_edate_result(const ShiftedMonth& shifted) noexcept {
+  const date_time::YMD legacy_base = legacy_1900_ymd(shifted.legacy_input_1900);
+  const MonthFields legacy_target = shift_month_fields(legacy_base, shifted.months);
+  // The 1900-01-00 alias is one day before the first of its target month.
+  const double serial_1900 = legacy_target.d == 0u
+                                 ? date_time::serial_from_ymd(legacy_target.y, legacy_target.m, 1u, false) - 1.0
+                                 : date_time::serial_from_ymd(legacy_target.y, legacy_target.m, legacy_target.d, false);
+  return serial_1900 - kDate1904EpochGap;
+}
+
+double legacy_eomonth_result(const ShiftedMonth& shifted) noexcept {
+  const date_time::YMD legacy_base = legacy_1900_ymd(shifted.legacy_input_1900);
+  const MonthFields legacy_target = shift_month_fields(legacy_base, shifted.months);
+  return date_time::serial_from_ymd(legacy_target.y, legacy_target.m, legacy_target.eom_d, false) - kDate1904EpochGap;
 }
 
 /// EDATE(start, months). Returns the serial of the same day-of-month shifted
@@ -337,8 +516,11 @@ Value Edate_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool 
     return Value::error(shifted.error());
   }
   const double serial = date_time::serial_from_ymd(shifted.value().y, shifted.value().m, shifted.value().d, date1904);
-  if (serial < 0.0) {
+  if (!is_valid_generated_date_serial(serial, date1904)) {
     return Value::error(ErrorCode::Num);
+  }
+  if (shifted.value().direct_date_text && date1904) {
+    return Value::number(legacy_edate_result(shifted.value()));
   }
   return Value::number(serial);
 }
@@ -357,8 +539,11 @@ Value Eomonth_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
   }
   const double serial =
       date_time::serial_from_ymd(shifted.value().y, shifted.value().m, shifted.value().eom_d, date1904);
-  if (serial < 0.0) {
+  if (!is_valid_generated_date_serial(serial, date1904)) {
     return Value::error(ErrorCode::Num);
+  }
+  if (shifted.value().direct_date_text && date1904) {
+    return Value::number(legacy_eomonth_result(shifted.value()));
   }
   return Value::number(serial);
 }
@@ -422,7 +607,7 @@ long long completed_months(int y1, unsigned m1, unsigned d1, int y2, unsigned m2
 /// its week start, divide by 7" formulation but avoids two extra
 /// conversions through serial space.
 Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto serial = coerce_serial(args[0]);
+  auto serial = coerce_bounded_date_arg(args[0], date1904);
   if (!serial) {
     return Value::error(serial.error());
   }
@@ -459,13 +644,15 @@ Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
       break;
     case 21: {
       // ISO 8601.
-      const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(serial.value()), date1904);
+      const date_time::YMD ymd =
+          date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
       return Value::number(static_cast<double>(iso_week_number(ymd.y, ymd.m, ymd.d)));
     }
     default:
       return Value::error(ErrorCode::Num);
   }
-  const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(serial.value()), date1904);
+  const date_time::YMD ymd =
+      date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
   const std::int64_t jan1_days = date_time::days_from_civil(ymd.y, 1, 1);
   const std::int64_t d_days = date_time::days_from_civil(ymd.y, ymd.m, ymd.d);
   const int jan1_sun0 = weekday_sun0(ymd.y, 1, 1);
@@ -479,11 +666,12 @@ Value Weeknum_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
 
 /// ISOWEEKNUM(serial). Returns 1..53 per ISO 8601.
 Value Isoweeknum_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto serial = coerce_serial(args[0]);
+  auto serial = coerce_bounded_date_arg(args[0], date1904);
   if (!serial) {
     return Value::error(serial.error());
   }
-  const date_time::YMD ymd = date_time::ymd_from_serial(std::floor(serial.value()), date1904);
+  const date_time::YMD ymd =
+      date_time::ymd_from_serial(std::floor(normal_date_serial(serial.value(), date1904)), /*date1904=*/false);
   return Value::number(static_cast<double>(iso_week_number(ymd.y, ymd.m, ymd.d)));
 }
 
@@ -493,15 +681,33 @@ Value Isoweeknum_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, 
 // pulling in the rest of the datetime module.
 // ---------------------------------------------------------------------------
 
+struct YearfracEndpoint {
+  double serial;
+  date_time::YMD ymd;
+};
+
+YearfracEndpoint make_yearfrac_endpoint(const CoercedDateArg& arg, bool date1904) noexcept {
+  const double workbook_serial = std::floor(workbook_date_serial(arg, date1904));
+  if (date1904 && arg.direct_date_text) {
+    // Direct Text follows the legacy coordinate for YEARFRAC's numeric day
+    // difference, while its civil fields come from the once-rebased 1900
+    // coordinate. This is deliberately distinct from DATEVALUE/DATE, which
+    // are Numbers already expressed in the workbook coordinate.
+    return YearfracEndpoint{workbook_serial - kDate1904EpochGap, legacy_1900_ymd(workbook_serial)};
+  }
+  return YearfracEndpoint{
+      workbook_serial, date_time::ymd_from_serial(std::floor(normal_date_serial(arg, date1904)), /*date1904=*/false)};
+}
+
 /// YEARFRAC(start, end, [basis]). Returns the positive (sign-stripped)
 /// fraction of a year between two dates under one of five day-count
 /// conventions. Invalid basis codes yield `#NUM!`.
 Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto start = coerce_serial(args[0]);
+  auto start = coerce_bounded_date_arg(args[0], date1904);
   if (!start) {
     return Value::error(start.error());
   }
-  auto end = coerce_serial(args[1]);
+  auto end = coerce_bounded_date_arg(args[1], date1904);
   if (!end) {
     return Value::error(end.error());
   }
@@ -510,15 +716,17 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
     return Value::error(basis_arg.error());
   }
   const int basis = basis_arg.value();
-  double s = std::floor(start.value());
-  double e = std::floor(end.value());
-  if (s > e) {
-    const double tmp = s;
-    s = e;
-    e = tmp;
+  YearfracEndpoint start_endpoint = make_yearfrac_endpoint(start.value(), date1904);
+  YearfracEndpoint end_endpoint = make_yearfrac_endpoint(end.value(), date1904);
+  if (start_endpoint.serial > end_endpoint.serial) {
+    const YearfracEndpoint tmp = start_endpoint;
+    start_endpoint = end_endpoint;
+    end_endpoint = tmp;
   }
-  const date_time::YMD a = date_time::ymd_from_serial(s, date1904);
-  const date_time::YMD b = date_time::ymd_from_serial(e, date1904);
+  const double s = start_endpoint.serial;
+  const double e = end_endpoint.serial;
+  const date_time::YMD a = start_endpoint.ymd;
+  const date_time::YMD b = end_endpoint.ymd;
   switch (basis) {
     case 0:
       return Value::number(date_time::yearfrac_us30_360(a.y, a.m, a.d, b.y, b.m, b.d));
@@ -551,11 +759,11 @@ Value Yearfrac_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool d
 ///
 /// `end < start` yields `#NUM!`; an unknown unit also yields `#NUM!`.
 Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
-  auto start = coerce_serial(args[0]);
+  auto start = coerce_bounded_date_arg(args[0], date1904);
   if (!start) {
     return Value::error(start.error());
   }
-  auto end = coerce_serial(args[1]);
+  auto end = coerce_bounded_date_arg(args[1], date1904);
   if (!end) {
     return Value::error(end.error());
   }
@@ -563,13 +771,13 @@ Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
   if (!unit) {
     return Value::error(unit.error());
   }
-  const double s = std::floor(start.value());
-  const double e = std::floor(end.value());
+  const double s = std::floor(normal_date_serial(start.value(), date1904));
+  const double e = std::floor(normal_date_serial(end.value(), date1904));
   if (e < s) {
     return Value::error(ErrorCode::Num);
   }
-  const date_time::YMD a = date_time::ymd_from_serial(s, date1904);
-  const date_time::YMD b = date_time::ymd_from_serial(e, date1904);
+  const date_time::YMD a = date_time::ymd_from_serial(s, /*date1904=*/false);
+  const date_time::YMD b = date_time::ymd_from_serial(e, /*date1904=*/false);
   const std::string& u = unit.value();
   if (strings::case_insensitive_eq(u, "D")) {
     return Value::number(e - s);
@@ -623,16 +831,17 @@ Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
 
 /// DAYS(end, start). Both arguments are truncated to their date component;
 /// the result is the signed day difference and may be negative.
-Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto end = coerce_to_number(args[0]);
+Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
+  auto end = coerce_date_arg(args[0], date1904);
   if (!end) {
     return Value::error(end.error());
   }
-  auto start = coerce_to_number(args[1]);
+  auto start = coerce_date_arg(args[1], date1904);
   if (!start) {
     return Value::error(start.error());
   }
-  const double diff = std::floor(end.value()) - std::floor(start.value());
+  const double diff =
+      std::floor(normal_date_serial(end.value(), date1904)) - std::floor(normal_date_serial(start.value(), date1904));
   return Value::number(diff);
 }
 
@@ -651,11 +860,11 @@ Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 ///
 /// European adjustments: any day of 31 is capped at 30 on both sides.
 Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto start_n = coerce_to_number(args[0]);
+  auto start_n = coerce_date_arg(args[0], date1904);
   if (!start_n) {
     return Value::error(start_n.error());
   }
-  auto end_n = coerce_to_number(args[1]);
+  auto end_n = coerce_date_arg(args[1], date1904);
   if (!end_n) {
     return Value::error(end_n.error());
   }
@@ -667,15 +876,15 @@ Value Days360_(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
     }
     european = m.value();
   }
-  const double start_f = std::floor(start_n.value());
-  const double end_f = std::floor(end_n.value());
+  const double start_f = std::floor(normal_date_serial(start_n.value(), date1904));
+  const double end_f = std::floor(normal_date_serial(end_n.value(), date1904));
   // `ymd_from_serial`'s contract requires a non-negative input; reject
   // pre-1900 serials rather than triggering undefined behaviour downstream.
   if (start_f < 0.0 || end_f < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const date_time::YMD s = date_time::ymd_from_serial(start_f, date1904);
-  const date_time::YMD e = date_time::ymd_from_serial(end_f, date1904);
+  const date_time::YMD s = date_time::ymd_from_serial(start_f, /*date1904=*/false);
+  const date_time::YMD e = date_time::ymd_from_serial(end_f, /*date1904=*/false);
   int sy = s.y;
   int sm = static_cast<int>(s.m);
   int sd = static_cast<int>(s.d);
@@ -895,6 +1104,7 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
       {"DATEDIF", {&Datedif_, 3u, 3u}},
       {"DAYS360", {&Days360_, 2u, 3u}},
       {"DATEVALUE", {&Datevalue_, 1u, 1u}},
+      {"DAYS", {&Days_, 2u, 2u}},
       {"NOW", {&Now_, 0u, 0u}},
       {"TODAY", {&Today_, 0u, 0u}},
       // TEXT is not a calendar function, but its date format codes read the
@@ -911,16 +1121,16 @@ const DateEntry* find_date_entry(std::string_view name) noexcept {
 }
 
 void register_datetime_builtins(FunctionRegistry& registry) {
-  // Time-of-day and pure serial-difference builtins stay eager and
-  // scalar-only. The date1904-sensitive calendar functions (DATE / YEAR /
-  // MONTH / DAY / WEEKDAY / EDATE / EOMONTH / WEEKNUM / ISOWEEKNUM /
-  // YEARFRAC / DATEDIF / DAYS360 / DATEVALUE / NOW / TODAY) are NOT
+  // Time-of-day functions stay eager and scalar-only. The date1904-sensitive
+  // calendar functions (DATE / YEAR / MONTH / DAY / WEEKDAY / EDATE /
+  // EOMONTH / WEEKNUM / ISOWEEKNUM / YEARFRAC / DATEDIF / DAYS360 / DAYS /
+  // DATEVALUE / NOW / TODAY) are NOT
   // registered here: they route through the lazy dispatch table
   // (`eval_datetime_lazy`) and the VM's `find_date_entry` hook so the
   // workbook's date epoch (`EvalContext::date1904()`) reaches the impl.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"TIME", 3u, 3u, &Time_},     {"HOUR", 1u, 1u, &Hour_}, {"MINUTE", 1u, 1u, &Minute_},
-      {"SECOND", 1u, 1u, &Second_}, {"DAYS", 2u, 2u, &Days_}, {"TIMEVALUE", 1u, 1u, &Timevalue_},
+      {"TIME", 3u, 3u, &Time_},     {"HOUR", 1u, 1u, &Hour_},           {"MINUTE", 1u, 1u, &Minute_},
+      {"SECOND", 1u, 1u, &Second_}, {"TIMEVALUE", 1u, 1u, &Timevalue_},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
