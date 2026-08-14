@@ -79,6 +79,164 @@ cases:
     setup: { A1: 10, A2: 20, A3: 30, B1: "ten", B2: "twenty", B3: "thirty" }
     formula: "=XLOOKUP(25,A1:A3,B1:B3,,-1)"
 
+  - id: xlookup_omitted_modes_default_forward
+    description: "Omitted match_mode and search_mode retain the default forward exact search"
+    setup: { A1: 20, A2: 20, A3: 30, B1: "first", B2: "last", B3: "other" }
+    formula: "=XLOOKUP(20,A1:A3,B1:B3,,,)"
+
+  - id: xlookup_omitted_match_mode_reverse_search
+    description: "An omitted match_mode does not coerce before explicit search_mode=-1"
+    setup: { A1: 20, A2: 20, A3: 30, B1: "first", B2: "last", B3: "other" }
+    formula: "=XLOOKUP(20,A1:A3,B1:B3,,,-1)"
+
+  # -- H-5: lookup_value arrays ------------------------------------------
+  # These are captured from the primary Mac Excel oracle before lifting
+  # XLOOKUP/XMATCH's first argument.  Only lookup_value is array-shaped;
+  # lookup_array, return_array, and modes remain whole-call arguments.
+  - id: xlookup_array_vertical_scalar_mixed
+    setup:
+      A1: 20
+      A2: 99
+      A3: { kind: formula, formula: "=NA()" }
+      D1: 10
+      D2: 20
+      D3: 30
+      E1: "ten"
+      E2: "twenty"
+      E3: "thirty"
+    formula: "=XLOOKUP(A1:A3,D1:D3,E1:E3,1/0)"
+
+  - id: xlookup_array_horizontal_scalar
+    setup:
+      A1: 30
+      B1: 10
+      C1: 99
+      E1: 10
+      E2: 20
+      E3: 30
+      F1: "ten"
+      F2: "twenty"
+      F3: "thirty"
+    formula: "=XLOOKUP(A1:C1,E1:E3,F1:F3,\"missing\")"
+
+  - id: xlookup_array_vertical_multicolumn
+    setup:
+      A1: 20
+      A2: 99
+      A3: { kind: formula, formula: "=NA()" }
+      D1: 10
+      D2: 20
+      D3: 30
+      E1: 101
+      F1: 102
+      G1: 103
+      E2: 201
+      F2: 202
+      G2: 203
+      E3: 301
+      F3: 302
+      G3: 303
+    formula: "=XLOOKUP(A1:A3,D1:D3,E1:G3,\"missing\")"
+
+  - id: xlookup_array_horizontal_multicolumn
+    setup:
+      A1: 20
+      B1: 99
+      C1: { kind: formula, formula: "=NA()" }
+      E1: 10
+      E2: 20
+      E3: 30
+      F1: 101
+      G1: 102
+      H1: 103
+      F2: 201
+      G2: 202
+      H2: 203
+      F3: 301
+      G3: 302
+      H3: 303
+    formula: "=XLOOKUP(A1:C1,E1:E3,F1:H3,\"missing\")"
+
+  - id: xlookup_array_vertical_multirow
+    setup:
+      A1: 20
+      A2: 99
+      A3: { kind: formula, formula: "=NA()" }
+      E1: 10
+      F1: 20
+      G1: 30
+      E2: 101
+      F2: 201
+      G2: 301
+      E3: 102
+      F3: 202
+      G3: 302
+      E4: 103
+      F4: 203
+      G4: 303
+    formula: "=XLOOKUP(A1:A3,E1:G1,E2:G4,\"missing\")"
+
+  - id: xlookup_array_horizontal_multirow
+    setup:
+      A1: 20
+      B1: 99
+      C1: { kind: formula, formula: "=NA()" }
+      E1: 10
+      F1: 20
+      G1: 30
+      E2: 101
+      F2: 201
+      G2: 301
+      E3: 102
+      F3: 202
+      G3: 302
+      E4: 103
+      F4: 203
+      G4: 303
+    formula: "=XLOOKUP(A1:C1,E1:G1,E2:G4,\"missing\")"
+
+  - id: xlookup_array_vertical_if_not_found_array
+    setup:
+      A1: 10
+      A2: 99
+      A3: 30
+      D1: 10
+      D2: 20
+      D3: 30
+      E1: 100
+      E2: 200
+      E3: 300
+      H1: 900
+      H2: 901
+      H3: 902
+    formula: "=XLOOKUP(A1:A3,D1:D3,E1:E3,H1:H3)"
+
+  - id: xlookup_array_horizontal_if_not_found_array
+    setup:
+      A1: 10
+      B1: 99
+      C1: 30
+      E1: 10
+      E2: 20
+      E3: 30
+      F1: 100
+      F2: 200
+      F3: 300
+      H1: 900
+      I1: 901
+      J1: 902
+    formula: "=XLOOKUP(A1:C1,E1:E3,F1:F3,H1:J1)"
+
+  - id: xlookup_array_all_hits_keeps_fallback_lazy
+    setup:
+      A1: 10
+      A2: 20
+      D1: 10
+      D2: 20
+      E1: 100
+      E2: 200
+    formula: "=XLOOKUP(A1:A2,D1:D2,E1:E2,1/0)"
+
   # -- XMATCH --------------------------------------------------------------
   - id: xmatch_exact_found
     setup: { A1: 10, A2: 20, A3: 30 }
@@ -87,6 +245,36 @@ cases:
   - id: xmatch_wildcard
     setup: { A1: "cat", A2: "cart", A3: "dog" }
     formula: "=XMATCH(\"ca?\",A1:A3,2)"
+
+  - id: xmatch_omitted_modes_default_forward
+    description: "Omitted match_mode and search_mode retain the default forward exact search"
+    setup: { A1: 20, A2: 20, A3: 30 }
+    formula: "=XMATCH(20,A1:A3,,)"
+
+  - id: xmatch_omitted_match_mode_reverse_search
+    description: "An omitted match_mode does not coerce before explicit search_mode=-1"
+    setup: { A1: 20, A2: 20, A3: 30 }
+    formula: "=XMATCH(20,A1:A3,,-1)"
+
+  - id: xmatch_array_vertical_mixed
+    setup:
+      A1: 20
+      A2: 99
+      A3: { kind: formula, formula: "=1/0" }
+      D1: 10
+      D2: 20
+      D3: 30
+    formula: "=XMATCH(A1:A3,D1:D3)"
+
+  - id: xmatch_array_horizontal_mixed
+    setup:
+      A1: 30
+      B1: 99
+      C1: { kind: formula, formula: "=1/0" }
+      E1: 10
+      E2: 20
+      E3: 30
+    formula: "=XMATCH(A1:C1,E1:E3)"
 
   # =========================================================================
   # Expanded probes — semantic edges around match modes, wildcards, error
@@ -311,3 +499,388 @@ cases:
     setup: { A1: 10, A2: 20, A3: 30,
              B1: "low", B2: "mid", B3: "high" }
     formula: "=LOOKUP(99,A1:A3,B1:B3)"
+
+  # =========================================================================
+  # H-5 classic lookup_value array lift — primary Oracle capture before
+  # implementation. Only lookup_value is array-shaped; table/range and
+  # index/match-mode remain whole-call arguments.
+  # =========================================================================
+  - id: vlookup_array_vertical_exact_mixed
+    setup:
+      A1: 20
+      A2: 99
+      A3: { kind: formula, formula: "=1/0" }
+      D1: 10
+      E1: "ten"
+      D2: 20
+      E2: "twenty"
+      D3: 30
+      E3: "thirty"
+    formula: "=VLOOKUP(A1:A3,D1:E3,2,FALSE)"
+
+  - id: vlookup_array_horizontal_approx
+    setup:
+      A1: 25
+      B1: 5
+      C1: 99
+      E1: 10
+      F1: "low"
+      E2: 20
+      F2: "mid"
+      E3: 30
+      F3: "high"
+    formula: "=VLOOKUP(A1:C1,E1:F3,2,TRUE)"
+
+  - id: vlookup_array_matrix_exact
+    setup:
+      A1: 30
+      B1: 10
+      A2: 99
+      B2: 20
+      D1: 10
+      E1: 100
+      D2: 20
+      E2: 200
+      D3: 30
+      E3: 300
+    formula: "=VLOOKUP(A1:B2,D1:E3,2,FALSE)"
+
+  - id: vlookup_array_invalid_col_precedence
+    setup:
+      A1: 20
+      A2: { kind: formula, formula: "=1/0" }
+      D1: 10
+      E1: 100
+      D2: 20
+      E2: 200
+    formula: "=VLOOKUP(A1:A2,D1:E2,3,FALSE)"
+
+  - id: hlookup_array_vertical_exact_mixed
+    setup:
+      A1: 20
+      A2: 99
+      A3: { kind: formula, formula: "=1/0" }
+      D1: 10
+      E1: 20
+      F1: 30
+      D2: "ten"
+      E2: "twenty"
+      F2: "thirty"
+    formula: "=HLOOKUP(A1:A3,D1:F2,2,FALSE)"
+
+  - id: hlookup_array_horizontal_approx
+    setup:
+      A1: 25
+      B1: 5
+      C1: 99
+      E1: 10
+      F1: 20
+      G1: 30
+      E2: "low"
+      F2: "mid"
+      G2: "high"
+    formula: "=HLOOKUP(A1:C1,E1:G2,2,TRUE)"
+
+  - id: hlookup_array_matrix_exact
+    setup:
+      A1: 30
+      B1: 10
+      A2: 99
+      B2: 20
+      D1: 10
+      E1: 20
+      F1: 30
+      D2: 100
+      E2: 200
+      F2: 300
+    formula: "=HLOOKUP(A1:B2,D1:F2,2,FALSE)"
+
+  - id: hlookup_array_invalid_row_precedence
+    setup:
+      A1: 20
+      A2: { kind: formula, formula: "=1/0" }
+      D1: 10
+      E1: 20
+      F1: 30
+      D2: 100
+      E2: 200
+      F2: 300
+    formula: "=HLOOKUP(A1:A2,D1:F2,3,FALSE)"
+
+  - id: match_array_vertical_exact_mixed
+    setup:
+      A1: 20
+      A2: 99
+      A3: { kind: formula, formula: "=1/0" }
+      D1: 10
+      D2: 20
+      D3: 30
+    formula: "=MATCH(A1:A3,D1:D3,0)"
+
+  - id: match_array_horizontal_approx_ascending
+    setup:
+      A1: 25
+      B1: 5
+      C1: 99
+      E1: 10
+      E2: 20
+      E3: 30
+    formula: "=MATCH(A1:C1,E1:E3,1)"
+
+  - id: match_array_matrix_approx_descending
+    setup:
+      A1: 25
+      B1: 15
+      A2: 35
+      B2: 5
+      D1: 30
+      D2: 20
+      D3: 10
+    formula: "=MATCH(A1:B2,D1:D3,-1)"
+
+  - id: match_array_invalid_match_type_precedence
+    setup:
+      A1: 20
+      A2: { kind: formula, formula: "=1/0" }
+      D1: 10
+      D2: 20
+      D3: 30
+    formula: "=MATCH(A1:A2,D1:D3,2)"
+
+  # =========================================================================
+  # H-5 / H-7 composition: an array lookup_value materialises a value array.
+  # A blank selected from a worksheet reference remains blank to COUNT and
+  # ISBLANK, but contributes to COUNTA. Scalar reference-return controls must
+  # retain the original reference semantics.
+  # =========================================================================
+  - id: xlookup_array_reference_blank_counta
+    setup:
+      D1: 1
+      D2: 2
+      D3: 3
+      E1: 2
+      E3: 1
+    formula: "=COUNTA(XLOOKUP(SEQUENCE(3),D1:D3,E1:E3))"
+
+  - id: xlookup_array_reference_blank_count
+    setup:
+      D1: 1
+      D2: 2
+      D3: 3
+      E1: 2
+      E3: 1
+    formula: "=COUNT(XLOOKUP(SEQUENCE(3),D1:D3,E1:E3))"
+
+  - id: xlookup_array_reference_blank_isblank
+    setup:
+      D1: 1
+      D2: 2
+      D3: 3
+      E1: 2
+      E3: 1
+    formula: "=ISBLANK(INDEX(XLOOKUP(SEQUENCE(3),D1:D3,E1:E3),2,1))"
+
+  - id: xlookup_scalar_reference_blank_counta
+    setup:
+      D1: 1
+      D2: 2
+      D3: 3
+      E1: 2
+      E3: 1
+    formula: "=COUNTA(XLOOKUP(2,D1:D3,E1:E3))"
+
+  - id: xlookup_array_reference_blank_fallback_counta
+    setup:
+      D1: 1
+      D2: 2
+      D3: 3
+      E1: 2
+      E3: 1
+    formula: "=COUNTA(XLOOKUP({1;2;99},D1:D3,E1:E3,INDEX(G1:G1,1)))"
+
+  - id: xlookup_scalar_reference_blank_fallback_counta
+    setup:
+      D1: 1
+      D2: 2
+      D3: 3
+      E1: 2
+      E3: 1
+    formula: "=COUNTA(XLOOKUP(99,D1:D3,E1:E3,INDEX(G1:G1,1)))"
+
+  - id: vlookup_array_reference_blank_counta
+    setup:
+      D1: 1
+      D2: 2
+      D3: 3
+      E1: 2
+      E3: 1
+    formula: "=COUNTA(VLOOKUP(SEQUENCE(3),D1:E3,2,FALSE))"
+
+  - id: hlookup_array_reference_blank_counta
+    setup:
+      D1: 1
+      E1: 2
+      F1: 3
+      D2: 2
+      F2: 1
+    formula: "=COUNTA(HLOOKUP(SEQUENCE(3),D1:F2,2,FALSE))"
+
+  # =========================================================================
+  # H-5 INDEX / CHOOSE array-selector capture — freeze Excel's tile shape,
+  # lane error precedence, and branch evaluation surface before implementation.
+  # =========================================================================
+  - id: index_array_row_selector_scalar_column
+    setup:
+      A1: 1
+      A2: 3
+      D1: 11
+      E1: 12
+      D2: 21
+      E2: 22
+      D3: 31
+      E3: 32
+    formula: "=INDEX(D1:E3,A1:A2,2)"
+
+  - id: index_scalar_row_array_column_selector
+    setup:
+      A1: 1
+      B1: 2
+      D1: 11
+      E1: 12
+      D2: 21
+      E2: 22
+      D3: 31
+      E3: 32
+    formula: "=INDEX(D1:E3,2,A1:B1)"
+
+  - id: index_outer_row_and_column_selectors
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      B1: 1
+      C1: 2
+      E1: 11
+      F1: 12
+      E2: 21
+      F2: 22
+      E3: 31
+      F3: 32
+    formula: "=INDEX(E1:F3,A1:A3,B1:C1)"
+
+  - id: index_unequal_vertical_selector_lengths
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+      B1: 1
+      B2: 2
+      E1: 11
+      F1: 12
+      E2: 21
+      F2: 22
+      E3: 31
+      F3: 32
+    formula: "=INDEX(E1:F3,A1:A3,B1:B2)"
+
+  - id: index_array_selector_bounds_and_error
+    setup:
+      A1: 1
+      A2: 9
+      A3: { kind: formula, formula: "=NA()" }
+      D1: 11
+      E1: 12
+      D2: 21
+      E2: 22
+      D3: 31
+      E3: 32
+    formula: "=INDEX(D1:E3,A1:A3,1)"
+
+  - id: index_array_row_zero_tile
+    formula: "=INDEX({11,12;21,22},{0;2},1)"
+
+  - id: index_array_column_zero_tile
+    formula: "=INDEX({11,12;21,22},1,{0,2})"
+
+  - id: index_array_selector_error_precedence
+    setup:
+      A1: { kind: formula, formula: "=NA()" }
+      A2: 2
+      D1: 11
+      E1: 12
+      D2: 21
+      E2: 22
+    formula: "=INDEX(D1:E2,A1:A2,#REF!)"
+
+  - id: index_array_selector_source_error_precedence
+    setup:
+      A1: 1
+      A2: 2
+    formula: "=INDEX(#REF!,A1:A2,1)"
+
+  - id: choose_array_index_matrix_scalars
+    setup:
+      A1: 1
+      B1: 2
+      A2: 2
+      B2: 1
+    formula: "=CHOOSE(A1:B2,10,20)"
+
+  - id: choose_horizontal_index_vertical_branch_tiles
+    setup:
+      A1: 1
+      B1: 2
+      D1: 11
+      D2: 12
+      E1: 21
+      E2: 22
+    formula: "=CHOOSE(A1:B1,D1:D2,E1:E2)"
+
+  - id: choose_vertical_index_horizontal_branch_tiles
+    setup:
+      A1: 1
+      A2: 2
+      D1: 11
+      E1: 12
+      F1: 21
+      G1: 22
+    formula: "=CHOOSE(A1:A2,D1:E1,F1:G1)"
+
+  - id: choose_array_unselected_branch_shape
+    setup:
+      A1: 1
+      B1: 1
+      D1: 21
+      D2: 22
+    formula: "=CHOOSE(A1:B1,9,D1:D2)"
+
+  - id: choose_array_unequal_branch_shapes
+    setup:
+      A1: 1
+      B1: 2
+      D1: 11
+      D2: 12
+      E1: 21
+      F1: 22
+    formula: "=CHOOSE(A1:B1,D1:D2,E1:F1)"
+
+  - id: choose_array_selected_and_unselected_error
+    setup:
+      A1: 1
+      B1: 2
+    formula: "=CHOOSE(A1:B1,10,1/0)"
+
+  - id: index_array_selector_reference_blank_counta
+    setup:
+      A1: 2
+      A3: 1
+      D1: 1
+      D2: 2
+      D3: 3
+    formula: "=COUNTA(INDEX(A1:A3,D1:D3))"
+
+  - id: choose_array_selector_reference_blank_counta
+    setup:
+      A1: 2
+      A3: 1
+    formula: "=COUNTA(CHOOSE(SEQUENCE(1),A1:A3))"

@@ -77,6 +77,215 @@ TEST(BuiltinsXLookup, ArrayLiteralLookupAndReturnArrays) {
   EXPECT_DOUBLE_EQ(v.as_number(), 20.0);
 }
 
+TEST(BuiltinsXLookup, ArrayLookupValuePreservesVerticalAndHorizontalRangeShape) {
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::number(10.0), Value::number(20.0), Value::number(30.0)},
+                 {Value::number(100.0), Value::number(200.0), Value::number(300.0)});
+  wb.sheet(0).set_cell_value(0, 3, Value::number(20.0));  // D1
+  wb.sheet(0).set_cell_value(1, 3, Value::number(10.0));  // D2
+  wb.sheet(0).set_cell_value(2, 3, Value::number(99.0));  // D3
+  const Value vertical = EvalSourceIn("=XLOOKUP(D1:D3,A1:A3,B1:B3,\"missing\")", wb, wb.sheet(0));
+  ASSERT_TRUE(vertical.is_array()) << vertical.debug_to_string();
+  EXPECT_EQ(vertical.as_array_rows(), 3U);
+  EXPECT_EQ(vertical.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(vertical.as_array_cells()[0].as_number(), 200.0);
+  EXPECT_DOUBLE_EQ(vertical.as_array_cells()[1].as_number(), 100.0);
+  ASSERT_TRUE(vertical.as_array_cells()[2].is_text());
+  EXPECT_EQ(vertical.as_array_cells()[2].as_text(), "missing");
+
+  wb.sheet(0).set_cell_value(3, 3, Value::number(30.0));  // D4
+  wb.sheet(0).set_cell_value(3, 4, Value::number(10.0));  // E4
+  wb.sheet(0).set_cell_value(3, 5, Value::number(20.0));  // F4
+  const Value horizontal = EvalSourceIn("=XLOOKUP(D4:F4,A1:A3,B1:B3,\"missing\")", wb, wb.sheet(0));
+  ASSERT_TRUE(horizontal.is_array()) << horizontal.debug_to_string();
+  EXPECT_EQ(horizontal.as_array_rows(), 1U);
+  EXPECT_EQ(horizontal.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(horizontal.as_array_cells()[0].as_number(), 300.0);
+  EXPECT_DOUBLE_EQ(horizontal.as_array_cells()[1].as_number(), 100.0);
+  EXPECT_DOUBLE_EQ(horizontal.as_array_cells()[2].as_number(), 200.0);
+}
+
+TEST(BuiltinsXLookup, TwoDimensionalArrayLookupValuePreservesRowMajorLanes) {
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::number(10.0), Value::number(20.0), Value::number(30.0)},
+                 {Value::number(100.0), Value::number(200.0), Value::number(300.0)});
+
+  const Value xlookup = EvalSourceIn("=XLOOKUP({30,10;99,20},A1:A3,B1:B3,\"missing\")", wb, wb.sheet(0));
+  ASSERT_TRUE(xlookup.is_array()) << xlookup.debug_to_string();
+  ASSERT_EQ(xlookup.as_array_rows(), 2U);
+  ASSERT_EQ(xlookup.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(xlookup.as_array_cells()[0].as_number(), 300.0);
+  EXPECT_DOUBLE_EQ(xlookup.as_array_cells()[1].as_number(), 100.0);
+  ASSERT_TRUE(xlookup.as_array_cells()[2].is_text());
+  EXPECT_EQ(xlookup.as_array_cells()[2].as_text(), "missing");
+  EXPECT_DOUBLE_EQ(xlookup.as_array_cells()[3].as_number(), 200.0);
+
+  const Value xmatch = EvalSourceIn("=XMATCH({30,10;99,20},A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(xmatch.is_array()) << xmatch.debug_to_string();
+  ASSERT_EQ(xmatch.as_array_rows(), 2U);
+  ASSERT_EQ(xmatch.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(xmatch.as_array_cells()[0].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(xmatch.as_array_cells()[1].as_number(), 1.0);
+  ASSERT_TRUE(xmatch.as_array_cells()[2].is_error());
+  EXPECT_EQ(xmatch.as_array_cells()[2].as_error(), ErrorCode::NA);
+  EXPECT_DOUBLE_EQ(xmatch.as_array_cells()[3].as_number(), 2.0);
+}
+
+TEST(BuiltinsXLookup, ArrayLookupValueUsesFirstCellOfMultiCellReturnSlice) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(101.0));
+  wb.sheet(0).set_cell_value(0, 2, Value::number(1001.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(202.0));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(2002.0));
+  wb.sheet(0).set_cell_value(2, 1, Value::number(303.0));
+  wb.sheet(0).set_cell_value(2, 2, Value::number(3003.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(30.0));  // D1
+  wb.sheet(0).set_cell_value(1, 3, Value::number(10.0));  // D2
+  const Value vertical = EvalSourceIn("=XLOOKUP(D1:D2,A1:A3,B1:C3,\"missing\")", wb, wb.sheet(0));
+  ASSERT_TRUE(vertical.is_array()) << vertical.debug_to_string();
+  EXPECT_EQ(vertical.as_array_rows(), 2U);
+  EXPECT_EQ(vertical.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(vertical.as_array_cells()[0].as_number(), 303.0);
+  EXPECT_DOUBLE_EQ(vertical.as_array_cells()[1].as_number(), 101.0);
+
+  wb.sheet(0).set_cell_value(4, 0, Value::number(10.0));  // A5
+  wb.sheet(0).set_cell_value(4, 1, Value::number(20.0));  // B5
+  wb.sheet(0).set_cell_value(4, 2, Value::number(30.0));  // C5
+  wb.sheet(0).set_cell_value(5, 0, Value::number(101.0));
+  wb.sheet(0).set_cell_value(5, 1, Value::number(202.0));
+  wb.sheet(0).set_cell_value(5, 2, Value::number(303.0));
+  wb.sheet(0).set_cell_value(6, 0, Value::number(1001.0));
+  wb.sheet(0).set_cell_value(6, 1, Value::number(2002.0));
+  wb.sheet(0).set_cell_value(6, 2, Value::number(3003.0));
+  wb.sheet(0).set_cell_value(3, 3, Value::number(20.0));  // D4
+  wb.sheet(0).set_cell_value(3, 4, Value::number(10.0));  // E4
+  const Value horizontal = EvalSourceIn("=XLOOKUP(D4:E4,A5:C5,A6:C7,\"missing\")", wb, wb.sheet(0));
+  ASSERT_TRUE(horizontal.is_array()) << horizontal.debug_to_string();
+  EXPECT_EQ(horizontal.as_array_rows(), 1U);
+  EXPECT_EQ(horizontal.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(horizontal.as_array_cells()[0].as_number(), 202.0);
+  EXPECT_DOUBLE_EQ(horizontal.as_array_cells()[1].as_number(), 101.0);
+}
+
+TEST(BuiltinsXLookup, ArrayLookupReferenceBlankPromotionAndScalarControls) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));  // A1
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));  // A2
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));  // A3
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));  // B1
+  // B2 intentionally remains blank.
+  wb.sheet(0).set_cell_value(2, 1, Value::number(1.0));  // B3
+  const Value counta = EvalSourceIn("=COUNTA(XLOOKUP(SEQUENCE(3),A1:A3,B1:B3))", wb, wb.sheet(0));
+  ASSERT_TRUE(counta.is_number());
+  EXPECT_DOUBLE_EQ(counta.as_number(), 3.0);
+  const Value count = EvalSourceIn("=COUNT(XLOOKUP(SEQUENCE(3),A1:A3,B1:B3))", wb, wb.sheet(0));
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 2.0);
+  const Value nested_blank = EvalSourceIn("=ISBLANK(INDEX(XLOOKUP(SEQUENCE(3),A1:A3,B1:B3),2,1))", wb, wb.sheet(0));
+  ASSERT_TRUE(nested_blank.is_boolean());
+  EXPECT_TRUE(nested_blank.as_boolean());
+
+  const Value scalar_counta = EvalSourceIn("=COUNTA(XLOOKUP(2,A1:A3,B1:B3))", wb, wb.sheet(0));
+  ASSERT_TRUE(scalar_counta.is_number());
+  EXPECT_DOUBLE_EQ(scalar_counta.as_number(), 0.0);
+
+  wb.sheet(0).set_cell_value(0, 3, Value::number(1.0));   // D1
+  wb.sheet(0).set_cell_value(0, 4, Value::number(2.0));   // E1
+  wb.sheet(0).set_cell_value(0, 5, Value::number(3.0));   // F1
+  wb.sheet(0).set_cell_value(1, 3, Value::number(10.0));  // D2
+  // E2 intentionally remains blank.
+  wb.sheet(0).set_cell_value(1, 5, Value::number(30.0));   // F2
+  wb.sheet(0).set_cell_value(2, 3, Value::number(100.0));  // D3
+  // E3 intentionally remains blank.
+  wb.sheet(0).set_cell_value(2, 5, Value::number(300.0));  // F3
+
+  const Value multi = EvalSourceIn("=XLOOKUP(D1:F1,D1:F1,D2:F3)", wb, wb.sheet(0));
+  ASSERT_TRUE(multi.is_array()) << multi.debug_to_string();
+  EXPECT_EQ(multi.as_array_rows(), 1U);
+  EXPECT_EQ(multi.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(multi.as_array_cells()[0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(multi.as_array_cells()[2].as_number(), 30.0);
+  const Value multi_nested_blank = EvalSourceIn("=ISBLANK(INDEX(XLOOKUP(D1:F1,D1:F1,D2:F3),1,2))", wb, wb.sheet(0));
+  ASSERT_TRUE(multi_nested_blank.is_boolean());
+  EXPECT_TRUE(multi_nested_blank.as_boolean());
+  const Value scalar_slice_counta = EvalSourceIn("=COUNTA(XLOOKUP(2,D1:F1,D2:F3))", wb, wb.sheet(0));
+  ASSERT_TRUE(scalar_slice_counta.is_number());
+  EXPECT_DOUBLE_EQ(scalar_slice_counta.as_number(), 0.0);
+
+  // INDEX over G1:G1 supplies a reference-derived blank as if_not_found.
+  // Array lanes promote it at the output boundary, while scalar XLOOKUP
+  // preserves the raw blank.
+  const Value array_fallback_counta =
+      EvalSourceIn("=COUNTA(XLOOKUP({1;2;99},A1:A3,B1:B3,INDEX(G1:G1,1)))", wb, wb.sheet(0));
+  ASSERT_TRUE(array_fallback_counta.is_number());
+  EXPECT_DOUBLE_EQ(array_fallback_counta.as_number(), 3.0);
+  const Value scalar_fallback_counta = EvalSourceIn("=COUNTA(XLOOKUP(99,A1:A3,B1:B3,INDEX(G1:G1,1)))", wb, wb.sheet(0));
+  ASSERT_TRUE(scalar_fallback_counta.is_number());
+  EXPECT_DOUBLE_EQ(scalar_fallback_counta.as_number(), 0.0);
+}
+
+TEST(BuiltinsXLookup, ArrayLookupValueErrorsAndTrueMissesAreIndependent) {
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::number(10.0), Value::number(20.0)}, {Value::number(100.0), Value::number(200.0)});
+  wb.sheet(0).set_cell_value(0, 3, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::error(ErrorCode::Div0));
+  wb.sheet(0).set_cell_value(2, 3, Value::number(99.0));
+  const Value v = EvalSourceIn("=XLOOKUP(D1:D3,A1:A2,B1:B2,\"missing\")", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  ASSERT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 100.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.as_array_cells()[2].is_text());
+  EXPECT_EQ(v.as_array_cells()[2].as_text(), "missing");
+}
+
+TEST(BuiltinsXLookup, ArrayLookupValueAllHitsDoNotEvaluateFallback) {
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::number(10.0), Value::number(20.0)}, {Value::number(100.0), Value::number(200.0)});
+  wb.sheet(0).set_cell_value(0, 3, Value::number(20.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(10.0));
+  const Value v = EvalSourceIn("=XLOOKUP(D1:D2,A1:A2,B1:B2,1/0)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 200.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 100.0);
+}
+
+TEST(BuiltinsXLookup, ArrayFallbackIsValueErrorOnlyInMissLanes) {
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::number(10.0), Value::number(20.0)}, {Value::number(100.0), Value::number(200.0)});
+  wb.sheet(0).set_cell_value(0, 2, Value::number(900.0));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(901.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(99.0));
+  const Value v = EvalSourceIn("=XLOOKUP(D1:D2,A1:A2,B1:B2,C1:C2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 100.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsXLookup, ScalarLookupArrayFallbackPreservesArrayResult) {
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::number(10.0), Value::number(20.0)}, {Value::number(100.0), Value::number(200.0)});
+  wb.sheet(0).set_cell_value(0, 2, Value::number(900.0));
+  wb.sheet(0).set_cell_value(1, 2, Value::number(901.0));
+  const Value v = EvalSourceIn("=XLOOKUP(99,A1:A2,B1:B2,C1:C2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  EXPECT_EQ(v.as_array_rows(), 2U);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 900.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 901.0);
+}
+
 // ---------------------------------------------------------------------------
 // XLOOKUP
 // ---------------------------------------------------------------------------
@@ -195,6 +404,20 @@ TEST(BuiltinsXLookup, SearchModeReverseDuplicates) {
   const Value rev = EvalSourceIn("=XLOOKUP(20, A1:A4, B1:B4, \"nf\", 0, -1)", wb, wb.sheet(0));
   ASSERT_TRUE(rev.is_text());
   EXPECT_EQ(rev.as_text(), "b2");
+}
+
+TEST(BuiltinsXLookup, OmittedModesUseDefaultAndExplicitReverseFindsLastDuplicate) {
+  // With all optional slots omitted, the default forward search finds the
+  // first duplicate. Supplying only search_mode=-1 finds the last duplicate.
+  Workbook wb = Workbook::create();
+  SeedColumnPair(wb, {Value::number(20.0), Value::number(20.0), Value::number(30.0)},
+                 {Value::text("first"), Value::text("last"), Value::text("other")});
+  const Value default_search = EvalSourceIn("=XLOOKUP(20, A1:A3, B1:B3,,,)", wb, wb.sheet(0));
+  ASSERT_TRUE(default_search.is_text()) << default_search.debug_to_string();
+  EXPECT_EQ(default_search.as_text(), "first");
+  const Value reverse_search = EvalSourceIn("=XLOOKUP(20, A1:A3, B1:B3,,,-1)", wb, wb.sheet(0));
+  ASSERT_TRUE(reverse_search.is_text()) << reverse_search.debug_to_string();
+  EXPECT_EQ(reverse_search.as_text(), "last");
 }
 
 TEST(BuiltinsXLookup, SearchModeBinaryAscExactHit) {
@@ -421,6 +644,32 @@ TEST(BuiltinsXMatch, ExactNumeric) {
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
 }
 
+TEST(BuiltinsXMatch, ArrayLookupValuePreservesShapeAndErrors) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(10.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(20.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::error(ErrorCode::Div0));
+  wb.sheet(0).set_cell_value(2, 3, Value::number(99.0));
+  const Value vertical = EvalSourceIn("=XMATCH(D1:D3,A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(vertical.is_array()) << vertical.debug_to_string();
+  EXPECT_EQ(vertical.as_array_rows(), 3U);
+  EXPECT_EQ(vertical.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(vertical.as_array_cells()[0].as_number(), 2.0);
+  ASSERT_TRUE(vertical.as_array_cells()[1].is_error());
+  EXPECT_EQ(vertical.as_array_cells()[1].as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(vertical.as_array_cells()[2].is_error());
+  EXPECT_EQ(vertical.as_array_cells()[2].as_error(), ErrorCode::NA);
+
+  const Value literal = EvalSourceIn("=XMATCH({30;10},A1:A3)", wb, wb.sheet(0));
+  ASSERT_TRUE(literal.is_array()) << literal.debug_to_string();
+  EXPECT_EQ(literal.as_array_rows(), 2U);
+  EXPECT_EQ(literal.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(literal.as_array_cells()[0].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(literal.as_array_cells()[1].as_number(), 1.0);
+}
+
 TEST(BuiltinsXMatch, ExactTextCaseInsensitive) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("Apple"));
@@ -472,6 +721,19 @@ TEST(BuiltinsXMatch, ReverseSearchDuplicates) {
   const Value rev = EvalSourceIn("=XMATCH(20, A1:A4, 0, -1)", wb, wb.sheet(0));
   ASSERT_TRUE(rev.is_number());
   EXPECT_DOUBLE_EQ(rev.as_number(), 3.0);
+}
+
+TEST(BuiltinsXMatch, OmittedModesUseDefaultAndExplicitReverseFindsLastDuplicate) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(20.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(30.0));
+  const Value default_search = EvalSourceIn("=XMATCH(20, A1:A3,,)", wb, wb.sheet(0));
+  ASSERT_TRUE(default_search.is_number()) << default_search.debug_to_string();
+  EXPECT_DOUBLE_EQ(default_search.as_number(), 1.0);
+  const Value reverse_search = EvalSourceIn("=XMATCH(20, A1:A3,,-1)", wb, wb.sheet(0));
+  ASSERT_TRUE(reverse_search.is_number()) << reverse_search.debug_to_string();
+  EXPECT_DOUBLE_EQ(reverse_search.as_number(), 2.0);
 }
 
 TEST(BuiltinsXMatch, BinaryAscExactHit) {

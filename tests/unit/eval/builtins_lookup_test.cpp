@@ -5,9 +5,12 @@
 // arguments (range shape for INDEX / MATCH; per-branch short-circuit for
 // CHOOSE).
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
+#include "eval/array_alloc.h"
+#include "eval/builtins.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
@@ -29,6 +32,42 @@ namespace {
 using formulon::test::EvalSource;
 using formulon::test::EvalSourceIn;
 
+thread_local std::uint32_t* g_tick_array_calls = nullptr;
+
+Value TickArrayImpl(const Value* /*args*/, std::uint32_t /*arity*/, Arena& arena) {
+  if (g_tick_array_calls != nullptr) {
+    ++*g_tick_array_calls;
+  }
+  Value* cells = nullptr;
+  ArrayValue* array = allocate_array_value(1U, 1U, arena, cells);
+  if (array == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  cells[0] = Value::number(1.0);
+  return Value::array(array);
+}
+
+Value EvalSourceInWithRegistry(std::string_view formula, const Workbook& wb, const Sheet& current,
+                               const FunctionRegistry& registry) {
+  Arena parse_arena;
+  Arena eval_arena;
+  parser::Parser p(formula, parse_arena);
+  parser::AstNode* root = p.parse();
+  EXPECT_NE(root, nullptr) << "parse failed for: " << formula;
+  if (root == nullptr) {
+    return Value::error(ErrorCode::Name);
+  }
+  EvalState state;
+  const EvalContext ctx(wb, current, state);
+  return evaluate(*root, eval_arena, registry, ctx);
+}
+
+void ExpectArrayShape(const Value& value, std::uint32_t rows, std::uint32_t cols) {
+  ASSERT_TRUE(value.is_array()) << value.debug_to_string();
+  EXPECT_EQ(value.as_array_rows(), rows);
+  EXPECT_EQ(value.as_array_cols(), cols);
+}
+
 // ---------------------------------------------------------------------------
 // MATCH
 // ---------------------------------------------------------------------------
@@ -48,6 +87,53 @@ TEST(BuiltinsMatch, ExactMatchArrayLiteralUsesSharedRangeMaterialization) {
   const Value v = EvalSource("=MATCH(20,{10;20;30},0)");
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 2.0);
+}
+
+TEST(BuiltinsMatch, FractionalMatchTypeTruncatesTowardZeroLikeXmatch) {
+  // Every integer argument in the lookup family narrows through the shared
+  // truncate-toward-zero helper, so `-0.5` is mode 0 (exact) for MATCH just
+  // as it is for XMATCH — never mode -1 via a floor.
+  const Value match = EvalSource("=MATCH(2,{1;2;3},-0.5)");
+  ASSERT_TRUE(match.is_number()) << "a fractional match_type must not flip MATCH into descending mode";
+  EXPECT_DOUBLE_EQ(match.as_number(), 2.0);
+
+  const Value xmatch = EvalSource("=XMATCH(2,{1;2;3},-0.5)");
+  ASSERT_TRUE(xmatch.is_number());
+  EXPECT_DOUBLE_EQ(xmatch.as_number(), match.as_number());
+}
+
+TEST(BuiltinsMatch, ArrayLookupValueExactPreservesShapeAndErrors) {
+  const Value v = EvalSource("=MATCH({20;99;#DIV/0!},{10;20;30},0)");
+  ExpectArrayShape(v, 3U, 1U);
+  const Value* cells = v.as_array_cells();
+  ASSERT_TRUE(cells[0].is_number());
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 2.0);
+  ASSERT_TRUE(cells[1].is_error());
+  EXPECT_EQ(cells[1].as_error(), ErrorCode::NA);
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsMatch, ArrayLookupValueNestedSequenceMapsOnce) {
+  const Value v = EvalSource("=MATCH(SEQUENCE(1,3,25,-10),SEQUENCE(3,1,10,10),1)");
+  ExpectArrayShape(v, 1U, 3U);
+  const Value* cells = v.as_array_cells();
+  ASSERT_TRUE(cells[0].is_number());
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 2.0);
+  ASSERT_TRUE(cells[1].is_number());
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 1.0);
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsMatch, ArrayLookupValueModeTwoUsesAscendingCoercion) {
+  const Value v = EvalSource("=MATCH({20;#DIV/0!},{10;20;30},2)");
+  ExpectArrayShape(v, 2U, 1U);
+  const Value* cells = v.as_array_cells();
+  ASSERT_TRUE(cells[0].is_number());
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 2.0);
+  ASSERT_TRUE(cells[1].is_error());
+  EXPECT_EQ(cells[1].as_error(), ErrorCode::Div0);
 }
 
 TEST(BuiltinsMatch, ExactZeroDoesNotMatchBlankCell) {
@@ -390,6 +476,33 @@ TEST(BuiltinsIndex, ZeroBothOn2DRangeSpillsWholeArray) {
   EXPECT_DOUBLE_EQ(cells[3].as_number(), 4.0);
 }
 
+TEST(BuiltinsIndex, ZeroRowOn2DRangeSpillsWholeArrayWithColumnOmitted) {
+  // The two-argument form reads its omitted column argument as zero, so a
+  // zero row selector spans both dimensions: `INDEX(src, 0)` and
+  // `INDEX(src, 0, 0)` produce the same rectangle. Anything narrower would
+  // make the same "0" mean different things depending only on whether the
+  // caller spelled the column argument out.
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 2; ++r) {
+    for (std::uint32_t c = 0; c < 2; ++c) {
+      wb.sheet(0).set_cell_value(r, c, Value::number(static_cast<double>(r * 2 + c + 1)));
+    }
+  }
+  const Value two_arg = EvalSourceIn("=INDEX(A1:B2, 0)", wb, wb.sheet(0));
+  ASSERT_TRUE(two_arg.is_array());
+  EXPECT_EQ(two_arg.as_array_rows(), 2U);
+  EXPECT_EQ(two_arg.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(two_arg.as_array_cells()[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(two_arg.as_array_cells()[3].as_number(), 4.0);
+
+  // The array-selector path composes the same tile.
+  const Value array_literal = EvalSource("=INDEX({1,2;3,4},0)");
+  ASSERT_TRUE(array_literal.is_array());
+  EXPECT_EQ(array_literal.as_array_rows(), 2U);
+  EXPECT_EQ(array_literal.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(array_literal.as_array_cells()[3].as_number(), 4.0);
+}
+
 TEST(BuiltinsIndex, ZeroColOutOfRangeColumnIsRefError) {
   // INDEX(A1:C3, 0, 5): whole column requested but col index out of range.
   Workbook wb = Workbook::create();
@@ -454,6 +567,145 @@ TEST(BuiltinsIndex, NonCoercibleIndexIsValueError) {
 TEST(BuiltinsIndex, WrongArityIsValueError) {
   EXPECT_EQ(EvalSource("=INDEX()").as_error(), ErrorCode::Value);
   EXPECT_EQ(EvalSource("=INDEX(1)").as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsIndex, ArrayRowSelectorWithScalarColumn) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 4, Value::number(22.0));
+  wb.sheet(0).set_cell_value(2, 3, Value::number(31.0));
+  wb.sheet(0).set_cell_value(2, 4, Value::number(32.0));
+  const Value v = EvalSourceIn("=INDEX(D1:E3,A1:A2,2)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 32.0);
+}
+
+TEST(BuiltinsIndex, ScalarRowWithArrayColumnSelector) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 4, Value::number(22.0));
+  wb.sheet(0).set_cell_value(2, 3, Value::number(31.0));
+  wb.sheet(0).set_cell_value(2, 4, Value::number(32.0));
+  const Value v = EvalSourceIn("=INDEX(D1:E3,2,A1:B1)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 22.0);
+}
+
+TEST(BuiltinsIndex, ArrayRowAndColumnSelectorsBroadcastOuter) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 2, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 5, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 4, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 5, Value::number(22.0));
+  wb.sheet(0).set_cell_value(2, 4, Value::number(31.0));
+  wb.sheet(0).set_cell_value(2, 5, Value::number(32.0));
+  const Value v = EvalSourceIn("=INDEX(E1:F3,A1:A3,B1:C1)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 3U, 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 22.0);
+  EXPECT_DOUBLE_EQ(cells[4].as_number(), 31.0);
+  EXPECT_DOUBLE_EQ(cells[5].as_number(), 32.0);
+}
+
+TEST(BuiltinsIndex, UnequalVerticalSelectorsFillNA) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 5, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 4, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 5, Value::number(22.0));
+  wb.sheet(0).set_cell_value(2, 4, Value::number(31.0));
+  wb.sheet(0).set_cell_value(2, 5, Value::number(32.0));
+  const Value v = EvalSourceIn("=INDEX(E1:F3,A1:A3,B1:B2)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 3U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 22.0);
+  ASSERT_TRUE(v.as_array_cells()[2].is_error());
+  EXPECT_EQ(v.as_array_cells()[2].as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsIndex, ArraySelectorBoundsAndErrorAreLaneLocal) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(9.0));
+  wb.sheet(0).set_cell_formula(2, 0, "=NA()");
+  wb.sheet(0).set_cell_value(0, 3, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 4, Value::number(22.0));
+  wb.sheet(0).set_cell_value(2, 3, Value::number(31.0));
+  wb.sheet(0).set_cell_value(2, 4, Value::number(32.0));
+  const Value v = EvalSourceIn("=INDEX(D1:E3,A1:A3,1)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 3U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.as_array_cells()[2].is_error());
+  EXPECT_EQ(v.as_array_cells()[2].as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsIndex, ArrayRowZeroComposesColumnTile) {
+  const Value v = EvalSource("=INDEX({11,12;21,22},{0;2},1)");
+  ExpectArrayShape(v, 2U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 21.0);
+}
+
+TEST(BuiltinsIndex, ArrayColumnZeroComposesRowTile) {
+  const Value v = EvalSource("=INDEX({11,12;21,22},1,{0,2})");
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 12.0);
+}
+
+TEST(BuiltinsIndex, ArraySelectorErrorPrecedesColumnErrorPerLane) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_formula(0, 0, "=NA()");
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(12.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 4, Value::number(22.0));
+  const Value v = EvalSourceIn("=INDEX(D1:E2,A1:A2,#REF!)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 1U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_error());
+  EXPECT_EQ(v.as_array_cells()[0].as_error(), ErrorCode::NA);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsIndex, ArraySelectorPreservesSourceErrorShape) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  const Value v = EvalSourceIn("=INDEX(#REF!,A1:A2,1)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 1U);
+  ASSERT_TRUE(v.as_array_cells()[0].is_error());
+  EXPECT_EQ(v.as_array_cells()[0].as_error(), ErrorCode::Ref);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Ref);
 }
 
 // ---------------------------------------------------------------------------
@@ -526,6 +778,154 @@ TEST(BuiltinsChoose, ZeroArityIsValueError) {
   EXPECT_EQ(EvalSource("=CHOOSE()").as_error(), ErrorCode::Value);
   // Just an index without any values is also invalid.
   EXPECT_EQ(EvalSource("=CHOOSE(1)").as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsChoose, ArrayIndexSelectsScalarBranches) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(1, 1, Value::number(1.0));
+  const Value v = EvalSourceIn("=CHOOSE(A1:B2,10,20)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 10.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 10.0);
+}
+
+TEST(BuiltinsChoose, HorizontalIndexTilesVerticalBranches) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(11.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(12.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 4, Value::number(22.0));
+  const Value v = EvalSourceIn("=CHOOSE(A1:B1,D1:D2,E1:E2)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 22.0);
+}
+
+TEST(BuiltinsChoose, VerticalIndexTilesHorizontalBranches) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(11.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(12.0));
+  wb.sheet(0).set_cell_value(0, 5, Value::number(21.0));
+  wb.sheet(0).set_cell_value(0, 6, Value::number(22.0));
+  const Value v = EvalSourceIn("=CHOOSE(A1:A2,D1:E1,F1:G1)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 21.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 22.0);
+}
+
+TEST(BuiltinsChoose, ArrayIndexUsesSelectedBranchShape) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(21.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(22.0));
+  const Value v = EvalSourceIn("=CHOOSE(A1:B1,9,D1:D2)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 2U);
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    EXPECT_DOUBLE_EQ(v.as_array_cells()[i].as_number(), 9.0);
+  }
+}
+
+TEST(BuiltinsChoose, UnequalBranchShapesBroadcastShortAxes) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(11.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(12.0));
+  wb.sheet(0).set_cell_value(0, 4, Value::number(21.0));
+  wb.sheet(0).set_cell_value(0, 5, Value::number(22.0));
+  const Value v = EvalSourceIn("=CHOOSE(A1:B1,D1:D2,E1:F1)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 2U);
+  const Value* cells = v.as_array_cells();
+  EXPECT_DOUBLE_EQ(cells[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(cells[1].as_number(), 22.0);
+  EXPECT_DOUBLE_EQ(cells[2].as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(cells[3].as_number(), 22.0);
+}
+
+TEST(BuiltinsChoose, ArrayIndexSelectedBranchErrorIsLaneLocal) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::number(2.0));
+  const Value v = EvalSourceIn("=CHOOSE(A1:B1,10,1/0)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 10.0);
+  ASSERT_TRUE(v.as_array_cells()[1].is_error());
+  EXPECT_EQ(v.as_array_cells()[1].as_error(), ErrorCode::Div0);
+}
+
+TEST(BuiltinsIndex, ArraySelectorReferenceBlankCountsInCountA) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(0, 3, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 3, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 3, Value::number(3.0));
+  const Value v = EvalSourceIn("=COUNTA(INDEX(A1:A3,D1:D3))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsChoose, ArraySelectorReferenceBlankCountsInCountA) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(1.0));
+  const Value v = EvalSourceIn("=COUNTA(CHOOSE(SEQUENCE(1),A1:A3))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+
+  const Value scalar = EvalSourceIn("=COUNTA(CHOOSE(1,A1:A3))", wb, wb.sheet(0));
+  ASSERT_TRUE(scalar.is_number());
+  EXPECT_DOUBLE_EQ(scalar.as_number(), 2.0);
+}
+
+TEST(BuiltinsChoose, ArraySelectorReferenceBlankCountsAndNestedIsBlank) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(1.0));
+
+  const Value count = EvalSourceIn("=COUNT(CHOOSE(SEQUENCE(1),A1:A3))", wb, wb.sheet(0));
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 2.0);
+
+  const Value blank = EvalSourceIn("=ISBLANK(INDEX(CHOOSE(SEQUENCE(1),A1:A3),2,1))", wb, wb.sheet(0));
+  ASSERT_TRUE(blank.is_boolean());
+  EXPECT_TRUE(blank.as_boolean());
+}
+
+TEST(BuiltinsChoose, ArraySelectorRangeExpanderEvaluatesIndexOnce) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(2.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(1.0));
+
+  FunctionRegistry registry;
+  register_builtins(registry);
+  ASSERT_TRUE(registry.register_function(FunctionDef{"TICKARRAY", 0U, 0U, &TickArrayImpl}));
+
+  std::uint32_t calls = 0U;
+  g_tick_array_calls = &calls;
+  const Value value = EvalSourceInWithRegistry("=COUNTA(CHOOSE(TICKARRAY(),A1:A3))", wb, wb.sheet(0), registry);
+  g_tick_array_calls = nullptr;
+
+  ASSERT_TRUE(value.is_number());
+  EXPECT_DOUBLE_EQ(value.as_number(), 3.0);
+  EXPECT_EQ(calls, 1U);
 }
 
 // ---------------------------------------------------------------------------

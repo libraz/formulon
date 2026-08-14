@@ -8,8 +8,9 @@
 // They are lazy (rather than eager like ordinary builtins) because the
 // lookup array argument must reach the impl as an AST node so a bare
 // single-cell `Ref` can still be treated as a 1-cell range, and because
-// `CHOOSE` must select exactly one of its value arguments and leave the
-// rest un-evaluated. The central dispatch table in `tree_walker.cpp`
+// scalar-index `CHOOSE` must select exactly one of its value arguments and
+// leave the rest un-evaluated. Array-index `CHOOSE` deliberately evaluates
+// every branch once. The central dispatch table in `tree_walker.cpp`
 // references these externs by unqualified name; see `eval/lazy_impls.h`
 // for the shared `LazyImpl` signature and `eval_node` entry point.
 
@@ -33,6 +34,13 @@ class FunctionRegistry;
 
 Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
+/// Evaluates an array-index CHOOSE after its index has already been
+/// materialised. Every branch is evaluated exactly once, left-to-right, and
+/// the selected cells are composed into one value array. Callers must pass an
+/// Array-valued index; this seam is shared by the lazy evaluator and the
+/// range-aware CHOOSE expander so the value-array blank marker is preserved.
+Value eval_choose_array_index_lazy(const parser::AstNode& call, const Value& index_value, Arena& arena,
+                                   const FunctionRegistry& registry, const EvalContext& ctx);
 Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx);
 Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

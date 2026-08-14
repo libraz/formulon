@@ -6,9 +6,11 @@
 
 #include "eval/lookups/classic.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -62,12 +64,29 @@ std::string lookup_text_cmp_key(std::string_view s, ExcelProfile profile) {
 Value index_whole_column(const std::vector<Value>& cells, std::uint32_t rows, std::uint32_t cols, std::uint32_t col,
                          Arena& arena) {
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(rows, 1U, arena, buffer);
+  ArrayValue* out = dynamic_array::allocate_array_value(rows, 1U, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
   for (std::uint32_t r = 0; r < rows; ++r) {
     buffer[r] = cells[(static_cast<std::size_t>(r) * cols) + col];
+  }
+  return Value::array(out);
+}
+
+// Materialises a whole row-major `cells` rectangle (`rows` x `cols`) as a
+// `Value::Array` of the same shape. Used by the INDEX forms that select no
+// single axis — `INDEX(array, 0, 0)` and its two-argument spelling
+// `INDEX(array, 0)`. Returns `#NUM!` on arena exhaustion.
+Value index_whole_array(const std::vector<Value>& cells, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
+  Value* buffer = nullptr;
+  ArrayValue* out = dynamic_array::allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t total = static_cast<std::size_t>(rows) * cols;
+  for (std::size_t i = 0; i < total; ++i) {
+    buffer[i] = cells[i];
   }
   return Value::array(out);
 }
@@ -78,7 +97,7 @@ Value index_whole_column(const std::vector<Value>& cells, std::uint32_t rows, st
 // `#NUM!` on arena exhaustion.
 Value index_whole_row(const std::vector<Value>& cells, std::uint32_t cols, std::uint32_t row, Arena& arena) {
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(1U, cols, arena, buffer);
+  ArrayValue* out = dynamic_array::allocate_array_value(1U, cols, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -86,6 +105,238 @@ Value index_whole_row(const std::vector<Value>& cells, std::uint32_t cols, std::
     buffer[c] = cells[(static_cast<std::size_t>(row) * cols) + c];
   }
   return Value::array(out);
+}
+
+// A selector is either a scalar or an already materialised value array. The
+// lazy lookup implementations keep these two cases separate so that a
+// scalar INDEX / CHOOSE call retains its historical short-circuit and result
+// shape, while an array selector can use the same row-major broadcast rules
+// as the dynamic-array dispatcher without re-evaluating its AST.
+struct SelectorView {
+  const Value* scalar = nullptr;
+  const ArrayValue* array = nullptr;
+  std::uint32_t rows = 1U;
+  std::uint32_t cols = 1U;
+
+  bool is_array() const noexcept { return array != nullptr; }
+};
+
+SelectorView make_selector_view(const Value& value) {
+  if (!value.is_array()) {
+    return SelectorView{&value, nullptr, 1U, 1U};
+  }
+  const ArrayValue* array = value.as_array();
+  return SelectorView{nullptr, array, array->rows, array->cols};
+}
+
+// Returns the value supplied by a selector at an output coordinate. A
+// non-1 selector axis shorter than the output rectangle is a lane-local
+// #N/A, rather than a global shape error. `missing` distinguishes that
+// synthetic #N/A from an actual error cell, which keeps the precedence logic
+// in the INDEX compositor explicit.
+Value selector_at(const SelectorView& selector, std::uint32_t row, std::uint32_t col, bool* missing) {
+  *missing = false;
+  if (!selector.is_array()) {
+    return *selector.scalar;
+  }
+  const std::uint32_t source_row = selector.rows == 1U ? 0U : row;
+  const std::uint32_t source_col = selector.cols == 1U ? 0U : col;
+  if (source_row >= selector.rows || source_col >= selector.cols) {
+    *missing = true;
+    return Value::error(ErrorCode::NA);
+  }
+  return selector.array->cells[static_cast<std::size_t>(source_row) * selector.cols + source_col];
+}
+
+std::uint32_t selector_rows(const SelectorView& row, const SelectorView& col) {
+  return std::max(row.rows, col.rows);
+}
+
+std::uint32_t selector_cols(const SelectorView& row, const SelectorView& col) {
+  return std::max(row.cols, col.cols);
+}
+
+// The array compositor is a materialisation boundary. Raw-reference blanks
+// copied from a source range must therefore become value-array blanks here so
+// that downstream COUNTA sees the occupied cells, while scalar INDEX / CHOOSE
+// paths continue to return the original reference blank unchanged.
+Value promote_array_result_cell(const Value& value) {
+  return value.promote_reference_blank_to_value_array();
+}
+
+ArrayValue* allocate_lookup_array(std::uint32_t rows, std::uint32_t cols, Arena& arena, Value*& buffer) {
+  return dynamic_array::allocate_array_value(rows, cols, arena, buffer, kMaxDerivedArrayCells);
+}
+
+enum class IndexAxisState : std::uint8_t { kValid, kError };
+
+struct DecodedIndex {
+  IndexAxisState state = IndexAxisState::kValid;
+  std::uint32_t index = 0U;
+  ErrorCode error = ErrorCode::Value;
+};
+
+DecodedIndex decode_index_cell(const Value& value) {
+  if (value.is_error()) {
+    return DecodedIndex{IndexAxisState::kError, 0U, value.as_error()};
+  }
+  auto number = coerce_to_number(value);
+  if (!number) {
+    return DecodedIndex{IndexAxisState::kError, 0U, number.error()};
+  }
+  const double original = number.value();
+  const double raw = truncate_index(original);
+  // A selector below 1 never names a row / column: negatives and sub-1
+  // fractions are both `#VALUE!`. Only an exact zero means "whole spanned
+  // dimension", so the fraction check tests `original` rather than `raw`.
+  if (original < 0.0 || (raw == 0.0 && original != 0.0)) {
+    return DecodedIndex{IndexAxisState::kError, 0U, ErrorCode::Value};
+  }
+  // Avoid an implementation-defined narrowing conversion for a gigantic
+  // finite selector. All admitted source dimensions are far below this
+  // bound, so the eventual result is the ordinary INDEX #REF! domain error.
+  if (raw > static_cast<double>(std::numeric_limits<std::uint32_t>::max())) {
+    return DecodedIndex{IndexAxisState::kError, 0U, ErrorCode::Ref};
+  }
+  return DecodedIndex{IndexAxisState::kValid, static_cast<std::uint32_t>(raw), ErrorCode::Value};
+}
+
+std::vector<DecodedIndex> decode_selector(const SelectorView& selector) {
+  const std::size_t count = static_cast<std::size_t>(selector.rows) * selector.cols;
+  std::vector<DecodedIndex> decoded;
+  decoded.reserve(count);
+  if (!selector.is_array()) {
+    decoded.push_back(decode_index_cell(*selector.scalar));
+    return decoded;
+  }
+  for (std::size_t i = 0; i < count; ++i) {
+    decoded.push_back(decode_index_cell(selector.array->cells[i]));
+  }
+  return decoded;
+}
+
+const DecodedIndex& decoded_selector_at(const SelectorView& selector, const std::vector<DecodedIndex>& decoded,
+                                        std::uint32_t row, std::uint32_t col, bool* missing) {
+  *missing = false;
+  const std::uint32_t source_row = selector.rows == 1U ? 0U : row;
+  const std::uint32_t source_col = selector.cols == 1U ? 0U : col;
+  if (source_row >= selector.rows || source_col >= selector.cols) {
+    *missing = true;
+    static const DecodedIndex kMissing{IndexAxisState::kError, 0U, ErrorCode::NA};
+    return kMissing;
+  }
+  return decoded[static_cast<std::size_t>(source_row) * selector.cols + source_col];
+}
+
+enum class IndexTileKind : std::uint8_t { kScalar, kRow, kColumn, kWhole };
+
+struct IndexTile {
+  IndexTileKind kind = IndexTileKind::kScalar;
+  std::uint32_t rows = 1U;
+  std::uint32_t cols = 1U;
+  std::uint32_t source_row = 0U;
+};
+
+IndexTile index_tile_for(std::uint32_t rows, std::uint32_t cols, std::uint32_t row_idx, std::uint32_t col_idx,
+                         bool col_explicit) {
+  IndexTile tile;
+  if (!col_explicit) {
+    if (rows == 1U && cols == 1U) {
+      return tile;
+    }
+    if (rows == 1U) {
+      if (row_idx == 0U) {
+        tile.kind = IndexTileKind::kRow;
+        tile.cols = cols;
+      }
+      return tile;
+    }
+    if (cols == 1U) {
+      if (row_idx == 0U) {
+        tile.kind = IndexTileKind::kColumn;
+        tile.rows = rows;
+      }
+      return tile;
+    }
+    // The two-argument form on a 2-D source reads the omitted column
+    // argument as zero, so a row selector returns that complete row and a
+    // zero selector spans every row as well -- the whole array, exactly as
+    // the explicit `INDEX(src, 0, 0)`. Matches the scalar path.
+    if (row_idx == 0U) {
+      tile.kind = IndexTileKind::kWhole;
+      tile.rows = rows;
+      tile.cols = cols;
+      return tile;
+    }
+    tile.kind = IndexTileKind::kRow;
+    tile.cols = cols;
+    tile.source_row = row_idx - 1U;
+    return tile;
+  }
+
+  if (rows == 1U && cols == 1U) {
+    return tile;
+  }
+  if (rows == 1U) {
+    if (col_idx == 0U) {
+      tile.kind = IndexTileKind::kRow;
+      tile.cols = cols;
+    }
+    return tile;
+  }
+  if (cols == 1U) {
+    if (row_idx == 0U) {
+      tile.kind = IndexTileKind::kColumn;
+      tile.rows = rows;
+    }
+    return tile;
+  }
+  if (row_idx == 0U && col_idx == 0U) {
+    tile.kind = IndexTileKind::kWhole;
+    tile.rows = rows;
+    tile.cols = cols;
+  } else if (row_idx == 0U) {
+    tile.kind = IndexTileKind::kColumn;
+    tile.rows = rows;
+  } else if (col_idx == 0U) {
+    tile.kind = IndexTileKind::kRow;
+    tile.cols = cols;
+  }
+  return tile;
+}
+
+Value index_tile_cell(const std::vector<Value>& cells, std::uint32_t source_rows, std::uint32_t source_cols,
+                      std::uint32_t row_idx, std::uint32_t col_idx, bool col_explicit, const IndexTile& tile,
+                      std::uint32_t output_row, std::uint32_t output_col) {
+  if (tile.kind == IndexTileKind::kScalar) {
+    const std::uint32_t source_row = col_explicit ? row_idx - 1U : (source_rows == 1U ? 0U : row_idx - 1U);
+    const std::uint32_t source_col = col_explicit ? col_idx - 1U : (source_rows == 1U ? row_idx - 1U : 0U);
+    const std::size_t flat = static_cast<std::size_t>(source_row) * source_cols + source_col;
+    return flat < cells.size() ? cells[flat] : Value::error(ErrorCode::Ref);
+  }
+
+  std::uint32_t source_row = 0U;
+  std::uint32_t source_col = 0U;
+  switch (tile.kind) {
+    case IndexTileKind::kRow:
+      source_row = col_explicit ? row_idx - 1U : tile.source_row;
+      source_col = output_col;
+      break;
+    case IndexTileKind::kColumn:
+      source_row = output_row;
+      source_col = col_explicit ? col_idx - 1U : 0U;
+      break;
+    case IndexTileKind::kWhole:
+      source_row = output_row;
+      source_col = output_col;
+      break;
+    case IndexTileKind::kScalar:
+      break;
+  }
+  if (source_row >= source_rows || source_col >= source_cols) {
+    return Value::error(ErrorCode::NA);
+  }
+  return cells[static_cast<std::size_t>(source_row) * source_cols + source_col];
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +543,29 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
   return best;
 }
 
+// Maps a scalar lookup result over the query array without routing through the
+// eager broadcaster. The lookup family has to resolve its table / index / mode
+// arguments exactly once, and an error in one query cell must remain local to
+// that lane even when the shared validation has already produced an error for
+// every ordinary lane.
+template <typename Mapper>
+Value map_lookup_query_array(const Value& lookup, Arena& arena, const Mapper& mapper) {
+  const std::uint32_t query_rows = lookup.as_array_rows();
+  const std::uint32_t query_cols = lookup.as_array_cols();
+  Value* output_cells = nullptr;
+  ArrayValue* output =
+      dynamic_array::allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
+  if (output == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const Value* query_cells = lookup.as_array_cells();
+  const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
+  for (std::size_t i = 0; i < query_count; ++i) {
+    output_cells[i] = promote_array_result_cell(mapper(query_cells[i]));
+  }
+  return Value::array(output);
+}
+
 Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx, LookupAxis axis) {
   const std::uint32_t arity = call.as_call_arity();
@@ -304,31 +578,60 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return lookup;
   }
 
+  const bool array_lookup = lookup.is_array();
+
   std::vector<Value> cells;
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   ErrorCode range_err = ErrorCode::Value;
   if (!resolve_table_array(call.as_call_arg(1), arena, registry, ctx, &cells, &range_err, &rows, &cols)) {
+    if (array_lookup) {
+      return map_lookup_query_array(lookup, arena, [range_err](const Value& query) {
+        return query.is_error() ? query : Value::error(range_err);
+      });
+    }
     return Value::error(range_err);
   }
   if (rows == 0U || cols == 0U) {
+    if (array_lookup) {
+      return map_lookup_query_array(
+          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::Ref); });
+    }
     return Value::error(ErrorCode::Ref);
   }
 
   const Value index_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
   if (index_val.is_error()) {
+    if (array_lookup) {
+      return map_lookup_query_array(lookup, arena,
+                                    [&index_val](const Value& query) { return query.is_error() ? query : index_val; });
+    }
     return index_val;
   }
   auto index_num = coerce_to_number(index_val);
   if (!index_num) {
+    if (array_lookup) {
+      const ErrorCode index_err = index_num.error();
+      return map_lookup_query_array(lookup, arena, [index_err](const Value& query) {
+        return query.is_error() ? query : Value::error(index_err);
+      });
+    }
     return Value::error(index_num.error());
   }
-  const double index_raw = std::floor(index_num.value());
+  const double index_raw = truncate_index(index_num.value());
   if (index_raw < 1.0) {
+    if (array_lookup) {
+      return map_lookup_query_array(
+          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::Value); });
+    }
     return Value::error(ErrorCode::Value);
   }
   const std::uint32_t result_extent = axis == LookupAxis::Column ? cols : rows;
   if (index_raw > static_cast<double>(result_extent)) {
+    if (array_lookup) {
+      return map_lookup_query_array(
+          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::Ref); });
+    }
     return Value::error(ErrorCode::Ref);
   }
   const auto result_index = static_cast<std::uint32_t>(index_raw);
@@ -337,13 +640,43 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   if (arity == 4) {
     const Value rl_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
     if (rl_val.is_error()) {
+      if (array_lookup) {
+        return map_lookup_query_array(lookup, arena,
+                                      [&rl_val](const Value& query) { return query.is_error() ? query : rl_val; });
+      }
       return rl_val;
     }
     auto rl_bool = coerce_to_bool(rl_val);
     if (!rl_bool) {
+      if (array_lookup) {
+        const ErrorCode range_lookup_err = rl_bool.error();
+        return map_lookup_query_array(lookup, arena, [range_lookup_err](const Value& query) {
+          return query.is_error() ? query : Value::error(range_lookup_err);
+        });
+      }
       return Value::error(rl_bool.error());
     }
     approximate = rl_bool.value();
+  }
+
+  if (array_lookup) {
+    return map_lookup_query_array(lookup, arena, [&](const Value& query) {
+      if (query.is_error()) {
+        return query;
+      }
+      const std::size_t off = lookup_scan(cells, rows, cols, axis, query, approximate, ctx.excel_profile());
+      if (off == SIZE_MAX) {
+        return Value::error(ErrorCode::NA);
+      }
+      const std::size_t flat =
+          axis == LookupAxis::Column
+              ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(result_index - 1U)
+              : (static_cast<std::size_t>(result_index - 1U) * static_cast<std::size_t>(cols)) + off;
+      if (flat >= cells.size()) {
+        return Value::error(ErrorCode::Ref);
+      }
+      return cells[flat];
+    });
   }
 
   const std::size_t off = lookup_scan(cells, rows, cols, axis, lookup, approximate, ctx.excel_profile());
@@ -359,7 +692,207 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   return cells[flat];
 }
 
+bool index_domain_valid(std::uint32_t rows, std::uint32_t cols, std::uint32_t row_idx, std::uint32_t col_idx,
+                        bool col_explicit) {
+  if (!col_explicit) {
+    if (rows == 1U && cols == 1U) {
+      return row_idx == 0U || row_idx == 1U;
+    }
+    if (rows == 1U) {
+      return row_idx <= cols;
+    }
+    if (cols == 1U) {
+      return row_idx <= rows;
+    }
+    return row_idx <= rows;
+  }
+  if (rows == 1U && cols == 1U) {
+    return (row_idx == 0U || row_idx == 1U) && (col_idx == 0U || col_idx == 1U);
+  }
+  if (rows == 1U) {
+    return (row_idx == 0U || row_idx == 1U) && col_idx <= cols;
+  }
+  if (cols == 1U) {
+    return row_idx <= rows && (col_idx == 0U || col_idx == 1U);
+  }
+  return row_idx <= rows && col_idx <= cols;
+}
+
+Value eval_index_array_selector(const std::vector<Value>& cells, std::uint32_t source_rows, std::uint32_t source_cols,
+                                bool source_ok, ErrorCode source_error, const Value& row_value, const Value* col_value,
+                                bool col_explicit, Arena& arena) {
+  const SelectorView row_selector = make_selector_view(row_value);
+  const Value implicit_col = Value::number(0.0);
+  const SelectorView col_selector = col_explicit ? make_selector_view(*col_value) : make_selector_view(implicit_col);
+  const std::vector<DecodedIndex> row_decoded = decode_selector(row_selector);
+  const std::vector<DecodedIndex> col_decoded = decode_selector(col_selector);
+
+  const std::uint32_t selector_out_rows = selector_rows(row_selector, col_selector);
+  const std::uint32_t selector_out_cols = selector_cols(row_selector, col_selector);
+  std::uint32_t out_rows = selector_out_rows;
+  std::uint32_t out_cols = selector_out_cols;
+
+  // A zero selector is a tile in scalar INDEX. In array-selector mode the
+  // tile is composed directly into the one flat output rectangle; no nested
+  // ArrayValue is allocated per lane. Scan the selector rectangle once to
+  // discover the largest tile shape that contributes to that rectangle.
+  if (source_ok) {
+    for (std::uint32_t r = 0; r < selector_out_rows; ++r) {
+      for (std::uint32_t c = 0; c < selector_out_cols; ++c) {
+        bool row_missing = false;
+        const DecodedIndex& row = decoded_selector_at(row_selector, row_decoded, r, c, &row_missing);
+        if (row_missing || row.state == IndexAxisState::kError) {
+          continue;
+        }
+        DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
+        bool col_missing = false;
+        if (col_explicit) {
+          col = decoded_selector_at(col_selector, col_decoded, r, c, &col_missing);
+          if (col_missing || col.state == IndexAxisState::kError) {
+            continue;
+          }
+        }
+        if (!index_domain_valid(source_rows, source_cols, row.index, col.index, col_explicit)) {
+          continue;
+        }
+        const IndexTile tile = index_tile_for(source_rows, source_cols, row.index, col.index, col_explicit);
+        out_rows = std::max(out_rows, tile.rows);
+        out_cols = std::max(out_cols, tile.cols);
+      }
+    }
+  }
+
+  Value* output_cells = nullptr;
+  ArrayValue* output = allocate_lookup_array(out_rows, out_cols, arena, output_cells);
+  if (output == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      Value result = Value::error(ErrorCode::NA);
+      bool row_missing = false;
+      const DecodedIndex& row = decoded_selector_at(row_selector, row_decoded, r, c, &row_missing);
+      if (row_missing) {
+        output_cells[static_cast<std::size_t>(r) * out_cols + c] = result;
+        continue;
+      }
+      if (row.state == IndexAxisState::kError) {
+        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(row.error);
+        continue;
+      }
+
+      DecodedIndex col{IndexAxisState::kValid, 0U, ErrorCode::Value};
+      bool col_missing = false;
+      if (col_explicit) {
+        col = decoded_selector_at(col_selector, col_decoded, r, c, &col_missing);
+        if (col_missing) {
+          output_cells[static_cast<std::size_t>(r) * out_cols + c] = result;
+          continue;
+        }
+        if (col.state == IndexAxisState::kError) {
+          output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(col.error);
+          continue;
+        }
+      }
+
+      // Source errors are global to INDEX, but an array selector still
+      // determines the output rectangle. Selector errors above retain their
+      // lane-local precedence over that source error.
+      if (!source_ok) {
+        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(source_error);
+        continue;
+      }
+      if (!index_domain_valid(source_rows, source_cols, row.index, col.index, col_explicit)) {
+        output_cells[static_cast<std::size_t>(r) * out_cols + c] = Value::error(ErrorCode::Ref);
+        continue;
+      }
+      const IndexTile tile = index_tile_for(source_rows, source_cols, row.index, col.index, col_explicit);
+      result = index_tile_cell(cells, source_rows, source_cols, row.index, col.index, col_explicit, tile, r, c);
+      output_cells[static_cast<std::size_t>(r) * out_cols + c] = promote_array_result_cell(result);
+    }
+  }
+  return Value::array(output);
+}
+
 }  // namespace
+
+// Array-index CHOOSE compositor. The index has already been evaluated by the
+// caller; every branch is evaluated exactly once, left-to-right, and selected
+// cells are composed into one value array.
+Value eval_choose_array_index_lazy(const parser::AstNode& call, const Value& index_value, Arena& arena,
+                                   const FunctionRegistry& registry, const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (!index_value.is_array()) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  const SelectorView index_selector = make_selector_view(index_value);
+
+  // Array-index CHOOSE evaluates every branch once, left-to-right, then
+  // selects cached scalar/array cells lane-by-lane. This is deliberately a
+  // separate path from scalar CHOOSE: only the scalar form may skip
+  // unselected branches.
+  std::vector<Value> branches;
+  branches.reserve(arity - 1U);
+  for (std::uint32_t i = 1U; i < arity; ++i) {
+    branches.push_back(eval_node(call.as_call_arg(i), arena, registry, ctx));
+  }
+
+  std::uint32_t out_rows = index_selector.rows;
+  std::uint32_t out_cols = index_selector.cols;
+  std::vector<SelectorView> branch_views;
+  branch_views.reserve(branches.size());
+  for (const Value& branch : branches) {
+    branch_views.push_back(make_selector_view(branch));
+    out_rows = std::max(out_rows, branch_views.back().rows);
+    out_cols = std::max(out_cols, branch_views.back().cols);
+  }
+
+  Value* output_cells = nullptr;
+  ArrayValue* output = allocate_lookup_array(out_rows, out_cols, arena, output_cells);
+  if (output == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+
+  const std::vector<DecodedIndex> decoded_indices = decode_selector(index_selector);
+  for (std::uint32_t r = 0; r < out_rows; ++r) {
+    for (std::uint32_t c = 0; c < out_cols; ++c) {
+      const std::size_t output_index = static_cast<std::size_t>(r) * out_cols + c;
+      bool index_missing = false;
+      const DecodedIndex& decoded = decoded_selector_at(index_selector, decoded_indices, r, c, &index_missing);
+      if (index_missing) {
+        output_cells[output_index] = Value::error(ErrorCode::NA);
+        continue;
+      }
+      if (decoded.state == IndexAxisState::kError) {
+        output_cells[output_index] = Value::error(decoded.error);
+        continue;
+      }
+      if (decoded.index < 1U || decoded.index > branches.size()) {
+        output_cells[output_index] = Value::error(ErrorCode::Value);
+        continue;
+      }
+
+      const SelectorView& branch = branch_views[decoded.index - 1U];
+      bool branch_missing = false;
+      const Value selected = selector_at(branch, r, c, &branch_missing);
+      if (branch_missing) {
+        output_cells[output_index] = Value::error(ErrorCode::NA);
+      } else {
+        // The compositor, rather than scalar CHOOSE, owns this value-array
+        // boundary. Promote reference blanks only after the selected cell
+        // has been chosen so an unselected branch's cells cannot leak into
+        // the output.
+        output_cells[output_index] = promote_array_result_cell(selected);
+      }
+    }
+  }
+  return Value::array(output);
+}
 
 // CHOOSE(index_num, value1, value2, ...)
 //
@@ -368,7 +901,7 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
 // or `c`). Out-of-range indices yield `#VALUE!`; a numeric coercion failure
 // on `index_num` also yields `#VALUE!`. Errors in `index_num` propagate.
 // Errors in the chosen value also propagate; unselected arguments are never
-// evaluated.
+// evaluated for the scalar-index path.
 Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -380,13 +913,16 @@ Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (idx_val.is_error()) {
     return idx_val;
   }
+  if (idx_val.is_array()) {
+    return eval_choose_array_index_lazy(call, idx_val, arena, registry, ctx);
+  }
   auto idx_num = coerce_to_number(idx_val);
   if (!idx_num) {
     return Value::error(idx_num.error());
   }
   // Excel truncates (toward zero) rather than rounds: CHOOSE(2.9, ...)
   // selects the 2nd value, not the 3rd.
-  const double raw = std::floor(idx_num.value());
+  const double raw = truncate_index(idx_num.value());
   if (!(raw >= 1.0 && raw <= static_cast<double>(arity - 1))) {
     return Value::error(ErrorCode::Value);
   }
@@ -421,19 +957,35 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return Value::error(ErrorCode::Value);
   }
   auto resolved = resolve_range_arg(call.as_call_arg(0), arena, registry, ctx);
-  if (!resolved) {
-    return Value::error(resolved.error());
-  }
-  const std::uint32_t rows = resolved.value().rows;
-  const std::uint32_t cols = resolved.value().cols;
-  std::vector<Value> cells = std::move(resolved.value().cells);
-  if (rows == 0U || cols == 0U) {
-    // Defensive: expand_range always produces a positive rectangle today.
-    return Value::error(ErrorCode::Ref);
+  const bool source_ok = resolved.has_value();
+  const ErrorCode source_error = source_ok ? ErrorCode::Value : resolved.error();
+  std::uint32_t rows = 0U;
+  std::uint32_t cols = 0U;
+  std::vector<Value> cells;
+  if (source_ok) {
+    rows = resolved.value().rows;
+    cols = resolved.value().cols;
+    cells = std::move(resolved.value().cells);
+    if (rows == 0U || cols == 0U) {
+      // Defensive: expand_range always produces a positive rectangle today.
+      rows = 0U;
+      cols = 0U;
+    }
   }
 
   // row_num is required (arity 2 or 3), col_num is optional.
   const Value row_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  Value col_val = Value::number(0.0);
+  if (arity == 3) {
+    col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
+  }
+  if (row_val.is_array() || col_val.is_array()) {
+    return eval_index_array_selector(cells, rows, cols, source_ok && rows != 0U && cols != 0U, source_error, row_val,
+                                     arity == 3 ? &col_val : nullptr, arity == 3, arena);
+  }
+  if (!source_ok || rows == 0U || cols == 0U) {
+    return Value::error(source_error == ErrorCode::Value ? ErrorCode::Ref : source_error);
+  }
   if (row_val.is_error()) {
     return row_val;
   }
@@ -442,14 +994,14 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return Value::error(row_num_exp.error());
   }
   const double row_orig = row_num_exp.value();
-  const double row_raw = std::floor(row_orig);
-  if (row_raw < 0.0) {
+  const double row_raw = truncate_index(row_orig);
+  if (row_orig < 0.0) {
     return Value::error(ErrorCode::Value);
   }
-  // Fractional sub-1 values (`row_num` in (0, 1)) floor to 0 but Excel rejects
-  // them with #VALUE!. The "whole-vector" / "whole-array" sentinel meaning of
-  // row_num == 0 only applies when the user explicitly passed 0.
-  if (row_raw == 0.0 && row_orig > 0.0) {
+  // Fractional sub-1 values (`row_num` in (0, 1)) truncate to 0 but Excel
+  // rejects them with #VALUE!. The "whole-vector" / "whole-array" sentinel
+  // meaning of row_num == 0 only applies when the user explicitly passed 0.
+  if (row_raw == 0.0 && row_orig != 0.0) {
     return Value::error(ErrorCode::Value);
   }
   const auto row_idx = static_cast<std::uint32_t>(row_raw);
@@ -457,7 +1009,6 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   std::uint32_t col_idx = 0;
   bool col_explicit = false;
   if (arity == 3) {
-    const Value col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
     if (col_val.is_error()) {
       return col_val;
     }
@@ -466,12 +1017,12 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       return Value::error(col_num_exp.error());
     }
     const double col_orig = col_num_exp.value();
-    const double col_raw = std::floor(col_orig);
-    if (col_raw < 0.0) {
+    const double col_raw = truncate_index(col_orig);
+    if (col_orig < 0.0) {
       return Value::error(ErrorCode::Value);
     }
     // Symmetric guard for sub-1 fractional col_num.
-    if (col_raw == 0.0 && col_orig > 0.0) {
+    if (col_raw == 0.0 && col_orig != 0.0) {
       return Value::error(ErrorCode::Value);
     }
     col_idx = static_cast<std::uint32_t>(col_raw);
@@ -520,14 +1071,17 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       r = row_idx - 1U;
       c = 0;
     } else {
-      // 2-D array with only a row selector: Excel 365 spills the whole
-      // selected row. Index 0 spills the whole row 1 (the first row),
-      // matching Excel's `INDEX(A1:C3, 0)` behaviour.
-      const std::uint32_t spill_row = row_idx == 0U ? 0U : row_idx - 1U;
-      if (spill_row >= rows) {
+      // 2-D array with only a row selector: the omitted column argument is
+      // read as zero, so the selected row spills whole. A zero row selector
+      // then spans both dimensions and spills the entire array, the same
+      // result the explicit `INDEX(array, 0, 0)` produces below.
+      if (row_idx == 0U) {
+        return index_whole_array(cells, rows, cols, arena);
+      }
+      if (row_idx > rows) {
         return Value::error(ErrorCode::Ref);
       }
-      return index_whole_row(cells, cols, spill_row, arena);
+      return index_whole_row(cells, cols, row_idx - 1U, arena);
     }
   } else {
     // Three-arg form.
@@ -564,17 +1118,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     } else {
       // 2-D array. Zero indices spill the spanned dimension.
       if (row_idx == 0U && col_idx == 0U) {
-        // Whole array: spill every cell row-major.
-        Value* buffer = nullptr;
-        ArrayValue* out = dynamic_array::allocate_array_value(rows, cols, arena, buffer);
-        if (out == nullptr) {
-          return Value::error(ErrorCode::Num);
-        }
-        const std::size_t total = static_cast<std::size_t>(rows) * cols;
-        for (std::size_t i = 0; i < total; ++i) {
-          buffer[i] = cells[i];
-        }
-        return Value::array(out);
+        return index_whole_array(cells, rows, cols, arena);
       }
       if (row_idx == 0U) {
         // Whole column at col_idx -> spill the column as a vertical array.
@@ -605,76 +1149,10 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   return cells[flat];
 }
 
-// MATCH(lookup_value, lookup_array, [match_type])
-//
-// Returns the 1-based position of `lookup_value` inside the 1-D
-// `lookup_array`. `lookup_array` must be a `RangeOp(Ref, Ref)` or a single
-// `Ref` with a 1-D shape (row vector or column vector); a 2-D range yields
-// `#N/A`.
-//
-// match_type semantics:
-//   *  1 (default) - ascending array; returns the largest position whose
-//      value is <= lookup_value. Wildcards are NOT honoured.
-//   *  0           - exact match with DOS-style wildcards (`*`, `?`, `~`)
-//      for text targets; first hit wins. No match -> `#N/A`.
-//   * -1           - descending array; returns the largest position whose
-//      value is >= lookup_value.
-//
-// Cross-type comparison is not implemented beyond "same rank, ordered" for
-// approximate modes: a cell whose kind doesn't match the lookup_value rank
-// is treated as a non-match and never participates in the approximate
-// ranking. This is a documented accepted divergence.
-Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx) {
-  const std::uint32_t arity = call.as_call_arity();
-  if (arity != 2 && arity != 3) {
-    return Value::error(ErrorCode::Value);
-  }
-
-  // lookup_value (scalar). Errors propagate; Blank is treated as 0 for the
-  // numeric comparison path below, matching Excel.
-  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int match_type, ExcelProfile profile) {
   if (lookup.is_error()) {
     return lookup;
   }
-
-  // lookup_array: must be a range / Ref with a 1-D shape.
-  auto resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
-  if (!resolved) {
-    return Value::error(resolved.error());
-  }
-  const std::uint32_t rows = resolved.value().rows;
-  const std::uint32_t cols = resolved.value().cols;
-  std::vector<Value> cells = std::move(resolved.value().cells);
-  if (rows != 1U && cols != 1U) {
-    // 2-D array to MATCH is not supported and Excel reports #N/A.
-    return Value::error(ErrorCode::NA);
-  }
-
-  // match_type: default 1. Truncate toward zero and clamp into {-1, 0, 1};
-  // any other value is rejected with #N/A (Excel's effective behaviour).
-  int match_type = 1;
-  if (arity == 3) {
-    const Value mt_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (mt_val.is_error()) {
-      return mt_val;
-    }
-    auto mt_num = coerce_to_number(mt_val);
-    if (!mt_num) {
-      return Value::error(mt_num.error());
-    }
-    const double mt_raw = std::floor(mt_num.value());
-    if (mt_raw == -1.0) {
-      match_type = -1;
-    } else if (mt_raw == 0.0) {
-      match_type = 0;
-    } else if (mt_raw == 1.0) {
-      match_type = 1;
-    } else {
-      return Value::error(ErrorCode::NA);
-    }
-  }
-
   const std::size_t n = cells.size();
   if (n == 0) {
     return Value::error(ErrorCode::NA);
@@ -690,16 +1168,13 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       // wildcards is still correct — `~*` becomes a literal `*` compare,
       // `foo` becomes a byte-exact compare. Lowering both sides gives
       // Excel's case-insensitive ASCII equality.
-      // Normalise (see classic.cpp::lookup_scan / lookup_text_key) before
-      // lower-casing so MATCH agrees with Mac Excel on kana / full-width
-      // variants and with XLOOKUP on half-width voicing composition.
-      const std::string pat_lower = lookup_text_key(lookup.as_text(), ctx.excel_profile());
+      const std::string pat_lower = lookup_text_key(lookup.as_text(), profile);
       for (std::size_t i = 0; i < n; ++i) {
         const Value& cell = cells[i];
         if (!cell.is_text()) {
           continue;
         }
-        const std::string cell_lower = lookup_text_key(cell.as_text(), ctx.excel_profile());
+        const std::string cell_lower = lookup_text_key(cell.as_text(), profile);
         if (wildcard_match(pat_lower, cell_lower)) {
           return Value::number(static_cast<double>(i + 1));
         }
@@ -750,7 +1225,6 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   auto cmp_text = [&](std::string_view a, std::string_view b) -> int {
     // Normalise (see classic.cpp::lookup_scan / lookup_text_cmp_key) so kana /
     // half-width voicing variants order together in MATCH approximate mode.
-    const ExcelProfile profile = ctx.excel_profile();
     return strings::case_insensitive_compare(lookup_text_cmp_key(a, profile), lookup_text_cmp_key(b, profile));
   };
 
@@ -808,6 +1282,124 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return Value::error(ErrorCode::NA);
   }
   return Value::number(static_cast<double>(best_pos));
+}
+
+// MATCH(lookup_value, lookup_array, [match_type])
+//
+// Returns the 1-based position of `lookup_value` inside the 1-D
+// `lookup_array`. `lookup_array` must be a `RangeOp(Ref, Ref)` or a single
+// `Ref` with a 1-D shape (row vector or column vector); a 2-D range yields
+// `#N/A`.
+//
+// match_type semantics:
+//   *  1 (default) - ascending array; returns the largest position whose
+//      value is <= lookup_value. Wildcards are NOT honoured.
+//   *  0           - exact match with DOS-style wildcards (`*`, `?`, `~`)
+//      for text targets; first hit wins. No match -> `#N/A`.
+//   * -1           - descending array; returns the largest position whose
+//      value is >= lookup_value.
+//
+// Cross-type comparison is not implemented beyond "same rank, ordered" for
+// approximate modes: a cell whose kind doesn't match the lookup_value rank
+// is treated as a non-match and never participates in the approximate
+// ranking. This is a documented accepted divergence.
+Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity != 2 && arity != 3) {
+    return Value::error(ErrorCode::Value);
+  }
+
+  // lookup_value (scalar). Errors propagate; Blank is treated as 0 for the
+  // numeric comparison path below, matching Excel.
+  const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (lookup.is_error()) {
+    return lookup;
+  }
+  const bool array_lookup = lookup.is_array();
+
+  // lookup_array: must be a range / Ref with a 1-D shape.
+  auto resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
+  if (!resolved) {
+    if (array_lookup) {
+      const ErrorCode lookup_array_err = resolved.error();
+      return map_lookup_query_array(lookup, arena, [lookup_array_err](const Value& query) {
+        return query.is_error() ? query : Value::error(lookup_array_err);
+      });
+    }
+    return Value::error(resolved.error());
+  }
+  const std::uint32_t rows = resolved.value().rows;
+  const std::uint32_t cols = resolved.value().cols;
+  std::vector<Value> cells = std::move(resolved.value().cells);
+  if (rows != 1U && cols != 1U) {
+    // 2-D array to MATCH is not supported and Excel reports #N/A.
+    if (array_lookup) {
+      return map_lookup_query_array(
+          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::NA); });
+    }
+    return Value::error(ErrorCode::NA);
+  }
+
+  // match_type: default 1. The scalar path retains its existing {-1, 0, 1}
+  // validation. Mac Excel's array path instead coerces any finite positive
+  // mode to ascending and any finite negative mode to descending; in
+  // particular, MATCH(array, range, 2) is not a global invalid result.
+  int match_type = 1;
+  if (arity == 3) {
+    const Value mt_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
+    if (mt_val.is_error()) {
+      if (array_lookup) {
+        return map_lookup_query_array(lookup, arena,
+                                      [&mt_val](const Value& query) { return query.is_error() ? query : mt_val; });
+      }
+      return mt_val;
+    }
+    auto mt_num = coerce_to_number(mt_val);
+    if (!mt_num) {
+      if (array_lookup) {
+        const ErrorCode match_type_err = mt_num.error();
+        return map_lookup_query_array(lookup, arena, [match_type_err](const Value& query) {
+          return query.is_error() ? query : Value::error(match_type_err);
+        });
+      }
+      return Value::error(mt_num.error());
+    }
+    const double mt_raw = truncate_index(mt_num.value());
+    if (mt_raw == -1.0) {
+      match_type = -1;
+    } else if (mt_raw == 0.0) {
+      match_type = 0;
+    } else if (mt_raw == 1.0) {
+      match_type = 1;
+    } else if (array_lookup && mt_raw > 0.0) {
+      match_type = 1;
+    } else if (array_lookup && mt_raw < 0.0) {
+      match_type = -1;
+    } else {
+      if (array_lookup) {
+        return map_lookup_query_array(
+            lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::NA); });
+      }
+      return Value::error(ErrorCode::NA);
+    }
+  }
+
+  const std::size_t n = cells.size();
+  if (n == 0) {
+    if (array_lookup) {
+      return map_lookup_query_array(
+          lookup, arena, [](const Value& query) { return query.is_error() ? query : Value::error(ErrorCode::NA); });
+    }
+    return Value::error(ErrorCode::NA);
+  }
+
+  if (array_lookup) {
+    return map_lookup_query_array(lookup, arena, [&](const Value& query) {
+      return match_lookup_one(cells, query, match_type, ctx.excel_profile());
+    });
+  }
+  return match_lookup_one(cells, lookup, match_type, ctx.excel_profile());
 }
 
 // VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])

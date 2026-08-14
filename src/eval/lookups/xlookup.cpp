@@ -8,12 +8,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/criteria.h"
-#include "eval/dynamic_array/common.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
@@ -335,15 +336,16 @@ std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_va
   return hi_eff - 1U;
 }
 
-// Coerce `v` to an int that must lie in the caller's whitelist. Truncates
-// toward zero (matching Excel's MATCH coercion). Returns true when the
-// coerced value was accepted; on rejection leaves `*out` untouched.
+// Coerce `v` to an int that must lie in the caller's whitelist. Narrows
+// through the lookup family's shared `truncate_index`, so XMATCH and MATCH
+// cannot disagree on a fractional mode. Returns true when the coerced value
+// was accepted; on rejection leaves `*out` untouched.
 bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, int* out) {
-  auto num = coerce_to_number(v);
+  auto num = coerce_to_index_number(v);
   if (!num) {
     return false;
   }
-  const double raw = std::trunc(num.value());
+  const double raw = num.value();
   const int as_int = static_cast<int>(raw);
   if (static_cast<double>(as_int) != raw) {
     return false;
@@ -375,7 +377,9 @@ bool coerce_mode_int(const Value& v, const int* allowed, std::size_t n_allowed, 
 /// B1:D5)`) spills the matched row across all return columns; a multi-row
 /// `return_array` (horizontal lookup) spills the matched column. The
 /// return_array's match axis must equal the lookup axis length, else
-/// `#VALUE!`.
+/// `#VALUE!`. When `lookup_value` is an array, each query is matched
+/// independently and the result keeps the query array's shape; each hit
+/// returns the first cell of its matched return slice.
 Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -432,7 +436,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   //    casting into the enum.
   static constexpr int kMatchModes[] = {-1, 0, 1, 2};
   int match_raw = 0;
-  if (arity >= 5U) {
+  if (arity >= 5U && !is_omitted_arg(call.as_call_arg(4))) {
     const Value mm_val = eval_node(call.as_call_arg(4), arena, registry, ctx);
     if (mm_val.is_error()) {
       return mm_val;
@@ -445,7 +449,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // 6) search_mode (optional, default FirstToLast).
   static constexpr int kSearchModes[] = {-2, -1, 1, 2};
   int search_raw = 1;
-  if (arity >= 6U) {
+  if (arity >= 6U && !is_omitted_arg(call.as_call_arg(5))) {
     const Value sm_val = eval_node(call.as_call_arg(5), arena, registry, ctx);
     if (sm_val.is_error()) {
       return sm_val;
@@ -466,28 +470,99 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     return Value::error(ErrorCode::Value);
   }
 
-  const std::size_t off = xlookup_scan(lookup_cells, lookup, match_mode, search_mode, ctx.excel_profile());
+  // A match is deliberately represented separately from the returned value:
+  // array-valued lookup_value lanes need to distinguish a query-cell error
+  // from a true miss so only the latter can evaluate if_not_found.
+  enum class MatchOutcomeKind : std::uint8_t { Hit, Miss, Error };
+  struct MatchOutcome {
+    MatchOutcomeKind kind;
+    std::size_t offset;
+    Value error;
+  };
+  const auto match_one = [&](const Value& query) -> MatchOutcome {
+    if (query.is_error()) {
+      return {MatchOutcomeKind::Error, SIZE_MAX, query};
+    }
+    const std::size_t offset = xlookup_scan(lookup_cells, query, match_mode, search_mode, ctx.excel_profile());
+    if (offset == SIZE_MAX) {
+      return {MatchOutcomeKind::Miss, SIZE_MAX, Value::blank()};
+    }
+    return {MatchOutcomeKind::Hit, offset, Value::blank()};
+  };
 
-  // 7) No match: evaluate if_not_found lazily, else #N/A. A blank-literal
-  //    slot (`XLOOKUP(..., ..., ..., , , -1)`) is treated as "no
-  //    if_not_found supplied" per Excel 365 — the parser injects a
-  //    Blank literal for the empty comma slot, but the function should
-  //    fall through to #N/A rather than returning that blank.
-  if (off == SIZE_MAX) {
-    if (arity >= 4U) {
-      const parser::AstNode& if_arg = call.as_call_arg(3);
-      const bool is_empty_slot = is_omitted_arg(if_arg);
-      if (!is_empty_slot) {
-        return eval_node(if_arg, arena, registry, ctx);
+  // Evaluate if_not_found at most once, and only after the first true miss.
+  // For array-valued lookup_value, an array fallback is not a scalar lane:
+  // Excel returns #VALUE! for every miss rather than nesting or aligning that
+  // array in the result. Scalar lookup_value retains its existing behavior.
+  std::optional<Value> fallback;
+  const auto value_for_miss = [&](bool array_lane) -> Value {
+    if (!fallback.has_value()) {
+      if (arity >= 4U && !is_omitted_arg(call.as_call_arg(3))) {
+        fallback = eval_node(call.as_call_arg(3), arena, registry, ctx);
+      } else {
+        fallback = Value::error(ErrorCode::NA);
       }
     }
-    return Value::error(ErrorCode::NA);
+    if (array_lane && fallback->is_array()) {
+      return Value::error(ErrorCode::Value);
+    }
+    return *fallback;
+  };
+
+  const auto first_cell_of_slice = [&](std::size_t offset) -> Value {
+    if (slice_extent == 1U) {
+      return return_cells[offset];
+    }
+    // For an array-valued lookup_value, XLOOKUP returns one scalar per query
+    // lane. A vertical lookup selects the first column of the matched row;
+    // a horizontal lookup selects the first row of the matched column.
+    if (horizontal_lookup) {
+      return return_cells[offset];
+    }
+    return return_cells[offset * r_cols];
+  };
+
+  if (lookup.is_array()) {
+    const std::uint32_t query_rows = lookup.as_array_rows();
+    const std::uint32_t query_cols = lookup.as_array_cols();
+    const Value* query_cells = lookup.as_array_cells();
+    Value* output_cells = nullptr;
+    ArrayValue* output = allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
+    if (output == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
+    for (std::size_t i = 0; i < query_count; ++i) {
+      const MatchOutcome match = match_one(query_cells[i]);
+      Value output_value = Value::error(ErrorCode::NA);
+      switch (match.kind) {
+        case MatchOutcomeKind::Error:
+          output_value = match.error;
+          break;
+        case MatchOutcomeKind::Miss:
+          output_value = value_for_miss(/*array_lane=*/true);
+          break;
+        case MatchOutcomeKind::Hit:
+          output_value = first_cell_of_slice(match.offset);
+          break;
+      }
+      output_cells[i] = output_value.promote_reference_blank_to_value_array();
+    }
+    return Value::array(output);
   }
 
-  // 8) Translate offset -> return slice. For a single return lane the
-  //    result is one cell; for a multi-lane return_array the matched
-  //    row (vertical lookup) or column (horizontal lookup) spills as an
-  //    array. `return_cells` is row-major (r_rows x r_cols).
+  const MatchOutcome match = match_one(lookup);
+  if (match.kind == MatchOutcomeKind::Error) {
+    return match.error;
+  }
+  if (match.kind == MatchOutcomeKind::Miss) {
+    return value_for_miss(/*array_lane=*/false);
+  }
+
+  // Translate offset -> return slice. For a scalar lookup_value, preserve
+  // the existing multi-cell return behavior: the matched row (vertical
+  // lookup) or column (horizontal lookup) spills as an array.
+  const std::size_t off = match.offset;
   if (slice_extent == 1U) {
     // Single-cell result. `off` indexes the match axis; with a 1-lane
     // return_array the flat index is `off` regardless of orientation.
@@ -497,7 +572,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     // Matched column `off`: gather every row at that column into an
     // r_rows x 1 vertical array.
     Value* buffer = nullptr;
-    ArrayValue* out = dynamic_array::allocate_array_value(r_rows, 1U, arena, buffer);
+    ArrayValue* out = allocate_array_value(r_rows, 1U, arena, buffer, kMaxDerivedArrayCells);
     if (out == nullptr) {
       return Value::error(ErrorCode::Num);
     }
@@ -509,7 +584,7 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // Vertical lookup, matched row `off`: gather every column at that row
   // into a 1 x r_cols horizontal array.
   Value* buffer = nullptr;
-  ArrayValue* out = dynamic_array::allocate_array_value(1U, r_cols, arena, buffer);
+  ArrayValue* out = allocate_array_value(1U, r_cols, arena, buffer, kMaxDerivedArrayCells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -553,7 +628,7 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   static constexpr int kMatchModes[] = {-1, 0, 1, 2};
   int match_raw = 0;
-  if (arity >= 3U) {
+  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
     const Value mm_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
     if (mm_val.is_error()) {
       return mm_val;
@@ -565,7 +640,7 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
 
   static constexpr int kSearchModes[] = {-2, -1, 1, 2};
   int search_raw = 1;
-  if (arity >= 4U) {
+  if (arity >= 4U && !is_omitted_arg(call.as_call_arg(3))) {
     const Value sm_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
     if (sm_val.is_error()) {
       return sm_val;
@@ -586,11 +661,58 @@ Value eval_xmatch_lazy(const parser::AstNode& call, Arena& arena, const Function
     return Value::error(ErrorCode::Value);
   }
 
-  const std::size_t off = xlookup_scan(cells, lookup, match_mode, search_mode, ctx.excel_profile());
-  if (off == SIZE_MAX) {
+  enum class MatchOutcomeKind : std::uint8_t { Hit, Miss, Error };
+  struct MatchOutcome {
+    MatchOutcomeKind kind;
+    std::size_t offset;
+    Value error;
+  };
+  const auto match_one = [&](const Value& query) -> MatchOutcome {
+    if (query.is_error()) {
+      return {MatchOutcomeKind::Error, SIZE_MAX, query};
+    }
+    const std::size_t offset = xlookup_scan(cells, query, match_mode, search_mode, ctx.excel_profile());
+    if (offset == SIZE_MAX) {
+      return {MatchOutcomeKind::Miss, SIZE_MAX, Value::blank()};
+    }
+    return {MatchOutcomeKind::Hit, offset, Value::blank()};
+  };
+
+  if (lookup.is_array()) {
+    const std::uint32_t query_rows = lookup.as_array_rows();
+    const std::uint32_t query_cols = lookup.as_array_cols();
+    const Value* query_cells = lookup.as_array_cells();
+    Value* output_cells = nullptr;
+    ArrayValue* output = allocate_array_value(query_rows, query_cols, arena, output_cells, kMaxDerivedArrayCells);
+    if (output == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    const std::size_t query_count = static_cast<std::size_t>(query_rows) * query_cols;
+    for (std::size_t i = 0; i < query_count; ++i) {
+      const MatchOutcome match = match_one(query_cells[i]);
+      switch (match.kind) {
+        case MatchOutcomeKind::Error:
+          output_cells[i] = match.error;
+          break;
+        case MatchOutcomeKind::Miss:
+          output_cells[i] = Value::error(ErrorCode::NA);
+          break;
+        case MatchOutcomeKind::Hit:
+          output_cells[i] = Value::number(static_cast<double>(match.offset + 1U));
+          break;
+      }
+    }
+    return Value::array(output);
+  }
+
+  const MatchOutcome match = match_one(lookup);
+  if (match.kind == MatchOutcomeKind::Error) {
+    return match.error;
+  }
+  if (match.kind == MatchOutcomeKind::Miss) {
     return Value::error(ErrorCode::NA);
   }
-  return Value::number(static_cast<double>(off + 1U));
+  return Value::number(static_cast<double>(match.offset + 1U));
 }
 
 }  // namespace eval

@@ -29,6 +29,12 @@ namespace {
 using formulon::test::EvalSource;
 using formulon::test::EvalSourceIn;
 
+void ExpectArrayShape(const Value& value, std::uint32_t rows, std::uint32_t cols) {
+  ASSERT_TRUE(value.is_array()) << value.debug_to_string();
+  EXPECT_EQ(value.as_array_rows(), rows);
+  EXPECT_EQ(value.as_array_cols(), cols);
+}
+
 // ---------------------------------------------------------------------------
 // VLOOKUP
 // ---------------------------------------------------------------------------
@@ -54,6 +60,32 @@ TEST(BuiltinsVLookup, ArrayLiteralTablePreservesTwoDimensions) {
   const Value v = EvalSource("=VLOOKUP(2,{1,\"a\";2,\"b\"},2,FALSE)");
   ASSERT_TRUE(v.is_text()) << v.debug_to_string();
   EXPECT_EQ(v.as_text(), "b");
+}
+
+TEST(BuiltinsVLookup, ArrayLookupValueExactPreservesShapeAndErrors) {
+  const Value v = EvalSource("=VLOOKUP({20,99;#DIV/0!,10},{10,\"ten\";20,\"twenty\";30,\"thirty\"},2,FALSE)");
+  ExpectArrayShape(v, 2U, 2U);
+  const Value* cells = v.as_array_cells();
+  ASSERT_TRUE(cells[0].is_text());
+  EXPECT_EQ(cells[0].as_text(), "twenty");
+  ASSERT_TRUE(cells[1].is_error());
+  EXPECT_EQ(cells[1].as_error(), ErrorCode::NA);
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(cells[3].is_text());
+  EXPECT_EQ(cells[3].as_text(), "ten");
+}
+
+TEST(BuiltinsVLookup, ArrayLookupValueNestedSequenceMapsOnce) {
+  const Value v = EvalSource("=VLOOKUP(SEQUENCE(3,1,20,-10),{10,\"ten\";20,\"twenty\";30,\"thirty\"},2,FALSE)");
+  ExpectArrayShape(v, 3U, 1U);
+  const Value* cells = v.as_array_cells();
+  ASSERT_TRUE(cells[0].is_text());
+  EXPECT_EQ(cells[0].as_text(), "twenty");
+  ASSERT_TRUE(cells[1].is_text());
+  EXPECT_EQ(cells[1].as_text(), "ten");
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::NA);
 }
 
 TEST(BuiltinsVLookup, ExactTextCaseInsensitive) {
@@ -282,6 +314,75 @@ TEST(BuiltinsHLookup, ExactNumericFirstRow) {
   const Value v = EvalSourceIn("=HLOOKUP(20, A1:C2, 2, FALSE)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_text());
   EXPECT_EQ(v.as_text(), "twenty");
+}
+
+TEST(BuiltinsHLookup, ArrayLookupValueExactPreservesShapeAndErrors) {
+  const Value v = EvalSource("=HLOOKUP({20,99;#DIV/0!,10},{10,20,30;\"ten\",\"twenty\",\"thirty\"},2,FALSE)");
+  ExpectArrayShape(v, 2U, 2U);
+  const Value* cells = v.as_array_cells();
+  ASSERT_TRUE(cells[0].is_text());
+  EXPECT_EQ(cells[0].as_text(), "twenty");
+  ASSERT_TRUE(cells[1].is_error());
+  EXPECT_EQ(cells[1].as_error(), ErrorCode::NA);
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(cells[3].is_text());
+  EXPECT_EQ(cells[3].as_text(), "ten");
+}
+
+TEST(BuiltinsHLookup, ArrayLookupValueNestedSequenceMapsOnce) {
+  const Value v = EvalSource("=HLOOKUP(SEQUENCE(1,3,25,-20),{10,20,30;\"low\",\"mid\",\"high\"},2,TRUE)");
+  ExpectArrayShape(v, 1U, 3U);
+  const Value* cells = v.as_array_cells();
+  ASSERT_TRUE(cells[0].is_text());
+  EXPECT_EQ(cells[0].as_text(), "mid");
+  ASSERT_TRUE(cells[1].is_error());
+  EXPECT_EQ(cells[1].as_error(), ErrorCode::NA);
+  ASSERT_TRUE(cells[2].is_error());
+  EXPECT_EQ(cells[2].as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsLookup, ArrayLookupReferenceBlankPromotionForVAndHLookup) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 3, Value::number(1.0));  // D1
+  wb.sheet(0).set_cell_value(1, 3, Value::number(2.0));  // D2
+  wb.sheet(0).set_cell_value(2, 3, Value::number(3.0));  // D3
+  wb.sheet(0).set_cell_value(0, 4, Value::number(2.0));  // E1
+  // E2 intentionally remains blank.
+  wb.sheet(0).set_cell_value(2, 4, Value::number(1.0));  // E3
+
+  const Value vlookup_counta = EvalSourceIn("=COUNTA(VLOOKUP(SEQUENCE(3),D1:E3,2,FALSE))", wb, wb.sheet(0));
+  ASSERT_TRUE(vlookup_counta.is_number());
+  EXPECT_DOUBLE_EQ(vlookup_counta.as_number(), 3.0);
+  const Value vlookup_count = EvalSourceIn("=COUNT(VLOOKUP(SEQUENCE(3),D1:E3,2,FALSE))", wb, wb.sheet(0));
+  ASSERT_TRUE(vlookup_count.is_number());
+  EXPECT_DOUBLE_EQ(vlookup_count.as_number(), 2.0);
+  const Value vlookup_blank = EvalSourceIn("=ISBLANK(INDEX(VLOOKUP(SEQUENCE(3),D1:E3,2,FALSE),2,1))", wb, wb.sheet(0));
+  ASSERT_TRUE(vlookup_blank.is_boolean());
+  EXPECT_TRUE(vlookup_blank.as_boolean());
+  const Value vlookup_scalar_counta = EvalSourceIn("=COUNTA(VLOOKUP(2,D1:E3,2,FALSE))", wb, wb.sheet(0));
+  ASSERT_TRUE(vlookup_scalar_counta.is_number());
+  EXPECT_DOUBLE_EQ(vlookup_scalar_counta.as_number(), 0.0);
+
+  wb.sheet(0).set_cell_value(0, 6, Value::number(1.0));  // G1
+  wb.sheet(0).set_cell_value(0, 7, Value::number(2.0));  // H1
+  wb.sheet(0).set_cell_value(0, 8, Value::number(3.0));  // I1
+  wb.sheet(0).set_cell_value(1, 6, Value::number(2.0));  // G2
+  // H2 intentionally remains blank.
+  wb.sheet(0).set_cell_value(1, 8, Value::number(1.0));  // I2
+
+  const Value hlookup_counta = EvalSourceIn("=COUNTA(HLOOKUP(SEQUENCE(3),G1:I2,2,FALSE))", wb, wb.sheet(0));
+  ASSERT_TRUE(hlookup_counta.is_number());
+  EXPECT_DOUBLE_EQ(hlookup_counta.as_number(), 3.0);
+  const Value hlookup_count = EvalSourceIn("=COUNT(HLOOKUP(SEQUENCE(3),G1:I2,2,FALSE))", wb, wb.sheet(0));
+  ASSERT_TRUE(hlookup_count.is_number());
+  EXPECT_DOUBLE_EQ(hlookup_count.as_number(), 2.0);
+  const Value hlookup_blank = EvalSourceIn("=ISBLANK(INDEX(HLOOKUP(SEQUENCE(3),G1:I2,2,FALSE),2,1))", wb, wb.sheet(0));
+  ASSERT_TRUE(hlookup_blank.is_boolean());
+  EXPECT_TRUE(hlookup_blank.as_boolean());
+  const Value hlookup_scalar_counta = EvalSourceIn("=COUNTA(HLOOKUP(H1,G1:I2,2,FALSE))", wb, wb.sheet(0));
+  ASSERT_TRUE(hlookup_scalar_counta.is_number());
+  EXPECT_DOUBLE_EQ(hlookup_scalar_counta.as_number(), 0.0);
 }
 
 TEST(BuiltinsHLookup, ExactWildcardStar) {
