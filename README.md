@@ -60,7 +60,7 @@ These are **permanent** non-goals, not "not yet." The scope is finite on purpose
 |---------|------|-------|
 | npm | `@libraz/formulon` | WASM ESM module, type definitions included. Node 22+, browsers, workers. |
 | PyPI | `formulon` | Python 3.9+ `py3-none-any` wheel that bundles `formulon_capi.wasm` plus a pure-Python wrapper. `pip` resolves the platform-specific `wasmtime` runtime. |
-| GitHub Releases | `formulon-cli-<platform-arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
+| GitHub Releases | `formulon-cli-<platform-arch>` | Standalone CLI binaries (`eval`, `recalc`, `dump`, `paginate`) for `darwin-arm64`, `linux-x64`, `linux-arm64`. |
 
 Every surface computes the same results from the same input. One
 deliberate difference is worth knowing before you size a workload: the
@@ -82,14 +82,23 @@ After placing a release binary on `PATH`, use `eval` for a scalar formula,
 ```bash
 formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
+formulon recalc --threads 4 input.xlsx -o output.xlsx
 formulon dump output.xlsx --formulas
 formulon paginate output.xlsx --sheet 0
 ```
 
+All four commands accept `--` to end option parsing. Put command options
+before it, then pass exactly one positional formula (`eval`) or input path
+(`recalc`, `dump`, `paginate`); this also allows a relative path beginning
+with `-`, for example `formulon dump --sheets -- -input.xlsx`.
+
 `recalc` accepts `.xlsx` or `.xlsb` input/output. It writes its success status
 to stderr as `formulon: recalc: ok, wrote M bytes to 'OUT'`; pass `--quiet` to
 suppress that status line. XLSB data-loss warnings remain visible under
-`--quiet`.
+`--quiet`. By default it uses the serial recalc contract. `--threads N` opts
+into the parallel SCC scheduler (`0` auto-detects, `1` stays on the caller
+thread, and `2..8` sets a worker cap) and reports per-pass telemetry in the
+status line.
 
 ## Status
 
@@ -119,7 +128,7 @@ additional category (507 + 15 = 522, not 524).
 
 Three labels partition the CTest suite: `SLOW` (minutes-scale integration, fuzz smoke, and concurrency cases), `TSAN` (thread-sanitizer runs), and `BENCH` (microbenchmark regression checks, whose threshold is tunable, so they run on demand). Everything else is the unlabeled fast tier that CI gates on; there is no separate load-test tier.
 
-Every skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 522 catalogued functions, `518` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); the remaining `4` (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) fail only `behaviors_declared` — their behavior taxonomy is under-specified. The separate workbook track still has an implementation/golden gap: page/data-axis `GETPIVOTDATA` is pending a product-verified Windows M365 observation, which may require a subsequent C++ fix.
+Every skip is an explicit divergence, host-service dependency, volatile/environment-bound case, or driver limitation, not a silent stub. Of the 522 catalogued functions, `517` satisfy all six closure conditions (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`); `4` of the remaining `5` (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) fail only `behaviors_declared` — their behavior taxonomy is under-specified. The fifth, `JIS`, lost its oracle case coverage when the suite was retired for Mac Excel's own JIS bug and has not yet been re-covered or formally recorded as a permanent divergence-skip. The separate workbook track still has an implementation/golden gap: page/data-axis `GETPIVOTDATA` is pending a product-verified Windows M365 observation, which may require a subsequent C++ fix.
 
 Beyond formula results, **pivot tables and print areas / pagination** have a dedicated **workbook oracle track** and a Windows COM driver. The `win-365-ja_JP` target is still `wanted`; the checked-in workbook files are historical/reference-only and are not counted as Microsoft 365 verification. The GETPIVOTDATA page/data-axis cases now include a post-build formula-probe schema, a native verifier, and a direct `#REF!` regression. A product-verified Windows Microsoft 365 host is still required to generate the external golden; the exact command and limitation are recorded in [`tests/divergence.yaml`](tests/divergence.yaml).
 

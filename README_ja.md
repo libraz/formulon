@@ -60,7 +60,7 @@ Formulon は以下を **意図的にサポートしません**。
 |--------|-------------|------|
 | npm | [`@libraz/formulon`](https://www.npmjs.com/package/@libraz/formulon) | WASM ESM モジュール。型定義同梱。Node 22+ / ブラウザ / Worker 対応。 |
 | PyPI | [`formulon`](https://pypi.org/project/formulon/) | Python 3.9+ の `py3-none-any` wheel。`formulon_capi.wasm` と pure-Python wrapper を同梱し、`wasmtime` は `pip` が解決します。 |
-| GitHub Releases | `formulon-cli-<platform-arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
+| GitHub Releases | `formulon-cli-<platform-arch>` | 単体 CLI バイナリ (`eval` / `recalc` / `dump` / `paginate`)。`darwin-arm64` / `linux-x64` / `linux-arm64` 向け。 |
 
 同じ入力からはどの配布形態でも同じ結果が出ます。ただし規模を見積もる前に知っておくべき意図的な違いが 1 つあります。WASM ビルド（つまり npm と PyPI のパッケージ）はワークシート XML を DOM パーサだけで読みますが、ネイティブ CLI は 256 KiB を超えるワークシートをストリーミングパーサに切り替えます。ストリーミングの実装はバイナリサイズを消費し、WASM の予算にその余裕がないためです。したがって WASM でワークシートを開くときは、固定量ではなくそのシートの XML に比例したメモリが要ります。ピークはワークブック単位ではなくワークシート単位（シートは 1 枚ずつ読みます）で、実際の上限はホストの 32-bit WASM アドレス空間です。
 
@@ -73,13 +73,20 @@ Release バイナリを `PATH` に置いた後、`eval` は単一数式の評価
 ```bash
 formulon eval '=SUM(1,2,3)'
 formulon recalc input.xlsx -o output.xlsx
+formulon recalc --threads 4 input.xlsx -o output.xlsx
 formulon dump output.xlsx --formulas
 formulon paginate output.xlsx --sheet 0
 ```
 
-`recalc` は成功時に stderr へ
-`formulon: recalc: ok, wrote M bytes to 'OUT'` を出力します。抑制するには
-`--quiet` を指定します。
+4 つのコマンドはいずれも `--` でオプションの解釈を終了できます。`--` より前にオプションを指定し、その後には `eval` では数式を、`recalc`・`dump`・`paginate` では入力パスを 1 つだけ渡します。これにより `-` で始まる相対パスも扱えます（例: `formulon dump --sheets -- -input.xlsx`）。
+
+`recalc` は入出力とも `.xlsx` / `.xlsb` を受け付けます。成功時は stderr へ
+`formulon: recalc: ok, wrote M bytes to 'OUT'` を出力し、このステータス行は
+`--quiet` で抑制できます。XLSB のデータ損失警告は `--quiet` を付けても表示
+されます。既定では直列の recalc 契約で動作し、`--threads N` を渡すと並列 SCC
+スケジューラに切り替わります（`0` は自動検出、`1` は呼び出しスレッドのまま、
+`2..8` はワーカー数の上限指定）。このときステータス行にはパスごとの
+テレメトリも出ます。
 
 ## ステータス
 
@@ -108,7 +115,7 @@ oracle は **97 カテゴリ** あります。primary oracle は Mac Excel 365 j
 
 CTest スイートを分けているラベルは 3 つです。`SLOW` (分オーダーの integration・fuzz smoke・concurrency ケース)、`TSAN` (thread sanitizer 実行)、`BENCH` (しきい値が可変なマイクロベンチ回帰チェックで、必要なときだけ実行) の 3 つで、残りはすべて CI がゲートする無ラベルの fast tier です。負荷試験専用の層はありません。
 
-残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `518` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る `4` 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、behavior taxonomy の記述が不足しているためです。別枠の workbook track には実装/golden の gap が残っており、page/data-axis `GETPIVOTDATA` は製品確認済み Windows M365 の観測待ちです。観測結果によっては C++ 側の修正が必要になります。
+残っている skip は、明示済みの divergence、ホストサービス依存、揮発・環境依存ケース、またはドライバ制約です。黙って未実装 stub に落としているものではありません。522 関数のうち `517` は closure 6 条件 (`behaviors_declared` / `cases_cover_behaviors` / `golden_present` / `divergence_documented` / `not_in_pilot` / `behavior_drift`) を全て満たします。残る 5 件のうち `4` 件 (`ARRAYTOTEXT`, `FILTERXML`, `GETPIVOTDATA`, `PHONETIC`) が満たさないのは `behaviors_declared` だけで、behavior taxonomy の記述が不足しているためです。5 件目の `JIS` は、Mac Excel 自体の JIS 関数バグを理由に oracle case 一式が撤去されて以来 oracle カバレッジを失っており、まだ再カバーも恒久的な divergence-skip としての正式登録もされていません。別枠の workbook track には実装/golden の gap が残っており、page/data-axis `GETPIVOTDATA` は製品確認済み Windows M365 の観測待ちです。観測結果によっては C++ 側の修正が必要になります。
 
 数式の結果に加えて、**ピボットテーブルと印刷範囲・改ページ**には専用の **workbook oracle track** と Windows COM driver があります。`win-365-ja_JP` target はまだ `wanted` で、チェックイン済み workbook ファイルは比較用の `reference-only` であり、Microsoft 365 検証とは数えません。GETPIVOTDATA の page/data-axis ケースには post-build formula-probe schema、native verifier、直接の `#REF!` 回帰を追加しました。製品確認済み Windows Microsoft 365 host での外部 golden 採取が必要で、コマンドと制約は [`tests/divergence.yaml`](tests/divergence.yaml) に記録しています。
 
