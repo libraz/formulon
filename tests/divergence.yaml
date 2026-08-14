@@ -248,8 +248,9 @@ entries:
   # the accumulator) exactly as Excel does. The three case formulas also
   # moved off `1/0` inside an array constant — an expression Excel rejects
   # at formula entry — onto the `#DIV/0!` error literal, so they now name
-  # something a live host can actually evaluate. The goldens still carry the
-  # old `skipped` marker and need a regeneration run to go live.
+  # something a live host can actually evaluate. Regenerated: all three
+  # goldens in tests/oracle/golden/lambda.golden.json carry the live
+  # per-slot #DIV/0! array result with no `skipped` field.
 
   # Gap 2 (closed 2026-04-29): Formulon parser now accepts the
   # `[optional_param]` bracket syntax in LAMBDA parameter lists. Optional
@@ -332,8 +333,9 @@ entries:
   # Stale `forecast_ets_seasonality_linear_no_period` removed: the
   # seasonality detector now removes the linear trend before computing the
   # autocorrelation, so a perfectly linear series reports no period (0) like
-  # Excel instead of picking lag 2 off a non-stationary series. The golden
-  # still carries the old `skipped` marker and needs a regeneration run.
+  # Excel instead of picking lag 2 off a non-stationary series. Regenerated:
+  # tests/oracle/golden/forecast_ets.golden.json carries the live
+  # `{kind: number, value: 0.0}` result with no `skipped` field.
 
   # REGEXEXTRACT spill-mode results — modes 1 (1 x N) and 2 (1 x G) are
   # now captured as full arrays by the spill-shape oracle probe. Mode 3
@@ -491,11 +493,14 @@ entries:
     first_noted: 2026-04-28
     last_verified_excel_version: "16.108.1"
     mode: skip-oracle
-  # FILTERXML is unavailable in the primary Mac Excel target. Keep this
-  # entire suite out of its goldens; Windows variant goldens cover the XPath
-  # contract where the function is available.
+  # FILTERXML is unavailable in the primary Mac Excel target (Mac Excel
+  # ja-JP does not evaluate it through the formula2/xlwings oracle path).
+  # `win-365-ja_JP` remains `status: wanted` / `active_ctest: false` in
+  # tools/oracle/targets.yaml -- its goldens are reference-only, not live
+  # oracle coverage, so this skip does not lean on them. The XPath
+  # contract itself is pinned by tests/unit/eval/builtins_web_test.cpp.
   - suite: filterxml
-    reason: "Mac Excel 16.108.1 does not evaluate FILTERXML through the formula2/xlwings oracle path, while Formulon implements the XPath contract and Windows Excel provides the available-host oracle."
+    reason: "Mac Excel 16.108.1 does not evaluate FILTERXML through the formula2/xlwings oracle path. Formulon implements the XPath contract (pugixml); its behavior is pinned by tests/unit/eval/builtins_web_test.cpp, not by Windows oracle coverage."
     prefer: formulon
     first_noted: 2026-05-15
     last_verified_excel_version: "16.108.1"
@@ -613,10 +618,13 @@ entries:
   # -- ENCODEURL: not available in Mac Excel 365 ja-JP ----------------------
   # Mac Excel 365 ja-JP returns #NAME? for every ENCODEURL invocation:
   # the function is documented in the Microsoft 365 catalog but is not
-  # registered in this build/locale. Windows Excel 365 live oracle coverage
-  # now pins the available-host behavior, including uppercase hex and the
-  # Excel-specific `~` -> `%7E` encoding. These Mac skips only preserve the
-  # unavailable-function surface for the primary Mac target.
+  # registered in this build/locale. `win-365-ja_JP` remains `status:
+  # wanted` / `active_ctest: false` in tools/oracle/targets.yaml
+  # (reference-only, unverified) -- its historical files are kept for
+  # comparison but do not pin anything here. These Mac skips only
+  # preserve the unavailable-function surface for the primary Mac
+  # target; Formulon's own encoding (uppercase hex, Excel's `~` ->
+  # `%7E`) is pinned by tests/unit/eval/builtins_web_test.cpp.
   - id: encodeurl_space
     mode: skip-oracle
     reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME? on every probe). Historical Windows files are reference-only until a product-verified Microsoft 365 capture is available; no live Windows coverage is asserted here."
@@ -631,7 +639,7 @@ entries:
     last_verified_excel_version: "16.108.1"
   - id: encodeurl_unreserved_passthrough
     mode: skip-oracle
-    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Windows Excel 365 pins Excel's tilde encoding as %7E."
+    reason: "Mac Excel 365 ja-JP does not register ENCODEURL (#NAME?). Formulon: unreserved characters pass through and `~` encodes as %7E (Excel's documented tilde behavior; pinned by tests/unit/eval/builtins_web_test.cpp, not by win-365-ja_JP which is reference-only)."
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.108.1"
@@ -710,48 +718,56 @@ entries:
   # geometric model just cannot reproduce them. Skipping until a
   # principled rule emerges (would need source-level Excel access or a
   # significantly broader capture matrix to derive empirically).
+  #
+  # The capturing host's `Application.Version` reported "16.0", which
+  # tests/oracle/variants/win-365-ja_JP/ENVIRONMENT.md and
+  # PROVENANCE.json (`classification: reference-only`, `verified: false`,
+  # `active_ctest: false`) both identify as an Office 2019 install, not a
+  # Microsoft 365 one. Stamped `unverified` below rather than "16.0" so
+  # these six entries surface as pending reprobes instead of masquerading
+  # as verified Microsoft 365 evidence.
   - id: scale_50_shrinks_breaks
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
   - id: scale_25_extreme_shrink
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
   - id: zoom_50_dense_fit_off
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
   - id: zoom_25_dense_fit_off
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
   - id: scale_50_short_row
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
   - id: scale_50_flat_rows
     mode: skip-oracle
     applies_to: [win-365-ja_JP]
     reason: "Excel PBP emits scale<=50 column auto-breaks that don't follow geometric pagination (community-documented COM quirk)."
     prefer: formulon
     first_noted: 2026-05-17
-    last_verified_excel_version: "16.0"
+    last_verified_excel_version: "unverified (Office 2019 reference capture; win-365-ja_JP is reference-only, active_ctest: false)"
 
   # -- GROUPBY / PIVOTBY nested subtotals (|total_depth| == 2) -------------
   # Both functions build the outer/inner hierarchy over the first key
@@ -809,14 +825,12 @@ entries:
   # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
   # itself a union reports its real area count.
   #
-  # Stale `arg_indirect_union` removed: AREAS now decodes an INDIRECT call's
-  # reference text and counts the areas it names, so
-  # `=AREAS(INDIRECT("A1,B2"))` reports 2. The decode is textual, so nothing
-  # here waits on the engine being able to hold a multi-area reference as a
-  # runtime value; text the decoder does not recognise (R1C1, a defined
-  # name, malformed input) keeps the single-opaque-reference count. See
-  # src/eval/areas_lazy.cpp. The golden still carries the old `skipped`
-  # marker and needs a regeneration run to go live.
+  # `arg_indirect_union` (tests/oracle/cases/areas.yaml): INDIRECT builds at
+  # most one rectangle, so `INDIRECT("A1,B2")` cannot return a 2-area
+  # reference -- the INDIRECT call itself is #REF!, and AREAS reports that
+  # error rather than a count of 2. Implementation (src/eval/areas_lazy.cpp),
+  # oracle case, and golden (tests/oracle/golden/areas.golden.json, no
+  # `skipped` field) all agree on #REF!; this is not a pending divergence.
 
   # -- Circular reference with iterative calculation OFF ------------------
   # A formula cycle (e.g. A1 = =A2, A2 = =A1) with the workbook's iterative
@@ -839,7 +853,7 @@ entries:
     reason: "A formula cycle with iterative calc OFF resolves to #REF! for every cycle-member cell in Formulon (recalc-engine SCC detection; eval_context returns ErrorCode::Ref on a re-entrant reference). Excel leaves 0 in the cells and shows a circular-reference warning banner — a UI-only surface with no computed value that the oracle harness cannot capture."
     prefer: formulon
     first_noted: 2026-07-02
-    last_verified_excel_version: "Excel 365 (Mac, ja-JP, 2026-07)"
+    last_verified_excel_version: "unverified (Mac Excel 365 observed 2026-07-02; build number not recorded, needs reprobe)"
 
   # -- XLSB-sourced pivot tables: GETPIVOTDATA unsupported ----------------
   # Pivot tables in a .xlsb workbook are not decoded into Formulon's
@@ -857,7 +871,7 @@ entries:
     reason: "Pivot tables loaded from .xlsb are not decoded into the evaluated pivot model (the XLSB reader wires no pivot caches / tables onto the workbook), so GETPIVOTDATA over an XLSB-sourced pivot returns #REF! where Excel returns the aggregated value. Deferred pending XLSB pivot record decoding."
     prefer: mac-excel-365
     first_noted: 2026-07-02
-    last_verified_excel_version: "Excel 365 (Mac, ja-JP, 2026-07)"
+    last_verified_excel_version: "unverified (Mac Excel 365 observed 2026-07-02; build number not recorded, needs reprobe)"
 
   # -- XLSB external-workbook defined names --------------------------------
   # PtgNameX resolves through the external-supporting-book and external-name
@@ -872,7 +886,7 @@ entries:
     reason: "XLSB PtgNameX external-workbook defined names require BrtSupBookSrc and BrtSupNameStart table decoding, which is not implemented. The reader keeps the cached cell value and reports the unsupported Ptg instead of fabricating an incorrect internal defined-name reference."
     prefer: mac-excel-365
     first_noted: 2026-08-05
-    last_verified_excel_version: "Excel 365 (Mac, ja-JP, 16.111.2)"
+    last_verified_excel_version: "16.111.2"
 
 # -- Parser internal-safety limits ------------------------------------------
   # `Parser::parse_expression`'s recursion-depth guard (`kMaxFormulaAstDepth`,
@@ -895,7 +909,49 @@ entries:
     reason: "Excel's formula-length limit (8,192 characters) is the real ceiling on a flat operator chain; Formulon additionally rejects a flat chain past kMaxFormulaAstDepth (128) terms because the recursion-depth guard is shared with true nesting for native-stack safety across ast_format / ast_shift / the XLSB ptg_reader. Not raised without also bounding those recursive consumers independently. Observed directly: a workbook carrying =A1+A2+...+A150 (642 characters, A1:A150 seeded 1..150) opens and evaluates to 11325, and a 1000-term chain (4,893 characters) opens and evaluates as well. The observation has to be made from a file: the AppleEvent formula setter the oracle driver uses truncates a long formula, so an in-place probe measures the bridge rather than Excel. See DefaultDepthCapRejectsLongLeftAssociativeChain."
     prefer: formulon
     first_noted: 2026-08-13
-    last_verified_excel_version: "Excel 365 (Mac, ja-JP, 16.112)"
+    last_verified_excel_version: "16.112"
+
+  # -- INDIRECT: R1C1 style (a1=FALSE) not decoded -------------------------
+  # `parse_a1_ref` (src/eval/reference/common.cpp) only understands A1
+  # syntax. Any `INDIRECT(ref_text, FALSE)` call takes the R1C1 branch
+  # unconditionally to #REF! before ref_text is even parsed -- including
+  # inputs ADDRESS() itself can produce, e.g.
+  # `INDIRECT(ADDRESS(2,3,1,FALSE),FALSE)`. Real Excel decodes R1C1 and
+  # resolves the cell. Deferred; tracked by
+  # tests/unit/eval/builtins_references_test.cpp
+  # BuiltinsIndirect.R1C1StyleNotSupportedMvp, which pins today's #REF!
+  # surface rather than the eventual Excel-matching behavior.
+  - id: indirect_r1c1_style_deferred
+    mode: skip-oracle
+    scope: deferred-feature
+    evidence: [tests/unit/eval/builtins_references_test.cpp]
+    reason: "INDIRECT(ref_text, FALSE) always returns #REF! because the R1C1 branch is deferred (src/eval/reference/common.cpp); Excel decodes R1C1 syntax and resolves the referenced cell. No live Excel probe is needed to confirm the gap exists, so this entry is intentionally left unverified rather than borrowed from an unrelated capture -- see tools/catalog/function_status.tsv for the INDIRECT catalog note."
+    prefer: mac-excel-365
+    first_noted: 2026-08-14
+    last_verified_excel_version: "unverified (implementation gap; not a live-capture-dependent claim)"
+
+  # -- Pivot: authored <filters> block is not evaluated --------------------
+  # An authored `<filters>` element (OOXML pivotTableDefinition) survives
+  # save/reload byte-for-byte in the verbatim passthrough tail -- see
+  # PivotTableReader.AuthoredFiltersRoundTripAsPassthroughAndStayOutOfTheModel
+  # and PivotTableWriter.ActiveFiltersAreSessionStateAndAreNotSerialized --
+  # but it never populates PivotTable::active_filters() and therefore never
+  # participates in evaluation. Excel applies the filter when it evaluates
+  # the same pivot. src/pivot/pivot_table.h documents the model-side
+  # rationale (active_filters() is deliberately session-only in both
+  # directions); this entry records only the Excel-observable gap.
+  - id: pivot_authored_filters_block_not_evaluated
+    mode: skip-oracle
+    scope: deferred-feature
+    evidence:
+      [
+        tests/unit/io/pivot_table_reader_test.cpp,
+        tests/unit/io/pivot_table_writer_test.cpp,
+      ]
+    reason: "A workbook carrying an authored <filters> block on a pivotTableDefinition: Excel applies that filter when it evaluates the pivot's aggregated values. Formulon retains the <filters> block byte-for-byte across save/reload (verbatim passthrough) but evaluates the pivot as if unfiltered, because the block is never decoded into PivotTable::active_filters(). Confirming the exact Excel-filtered values requires a live Microsoft 365 host: author a pivot workbook with a real <filters> block (label/value/date filter), record the pivot's aggregated cell values under that filter, and compare against Formulon's unfiltered evaluation of the same workbook. No such probe has been run this session."
+    prefer: mac-excel-365
+    first_noted: 2026-08-14
+    last_verified_excel_version: "unverified (needs a live Excel probe: author a <filters>-bearing pivot workbook and record its filtered evaluation)"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

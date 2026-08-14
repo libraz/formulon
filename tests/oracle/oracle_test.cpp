@@ -648,6 +648,16 @@ TEST_P(OracleTest, Matches) {
   } else {
     wb.set_excel_profile(eval::mac_365_ja_jp_profile());
   }
+  // The oracle generator records the suite-level date system in the
+  // environment record. Keep the native workbook and every evaluator context
+  // on the same epoch; absent or non-boolean values preserve the 1900 default.
+  // Coverage is intentionally through the parameterized oracle path: the H3
+  // golden's date1904=true environment and serial anchor exercise parsing,
+  // workbook setup, and formula evaluation together.
+  if (const JsonValue* date1904_v = param.environment.find("date1904");
+      date1904_v != nullptr && date1904_v->is_bool()) {
+    wb.set_date1904(date1904_v->as_bool());
+  }
   // Honour the suite-level iterative-calc flag. The Python generator stamps
   // `environment.iterative` from the suite's `options.iterative`; when true
   // the workbook resolves circular formulas via fixed-point iteration
@@ -751,6 +761,7 @@ TEST_P(OracleTest, Matches) {
                                    << setup_formula.formula << "'";
     eval::EvalContext setup_ctx = eval::EvalContext(wb, setup_sheet, setup_state)
                                       .with_excel_profile(wb.excel_profile())
+                                      .with_date1904(wb.date1904())
                                       .with_mutable_sheet(setup_sheet)
                                       .with_formula_cell(setup_formula.row, setup_formula.col);
     Value setup_value = eval::evaluate(*setup_root, setup_eval_arena, registry, setup_ctx);
@@ -775,7 +786,8 @@ TEST_P(OracleTest, Matches) {
   // detection, and the default function registry all kick in — matching
   // what a real Formulon calc would do.
   eval::EvalState state;
-  eval::EvalContext ctx = eval::EvalContext(wb, sheet, state).with_excel_profile(wb.excel_profile());
+  eval::EvalContext ctx =
+      eval::EvalContext(wb, sheet, state).with_excel_profile(wb.excel_profile()).with_date1904(wb.date1904());
   // Anchor the formula at its own cell so zero-arg ROW() / COLUMN() return
   // the case's row / column. Cases whose `id` is an A1 address (e.g. "A1",
   // "C5") use that address; all other cases (descriptive ids like
