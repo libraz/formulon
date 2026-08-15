@@ -9,8 +9,102 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.oracle.provenance import active_variant_names, cf_active, validate_targets
+from tools.oracle.provenance import active_variant_names, cf_active, validate_targets, workbook_active
 from tools.oracle.workbook_oracle_gen import _display_path, _workbook_primary
+
+
+def _workbook_tree(root: Path, *, case_ids: list[str], golden_ids: list[str]) -> dict:
+    """Materialises a one-suite workbook capture and its manifest doc."""
+
+    cases_dir = root / "tests/oracle/cases_wb"
+    golden_dir = root / "tests/oracle/golden_wb"
+    cases_dir.mkdir(parents=True)
+    golden_dir.mkdir(parents=True)
+    (cases_dir / "suite.case.json").write_text(
+        json.dumps({"suite": "suite", "kind": "workbook", "cases": [{"id": i, "sheets": {}} for i in case_ids]}),
+        encoding="utf-8",
+    )
+    golden_path = golden_dir / "suite.golden.json"
+    golden_path.write_text(
+        json.dumps(
+            {
+                "suite": "suite",
+                "kind": "workbook",
+                "environment": {
+                    "excel_version": "16.0.18025",
+                    "excel_locale": "ja-JP",
+                    "capture_id": "capture-1",
+                },
+                "cases": [{"id": i, "spec": {}, "expect": {}} for i in golden_ids],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (golden_dir / "PROVENANCE.json").write_text(
+        json.dumps(
+            {
+                "status": "scaffolded",
+                "classification": "active",
+                "verified": True,
+                "active_ctest": True,
+                "target": "win",
+                "product": "16.0.18025",
+                "locale": "ja-JP",
+                "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
+                "capture_id": "capture-1",
+                "all_suites_same_capture": True,
+                "required_suites": ["suite"],
+                "captured_suites": ["suite"],
+                "suite_inventory": [
+                    {
+                        "suite": "suite",
+                        "case_count": len(golden_ids),
+                        "sha256": hashlib.sha256(golden_path.read_bytes()).hexdigest(),
+                        "capture_id": "capture-1",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "tracks": {"workbook": {"primary": "win"}},
+        "targets": {"win": {"status": "scaffolded", "locale": "ja-JP"}},
+    }
+
+
+class WorkbookCaptureActivationTest(unittest.TestCase):
+    """Which case-id mismatches revoke a capture, and which merely wait."""
+
+    def test_matching_ids_are_active(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = _workbook_tree(root, case_ids=["a", "b"], golden_ids=["a", "b"])
+            self.assertTrue(workbook_active(doc, root))
+
+    def test_a_newly_declared_uncaptured_case_does_not_revoke_the_capture(self) -> None:
+        # Adding a case is how coverage is requested. If that revoked the
+        # whole capture, every already-captured case in the tree would
+        # silently drop out of CTest until the next Excel session -- the
+        # cost of asking for coverage would be losing the coverage you had.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = _workbook_tree(root, case_ids=["a", "b", "new"], golden_ids=["a", "b"])
+            self.assertTrue(workbook_active(doc, root))
+
+    def test_a_golden_asserting_an_undeclared_case_revokes_the_capture(self) -> None:
+        # The dangerous direction: nothing regenerates an orphan golden
+        # case, so it would assert a spec no one maintains.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = _workbook_tree(root, case_ids=["a"], golden_ids=["a", "orphan"])
+            self.assertFalse(workbook_active(doc, root))
+
+    def test_a_golden_with_no_cases_at_all_revokes_the_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            doc = _workbook_tree(root, case_ids=["a"], golden_ids=[])
+            self.assertFalse(workbook_active(doc, root))
 
 
 class ProvenancePolicyTest(unittest.TestCase):

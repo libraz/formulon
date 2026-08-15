@@ -336,7 +336,15 @@ def workbook_active(doc: Mapping[str, Any], repo_root: Path = REPO_ROOT) -> bool
             return False
         expected_ids = {case.get("id") for case in case_doc.get("cases", []) if isinstance(case, dict)}
         golden_ids = {case.get("id") for case in cases if isinstance(case, dict)}
-        if not expected_ids or expected_ids != golden_ids:
+        # Deliberately directional. A golden asserting an id no case file
+        # declares is an orphan -- nothing regenerates it, so it must
+        # revoke the capture. The other direction is only "declared but
+        # not captured yet", which `workbook_closure_check.py` reports as
+        # PENDING; treating it as revocation meant adding one case
+        # silently dropped every already-captured case in the tree to zero
+        # coverage, so asking for new coverage cost you the coverage you
+        # had.
+        if not expected_ids or not golden_ids or not golden_ids.issubset(expected_ids):
             return False
         item = inventory.get(suite)
         if item is None or item.get("case_count") != len(cases):

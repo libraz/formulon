@@ -162,6 +162,19 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tools/oracle/.venv/bin/python")
 endif()
 set(_manifest_active_variants "")
 set(_manifest_workbook_active "")
+
+# Whether a golden tree counts as active CTest coverage is decided here, at
+# configure time, from files the build does not otherwise depend on. Landing
+# a capture therefore had no effect until someone happened to re-run cmake,
+# and the failure was silent: `ctest` reported a clean run over the cases it
+# still didn't know about. Make the two markers configure inputs so the
+# generator picks the change up on the next build instead.
+set_property(
+  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_SOURCE_DIR}/tools/oracle/targets.yaml"
+  "${CMAKE_CURRENT_SOURCE_DIR}/golden_wb/PROVENANCE.json"
+)
+
 if(Python3_Interpreter_FOUND)
   execute_process(
     COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/provenance.py
