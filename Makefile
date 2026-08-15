@@ -49,7 +49,7 @@ CTEST_JOBS ?= 0
 SRC_DIRS := src tests
 CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 2>/dev/null)
 
-.PHONY: all build release test test-slow test-all format format-check lint clean \
+.PHONY: all build release build-type test test-slow test-all format format-check lint clean \
         wasm wasm-debug wasm-capi test-wasm test-python size-check \
         npm-package npm-test npm-pack npm-check-dts \
         node-native node-package node-test \
@@ -72,13 +72,32 @@ release:
 	$(CMAKE) -B build-release -DCMAKE_BUILD_TYPE=Release
 	$(CMAKE) --build build-release --parallel
 
-test:
+# A gate result is only a claim about the tree it ran in, and that tree's
+# configuration can change without this file being touched: any
+# `cmake -B $(BUILD_DIR)` carrying a different `-DCMAKE_BUILD_TYPE`
+# rewrites the cache in place, so `build:` having once created the
+# directory says nothing about how it is configured now. It matters
+# because the suite is not the same size in every configuration --
+# `assert`-backed death tests exist only where `NDEBUG` is unset, and
+# their release-mode counterparts are different tests -- so a passing
+# count from one configuration is not the count CI produces from
+# another. Printing the type on every run is what makes the count
+# comparable; inferring it is what makes a green report unverifiable.
+build-type:
+	@type=$$(sed -n 's/^CMAKE_BUILD_TYPE:STRING=//p' $(BUILD_DIR)/CMakeCache.txt 2>/dev/null); \
+	if [ -z "$$type" ]; then \
+	  echo "$(BUILD_DIR): build type unset (unconfigured, or configured without CMAKE_BUILD_TYPE)"; \
+	else \
+	  echo "$(BUILD_DIR): CMAKE_BUILD_TYPE=$$type"; \
+	fi
+
+test: build-type
 	(cd $(BUILD_DIR) && $(CTEST) -LE "SLOW|BENCH|TSAN" -j $(CTEST_JOBS) --output-on-failure --timeout 30)
 
-test-slow:
+test-slow: build-type
 	(cd $(BUILD_DIR) && $(CTEST) -LE "BENCH|TSAN" -j $(CTEST_JOBS) --output-on-failure --timeout 120)
 
-test-all:
+test-all: build-type
 	(cd $(BUILD_DIR) && $(CTEST) -j $(CTEST_JOBS) --output-on-failure --timeout 300)
 
 # `format` is the single auto-fix entry point and must cover every tree
