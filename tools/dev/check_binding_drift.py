@@ -18,6 +18,20 @@ Checks:
                   literal `_STATUS_RETURNING_EXPORT_NAMES` tuple in `_c.py`
                   must also equal exactly the intersection of the manifest
                   and header declarations returning `fm_status_t`.
+  python-call-signatures
+                  Every `LIB.fm_*(...)` call in packages/python/formulon
+                  passes as many arguments as src/c_api/formulon_c.h declares
+                  parameters, and every scratch block passed to a pointer
+                  parameter is at least (for a struct, exactly) the wasm32
+                  size of that parameter's pointee. Argument types at
+                  non-pointer positions are not covered; see the function's
+                  docstring for the exact boundary.
+  python-inline-structs
+                  The C structs the Python binding decodes with a bare
+                  `struct.unpack` instead of a `_structs.Struct` entry --
+                  `fm_value_t`, `fm_print_range_t` -- have their size
+                  literals and their decoders' offsets and field widths
+                  measured against the header.
   dts-wasm        src/wasm/formulon.d.ts (Workbook / WorkbookCtor /
                   FormulonModule method surface) matches what is
                   registered in src/wasm/parts/bindings_register.cpp.
@@ -523,6 +537,589 @@ def check_python_struct_layouts() -> List[str]:
                 )
         if layout.size != c_size:
             problems.append(f"python-struct-layout: {layout.name} size C={c_size} Python={layout.size}")
+    return problems
+
+
+# ---------------------------------------------------------------------------
+# Check 1c: Python `LIB.fm_*` call sites <-> the C header's declarations.
+#
+# `python-exports` matches call *names* only. Nothing compares what a call
+# passes against what the entry point declares, so a parameter added to an
+# existing `fm_*` function -- the shape a 1.0-frozen ABI is most likely to
+# grow -- leaves the Python side calling the old signature and is caught only
+# if a runtime binding test happens to exercise that path.
+# ---------------------------------------------------------------------------
+
+_C_FUNCTION_DECL_RE = re.compile(r"FM_API\s+[A-Za-z_][A-Za-z0-9_ *]*?\b(fm_[A-Za-z0-9_]+)\s*\(([^;]*?)\)\s*;", re.S)
+
+# Scratch readers whose name pins how many bytes come back out of the slot.
+# `read_cstr` is deliberately absent: it walks to a NUL rather than reading a
+# fixed width, so it is checked for the deref mistake only (below).
+_SCRATCH_READER_WIDTHS = {"read_u32": 4, "read_i32": 4, "read_f64": 8}
+
+
+def _split_c_params(text: str) -> List[str]:
+    """Splits a parameter list on its top-level commas."""
+    parts: List[str] = []
+    depth = 0
+    current = ""
+    for char in text:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        if char == "," and depth == 0:
+            parts.append(current.strip())
+            current = ""
+        else:
+            current += char
+    parts.append(current.strip())
+    return parts
+
+
+def _c_function_params(header: str) -> dict[str, List[str]]:
+    """Maps each `FM_API` entry point to its declared parameter types.
+
+    The parameter *name* is stripped, so the values are types in declaration
+    order (`["fm_workbook_t*", "size_t", "fm_value_t*"]`). Every parameter in
+    this header is named, so dropping the last whitespace-delimited token is
+    unambiguous.
+    """
+    declarations: dict[str, List[str]] = {}
+    for name, params in _C_FUNCTION_DECL_RE.findall(header):
+        params = " ".join(params.split())
+        if params in ("", "void"):
+            declarations[name] = []
+            continue
+        declarations[name] = [" ".join(param.split()[:-1]) for param in _split_c_params(params)]
+    return declarations
+
+
+def _module_int_constants(paths: List[Path]) -> dict[str, int]:
+    """Module-level `NAME = <int literal>` bindings across the binding package.
+
+    Collected across files because the constant a scratch allocation is sized
+    with may be defined in one module and imported into another
+    (`fm_value_t_size` lives in `_c.py` and is used from `workbook.py`).
+    """
+    constants: dict[str, int] = {}
+    for path in paths:
+        for statement in ast.parse(_read(path), filename=str(path)).body:
+            if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+                continue
+            target = statement.targets[0]
+            if isinstance(target, ast.Name) and isinstance(statement.value, ast.Constant):
+                if isinstance(statement.value.value, int) and not isinstance(statement.value.value, bool):
+                    constants[target.id] = statement.value.value
+    return constants
+
+
+def _is_lib_call(node: ast.AST, attribute: Optional[str] = None) -> bool:
+    """True for `LIB.<attribute>(...)` (any `LIB.*` call when unspecified)."""
+    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+        return False
+    if not (isinstance(node.func.value, ast.Name) and node.func.value.id == "LIB"):
+        return False
+    return attribute is None or node.func.attr == attribute
+
+
+def _scratch_slot_widths(
+    function: ast.AST, constants: dict[str, int], struct_module: object
+) -> dict[str, Optional[int]]:
+    """Local name -> byte width of the WASM scratch block bound to it.
+
+    A width of `None` marks a slot whose size this resolver cannot pin (an
+    array allocation sized from a runtime length, or a name rebound to two
+    different widths). Those are reported rather than skipped when the C side
+    says the parameter is a struct pointer, because an unmeasurable buffer
+    behind a by-pointer struct is exactly the case a size guard exists for.
+    """
+    widths: dict[str, Optional[int]] = {}
+
+    def record(name: str, width: Optional[int]) -> None:
+        if name in widths and widths[name] != width:
+            widths[name] = None
+        else:
+            widths[name] = width
+
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not isinstance(target, ast.Name) or not isinstance(node.value, ast.Call):
+            continue
+        call = node.value
+        callee = call.func
+        # `x = _alloc_out_ptr()` -- the package's 4-byte out-i32 / out-ptr slot.
+        if isinstance(callee, ast.Name) and callee.id == "_alloc_out_ptr":
+            record(target.id, 4)
+        # `x = S.alloc_struct(LIB, S.LAYOUT)` -- sized from the layout table
+        # `python-struct-layouts` already pins against the header.
+        elif (isinstance(callee, ast.Attribute) and callee.attr == "alloc_struct") or (
+            isinstance(callee, ast.Name) and callee.id == "alloc_struct"
+        ):
+            layout = call.args[1] if len(call.args) > 1 else None
+            layout_name = layout.attr if isinstance(layout, ast.Attribute) else None
+            struct = getattr(struct_module, layout_name, None) if layout_name else None
+            record(target.id, struct.size if isinstance(struct, struct_module.Struct) else None)
+        # `x = LIB.alloc(N)` / `LIB.alloc(CONSTANT)` -- a hand-sized block.
+        elif _is_lib_call(call, "alloc") and call.args:
+            size = call.args[0]
+            if isinstance(size, ast.Constant) and isinstance(size.value, int):
+                record(target.id, size.value)
+            elif isinstance(size, ast.Name) and size.id in constants:
+                record(target.id, constants[size.id])
+            else:
+                record(target.id, None)
+    return widths
+
+
+def _scratch_slot_readers(function: ast.AST) -> dict[str, Set[object]]:
+    """Local name -> the reads taken against that scratch slot.
+
+    An entry is either a `_SCRATCH_READER_WIDTHS` key, `("bytes", N)` for a
+    constant-length `LIB.read_bytes`, or `"read_cstr"`.
+    """
+    readers: dict[str, Set[object]] = {}
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Call) or not _is_lib_call(node) or not node.args:
+            continue
+        first = node.args[0]
+        if not isinstance(first, ast.Name):
+            continue
+        attribute = node.func.attr if isinstance(node.func, ast.Attribute) else ""
+        if attribute in _SCRATCH_READER_WIDTHS or attribute == "read_cstr":
+            readers.setdefault(first.id, set()).add(attribute)
+        elif attribute == "read_bytes" and len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+            readers.setdefault(first.id, set()).add(("bytes", node.args[1].value))
+    return readers
+
+
+def _pointee(ctype: str) -> Optional[str]:
+    """The type a parameter points at, or `None` if it is not a pointer."""
+    ctype = ctype.strip()
+    if not ctype.endswith("*"):
+        return None
+    return ctype[:-1].strip()
+
+
+def _check_out_param_width(
+    layouts: _Wasm32Layouts,
+    site: str,
+    fn_name: str,
+    position: int,
+    ctype: str,
+    width: Optional[int],
+    reads: Set[object],
+) -> List[str]:
+    """One scratch slot against the parameter it is passed to."""
+    problems: List[str] = []
+    pointee = _pointee(ctype)
+    if pointee is None:
+        # Emscripten lowers a by-value struct parameter to a pointer into
+        # linear memory, so a scratch block is the correct thing to pass for
+        # one. Any other non-pointer parameter takes a scalar, and handing it
+        # a scratch address means the callee reads the pointer as the value.
+        bare = ctype.replace("const ", "").strip()
+        if not layouts.is_struct(bare):
+            return [
+                f"python-call-signatures: {site}: {fn_name} parameter {position} is {ctype!r}, "
+                "which takes a scalar by value, but the binding passes a scratch-block pointer"
+            ]
+        pointee_size, _ = layouts.extent(bare)
+        is_struct = True
+    else:
+        bare = pointee.replace("const ", "").strip()
+        if bare.endswith("*"):
+            pointee_size, is_struct = 4, False  # wasm32 pointer-to-pointer
+        else:
+            try:
+                pointee_size, _ = layouts.extent(bare)
+            except _LayoutError as exc:
+                return [f"python-call-signatures: {site}: {fn_name} parameter {position} ({ctype}): {exc}"]
+            is_struct = layouts.is_struct(bare)
+
+    if width is None:
+        if is_struct:
+            problems.append(
+                f"python-call-signatures: {site}: {fn_name} parameter {position} is {ctype!r}, "
+                "but the size of the scratch block passed to it cannot be resolved; give the "
+                "struct a `_structs.Struct` layout or size the allocation from a module constant"
+            )
+        return problems
+
+    if width < pointee_size:
+        problems.append(
+            f"python-call-signatures: {site}: {fn_name} parameter {position} is {ctype!r} "
+            f"(wasm32 pointee {pointee_size} bytes) but the binding allocates {width} bytes"
+        )
+    elif is_struct and width != pointee_size:
+        problems.append(
+            f"python-call-signatures: {site}: {fn_name} parameter {position} is {ctype!r} "
+            f"(wasm32 sizeof {pointee_size}) but the binding allocates {width} bytes; a struct "
+            "out-parameter block must match the C size exactly"
+        )
+
+    for read in sorted(reads, key=repr):
+        read_width = _SCRATCH_READER_WIDTHS.get(read) if isinstance(read, str) else read[1]
+        if read == "read_cstr":
+            if bare.endswith("*"):
+                problems.append(
+                    f"python-call-signatures: {site}: {fn_name} parameter {position} is {ctype!r}, "
+                    "so its slot holds a pointer; `read_cstr` on the slot itself decodes the "
+                    "pointer's bytes as text instead of dereferencing it"
+                )
+            continue
+        if read_width is None:
+            continue
+        if read_width > width:
+            problems.append(
+                f"python-call-signatures: {site}: {fn_name} parameter {position}'s slot is "
+                f"{width} bytes but is read with {read!r} ({read_width} bytes)"
+            )
+        elif read_width > pointee_size:
+            problems.append(
+                f"python-call-signatures: {site}: {fn_name} parameter {position} is {ctype!r} "
+                f"(wasm32 pointee {pointee_size} bytes) but its slot is read with {read!r} "
+                f"({read_width} bytes)"
+            )
+    return problems
+
+
+def check_python_call_signatures() -> List[str]:
+    """Verify Python's `LIB.fm_*` calls against the C header's declarations.
+
+    Covered, for every `LIB.fm_*(...)` call in `packages/python/formulon`:
+
+    * **Arity.** The number of positional arguments equals the header's
+      parameter count. A call that splats (`*pointers`) is checked as a lower
+      bound only and named in the run's SKIPPED list.
+    * **Scratch-block width.** When an argument is a local bound to a
+      recognised scratch allocation (``_alloc_out_ptr()``,
+      ``S.alloc_struct(LIB, S.LAYOUT)``, or ``LIB.alloc(...)`` with a constant
+      or module-constant size), the block is compared against the wasm32 size
+      of what the parameter addresses: never smaller, and exactly equal when
+      that is a struct. This covers both pointer parameters and the by-value
+      struct parameters Emscripten lowers to a pointer. A struct whose block
+      size cannot be resolved is reported rather than skipped.
+    * **Read width.** Reads taken against such a slot (``read_u32`` /
+      ``read_i32`` / ``read_f64`` / constant-length ``read_bytes``) must not
+      exceed either the block or the pointee, and ``read_cstr`` must not be
+      applied to a slot that holds a pointer.
+
+    NOT covered: argument *types* at non-pointer positions (nothing on the
+    Python side records whether a value was meant to be a `uint32_t` or a
+    `double`; the wasmtime layer passes plain Python ints and floats), return
+    types beyond what `python-exports` already pins, and both non-Python
+    bindings -- embind and N-API bind C++ entry points directly rather than
+    the `fm_*` C ABI, so this header has no arity relationship to them.
+    """
+    header = re.sub(r"/\*.*?\*/", "", _read(CAPI_HEADER), flags=re.S)
+    declarations = _c_function_params(header)
+    layouts = _Wasm32Layouts(header)
+
+    spec = importlib.util.spec_from_file_location("formulon_struct_layouts_sig", PYTHON_STRUCTS)
+    if spec is None or spec.loader is None:
+        return ["python-call-signatures: could not load packages/python/formulon/_structs.py"]
+    struct_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(struct_module)
+
+    sources = sorted(PYTHON_PKG_DIR.glob("*.py"))
+    constants = _module_int_constants(sources)
+
+    problems: List[str] = []
+    checked_calls = 0
+    for path in sources:
+        label = path.relative_to(REPO_ROOT)
+        tree = ast.parse(_read(path), filename=str(path))
+        # Analysis is per enclosing function: a scratch local is only
+        # meaningfully tied to the calls in the scope that allocated it.
+        scopes = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        for scope in scopes:
+            widths = _scratch_slot_widths(scope, constants, struct_module)
+            readers = _scratch_slot_readers(scope)
+            for node in ast.walk(scope):
+                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                    continue
+                if not _is_lib_call(node):
+                    continue
+                fn_name = node.func.attr
+                if not fn_name.startswith("fm_"):
+                    continue
+                site = f"{label}:{node.lineno}"
+                params = declarations.get(fn_name)
+                if params is None:
+                    problems.append(f"python-call-signatures: {site}: {fn_name} is not declared in the C header")
+                    continue
+                checked_calls += 1
+                if node.keywords:
+                    problems.append(
+                        f"python-call-signatures: {site}: {fn_name} is called with keyword arguments; "
+                        "the wasmtime export takes positional arguments only"
+                    )
+                    continue
+                starred = any(isinstance(arg, ast.Starred) for arg in node.args)
+                if starred:
+                    fixed = len(node.args) - 1
+                    if fixed > len(params):
+                        problems.append(
+                            f"python-call-signatures: {site}: {fn_name} passes {fixed} arguments before its "
+                            f"splat but the C header declares only {len(params)} parameters"
+                        )
+                    _SKIPPED.append(
+                        f"python-call-signatures: {site}: {fn_name} splats its trailing arguments, so only "
+                        f"the {fixed}-argument lower bound is checked against the header's {len(params)}"
+                    )
+                    continue
+                if len(node.args) != len(params):
+                    problems.append(
+                        f"python-call-signatures: {site}: {fn_name} is called with {len(node.args)} "
+                        f"arguments but the C header declares {len(params)}: {params}"
+                    )
+                    continue
+                for position, argument in enumerate(node.args):
+                    if not isinstance(argument, ast.Name) or argument.id not in widths:
+                        continue
+                    problems.extend(
+                        _check_out_param_width(
+                            layouts,
+                            site,
+                            fn_name,
+                            position,
+                            params[position],
+                            widths[argument.id],
+                            readers.get(argument.id, set()),
+                        )
+                    )
+
+    if not checked_calls:
+        problems.append(
+            "python-call-signatures: no `LIB.fm_*` call sites found in "
+            f"{PYTHON_PKG_DIR.relative_to(REPO_ROOT)}; the check has stopped looking at anything"
+        )
+    # A call inside a nested `def` is reached both as part of the enclosing
+    # scope's walk and as its own scope, so the same finding can be produced
+    # twice. Deduplicate in place rather than restricting the walk: an inner
+    # closure that uses a scratch slot its parent allocated still has to be
+    # checked against that slot's width.
+    return list(dict.fromkeys(problems))
+
+
+# ---------------------------------------------------------------------------
+# Check 1d: C structs the Python binding decodes inline <-> the C header.
+#
+# `python-struct-layouts` only sees structs that have a `_structs.Struct`
+# entry. A struct small enough to decode with a bare `struct.unpack` -- an
+# `fm_value_t`, an `fm_print_range_t` -- has no such entry, so its field
+# offsets and widths live as literals in the decoding function and nothing
+# compares them to the header.
+# ---------------------------------------------------------------------------
+
+# (source file, decoder qualname, C struct). Each decoder is expected to
+# consume the whole struct, so its `struct` calls are read as a description
+# of the C layout and compared field for field.
+_PYTHON_INLINE_DECODERS = (
+    ("Value._from_wasm", "fm_value_t"),
+    ("Workbook.paginate", "fm_print_range_t"),
+)
+
+# Python-side size literals for a struct with no `_structs.Struct` entry, as
+# (module, binding name, C struct). A `Struct`-shaped tuple binding is
+# compared on both size and alignment; a bare int on size alone.
+_PYTHON_SIZE_CONSTANTS = (
+    (PYTHON_C_BINDING, "fm_value_t_size", "fm_value_t"),
+    (PYTHON_STRUCTS, "VALUE_BLOB", "fm_value_t"),
+)
+
+# C structs that cross the ABI but that no binding marshals, so there is no
+# second side to compare against. Each is pinned by a native/wasm32
+# `static_assert` tripwire in tests/c_api instead; listing them here keeps the
+# absence deliberate, and `python-call-signatures` fails if a binding starts
+# passing one an unmeasurable block.
+_UNMODELLED_C_STRUCTS = {"fm_styles_batch"}
+
+_STRUCT_FORMAT_WIDTHS = {"b": 1, "B": 1, "h": 2, "H": 2, "i": 4, "I": 4, "q": 8, "Q": 8, "f": 4, "d": 8}
+
+
+def _struct_format_widths(fmt: str) -> Optional[List[int]]:
+    """Per-item byte widths of a little-endian `struct` format string."""
+    if not fmt.startswith("<"):
+        return None
+    widths: List[int] = []
+    for char in fmt[1:]:
+        width = _STRUCT_FORMAT_WIDTHS.get(char)
+        if width is None:
+            return None
+        widths.append(width)
+    return widths
+
+
+def _find_qualified_function(tree: ast.AST, qualname: str) -> Optional[ast.AST]:
+    class_name, _, function_name = qualname.rpartition(".")
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef) or node.name != class_name:
+            continue
+        for member in node.body:
+            if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)) and member.name == function_name:
+                return member
+    return None
+
+
+def check_python_inline_structs() -> List[str]:
+    """Verify Python's inline `struct.unpack` decoders against the C header.
+
+    Two things are compared, both measured from the C declarations rather
+    than tabulated here:
+
+    * A size literal the binding carries for a struct with no
+      `_structs.Struct` entry (`fm_value_t_size`, `VALUE_BLOB`) equals the
+      struct's wasm32 size, and its alignment where the binding records one.
+    * Inside each decoder in `_PYTHON_INLINE_DECODERS`, every
+      `struct.unpack_from(fmt, buf, offset)` lands on a C member offset and
+      reads no wider than that member, every whole-struct `struct.unpack(fmt,
+      ...)` describes the C members' widths in order, and every
+      constant-length `LIB.read_bytes` spans exactly the struct.
+
+    NOT covered: the *meaning* of a field (a decoder that reads the right
+    width from the right offset into the wrong attribute still passes), and
+    any struct in `_UNMODELLED_C_STRUCTS`, which no binding marshals and
+    which therefore has only a `static_assert` tripwire.
+    """
+    header = re.sub(r"/\*.*?\*/", "", _read(CAPI_HEADER), flags=re.S)
+    layouts = _Wasm32Layouts(header)
+    constants = _module_int_constants(sorted(PYTHON_PKG_DIR.glob("*.py")))
+    problems: List[str] = []
+
+    def measure(struct_name: str) -> Optional[tuple[dict[str, int], int, int, dict[str, int]]]:
+        try:
+            members = layouts.members(struct_name)
+        except _LayoutError as exc:
+            problems.append(f"python-inline-structs: {exc}")
+            return None
+        offsets, size, align = _wasm32_layout([(m.name, m.size, m.align) for m in members])
+        return offsets, size, align, {m.name: m.size for m in members}
+
+    for struct_name in sorted(_UNMODELLED_C_STRUCTS):
+        if not layouts.is_struct(struct_name):
+            problems.append(
+                f"python-inline-structs: {struct_name} is listed as unmodelled by every binding "
+                f"but no longer exists in {CAPI_HEADER.relative_to(REPO_ROOT)}"
+            )
+
+    for module_path, binding_name, struct_name in _PYTHON_SIZE_CONSTANTS:
+        measured = measure(struct_name)
+        if measured is None:
+            continue
+        _, c_size, c_align, _ = measured
+        label = module_path.relative_to(REPO_ROOT)
+        found = False
+        for statement in ast.parse(_read(module_path), filename=str(module_path)).body:
+            if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+                continue
+            target = statement.targets[0]
+            if not isinstance(target, ast.Name) or target.id != binding_name:
+                continue
+            found = True
+            value = statement.value
+            if isinstance(value, ast.Constant) and isinstance(value.value, int):
+                if value.value != c_size:
+                    problems.append(
+                        f"python-inline-structs: {label}: {binding_name} is {value.value}, "
+                        f"but wasm32 sizeof({struct_name}) is {c_size}"
+                    )
+            elif isinstance(value, ast.Tuple) and len(value.elts) == 3:
+                elements = [element.value if isinstance(element, ast.Constant) else None for element in value.elts]
+                if elements[1] != c_size:
+                    problems.append(
+                        f"python-inline-structs: {label}: {binding_name} declares size {elements[1]}, "
+                        f"but wasm32 sizeof({struct_name}) is {c_size}"
+                    )
+                if elements[2] != c_align:
+                    problems.append(
+                        f"python-inline-structs: {label}: {binding_name} declares alignment {elements[2]}, "
+                        f"but wasm32 alignof({struct_name}) is {c_align}"
+                    )
+            else:
+                problems.append(
+                    f"python-inline-structs: {label}: {binding_name} is neither an int literal nor a "
+                    "(kind, size, alignment) literal tuple, so its layout claim cannot be read"
+                )
+        if not found:
+            problems.append(
+                f"python-inline-structs: {label} no longer defines {binding_name}, "
+                f"which is where the binding's {struct_name} size lives"
+            )
+
+    tree = ast.parse(_read(PYTHON_WORKBOOK), filename=str(PYTHON_WORKBOOK))
+    label = PYTHON_WORKBOOK.relative_to(REPO_ROOT)
+    for qualname, struct_name in _PYTHON_INLINE_DECODERS:
+        function = _find_qualified_function(tree, qualname)
+        if function is None:
+            problems.append(
+                f"python-inline-structs: {label} no longer defines {qualname}, "
+                f"which is where the inline {struct_name} decoding lives"
+            )
+            continue
+        measured = measure(struct_name)
+        if measured is None:
+            continue
+        c_offsets, c_size, _, c_sizes = measured
+        member_widths = [c_sizes[name] for name in c_offsets]
+
+        for node in ast.walk(function):
+            if isinstance(node, ast.Call) and _is_lib_call(node, "read_bytes") and len(node.args) > 1:
+                length = node.args[1]
+                span = None
+                if isinstance(length, ast.Constant) and isinstance(length.value, int):
+                    span = length.value
+                elif isinstance(length, ast.Name):
+                    span = constants.get(length.id)
+                if span is not None and span != c_size:
+                    problems.append(
+                        f"python-inline-structs: {label}:{node.lineno}: {qualname} reads {span} bytes "
+                        f"for a {struct_name}, whose wasm32 size is {c_size}"
+                    )
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "struct"
+            ):
+                continue
+            if not node.args or not isinstance(node.args[0], ast.Constant):
+                continue
+            fmt = node.args[0].value
+            if not isinstance(fmt, str):
+                continue
+            widths = _struct_format_widths(fmt)
+            if widths is None:
+                problems.append(
+                    f"python-inline-structs: {label}:{node.lineno}: {qualname} uses the format {fmt!r}, "
+                    "which is not a little-endian fixed-width layout this check can measure"
+                )
+                continue
+            if node.func.attr == "unpack_from":
+                if len(node.args) < 3 or not isinstance(node.args[2], ast.Constant):
+                    continue
+                offset = node.args[2].value
+                owner = next((name for name, at in c_offsets.items() if at == offset), None)
+                if owner is None:
+                    problems.append(
+                        f"python-inline-structs: {label}:{node.lineno}: {qualname} decodes at offset "
+                        f"{offset}, which is not a member offset of {struct_name} "
+                        f"({sorted(c_offsets.items(), key=lambda item: item[1])})"
+                    )
+                elif sum(widths) > c_sizes[owner]:
+                    problems.append(
+                        f"python-inline-structs: {label}:{node.lineno}: {qualname} reads {sum(widths)} bytes "
+                        f"with {fmt!r} at offset {offset}, but {struct_name}.{owner} is {c_sizes[owner]} bytes"
+                    )
+            elif node.func.attr == "unpack" and widths != member_widths:
+                problems.append(
+                    f"python-inline-structs: {label}:{node.lineno}: {qualname} decodes a whole "
+                    f"{struct_name} with {fmt!r} (field widths {widths}), but the C members are "
+                    f"{list(zip(c_offsets, member_widths))}"
+                )
     return problems
 
 
@@ -1119,6 +1716,8 @@ def check_staged_dist() -> List[str]:
 CHECKS = {
     "python-exports": check_python_exports,
     "python-struct-layouts": check_python_struct_layouts,
+    "python-call-signatures": check_python_call_signatures,
+    "python-inline-structs": check_python_inline_structs,
     "dts-wasm": check_dts_wasm,
     "dts-node": check_dts_node,
     "readme-counts": check_readme_counts,

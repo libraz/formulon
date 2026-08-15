@@ -154,6 +154,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/eval_context_spill_read_test.cpp
   unit/eval/spill_committer_test.cpp
   unit/eval/whole_axis_spill_test.cpp
+  unit/eval/bounded_range_spill_test.cpp
   unit/eval/builtins_stats_test.cpp
   unit/eval/builtins_subtotal_test.cpp
   unit/eval/builtins_aggregate_fn_test.cpp
@@ -359,6 +360,19 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   add_test(
     NAME binding_drift_python_struct_layouts
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-struct-layouts
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  # The two checks that cross the ABI boundary for functions rather than for
+  # struct layouts: what the Python binding calls, against what the C header
+  # declares. Everything else here compares two hand-maintained descriptions.
+  add_test(
+    NAME binding_drift_python_call_signatures
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-call-signatures
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME binding_drift_python_inline_structs
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_binding_drift.py python-inline-structs
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   add_test(

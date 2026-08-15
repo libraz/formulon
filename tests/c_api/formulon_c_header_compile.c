@@ -36,6 +36,11 @@ int main(void) {
       fm_workbook_defined_name_at;
   fm_status_t (*pivot_add_item_at)(fm_workbook_t*, size_t, size_t, size_t, uint32_t, int32_t) =
       fm_workbook_pivot_field_add_item_at;
+  // The two entry points whose records no binding marshals, written out in
+  // full so a parameter added to either is a compile error here rather than a
+  // silently-wrong C caller.
+  fm_status_t (*add_styles_batch)(fm_workbook_t*, const fm_styles_batch*) = fm_styles_add_batch;
+  fm_status_t (*print_area_at)(const fm_pagination_t*, size_t, fm_print_range_t*) = fm_pagination_print_area_at;
   // Both counter structs must lay out identically on native and wasm32, so a
   // binding's hand-written offsets cannot drift from the compiler's. Five
   // 4-byte counters, no padding, in either target.
@@ -45,6 +50,18 @@ int main(void) {
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf) == 88, "fm_cell_xf ABI layout changed");
   _Static_assert(sizeof(fm_sheet_view_t) == (sizeof(void*) == 4 ? 40 : 48), "fm_sheet_view_t ABI layout changed");
+  // The three records a C consumer marshals without help from any binding:
+  // `fm_value_t` comes back from every cell read, `fm_print_range_t` from
+  // pagination, and `fm_styles_batch` is passed in by pointer with fifteen
+  // pointer-width slots. The first two are target-independent; the batch is
+  // pinned in terms of `sizeof(void*)` because its `size_t` counts are not.
+  _Static_assert(sizeof(fm_value_t) == 16, "fm_value_t ABI layout changed");
+  _Static_assert(offsetof(fm_value_t, u) == 8, "fm_value_t.u offset changed");
+  _Static_assert(sizeof(fm_print_range_t) == 16, "fm_print_range_t ABI layout changed");
+  _Static_assert(offsetof(fm_print_range_t, last_col) == 12, "fm_print_range_t.last_col offset changed");
+  _Static_assert(sizeof(fm_styles_batch) == 15 * sizeof(void*), "fm_styles_batch ABI layout changed");
+  _Static_assert(offsetof(fm_styles_batch, num_fmt_ids) == 14 * sizeof(void*),
+                 "fm_styles_batch.num_fmt_ids offset changed");
   (void)save_diagnostics;
   (void)read_diagnostics;
   (void)save_as;
@@ -55,6 +72,8 @@ int main(void) {
   (void)get_view;
   (void)defined_name_at;
   (void)pivot_add_item_at;
+  (void)add_styles_batch;
+  (void)print_area_at;
   (void)parallel_recalc;
   (void)stats;
   return callback(1U, 0.0, 1U, 0) ? 0 : 1;

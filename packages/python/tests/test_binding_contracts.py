@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import inspect
 import os
+import struct
 import sys
 import tempfile
 import unittest
@@ -587,6 +588,79 @@ class CollectionReaderAllocationTests(unittest.TestCase):
             wb.recalc()
 
         self._assert_flat_in_item_count(populate, lambda wb: wb.evaluate_cf_range(0, 0, 0, 39, 0))
+
+
+class AbiScratchBlockTests(unittest.TestCase):
+    """The records the wrapper sizes by hand, measured against the real module.
+
+    ``fm_value_t`` and ``fm_print_range_t`` have no ``_structs.Struct``
+    layout: the wrapper carries their sizes as the literals
+    ``_c.fm_value_t_size`` and the 16 in ``Workbook.paginate``. The static
+    drift check compares those literals to the C header in the working tree,
+    which says nothing about the ``.wasm`` actually loaded -- a module built
+    from a wider definition of either record writes past the block the
+    wrapper allocated, corrupting whatever the WASM allocator placed after
+    it. Padding each block with a sentinel makes that overrun observable
+    here instead of as an unrelated failure later in the session.
+    """
+
+    _SENTINEL = b"\xa5" * 16
+
+    def _guarded_block(self, size: int) -> int:
+        ptr = _c.LIB.alloc(size + len(self._SENTINEL))
+        _c.LIB.write_bytes(ptr, b"\x00" * size + self._SENTINEL)
+        return ptr
+
+    def _assert_sentinel_intact(self, ptr: int, size: int, record: str) -> None:
+        tail = _c.LIB.read_bytes(ptr + size, len(self._SENTINEL))
+        self.assertEqual(
+            tail,
+            self._SENTINEL,
+            f"the engine wrote past {size} bytes for a {record}; the wrapper's block is too small for the "
+            f"module it loaded (tail: {tail!r})",
+        )
+
+    def test_value_out_param_stays_within_the_wrappers_block(self) -> None:
+        size = _c.fm_value_t_size
+        with Workbook.create_default() as wb:
+            wb.set_number(0, 0, 0, 6.25)
+            wb.recalc()
+            ptr = self._guarded_block(size)
+            try:
+                status = _c.LIB.fm_workbook_get_value(wb._require(), 0, 0, 0, ptr)
+                self.assertEqual(status, 0)
+                self._assert_sentinel_intact(ptr, size, "fm_value_t")
+                # The payload must also land where `Value._from_wasm` looks
+                # for it, which pins the union's offset rather than only the
+                # record's total width.
+                raw = _c.LIB.read_bytes(ptr, size)
+                self.assertEqual(struct.unpack_from("<i", raw, 0)[0], int(ValueKind.NUMBER))
+                self.assertEqual(struct.unpack_from("<d", raw, 8)[0], 6.25)
+            finally:
+                _c.LIB.free(ptr)
+
+    def test_print_range_out_param_stays_within_the_wrappers_block(self) -> None:
+        size = 16  # fm_print_range_t: four uint32_t, as Workbook.paginate reads it
+        with Workbook.create_default() as wb:
+            wb.set_defined_name_scoped("_xlnm.Print_Area", "Sheet1!$A$1:$C$5", 0)
+            out = _c.LIB.alloc(4)
+            try:
+                self.assertEqual(_c.LIB.fm_workbook_paginate(wb._require(), 0, out), 0)
+                pagination = _c.LIB.read_u32(out)
+                self.assertNotEqual(pagination, 0)
+                try:
+                    self.assertGreater(int(_c.LIB.fm_pagination_print_area_count(pagination)), 0)
+                    ptr = self._guarded_block(size)
+                    try:
+                        self.assertEqual(_c.LIB.fm_pagination_print_area_at(pagination, 0, ptr), 0)
+                        self._assert_sentinel_intact(ptr, size, "fm_print_range_t")
+                        self.assertEqual(struct.unpack("<IIII", _c.LIB.read_bytes(ptr, size)), (0, 0, 4, 2))
+                    finally:
+                        _c.LIB.free(ptr)
+                finally:
+                    _c.LIB.fm_pagination_destroy(pagination)
+            finally:
+                _c.LIB.free(out)
 
 
 class CellMutatorDocstringTests(unittest.TestCase):

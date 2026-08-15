@@ -58,6 +58,30 @@ static_assert(offsetof(fm_save_diagnostics_t, dropped_relationship_count) == 12U
 static_assert(offsetof(fm_save_diagnostics_t, renumbered_part_count) == 16U);
 static_assert(sizeof(fm_parallel_recalc_stats) == 48U);
 
+// `fm_value_t` is the most widely passed record on the boundary: every cell
+// read, every ad-hoc evaluation and every pivot cell writes one through a
+// caller-supplied block. The union's `double` fixes the alignment at 8, so the
+// discriminator's four bytes of tail padding are part of the layout rather than
+// an implementation detail, and both host bindings decode the payload from the
+// resulting offset 8. Identical on native and wasm32 because the widest union
+// member is the `double` on both.
+static_assert(sizeof(fm_value_t) == 16U, "fm_value_t ABI layout changed");
+static_assert(alignof(fm_value_t) == 8U, "fm_value_t ABI alignment changed");
+static_assert(offsetof(fm_value_t, kind) == 0U, "fm_value_t.kind offset changed");
+static_assert(offsetof(fm_value_t, u) == 8U, "fm_value_t.u offset changed");
+static_assert(sizeof(decltype(fm_value_t::u)) == 8U, "fm_value_t.u payload width changed");
+
+// `fm_print_range_t` is written through a caller-supplied block by
+// `fm_pagination_print_area_at`. Four `uint32_t` with no padding, so it is
+// identical on native and wasm32 and a binding may decode it as four
+// little-endian words.
+static_assert(sizeof(fm_print_range_t) == 16U, "fm_print_range_t ABI layout changed");
+static_assert(alignof(fm_print_range_t) == 4U, "fm_print_range_t ABI alignment changed");
+static_assert(offsetof(fm_print_range_t, first_row) == 0U, "fm_print_range_t.first_row offset changed");
+static_assert(offsetof(fm_print_range_t, first_col) == 4U, "fm_print_range_t.first_col offset changed");
+static_assert(offsetof(fm_print_range_t, last_row) == 8U, "fm_print_range_t.last_row offset changed");
+static_assert(offsetof(fm_print_range_t, last_col) == 12U, "fm_print_range_t.last_col offset changed");
+
 namespace {
 
 // RAII wrapper so the workbook handle is released even on test failure.

@@ -12,6 +12,7 @@ Run via ``make python-test`` (or ``python -m unittest`` with
 
 from __future__ import annotations
 
+import inspect
 import struct
 import subprocess
 import unittest
@@ -45,6 +46,7 @@ from formulon import (
     ValueKind,
     Workbook,
     WorkbookFormat,
+    _c,
 )
 from formulon import _structs as S
 
@@ -162,16 +164,38 @@ class StructLayoutTests(unittest.TestCase):
     def test_pivot_cell_value_offset(self) -> None:
         self.assertEqual(S.PIVOT_CELL_VALUE_OFFSET, 8)
 
+    # Records the wrapper marshals without a `Struct` entry, so they are
+    # invisible to `EXPECTED_SIZES` above. `fm_value_t` is passed around as
+    # the bare `fm_value_t_size` and as `VALUE_BLOB` when it sits inline in a
+    # larger record; `fm_print_range_t` is the literal 16 in
+    # `Workbook.paginate`. `python-inline-structs` binds these to the C
+    # header; pinning them here makes a size change loud on its own.
+    def test_hand_marshalled_record_sizes(self) -> None:
+        self.assertEqual(_c.fm_value_t_size, 16)
+        self.assertEqual(S.VALUE_BLOB, ("blob16", 16, 8))
+        source = inspect.getsource(Workbook.paginate)
+        self.assertIn('struct.unpack("<IIII", LIB.read_bytes(range_ptr, 16))', source)
+
     def test_layouts_match_c_header(self) -> None:
+        """Every binding-drift check that reads the Python package.
+
+        Run as a group: the struct-layout check covers the `Struct` table,
+        the call-signature check covers what the wrapper passes to each
+        `fm_*` entry point, and the inline-struct check covers the records
+        decoded with a bare `struct.unpack`. A failure in any of them is a
+        Python-side ABI mismatch and belongs in this suite's result.
+        """
         root = Path(__file__).resolve().parents[3]
-        result = subprocess.run(
-            ["python3", str(root / "tools" / "dev" / "check_binding_drift.py"), "python-struct-layouts"],
-            cwd=root,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for check in ("python-struct-layouts", "python-call-signatures", "python-inline-structs"):
+            with self.subTest(check=check):
+                result = subprocess.run(
+                    ["python3", str(root / "tools" / "dev" / "check_binding_drift.py"), check],
+                    cwd=root,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 class SheetStructureTests(unittest.TestCase):

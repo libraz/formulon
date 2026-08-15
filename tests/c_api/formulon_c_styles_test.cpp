@@ -51,6 +51,44 @@ static_assert(offsetof(fm_dxf_record, alignment_xml) == (sizeof(void*) == 4U ? 3
 static_assert(offsetof(fm_dxf_record, protection_xml) == (sizeof(void*) == 4U ? 352U : 360U),
               "fm_dxf_record.protection_xml offset changed");
 
+// `fm_styles_batch` is fifteen pointer-width slots: five (array, count,
+// out-indices) triples whose `size_t` counts are the same width as a pointer on
+// both targets. Unlike its neighbours it is reached by no binding -- only the C
+// and C++ callers of `fm_styles_add_batch` -- so nothing cross-checks it from
+// the other side of the boundary and every offset is pinned here instead. A
+// reorder within the struct moves no total size, which is exactly why the
+// per-member offsets and not just `sizeof` are recorded.
+static_assert(sizeof(fm_styles_batch) == 15U * sizeof(void*), "fm_styles_batch ABI layout changed");
+static_assert(alignof(fm_styles_batch) == alignof(void*), "fm_styles_batch ABI alignment changed");
+static_assert(offsetof(fm_styles_batch, fonts) == 0U * sizeof(void*), "fm_styles_batch.fonts offset changed");
+static_assert(offsetof(fm_styles_batch, font_count) == 1U * sizeof(void*), "fm_styles_batch.font_count offset changed");
+static_assert(offsetof(fm_styles_batch, font_indices) == 2U * sizeof(void*),
+              "fm_styles_batch.font_indices offset changed");
+static_assert(offsetof(fm_styles_batch, fills) == 3U * sizeof(void*), "fm_styles_batch.fills offset changed");
+static_assert(offsetof(fm_styles_batch, fill_count) == 4U * sizeof(void*), "fm_styles_batch.fill_count offset changed");
+static_assert(offsetof(fm_styles_batch, fill_indices) == 5U * sizeof(void*),
+              "fm_styles_batch.fill_indices offset changed");
+static_assert(offsetof(fm_styles_batch, borders) == 6U * sizeof(void*), "fm_styles_batch.borders offset changed");
+static_assert(offsetof(fm_styles_batch, border_count) == 7U * sizeof(void*),
+              "fm_styles_batch.border_count offset changed");
+static_assert(offsetof(fm_styles_batch, border_indices) == 8U * sizeof(void*),
+              "fm_styles_batch.border_indices offset changed");
+static_assert(offsetof(fm_styles_batch, cell_xfs) == 9U * sizeof(void*), "fm_styles_batch.cell_xfs offset changed");
+static_assert(offsetof(fm_styles_batch, cell_xf_count) == 10U * sizeof(void*),
+              "fm_styles_batch.cell_xf_count offset changed");
+static_assert(offsetof(fm_styles_batch, cell_xf_indices) == 11U * sizeof(void*),
+              "fm_styles_batch.cell_xf_indices offset changed");
+static_assert(offsetof(fm_styles_batch, num_fmt_codes) == 12U * sizeof(void*),
+              "fm_styles_batch.num_fmt_codes offset changed");
+static_assert(offsetof(fm_styles_batch, num_fmt_count) == 13U * sizeof(void*),
+              "fm_styles_batch.num_fmt_count offset changed");
+static_assert(offsetof(fm_styles_batch, num_fmt_ids) == 14U * sizeof(void*),
+              "fm_styles_batch.num_fmt_ids offset changed");
+// The slots are pointer-width because `size_t` is, on every target this ABI
+// ships to. Pinned separately so a target where that stops holding fails here
+// rather than silently re-laying the struct out.
+static_assert(sizeof(size_t) == sizeof(void*), "fm_styles_batch assumes size_t is pointer-width");
+
 struct WorkbookGuard {
   fm_workbook_t* handle = nullptr;
   ~WorkbookGuard() { fm_workbook_destroy(handle); }
