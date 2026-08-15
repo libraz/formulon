@@ -1,0 +1,41 @@
+suite: indirect_r1c1
+description: >
+  INDIRECT's `a1` flag. The two `a1 = FALSE` cases are the Excel side of a
+  deferred implementation gap: Formulon takes the R1C1 branch straight to
+  #REF! without parsing ref_text, so they carry a divergence entry and are
+  skipped until that branch is written. A skipped case carries no `expect`
+  in the golden, so what Excel answers is recorded in the divergence
+  entries' reason text with its build stamp; closing the gap means
+  deleting those two entries and regenerating this suite.
+
+  The two `a1 = TRUE` cases run. They are what makes the skipped pair
+  meaningful: the first shows the reference resolves at all, and the
+  second shows Excel rejects R1C1 text when the flag says A1 -- without
+  it, "R2C3 resolved" would not distinguish Excel honouring the flag from
+  Excel ignoring ref_text's syntax entirely.
+tolerance: { abs: 0.0, rel: 0.0 }
+locale: ja-JP
+cases:
+  - id: indirect_a1_true_resolves
+    description: '=INDIRECT("C2", TRUE) with C2 = 42 -> 42'
+    setup:
+      'C2': 42
+    formula: '=INDIRECT("C2", TRUE)'
+
+  - id: indirect_r1c1_text_under_a1_true_is_ref
+    description: '=INDIRECT("R2C3", TRUE) -> #REF! (R1C1 text is not an A1 reference)'
+    setup:
+      'C2': 42
+    formula: '=INDIRECT("R2C3", TRUE)'
+
+  - id: indirect_r1c1_absolute
+    description: '=INDIRECT("R2C3", FALSE) with C2 = 42 -> 42'
+    setup:
+      'C2': 42
+    formula: '=INDIRECT("R2C3", FALSE)'
+
+  - id: indirect_r1c1_from_address
+    description: '=INDIRECT(ADDRESS(2,3,1,FALSE), FALSE) with C2 = 42 -> 42'
+    setup:
+      'C2': 42
+    formula: '=INDIRECT(ADDRESS(2,3,1,FALSE), FALSE)'

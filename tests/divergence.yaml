@@ -5,7 +5,7 @@
 #
 #   mode: skip-oracle
 #     Case is excluded from oracle-gen and oracle-verify. Use sparingly,
-#     and say which of the four `cause` values applies — see below.
+#     and say which `cause` value applies — see below.
 #     Prefer widening tolerance when possible.
 #
 #   tolerance: { abs: <N>, rel: <N> }
@@ -22,9 +22,8 @@
 # Every `mode: skip-oracle` entry MUST also carry a `cause`, which
 # `divergence_check.py` validates and tallies per cause. The release gate
 # leaves skipped cases out of the pass-rate denominator on the grounds
-# that they "can never pass" — true of exactly one of these four, so the
-# tally is what keeps the other three from ageing into permanent
-# exemptions:
+# that they "can never pass" — true of exactly one of these causes, so the
+# tally is what keeps the others from ageing into permanent exemptions:
 #
 #   cause: excel-no-value
 #     Excel produces no comparable value at all — volatile / not
@@ -46,16 +45,26 @@
 #     Excel answers and Formulon is wrong or not there yet. The entry is
 #     deleted when the engine work lands.
 #
+#   cause: non-identifiable
+#     Both engines answer and the quantity itself has no unique value to
+#     agree on — a smoothing weight the data cannot pin down once the fit
+#     saturates, an F statistic whose residual is zero in the limit.
+#     Neither answer is the wrong one, which is what separates this from
+#     `engine-gap`: there is no engine work that would close it. It is not
+#     `accepted-divergence` either, because we did not choose to differ.
+#     Long-lived, and the entry should carry the reason the quantity is
+#     unidentifiable rather than a comparison of the two numbers.
+#
 #   cause: unclassified
-#     The entry's own text does not determine which of the four applies:
+#     The entry's own text does not determine which of the others applies:
 #     it states two different blockers, or none of them in these terms.
 #     Use it rather than picking the most plausible one — a guessed cause
 #     reads as settled and nothing re-examines it, which is the failure
 #     this field exists to prevent. The checker tallies these separately;
 #     working the count down means going back to each entry's source.
 #
-# When more than one of the four applies, record the cause that prevents
-# the comparison *first* — harness before engine — because that is the one
+# When more than one applies, record the cause that prevents the
+# comparison *first* — harness before engine — because that is the one
 # that has to be removed before the case can be judged at all. If that
 # ordering is itself unclear from the text, the entry is `unclassified`.
 #
@@ -219,44 +228,42 @@ entries:
     first_noted: 2026-04-26
     last_verified_excel_version: "16.108.1"
 
-  # -- Jagged array literal: xlwings parse-error blank read-back ---------
-  # Mac Excel rejects `=ROWS({1,2;3,4,5})` at the formula level (jagged
-  # array rows). xlwings reads the rejection back as a blank cell rather
-  # than an error category, so the golden records `kind: blank`.
-  # Formulon's parser correctly surfaces a `#NAME?` for the malformed
-  # array literal. Same family of xlwings round-trip gaps as
-  # erf_precise_two_arg_rejected.
+  # -- Formulas Excel refuses to accept into a cell ------------------------
+  # These three share one mechanism, established by writing the formula
+  # through `formula2` and reading it straight back: the cell retains
+  # nothing. Excel never accepts the formula, so it never evaluates one
+  # and there is no result of any kind — not an error category the bridge
+  # failed to reify, and not a blank cell. The earlier reading ("xlwings
+  # reads the rejection back as blank") described the capture path that
+  # existed before the driver checked retention, and was wrong about
+  # where the value was lost.
+  #
+  # The control that makes an empty read-back mean refusal rather than a
+  # dead bridge: in the same generator invocation, `erf_zero` and
+  # `erf_one` set and captured normally (0.0 and 0.8427007929497149).
   - id: rows_of_mixed_row_array_literal
-    cause: unclassified
+    cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel rejects =ROWS({1,2;3,4,5}) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #NAME? for the jagged array literal."
+    reason: "Mac Excel refuses =ROWS({1,2;3,4,5}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's parser surfaces #NAME? for the jagged array literal."
     prefer: formulon
     first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112"
 
-  # -- ERF.PRECISE arity rejection: Mac Excel returns blank, not error ----
-  # Mac Excel 365 ja-JP refuses to evaluate `=ERF.PRECISE(1, 2)` (the
-  # function is documented as strict 1-arg) and surfaces something the
-  # xlwings driver reads back as a blank cell — most likely a parse-time
-  # rejection or an error category xlwings can't reify. Formulon's
-  # registry enforces the (1,1) arity bound and correctly returns
-  # #VALUE!, which is the more useful behaviour for tooling that
-  # consumes formula errors.
   - id: erf_precise_two_arg_rejected
-    cause: unclassified
+    cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel rejects =ERF.PRECISE(1,2) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #VALUE! from arity enforcement."
+    reason: "Mac Excel refuses =ERF.PRECISE(1,2) at entry (the function is strict 1-arg): the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon's registry enforces the (1,1) arity bound and returns #VALUE!, which is the more useful surface for tooling that consumes formula errors."
     prefer: formulon
     first_noted: 2026-04-26
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112"
 
   - id: erfc_precise_two_arg_rejected
-    cause: unclassified
+    cause: excel-no-value
     mode: skip-oracle
-    reason: "Mac Excel rejects =ERFC.PRECISE(1,2) at the formula level; xlwings reads the rejection back as blank. Formulon correctly surfaces #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected."
+    reason: "Mac Excel refuses =ERFC.PRECISE(1,2) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. Formulon returns #VALUE! from arity enforcement, mirroring erf_precise_two_arg_rejected."
     prefer: formulon
     first_noted: 2026-04-29
-    last_verified_excel_version: "16.108.1"
+    last_verified_excel_version: "16.112"
 
   # -- No-infrastructure stubs --------------------------------------------
   # These functions return a deterministic Excel-visible surface in lieu
@@ -381,7 +388,7 @@ entries:
   # alpha value becomes non-unique; Mac picks alpha ~0.751, Formulon
   # picks alpha ~0.09 on the same data with the same RMSE.
   - id: forecast_ets_stat_alpha
-    cause: unclassified
+    cause: non-identifiable
     reason: "On cyclic period-4 data where joint optimisation drives RMSE -> 0, the alpha value is non-unique: any (alpha, beta, gamma, initial-state) combination with the same forecast manifold yields the same SSE. Mac selects alpha ~0.751 via its bias / regularisation; Formulon's bounded Nelder-Mead reaches RMSE = 0 at alpha ~0.09. The fit quality (RMSE / MASE) matches Mac; the smoothing weight is a non-identifiable parameter on this fixture."
     prefer: mac-excel-365
     first_noted: 2026-04-28
@@ -441,25 +448,25 @@ entries:
   # entries remain for numerically unstable perfect-fit statistics and an
   # empty-array-literal read-back quirk.
   - id: linest_univariate_stats_true
-    cause: unclassified
+    cause: non-identifiable
     reason: "Perfect-fit LINEST stats=TRUE drives the residual sum to exactly 0, so the F statistic is infinite in the limit. Both engines report a huge finite F — Formulon by flooring the residual at the squared rounding error the data's scale can still resolve, Mac Excel 16.109 by whatever residual its own arithmetic happens to leave — and the two magnitudes differ by a numerically unstable factor. Same class as logest_univariate_stats_true. Other stats cells are covered by unit tests."
     prefer: mac-excel-365
     first_noted: 2026-05-15
     last_verified_excel_version: "16.109"
     mode: skip-oracle
   - id: logest_univariate_stats_true
-    cause: unclassified
+    cause: non-identifiable
     reason: "Perfect-fit LOGEST stats=TRUE produces a near-zero residual variance; Mac Excel 16.109 and Formulon both return huge finite F statistics but differ by a numerically unstable factor. Other stats cells are covered by unit tests."
     prefer: mac-excel-365
     first_noted: 2026-05-15
     last_verified_excel_version: "16.109"
     mode: skip-oracle
   - id: frequency_empty_bins
-    cause: unclassified
-    reason: "Mac Excel 16.109/xlwings captures FREQUENCY({1;2;3}, {}) as blank for the empty array-literal bins argument, while Formulon treats the degenerate zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests."
-    prefer: mac-excel-365
+    cause: excel-no-value
+    reason: "Mac Excel refuses =FREQUENCY({1;2;3}, {}) at entry: the formula written through formula2 reads back empty, so no formula is stored and Excel evaluates nothing. The empty array literal is rejected as a formula construct rather than treated as a degenerate bins argument. Formulon treats the zero-numeric-bin case as the documented 1x1 count spill. Non-empty fully non-numeric bins remain covered by unit tests."
+    prefer: formulon
     first_noted: 2026-05-15
-    last_verified_excel_version: "16.109"
+    last_verified_excel_version: "16.112"
     mode: skip-oracle
   # Volatile / non-deterministic cluster (NOW / TODAY / RAND / RANDBETWEEN /
   # RANDARRAY). Each function's result is intrinsically non-reproducible —
@@ -933,14 +940,14 @@ entries:
   # Office 2019 / unknown-version files are reference-only and must not be
   # used as a Microsoft 365 result.
   - id: page_axis_field
-    cause: unclassified
+    cause: engine-gap
     mode: skip-oracle
     reason: "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
     prefer: formulon
     first_noted: 2026-06-26
     last_verified_excel_version: "unverified (external Microsoft 365 Windows probe pending)"
   - id: data_axis_field
-    cause: unclassified
+    cause: engine-gap
     mode: skip-oracle
     reason: "External pending: Formulon currently returns #REF! for page/data-axis field/item pairs because filter-state routing is not implemented. The exact Excel result must be captured from a product-verified Microsoft 365 Windows host, not the historical Office 2019/version-unknown reference files. Run tools/oracle/.venv/bin/python tools/oracle/provenance.py check, then stage output outside the repository with FORMULON_WIN_PYTHON configured: tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py --target win-365-ja_JP --suite getpivotdata_page_data --golden-dir /tmp/formulon-m365-getpivotdata-golden. Do not overwrite historical reference goldens. The current Darwin host cannot run COM, so no external golden is asserted."
     prefer: formulon
@@ -1071,10 +1078,33 @@ entries:
     mode: skip-oracle
     scope: deferred-feature
     evidence: [tests/unit/eval/builtins_references_test.cpp]
-    reason: "INDIRECT(ref_text, FALSE) always returns #REF! because the R1C1 branch is deferred (src/eval/reference/common.cpp); Excel decodes R1C1 syntax and resolves the referenced cell. No live Excel probe is needed to confirm the gap exists, so this entry is intentionally left unverified rather than borrowed from an unrelated capture -- see tools/catalog/function_status.tsv for the INDIRECT catalog note."
+    reason: "INDIRECT(ref_text, FALSE) always returns #REF! because the R1C1 branch is deferred (src/eval/reference/common.cpp). Excel decodes R1C1 and resolves the cell: with C2 = 42, INDIRECT(\"R2C3\", FALSE) and INDIRECT(ADDRESS(2,3,1,FALSE), FALSE) both return 42, while the same text under a1 = TRUE is #REF! -- so Excel is reading the flag rather than resolving the text some other way. See tools/catalog/function_status.tsv for the INDIRECT catalog note."
     prefer: mac-excel-365
     first_noted: 2026-08-14
-    last_verified_excel_version: "unverified (implementation gap; not a live-capture-dependent claim)"
+    last_verified_excel_version: "16.112"
+
+  # The two executable halves of the entry above. A skipped case carries
+  # no `expect` in the golden, so the measured Excel answer lives in these
+  # reason strings and nowhere else; closing the R1C1 branch means
+  # deleting both entries and regenerating the suite. The `a1 = TRUE`
+  # cases in the same suite are not skipped: they run, and they are what
+  # makes these two mean "the flag is not decoded" rather than "INDIRECT
+  # is broken".
+  - id: indirect_r1c1_absolute
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel returns 42 for INDIRECT(\"R2C3\", FALSE) with C2 = 42; Formulon returns #REF! because the R1C1 branch in src/eval/reference/common.cpp is deferred. See indirect_r1c1_style_deferred."
+    prefer: mac-excel-365
+    first_noted: 2026-08-15
+    last_verified_excel_version: "16.112"
+
+  - id: indirect_r1c1_from_address
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "Excel returns 42 for INDIRECT(ADDRESS(2,3,1,FALSE), FALSE) with C2 = 42 -- an R1C1 string ADDRESS itself produces -- while Formulon returns #REF! from the deferred R1C1 branch. See indirect_r1c1_style_deferred."
+    prefer: mac-excel-365
+    first_noted: 2026-08-15
+    last_verified_excel_version: "16.112"
 
   # -- Pivot: authored <filters> block is not evaluated --------------------
   # An authored `<filters>` element (OOXML pivotTableDefinition) survives
@@ -1087,7 +1117,7 @@ entries:
   # rationale (active_filters() is deliberately session-only in both
   # directions); this entry records only the Excel-observable gap.
   - id: pivot_authored_filters_block_not_evaluated
-    cause: unclassified
+    cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
     evidence:
