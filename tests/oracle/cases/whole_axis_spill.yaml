@@ -200,3 +200,35 @@ cases:
     setup:
       A3: 3
       B3: 30
+
+  # ------------------------------------------------------------------
+  # The same rectangles written the bounded way. Excel does not treat
+  # these as a separate form at all: it rewrites a full-height bounded
+  # range into the whole-axis spelling on entry, so `=A1:A1048576` reads
+  # back as `=A:A`. Anything that answers one spelling differently from
+  # the other is therefore answering a distinction Excel does not make.
+  # These cases sit next to their whole-axis twins so the pair is read
+  # together.
+  # ------------------------------------------------------------------
+
+  - id: bounded_full_col_spills_like_the_whole_axis_spelling
+    description: "=A1:A1048576 at B1; Excel canonicalises to =A:A and spills 1048576x1"
+    formula: "=A1:A1048576"
+    formula_cell: B1
+    capture: shape
+    samples: [B1, B2, B3, B1048576]
+    setup:
+      A1: 1
+      A2: 2
+      A3: 3
+
+  - id: bounded_rectangle_containing_its_own_formula_cell
+    description: "=A1:C3 at B2; the rectangle contains its own formula cell, so the spill never happens"
+    formula: "=A1:C3"
+    formula_cell: B2
+    expect: 0
+
+  - id: bounded_rectangle_outside_its_own_formula_cell
+    description: "=A1:C3 at E1; control for the case above -- same rectangle, anchor outside it, spills 3x3"
+    formula: "=A1:C3"
+    formula_cell: E1

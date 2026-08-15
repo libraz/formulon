@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-08-14T20:07:42Z"
+    "generated_at": "2026-08-14T23:09:39Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -154,7 +154,7 @@
         }
       },
       "formula_cell": "A1",
-      "skipped": "=A:A at A1 with column A otherwise empty: the rectangle fits and the runway is clear, so only the cycle stops it; Excel leaves 0 in the cell with iterative calculation off. Formulon returns #VALUE! from the non-spilling whole-axis branch; once that branch spills, the reference contains the formula cell and Formulon's cycle policy returns #REF!."
+      "skipped": "=A:A at A1 with column A otherwise empty: the rectangle fits and the runway is clear, so only the cycle stops the spill. Nothing else in column A holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."
     },
     {
       "id": "whole_row_containing_its_own_formula_cell",
@@ -170,7 +170,7 @@
         }
       },
       "formula_cell": "A5",
-      "skipped": "=5:5 at A5 with row 5 otherwise empty: same isolation on the row axis; Excel leaves 0 with iterative calculation off. Formulon returns #VALUE! today and #REF! once the whole-axis branch spills, per its cycle policy."
+      "skipped": "=5:5 at A5 with row 5 otherwise empty: same isolation on the row axis. Nothing else in row 5 holds a formula, so the formula cell is the sole member of the cycle and Excel seeds it with 0. Formulon returns #REF! per its cycle policy."
     },
     {
       "id": "whole_col_cycle_decided_before_blocking",
@@ -190,7 +190,7 @@
         }
       },
       "formula_cell": "A1",
-      "skipped": "=A:A at A1 with A2/A3 occupied: circular and blocked at once. Excel answers 0, so it decides the cycle first. Formulon returns #SPILL!, i.e. it decides the blocking first -- a third behaviour distinct from the #VALUE! the two clear-runway self-reference cases produce."
+      "skipped": "=A:A at A1 with A2/A3 occupied: circular and blocked at once, and Excel answers 0 -- it decides the cycle before the blocking check. A2 and A3 hold literal data, not formulas, so the formula cell is the only member of this cycle and its 0 is a single readable value rather than one term of a cascade. Formulon returns #REF! per its cycle policy. The control case with the formula cell outside the referenced column is a live golden and reports #SPILL!, so the pair pins the ordering rather than the blocking."
     },
     {
       "id": "whole_col_blocked_when_formula_cell_is_outside_the_axis",
@@ -359,6 +359,73 @@
           "C5": 0.0,
           "XFD5": 0.0
         }
+      }
+    },
+    {
+      "id": "bounded_full_col_spills_like_the_whole_axis_spelling",
+      "formula": "=A1:A1048576",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A3": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "formula_cell": "B1",
+      "capture": "shape",
+      "expect": {
+        "kind": "array_shape",
+        "shape": [
+          1048576,
+          1
+        ],
+        "samples": {
+          "B1": 1.0,
+          "B2": 2.0,
+          "B3": 3.0,
+          "B1048576": 0.0
+        }
+      }
+    },
+    {
+      "id": "bounded_rectangle_containing_its_own_formula_cell",
+      "formula": "=A1:C3",
+      "setup": {},
+      "formula_cell": "B2",
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "bounded_rectangle_outside_its_own_formula_cell",
+      "formula": "=A1:C3",
+      "setup": {},
+      "formula_cell": "E1",
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          3,
+          3
+        ]
       }
     }
   ]

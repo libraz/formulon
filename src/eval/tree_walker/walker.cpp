@@ -253,27 +253,113 @@ bool whole_axis_declared_rect(const parser::AstNode& node, parser::Reference* to
   return true;
 }
 
-// Evaluates a bare whole-axis reference standing as the entire formula.
+// Recovers the rectangle a bare bounded range declares (`A1:C10`), so the
+// spelling that names both corners can be measured before it is built.
 //
-// The three outcomes are tried in the order Excel decides them, which is
-// also the only order that is affordable:
+// This is the same rectangle `eval_node`'s `RangeOp` case materialises,
+// recovered one level up because only the whole-formula position can spill
+// and therefore only that position may consult a footprint. The endpoints
+// are normalised so the top-left corner comes first, exactly as there.
+//
+// Three shapes are deliberately left to `eval_node`: a whole-axis endpoint,
+// which `whole_axis_declared_rect` recognises instead; a single-cell range
+// (`A1:A1`), which keeps its scalar degradation; and an endpoint outside the
+// grid, which must keep surfacing the `#REF!` range expansion gives it
+// rather than being answered by the footprint.
+//
+// Returns false for anything else, leaving the out-params untouched.
+bool bounded_declared_rect(const parser::AstNode& node, parser::Reference* top_left, parser::Reference* bottom_right) {
+  if (node.kind() != parser::NodeKind::RangeOp) {
+    return false;
+  }
+  const parser::AstNode& lhs_ast = node.as_range_lhs();
+  const parser::AstNode& rhs_ast = node.as_range_rhs();
+  if (lhs_ast.kind() != parser::NodeKind::Ref || rhs_ast.kind() != parser::NodeKind::Ref) {
+    return false;
+  }
+  const parser::Reference& lhs = lhs_ast.as_ref();
+  const parser::Reference& rhs = rhs_ast.as_ref();
+  if (lhs.is_full_col || lhs.is_full_row || rhs.is_full_col || rhs.is_full_row) {
+    return false;
+  }
+  if (lhs.row >= Sheet::kMaxRows || rhs.row >= Sheet::kMaxRows || lhs.col >= Sheet::kMaxCols ||
+      rhs.col >= Sheet::kMaxCols) {
+    return false;
+  }
+  const std::uint32_t r1 = std::min(lhs.row, rhs.row);
+  const std::uint32_t r2 = std::max(lhs.row, rhs.row);
+  const std::uint32_t c1 = std::min(lhs.col, rhs.col);
+  const std::uint32_t c2 = std::max(lhs.col, rhs.col);
+  if (r1 == r2 && c1 == c2) {
+    return false;
+  }
+  parser::Reference first{};
+  parser::Reference last{};
+  // `eval_node` carries the left endpoint's qualifier onto both corners, and
+  // `expand_range` lets the right corner inherit it either way; reproducing
+  // it keeps the two entry points describing one rectangle.
+  first.sheet = lhs.sheet;
+  first.sheet_quoted = lhs.sheet_quoted;
+  first.row = r1;
+  first.col = c1;
+  last.sheet = lhs.sheet;
+  last.sheet_quoted = lhs.sheet_quoted;
+  last.row = r2;
+  last.col = c2;
+  *top_left = first;
+  *bottom_right = last;
+  return true;
+}
+
+// Evaluates a bare range standing as the entire formula — the only position
+// in which a range spills, and so the only one where a footprint may be
+// consulted.
+//
+// The outcomes are tried in the order Excel decides them, which is also the
+// only order that is affordable:
 //
 //   1. The rectangle covers the formula's own cell. The formula then reads
 //      its own result, which is a circular reference and never spills —
 //      whatever else occupies the rectangle. This is settled first, so a
 //      self-referential formula does not get answered by the footprint.
+//      `settle_circularity` selects it; see the parameter note below.
 //   2. The footprint cannot be placed, either because the rectangle leaves
 //      the grid measured from the anchor or because something occupies it.
 //      `Sheet::probe_spill_footprint` decides that without building any
-//      values, which is what keeps `=A:C` at Z2 from allocating three
-//      million cells to return `#SPILL!`.
+//      values, which is what keeps `=A:C` — and equally `=A1:C1048576` — at
+//      Z2 from allocating three million cells to return `#SPILL!`.
 //   3. Otherwise the rectangle is materialised and spills.
+//
+// `settle_circularity` decides whether the cycle is pre-empted here or left
+// to be reported per cell by `resolve_ref` inside the expansion. It is on
+// for the whole-axis spelling and for a bounded rectangle spanning a full
+// grid axis; it is off for every smaller rectangle. The line is drawn where
+// Excel draws it: a full-height or full-width bounded range is rewritten
+// into the whole-axis spelling on entry, so `=A1:XFD1048576` and `=A:XFD`
+// are not two ways of writing one rectangle but literally one formula, and
+// two answers for one formula are indefensible whatever the answers are. A
+// rectangle Excel does not canonicalise (`=A1:C3`) has no twin to disagree
+// with and keeps the per-cell route.
+//
+// For the committing driver this is a difference in cost, not in verdict:
+// the materialised footprint feeds a self-edge back into the dependency
+// graph and the engine's cycle policy reaches `#REF!` on its own, after
+// building the rectangle. Pre-empting reaches the same answer without
+// building it — the same shape as the footprint pre-check above. The
+// read-only driver has no graph to fall back on, which is where the two
+// spellings visibly disagreed.
+//
+// The pre-emption does not introduce a divergence from Excel. Excel
+// abandons the closure for a self-covering rectangle and leaves 0, while
+// Formulon reports every cycle member as `#REF!`; that is the registered
+// engine-wide policy, and this extends it to a spelling Excel treats as
+// identical to one already covered by it.
 //
 // Without a formula cell to anchor against there is no footprint to
 // measure and nothing that could spill, so the rectangle is materialised
 // directly; that is the shape ad-hoc parser-level evaluation sees.
-Value evaluate_whole_axis_reference(const parser::Reference& top_left, const parser::Reference& bottom_right,
-                                    Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+Value evaluate_bare_range_spill(const parser::Reference& top_left, const parser::Reference& bottom_right, Arena& arena,
+                                const FunctionRegistry& registry, const EvalContext& ctx, bool settle_circularity) {
   const Sheet* sheet = ctx.current_sheet();
   if (sheet == nullptr || !ctx.has_formula_cell()) {
     return materialize_rectangle(top_left, bottom_right, arena, registry, ctx);
@@ -284,8 +370,8 @@ Value evaluate_whole_axis_reference(const parser::Reference& top_left, const par
   // The rectangle is on the formula's own sheet when it carries no
   // qualifier, or when the qualifier names that sheet.
   const bool same_sheet = top_left.sheet.empty() || sheet_names::equal(top_left.sheet, sheet->name());
-  if (same_sheet && anchor_row >= top_left.row && anchor_row <= bottom_right.row && anchor_col >= top_left.col &&
-      anchor_col <= bottom_right.col) {
+  if (settle_circularity && same_sheet && anchor_row >= top_left.row && anchor_row <= bottom_right.row &&
+      anchor_col >= top_left.col && anchor_col <= bottom_right.col) {
     // Circular, and reported as the engine reports every other cycle
     // rather than as anything specific to this shape: `#REF!` with
     // iterative calculation off, the cell's last computed value when it is
@@ -374,6 +460,12 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
       //     behind an operator. See `whole_axis_declared_rect`.
       //   * A single-cell (`A1:A1`) range: degrades to the scalar so the
       //     degenerate surface is unchanged.
+      //
+      // A bounded rectangle reaches the materialisation below only from a
+      // nested position. In the spilling position `evaluate()` intercepts it
+      // too, so that the footprint refusing it is measured rather than
+      // discovered by building the rectangle; the rectangle it materialises
+      // when admitted is the one built here. See `bounded_declared_rect`.
       //
       // Verified Mac semantics: tests/oracle/cases/implicit_intersection.yaml.
       const auto& lhs = node.as_range_lhs();
@@ -893,32 +985,39 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   }
 
   // The value of the whole formula is produced by exactly one of three
-  // branches: the whole-axis spilling position, the iterative-calculation
+  // branches: the bare-range spilling position, the iterative-calculation
   // driver, or the ordinary single-pass walk.
   //
-  // A bare whole-axis reference (`=A:A`, `=A:C`, `=1:2`) standing as the
-  // entire formula is a spilling expression like any other bare range: its
+  // A bare range standing as the entire formula — whole-axis (`=A:A`,
+  // `=A:C`, `=1:2`) or bounded (`=A1:C10`) — is a spilling expression: its
   // value is the array of the declared rectangle, anchored at the formula
-  // cell. Materialising it is only sound in this position, where the result
-  // can actually spill, so the interception is here rather than in
-  // `eval_node` — an operand or a scalar function argument keeps the
-  // top-left anchor projection.
+  // cell. Both spellings are intercepted here rather than in `eval_node`
+  // because this is the only position where the result can actually spill,
+  // and therefore the only one that may weigh the rectangle against the
+  // anchor's footprint. An operand or a scalar function argument reaches
+  // `eval_node` instead and is unaffected: the whole-axis form keeps its
+  // top-left anchor projection there, the bounded form its plain
+  // materialisation.
+  //
+  // Routing both through one place is what keeps them from disagreeing on
+  // cost. Two spellings of one rectangle already returned one answer, but
+  // only the whole-axis form measured the footprint before building it, so
+  // the bounded form paid a full materialisation — 3.1 million cells for
+  // `=A1:C1048576` — to arrive at the same `#SPILL!`. The rectangle is
+  // bounded by the same range-expansion ceiling either way.
   //
   // Excel's observed consequences — the rectangle must fit measured from
   // the anchor, an occupied cell anywhere inside the declared rectangle
   // blocks it, and unpopulated cells spill as 0 — are pinned by
-  // tests/oracle/cases/whole_axis_spill.yaml. The rectangle is bounded by
-  // the same range-expansion ceiling as the equivalent `=A1:A1048576`
-  // spelling, so the two spellings of one rectangle cannot answer
-  // differently.
+  // tests/oracle/cases/whole_axis_spill.yaml.
   //
   // One consequence in that suite is deliberately NOT matched. A formula
   // sitting inside the axis it references is circular; Excel resolves the
   // cycle to 0 with iterative calculation off, while Formulon's engine-wide
   // policy reports `#REF!` for every cycle member. That difference is a
   // registered divergence, not an observation this code reproduces.
-  // `evaluate_whole_axis_reference` settles circularity before the
-  // footprint so the cycle cannot be pre-empted by a blocker.
+  // `evaluate_bare_range_spill` settles circularity before the footprint so
+  // the cycle cannot be pre-empted by a blocker.
   //
   // Iterative-calculation driver. When the bound workbook has Excel's
   // "Enable iterative calculation" option on, a formula anchored at a known
@@ -933,10 +1032,19 @@ Value evaluate(const parser::AstNode& node, Arena& arena, const FunctionRegistry
   // drives the loop; nested re-entry (`resolve_ref`) keeps the ordinary
   // single-pass behaviour.
   Value v = Value::blank();
-  parser::Reference whole_axis_top{};
-  parser::Reference whole_axis_bottom{};
-  if (is_top_level && whole_axis_declared_rect(node, &whole_axis_top, &whole_axis_bottom)) {
-    v = evaluate_whole_axis_reference(whole_axis_top, whole_axis_bottom, arena, registry, ctx_with_counters);
+  parser::Reference bare_range_top{};
+  parser::Reference bare_range_bottom{};
+  if (is_top_level && whole_axis_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
+    v = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
+                                  /*settle_circularity=*/true);
+  } else if (is_top_level && bounded_declared_rect(node, &bare_range_top, &bare_range_bottom)) {
+    // Excel rewrites a bounded range spanning a full grid axis into the
+    // whole-axis spelling on entry, so exactly this set has a twin above
+    // whose answer it must match. Anything narrower has no twin.
+    const bool full_height = bare_range_top.row == 0U && bare_range_bottom.row == Sheet::kMaxRows - 1U;
+    const bool full_width = bare_range_top.col == 0U && bare_range_bottom.col == Sheet::kMaxCols - 1U;
+    v = evaluate_bare_range_spill(bare_range_top, bare_range_bottom, arena, registry, ctx_with_counters,
+                                  /*settle_circularity=*/full_height || full_width);
   } else if (is_top_level && !ctx.iterative_driver_suppressed() && ctx.has_formula_cell() &&
              ctx.current_sheet() != nullptr && ctx.workbook() != nullptr &&
              ctx.workbook()->iterative_options().enabled) {
