@@ -353,9 +353,16 @@ class WindowsExcelOracle(OracleDriver):
     def probe_environment(self) -> EnvironmentInfo:
         """Returns a snapshot of Excel's version / locale for logging.
 
-        ``app.version`` is a string property on recent xlwings on
-        Windows; the fallback path queries the raw COM ``Version`` /
-        ``Build`` properties. The locale is detected via
+        On Windows ``Application.Version`` is the Office *major* version --
+        the literal ``"16.0"`` for every SKU from Office 2016 through
+        Microsoft 365. On its own it identifies nothing, which is exactly
+        the shape of stamp that let an Office 2019 capture pass for a
+        Microsoft 365 one; ``tools/oracle/divergence_check.py`` rejects it
+        by name. ``Application.Build`` carries the discriminating part, so
+        it is always appended (2019 builds are 10xxx, Microsoft 365 18xxx),
+        producing a ``16.0.<build>`` stamp that survives that check.
+
+        The locale is detected via
         ``Application.International(xlCountryCode)`` (see
         :func:`tools.oracle.drivers._locale.detect_locale_from_app`); a
         probe failure or unmapped country code yields an empty string,
@@ -365,19 +372,29 @@ class WindowsExcelOracle(OracleDriver):
 
         version = ""
         try:
-            version = str(self._app.version) if self._app.version else ""
+            version = str(self._app.version).strip() if self._app.version else ""
         except Exception:
             version = ""
-        if not version:
-            try:
-                api = self._app.api
+        build = ""
+        try:
+            api = self._app.api
+            if not version:
                 v = api.Version() if callable(getattr(api, "Version", None)) else getattr(api, "Version", "")
-                b = api.Build() if callable(getattr(api, "Build", None)) else getattr(api, "Build", "")
                 version = str(v).strip()
-                if b and str(b) not in version:
-                    version = f"{version} (Build {b})"
-            except Exception:
-                pass
+            b = api.Build() if callable(getattr(api, "Build", None)) else getattr(api, "Build", "")
+            build = str(b).strip()
+        except Exception:
+            build = ""
+        # `Build` is normally the bare build number ("18025"), but some
+        # Office channels report a full dotted version there. Take it whole
+        # in that case rather than concatenating a doubled prefix.
+        if build:
+            if not version:
+                version = build
+            elif build.startswith(version):
+                version = build
+            elif build not in version.split("."):
+                version = f"{version}.{build}"
         locale = detect_locale_from_app(self._app) or ""
         return EnvironmentInfo(
             excel_version=version.strip(),
@@ -733,6 +750,22 @@ class WindowsExcelOracle(OracleDriver):
                 wb.sheets[0].range(f"A{row_key}").row_height = float(height)
             except Exception:
                 pass
+
+        # Hiding is read back and asserted rather than attempted quietly.
+        # The width / height loops above swallow failures because a wrong
+        # size is visible in the captured page counts, but a column that
+        # silently failed to hide yields a golden that looks perfectly
+        # ordinary while answering a different question than the case asks.
+        for col_key in case.get("hidden_columns") or []:
+            target = wb.sheets[0].range(f"{col_key}1").api.EntireColumn
+            target.Hidden = True
+            if not target.Hidden:
+                raise RuntimeError(f"column {col_key!r} did not hide; refusing to capture a case it does not match")
+        for row_key in case.get("hidden_rows") or []:
+            target = wb.sheets[0].range(f"A{row_key}").api.EntireRow
+            target.Hidden = True
+            if not target.Hidden:
+                raise RuntimeError(f"row {row_key!r} did not hide; refusing to capture a case it does not match")
 
 
 def _split_sheet_qualified_addr(key: str) -> "tuple[Optional[str], str]":

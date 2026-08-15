@@ -27,7 +27,9 @@ except ImportError:  # pragma: no cover
     from tools.oracle import promote_capture
 
 _SENTINEL = "ARRAYTOTEXT(1) == text '1'"
-_PRODUCT = "16.99 (Microsoft 365)"
+# A Windows capture stamps `Application.Version` + `Application.Build`; the
+# build is the only part that distinguishes an Office SKU.
+_PRODUCT = "16.0.18025"
 _LOCALE = "ja-JP"
 _CAPTURE = "capture-0001"
 _TARGET = "win-365-ja_JP"
@@ -114,6 +116,24 @@ class CheckCaptureTests(unittest.TestCase):
         # This is the exact shape of the historical Office 2019 mix-up.
         staged = self._staged(product="unknown Excel 16.0 capture")
         with self.assertRaisesRegex(RuntimeError, "Office 2019"):
+            promote_capture.check_capture(staged, _TARGET, _RECORD)
+
+    def test_bare_office_major_product_is_refused(self) -> None:
+        # `Application.Version` reports "16.0" for every SKU from Office
+        # 2016 through Microsoft 365, so it identifies nothing. A capture
+        # stamped with it is indistinguishable after the fact from the
+        # Office 2019 one, which is the whole failure this step exists for.
+        staged = self._staged(product="16.0")
+        for path in staged.glob("*.golden.json"):
+            document = json.loads(path.read_text())
+            document["environment"]["excel_version"] = "16.0"
+            path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "names no particular Excel build"):
+            promote_capture.check_capture(staged, _TARGET, _RECORD)
+
+    def test_prose_wrapped_product_is_refused(self) -> None:
+        staged = self._staged(product="Excel 365 (Windows, ja-JP)")
+        with self.assertRaisesRegex(RuntimeError, "names no particular Excel build"):
             promote_capture.check_capture(staged, _TARGET, _RECORD)
 
     def test_missing_m365_sentinel_is_refused(self) -> None:

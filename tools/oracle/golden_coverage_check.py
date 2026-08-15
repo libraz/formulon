@@ -14,24 +14,21 @@ for," which presupposes a real case definition behind it).
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+try:  # pragma: no cover - trivial fallback
+    from tools.oracle.divergence_check import is_pending_stamp
+except ImportError:  # pragma: no cover
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from divergence_check import is_pending_stamp  # type: ignore
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CASES_DIR = REPO_ROOT / "tests/oracle/cases"
 GOLDEN_DIR = REPO_ROOT / "tests/oracle/golden"
-
-# A real Microsoft 365 build stamp, e.g. "16.111.2" or "16.112" -- mirrors
-# the allowlist in divergence_check.py's is_pending_stamp(). A golden whose
-# `environment.excel_version` doesn't match this (a placeholder like
-# "hand-seeded", or a bare "16.0" Office-major stamp) was not produced by a
-# verified Excel capture and must not count toward the release-gate
-# denominator either.
-_M365_BUILD_RE = re.compile(r"16\.\d+(\.\d+)?")
 
 
 def load_case_catalog() -> tuple[set[str], set[str]]:
@@ -79,10 +76,12 @@ def load_golden_ids() -> tuple[set[str], list[str]]:
 
         # Version-format check: a golden not produced by a real, verified
         # Excel capture (a hand-seeded placeholder, or the non-evidence
-        # bare "16.0" Office-major stamp -- see divergence_check.py) must
-        # not silently look like primary-oracle evidence.
+        # bare "16.0" Office-major stamp) must not silently look like
+        # primary-oracle evidence. Delegated to divergence_check rather
+        # than re-stated as a local regex -- the local copy claimed to
+        # mirror that allowlist while in fact accepting "16.0".
         version = doc.get("environment", {}).get("excel_version") if isinstance(doc, dict) else None
-        if not isinstance(version, str) or not version or not _M365_BUILD_RE.fullmatch(version):
+        if is_pending_stamp(version):
             errors.append(f"{path}: environment.excel_version {version!r} is not a verified Microsoft 365 build stamp")
 
         for index, case in enumerate(cases):

@@ -45,10 +45,12 @@ from typing import Any, Dict, List, Mapping, Optional
 
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import provenance as provenance_mod
+    from tools.oracle.divergence_check import is_pending_stamp
     from tools.oracle.workbook_oracle_gen import staging_dir_for
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import provenance as provenance_mod  # type: ignore
+    from divergence_check import is_pending_stamp  # type: ignore
     from workbook_oracle_gen import staging_dir_for  # type: ignore
 
 import yaml
@@ -135,10 +137,17 @@ def check_capture(staged_dir: Path, target_name: str, target_record: Mapping[str
     product = candidate.get("product")
     if not isinstance(product, str) or not product.strip():
         raise RuntimeError(f"{candidate_path}: missing the Excel product/version string")
-    if "unknown" in product.lower():
+    # `is_pending_stamp` is the project's single definition of a version
+    # string that identifies no particular Excel -- "unknown", the bare
+    # Office-major "16.0" that every SKU from 2016 through 365 reports, and
+    # placeholder shapes. A capture stamped with one cannot later be told
+    # apart from the historical Office 2019 mix-up, so it is refused even
+    # though the sentinel passed.
+    if is_pending_stamp(product):
         raise RuntimeError(
-            f"{candidate_path}: product is {product!r}. A capture that cannot name its Excel build is "
-            "exactly the shape of the historical Office 2019 mix-up and is refused."
+            f"{candidate_path}: product is {product!r}, which names no particular Excel build. "
+            "This is exactly the shape of the historical Office 2019 mix-up and is refused. "
+            "Recapture with a driver that records Application.Build."
         )
     declared_locale = target_record.get("locale")
     if candidate.get("locale") != declared_locale:
