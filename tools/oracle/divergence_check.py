@@ -118,6 +118,35 @@ def load_case_ids() -> set[str]:
     return load_case_catalog()[0]
 
 
+def load_observations(golden_dirs: "list[Path] | None" = None) -> dict[str, str]:
+    """Load case-id -> where Excel's answer for a still-skipped case is recorded.
+
+    A capture drives skipped cases whose stamp is still pending and parks
+    the result under `observed` (see `oracle_gen._load_divergence_reprobes`).
+    Surfacing that here is what turns a pending entry from "someone should
+    look at this one day" into "the evidence is on disk, go adjudicate it" --
+    otherwise the observation sits in a golden nobody re-reads.
+    """
+
+    out: dict[str, str] = {}
+    if golden_dirs is None:
+        golden_dirs = [REPO_ROOT / "tests/oracle/golden", REPO_ROOT / "tests/oracle/golden_wb"]
+    for golden_dir in golden_dirs:
+        for path in sorted(golden_dir.glob("*.golden.json")):
+            try:
+                doc = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            for case in doc.get("cases") or []:
+                if not isinstance(case, dict) or not isinstance(case.get("id"), str):
+                    continue
+                if "observed" in case:
+                    out[case["id"]] = f"{_display_path(path)} (observed)"
+                elif "observed_error" in case:
+                    out[case["id"]] = f"{_display_path(path)} (probe failed: {case['observed_error']})"
+    return out
+
+
 def divergence_files() -> list[Path]:
     """Every divergence registry in the tree: the primary plus each variant."""
 
@@ -348,8 +377,11 @@ def validate(path: Path, *, strict: bool) -> int:
 
     for message in errors:
         print(f"FAIL {message}", file=sys.stderr)
+    observations = load_observations()
     for case_id in pending:
-        print(f"PENDING {case_id}: needs a verified Excel version stamp", file=sys.stderr)
+        note = observations.get(case_id)
+        detail = f"; Excel answered, see {note}" if note else ""
+        print(f"PENDING {case_id}: needs a verified Excel version stamp{detail}", file=sys.stderr)
 
     print(
         f"divergence records: {len(entries)} entries, {len(case_ids)} oracle case IDs, "

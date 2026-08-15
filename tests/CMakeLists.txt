@@ -456,6 +456,16 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.promote_capture_test
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+
+  # A skip-oracle entry withholds verification, not capture. Nothing on a
+  # host without Excel can notice if that separation regresses, and the
+  # symptom -- a pending reprobe that no capture ever resolves -- looks
+  # exactly like "we haven't got round to it yet".
+  add_test(
+    NAME OracleSkipReprobe
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.reprobe_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
 endif()
 
 add_subdirectory(integration)

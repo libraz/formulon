@@ -55,11 +55,11 @@ from typing import Any, Dict, List, Optional, Tuple
 # (no package) and `python3 -m tools.oracle.workbook_oracle_gen`.
 try:  # pragma: no cover - trivial fallback
     from tools.oracle.drivers import select_driver
-    from tools.oracle.oracle_gen import _load_divergence_skips
+    from tools.oracle.oracle_gen import _load_divergence_reprobes, _load_divergence_skips
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from drivers import select_driver  # type: ignore
-    from oracle_gen import _load_divergence_skips  # type: ignore
+    from oracle_gen import _load_divergence_reprobes, _load_divergence_skips  # type: ignore
 try:
     from tools.oracle import workbook_case_schema
 except ImportError:  # pragma: no cover
@@ -207,6 +207,27 @@ def _resolve_skips(
     return skips
 
 
+def _resolve_reprobes(
+    targets_doc: Dict[str, Any],
+    target: Dict[str, Any],
+    divergence_path: Path,
+) -> Dict[str, str]:
+    """Returns the skipped case ids that still owe a live-Excel observation.
+
+    Same selection and variant-overlay rules as `_resolve_skips`, narrowed
+    to entries whose `last_verified_excel_version` is a pending stamp. See
+    `oracle_gen._load_divergence_reprobes` for why a skip must not also
+    suppress capture.
+    """
+
+    reprobes = _load_divergence_reprobes(divergence_path, target["_name"])
+    if target["_name"] != _workbook_primary(targets_doc):
+        variant_div = REPO_ROOT / "tests" / "oracle" / "variants" / target["_name"] / "divergence.yaml"
+        if variant_div.exists():
+            reprobes.update(_load_divergence_reprobes(variant_div, target["_name"]))
+    return reprobes
+
+
 def _discover_workbook_suites(cases_dir: Path) -> List[Tuple[Path, Dict[str, Any]]]:
     """Loads every `*.case.json` under `cases_dir` (non-recursive).
 
@@ -327,6 +348,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="YAML listing cases to skip; see tests/divergence.yaml.",
     )
     parser.add_argument(
+        "--no-reprobe",
+        action="store_true",
+        help=(
+            "Do not drive skipped cases whose last_verified_excel_version is still "
+            "pending through Excel. They are probed by default because a skip that "
+            "also suppresses capture can never produce the observation it asks for."
+        ),
+    )
+    parser.add_argument(
         "--visible",
         action="store_true",
         help="Show the Excel window during generation (debug aid).",
@@ -373,11 +403,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"  review, then land it with: make oracle-promote TRACK=workbook TARGET={target['_name']}")
 
     # Cases marked `mode: skip-oracle` in tests/divergence.yaml (plus any
-    # per-variant override) are excluded from generation. A typo in an
+    # per-variant override) are excluded from *verification*. A typo in an
     # `applies_to` list raises here -- fail fast rather than silently
     # masking entries.
     try:
         skips = _resolve_skips(targets_doc, target, args.divergence)
+        reprobes = {} if args.no_reprobe else _resolve_reprobes(targets_doc, target, args.divergence)
     except RuntimeError as exc:
         print(f"workbook-oracle-gen: {exc}", file=sys.stderr)
         return 2
@@ -434,22 +465,36 @@ def main(argv: Optional[List[str]] = None) -> int:
             try:
                 out_cases: List[Dict[str, Any]] = []
                 skipped_here = 0
+                reprobed_here = 0
                 for case in raw_cases:
                     if not isinstance(case, dict):
                         raise RuntimeError(f"{path}: case entry is not an object")
                     cid = case.get("id")
                     # A divergence.yaml skip-oracle entry excludes this
-                    # case from Excel automation; the golden records the
+                    # case from verification; the golden records the
                     # documented reason in place of `expect` so the C++
                     # verifier can recognise an intentional gap.
                     if isinstance(cid, str) and cid in skips:
-                        out_cases.append(
-                            {
-                                "id": cid,
-                                "spec": case,
-                                "skipped": skips[cid],
-                            }
-                        )
+                        entry: Dict[str, Any] = {
+                            "id": cid,
+                            "spec": case,
+                            "skipped": skips[cid],
+                        }
+                        # ... but a skip whose stamp is still pending is
+                        # asking to be looked at again, so drive it through
+                        # Excel anyway and park the answer under `observed`.
+                        # It sits beside `skipped`, never in place of it:
+                        # the entry stays skipped until a human compares the
+                        # two and either retires it or stamps it.
+                        if cid in reprobes:
+                            try:
+                                entry["observed"] = oracle.run_workbook_case(case)
+                            except Exception as exc:  # noqa: BLE001 - reported, not raised
+                                # One unobservable case must not sink an
+                                # otherwise complete capture.
+                                entry["observed_error"] = f"{type(exc).__name__}: {exc}"
+                            reprobed_here += 1
+                        out_cases.append(entry)
                         skipped_here += 1
                         continue
                     # The driver evaluates the declarative workbook spec
@@ -464,6 +509,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     )
                 if skipped_here:
                     print(f"  ! {skipped_here} case(s) skipped by divergence.yaml (see golden 'skipped' fields)")
+                if reprobed_here:
+                    print(
+                        f"  * {reprobed_here} of those still owe an observation and were probed anyway "
+                        "(see golden 'observed' fields)"
+                    )
                 out_path = golden_dir / f"{suite_name}.golden.json"
                 _write_golden(out_path, suite_name, env_json, out_cases)
                 case_ids, _ = workbook_case_schema.validate_pair(path, out_path)

@@ -35,11 +35,13 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 # package) and `python3 -m tools.oracle.oracle_gen` (package-style).
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import case_schema
+    from tools.oracle.divergence_check import is_pending_stamp
     from tools.oracle.drivers import select_driver
     from tools.oracle.drivers.base import CaseResult, EnvironmentInfo
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import case_schema  # type: ignore
+    from divergence_check import is_pending_stamp  # type: ignore
     from drivers import select_driver  # type: ignore
     from drivers.base import CaseResult, EnvironmentInfo  # type: ignore
 
@@ -188,8 +190,10 @@ def _write_golden(
     env_json: Dict[str, object],
     results: List[CaseResult],
     skipped: Optional[Dict[str, str]] = None,
+    observed: Optional[Dict[str, CaseResult]] = None,
 ) -> None:
     skipped = skipped or {}
+    observed = observed or {}
     cases_out: List[Dict[str, object]] = []
     by_id = {r.id: r for r in results}
     for c in suite.cases:
@@ -206,6 +210,12 @@ def _write_golden(
             record["merges"] = list(c.merges)
         if c.id in skipped:
             record["skipped"] = skipped[c.id]
+            # Evidence for a still-pending divergence, recorded beside the
+            # skip rather than in place of it: the case stays skipped until
+            # someone compares this against Formulon and retires or stamps
+            # the entry. See `_load_divergence_reprobes`.
+            if c.id in observed:
+                record["observed"] = _result_to_json(observed[c.id])
             cases_out.append(record)
             continue
         r = by_id.get(c.id)
@@ -266,24 +276,18 @@ def _applies_to_target(entry: Dict[str, Any], path: Path, label: str, target_nam
     return target_name in applies
 
 
-def _load_divergence_skips(
+def _iter_skip_entries(
     path: Path,
     target_name: str,
     *,
     suites: Optional[Sequence[tuple[Path, case_schema.Suite]]] = None,
-) -> Dict[str, str]:
-    """Loads case-id -> reason from divergence YAML entries whose mode is
-    `skip-oracle` AND whose `applies_to` either includes `target_name` or
-    is absent (default = applies to all targets).
+):
+    """Yields `(entry, case_ids)` for every in-scope `skip-oracle` entry.
 
-    File-level read / parse failures fall back to an empty dict so a
-    completely missing or unreadable divergence file does not abort
-    generation. Entry-level type errors (e.g. `applies_to` is not a list)
-    are surfaced as `RuntimeError` so typos are caught by the caller
-    rather than silently masking entries.
+    Shared by `_load_divergence_skips` and `_load_divergence_reprobes` so
+    the two agree on exactly which cases an entry selects.
     """
 
-    out: Dict[str, str] = {}
     suite_cases = {suite.name: [case.id for case in suite.cases] for _, suite in suites or []}
     for entry in _load_divergence_entries(path):
         mode = entry.get("mode", "tolerance")
@@ -311,9 +315,63 @@ def _load_divergence_skips(
         label = ", ".join(raw_ids)
         if not _applies_to_target(entry, path, label, target_name):
             continue
+        yield entry, raw_ids
+
+
+def _load_divergence_skips(
+    path: Path,
+    target_name: str,
+    *,
+    suites: Optional[Sequence[tuple[Path, case_schema.Suite]]] = None,
+) -> Dict[str, str]:
+    """Loads case-id -> reason from divergence YAML entries whose mode is
+    `skip-oracle` AND whose `applies_to` either includes `target_name` or
+    is absent (default = applies to all targets).
+
+    File-level read / parse failures fall back to an empty dict so a
+    completely missing or unreadable divergence file does not abort
+    generation. Entry-level type errors (e.g. `applies_to` is not a list)
+    are surfaced as `RuntimeError` so typos are caught by the caller
+    rather than silently masking entries.
+    """
+
+    out: Dict[str, str] = {}
+    for entry, raw_ids in _iter_skip_entries(path, target_name, suites=suites):
         reason = str(entry.get("reason", "divergence.yaml skip-oracle"))
         for case_id in raw_ids:
             out[case_id] = reason
+    return out
+
+
+def _load_divergence_reprobes(
+    path: Path,
+    target_name: str,
+    *,
+    suites: Optional[Sequence[tuple[Path, case_schema.Suite]]] = None,
+) -> Dict[str, str]:
+    """Loads case-id -> pending stamp for skips that still owe an observation.
+
+    A `skip-oracle` entry excludes its cases from *verification*, which is
+    a deliberate policy. It must not also exclude them from *capture*: an
+    entry whose `last_verified_excel_version` is a pending stamp is, by
+    definition, one asking for a fresh look at Excel, and skipping it at
+    capture time is what makes that request unsatisfiable -- every run
+    silently reproduces the same "still pending" state no matter which
+    Excel it ran against.
+
+    So the cases named here are still driven through Excel, and what Excel
+    answers is recorded alongside the skip reason (never in its place, so
+    the verifier keeps skipping until a human adjudicates). Entries with a
+    verified stamp are settled and stay unprobed.
+    """
+
+    out: Dict[str, str] = {}
+    for entry, raw_ids in _iter_skip_entries(path, target_name, suites=suites):
+        stamp = entry.get("last_verified_excel_version")
+        if not is_pending_stamp(stamp):
+            continue
+        for case_id in raw_ids:
+            out[case_id] = str(stamp or "")
     return out
 
 
@@ -559,6 +617,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="Abort on first suite failure instead of continuing.",
     )
     parser.add_argument(
+        "--no-reprobe",
+        action="store_true",
+        help=(
+            "Do not drive skipped cases whose last_verified_excel_version is still "
+            "pending through Excel. They are probed by default because a skip that "
+            "also suppresses capture can never produce the observation it asks for."
+        ),
+    )
+    parser.add_argument(
         "--visible",
         action="store_true",
         help="Show the Excel window during generation (debug aid).",
@@ -641,6 +708,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     try:
         skips = _load_divergence_skips(args.divergence, target["_name"], suites=suites)
+        reprobes = {} if args.no_reprobe else _load_divergence_reprobes(args.divergence, target["_name"], suites=suites)
         metadata = _load_divergence_metadata(args.divergence, target["_name"])
 
         # Variants may declare an extra `divergence:` path in targets.yaml,
@@ -652,6 +720,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             if variant_div_path.exists():
                 variant_skips = _load_divergence_skips(variant_div_path, target["_name"], suites=suites)
                 skips.update(variant_skips)
+                if not args.no_reprobe:
+                    reprobes.update(_load_divergence_reprobes(variant_div_path, target["_name"], suites=suites))
                 metadata.extend(_load_divergence_metadata(variant_div_path, target["_name"]))
     except RuntimeError as exc:
         print(f"oracle-gen: {exc}", file=sys.stderr)
@@ -720,7 +790,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 # Carry divergence.yaml skips into the per-run map. The
                 # driver still gets the full case list so row numbering
                 # stays aligned; we'll drop the skipped ids on write.
-                runnable = [c for c in suite.cases if c.id not in skips]
+                # A skipped case whose stamp is still pending stays in the
+                # run -- its result is written as `observed`, not `expect`.
+                runnable = [c for c in suite.cases if c.id not in skips or c.id in reprobes]
                 case_inputs = [_case_input(c) for c in runnable]
                 env_copy = EnvironmentInfo(
                     excel_version=env.excel_version,
@@ -770,6 +842,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 # generic "no result captured".
                 merged_skips: Dict[str, str] = {c.id: skips[c.id] for c in suite.cases if c.id in skips}
                 runtime_results: List[CaseResult] = []
+                observed: Dict[str, CaseResult] = {}
                 runtime_skipped = 0
                 for r in results:
                     if r.kind == "skipped":
@@ -778,10 +851,19 @@ def main(argv: Optional[List[str]] = None) -> int:
                             f"driver skip: {r.value or 'unknown reason'}",
                         )
                         runtime_skipped += 1
+                    elif r.id in merged_skips:
+                        # A reprobe: Excel answered, but the entry is still
+                        # skipped, so this is evidence rather than a golden.
+                        observed[r.id] = r
                     else:
                         runtime_results.append(r)
                 if runtime_skipped:
                     print(f"  ! {runtime_skipped} case(s) skipped by driver (see golden 'skipped' fields)")
+                if observed:
+                    print(
+                        f"  * {len(observed)} skipped case(s) still owed an observation and were probed "
+                        "anyway (see golden 'observed' fields)"
+                    )
                 out_path = golden_dir / f"{suite.name}.golden.json"
                 _write_golden(
                     out_path,
@@ -789,6 +871,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     this_env_json,
                     runtime_results,
                     skipped=merged_skips,
+                    observed=observed,
                 )
                 print(f"  -> {out_path.relative_to(REPO_ROOT)}")
             except Exception as exc:
