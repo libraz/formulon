@@ -66,7 +66,7 @@ TEST(SheetNameValidation, OoxmlReaderRejectsCaseFoldedDuplicate) {
 
 TEST(SheetNameValidation, XlsbReaderRejectsCaseFoldedDuplicate) {
   const Workbook wb = BuildCollidingWorkbook();
-  auto bytes_or = wb.save_ex(WorkbookFormat::Xlsb);
+  auto bytes_or = wb.save_as(WorkbookFormat::Xlsb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
 
   auto read_or = xlsb::read_xlsb(SpanOf(bytes_or.value()));
@@ -86,7 +86,7 @@ TEST(SheetNameValidation, OoxmlReaderRejectsUnicodeSimpleFoldedDuplicate) {
 
 TEST(SheetNameValidation, XlsbReaderRejectsUnicodeSimpleFoldedDuplicate) {
   const Workbook wb = BuildUnicodeCollidingWorkbook();
-  auto bytes_or = wb.save_ex(WorkbookFormat::Xlsb);
+  auto bytes_or = wb.save_as(WorkbookFormat::Xlsb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message;
 
   auto read_or = xlsb::read_xlsb(SpanOf(bytes_or.value()));
@@ -107,7 +107,7 @@ TEST(SheetNameValidation, DistinctUnicodeNamesLoadOnBothReaders) {
   ASSERT_TRUE(static_cast<bool>(read_xlsx_or)) << read_xlsx_or.error().message;
   EXPECT_EQ(read_xlsx_or.value().workbook.sheet_count(), 2U);
 
-  auto xlsb_or = wb.save_ex(WorkbookFormat::Xlsb);
+  auto xlsb_or = wb.save_as(WorkbookFormat::Xlsb);
   ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
   auto read_xlsb_or = xlsb::read_xlsb(SpanOf(xlsb_or.value()));
   ASSERT_TRUE(static_cast<bool>(read_xlsb_or)) << read_xlsb_or.error().message;
@@ -127,7 +127,7 @@ TEST(SheetNameValidation, DistinctNamesStillLoadOnBothReaders) {
   ASSERT_TRUE(static_cast<bool>(read_xlsx_or)) << read_xlsx_or.error().message;
   EXPECT_EQ(read_xlsx_or.value().workbook.sheet_count(), 2U);
 
-  auto xlsb_or = wb.save_ex(WorkbookFormat::Xlsb);
+  auto xlsb_or = wb.save_as(WorkbookFormat::Xlsb);
   ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
   auto read_xlsb_or = xlsb::read_xlsb(SpanOf(xlsb_or.value()));
   ASSERT_TRUE(static_cast<bool>(read_xlsb_or)) << read_xlsb_or.error().message;

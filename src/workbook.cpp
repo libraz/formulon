@@ -622,10 +622,10 @@ const pivot::PivotCache* Workbook::find_pivot_cache(std::uint32_t cache_id) cons
 }
 
 Expected<std::vector<std::uint8_t>, Error> Workbook::save() const {
-  return save_ex(io::WorkbookFormat::Ooxml);
+  return save_as(io::WorkbookFormat::Ooxml);
 }
 
-Expected<std::vector<std::uint8_t>, Error> Workbook::save_ex(io::WorkbookFormat format) const {
+Expected<std::vector<std::uint8_t>, Error> Workbook::save_as(io::WorkbookFormat format) const {
   switch (format) {
     case io::WorkbookFormat::Ooxml:
       return io::write_ooxml(*this);
@@ -634,8 +634,8 @@ Expected<std::vector<std::uint8_t>, Error> Workbook::save_ex(io::WorkbookFormat 
     case io::WorkbookFormat::Unknown:
       break;
   }
-  return make_error(FormulonErrorCode::kInvalidArgument, "Workbook::save_ex: unsupported format",
-                    "context=workbook_save_ex");
+  return make_error(FormulonErrorCode::kInvalidArgument, "Workbook::save_as: unsupported format",
+                    "context=workbook_save_as");
 }
 
 namespace {

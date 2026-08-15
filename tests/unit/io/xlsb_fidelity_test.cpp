@@ -404,7 +404,7 @@ TEST(XlsbFidelity, StylesBinSurvivesAsPassthroughPart) {
 }
 
 // ---------------------------------------------------------------------------
-// (f) A save_ex(Xlsb) -> reload cycle must not disturb formula text or
+// (f) A save_as(Xlsb) -> reload cycle must not disturb formula text or
 // recalculated values for every Ptg form this bundle closes (future-
 // function dispatch, LET, PtgArray literals, plain ranges, and defined-
 // name references). `H4` / `H5` are excluded — see the class comment
@@ -415,14 +415,14 @@ TEST(XlsbFidelity, SaveReloadPreservesFormulaTextAndValues) {
   Workbook wb = LoadAndRecalcFixture();
   ASSERT_EQ(wb.sheet_count(), 2U);
 
-  auto saved_or = wb.save_ex(io::WorkbookFormat::Xlsb);
-  ASSERT_TRUE(static_cast<bool>(saved_or)) << "save_ex(Xlsb) failed: " << saved_or.error().message;
+  auto saved_or = wb.save_as(io::WorkbookFormat::Xlsb);
+  ASSERT_TRUE(static_cast<bool>(saved_or)) << "save_as(Xlsb) failed: " << saved_or.error().message;
 
   const std::vector<std::uint8_t>& saved = saved_or.value();
   EXPECT_EQ(io::detect_workbook_format(SpanOf(saved)), io::WorkbookFormat::Xlsb);
 
   auto reloaded_or = io::xlsb::read_xlsb(SpanOf(saved));
-  ASSERT_TRUE(static_cast<bool>(reloaded_or)) << "reload after save_ex failed: " << reloaded_or.error().message;
+  ASSERT_TRUE(static_cast<bool>(reloaded_or)) << "reload after save_as failed: " << reloaded_or.error().message;
   Workbook reloaded = std::move(reloaded_or.value().workbook);
   auto recalc_or = reloaded.recalc(eval::default_registry());
   ASSERT_TRUE(static_cast<bool>(recalc_or)) << "recalc after reload failed: " << recalc_or.error().message;
@@ -480,7 +480,7 @@ TEST(XlsbFidelity, SaveReloadPreservesFormulaTextAndValues) {
       found_rate = true;
     }
   }
-  EXPECT_TRUE(found_rate) << "defined name 'Rate' lost across save_ex -> reload";
+  EXPECT_TRUE(found_rate) << "defined name 'Rate' lost across save_as -> reload";
 }
 
 }  // namespace

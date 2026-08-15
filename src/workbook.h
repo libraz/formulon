@@ -253,7 +253,7 @@ class Workbook {
   /// Serialises the workbook to an in-memory `.xlsx` byte stream. Delegates
   /// to `io::write_ooxml`; see that function's documentation for the exact
   /// set of OOXML parts emitted by the empty-workbook writer slice.
-  /// Equivalent to `save_ex(io::WorkbookFormat::Ooxml)`.
+  /// Equivalent to `save_as(io::WorkbookFormat::Ooxml)`.
   Expected<std::vector<std::uint8_t>, Error> save() const;
 
   /// Serialises the workbook using an explicit container `format`.
@@ -261,7 +261,7 @@ class Workbook {
   /// `.xlsx` writer); `io::WorkbookFormat::Xlsb` delegates to
   /// `io::xlsb::write_xlsb` (the MS-XLSB writer). `io::WorkbookFormat::Unknown`
   /// is not a valid save target and returns `kInvalidArgument`.
-  Expected<std::vector<std::uint8_t>, Error> save_ex(io::WorkbookFormat format) const;
+  Expected<std::vector<std::uint8_t>, Error> save_as(io::WorkbookFormat format) const;
 
   // ---------------------------------------------------------------------------
   // Recalc-engine integration
