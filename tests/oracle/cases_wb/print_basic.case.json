@@ -1,7 +1,7 @@
 {
   "suite": "print_basic",
   "kind": "workbook",
-  "description": "Basic print-area / page-setup oracle cases: explicit and absent print areas, A4 vs Letter paper, portrait vs landscape orientation, print titles, and a multi-area print range. Every case carries a small populated grid on \"Sheet1\" and a print block describing the page setup. No golden is committed: print golden generation needs a Windows + Excel host.\n",
+  "description": "Basic print-area / page-setup oracle cases: explicit and absent print areas, A4 vs Letter paper, portrait vs landscape orientation, print titles, a multi-area print range, and hidden columns / rows that carry no recorded size. Every case carries a small populated grid on \"Sheet1\" and a print block describing the page setup.",
   "cases": [
     {
       "id": "explicit_print_area_a4_portrait",
@@ -210,6 +210,187 @@
       "print": {
         "sheet": "Sheet1",
         "print_area": "C3:C3",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "hidden_columns_no_width",
+      "description": "Wide columns with three of them hidden and no width recorded for the hidden ones. Whether a hidden column still consumes page width decides the horizontal break count.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "A40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "B40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "C40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "D1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "D40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "E1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "E40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "F1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "F40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "G1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "G40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "H40": {
+            "kind": "text",
+            "value": "end"
+          }
+        }
+      },
+      "column_widths": {
+        "A:H": 28
+      },
+      "hidden_columns": [
+        "C",
+        "D",
+        "E"
+      ],
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H40",
+        "page_setup": {
+          "orientation": "portrait",
+          "paper": 9,
+          "scale": 100
+        }
+      }
+    },
+    {
+      "id": "hidden_rows_no_height",
+      "description": "The row-axis counterpart: hidden rows carry no ht, so the vertical break count says whether they still occupy page height.",
+      "sheets": {
+        "Sheet1": {
+          "A1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "A40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "B40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "C1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "C40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "D1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "D40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "E1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "E40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "F1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "F40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "G1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "G40": {
+            "kind": "text",
+            "value": "end"
+          },
+          "H1": {
+            "kind": "text",
+            "value": "hdr"
+          },
+          "H40": {
+            "kind": "text",
+            "value": "end"
+          }
+        }
+      },
+      "row_heights": {
+        "1": 60,
+        "40": 60
+      },
+      "hidden_rows": [
+        "10",
+        "11",
+        "12",
+        "13",
+        "14"
+      ],
+      "print": {
+        "sheet": "Sheet1",
+        "print_area": "A1:H40",
         "page_setup": {
           "orientation": "portrait",
           "paper": 9,

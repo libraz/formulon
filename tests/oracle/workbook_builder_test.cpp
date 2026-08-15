@@ -440,6 +440,101 @@ TEST(WorkbookBuilderPrint, FitToWidthCollapsesVerticalBreaks) {
   EXPECT_EQ(pag.page_count, 1U);
 }
 
+TEST(WorkbookBuilderPrint, HiddenColumnCarriesNoWidthOfItsOwn) {
+  // The shape H-9 is about: a hidden column recorded with no width at
+  // all. `has_width` must stay false so the sheet default -- not a
+  // fabricated zero -- is what pagination reads.
+  JsonValue spec = jobj({
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"H1", text_cell("x")}})}})},
+      {"hidden_columns", jarr({jstr("C"), jstr("E")})},
+      {"print", jobj({
+                    {"sheet", jstr("Sheet1")},
+                    {"print_area", jstr("A1:H1")},
+                    {"page_setup", a4_portrait_setup()},
+                })},
+  });
+
+  auto built_or = build_print_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const SheetLayout& layout = built_or.value().workbook->sheet(built_or.value().sheet_index).layout();
+
+  ASSERT_EQ(layout.columns.size(), 2U);
+  for (const ColumnLayout& col : layout.columns) {
+    EXPECT_TRUE(col.hidden);
+    EXPECT_FALSE(col.has_width);
+    EXPECT_FALSE(HasExplicitColumnWidth(col));
+    EXPECT_EQ(col.first, col.last);
+  }
+  EXPECT_EQ(layout.columns[0].first, 2U);  // C
+  EXPECT_EQ(layout.columns[1].first, 4U);  // E
+}
+
+TEST(WorkbookBuilderPrint, HiddenRowCarriesNoHeightOfItsOwn) {
+  JsonValue spec = jobj({
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}})}})},
+      {"hidden_rows", jarr({jstr("3")})},
+      {"print", jobj({
+                    {"sheet", jstr("Sheet1")},
+                    {"print_area", jstr("A1:A9")},
+                    {"page_setup", a4_portrait_setup()},
+                })},
+  });
+
+  auto built_or = build_print_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const SheetLayout& layout = built_or.value().workbook->sheet(built_or.value().sheet_index).layout();
+
+  ASSERT_EQ(layout.row_overrides.size(), 1U);
+  EXPECT_EQ(layout.row_overrides[0].row, 2U);  // 1-based row 3
+  EXPECT_TRUE(layout.row_overrides[0].hidden);
+  EXPECT_FALSE(layout.row_overrides[0].has_height);
+}
+
+TEST(WorkbookBuilderPrint, HidingAndSizingTheSameColumnStayIndependent) {
+  // A width entry and a hidden entry are separate overrides; neither may
+  // silently absorb the other, or a case could not express "hidden, and
+  // the rest of the span is wide".
+  JsonValue spec = jobj({
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}, {"H1", text_cell("x")}})}})},
+      {"column_widths", jobj({{"A:H", jnum(kWideColumnChars)}})},
+      {"hidden_columns", jarr({jstr("C")})},
+      {"print", jobj({
+                    {"sheet", jstr("Sheet1")},
+                    {"print_area", jstr("A1:H1")},
+                    {"page_setup", a4_portrait_setup()},
+                })},
+  });
+
+  auto built_or = build_print_from_spec(spec);
+  ASSERT_TRUE(static_cast<bool>(built_or)) << built_or.error().message;
+  const SheetLayout& layout = built_or.value().workbook->sheet(built_or.value().sheet_index).layout();
+
+  ASSERT_EQ(layout.columns.size(), 2U);
+  EXPECT_FALSE(layout.columns[0].hidden);
+  EXPECT_EQ(layout.columns[0].width, kWideColumnChars);
+  EXPECT_TRUE(layout.columns[1].hidden);
+  EXPECT_FALSE(layout.columns[1].has_width);
+}
+
+TEST(WorkbookBuilderPrint, RejectsMalformedHiddenColumnKey) {
+  JsonValue spec = jobj({
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}})}})},
+      {"hidden_columns", jarr({jstr("3")})},
+      {"print", jobj({{"sheet", jstr("Sheet1")}, {"page_setup", a4_portrait_setup()}})},
+  });
+  EXPECT_FALSE(static_cast<bool>(build_print_from_spec(spec)));
+}
+
+TEST(WorkbookBuilderPrint, RejectsHiddenRowZero) {
+  // Rows are 1-based in a case file; a "0" would silently become row -1.
+  JsonValue spec = jobj({
+      {"sheets", jobj({{"Sheet1", jobj({{"A1", text_cell("x")}})}})},
+      {"hidden_rows", jarr({jstr("0")})},
+      {"print", jobj({{"sheet", jstr("Sheet1")}, {"page_setup", a4_portrait_setup()}})},
+  });
+  EXPECT_FALSE(static_cast<bool>(build_print_from_spec(spec)));
+}
+
 TEST(WorkbookBuilderPrint, RejectsSpecWithoutPrintBlock) {
   const JsonValue spec = jobj({{"sheets", jobj({{"Sheet1", jobj({})}})}});
   auto built_or = build_print_from_spec(spec);

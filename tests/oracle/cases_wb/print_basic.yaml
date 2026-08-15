@@ -3,10 +3,9 @@ kind: workbook
 description: >
   Basic print-area / page-setup oracle cases: explicit and absent print
   areas, A4 vs Letter paper, portrait vs landscape orientation, print
-  titles, and a multi-area print range. Every case carries a small
-  populated grid on "Sheet1" and a print block describing the page
-  setup. No golden is committed: print golden generation needs a
-  Windows + Excel host.
+  titles, a multi-area print range, and hidden columns / rows that carry no
+  recorded size. Every case carries a small populated grid on "Sheet1" and
+  a print block describing the page setup.
 
 cases:
   - id: explicit_print_area_a4_portrait
@@ -98,4 +97,63 @@ cases:
     print:
       sheet: Sheet1
       print_area: C3:C3
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: hidden_columns_no_width
+    description: >
+      Wide columns with three of them hidden and no width recorded for
+      the hidden ones. Whether a hidden column still consumes page width
+      decides the horizontal break count.
+    sheets:
+      Sheet1:
+        A1: hdr
+        B1: hdr
+        C1: hdr
+        D1: hdr
+        E1: hdr
+        F1: hdr
+        G1: hdr
+        H1: hdr
+        A40: end
+        B40: end
+        C40: end
+        D40: end
+        E40: end
+        F40: end
+        G40: end
+        H40: end
+    column_widths: {"A:H": 28}
+    hidden_columns: [C, D, E]
+    print:
+      sheet: Sheet1
+      print_area: A1:H40
+      page_setup: {orientation: portrait, paper: 9, scale: 100}
+
+  - id: hidden_rows_no_height
+    description: >
+      The row-axis counterpart: hidden rows carry no ht, so the vertical
+      break count says whether they still occupy page height.
+    sheets:
+      Sheet1:
+        A1: hdr
+        B1: hdr
+        C1: hdr
+        D1: hdr
+        E1: hdr
+        F1: hdr
+        G1: hdr
+        H1: hdr
+        A40: end
+        B40: end
+        C40: end
+        D40: end
+        E40: end
+        F40: end
+        G40: end
+        H40: end
+    row_heights: {"1": 60, "40": 60}
+    hidden_rows: ["10", "11", "12", "13", "14"]
+    print:
+      sheet: Sheet1
+      print_area: A1:H40
       page_setup: {orientation: portrait, paper: 9, scale: 100}

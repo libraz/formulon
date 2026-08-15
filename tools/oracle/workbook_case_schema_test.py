@@ -106,5 +106,46 @@ class WorkbookCaseSchemaNegativeTest(unittest.TestCase):
         self.assertNotEqual(schema.normalise_case_source(yaml_like), schema.normalise_case_source(json_like))
 
 
+def _layout_case(**extra):
+    return {
+        "suite": "negative",
+        "kind": "workbook",
+        "cases": [
+            {
+                "id": "case",
+                "sheets": {"Sheet1": {"A1": {"kind": "text", "value": "x"}}},
+                "print": {"sheet": "Sheet1"},
+                **extra,
+            }
+        ],
+    }
+
+
+class HiddenLineSchemaTest(unittest.TestCase):
+    """Hiding is its own field, not a zero entry in the size map."""
+
+    def test_hidden_columns_are_accepted(self):
+        self.assertEqual(schema.validate_case_json(_layout_case(hidden_columns=["C", "E"])), ["case"])
+
+    def test_hidden_rows_accept_numbers_or_strings(self):
+        self.assertEqual(schema.validate_case_json(_layout_case(hidden_rows=[3, "4"])), ["case"])
+
+    def test_empty_hidden_list_is_rejected(self):
+        # An empty list reads as "this case is about hiding" while hiding
+        # nothing -- almost certainly a half-written case.
+        with self.assertRaisesRegex(schema.ValidationError, "non-empty list"):
+            schema.validate_case_json(_layout_case(hidden_columns=[]))
+
+    def test_duplicate_hidden_key_is_rejected(self):
+        with self.assertRaisesRegex(schema.ValidationError, "duplicate"):
+            schema.validate_case_json(_layout_case(hidden_columns=["C", "C"]))
+
+    def test_zero_width_is_still_rejected_by_the_size_map(self):
+        # The reason hiding needed its own field: a hidden column is not a
+        # zero-width one, and `column_widths` refuses to express either.
+        with self.assertRaisesRegex(schema.ValidationError, "must be positive"):
+            schema.validate_case_json(_layout_case(column_widths={"C": 0}))
+
+
 if __name__ == "__main__":
     unittest.main()

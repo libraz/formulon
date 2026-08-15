@@ -155,6 +155,27 @@ def _validate_dimension_map(raw: Any, where: str, *, label: str) -> None:
             raise ValidationError(f"{where}/{key}: {label} value must be positive, got {num!r}")
 
 
+def _validate_hidden_list(raw: Any, where: str, *, label: str) -> None:
+    """Validates a `hidden_columns` / `hidden_rows` list.
+
+    Hiding is deliberately its own field rather than a zero entry in the
+    width / height map: a hidden column is not a zero-width one, and the
+    two differ exactly where pagination cares. `_validate_dimension_map`
+    rejects non-positive sizes for that reason.
+    """
+
+    if not isinstance(raw, list) or not raw:
+        raise ValidationError(f"{where}: expected a non-empty list of {label}s")
+    seen: Set[str] = set()
+    for i, item in enumerate(raw):
+        key = str(item) if isinstance(item, int) and not isinstance(item, bool) else item
+        if not isinstance(key, str) or not key:
+            raise ValidationError(f"{where}/{i}: expected a {label}, got {item!r}")
+        if key in seen:
+            raise ValidationError(f"{where}/{i}: duplicate {label} {key!r}")
+        seen.add(key)
+
+
 def _validate_pivot_block(raw: Any, where: str) -> None:
     """Validate the declarative pivot block and optional formula probes.
 
@@ -315,6 +336,10 @@ def _validate_case_entry(case: Any, where: str) -> str:
         _validate_dimension_map(case["column_widths"], f"{where}/column_widths", label="column_widths")
     if "row_heights" in case and case["row_heights"] is not None:
         _validate_dimension_map(case["row_heights"], f"{where}/row_heights", label="row_heights")
+    if "hidden_columns" in case and case["hidden_columns"] is not None:
+        _validate_hidden_list(case["hidden_columns"], f"{where}/hidden_columns", label="column letter")
+    if "hidden_rows" in case and case["hidden_rows"] is not None:
+        _validate_hidden_list(case["hidden_rows"], f"{where}/hidden_rows", label="1-based row number")
     if "pivot" in case and case["pivot"] is not None:
         _validate_pivot_block(case["pivot"], f"{where}/pivot")
     if "print" in case and case["print"] is not None:
@@ -382,6 +407,25 @@ def validate_golden_json(doc: Any) -> List[str]:
             raise ValidationError(f"{where}: missing required key 'expect' or 'skipped'")
         if has_expect and not isinstance(case["expect"], dict):
             raise ValidationError(f"{where}/expect: expected mapping")
+
+        # `observed` is what Excel answered for a case the verifier still
+        # skips -- evidence for adjudicating a pending divergence, never an
+        # assertion. Pin that distinction here so it cannot quietly become a
+        # second source of truth: it is only meaningful next to `skipped`,
+        # and a case that carries `expect` has nothing to adjudicate.
+        for advisory in ("observed", "observed_error"):
+            if advisory not in case:
+                continue
+            if not has_skipped:
+                raise ValidationError(f"{where}/{advisory}: only valid on a skipped case")
+            if has_expect:
+                raise ValidationError(f"{where}/{advisory}: a case with 'expect' is not pending adjudication")
+        if "observed" in case and not isinstance(case["observed"], dict):
+            raise ValidationError(f"{where}/observed: expected mapping")
+        if "observed_error" in case and not isinstance(case["observed_error"], str):
+            raise ValidationError(f"{where}/observed_error: expected string")
+        if "observed" in case and "observed_error" in case:
+            raise ValidationError(f"{where}: 'observed' and 'observed_error' are mutually exclusive")
         if has_expect:
             spec_pivot = case["spec"].get("pivot") if isinstance(case["spec"], dict) else None
             if isinstance(spec_pivot, dict) and spec_pivot.get("formula_probes") is not None:
