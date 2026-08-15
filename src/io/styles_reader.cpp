@@ -20,6 +20,7 @@
 
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
+#include "io/xsd_double.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -65,7 +66,11 @@ ColorSpec ParseColorSpec(const pugi::xml_node& color) {
   if (pugi::xml_attribute theme = color.attribute("theme"); theme) {
     spec.kind = ColorSpec::Kind::kTheme;
     spec.theme = theme.as_uint(0U);
-    spec.tint = color.attribute("tint").as_double(0.0);
+    // Signed by design (ECMA-376 bounds it to [-1.0, 1.0]), so this takes
+    // the plain double lexer rather than the non-negative one; what it
+    // must not admit is a NaN or an infinity, which would propagate into
+    // every channel of the resolved colour.
+    spec.tint = attr_f64(color, "tint", 0.0);
     return spec;
   }
   if (pugi::xml_attribute indexed = color.attribute("indexed"); indexed) {
@@ -224,7 +229,12 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
   }
   pugi::xml_node sz = f.child("sz");
   if (sz) {
-    rec.size = sz.attribute("val").as_double(11.0);
+    // A font cannot be smaller than nothing, and a non-finite size feeds
+    // the row-height estimate, so an unusable value keeps Excel's default.
+    double size = 0.0;
+    if (parse_xsd_nonneg_double(attr_str(sz, "val"), &size)) {
+      rec.size = size;
+    }
   }
   if (const pugi::xml_node bold = f.child("b")) {
     rec.has_bold = true;

@@ -18,7 +18,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <string>
@@ -32,6 +31,7 @@
 #include "io/sax_xml_reader.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
+#include "io/xsd_double.h"
 #include "io/xsd_int.h"
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
@@ -515,21 +515,27 @@ void ApplySheetPrTabHidden(const pugi::xml_node& worksheet, SheetView& view) {
 /// struct defaults; `defaultColWidth` / `defaultRowHeight` also set the
 /// `has_*` flags so a consumer can distinguish an explicit `0` from an
 /// absent attribute.
+///
+/// A measurement outside the shared non-negative-double lexical space is
+/// treated as absent, flag included: these three sizes are what the
+/// paginator falls back to for every un-overridden track, so admitting an
+/// infinity or a NaN here changes the page count of the whole sheet.
 void ApplySheetFormatDefaults(const pugi::xml_node& worksheet, SheetFormatDefaults& defaults) {
   pugi::xml_node fmt = worksheet.child("sheetFormatPr");
   if (!fmt) {
     return;
   }
-  if (pugi::xml_attribute attr = fmt.attribute("defaultColWidth"); attr) {
-    defaults.default_col_width = std::strtod(attr.value(), nullptr);
+  double measurement = 0.0;
+  if (parse_xsd_nonneg_double(attr_str(fmt, "defaultColWidth"), &measurement)) {
+    defaults.default_col_width = measurement;
     defaults.has_default_col_width = true;
   }
-  if (pugi::xml_attribute attr = fmt.attribute("defaultRowHeight"); attr) {
-    defaults.default_row_height = std::strtod(attr.value(), nullptr);
+  if (parse_xsd_nonneg_double(attr_str(fmt, "defaultRowHeight"), &measurement)) {
+    defaults.default_row_height = measurement;
     defaults.has_default_row_height = true;
   }
-  if (pugi::xml_attribute attr = fmt.attribute("baseColWidth"); attr) {
-    defaults.base_col_width = std::strtod(attr.value(), nullptr);
+  if (parse_xsd_nonneg_double(attr_str(fmt, "baseColWidth"), &measurement)) {
+    defaults.base_col_width = measurement;
   }
 }
 
@@ -555,8 +561,9 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
     ColumnLayout entry;
     entry.first = static_cast<std::uint32_t>(min_v - 1);
     entry.last = static_cast<std::uint32_t>(max_v - 1);
-    if (pugi::xml_attribute width_attr = col.attribute("width"); width_attr) {
-      entry.width = attr_f64(col, "width");
+    double width = 0.0;
+    if (parse_xsd_nonneg_double(attr_str(col, "width"), &width)) {
+      entry.width = width;
       entry.has_width = true;
     }
     if (pugi::xml_attribute style_attr = col.attribute("style"); style_attr) {
@@ -598,7 +605,13 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     pugi::xml_attribute custom_format_attr = row.attribute("customFormat");
     pugi::xml_attribute style_attr = row.attribute("s");
     const bool custom_format = custom_format_attr && read_xsd_bool(row, "customFormat", false);
-    if (!ht_attr && !hidden_attr && !outline_attr && !custom_format) {
+    // An `ht` outside the shared non-negative-double lexical space is
+    // treated as absent for both the contribute test below and the stored
+    // override, so a row carrying nothing else does not become an
+    // all-defaults entry.
+    double height = 0.0;
+    const bool has_height = ht_attr && parse_xsd_nonneg_double(attr_str(row, "ht"), &height);
+    if (!has_height && !hidden_attr && !outline_attr && !custom_format) {
       continue;
     }
     if (!r_attr) {
@@ -614,8 +627,8 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     }
     RowLayout entry;
     entry.row = r_v - 1U;
-    if (ht_attr) {
-      entry.height = attr_f64(row, "ht");
+    if (has_height) {
+      entry.height = height;
       entry.has_height = true;
     }
     if (hidden_attr) {
@@ -793,7 +806,9 @@ Expected<void, Error> SaxOnCellTrampoline(void* user_data, const CellRecord& rec
 Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& rec) {
   auto* st = static_cast<SaxApplyState*>(user_data);
   const bool custom_format = !rec.custom_format.empty() && parse_xsd_bool(rec.custom_format, false);
-  if (rec.ht.empty() && rec.hidden.empty() && rec.outline_level.empty() && !custom_format) {
+  double height = 0.0;
+  const bool has_height = parse_xsd_nonneg_double(rec.ht, &height);
+  if (!has_height && rec.hidden.empty() && rec.outline_level.empty() && !custom_format) {
     return Expected<void, Error>::Ok();
   }
   if (rec.row_1based < 1U) {
@@ -801,8 +816,8 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   }
   RowLayout entry;
   entry.row = rec.row_1based - 1U;
-  if (!rec.ht.empty()) {
-    entry.height = std::strtod(std::string(rec.ht).c_str(), nullptr);
+  if (has_height) {
+    entry.height = height;
     entry.has_height = true;
   }
   if (!rec.hidden.empty()) {

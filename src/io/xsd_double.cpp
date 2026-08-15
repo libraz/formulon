@@ -94,4 +94,16 @@ bool parse_xsd_double(std::string_view text, double* out) {
   return true;
 }
 
+bool parse_xsd_nonneg_double(std::string_view text, double* out) {
+  double value = 0.0;
+  if (!parse_xsd_double(text, &value)) {
+    return false;
+  }
+  if (value < 0.0) {
+    return false;
+  }
+  *out = value;
+  return true;
+}
+
 }  // namespace formulon::io

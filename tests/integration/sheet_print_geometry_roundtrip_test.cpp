@@ -16,6 +16,7 @@
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "print/pagination.h"
 #include "sheet.h"
 #include "value.h"
 #include "workbook.h"
@@ -170,6 +171,132 @@ TEST(SheetPrintGeometry, SheetFormatPrPartialElementSetsOnlyPresentFlags) {
   EXPECT_TRUE(defaults.has_default_row_height);
   EXPECT_DOUBLE_EQ(defaults.default_row_height, 15.0);
   EXPECT_DOUBLE_EQ(defaults.base_col_width, 8.0);
+}
+
+/// Wraps `<sheetFormatPr>` / `<cols>` attributes around a two-cell sheet
+/// whose used range spans 50 rows, so a change in the fallback track size
+/// is visible as a change in the page count.
+std::string SheetXmlWithGeometry(std::string_view format_attrs, std::string_view cols, std::string_view trailing = {}) {
+  return std::string(
+             "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+             "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+             "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n"
+             "  <sheetFormatPr ")
+      .append(format_attrs)
+      .append("/>\n  ")
+      .append(cols)
+      .append(
+          "<sheetData>\n"
+          "    <row r=\"1\"><c r=\"A1\"><v>1</v></c></row>\n"
+          "    <row r=\"50\"><c r=\"D50\"><v>2</v></c></row>\n"
+          "  </sheetData>\n  ")
+      .append(trailing)
+      .append("</worksheet>\n");
+}
+
+TEST(SheetPrintGeometry, SheetFormatPrMeasurementsOutsideTheLexicalSpaceAreTreatedAsAbsent) {
+  // `strtod` reads these as +inf, a quiet NaN, 16, 0 and +inf. Any of them
+  // reaching the model becomes the fallback size for every un-overridden
+  // track on the sheet.
+  for (const char* spelling : {"INF", "NaN", "0x10", "abc", "1e999", "-5"}) {
+    const std::string format_attrs = std::string("baseColWidth=\"")
+                                         .append(spelling)
+                                         .append("\" defaultColWidth=\"")
+                                         .append(spelling)
+                                         .append("\" defaultRowHeight=\"")
+                                         .append(spelling)
+                                         .append("\"");
+    const std::vector<std::uint8_t> source = BuildPackageWithSheetXml(SheetXmlWithGeometry(format_attrs, ""));
+    auto result_or = io::read_ooxml(SpanOf(source));
+    ASSERT_TRUE(static_cast<bool>(result_or)) << spelling << ": " << result_or.error().message;
+    const SheetFormatDefaults& defaults = result_or.value().workbook.sheet(0).format_defaults();
+    EXPECT_FALSE(defaults.has_default_col_width) << spelling;
+    EXPECT_FALSE(defaults.has_default_row_height) << spelling;
+    EXPECT_DOUBLE_EQ(defaults.base_col_width, 8.0) << spelling;
+  }
+}
+
+TEST(SheetPrintGeometry, ColumnWidthOutsideTheLexicalSpaceIsTreatedAsAbsent) {
+  for (const char* spelling : {"INF", "NaN", "0x10", "abc", "1e999", "-5"}) {
+    const std::string cols = std::string("<cols><col min=\"1\" max=\"4\" width=\"")
+                                 .append(spelling)
+                                 .append("\" customWidth=\"1\"/></cols>\n  ");
+    const std::vector<std::uint8_t> source =
+        BuildPackageWithSheetXml(SheetXmlWithGeometry("defaultRowHeight=\"15\"", cols));
+    auto result_or = io::read_ooxml(SpanOf(source));
+    ASSERT_TRUE(static_cast<bool>(result_or)) << spelling << ": " << result_or.error().message;
+    // The span carried nothing but the unusable width, so it contributes
+    // no column layout rather than one sized by a non-measurement.
+    EXPECT_TRUE(result_or.value().workbook.sheet(0).layout().columns.empty()) << spelling;
+  }
+}
+
+TEST(SheetPrintGeometry, HostileTrackSizesPaginateLikeTheSchemaDefaults) {
+  // The observable consequence of admitting one: an infinite default row
+  // height breaks a page before every row, and a NaN one makes every
+  // accumulation comparison false so the whole sheet reports a single
+  // page. Both must now match the well-formed sheet exactly.
+  const std::vector<std::uint8_t> baseline_bytes =
+      BuildPackageWithSheetXml(SheetXmlWithGeometry("defaultRowHeight=\"15\" defaultColWidth=\"8.43\"", ""));
+  auto baseline_or = io::read_ooxml(SpanOf(baseline_bytes));
+  ASSERT_TRUE(static_cast<bool>(baseline_or)) << baseline_or.error().message;
+  auto baseline_pages_or = print::paginate(baseline_or.value().workbook, 0U);
+  ASSERT_TRUE(static_cast<bool>(baseline_pages_or)) << baseline_pages_or.error().message;
+  const print::PaginationResult& baseline = baseline_pages_or.value();
+  ASSERT_GT(baseline.page_count, 1U) << "the baseline must span pages for this comparison to bite";
+
+  for (const char* spelling : {"INF", "NaN", "1e999", "abc"}) {
+    const std::string format_attrs =
+        std::string("defaultRowHeight=\"").append(spelling).append("\" defaultColWidth=\"8.43\"");
+    const std::vector<std::uint8_t> source = BuildPackageWithSheetXml(SheetXmlWithGeometry(format_attrs, ""));
+    auto result_or = io::read_ooxml(SpanOf(source));
+    ASSERT_TRUE(static_cast<bool>(result_or)) << spelling << ": " << result_or.error().message;
+    auto pages_or = print::paginate(result_or.value().workbook, 0U);
+    ASSERT_TRUE(static_cast<bool>(pages_or)) << spelling << ": " << pages_or.error().message;
+    EXPECT_EQ(pages_or.value().page_count, baseline.page_count) << spelling;
+    EXPECT_EQ(pages_or.value().h_breaks, baseline.h_breaks) << spelling;
+    EXPECT_EQ(pages_or.value().v_breaks, baseline.v_breaks) << spelling;
+  }
+}
+
+TEST(SheetPrintGeometry, PageMarginsOutsideTheLexicalSpaceKeepTheDefaults) {
+  // The margins are subtracted from the paper to get the printable body,
+  // so an infinity or a NaN collapses that body and breaks a page before
+  // every track, while a negative one inflates it past the paper. The raw
+  // `<pageMargins>` string is round-tripped verbatim either way, so the
+  // file still says what it said.
+  const std::vector<std::uint8_t> baseline_bytes = BuildPackageWithSheetXml(SheetXmlWithGeometry(
+      "defaultRowHeight=\"15\" defaultColWidth=\"8.43\"", "",
+      "<pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>\n  "));
+  auto baseline_or = io::read_ooxml(SpanOf(baseline_bytes));
+  ASSERT_TRUE(static_cast<bool>(baseline_or)) << baseline_or.error().message;
+  auto baseline_pages_or = print::paginate(baseline_or.value().workbook, 0U);
+  ASSERT_TRUE(static_cast<bool>(baseline_pages_or)) << baseline_pages_or.error().message;
+  const print::PaginationResult& baseline = baseline_pages_or.value();
+  ASSERT_GT(baseline.page_count, 1U);
+
+  for (const char* spelling : {"INF", "NaN", "1e999", "-99", "abc"}) {
+    const std::string margins = std::string("<pageMargins left=\"")
+                                    .append(spelling)
+                                    .append("\" right=\"")
+                                    .append(spelling)
+                                    .append("\" top=\"")
+                                    .append(spelling)
+                                    .append("\" bottom=\"")
+                                    .append(spelling)
+                                    .append("\" header=\"0.3\" footer=\"0.3\"/>\n  ");
+    const std::vector<std::uint8_t> source =
+        BuildPackageWithSheetXml(SheetXmlWithGeometry("defaultRowHeight=\"15\" defaultColWidth=\"8.43\"", "", margins));
+    auto result_or = io::read_ooxml(SpanOf(source));
+    ASSERT_TRUE(static_cast<bool>(result_or)) << spelling << ": " << result_or.error().message;
+    const PageMargins& margins_read = result_or.value().workbook.sheet(0).print_settings().page_margins;
+    EXPECT_DOUBLE_EQ(margins_read.left, 0.7) << spelling;
+    EXPECT_DOUBLE_EQ(margins_read.top, 0.75) << spelling;
+    auto pages_or = print::paginate(result_or.value().workbook, 0U);
+    ASSERT_TRUE(static_cast<bool>(pages_or)) << spelling << ": " << pages_or.error().message;
+    EXPECT_EQ(pages_or.value().page_count, baseline.page_count) << spelling;
+    EXPECT_EQ(pages_or.value().h_breaks, baseline.h_breaks) << spelling;
+  }
 }
 
 TEST(SheetPrintGeometry, SheetFormatPrDefaultsSurviveWriteReadCycle) {

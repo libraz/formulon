@@ -15,6 +15,7 @@
 
 #include "cell.h"
 #include "eval/dep_graph.h"
+#include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/package_validator.h"
@@ -442,6 +443,55 @@ std::vector<std::uint8_t> RebuildArchiveReplacing(const std::vector<std::uint8_t
                                 static_cast<const std::uint8_t*>(archive_ptr) + archive_size);
   mz_free(archive_ptr);
   return out;
+}
+
+// The iterative solver stops once the largest change across the cycle
+// falls below `iterateDelta`. `strtod` would turn these spellings into a
+// NaN or an infinity, and `max_delta < NaN` is false forever: the
+// workbook would silently burn its whole iteration budget and report the
+// unconverged values. A tolerance outside the shared non-negative-double
+// lexical space keeps the engine default instead.
+TEST(OoxmlReader, IterateDeltaOutsideTheLexicalSpaceKeepsTheEngineDefault) {
+  for (const char* spelling : {"INF", "NaN", "1e999", "-0.001", "abc"}) {
+    const std::string workbook_xml =
+        std::string(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+            "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+            "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+            "<calcPr iterate=\"1\" iterateCount=\"50\" iterateDelta=\"")
+            .append(spelling)
+            .append(
+                "\"/>"
+                "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+                "</workbook>");
+    const std::vector<std::uint8_t> mutated =
+        RebuildArchiveReplacing(SaveOrDie(Workbook::create()), "xl/workbook.xml", workbook_xml);
+
+    auto loaded_or = read_ooxml(SpanOf(mutated));
+    ASSERT_TRUE(static_cast<bool>(loaded_or)) << spelling << ": " << loaded_or.error().message;
+    const eval::IterativeOptions& opts = loaded_or.value().workbook.iterative_options();
+    // The attributes that do lex are still honoured, so the rejection is
+    // scoped to the one value rather than to the whole element.
+    EXPECT_TRUE(opts.enabled) << spelling;
+    EXPECT_EQ(opts.max_iterations, 50U) << spelling;
+    EXPECT_DOUBLE_EQ(opts.max_change, eval::kDefaultMaxChange) << spelling;
+  }
+}
+
+TEST(OoxmlReader, WellFormedIterateDeltaIsHonoured) {
+  constexpr std::string_view kWorkbookXml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<calcPr iterate=\"1\" iterateCount=\"50\" iterateDelta=\"0.25\"/>"
+      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+      "</workbook>";
+  const std::vector<std::uint8_t> mutated =
+      RebuildArchiveReplacing(SaveOrDie(Workbook::create()), "xl/workbook.xml", kWorkbookXml);
+
+  auto loaded_or = read_ooxml(SpanOf(mutated));
+  ASSERT_TRUE(static_cast<bool>(loaded_or)) << loaded_or.error().message;
+  EXPECT_DOUBLE_EQ(loaded_or.value().workbook.iterative_options().max_change, 0.25);
 }
 
 // A `frozenSplit` pane must open frozen, and the freeze must survive a

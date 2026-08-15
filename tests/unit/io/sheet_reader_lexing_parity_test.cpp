@@ -350,6 +350,72 @@ TEST(SheetReaderLexingParity, UppercaseHiddenBooleanAgrees) {
   EXPECT_TRUE(dom.rows[0].hidden);
 }
 
+TEST(SheetReaderLexingParity, NonFiniteRowHeightDropsTheHeightOnBothPaths) {
+  // `strtod` turns these four spellings into +inf, a quiet NaN, 16, and 0
+  // respectively. An infinite or NaN track height reaches the paginator,
+  // which then breaks a page at every row or none at all, so a height
+  // outside the shared lexical space is treated as absent instead.
+  for (const char* spelling : {"INF", "NaN", "0x10", "abc"}) {
+    const std::string xml =
+        WrapSheet(std::string("<row r=\"1\" ht=\"").append(spelling).append("\"><c r=\"A1\"><v>1</v></c></row>"));
+    const LoadResult dom = LoadDom(xml);
+    const LoadResult sax = LoadSax(xml);
+    ASSERT_TRUE(dom.ok) << spelling;
+    ASSERT_TRUE(sax.ok) << spelling;
+    EXPECT_TRUE(SameOutcome(dom, sax)) << spelling;
+    // The row carried nothing but the bad height, so it contributes no
+    // override at all rather than an all-defaults one.
+    EXPECT_TRUE(dom.rows.empty()) << spelling;
+  }
+}
+
+TEST(SheetReaderLexingParity, OverflowingRowHeightDropsTheHeightOnBothPaths) {
+  const std::string xml = WrapSheet("<row r=\"1\" ht=\"1e999\"><c r=\"A1\"><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  EXPECT_TRUE(dom.rows.empty());
+}
+
+TEST(SheetReaderLexingParity, NegativeRowHeightDropsTheHeightOnBothPaths) {
+  // A track cannot be shorter than nothing; a negative height subtracts
+  // from the running page extent instead of adding to it.
+  const std::string xml = WrapSheet("<row r=\"1\" ht=\"-20\"><c r=\"A1\"><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  EXPECT_TRUE(dom.rows.empty());
+}
+
+TEST(SheetReaderLexingParity, RowWithBadHeightKeepsItsOtherOverridesOnBothPaths) {
+  // Dropping the height must not drop the row: `hidden` still applies,
+  // and the entry reports no height so the paginator uses the default.
+  const std::string xml = WrapSheet("<row r=\"3\" ht=\"NaN\" hidden=\"1\"><c r=\"A3\"><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.rows.size(), 1U);
+  EXPECT_EQ(dom.rows[0].row, 2U);
+  EXPECT_TRUE(dom.rows[0].hidden);
+  EXPECT_FALSE(dom.rows[0].has_height);
+}
+
+TEST(SheetReaderLexingParity, ZeroRowHeightIsKeptOnBothPaths) {
+  // Zero is a legitimate height Excel writes for a collapsed row, so the
+  // non-negative gate must not swallow it.
+  const std::string xml = WrapSheet("<row r=\"1\" ht=\"0\"><c r=\"A1\"><v>1</v></c></row>");
+  const LoadResult dom = LoadDom(xml);
+  const LoadResult sax = LoadSax(xml);
+  ASSERT_TRUE(dom.ok);
+  EXPECT_TRUE(SameOutcome(dom, sax));
+  ASSERT_EQ(dom.rows.size(), 1U);
+  EXPECT_TRUE(dom.rows[0].has_height);
+  EXPECT_DOUBLE_EQ(dom.rows[0].height, 0.0);
+}
+
 TEST(SheetReaderLexingParity, NonFiniteCellValueFailsBothPaths) {
   // A magnitude IEEE 754 cannot hold is rejected at load rather than
   // stored as +inf and re-emitted as `#NUM!` by the next save.

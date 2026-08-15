@@ -235,6 +235,45 @@ TEST(StylesReader, RejectsMalformedAlignmentAttributesWithContext) {
   }
 }
 
+TEST(StylesReader, NonFiniteFontSizeAndTintKeepTheirDefaults) {
+  // `strtod` would turn these into an infinite font size and a NaN tint,
+  // which then flow into the row-height estimate and into every channel of
+  // the resolved colour. `tint` is signed by schema, so the gate here is
+  // finiteness rather than non-negativity; `sz` is a measurement and takes
+  // both.
+  for (const char* spelling : {"INF", "NaN", "1e999", "0x10", "abc"}) {
+    std::string xml(kXmlDecl);
+    xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+    xml.append("  <fonts count=\"1\"><font><sz val=\"");
+    xml.append(spelling);
+    xml.append("\"/><color theme=\"3\" tint=\"");
+    xml.append(spelling);
+    xml.append("\"/><name val=\"Calibri\"/></font></fonts>\n");
+    xml.append("</styleSheet>");
+
+    auto result_or = read_styles(Bytes(xml));
+    ASSERT_TRUE(static_cast<bool>(result_or)) << spelling << ": " << result_or.error().message;
+    ASSERT_EQ(result_or.value().fonts.size(), 1U) << spelling;
+    EXPECT_DOUBLE_EQ(result_or.value().fonts[0].size, 11.0) << spelling;
+    EXPECT_DOUBLE_EQ(result_or.value().fonts[0].color.tint, 0.0) << spelling;
+  }
+}
+
+TEST(StylesReader, NegativeTintIsKeptButNegativeFontSizeIsNot) {
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+  xml.append("  <fonts count=\"1\"><font><sz val=\"-11\"/><color theme=\"3\" tint=\"-0.25\"/>");
+  xml.append("<name val=\"Calibri\"/></font></fonts>\n");
+  xml.append("</styleSheet>");
+
+  auto result_or = read_styles(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(result_or)) << "read failed: " << result_or.error().message;
+  ASSERT_EQ(result_or.value().fonts.size(), 1U);
+  // ECMA-376 bounds `tint` to [-1.0, 1.0]; a darkening tint is ordinary.
+  EXPECT_DOUBLE_EQ(result_or.value().fonts[0].color.tint, -0.25);
+  EXPECT_DOUBLE_EQ(result_or.value().fonts[0].size, 11.0);
+}
+
 TEST(StylesReader, ReadsColorSelectorsWithoutResolvingArgb) {
   std::string xml(kXmlDecl);
   xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");

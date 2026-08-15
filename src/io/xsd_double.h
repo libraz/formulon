@@ -36,6 +36,22 @@ namespace formulon::io {
 /// hold surfaces at load rather than at the next save.
 bool parse_xsd_double(std::string_view text, double* out);
 
+/// Parses `text` as a non-negative measurement — a row height, a column
+/// width, or any other geometry attribute the layout model stores as a
+/// double.
+///
+/// Accepts exactly what `parse_xsd_double` accepts, minus negative values:
+/// a track cannot be shorter than nothing, and a negative width reaching
+/// pagination subtracts from the running page extent instead of adding to
+/// it. Returns false and leaves `*out` unchanged otherwise.
+///
+/// Callers treat a false return as an absent attribute — the field keeps
+/// its schema default and any presence flag stays clear. That disposition
+/// is what keeps a hostile geometry attribute from reaching the paginator:
+/// an infinity there breaks a page at every track and a NaN makes every
+/// comparison false, so the sheet silently prints as one page.
+bool parse_xsd_nonneg_double(std::string_view text, double* out);
+
 }  // namespace formulon::io
 
 #endif  // FORMULON_IO_XSD_DOUBLE_H_

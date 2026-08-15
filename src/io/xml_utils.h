@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/xsd_double.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -131,10 +132,23 @@ std::uint32_t attr_u32(const pugi::xml_node& n, const char* name, std::uint32_t 
 /// legacy `parse_xml_i32_attr(node.attribute(name), def)` shape.
 std::int32_t attr_i32(const pugi::xml_node& n, const char* name, std::int32_t def = 0);
 
-/// Returns the attribute value as `double`, or `def` on missing /
-/// empty / malformed input. Delegates to pugi's `as_double(def)`.
+/// Returns the attribute value as `double`, or `def` on missing / empty /
+/// malformed input.
+///
+/// Delegates to `parse_xsd_double`, not to pugi's `as_double(def)`: pugi
+/// falls back to `def` only when the attribute is absent and otherwise
+/// hands the value to `strtod`, which reads `0x10` as 16, turns `INF` and
+/// `NaN` into the values of those names, saturates `1e999` to infinity,
+/// and quietly yields `0` for text that is not a number at all. Sharing
+/// the sheet path's lexer keeps one spelling of a number from meaning two
+/// things depending on which attribute it lands in.
 inline double attr_f64(const pugi::xml_node& n, const char* name, double def = 0.0) {
-  return n.attribute(name).as_double(def);
+  const pugi::xml_attribute a = n.attribute(name);
+  if (!a) {
+    return def;
+  }
+  double value = 0.0;
+  return parse_xsd_double(a.value(), &value) ? value : def;
 }
 
 /// Returns the attribute value as `bool`, or `def` if absent. "1" and

@@ -54,6 +54,7 @@
 #include "io/workbook_kind.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
+#include "io/xsd_double.h"
 #include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
@@ -153,13 +154,26 @@ void ApplyStructuredPageSetup(const pugi::xml_node& page_setup, PageSetup& out) 
 /// Populates the structured `PageMargins` fields from a `<pageMargins>`
 /// node. Additive alongside the raw XML string; missing attributes keep
 /// the struct defaults.
+///
+/// A margin outside the shared non-negative-double lexical space keeps the
+/// default too. The paginator subtracts the margins from the paper to get
+/// the printable body, so an infinite or NaN one collapses that body and
+/// breaks a page before every single track; a negative one inflates the
+/// body past the paper. Neither is a margin, and the raw XML string is
+/// re-emitted verbatim regardless, so nothing the file states is lost.
 void ApplyStructuredPageMargins(const pugi::xml_node& page_margins, PageMargins& out) {
-  out.left = page_margins.attribute("left").as_double(out.left);
-  out.right = page_margins.attribute("right").as_double(out.right);
-  out.top = page_margins.attribute("top").as_double(out.top);
-  out.bottom = page_margins.attribute("bottom").as_double(out.bottom);
-  out.header = page_margins.attribute("header").as_double(out.header);
-  out.footer = page_margins.attribute("footer").as_double(out.footer);
+  const auto margin = [&page_margins](const char* name, double& field) {
+    double value = 0.0;
+    if (parse_xsd_nonneg_double(attr_str(page_margins, name), &value)) {
+      field = value;
+    }
+  };
+  margin("left", out.left);
+  margin("right", out.right);
+  margin("top", out.top);
+  margin("bottom", out.bottom);
+  margin("header", out.header);
+  margin("footer", out.footer);
 }
 
 /// Reads the `<brk>` children of a `<rowBreaks>` / `<colBreaks>` node
@@ -588,8 +602,13 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       const long long parsed = count.as_llong(static_cast<long long>(eval::kDefaultMaxIterations));
       opts.max_iterations = parsed < 1 ? 1U : static_cast<std::uint32_t>(parsed);
     }
-    if (pugi::xml_attribute delta = calc_pr.attribute("iterateDelta"); delta) {
-      opts.max_change = delta.as_double(eval::kDefaultMaxChange);
+    // The solver stops once the largest change falls below `max_change`.
+    // A NaN tolerance makes that comparison false forever, so the workbook
+    // silently burns the whole iteration budget and reports the
+    // unconverged values; a negative one can never be reached either.
+    double delta_value = 0.0;
+    if (parse_xsd_nonneg_double(attr_str(calc_pr, "iterateDelta"), &delta_value)) {
+      opts.max_change = delta_value;
     }
     wb.set_iterative_options(opts);
   }

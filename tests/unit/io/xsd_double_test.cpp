@@ -95,6 +95,42 @@ TEST(XsdDouble, AcceptsTheRepresentableExtremes) {
   EXPECT_TRUE(std::isfinite(denormal));
 }
 
+TEST(XsdNonNegDouble, AcceptsWhatTheDoubleLexerAcceptsFromZeroUp) {
+  double out = 0.0;
+  ASSERT_TRUE(parse_xsd_nonneg_double("0", &out));
+  EXPECT_DOUBLE_EQ(out, 0.0);
+  ASSERT_TRUE(parse_xsd_nonneg_double("15", &out));
+  EXPECT_DOUBLE_EQ(out, 15.0);
+  ASSERT_TRUE(parse_xsd_nonneg_double("8.43", &out));
+  EXPECT_DOUBLE_EQ(out, 8.43);
+  ASSERT_TRUE(parse_xsd_nonneg_double("1.5e1", &out));
+  EXPECT_DOUBLE_EQ(out, 15.0);
+}
+
+TEST(XsdNonNegDouble, RejectsNegativeMeasurements) {
+  // A row height or column width below zero shortens the running page
+  // extent instead of extending it, so it is not a measurement at all.
+  double out = 7.0;
+  EXPECT_FALSE(parse_xsd_nonneg_double("-1", &out));
+  EXPECT_FALSE(parse_xsd_nonneg_double("-0.5", &out));
+  EXPECT_DOUBLE_EQ(out, 7.0);
+  // Negative zero is zero, and stays acceptable.
+  EXPECT_TRUE(parse_xsd_nonneg_double("-0", &out));
+  EXPECT_DOUBLE_EQ(out, 0.0);
+}
+
+TEST(XsdNonNegDouble, RejectsEverythingTheDoubleLexerRejects) {
+  double out = 7.0;
+  EXPECT_FALSE(parse_xsd_nonneg_double("", &out));
+  EXPECT_FALSE(parse_xsd_nonneg_double("abc", &out));
+  EXPECT_FALSE(parse_xsd_nonneg_double("0x10", &out));
+  EXPECT_FALSE(parse_xsd_nonneg_double("INF", &out));
+  EXPECT_FALSE(parse_xsd_nonneg_double("NaN", &out));
+  EXPECT_FALSE(parse_xsd_nonneg_double("1e999", &out));
+  EXPECT_FALSE(parse_xsd_nonneg_double("20pt", &out));
+  EXPECT_DOUBLE_EQ(out, 7.0);
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon
