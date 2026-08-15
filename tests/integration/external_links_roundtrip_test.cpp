@@ -243,6 +243,72 @@ TEST(ExternalLinksRoundTrip, RelsReadFailurePropagatesUnchanged) {
   EXPECT_NE(load_or.error().context.find("entry=xl/externalLinks/_rels/externalLink1.xml.rels"), std::string::npos);
 }
 
+// `TargetMode` is optional in the packaging relationships, and its
+// default is `Internal` — so the writer omits the attribute for an
+// in-package target, and the reader must read that omission back as
+// in-package. Getting this backwards is not a cosmetic flag error: a
+// relationship the source file did NOT declare as external comes back
+// marked external, and the next save writes `TargetMode="External"` into
+// the package. That turns an in-package reference into one a consumer
+// will try to fetch from outside the file.
+//
+// The whole cycle stays inside our own writer and reader, so a
+// disagreement here is a plain round-trip loss, independent of what any
+// particular producer happens to emit.
+TEST(ExternalLinksRoundTrip, InPackageTargetModeSurvivesRoundTrip) {
+  Workbook src = MakeSingleExternalLinkWorkbook(MakeExternalBookBody("rId1"));
+  {
+    std::vector<io::ExternalLinkRecord> links = src.external_links();
+    ASSERT_EQ(links.size(), 1U);
+    links[0].target = "externalLinks/RemoteBook.xlsx";
+    links[0].target_external = false;
+    src.set_external_links(std::move(links));
+  }
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << "save failed: " << save_or.error().message;
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+
+  const auto& rt = load_or.value().workbook.external_links();
+  ASSERT_EQ(rt.size(), 1U);
+  EXPECT_EQ(rt[0].target, "externalLinks/RemoteBook.xlsx");
+  EXPECT_FALSE(rt[0].target_external) << "an in-package target came back marked external";
+}
+
+// The common path, pinned alongside the case above so a fix to one is not
+// free to break the other.
+TEST(ExternalLinksRoundTrip, ExternalTargetModeSurvivesRoundTrip) {
+  Workbook src = MakeSingleExternalLinkWorkbook(MakeExternalBookBody("rId1"));
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or));
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or));
+
+  const auto& rt = load_or.value().workbook.external_links();
+  ASSERT_EQ(rt.size(), 1U);
+  EXPECT_TRUE(rt[0].target_external);
+}
+
+// `part_path` becomes a zip entry name at save time, and it can reach the
+// model without passing the reader's traversal check — `set_external_links`
+// takes it verbatim. The writer applies the same refusal it already applies
+// to passthrough part names, so the model cannot be used to place an entry
+// outside the package for whoever extracts the result later.
+TEST(ExternalLinksRoundTrip, TraversalShapedPartPathIsRefusedOnWrite) {
+  Workbook src = MakeSingleExternalLinkWorkbook(MakeExternalBookBody("rId1"));
+  {
+    std::vector<io::ExternalLinkRecord> links = src.external_links();
+    ASSERT_EQ(links.size(), 1U);
+    links[0].part_path = "../../evil/externalLink1.xml";
+    src.set_external_links(std::move(links));
+  }
+
+  auto save_or = src.save();
+  ASSERT_FALSE(static_cast<bool>(save_or)) << "a traversal-shaped part path was written into the package";
+  EXPECT_EQ(save_or.error().code, FormulonErrorCode::kIoZipSlip);
+}
+
 TEST(ExternalLinksRoundTrip, EmptyWorkbookEmitsNoExternalReferencesBlock) {
   Workbook src = Workbook::create();
   auto save_or = src.save();

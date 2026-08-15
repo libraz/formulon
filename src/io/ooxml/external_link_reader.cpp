@@ -95,8 +95,13 @@ Expected<ExternalLinkLoadResult, Error> load_external_links(const ZipReader& zip
             const bool id_match = !rec.body_rel_id.empty() && rel_id == rec.body_rel_id;
             if (rec.target.empty() || id_match) {
               rec.target = rel.attribute("Target").value();
-              const std::string_view target_mode = rel.attribute("TargetMode").value();
-              rec.target_external = (target_mode == "External") || target_mode.empty();
+              // `TargetMode` is optional and defaults to `Internal`, so an
+              // absent attribute means an in-package target. Reading it as
+              // external instead would let the next save emit
+              // `TargetMode="External"` for a relationship the source file
+              // never declared that way. Matches every other TargetMode
+              // read site in the reader family.
+              rec.target_external = rel.attribute("TargetMode").value() == std::string_view("External");
               if (rec.body_rel_id.empty()) {
                 rec.body_rel_id = rel_id;
               }

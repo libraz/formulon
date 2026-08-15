@@ -423,6 +423,14 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       continue;
     }
     std::string rels_path = ooxml::rels_path_for_part(e.record->part_path);
+    // Same rule as the passthrough parts below: `part_path` can reach the
+    // model without passing the reader's traversal check, and this is the
+    // only other place a model field becomes a zip entry name.
+    if (!ooxml::is_safe_part_name(rels_path)) {
+      return make_error(FormulonErrorCode::kIoZipSlip,
+                        "external link rels path escapes package root; refusing to write",
+                        "context=write_ooxml part=" + rels_path);
+    }
     auto result = AddPart(writer.get(), rels_path, rels_xml, &written_paths);
     if (!result) {
       return result.error();
