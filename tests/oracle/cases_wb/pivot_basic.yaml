@@ -1,11 +1,10 @@
 suite: pivot_basic
 kind: workbook
 description: >
-  Basic pivot-table oracle cases: a single row field with Sum, multiple
-  row fields, row + column fields, and grand-total on/off. Every case
-  carries the same 12-row sales dataset on a "Data" sheet and pivots it
-  onto a separate "Report" sheet. No golden is committed: pivot golden
-  generation needs a Windows + Excel host.
+  Basic pivot-table oracle cases: a single row field with Sum, multiple row
+  fields, row + column fields, grand-total on/off, and a blank row-item
+  label. Every case pivots a small sales dataset from a "Data" sheet onto a
+  separate "Report" sheet.
 
 cases:
   - id: single_row_sum
@@ -234,6 +233,32 @@ cases:
         B4: 333
         A5: East
         B5: 444
+      Report: {}
+    pivot:
+      source: Data!A1:B5
+      anchor: Report!A1
+      row_fields: [Region]
+      data_fields:
+        - {field: Amount, agg: Sum}
+
+  - id: blank_row_item_label
+    description: >
+      A source row whose Region cell is empty. Excel groups those records
+      under a locale-specific blank label rather than an empty string;
+      this case is what pins the ja-JP wording.
+    sheets:
+      Data:
+        A1: Region
+        B1: Amount
+        A2: North
+        B2: 100
+        # A3 deliberately absent: a blank inside the source range, not a
+        # short range. This is the record that has to land under the
+        # blank label.
+        B3: 50
+        A4: South
+        B4: 200
+        B5: 25
       Report: {}
     pivot:
       source: Data!A1:B5

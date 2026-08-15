@@ -4,8 +4,7 @@ description: >
   Scale vs fit-to-page oracle cases: explicit reduced / enlarged scale
   percentages against fit-to-width / fit-to-height collapse. Every case
   uses the same wide-or-tall table whose breaks the scale or fit toggle
-  changes. No golden is committed: print golden generation needs a
-  Windows + Excel host.
+  changes.
 
 cases:
   - id: scale_100_baseline

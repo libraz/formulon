@@ -1,7 +1,7 @@
 {
   "suite": "pivot_aggregations",
   "kind": "workbook",
-  "description": "Aggregation-function coverage for the pivot oracle: COUNT, AVERAGE, MAX, MIN, PRODUCT, CountNumbers, and multi data-field pivots. Each case reuses a small sales dataset on a \"Data\" sheet and pivots onto \"Report\". No golden is committed: pivot golden generation needs a Windows + Excel host.",
+  "description": "Aggregation-function coverage for the pivot oracle: COUNT, AVERAGE, MAX, MIN, PRODUCT, CountNumbers, and multi data-field pivots. Each case reuses a small sales dataset on a \"Data\" sheet and pivots onto \"Report\".",
   "cases": [
     {
       "id": "count_by_region",

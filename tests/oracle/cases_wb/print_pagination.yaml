@@ -1,12 +1,11 @@
 suite: print_pagination
 kind: workbook
 description: >
-  Page-break (pagination) oracle cases: wide tables forcing vertical
-  breaks via set column widths, tall tables forcing horizontal breaks
-  via set row heights, and manual row / column page breaks. Every case
-  carries an anchor cell plus a column-widths / row-heights map so the
-  pagination geometry is deterministic. No golden is committed: print
-  golden generation needs a Windows + Excel host.
+  Page-break (pagination) oracle cases: wide tables forcing vertical breaks
+  via set column widths, tall tables forcing horizontal breaks via set row
+  heights, and manual row / column page breaks. Every case carries an
+  anchor cell plus a column-widths / row-heights map so the pagination
+  geometry is deterministic.
 
 cases:
   - id: wide_table_vertical_breaks

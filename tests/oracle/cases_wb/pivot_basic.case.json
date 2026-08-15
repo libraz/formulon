@@ -1,7 +1,7 @@
 {
   "suite": "pivot_basic",
   "kind": "workbook",
-  "description": "Basic pivot-table oracle cases: a single row field with Sum, multiple row fields, row + column fields, and grand-total on/off. Every case carries the same 12-row sales dataset on a \"Data\" sheet and pivots it onto a separate \"Report\" sheet. No golden is committed: pivot golden generation needs a Windows + Excel host.",
+  "description": "Basic pivot-table oracle cases: a single row field with Sum, multiple row fields, row + column fields, grand-total on/off, and a blank row-item label. Every case pivots a small sales dataset from a \"Data\" sheet onto a separate \"Report\" sheet.",
   "cases": [
     {
       "id": "single_row_sum",
@@ -712,6 +712,60 @@
           "B5": {
             "kind": "number",
             "value": 444.0
+          }
+        },
+        "Report": {}
+      },
+      "pivot": {
+        "source": "Data!A1:B5",
+        "anchor": "Report!A1",
+        "row_fields": [
+          "Region"
+        ],
+        "data_fields": [
+          {
+            "field": "Amount",
+            "agg": "Sum"
+          }
+        ]
+      }
+    },
+    {
+      "id": "blank_row_item_label",
+      "description": "A source row whose Region cell is empty. Excel groups those records under a locale-specific blank label rather than an empty string; this case is what pins the ja-JP wording.",
+      "sheets": {
+        "Data": {
+          "A1": {
+            "kind": "text",
+            "value": "Region"
+          },
+          "B1": {
+            "kind": "text",
+            "value": "Amount"
+          },
+          "A2": {
+            "kind": "text",
+            "value": "North"
+          },
+          "B2": {
+            "kind": "number",
+            "value": 100.0
+          },
+          "B3": {
+            "kind": "number",
+            "value": 50.0
+          },
+          "A4": {
+            "kind": "text",
+            "value": "South"
+          },
+          "B4": {
+            "kind": "number",
+            "value": 200.0
+          },
+          "B5": {
+            "kind": "number",
+            "value": 25.0
           }
         },
         "Report": {}
