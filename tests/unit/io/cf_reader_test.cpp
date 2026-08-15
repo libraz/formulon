@@ -237,19 +237,29 @@ TEST(CFReader, DataBarBasic) {
 
 TEST(CFReader, DataBarX14OverlayAppliesNegativeAxisAndGradient) {
   // Excel 2010+ always writes the legacy `<dataBar>` for backward
-  // compatibility alongside the richer `<x14:dataBar>` extension, cross-
-  // referenced by the base `<cfRule id="...">` GUID. The legacy element
-  // alone cannot express negative fill / axis colour+position / solid
-  // fill — those only exist in the x14 overlay.
+  // compatibility alongside the richer `<x14:dataBar>` extension, which
+  // is the only place negative fill / axis colour+position / solid fill
+  // can be expressed.
+  //
+  // The link between the two is a nested
+  // `<extLst><ext uri="{B025F937-...}"><x14:id>` inside the legacy
+  // `<cfRule>` -- NOT an `id` attribute on the `<cfRule>`. The input
+  // below is the exact shape Excel 365 wrote when asked to re-save this
+  // rule, so the assertions run the path real files take.
   pugi::xml_document doc = Load(R"(
     <worksheet>
       <conditionalFormatting sqref="C1:C10">
-        <cfRule type="dataBar" priority="1" id="{DA7ABA51-AAAA-BBBB-0001-000000000001}">
-          <dataBar minLength="0" maxLength="100">
+        <cfRule type="dataBar" priority="1">
+          <dataBar>
             <cfvo type="min"/>
             <cfvo type="max"/>
             <color rgb="FF638EC6"/>
           </dataBar>
+          <extLst>
+            <ext uri="{B025F937-C7B1-47D3-B67F-A62EFF666E3E}">
+              <x14:id>{DA7ABA51-AAAA-BBBB-0001-000000000001}</x14:id>
+            </ext>
+          </extLst>
         </cfRule>
       </conditionalFormatting>
       <extLst>
@@ -285,6 +295,95 @@ TEST(CFReader, DataBarX14OverlayAppliesNegativeAxisAndGradient) {
   EXPECT_FALSE(r.data_bar->gradient);
   ASSERT_TRUE(r.data_bar->border.has_value());
   EXPECT_EQ(*r.data_bar->border, cf::Color({0x00, 0x00, 0x00, 255}));
+  // The legacy element carries no minLength/maxLength here -- exactly as
+  // Excel writes it -- so the pre-2010 defaults 10/90 would apply. The
+  // extension restates 0/100 and Excel draws 0/100, so the overlay wins.
+  EXPECT_EQ(r.data_bar->min_length_pct, 0);
+  EXPECT_EQ(r.data_bar->max_length_pct, 100);
+}
+
+// The `id` attribute on the legacy `<cfRule>` is accepted as a lenient
+// fallback for hand-written files. Excel neither writes it nor keeps it
+// (re-saving strips the attribute and drops the orphaned overlay), so
+// this is a compatibility path, not the one real input takes -- which is
+// why the test above deliberately uses the nested form instead.
+TEST(CFReader, DataBarX14OverlayAcceptsLegacyIdAttributeAsFallback) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="C1:C10">
+        <cfRule type="dataBar" priority="1" id="{DA7ABA51-AAAA-BBBB-0001-000000000009}">
+          <dataBar minLength="0" maxLength="100">
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF638EC6"/>
+          </dataBar>
+        </cfRule>
+      </conditionalFormatting>
+      <extLst>
+        <ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}">
+          <x14:conditionalFormattings>
+            <x14:conditionalFormatting>
+              <x14:cfRule type="dataBar" id="{DA7ABA51-AAAA-BBBB-0001-000000000009}">
+                <x14:dataBar axisPosition="none">
+                  <x14:cfvo type="autoMin"/>
+                  <x14:cfvo type="autoMax"/>
+                  <x14:negativeFillColor rgb="FF00FF00"/>
+                </x14:dataBar>
+              </x14:cfRule>
+            </x14:conditionalFormatting>
+          </x14:conditionalFormattings>
+        </ext>
+      </extLst>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.data_bar.has_value());
+  EXPECT_EQ(r.data_bar->axis_position, cf::DataBarAxisPosition::None);
+  EXPECT_EQ(r.data_bar->negative_fill, cf::Color({0x00, 0xFF, 0x00, 255}));
+}
+
+// The nested form wins when a file carries both spellings and they
+// disagree. Excel only ever emits the nested one, so a conflicting
+// attribute is stale data from another producer.
+TEST(CFReader, DataBarX14OverlayPrefersNestedIdOverLegacyAttribute) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="C1:C10">
+        <cfRule type="dataBar" priority="1" id="{DA7ABA51-AAAA-BBBB-0001-00000000000A}">
+          <dataBar>
+            <cfvo type="min"/>
+            <cfvo type="max"/>
+            <color rgb="FF638EC6"/>
+          </dataBar>
+          <extLst>
+            <ext uri="{B025F937-C7B1-47D3-B67F-A62EFF666E3E}">
+              <x14:id>{DA7ABA51-AAAA-BBBB-0001-00000000000B}</x14:id>
+            </ext>
+          </extLst>
+        </cfRule>
+      </conditionalFormatting>
+      <extLst>
+        <ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}">
+          <x14:conditionalFormattings>
+            <x14:conditionalFormatting>
+              <x14:cfRule type="dataBar" id="{DA7ABA51-AAAA-BBBB-0001-00000000000A}">
+                <x14:dataBar><x14:negativeFillColor rgb="FFFF0000"/></x14:dataBar>
+              </x14:cfRule>
+              <x14:cfRule type="dataBar" id="{DA7ABA51-AAAA-BBBB-0001-00000000000B}">
+                <x14:dataBar><x14:negativeFillColor rgb="FF0000FF"/></x14:dataBar>
+              </x14:cfRule>
+            </x14:conditionalFormatting>
+          </x14:conditionalFormattings>
+        </ext>
+      </extLst>
+    </worksheet>)");
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  const auto& r = cfs.value()[0].rules[0];
+  ASSERT_TRUE(r.data_bar.has_value());
+  EXPECT_EQ(r.data_bar->negative_fill, cf::Color({0x00, 0x00, 0xFF, 255}))
+      << "the legacy attribute won over the nested id";
 }
 
 TEST(CFReader, DataBarX14OverlayNegativeSameAsPositiveOverridesExplicitColor) {

@@ -391,8 +391,9 @@ void ReadDataBar(const pugi::xml_node& bar, cf::DataBarSpec* out) {
       ++cfvo_idx;
     } else if (name == "color") {
       // Legacy `<dataBar>` (pre-2010) carries one `<color>` element used
-      // as the positive fill. The 2010+ extension lifts negative-fill /
-      // axis-color into `<extLst>`, which this PR does not yet consume.
+      // as the positive fill. Negative fill, axis colour/position and
+      // gradient live only in the 2010+ `<x14:dataBar>` extension, which
+      // `ApplyX14DataBarOverlay` folds on top of this.
       if (color_idx == 0) {
         out->fill = ParseRgbColor(attr_str(child, "rgb"));
         out->negative_fill = out->fill;
@@ -459,6 +460,49 @@ void ApplyX14DataBarOverlay(const pugi::xml_node& x14_bar, cf::DataBarSpec* out)
   if (attr_bool(x14_bar, "negativeBarColorSameAsPositive", false)) {
     out->negative_fill = out->fill;
   }
+  // Bar-length bounds are restated here and win over the legacy element.
+  // Excel writes a legacy `<dataBar>` with no minLength/maxLength -- which
+  // means the pre-2010 defaults 10/90 -- while stating 0/100 in the
+  // extension, and renders 0/100. Taking the legacy defaults would report
+  // a bar length Excel does not draw.
+  if (const pugi::xml_attribute min_length = x14_bar.attribute("minLength"); min_length) {
+    const std::int32_t parsed = attr_i32(x14_bar, "minLength", 0);
+    if (parsed >= 0 && parsed <= 100) {
+      out->min_length_pct = static_cast<std::uint8_t>(parsed);
+    }
+  }
+  if (const pugi::xml_attribute max_length = x14_bar.attribute("maxLength"); max_length) {
+    const std::int32_t parsed = attr_i32(x14_bar, "maxLength", 0);
+    if (parsed >= 0 && parsed <= 100) {
+      out->max_length_pct = static_cast<std::uint8_t>(parsed);
+    }
+  }
+}
+
+/// Returns the x14 rule id a legacy `<cfRule>` points at, or an empty
+/// string when it points at none.
+///
+/// Excel expresses the link as a nested
+/// `<extLst><ext uri="{B025F937-...}"><x14:id>{GUID}</x14:id>`, NOT as an
+/// `id` attribute on the `<cfRule>` itself. Both spellings appear in the
+/// wild, but only the nested one survives Excel: opening a file that uses
+/// the attribute form and saving it back strips the attribute and drops
+/// the orphaned worksheet-level x14 block entirely (measured against
+/// Excel 365, macOS, 2026-08-15). The attribute is still accepted here as
+/// a lenient fallback -- it costs one lookup and keeps hand-written files
+/// working -- but the nested form is what real input uses and therefore
+/// what decides.
+std::string ReadX14RuleId(const pugi::xml_node& rule) {
+  for (pugi::xml_node ext_lst = rule.child("extLst"); ext_lst; ext_lst = ext_lst.next_sibling("extLst")) {
+    for (pugi::xml_node ext = ext_lst.child("ext"); ext; ext = ext.next_sibling("ext")) {
+      if (const pugi::xml_node id = ext.child("x14:id"); id) {
+        if (const std::string text(id.child_value()); !text.empty()) {
+          return text;
+        }
+      }
+    }
+  }
+  return std::string(attr_str(rule, "id"));
 }
 
 /// Builds an `id -> <x14:dataBar>` lookup from the worksheet-level
@@ -526,7 +570,7 @@ cf::CFRule ReadCfRule(const pugi::xml_node& rule) {
   if (rule.attribute("dxfId")) {
     out.dxf_id = static_cast<std::uint32_t>(attr_i32(rule, "dxfId", 0));
   }
-  out.id = attr_str(rule, "id");
+  out.id = ReadX14RuleId(rule);
 
   if (out.type == cf::RuleType::CellIs) {
     out.op = ParseCellIsOperator(attr_str(rule, "operator"));
