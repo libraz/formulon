@@ -733,7 +733,10 @@ TEST_P(OracleTest, Matches) {
     wb.set_iterative_options(iopts);
   }
 
-  Sheet& sheet = wb.sheet(0);
+  // Deliberately not hoisted into a `Sheet&`: a sheet-qualified setup key adds
+  // a sheet, and `Workbook` stores sheets by value, so any reference taken
+  // before that point dangles afterwards. Re-fetching by index at each use
+  // keeps the default sheet valid across the whole case.
   Arena text_arena;
   std::vector<SetupFormulaCell> setup_formulas;
 
@@ -764,10 +767,10 @@ TEST_P(OracleTest, Matches) {
   // (e.g. setup formulas calling FORMULATEXT(<test-cell>)) see the cell as a
   // formula cell. The actual value comes from `eval::evaluate` below; the
   // formula_text stored here is only consulted by FORMULATEXT / ISFORMULA.
-  sheet.set_cell_formula(case_row, case_col, formula_src);
+  wb.sheet(0).set_cell_formula(case_row, case_col, formula_src);
 
   if (const JsonValue* merges = param.raw_case.find("merges"); merges != nullptr) {
-    const char* err_msg = apply_merge_ranges(*merges, sheet);
+    const char* err_msg = apply_merge_ranges(*merges, wb.sheet(0));
     if (err_msg != nullptr) {
       FAIL() << param.suite << "." << param.case_id << ": " << err_msg;
       return;
@@ -781,7 +784,7 @@ TEST_P(OracleTest, Matches) {
       // to the workbook on first reference. Bare keys still land on the
       // default Sheet1, preserving the historical default behaviour.
       auto [sheet_name, bare_addr] = split_sheet_qualified_addr(entry.first);
-      Sheet* target_sheet = &sheet;
+      Sheet* target_sheet = &wb.sheet(0);
       std::size_t target_sheet_index = 0;
       if (!sheet_name.empty()) {
         std::size_t idx = wb.sheet_index_by_name(sheet_name);
@@ -860,7 +863,7 @@ TEST_P(OracleTest, Matches) {
   // what a real Formulon calc would do.
   eval::EvalState state;
   eval::EvalContext ctx =
-      eval::EvalContext(wb, sheet, state).with_excel_profile(wb.excel_profile()).with_date1904(wb.date1904());
+      eval::EvalContext(wb, wb.sheet(0), state).with_excel_profile(wb.excel_profile()).with_date1904(wb.date1904());
   // Anchor the formula at its own cell (resolved above) so zero-arg ROW() /
   // COLUMN() return the case's row / column. The anchor is what
   // differentiates spill (top-left) from implicit intersection (row/col
