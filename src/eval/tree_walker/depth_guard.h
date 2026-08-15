@@ -30,9 +30,17 @@ namespace eval {
 //     cap a chain of ~1000 cells overflows the WASM 256-512 KB stack.
 //
 //   * `kMaxLambdaDepth` — bounds runtime recursion through user-defined
-//     LAMBDA closures (e.g. `LET(f, LAMBDA(n, f(n+1)), f(0))`). The body
-//     AST stays small so `kMaxEvalDepth` does not trigger; the recursion
-//     lives in `invoke_lambda` re-entering itself.
+//     LAMBDA closures. The body AST stays small so `kMaxEvalDepth` does
+//     not trigger; the recursion lives in `invoke_lambda` re-entering
+//     itself. Two spellings reach it: self-application,
+//     `LET(g, LAMBDA(self, n, self(self, n+1)), g(g, 0))`, and a
+//     workbook defined name whose formula is a LAMBDA referring to its
+//     own name. `LET(f, LAMBDA(n, f(n+1)), f(0))` is NOT one of them and
+//     must not be used to check this guard: LET binds sequentially, so
+//     `f` is not in scope inside its own initialiser and the call
+//     returns `#NAME?` without ever re-entering `invoke_lambda`. It
+//     fails in a way that looks like the cap firing, which is what makes
+//     it worth naming here.
 //
 // On overflow the offending sub-expression returns `#CALC!` (the same
 // Excel-visible code Mac Excel surfaces for indeterminate / runaway lambda
