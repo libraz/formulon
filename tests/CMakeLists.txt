@@ -447,6 +447,15 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/oracle/golden_coverage_check.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The staged-capture landing step. Its refusals are the only thing
+  # standing between an externally captured golden and repository
+  # coverage, so they are exercised on every run rather than only when
+  # someone happens to have Excel.
+  add_test(
+    NAME OracleCapturePromotion
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.promote_capture_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
 endif()
 
 add_subdirectory(integration)

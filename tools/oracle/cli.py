@@ -189,6 +189,8 @@ def _cmd_workbook(args: argparse.Namespace) -> int:
     if args.suite:
         for s in args.suite:
             gen_argv.extend(["--suite", s])
+    if getattr(args, "golden_dir", None):
+        gen_argv.extend(["--golden-dir", str(args.golden_dir)])
     if args.visible:
         gen_argv.append("--visible")
     print("[oracle-cli] track=workbook")
@@ -1091,6 +1093,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         default=None,
         metavar="NAME",
         help="Restrict to the named suite(s); forwarded to workbook_oracle_gen.",
+    )
+    p_wb.add_argument(
+        "--golden-dir",
+        default=None,
+        metavar="DIR",
+        help=(
+            "Write goldens here instead of the per-target path. A target "
+            "with status=wanted always stages outside the repository; "
+            "omit this to accept the default staging directory."
+        ),
     )
     p_wb.add_argument("--visible", action="store_true")
     p_wb.set_defaults(func=_cmd_workbook)

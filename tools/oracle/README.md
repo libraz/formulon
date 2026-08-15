@@ -140,12 +140,18 @@ make oracle-gen-cf SUITE=cf_smoke
 make oracle-gen TARGET=win-365-ja_JP
 make oracle-gen TARGET=win-365-ja_JP SUITE=count
 
-# Workbook track (pivot + post-build formula probes). Stage output outside
-# the repository until provenance is reviewed; do not overwrite historical
-# reference goldens.
-tools/oracle/.venv/bin/python tools/oracle/workbook_oracle_gen.py \
-  --target win-365-ja_JP --suite getpivotdata_page_data \
-  --golden-dir /tmp/formulon-m365-getpivotdata-golden
+# Workbook track (pivot tables + print areas). Target is auto-detected from
+# the host OS; pass TARGET= to override and SUITE= to narrow.
+make oracle-gen-workbook
+make oracle-gen-workbook TARGET=win-365-ja_JP
+make oracle-gen-workbook TARGET=win-365-ja_JP SUITE=getpivotdata_page_data
+
+# A target whose status is still `wanted` has no established provenance,
+# so its capture stages outside the repository (the generator prints the
+# path) and is landed separately after review. GOLDEN_DIR= overrides where
+# it stages.
+make oracle-promote TRACK=workbook TARGET=win-365-ja_JP DRY_RUN=1
+make oracle-promote TRACK=workbook TARGET=win-365-ja_JP
 
 # Direct CLI access (more flexibility)
 tools/oracle/.venv/bin/python tools/oracle/cli.py gen --target win-365-ja_JP
@@ -156,6 +162,39 @@ tools/oracle/.venv/bin/python tools/oracle/oracle_gen.py --suite count --visible
 Successful runs for a maintained target:
 - Primary: updates `tests/oracle/golden/*.golden.json` + `tests/oracle/ENVIRONMENT.md`
 - Variant: updates `tests/oracle/variants/<target>/golden/*.golden.json` + per-variant `ENVIRONMENT.md`
+
+## Promoting a staged capture
+
+`status: wanted` means the project has not yet decided that this host's
+Excel is one it wants to be measured against, so the generator stages the
+capture at `~/.cache/formulon/oracle-capture/<track>/<target>/` instead of
+writing into the tree. A complete run on an M365 host also drops a
+`PROVENANCE.candidate.json` there.
+
+`make oracle-promote` is the second half. It re-derives each golden's
+SHA-256 from the file rather than trusting the candidate, checks that every
+declared suite is present and that all of them came from one capture, and
+refuses a capture whose Excel cannot name itself — the shape of the Office
+2019 mix-up that made this a separate step. On success it copies the
+goldens in, writes the directory's `PROVENANCE.json` with
+`classification: active`, and flips the manifest `status:` to
+`scaffolded`.
+
+```bash
+make oracle-promote TRACK=workbook TARGET=win-365-ja_JP DRY_RUN=1   # check only
+make oracle-promote TRACK=workbook TARGET=win-365-ja_JP
+make oracle-promote FROM=/path/to/other/capture                     # non-default source
+
+# Then confirm the promotion is coverage-eligible and the goldens agree:
+tools/oracle/.venv/bin/python tools/oracle/provenance.py check
+tools/oracle/.venv/bin/python tools/oracle/provenance.py workbook-active
+make oracle-verify
+```
+
+The refusals are covered by `tools/oracle/promote_capture_test.py`, which
+runs in the default CTest surface as `OracleCapturePromotion` — they are
+what stands between an external golden and repository coverage, so they are
+tested on every run rather than only on a host that has Excel.
 
 Diffs on these files are part of the PR review surface. Every oracle-gen PR
 should call out which cells changed and why.

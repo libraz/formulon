@@ -72,6 +72,21 @@ DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "golden_wb"
 DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 
+# Where a `status: wanted` target stages its capture when the caller does
+# not name a directory. A wanted target has no established provenance yet,
+# so its goldens must not land in the repository straight off the driver --
+# but making the operator invent a path for every run turned the ordinary
+# capture into a bespoke command line. A stable per-user cache keeps the
+# staging out of the tree, survives a reboot (unlike /tmp) so a capture can
+# be reviewed the next day, and gives `promote_capture.py` a default source.
+STAGING_ROOT = Path.home() / ".cache" / "formulon" / "oracle-capture"
+
+
+def staging_dir_for(track: str, target_name: str) -> Path:
+    """Returns the default staging directory for one track / target pair."""
+
+    return STAGING_ROOT / track / target_name
+
 
 def _load_targets(path: Path) -> Dict[str, Any]:
     """Loads `targets.yaml`. Raises RuntimeError on any read / parse error."""
@@ -327,12 +342,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"workbook-oracle-gen: {exc}", file=sys.stderr)
         return 2
 
+    staged = False
     if target.get("status") == "wanted" and args.golden_dir is None:
-        print(
-            "workbook-oracle-gen: status=wanted requires explicit external --golden-dir; refusing repository output",
-            file=sys.stderr,
-        )
-        return 2
+        # No established provenance yet, so the capture stages outside the
+        # tree rather than failing: the operator gets a complete run and a
+        # `PROVENANCE.candidate.json`, and `promote_capture.py` is what
+        # decides whether it earns a place in the repository.
+        args.golden_dir = staging_dir_for("workbook", target["_name"])
+        staged = True
     if args.golden_dir is not None:
         resolved = args.golden_dir.resolve()
         try:
@@ -348,6 +365,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         golden_dir = args.golden_dir
     else:
         golden_dir = _golden_dir_for_target(targets_doc, target)
+    if staged:
+        print(
+            f"workbook-oracle-gen: target {target['_name']!r} has status=wanted; "
+            f"staging outside the repository at {golden_dir}"
+        )
+        print(f"  review, then land it with: make oracle-promote TRACK=workbook TARGET={target['_name']}")
 
     # Cases marked `mode: skip-oracle` in tests/divergence.yaml (plus any
     # per-variant override) are excluded from generation. A typo in an

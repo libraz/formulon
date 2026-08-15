@@ -56,7 +56,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
         python-package python-test python-wheel \
         parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
-        oracle-gen oracle-gen-cf oracle-gen-workbook \
+        oracle-gen oracle-gen-cf oracle-gen-workbook oracle-promote \
         oracle-verify oracle-contribute oracle-contribute-list \
         ironcalc-import ironcalc-verify \
         fuzz-parser fuzz-xlsx fuzz-eval bench coverage mutation \
@@ -545,11 +545,31 @@ oracle-gen-cf:
 	@$(ORACLE_PY) tools/oracle/cf_oracle_gen.py $(if $(SUITE),--suite $(SUITE),)
 
 # Workbook track (pivot tables + print areas). Target is auto-detected
-# from the host OS; pass TARGET=<name> to override.
+# from the host OS; pass TARGET=<name> to override, GOLDEN_DIR=<path> to
+# choose where the capture lands.
+#
+# A target whose manifest status is still `wanted` has no established
+# provenance, so its capture stages outside the repository and is landed
+# by `make oracle-promote` after review -- the generator prints the path.
 oracle-gen-workbook:
 	@$(call require_oracle_venv,oracle-gen-workbook)
 	@$(ORACLE_PY) tools/oracle/cli.py workbook \
-	  $(if $(TARGET),--target $(TARGET),) $(if $(SUITE),--suite $(SUITE),)
+	  $(if $(TARGET),--target $(TARGET),) $(if $(SUITE),--suite $(SUITE),) \
+	  $(if $(GOLDEN_DIR),--golden-dir $(GOLDEN_DIR),)
+
+# Lands a staged capture in the repository: verifies the staged
+# PROVENANCE.candidate.json against the goldens beside it, copies them in,
+# writes the directory's PROVENANCE.json, and flips the manifest status
+# from `wanted` to `scaffolded`.
+#
+#   make oracle-promote                          # workbook track, its primary
+#   make oracle-promote TRACK=workbook TARGET=win-365-ja_JP
+#   make oracle-promote DRY_RUN=1                # check only, write nothing
+oracle-promote:
+	@$(call require_oracle_venv,oracle-promote)
+	@$(ORACLE_PY) tools/oracle/promote_capture.py \
+	  $(if $(TRACK),--track $(TRACK),) $(if $(TARGET),--target $(TARGET),) \
+	  $(if $(FROM),--from $(FROM),) $(if $(DRY_RUN),--dry-run,)
 
 # oracle-verify shells to `ctest -L oracle`, which already selects the
 # workbook oracle binary: formulon_workbook_oracle_tests carries the
